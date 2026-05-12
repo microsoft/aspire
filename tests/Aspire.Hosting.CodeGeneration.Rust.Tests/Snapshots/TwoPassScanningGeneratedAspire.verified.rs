@@ -964,6 +964,71 @@ impl ProcessCommandExportOptions {
     }
 }
 
+/// ProcessCommandSpecExportData
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ProcessCommandSpecExportData {
+    #[serde(rename = "ExecutablePath")]
+    pub executable_path: String,
+    #[serde(rename = "Arguments")]
+    pub arguments: Vec<String>,
+    #[serde(rename = "WorkingDirectory")]
+    pub working_directory: String,
+    #[serde(rename = "EnvironmentVariables")]
+    pub environment_variables: HashMap<String, String>,
+    #[serde(rename = "InheritEnvironmentVariables", skip_serializing_if = "Option::is_none")]
+    pub inherit_environment_variables: Option<bool>,
+    #[serde(rename = "StandardInputContent")]
+    pub standard_input_content: String,
+    #[serde(rename = "KillEntireProcessTree", skip_serializing_if = "Option::is_none")]
+    pub kill_entire_process_tree: Option<bool>,
+}
+
+impl ProcessCommandSpecExportData {
+    pub fn to_map(&self) -> HashMap<String, Value> {
+        let mut map = HashMap::new();
+        map.insert("ExecutablePath".to_string(), serde_json::to_value(&self.executable_path).unwrap_or(Value::Null));
+        map.insert("Arguments".to_string(), serde_json::to_value(&self.arguments).unwrap_or(Value::Null));
+        map.insert("WorkingDirectory".to_string(), serde_json::to_value(&self.working_directory).unwrap_or(Value::Null));
+        map.insert("EnvironmentVariables".to_string(), serde_json::to_value(&self.environment_variables).unwrap_or(Value::Null));
+        if let Some(ref v) = self.inherit_environment_variables {
+            map.insert("InheritEnvironmentVariables".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        map.insert("StandardInputContent".to_string(), serde_json::to_value(&self.standard_input_content).unwrap_or(Value::Null));
+        if let Some(ref v) = self.kill_entire_process_tree {
+            map.insert("KillEntireProcessTree".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        map
+    }
+}
+
+/// ProcessCommandResultExportOptions
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ProcessCommandResultExportOptions {
+    #[serde(rename = "CommandOptions")]
+    pub command_options: CommandOptions,
+    #[serde(rename = "MaxOutputLineCount", skip_serializing_if = "Option::is_none")]
+    pub max_output_line_count: Option<f64>,
+    #[serde(rename = "DisplayImmediately", skip_serializing_if = "Option::is_none")]
+    pub display_immediately: Option<bool>,
+    #[serde(rename = "SuccessExitCodes")]
+    pub success_exit_codes: Vec<f64>,
+}
+
+impl ProcessCommandResultExportOptions {
+    pub fn to_map(&self) -> HashMap<String, Value> {
+        let mut map = HashMap::new();
+        map.insert("CommandOptions".to_string(), serde_json::to_value(&self.command_options).unwrap_or(Value::Null));
+        if let Some(ref v) = self.max_output_line_count {
+            map.insert("MaxOutputLineCount".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.display_immediately {
+            map.insert("DisplayImmediately".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        map.insert("SuccessExitCodes".to_string(), serde_json::to_value(&self.success_exit_codes).unwrap_or(Value::Null));
+        map
+    }
+}
+
 /// ExecuteCommandResult
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ExecuteCommandResult {
@@ -1878,6 +1943,22 @@ impl CSharpAppResource {
         args.insert("displayName".to_string(), serde_json::to_value(&display_name).unwrap_or(Value::Null));
         args.insert("options".to_string(), serde_json::to_value(&options).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/withProcessCommand", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds a process resource command via callback
+    pub fn with_process_command_factory(&self, command_name: &str, display_name: &str, create_process_spec: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, options: Option<ProcessCommandResultExportOptions>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("commandName".to_string(), serde_json::to_value(&command_name).unwrap_or(Value::Null));
+        args.insert("displayName".to_string(), serde_json::to_value(&display_name).unwrap_or(Value::Null));
+        let callback_id = register_callback(create_process_spec);
+        args.insert("createProcessSpec".to_string(), Value::String(callback_id));
+        if let Some(ref v) = options {
+            args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withProcessCommandFactory", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -2918,6 +2999,22 @@ impl ContainerRegistryResource {
         args.insert("displayName".to_string(), serde_json::to_value(&display_name).unwrap_or(Value::Null));
         args.insert("options".to_string(), serde_json::to_value(&options).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/withProcessCommand", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds a process resource command via callback
+    pub fn with_process_command_factory(&self, command_name: &str, display_name: &str, create_process_spec: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, options: Option<ProcessCommandResultExportOptions>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("commandName".to_string(), serde_json::to_value(&command_name).unwrap_or(Value::Null));
+        args.insert("displayName".to_string(), serde_json::to_value(&display_name).unwrap_or(Value::Null));
+        let callback_id = register_callback(create_process_spec);
+        args.insert("createProcessSpec".to_string(), Value::String(callback_id));
+        if let Some(ref v) = options {
+            args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withProcessCommandFactory", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -4005,6 +4102,22 @@ impl ContainerResource {
         args.insert("displayName".to_string(), serde_json::to_value(&display_name).unwrap_or(Value::Null));
         args.insert("options".to_string(), serde_json::to_value(&options).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/withProcessCommand", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds a process resource command via callback
+    pub fn with_process_command_factory(&self, command_name: &str, display_name: &str, create_process_spec: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, options: Option<ProcessCommandResultExportOptions>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("commandName".to_string(), serde_json::to_value(&command_name).unwrap_or(Value::Null));
+        args.insert("displayName".to_string(), serde_json::to_value(&display_name).unwrap_or(Value::Null));
+        let callback_id = register_callback(create_process_spec);
+        args.insert("createProcessSpec".to_string(), Value::String(callback_id));
+        if let Some(ref v) = options {
+            args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withProcessCommandFactory", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -5681,6 +5794,22 @@ impl DotnetToolResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Adds a process resource command via callback
+    pub fn with_process_command_factory(&self, command_name: &str, display_name: &str, create_process_spec: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, options: Option<ProcessCommandResultExportOptions>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("commandName".to_string(), serde_json::to_value(&command_name).unwrap_or(Value::Null));
+        args.insert("displayName".to_string(), serde_json::to_value(&display_name).unwrap_or(Value::Null));
+        let callback_id = register_callback(create_process_spec);
+        args.insert("createProcessSpec".to_string(), Value::String(callback_id));
+        if let Some(ref v) = options {
+            args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withProcessCommandFactory", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Adds an HTTP resource command
     pub fn with_http_command(&self, path: &str, display_name: &str, options: Option<HttpCommandExportOptions>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -7340,6 +7469,22 @@ impl ExecutableResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Adds a process resource command via callback
+    pub fn with_process_command_factory(&self, command_name: &str, display_name: &str, create_process_spec: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, options: Option<ProcessCommandResultExportOptions>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("commandName".to_string(), serde_json::to_value(&command_name).unwrap_or(Value::Null));
+        args.insert("displayName".to_string(), serde_json::to_value(&display_name).unwrap_or(Value::Null));
+        let callback_id = register_callback(create_process_spec);
+        args.insert("createProcessSpec".to_string(), Value::String(callback_id));
+        if let Some(ref v) = options {
+            args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withProcessCommandFactory", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Adds an HTTP resource command
     pub fn with_http_command(&self, path: &str, display_name: &str, options: Option<HttpCommandExportOptions>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -8130,6 +8275,22 @@ impl ExternalServiceResource {
         args.insert("displayName".to_string(), serde_json::to_value(&display_name).unwrap_or(Value::Null));
         args.insert("options".to_string(), serde_json::to_value(&options).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/withProcessCommand", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds a process resource command via callback
+    pub fn with_process_command_factory(&self, command_name: &str, display_name: &str, create_process_spec: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, options: Option<ProcessCommandResultExportOptions>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("commandName".to_string(), serde_json::to_value(&command_name).unwrap_or(Value::Null));
+        args.insert("displayName".to_string(), serde_json::to_value(&display_name).unwrap_or(Value::Null));
+        let callback_id = register_callback(create_process_spec);
+        args.insert("createProcessSpec".to_string(), Value::String(callback_id));
+        if let Some(ref v) = options {
+            args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withProcessCommandFactory", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -10543,6 +10704,22 @@ impl ParameterResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Adds a process resource command via callback
+    pub fn with_process_command_factory(&self, command_name: &str, display_name: &str, create_process_spec: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, options: Option<ProcessCommandResultExportOptions>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("commandName".to_string(), serde_json::to_value(&command_name).unwrap_or(Value::Null));
+        args.insert("displayName".to_string(), serde_json::to_value(&display_name).unwrap_or(Value::Null));
+        let callback_id = register_callback(create_process_spec);
+        args.insert("createProcessSpec".to_string(), Value::String(callback_id));
+        if let Some(ref v) = options {
+            args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withProcessCommandFactory", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Adds a relationship to another resource
     pub fn with_relationship(&self, resource_builder: &IResource, r#type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -11900,6 +12077,22 @@ impl ProjectResource {
         args.insert("displayName".to_string(), serde_json::to_value(&display_name).unwrap_or(Value::Null));
         args.insert("options".to_string(), serde_json::to_value(&options).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/withProcessCommand", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds a process resource command via callback
+    pub fn with_process_command_factory(&self, command_name: &str, display_name: &str, create_process_spec: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, options: Option<ProcessCommandResultExportOptions>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("commandName".to_string(), serde_json::to_value(&command_name).unwrap_or(Value::Null));
+        args.insert("displayName".to_string(), serde_json::to_value(&display_name).unwrap_or(Value::Null));
+        let callback_id = register_callback(create_process_spec);
+        args.insert("createProcessSpec".to_string(), Value::String(callback_id));
+        if let Some(ref v) = options {
+            args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withProcessCommandFactory", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -13813,6 +14006,22 @@ impl TestDatabaseResource {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
+    /// Adds a process resource command via callback
+    pub fn with_process_command_factory(&self, command_name: &str, display_name: &str, create_process_spec: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, options: Option<ProcessCommandResultExportOptions>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("commandName".to_string(), serde_json::to_value(&command_name).unwrap_or(Value::Null));
+        args.insert("displayName".to_string(), serde_json::to_value(&display_name).unwrap_or(Value::Null));
+        let callback_id = register_callback(create_process_spec);
+        args.insert("createProcessSpec".to_string(), Value::String(callback_id));
+        if let Some(ref v) = options {
+            args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withProcessCommandFactory", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
     /// Adds an HTTP resource command
     pub fn with_http_command(&self, path: &str, display_name: &str, options: Option<HttpCommandExportOptions>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -15217,6 +15426,22 @@ impl TestRedisResource {
         args.insert("displayName".to_string(), serde_json::to_value(&display_name).unwrap_or(Value::Null));
         args.insert("options".to_string(), serde_json::to_value(&options).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/withProcessCommand", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds a process resource command via callback
+    pub fn with_process_command_factory(&self, command_name: &str, display_name: &str, create_process_spec: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, options: Option<ProcessCommandResultExportOptions>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("commandName".to_string(), serde_json::to_value(&command_name).unwrap_or(Value::Null));
+        args.insert("displayName".to_string(), serde_json::to_value(&display_name).unwrap_or(Value::Null));
+        let callback_id = register_callback(create_process_spec);
+        args.insert("createProcessSpec".to_string(), Value::String(callback_id));
+        if let Some(ref v) = options {
+            args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withProcessCommandFactory", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
@@ -16691,6 +16916,22 @@ impl TestVaultResource {
         args.insert("displayName".to_string(), serde_json::to_value(&display_name).unwrap_or(Value::Null));
         args.insert("options".to_string(), serde_json::to_value(&options).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/withProcessCommand", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Adds a process resource command via callback
+    pub fn with_process_command_factory(&self, command_name: &str, display_name: &str, create_process_spec: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, options: Option<ProcessCommandResultExportOptions>) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("commandName".to_string(), serde_json::to_value(&command_name).unwrap_or(Value::Null));
+        args.insert("displayName".to_string(), serde_json::to_value(&display_name).unwrap_or(Value::Null));
+        let callback_id = register_callback(create_process_spec);
+        args.insert("createProcessSpec".to_string(), Value::String(callback_id));
+        if let Some(ref v) = options {
+            args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/withProcessCommandFactory", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }

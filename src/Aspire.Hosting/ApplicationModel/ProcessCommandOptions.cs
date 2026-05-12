@@ -145,3 +145,72 @@ internal sealed class ProcessCommandExportOptions
     /// </summary>
     public IReadOnlyList<int>? SuccessExitCodes { get; set; }
 }
+
+/// <summary>
+/// ATS-friendly process specification for resource process command callbacks.
+/// </summary>
+[AspireDto]
+internal sealed class ProcessCommandSpecExportData
+{
+    /// <summary>
+    /// The executable path or command name to start.
+    /// </summary>
+    public string? ExecutablePath { get; set; }
+
+    /// <summary>
+    /// The command-line arguments for the process.
+    /// </summary>
+    public IReadOnlyList<string>? Arguments { get; set; }
+
+    /// <summary>
+    /// The working directory for the process.
+    /// </summary>
+    public string? WorkingDirectory { get; set; }
+
+    /// <summary>
+    /// The environment variables to set for the process.
+    /// </summary>
+    public IReadOnlyDictionary<string, string>? EnvironmentVariables { get; set; }
+
+    /// <summary>
+    /// A value indicating whether the process should inherit the current environment variables.
+    /// </summary>
+    public bool? InheritEnvironmentVariables { get; set; }
+
+    /// <summary>
+    /// Standard input content to write to the process after it starts.
+    /// </summary>
+    public string? StandardInputContent { get; set; }
+
+    /// <summary>
+    /// A value indicating whether the entire process tree should be killed when the process is disposed.
+    /// </summary>
+    public bool? KillEntireProcessTree { get; set; }
+}
+
+/// <summary>
+/// ATS-friendly result and command configuration for resource process commands.
+/// </summary>
+[AspireDto]
+internal sealed class ProcessCommandResultExportOptions
+{
+    /// <summary>
+    /// Optional command configuration.
+    /// </summary>
+    public CommandOptions? CommandOptions { get; set; }
+
+    /// <summary>
+    /// The maximum number of stdout and stderr output lines returned as command result data.
+    /// </summary>
+    public int? MaxOutputLineCount { get; set; }
+
+    /// <summary>
+    /// A value indicating whether returned command output should be displayed immediately in the dashboard.
+    /// </summary>
+    public bool? DisplayImmediately { get; set; }
+
+    /// <summary>
+    /// The exit codes that are treated as a successful command invocation.
+    /// </summary>
+    public IReadOnlyList<int>? SuccessExitCodes { get; set; }
+}

@@ -118,6 +118,40 @@ await cache.withProcessCommand(
             iconName: "WindowConsole"
         }
     });
+await cache.withProcessCommandFactory(
+    "node-process-check-factory",
+    "Node process check with arguments",
+    async (context: ExecuteCommandContext) => {
+        const args = await context.arguments();
+        const message = await args.requiredValue("message");
+
+        return {
+            executablePath: "node",
+            arguments: [
+                processCommandScriptPath,
+                message
+            ],
+            environmentVariables: {
+                TS_PROCESS_COMMAND_SAMPLE: "from-process-command-factory"
+            },
+            standardInputContent: "hello from TypeScript AppHost factory"
+        };
+    },
+    {
+        commandOptions: {
+            description: "Runs a Node process command with arguments from the TypeScript AppHost.",
+            iconName: "WindowConsole",
+            arguments: [
+                {
+                    name: "message",
+                    label: "Message",
+                    inputType: InputType.Text,
+                    required: true
+                }
+            ]
+        },
+        maxOutputLineCount: 10
+    });
 
 console.log("Added Redis cache");
 
