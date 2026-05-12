@@ -6,18 +6,18 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
 // VNet layout:
-//   10.0.0.0/16   - vnet
-//     10.0.0.0/22 - aks node pool subnet (1024 IPs - room for pods/nodes)
-//     10.0.4.0/24 - public AGC frontend subnet (delegated to ServiceNetworking by AddLoadBalancer)
-//     10.0.5.0/24 - admin AGC frontend subnet
+//   10.100.0.0/16   - vnet (chosen to avoid the AKS default service CIDR 10.0.0.0/16)
+//     10.100.0.0/22 - aks node pool subnet (1024 IPs - room for pods/nodes)
+//     10.100.4.0/24 - public AGC frontend subnet (delegated to ServiceNetworking by AddLoadBalancer)
+//     10.100.5.0/24 - admin AGC frontend subnet
 //
 // AGC requires the ALB frontend subnet to be /24 or larger and to be delegated to
 // Microsoft.ServiceNetworking/trafficControllers. AddLoadBalancer applies the delegation
 // for us; we just need to make sure the AKS subnet and ALB subnets do not overlap.
-var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
-var aksSubnet = vnet.AddSubnet("aks-nodes", "10.0.0.0/22");
-var publicSubnet = vnet.AddSubnet("alb-public", "10.0.4.0/24");
-var adminSubnet = vnet.AddSubnet("alb-admin", "10.0.5.0/24");
+var vnet = builder.AddAzureVirtualNetwork("vnet", "10.100.0.0/16");
+var aksSubnet = vnet.AddSubnet("aks-nodes", "10.100.0.0/22");
+var publicSubnet = vnet.AddSubnet("alb-public", "10.100.4.0/24");
+var adminSubnet = vnet.AddSubnet("alb-admin", "10.100.5.0/24");
 
 var aks = builder.AddAzureKubernetesEnvironment("aks")
                  .WithSubnet(aksSubnet)
