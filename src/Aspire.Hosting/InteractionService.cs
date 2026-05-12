@@ -71,7 +71,7 @@ internal class InteractionService : IInteractionService
     /// </summary>
     internal static NonInteractiveScope StartNonInteractiveScope() => new();
 
-    internal readonly struct NonInteractiveScope : IDisposable
+    internal sealed class NonInteractiveScope : IDisposable
     {
         private readonly bool _previousValue;
 

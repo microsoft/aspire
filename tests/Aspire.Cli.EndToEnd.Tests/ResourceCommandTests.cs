@@ -23,7 +23,7 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
         var projectSuffix = Guid.NewGuid().ToString("N")[..6];
         var projectName = $"ResourceCmdApp_{projectSuffix}";
 
-        var workspace = TemporaryWorkspace.Create(output);
+        using var workspace = TemporaryWorkspace.Create(output);
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
 
@@ -54,8 +54,7 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
                     StringComparison.Ordinal);
             }
 
-            var original = "var app = builder.Build();";
-            var replacement = """
+            var commandInjection = """
                 cache.WithCommand(
                     name: "needs-interaction",
                     displayName: "Needs interaction",
@@ -80,10 +79,20 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
                         }
                     });
 
-                var app = builder.Build();
                 """;
 
-            content = content.Replace(original, replacement, StringComparison.Ordinal);
+            if (content.Contains("builder.Build().Run();", StringComparison.Ordinal))
+            {
+                content = content.Replace(
+                    "builder.Build().Run();",
+                    $"{commandInjection}builder.Build().Run();",
+                    StringComparison.Ordinal);
+            }
+            else
+            {
+                throw new InvalidOperationException("Could not locate AppHost build statement while injecting resource command test hook.");
+            }
+
             File.WriteAllText(appHostFilePath, content);
 
             await auto.TypeAsync("aspire start");

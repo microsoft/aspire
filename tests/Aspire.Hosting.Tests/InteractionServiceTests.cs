@@ -330,6 +330,25 @@ public class InteractionServiceTests
     }
 
     [Fact]
+    public void IsAvailable_NullScopeDispose_DoesNotAffectOuterScope()
+    {
+        var interactionService = CreateInteractionService();
+
+        Assert.True(interactionService.IsAvailable);
+
+        using (InteractionService.StartNonInteractiveScope())
+        {
+            Assert.False(interactionService.IsAvailable);
+
+            using var _ = default(InteractionService.NonInteractiveScope);
+
+            Assert.False(interactionService.IsAvailable);
+        }
+
+        Assert.True(interactionService.IsAvailable);
+    }
+
+    [Fact]
     public async Task PromptInputAsync_ValidationCallbackInvalidData_ReturnErrors()
     {
         var interactionService = CreateInteractionService();
