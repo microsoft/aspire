@@ -39,11 +39,11 @@ public sealed class TypeScriptStarterTemplateTests(ITestOutputHelper output)
         // Step 1.5: Verify starter creation also restored the generated TypeScript SDK.
         var projectRoot = Path.Combine(workspace.WorkspaceRoot.FullName, "TsStarterApp");
         GitIgnoreAssertions.AssertContainsEntry(projectRoot, ".aspire/");
-        var modulesDir = Path.Combine(projectRoot, "modules");
+        var modulesDir = Path.Combine(projectRoot, ".modules");
 
         if (!Directory.Exists(modulesDir))
         {
-            throw new InvalidOperationException($"modules directory was not created at {modulesDir}");
+            throw new InvalidOperationException($".modules directory was not created at {modulesDir}");
         }
 
         var aspireModulePath = Path.Combine(modulesDir, "aspire.mts");

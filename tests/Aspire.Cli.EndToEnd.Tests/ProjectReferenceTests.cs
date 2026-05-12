@@ -126,8 +126,8 @@ public sealed class ProjectReferenceTests(ITestOutputHelper output)
             var updatedJson = config.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(configPath, updatedJson);
 
-            // Delete the generated modules folder to force re-codegen with the new integration
-            var modulesDir = Path.Combine(workDir, "modules");
+            // Delete the generated .modules folder to force re-codegen with the new integration
+            var modulesDir = Path.Combine(workDir, ".modules");
             if (Directory.Exists(modulesDir))
             {
                 Directory.Delete(modulesDir, recursive: true);

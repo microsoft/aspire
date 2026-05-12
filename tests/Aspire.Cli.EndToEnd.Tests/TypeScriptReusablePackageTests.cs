@@ -69,8 +69,8 @@ public sealed class TypeScriptReusablePackageTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
         await auto.WaitForSuccessPromptAsync(counter);
 
-        var helperModulesDirectory = Path.Combine(helperDirectory.FullName, "modules");
-        Assert.True(Directory.Exists(helperModulesDirectory), $"modules directory was not created for helper package at {helperModulesDirectory}");
+        var helperModulesDirectory = Path.Combine(helperDirectory.FullName, ".modules");
+        Assert.True(Directory.Exists(helperModulesDirectory), $".modules directory was not created for helper package at {helperModulesDirectory}");
         Assert.Contains("addRedis", File.ReadAllText(Path.Combine(helperModulesDirectory, "aspire.mts")));
 
         await auto.TypeAsync("npx tsc --noEmit");
@@ -135,7 +135,7 @@ public sealed class TypeScriptReusablePackageTests(ITestOutputHelper output)
                 "apphost.mts",
                 ".modules/**/*.mts",
                 "../packages/aspire-commands/src/**/*.ts",
-                "../packages/aspire-commands/modules/**/*.mts"
+                "../packages/aspire-commands/.modules/**/*.mts"
               ],
               "exclude": [
                 "node_modules"
