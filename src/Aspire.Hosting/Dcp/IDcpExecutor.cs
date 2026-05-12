@@ -3,17 +3,6 @@
 
 namespace Aspire.Hosting.Dcp;
 
-/// <summary>
-/// Specifies which endpoints to process when creating AllocatedEndpoint info.
-/// </summary>
-[Flags]
-internal enum AllocatedEndpointsMode
-{
-    Workload = 0x1,
-    ContainerTunnel = 0x2,
-    All = 0xFF
-}
-
 internal interface IDcpExecutor
 {
     Task RunApplicationAsync(CancellationToken cancellationToken);

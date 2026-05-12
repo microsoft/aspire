@@ -43,7 +43,7 @@ internal record struct HostResourceWithEndpoints(
 /// Handles preparation and creation of Container, ContainerExec, ContainerNetwork,
 /// and ContainerNetworkTunnelProxy DCP resources.
 /// </summary>
-internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCreationContext>, IObjectCreator<ContainerExec, EmptyCreationContext>
+internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCreationContext>, IObjectCreator<ContainerExec, EmptyCreationContext>, IDisposable
 {
     private const string ContainerTunnelContainerName = "aspire";
 
@@ -83,6 +83,11 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         _logger = logger;
         _normalizedApplicationName = DcpExecutor.NormalizeApplicationName(hostEnvironment.ApplicationName);
         _appResources = appResources;
+    }
+
+    public void Dispose()
+    {
+        _tunnelSemaphore.Dispose();
     }
 
     private async Task<string> GetContainerHostNameAsync(CancellationToken cancellationToken = default)
@@ -431,8 +436,8 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
     private async Task<AppResource<ContainerNetworkTunnelProxy>> CreateTunnelProxyResourceAsync(
         IDcpObjectFactory factory,
         List<TunnelConfiguration>? tunnels,
-        CancellationToken cancellationToken = default
-) {
+        CancellationToken cancellationToken = default)
+    {
         Debug.Assert(_options.Value.EnableAspireContainerTunnel, "This method should only be called if the container tunnel feature is enabled.");
         Debug.Assert(!_appResources.Get().OfType<AppResource<ContainerNetworkTunnelProxy>>().Any(), "This method should only be called if a tunnel proxy resource hasn't already been created.");
 
@@ -485,7 +490,6 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
 
         await Task.WhenAll([cctx.ContainerPrerequisitesReady, cctx.ContainerTunnelPrerequisitesReady]).WaitAsync(cancellationToken).ConfigureAwait(false);
 
-        _appResources.AddRange(containerNetworkServices.Select(cns => cns.ServiceResource));
         var serviceObjects = containerNetworkServices.Select(cns => cns.ServiceResource.DcpResource).ToArray();
         await factory.CreateDcpObjectsAsync(serviceObjects, cancellationToken).ConfigureAwait(false);
 
@@ -527,11 +531,10 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         }
 
         await factory.UpdateWithEffectiveAddressInfo(serviceObjects, cancellationToken, TimeSpan.FromMinutes(1)).ConfigureAwait(false);
-        DcpModelUtilities.AddAllocatedEndpointInfo(
-            _appResources.Get().OfType<RenderedModelResource<Executable>>(),
-            AllocatedEndpointsMode.ContainerTunnel,
-            _appResources.Get(),
-            _options.Value.EnableAspireContainerTunnel,
+        _appResources.AddRange(containerNetworkServices.Select(cns => cns.ServiceResource));
+        DcpModelUtilities.AddContainerTunnelAllocatedEndpoints(
+            hostDependencies.Select(hd => hd.Resource),
+            _appResources,
             await GetContainerHostNameAsync(cancellationToken).ConfigureAwait(false));
     }
 
