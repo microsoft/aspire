@@ -211,9 +211,9 @@ public static partial class KubernetesHelmChartExtensions
     }
 
     /// <summary>
-    /// Opts the Helm chart in to <c>helm upgrade --install --take-ownership</c>. When set,
-    /// Helm's server-side apply takes ownership of any fields owned by another field manager
-    /// instead of failing with a conflict.
+    /// Opts the Helm chart in to <c>helm upgrade --install --force-conflicts</c>. When set,
+    /// Helm's server-side apply forcibly takes over any fields owned by another field
+    /// manager instead of failing with a conflict.
     /// </summary>
     /// <param name="builder">The Helm chart resource builder.</param>
     /// <returns>The resource builder for chaining.</returns>
@@ -223,22 +223,24 @@ public static partial class KubernetesHelmChartExtensions
     /// (cert-manager, kyverno, gatekeeper, opa-gatekeeper, etc.) on clusters where another
     /// admission controller — such as the AKS <c>admissionsenforcer</c> field manager
     /// installed by the Azure Policy add-on or Deployment Safeguards — mutates the webhook
-    /// configuration after install. Helm 3.18+ uses Server-Side Apply for charts that opt in,
-    /// and SSA refuses to overwrite fields owned by another field manager. Without
-    /// <c>--take-ownership</c>, the next <c>helm upgrade</c> fails with a "conflict with
-    /// admissionsenforcer" error on the webhook's <c>namespaceSelector</c> (or similar).
+    /// configuration after install. Helm's Server-Side Apply (used by default for charts
+    /// that opt in, including cert-manager) refuses to overwrite fields owned by another
+    /// field manager. Without <c>--force-conflicts</c>, the next <c>helm upgrade</c> fails
+    /// with a "conflict with admissionsenforcer" error on the webhook's
+    /// <c>namespaceSelector</c> (or similar).
     /// See
-    /// <see href="https://learn.microsoft.com/azure/aks/deployment-safeguards">Deployment Safeguards in AKS</see>,
-    /// <see href="https://kubernetes.io/docs/reference/using-api/server-side-apply/#conflicts">Server-Side Apply conflicts</see>,
-    /// and the Helm 3.18 <see href="https://github.com/helm/helm/releases/tag/v3.18.0">release notes</see>
+    /// <see href="https://learn.microsoft.com/azure/aks/deployment-safeguards">Deployment Safeguards in AKS</see>
+    /// and
+    /// <see href="https://kubernetes.io/docs/reference/using-api/server-side-apply/#conflicts">Server-Side Apply conflicts</see>
     /// for background.
     /// </para>
     /// <para>
-    /// Unlike the deprecated <c>helm upgrade --force</c>, <c>--take-ownership</c> is
-    /// non-destructive — it only changes which field manager owns the conflicting field.
-    /// No resources are deleted or recreated. The flag requires Helm 3.18 or later, which
-    /// Aspire's Kubernetes deployment tooling already requires for its Server-Side Apply
-    /// behavior.
+    /// Unlike the deprecated <c>--force</c> / <c>--force-replace</c> (which delete and
+    /// recreate the resource and are incompatible with Server-Side Apply),
+    /// <c>--force-conflicts</c> is non-destructive — it only changes which field manager
+    /// owns the conflicting field. No resources are deleted or recreated. This flag is
+    /// also distinct from Helm's <c>--take-ownership</c>, which transfers ownership of an
+    /// entire resource between Helm releases and does not address field-level conflicts.
     /// </para>
     /// </remarks>
     /// <example>
@@ -249,7 +251,7 @@ public static partial class KubernetesHelmChartExtensions
     ///     .WithForceUpgrade();
     /// </code>
     /// </example>
-    [AspireExport("withHelmChartForceUpgrade", Description = "Passes --take-ownership to helm upgrade --install for this chart")]
+    [AspireExport("withHelmChartForceUpgrade", Description = "Passes --force-conflicts to helm upgrade --install for this chart")]
     public static IResourceBuilder<KubernetesHelmChartResource> WithForceUpgrade(
         this IResourceBuilder<KubernetesHelmChartResource> builder)
     {
@@ -283,13 +285,17 @@ public static partial class KubernetesHelmChartExtensions
 
         if (chart.ForceUpgrade)
         {
-            // --take-ownership tells helm's server-side apply to take over fields owned
-            // by other field managers instead of failing with a conflict. Required for
-            // charts whose admission webhooks are mutated by the AKS admissionsenforcer
-            // / Azure Policy add-on after install — without it, helm 3.18+ fails on
+            // --force-conflicts tells helm's server-side apply to forcibly take over fields
+            // owned by other field managers instead of failing with a conflict. Required
+            // for charts whose admission webhooks are mutated by the AKS admissionsenforcer
+            // / Azure Policy add-on after install — without it, helm's SSA fails on
             // .webhooks[*].namespaceSelector. Non-destructive (no resource recreate).
+            // Equivalent to `kubectl apply --force-conflicts` and distinct from
+            // --take-ownership (which transfers helm release ownership) and the
+            // deprecated --force / --force-replace (which delete + recreate resources
+            // and are incompatible with SSA).
             // See KubernetesHelmChartExtensions.WithForceUpgrade for the full rationale.
-            arguments.Append(" --take-ownership");
+            arguments.Append(" --force-conflicts");
         }
 
         if (environment.KubeConfigPath is not null)
