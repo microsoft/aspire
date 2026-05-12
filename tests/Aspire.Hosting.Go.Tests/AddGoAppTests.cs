@@ -90,10 +90,7 @@ public class AddGoAppTests
 
         var content = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
 
-        // Build context is the module root (sourceDir) — go.mod is found.
-        Assert.Contains("go mod download", content);
-        // go build targets the sub-package, not the module root.
-        Assert.Contains("-o /app/api ./cmd/server", content);
+        await Verify(content);
     }
 
     // ---- Manifest: AddGoApp build params ------------------------------------
@@ -503,10 +500,8 @@ public class AddGoAppTests
         Assert.True(File.Exists(dockerfilePath), "Dockerfile should be generated in publish mode");
 
         var content = await File.ReadAllTextAsync(dockerfilePath);
-        Assert.Contains("FROM golang:1.23-alpine AS build", content);
-        Assert.Contains("FROM alpine:latest", content);
-        Assert.Contains("go build -o /app/api .", content);
-        Assert.Contains("ca-certificates", content);
+
+        await Verify(content);
     }
 
     [Fact]
@@ -521,7 +516,8 @@ public class AddGoAppTests
         builder.Build().Run();
 
         var content = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
-        Assert.Contains("FROM golang:1.26-alpine AS build", content);
+
+        await Verify(content);
     }
 
     [Fact]
@@ -541,10 +537,8 @@ public class AddGoAppTests
         builder.Build().Run();
 
         var content = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
-        // -race requires CGO; the Dockerfile sets CGO_ENABLED=0, so it must not appear in publish builds.
-        Assert.DoesNotContain("-race", content);
-        Assert.Contains("-tags='netgo,osusergo'", content);
-        Assert.Contains("-ldflags='-X main.version=1.0.0'", content);
+
+        await Verify(content);
     }
 
     [Fact]
@@ -564,8 +558,8 @@ public class AddGoAppTests
         builder.Build().Run();
 
         var content = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
-        // POSIX: 'it'\''s' is the correctly escaped form of it's inside single quotes.
-        Assert.Contains("-ldflags='-X main.msg=it'\\''s alive'", content);
+
+        await Verify(content);
     }
 
     [Fact]
@@ -599,9 +593,8 @@ public class AddGoAppTests
         builder.Build().Run();
 
         var content = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
-        Assert.Contains("FROM golang:1.22-bookworm AS build", content);
-        Assert.Contains("FROM debian:bookworm-slim", content);
-        Assert.DoesNotContain("alpine", content);
+
+        await Verify(content);
     }
 
     // ---- Publish: private module authentication --------------------------------
@@ -622,18 +615,7 @@ public class AddGoAppTests
 
         var content = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
 
-        // Build ARG carries the non-sensitive username.
-        Assert.Contains("ARG GIT_USER", content);
-        // GOPRIVATE routes private paths away from the public proxy.
-        Assert.Contains("GOPRIVATE=github.com/myorg", content);
-        // git is required for private module fetching on Alpine.
-        Assert.Contains("apk add --no-cache git", content);
-        // Secret mount + inline .netrc write + cleanup must be in the mod download step.
-        Assert.Contains("type=secret,id=gittoken", content);
-        Assert.Contains("machine github.com login", content);
-        Assert.Contains("rm -f $HOME/.netrc", content);
-        // Standard binary still built correctly.
-        Assert.Contains("go build", content);
+        await Verify(content);
     }
 
     [Fact]
@@ -652,9 +634,7 @@ public class AddGoAppTests
 
         var content = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
 
-        Assert.Contains("GOPRIVATE=gitlab.mycompany.com", content);
-        Assert.Contains("type=secret,id=gl_token", content);
-        Assert.Contains("machine gitlab.mycompany.com login", content);
+        await Verify(content);
     }
 
     // ---- Container files (IContainerFilesDestinationResource) ---------------
@@ -807,10 +787,7 @@ public class AddGoAppTests
 
         var content = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
 
-        // -race requires CGO; Dockerfile sets CGO_ENABLED=0 — must not appear in publish builds.
-        Assert.DoesNotContain("-race", content);
-        // go build should still be present.
-        Assert.Contains("go build", content);
+        await Verify(content);
     }
 
     // ---- Issue 4: mod tool ordering -----------------------------------------
@@ -883,10 +860,7 @@ public class AddGoAppTests
 
         var content = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
 
-        // Alpine non-root user creation.
-        Assert.Contains("addgroup -S app", content);
-        Assert.Contains("adduser -S -G app app", content);
-        Assert.Contains("USER app", content);
+        await Verify(content);
     }
 
     [Fact]
@@ -905,10 +879,7 @@ public class AddGoAppTests
 
         var content = await File.ReadAllTextAsync(Path.Combine(outputDir.Path, "api.Dockerfile"));
 
-        // Debian non-root user creation.
-        Assert.Contains("groupadd --system --gid 999 app", content);
-        Assert.Contains("useradd --system --gid 999 --uid 999 --no-create-home app", content);
-        Assert.Contains("USER app", content);
+        await Verify(content);
     }
 
     private sealed class GoFilesContainer(string name, string command, string workingDirectory)
