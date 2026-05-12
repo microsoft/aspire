@@ -286,7 +286,23 @@ internal sealed class ScaffoldingService : IScaffoldingService
         scripts["aspire:build"] = CreateRootDelegateScript(toolchain, relativeAppHostDirectory, "aspire:build");
         scripts["aspire:dev"] = CreateRootDelegateScript(toolchain, relativeAppHostDirectory, "aspire:dev");
 
-        await File.WriteAllTextAsync(packageJsonPath, packageJson.ToJsonString(s_packageJsonSerializerOptions), cancellationToken);
+        var serializedPackageJson = SerializePackageJson(packageJson, existingContent);
+        await File.WriteAllTextAsync(packageJsonPath, serializedPackageJson, cancellationToken);
+    }
+
+    internal static string SerializePackageJson(JsonObject packageJson, string existingContent)
+    {
+        var serializedPackageJson = packageJson.ToJsonString(s_packageJsonSerializerOptions);
+        var trailingNewLine = existingContent.EndsWith("\r\n", StringComparison.Ordinal)
+            ? "\r\n"
+            : existingContent.EndsWith('\n') ? "\n" : null;
+
+        if (trailingNewLine is not null)
+        {
+            serializedPackageJson += trailingNewLine;
+        }
+
+        return serializedPackageJson;
     }
 
     private static JsonObject EnsureJsonObject(JsonObject parent, string propertyName)

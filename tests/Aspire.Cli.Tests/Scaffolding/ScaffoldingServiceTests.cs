@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json.Nodes;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Projects;
 
@@ -79,6 +80,36 @@ public class ScaffoldingServiceTests
         {
             rootDirectory.Delete(recursive: true);
         }
+    }
+
+    [Fact]
+    public void SerializePackageJson_PreservesTrailingNewLine_WhenOriginalHadOne()
+    {
+        var packageJson = JsonNode.Parse("""{ "scripts": { "aspire:start": "npm --prefix aspire-apphost run aspire:start" } }""")!.AsObject();
+
+        var serialized = ScaffoldingService.SerializePackageJson(packageJson, "{\n}\n");
+
+        Assert.EndsWith("\n", serialized);
+    }
+
+    [Fact]
+    public void SerializePackageJson_PreservesTrailingNewLineStyle_WhenOriginalHadWindowsNewLine()
+    {
+        var packageJson = JsonNode.Parse("""{ "scripts": { "aspire:start": "npm --prefix aspire-apphost run aspire:start" } }""")!.AsObject();
+
+        var serialized = ScaffoldingService.SerializePackageJson(packageJson, "{\r\n}\r\n");
+
+        Assert.EndsWith("\r\n", serialized);
+    }
+
+    [Fact]
+    public void SerializePackageJson_DoesNotAddTrailingNewLine_WhenOriginalDidNotHaveOne()
+    {
+        var packageJson = JsonNode.Parse("""{ "scripts": { "aspire:start": "npm --prefix aspire-apphost run aspire:start" } }""")!.AsObject();
+
+        var serialized = ScaffoldingService.SerializePackageJson(packageJson, "{}");
+
+        Assert.False(serialized.EndsWith(Environment.NewLine, StringComparison.Ordinal));
     }
 
     [Fact]
