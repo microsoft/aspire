@@ -11,6 +11,10 @@ public static class CustomAssert
     {
         // Timers are not precise, especially under CPU contention, so we allow for a margin of error.
         // The margin accounts for system scheduling delays and Task.Delay inaccuracy under load.
-        Assert.True(duration >= minInterval.Subtract(TimeSpan.FromMilliseconds(200)), $"Elapsed time {duration} should be greater than min interval {minInterval}.");
+        var tolerance = TimeSpan.FromMilliseconds(200);
+        var effectiveMinInterval = minInterval.Subtract(tolerance);
+        Assert.True(
+            duration >= effectiveMinInterval,
+            $"Elapsed time {duration} should be greater than or equal to effective min interval {effectiveMinInterval} (min interval {minInterval} with tolerance {tolerance}).");
     }
 }
