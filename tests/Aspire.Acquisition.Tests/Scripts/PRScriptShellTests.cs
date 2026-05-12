@@ -158,10 +158,13 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
     [Fact]
     public async Task RunIdAsFirstArg_DryRun_Succeeds()
     {
+        // Verifies --run-id is recognized as a first-positional flag. Pair with
+        // --hive-label because --run-id alone is rejected (the installed CLI's
+        // channel is baked at build time and never points at a 'run-<id>' hive).
         using var env = new TestEnvironment();
         using var cmd = await CreateCommandWithMockGhAsync(env);
 
-        var result = await cmd.ExecuteAsync("--run-id", "987654321", "--dry-run", "--skip-path");
+        var result = await cmd.ExecuteAsync("--run-id", "987654321", "--hive-label", "pr-12345", "--dry-run", "--skip-path");
 
         result.EnsureSuccessful();
         Assert.Contains("987654321", result.Output);
@@ -169,15 +172,22 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
     }
 
     [Fact]
-    public async Task RunIdAsFirstArg_DryRun_UsesRunHiveLabel()
+    public async Task RunIdOnly_NoHiveLabel_DryRun_Rejected()
     {
+        // Regression guard: --run-id alone (without --pr-number / --hive-label) must
+        // fail with actionable guidance. The installed CLI's channel is baked at build
+        // time (pr-<N>/staging/daily/local); 'run-<id>' is never a baked channel, so a
+        // hives/run-<id>/packages layout would be unreachable from the CLI.
         using var env = new TestEnvironment();
         using var cmd = await CreateCommandWithMockGhAsync(env);
 
         var result = await cmd.ExecuteAsync("--run-id", "987654321", "--dry-run", "--skip-path", "--verbose");
 
-        result.EnsureSuccessful();
-        Assert.Contains("run-987654321", result.Output);
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("Cannot determine hive label from --run-id alone", result.Output);
+        Assert.Contains("--pr-number", result.Output);
+        Assert.Contains("--hive-label", result.Output);
+        Assert.DoesNotContain("run-987654321", result.Output);
     }
 
     [Fact]
@@ -218,10 +228,12 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
     [Fact]
     public async Task ShortRunIdFlag_AsFirstArg_DryRun_Succeeds()
     {
+        // Verifies -r is recognized as a first-positional alias for --run-id. Pair
+        // with --hive-label because --run-id alone is rejected.
         using var env = new TestEnvironment();
         using var cmd = await CreateCommandWithMockGhAsync(env);
 
-        var result = await cmd.ExecuteAsync("-r", "987654321", "--dry-run", "--skip-path");
+        var result = await cmd.ExecuteAsync("-r", "987654321", "--hive-label", "pr-12345", "--dry-run", "--skip-path");
 
         result.EnsureSuccessful();
         Assert.Contains("987654321", result.Output);
@@ -465,7 +477,7 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
             "--dry-run");
 
         result.EnsureSuccessful();
-        Assert.Contains("local", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Using hive label: local", result.Output, StringComparison.Ordinal);
         Assert.DoesNotContain("run-99999", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 }

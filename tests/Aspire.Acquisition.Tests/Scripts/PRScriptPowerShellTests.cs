@@ -118,6 +118,25 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
     }
 
     [Fact]
+    public async Task WorkflowRunIdOnly_NoHiveLabel_WhatIf_Rejected()
+    {
+        // Regression guard: -WorkflowRunId alone (without -PRNumber / -HiveLabel) must
+        // fail with actionable guidance. The installed CLI's channel is baked at build
+        // time (pr-<N>/staging/daily/local); 'run-<id>' is never a baked channel, so a
+        // hives/run-<id>/packages layout would be unreachable from the CLI.
+        using var env = new TestEnvironment();
+        using var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("-WorkflowRunId", "987654321", "-WhatIf", "-SkipPath", "-Verbose");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("Cannot determine hive label from -WorkflowRunId alone", result.Output);
+        Assert.Contains("-PRNumber", result.Output);
+        Assert.Contains("-HiveLabel", result.Output);
+        Assert.DoesNotContain("run-987654321", result.Output);
+    }
+
+    [Fact]
     public async Task LocalDir_WhatIf_UsesLocalDirectoryWithoutGh()
     {
         using var env = new TestEnvironment();
@@ -369,7 +388,7 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
             "-WhatIf");
 
         result.EnsureSuccessful();
-        Assert.Contains("local", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Using hive label: local", result.Output, StringComparison.Ordinal);
         Assert.DoesNotContain("run-99999", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 }
