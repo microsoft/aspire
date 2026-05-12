@@ -1421,7 +1421,12 @@ function Start-DownloadAndInstall {
     } elseif ($PRNumber -gt 0) {
         "pr-$PRNumber"
     } else {
-        "run-$runId"
+        # The installed CLI's identity (CliExecutionContext.Channel) is baked at build
+        # time via AspireCliChannel — one of pr-<N>/staging/daily/local. There is no
+        # 'run-<id>' channel, so packages dropped into hives/run-<id>/packages would
+        # be invisible to the CLI. Reject early with actionable guidance instead of
+        # silently producing an unusable layout.
+        throw "Cannot determine hive label from -WorkflowRunId alone. The installed CLI's package channel is baked at build time (pr-<N>/staging/daily/local) and will not look in a 'run-<id>' hive. Re-run with -PRNumber <N> (preferred) or -HiveLabel <label> matching the CLI's baked AspireCliChannel."
     }
     $nugetHiveDir = Join-Path $resolvedInstallPrefix "hives" $resolvedHiveLabel "packages"
 
