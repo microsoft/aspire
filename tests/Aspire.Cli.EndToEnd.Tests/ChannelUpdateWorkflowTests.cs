@@ -83,8 +83,10 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
         // baked channel (local / pr-N / dev / staging depending on the install strategy).
         await auto.AspireNewTypeScriptEmptyAppHostAsync(projectName, counter);
 
-        // For LocalHive runs, point the freshly-created project at the local channel so subsequent
-        // adds/updates resolve packages from the in-repo nupkgs.
+        // LocalHive strategy only: PrepareLocalChannel returned a real channel,
+        // so write the per-project aspire.config.json to point at the in-repo
+        // nupkg hive. Other strategies (script-installed CLI, pre-existing CLI)
+        // return null and rely on the CLI's baked channel + ambient NuGet feeds.
         if (localChannel is not null)
         {
             CliE2ETestHelpers.WriteLocalChannelSettings(projectPath, localChannel.SdkVersion);
