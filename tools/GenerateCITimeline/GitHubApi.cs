@@ -6,28 +6,69 @@ using System.Text.Json;
 
 internal static class GitHubApi
 {
+    private const int MaxTransientRetries = 3;
+
     public static async Task<JsonElement> CallAsync(string endpoint)
     {
-        var psi = new ProcessStartInfo("gh", ["api", endpoint, "--paginate"])
+        for (var attempt = 1; ; attempt++)
         {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-        };
+            var psi = new ProcessStartInfo("gh", ["api", endpoint, "--paginate"])
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            };
 
-        using var process = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start gh process.");
-        // Read both streams concurrently to avoid deadlock when a pipe buffer fills.
-        var stdoutTask = process.StandardOutput.ReadToEndAsync();
-        var stderrTask = process.StandardError.ReadToEndAsync();
-        await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false);
-        var stdout = stdoutTask.Result;
-        var stderr = stderrTask.Result;
-        await process.WaitForExitAsync().ConfigureAwait(false);
+            using var process = Process.Start(psi) ?? throw new InvalidOperationException("Failed to start gh process.");
+            var stdoutTask = process.StandardOutput.ReadToEndAsync();
+            var stderrTask = process.StandardError.ReadToEndAsync();
+            await Task.WhenAll(stdoutTask, stderrTask).ConfigureAwait(false);
+            var stdout = stdoutTask.Result;
+            var stderr = stderrTask.Result;
+            await process.WaitForExitAsync().ConfigureAwait(false);
 
-        if (process.ExitCode != 0)
-        {
+            if (process.ExitCode == 0)
+            {
+                var text = stdout.Trim();
+                if (string.IsNullOrEmpty(text))
+                {
+                    using var emptyDoc = JsonDocument.Parse("{}");
+                    return emptyDoc.RootElement.Clone();
+                }
+
+                return ParseJson(stdout);
+            }
+
+            if (attempt < MaxTransientRetries && IsTransientGhApiFailure(stderr))
+            {
+                await Task.Delay(TimeSpan.FromSeconds(attempt)).ConfigureAwait(false);
+                continue;
+            }
+
             throw new InvalidOperationException($"gh api failed: {stderr.Trim()}");
         }
+    }
 
+    internal static bool IsTransientGhApiFailure(string? stderr)
+    {
+        if (string.IsNullOrWhiteSpace(stderr))
+        {
+            return false;
+        }
+
+        return stderr.Contains("HTTP 500", StringComparison.OrdinalIgnoreCase)
+            || stderr.Contains("HTTP 502", StringComparison.OrdinalIgnoreCase)
+            || stderr.Contains("HTTP 503", StringComparison.OrdinalIgnoreCase)
+            || stderr.Contains("HTTP 504", StringComparison.OrdinalIgnoreCase)
+            || stderr.Contains("bad gateway", StringComparison.OrdinalIgnoreCase)
+            || stderr.Contains("server error", StringComparison.OrdinalIgnoreCase)
+            || stderr.Contains("gateway timeout", StringComparison.OrdinalIgnoreCase)
+            || stderr.Contains("connection reset", StringComparison.OrdinalIgnoreCase)
+            || stderr.Contains("timed out", StringComparison.OrdinalIgnoreCase)
+            || stderr.Contains("temporarily unavailable", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static JsonElement ParseJson(string stdout)
+    {
         var text = stdout.Trim();
         if (string.IsNullOrEmpty(text))
         {
@@ -35,8 +76,6 @@ internal static class GitHubApi
             return emptyDoc.RootElement.Clone();
         }
 
-        // gh --paginate can produce multiple JSON objects concatenated together.
-        // Parse them all and merge if needed.
         var objects = new List<JsonElement>();
         var reader = new Utf8JsonReader(
             System.Text.Encoding.UTF8.GetBytes(text),

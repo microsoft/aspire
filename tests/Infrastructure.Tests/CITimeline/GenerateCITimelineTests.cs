@@ -168,7 +168,27 @@ public class GenerateCITimelineTests
     {
         var (runInfo, jobs) = LoadTestData("basic-run.json");
         var summary = TimelineRenderer.GenerateSummary(runInfo, jobs);
-
+ 
         Assert.Contains("45m", summary);
+    }
+
+    [Theory]
+    [InlineData("gh: Server Error (HTTP 502)")]
+    [InlineData("gh: gateway timeout (HTTP 504)")]
+    [InlineData("connection reset by peer")]
+    [InlineData("service temporarily unavailable")]
+    public void IsTransientGhApiFailure_ReturnsTrue_ForTransientFailures(string stderr)
+    {
+        Assert.True(GitHubApi.IsTransientGhApiFailure(stderr));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("gh: Not Found (HTTP 404)")]
+    [InlineData("gh: Validation Failed (HTTP 422)")]
+    public void IsTransientGhApiFailure_ReturnsFalse_ForNonTransientFailures(string? stderr)
+    {
+        Assert.False(GitHubApi.IsTransientGhApiFailure(stderr));
     }
 }
