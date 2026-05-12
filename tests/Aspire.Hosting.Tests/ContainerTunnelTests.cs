@@ -99,14 +99,21 @@ public class ContainerTunnelTests(ITestOutputHelper testOutputHelper)
         var waitingContainer = builder.AddContainer($"{testName}-waiting", "mcr.microsoft.com/cbl-mariner/base/nginx", "1.22")
             .WaitFor(container);
 
+        var waitingContainerConsumingEndpoint = builder.AddContainer($"{testName}-waiting-consuming", "mcr.microsoft.com/cbl-mariner/base/nginx", "1.22")
+            .WithEnvironment("SERVICEA_URL", servicea.GetEndpoint("http"))
+            .WaitFor(container);
+
         await using var app = builder.Build();
 
         // Use extra long timeout because if this is first time the tunnel is being used,
         // getting the base images and building the tunnel (client) proxy image may take a while.
         await app.StartAsync().DefaultTimeout(TestConstants.ExtraLongTimeoutDuration);
 
-        await app.ResourceNotifications.WaitForResourceAsync(waitingContainer.Resource.Name, KnownResourceStates.Running)
+        foreach (var c in new[] { container, waitingContainer, waitingContainerConsumingEndpoint })
+        {
+            await app.ResourceNotifications.WaitForResourceAsync(c.Resource.Name, KnownResourceStates.Running)
             .DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
+        }
 
         await app.StopAsync().DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
     }
