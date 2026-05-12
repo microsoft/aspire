@@ -12,6 +12,7 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.NuGet;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Scaffolding;
@@ -334,12 +335,29 @@ internal sealed class InitCommand : BaseCommand
         try
         {
             var query = new TemplatePackageQuery(
-                ChannelOverride: _executionContext.Channel,
+                RequestedChannel: _executionContext.IdentityChannel,
                 VersionOverride: null,
                 SourceOverride: null,
                 IncludePrHives: false);
 
             selection = await _templateNuGetConfigService.ResolveTemplatePackageAsync(query, cancellationToken);
+        }
+        catch (ChannelNotFoundException) when
+            (string.Equals(_executionContext.IdentityChannel, PackageChannelNames.Local, StringComparison.OrdinalIgnoreCase))
+        {
+            // Locally-built CLI (identity=local) on a machine where ~/.aspire/hives/local
+            // isn't installed. The PackagingService produces no "local" channel in that
+            // case, but init's contract is that identity-as-request is implicit — so fall
+            // back to the implicit channel (ambient NuGet) instead of failing. This branch
+            // lives here, NOT in the resolver, so that an explicit `aspire new --channel local`
+            // without the hive correctly errors instead of silently switching feeds.
+            var fallbackQuery = new TemplatePackageQuery(
+                RequestedChannel: null,
+                VersionOverride: null,
+                SourceOverride: null,
+                IncludePrHives: false);
+
+            selection = await _templateNuGetConfigService.ResolveTemplatePackageAsync(fallbackQuery, cancellationToken);
         }
         catch (ChannelNotFoundException ex)
         {

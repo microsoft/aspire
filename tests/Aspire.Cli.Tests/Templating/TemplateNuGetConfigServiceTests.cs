@@ -54,9 +54,9 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ResolveTemplatePackageAsync_NullChannelOverride_UsesImplicitChannelOnly()
+    public async Task ResolveTemplatePackageAsync_NullRequestedChannel_UsesImplicitChannelOnly()
     {
-        // No explicit ChannelOverride: the resolver picks the implicit channel only.
+        // No explicit RequestedChannel: the resolver picks the implicit channel only.
         // We exercise the production codepath with a tracking packaging service so the
         // assertion is that the resolver completes (no exception is thrown by
         // an unexpected channel-lookup path) and only the implicit channel is in play.
@@ -76,7 +76,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         var service = CreateService(packagingService: packagingService);
 
         var query = new TemplatePackageQuery(
-            ChannelOverride: null,
+            RequestedChannel: null,
             VersionOverride: null,
             SourceOverride: null,
             IncludePrHives: false);
@@ -90,50 +90,13 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ResolveTemplatePackageAsync_LocalChannelOverride_NoLocalHive_FallsBackToImplicitChannel()
+    public async Task ResolveTemplatePackage_RequestedChannel_NotFound_Throws()
     {
-        // A locally-built CLI bakes channel="local" into assembly metadata. On a clean
-        // machine without ~/.aspire/hives/local, PackagingService produces no "local"
-        // channel, and InitCommand forwards CliExecutionContext.Channel ("local") as
-        // ChannelOverride. Without the resolver-level fallback this throws
-        // ChannelNotFoundException and `aspire init` is unusable on a clean machine.
-        // The fallback policy: a request for "local" with no matching channel resolves
-        // to the implicit channel (ambient NuGet config) — a CLI with no local hive is
-        // semantically just a CLI using ambient NuGet.
-        var packagingService = new TestPackagingService
-        {
-            GetChannelsAsyncCallback = _ =>
-            {
-                var implicitCh = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache
-                {
-                    GetTemplatePackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(
-                    [
-                        new Aspire.Shared.NuGetPackageCli { Id = TemplateNuGetConfigService.TemplatesPackageName, Version = "13.3.0", Source = "implicit" }
-                    ])
-                });
-                return Task.FromResult<IEnumerable<PackageChannel>>([implicitCh]);
-            }
-        };
-
-        var service = CreateService(packagingService: packagingService);
-
-        var query = new TemplatePackageQuery(
-            ChannelOverride: PackageChannelNames.Local,
-            VersionOverride: null,
-            SourceOverride: null,
-            IncludePrHives: false);
-
-        var selection = await service.ResolveTemplatePackageAsync(query, CancellationToken.None);
-
-        Assert.Equal(PackageChannelType.Implicit, selection.Channel.Type);
-    }
-
-    [Fact]
-    public async Task ResolveTemplatePackageAsync_NonExistentChannelOverride_NotLocal_StillThrowsChannelNotFound()
-    {
-        // The fallback is intentionally narrow: only "local" → implicit. A request for
-        // any other unrecognized channel name must still fail loudly so typos surface
-        // (e.g., "stalbe" for "stable").
+        // The resolver no longer special-cases "local". A request for any unrecognized
+        // channel name — including "local" with no matching named channel — must
+        // throw ChannelNotFoundException. The local-identity fallback that previously
+        // lived here has moved to InitCommand so that an explicit `aspire new --channel local`
+        // without the hive still errors cleanly instead of silently switching feeds.
         var packagingService = new TestPackagingService
         {
             GetChannelsAsyncCallback = _ =>
@@ -146,7 +109,75 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         var service = CreateService(packagingService: packagingService);
 
         var query = new TemplatePackageQuery(
-            ChannelOverride: "stalbe",
+            RequestedChannel: PackageChannelNames.Local,
+            VersionOverride: null,
+            SourceOverride: null,
+            IncludePrHives: false);
+
+        await Assert.ThrowsAsync<Aspire.Cli.Exceptions.ChannelNotFoundException>(
+            async () => await service.ResolveTemplatePackageAsync(query, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ResolveTemplatePackage_RequestedChannel_Matches_ReturnsThatChannel()
+    {
+        // Positive parity: a request for a registered named channel must resolve to that
+        // exact channel. Verifies the rename + collapsed selection block didn't regress
+        // the matching path.
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ =>
+            {
+                var implicitCh = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache());
+                var stableCh = PackageChannel.CreateExplicitChannel(
+                    "stable",
+                    PackageChannelQuality.Both,
+                    [new PackageMapping("Aspire*", "stable-src")],
+                    new FakeNuGetPackageCache
+                    {
+                        GetTemplatePackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(
+                        [
+                            new Aspire.Shared.NuGetPackageCli { Id = TemplateNuGetConfigService.TemplatesPackageName, Version = "13.3.0", Source = "stable-src" }
+                        ])
+                    });
+                return Task.FromResult<IEnumerable<PackageChannel>>([implicitCh, stableCh]);
+            }
+        };
+
+        var service = CreateService(packagingService: packagingService);
+
+        var query = new TemplatePackageQuery(
+            RequestedChannel: "stable",
+            VersionOverride: null,
+            SourceOverride: null,
+            IncludePrHives: false);
+
+        var selection = await service.ResolveTemplatePackageAsync(query, CancellationToken.None);
+
+        Assert.Equal("stable", selection.Channel.Name);
+        Assert.Equal(PackageChannelType.Explicit, selection.Channel.Type);
+        Assert.Equal("13.3.0", selection.Package.Version);
+    }
+
+    [Fact]
+    public async Task ResolveTemplatePackageAsync_NonExistentRequestedChannel_NotLocal_StillThrowsChannelNotFound()
+    {
+        // Companion to RequestedChannel_NotFound_Throws: any unrecognized name (typo
+        // such as "stalbe") must still surface a ChannelNotFoundException so users see
+        // the failure instead of silently falling through to the implicit channel.
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ =>
+            {
+                var implicitCh = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache());
+                return Task.FromResult<IEnumerable<PackageChannel>>([implicitCh]);
+            }
+        };
+
+        var service = CreateService(packagingService: packagingService);
+
+        var query = new TemplatePackageQuery(
+            RequestedChannel: "stalbe",
             VersionOverride: null,
             SourceOverride: null,
             IncludePrHives: false);
@@ -213,7 +244,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         var service = CreateService(packagingService: packagingService, executionContext: executionContext);
 
         var query = new TemplatePackageQuery(
-            ChannelOverride: null,
+            RequestedChannel: null,
             VersionOverride: null,
             SourceOverride: null,
             IncludePrHives: includePrHives);
