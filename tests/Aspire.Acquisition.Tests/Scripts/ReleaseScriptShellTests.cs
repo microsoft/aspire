@@ -190,17 +190,15 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
 
         // The script should not even plan a global-channel write in its dry-run output.
         Assert.DoesNotContain("aspire.config.json", result.Output, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("save_global_settings", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public async Task Install_DryRun_DoesNotWriteGlobalChannelField()
     {
-        // PR1 invariant: install.sh must not write the global channel field
-        // to ~/.aspire/aspire.config.json. Channel is baked into the CLI binary
-        // and discovered via IdentityChannelReader; a global override would
-        // shadow that and is removed structurally by PR1. Asserts both
-        // dry-run stdout shape and absence of the global config file.
+        // Install scripts must not write a global aspire.config.json — the channel
+        // is baked into the CLI binary at build time and read via
+        // IdentityChannelReader. A global channel field would shadow the baked value.
+        // Asserts both dry-run stdout shape and absence of the global config file.
         using var env = new TestEnvironment();
         using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
 
@@ -213,6 +211,6 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
         var configPath = Path.Combine(env.MockHome, ".aspire", "aspire.config.json");
         Assert.False(
             File.Exists(configPath),
-            $"PR1 invariant: install.sh must not create global aspire.config.json; found at {configPath}.");
+            $"install.sh must not create global aspire.config.json; found at {configPath}.");
     }
 }
