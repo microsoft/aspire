@@ -60,6 +60,16 @@ const serviceContainer = await builder.addContainer('kube-service', 'redis:alpin
 await serviceContainer.publishAsKubernetesService(async (service) => {
     const _serviceName: string = await service.name();
     const _serviceParent = await service.parent();
+
+    await service.addManifest('keda.sh/v1alpha1', 'ScaledObject', 'kube-service-scaler', {
+        configure: async (manifest) => {
+            await manifest.withLabel('example.com/custom', 'true');
+            await manifest.withAnnotation('example.com/source', 'typescript');
+            await manifest.withField('spec.scaleTargetRef.kind', 'Deployment');
+            await manifest.withField('spec.scaleTargetRef.name', 'kube-service');
+            await manifest.withField('spec.maxReplicaCount', 3);
+        },
+    });
 });
 
 await builder.build().run();
