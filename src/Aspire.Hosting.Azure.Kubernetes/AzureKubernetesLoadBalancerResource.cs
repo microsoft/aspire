@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001 // PipelineStepAnnotation/PipelineStep are evaluation-only
+#pragma warning disable ASPIREAZURE003 // AzureSubnetResource is evaluation-only
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
@@ -74,6 +75,18 @@ public sealed class AzureKubernetesLoadBalancerResource :
     /// <c>spec.associations</c> field of the <c>ApplicationLoadBalancer</c> CR.
     /// </summary>
     internal BicepOutputReference SubnetIdReference { get; set; } = default!;
+
+    /// <summary>
+    /// The Aspire subnet resource that backs this load balancer. Captured so the AKS
+    /// environment's Bicep emission can synthesize a per-LB role assignment granting
+    /// the AKS-auto-created AGC controller identity the
+    /// <c>Microsoft.Network/virtualNetworks/subnets/join/action</c> permission on the
+    /// subnet (via <c>Network Contributor</c>). Without this, AKS only auto-grants the
+    /// AGC identity permissions inside the cluster's <c>MC_*</c> node resource group, so
+    /// any user-supplied subnet outside that RG fails with <c>LinkedAuthorizationFailed</c>
+    /// when the controller tries to create the AGC association.
+    /// </summary>
+    internal Aspire.Hosting.Azure.AzureSubnetResource SubnetResource { get; set; } = default!;
 
     /// <summary>
     /// The in-cluster name of the <c>ApplicationLoadBalancer</c> CR. This is the value

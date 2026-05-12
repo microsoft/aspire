@@ -5,6 +5,8 @@ param subnetId string
 
 param acrName string
 
+param vnet_outputs_name string
+
 resource aks 'Microsoft.ContainerService/managedClusters@2025-09-02-preview' = {
   name: take('aks-${uniqueString(resourceGroup().id)}', 63)
   tags: {
@@ -67,6 +69,25 @@ resource acrPullRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
     principalType: 'ServicePrincipal'
   }
   scope: acr
+}
+
+resource vnet 'Microsoft.Network/virtualNetworks@2025-05-01' existing = {
+  name: vnet_outputs_name
+}
+
+resource vnet_alb_existing 'Microsoft.Network/virtualNetworks/subnets@2025-05-01' existing = {
+  name: 'alb'
+  parent: vnet
+}
+
+resource albSubnetJoin_lb 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(vnet_alb_existing.id, aks.id, subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4d97b98b-1d4f-4787-a291-c67834d212e7'))
+  properties: {
+    principalId: aks.properties.ingressProfile.applicationLoadBalancer.identity.objectId
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4d97b98b-1d4f-4787-a291-c67834d212e7')
+    principalType: 'ServicePrincipal'
+  }
+  scope: vnet_alb_existing
 }
 
 output id string = aks.id

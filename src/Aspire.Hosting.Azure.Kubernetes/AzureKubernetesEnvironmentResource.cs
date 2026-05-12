@@ -166,6 +166,14 @@ public partial class AzureKubernetesEnvironmentResource :
     internal AzureContainerRegistryResource? DefaultContainerRegistry { get; set; }
 
     /// <summary>
+    /// Gets the load balancer resources registered against this AKS environment via
+    /// <see cref="AzureKubernetesEnvironmentExtensions.AddLoadBalancer"/>. Used by
+    /// the Bicep emission to synthesize per-LB role assignments granting the
+    /// AKS-auto-created AGC controller identity permission to join each LB subnet.
+    /// </summary>
+    internal List<AzureKubernetesLoadBalancerResource> LoadBalancers { get; } = [];
+
+    /// <summary>
     /// Gets or sets whether the AKS managed Gateway API installation is enabled on the
     /// cluster. Toggled internally by <see cref="AzureKubernetesEnvironmentExtensions.AddLoadBalancer"/>;
     /// not exposed as a public extension because it's only useful in combination with the

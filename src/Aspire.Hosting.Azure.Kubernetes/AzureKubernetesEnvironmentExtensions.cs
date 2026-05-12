@@ -16,6 +16,7 @@ using Azure.Provisioning.Authorization;
 using Azure.Provisioning.ContainerRegistry;
 using Azure.Provisioning.ContainerService;
 using Azure.Provisioning.Expressions;
+using Azure.Provisioning.Network;
 using Azure.Provisioning.Resources;
 using Azure.Provisioning.Roles;
 using Microsoft.Extensions.DependencyInjection;
@@ -429,8 +430,16 @@ public static class AzureKubernetesEnvironmentExtensions
 
         var lb = new AzureKubernetesLoadBalancerResource(name, builder.Resource)
         {
-            SubnetIdReference = subnet.Resource.Id
+            SubnetIdReference = subnet.Resource.Id,
+            SubnetResource = subnet.Resource
         };
+
+        // Track the LB on the env so ConfigureAksInfrastructure can emit a role
+        // assignment binding the AKS-auto-created AGC controller identity to the
+        // user-supplied subnet. Done in both run and publish modes so any future
+        // run-mode introspection sees a consistent set of LBs; the subsequent
+        // run-mode early-return below skips the model registration only.
+        builder.Resource.LoadBalancers.Add(lb);
 
         // In run mode the AKS environment is not added to the model (see
         // AddAzureKubernetesEnvironment), so its aks-get-credentials-{name}
@@ -662,6 +671,85 @@ public static class AzureKubernetesEnvironmentExtensions
                 PrincipalType = RoleManagementPrincipalType.ServicePrincipal
             };
             infrastructure.Add(roleAssignment);
+        }
+
+        // AGC ALB controller subnet role assignments. AKS auto-creates a managed identity
+        // for the AGC ALB add-on (`applicationloadbalancer-{cluster-name}` in the MC_*
+        // resource group) when `ingressProfile.applicationLoadBalancer.enabled` is set,
+        // but only auto-grants it permissions on resources inside MC_*. When the user
+        // supplies an ALB subnet that lives outside MC_* (e.g. in the cluster's parent
+        // RG), the controller fails with `LinkedAuthorizationFailed` on
+        // `Microsoft.Network/virtualNetworks/subnets/join/action`. We close that gap by
+        // emitting a `Network Contributor` role assignment per LB subnet, scoped to the
+        // subnet, with the principalId read back from the cluster's
+        // `properties.ingressProfile.applicationLoadBalancer.identity.objectId` output.
+        // The schema marks that identity property `readOnly`, so AKS owns the lifecycle
+        // and we just consume it after the cluster is provisioned.
+        // See https://learn.microsoft.com/en-us/azure/application-gateway/for-containers/quickstart-deploy-application-gateway-for-containers-alb-controller-addon
+        // for the documented role bindings the addon needs.
+        if (aksResource.LoadBalancers.Count > 0)
+        {
+            // Network Contributor role: 4d97b98b-1d4f-4787-a291-c67834d212e7. Picked
+            // because it includes `Microsoft.Network/virtualNetworks/subnets/join/action`,
+            // matching the BYO-deployment guidance for AGC associations.
+            var networkContributorRoleId = BicepFunction.GetSubscriptionResourceId(
+                "Microsoft.Authorization/roleDefinitions",
+                "4d97b98b-1d4f-4787-a291-c67834d212e7");
+
+            var albAddonPrincipalId = new MemberExpression(
+                new MemberExpression(
+                    new MemberExpression(
+                        new MemberExpression(
+                            new MemberExpression(
+                                new IdentifierExpression(aks.BicepIdentifier),
+                                "properties"),
+                            "ingressProfile"),
+                        "applicationLoadBalancer"),
+                    "identity"),
+                "objectId");
+
+            // Dedupe (vnet, subnet) pairs so multiple LBs sharing a subnet only emit a
+            // single existing-resource declaration and a single role assignment.
+            var subnetExistingByKey = new Dictionary<string, SubnetResource>(StringComparer.Ordinal);
+            var assignedSubnets = new HashSet<string>(StringComparer.Ordinal);
+
+            foreach (var lb in aksResource.LoadBalancers)
+            {
+                var subnet = lb.SubnetResource
+                    ?? throw new InvalidOperationException($"AzureKubernetesLoadBalancerResource '{lb.Name}' is missing its subnet binding.");
+                var vnet = subnet.Parent;
+
+                // Reuse the canonical existing-VNet handle so emitted Bicep references
+                // match the rest of the module and we don't double-declare the resource.
+                var existingVnet = (VirtualNetwork)vnet.AddAsExistingResource(infrastructure);
+
+                var subnetIdentifier = $"{existingVnet.BicepIdentifier}_{Infrastructure.NormalizeBicepIdentifier(subnet.Name)}_existing";
+                if (!subnetExistingByKey.TryGetValue(subnetIdentifier, out var existingSubnet))
+                {
+                    existingSubnet = SubnetResource.FromExisting(subnetIdentifier);
+                    existingSubnet.Parent = existingVnet;
+                    existingSubnet.Name = subnet.SubnetName;
+                    infrastructure.Add(existingSubnet);
+                    subnetExistingByKey[subnetIdentifier] = existingSubnet;
+                }
+
+                if (!assignedSubnets.Add(subnetIdentifier))
+                {
+                    continue;
+                }
+
+                var albSubnetRole = new RoleAssignment($"albSubnetJoin_{Infrastructure.NormalizeBicepIdentifier(lb.Name)}")
+                {
+                    // GUID name keyed off subnet + cluster + role so reruns are idempotent
+                    // and parallel LBs targeting different subnets don't collide.
+                    Name = BicepFunction.CreateGuid(existingSubnet.Id, aks.Id, networkContributorRoleId),
+                    Scope = new IdentifierExpression(existingSubnet.BicepIdentifier),
+                    RoleDefinitionId = networkContributorRoleId,
+                    PrincipalId = albAddonPrincipalId,
+                    PrincipalType = RoleManagementPrincipalType.ServicePrincipal
+                };
+                infrastructure.Add(albSubnetRole);
+            }
         }
 
         // Outputs
