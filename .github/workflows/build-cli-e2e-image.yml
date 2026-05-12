@@ -60,7 +60,10 @@ jobs:
           # is opt-in via the trailing flag. All remaining args are tags (-t)
           # — the polyglot base passes two tags so both the FROM-referenced
           # base name and the artifact-friendly polyglot name resolve locally
-          # without a follow-up `docker tag` step.
+          # without a follow-up `docker tag` step. The optional EXTRA_BUILD_ARGS
+          # array, set by callers in this script, is spliced into every invocation
+          # — used by the extended polyglot loop below to expose the locally-loaded
+          # base image to the buildx container driver via --build-context.
           build_image() {
             local display="$1" dockerfile="$2" cache_scope="$3" skip_source="$4"
             shift 4
@@ -90,6 +93,7 @@ jobs:
                   --cache-from "type=gha,scope=$cache_scope" \
                   --cache-to "type=gha,scope=$cache_scope,mode=max,ignore-error=true" \
                   "${extra_args[@]}" \
+                  "${EXTRA_BUILD_ARGS[@]+"${EXTRA_BUILD_ARGS[@]}"}" \
                   "${mirror_args[@]}" \
                   "${tag_args[@]}" \
                   -f "$dockerfile" \
@@ -134,6 +138,18 @@ jobs:
           # so the heavy upstream `golang:1` / `rust:1` COPY stages don't
           # re-pull on every CI build (which would also hit Docker Hub
           # anonymous-pull rate limits).
+          #
+          # The `cli-e2e-builder` instance uses the docker-container driver,
+          # which has its own image store separate from the host Docker
+          # daemon. `--load` exports the polyglot base to the host daemon but
+          # does NOT register the tag in the buildkit container's internal
+          # store, so a naked `FROM aspire-e2e-polyglot-base` falls back to
+          # docker.io/library/... and 401s. --build-context with the
+          # docker-image:// scheme tells buildx to resolve that name via the
+          # host daemon, which is where the base now lives.
+          EXTRA_BUILD_ARGS=(
+            --build-context "aspire-e2e-polyglot-base=docker-image://aspire-e2e-polyglot-base:latest"
+          )
           for lang in java python go rust; do
             build_image "${lang^} polyglot image" \
               "tests/Shared/Docker/Dockerfile.e2e-polyglot-${lang}" \
