@@ -86,6 +86,8 @@ internal sealed class TestKubernetesService : IKubernetesService
                 proxy.Status = new ContainerNetworkTunnelProxyStatus();
             }
             proxy.Status.State = ContainerNetworkTunnelProxyState.Running;
+            proxy.Status.TunnelConfigurationVersion = 1;
+            proxy.Status.TunnelStatuses = CreateReadyTunnelStatuses(proxy.Spec.Tunnels);
         }
 
         lock (CreatedResources)
@@ -189,8 +191,8 @@ internal sealed class TestKubernetesService : IKubernetesService
 
     public Task<T> PatchAsync<T>(T obj, V1Patch patch, CancellationToken cancellationToken = default) where T : CustomResource, IKubernetesStaticMetadata
     {
-        // Not a complete implementation, but Aspire is using patching only to stop resources,
-        // so this is good enough.
+        // Not a complete implementation; tests currently use patching to stop resources
+        // and to update container tunnel proxy configuration.
 
         if (patch.Type == V1Patch.PatchType.JsonPatch)
         {
@@ -233,6 +235,16 @@ internal sealed class TestKubernetesService : IKubernetesService
                 }
             }
 
+            if (res is ContainerNetworkTunnelProxy proxy && result is ContainerNetworkTunnelProxy updatedProxy)
+            {
+                proxy.Spec = updatedProxy.Spec;
+                proxy.Status ??= new ContainerNetworkTunnelProxyStatus();
+                proxy.Status.State = ContainerNetworkTunnelProxyState.Running;
+                proxy.Status.TunnelConfigurationVersion++;
+                proxy.Status.TunnelStatuses = CreateReadyTunnelStatuses(proxy.Spec.Tunnels);
+                PushResourceModified(proxy);
+            }
+
             return Task.FromResult(res);
         }
 
@@ -258,5 +270,15 @@ internal sealed class TestKubernetesService : IKubernetesService
     public Task CleanupResourcesAsync(CancellationToken cancellationToken = default)
     {
         return StopServerAsync("Full", cancellationToken);
+    }
+
+    private static List<TunnelStatus>? CreateReadyTunnelStatuses(List<TunnelConfiguration>? tunnels)
+    {
+        return tunnels?.Select(t => new TunnelStatus
+        {
+            Name = t.Name,
+            State = TunnelState.Ready,
+            Timestamp = DateTime.UtcNow
+        }).ToList();
     }
 }
