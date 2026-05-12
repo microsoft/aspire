@@ -154,10 +154,14 @@ public partial class AspireExportAnalyzer
             customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
         private const string DuplicateInstanceMethodNameId = "ASPIREEXPORT015";
+        // Severity is Warning (not Error like ASPIREEXPORT014) because the collision is
+        // resolvable through well-known escape hatches: applying [AspireExportIgnore] to
+        // unsupported overloads or assigning a unique [AspireExport("...")] ID. Promoting
+        // this to Error would break existing assemblies on the first release of the rule.
         internal static readonly DiagnosticDescriptor s_duplicateInstanceMethodName = new(
             id: DuplicateInstanceMethodNameId,
             title: "Exported instance methods must have unique polyglot names",
-            messageFormat: "Exported instance method '{0}' on type '{1}' maps to polyglot method name '{2}', which is already used by another exported instance method. Use [AspireExportIgnore] on unsupported overloads or assign a unique [AspireExport(\"...\")] ID.",
+            messageFormat: "Exported instance method '{0}' on type '{1}' maps to polyglot method name '{2}', which is shared by multiple exported instance methods: {3}. Use [AspireExportIgnore] on unsupported overloads or assign a unique [AspireExport(\"...\")] ID.",
             category: "Design",
             DiagnosticSeverity.Warning,
             isEnabledByDefault: true,

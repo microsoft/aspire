@@ -2203,6 +2203,7 @@ public class AspireExportAnalyzerTests
     public async Task ExplicitInstanceMethodAliasesWithSamePublicName_ReportsASPIREEXPORT015()
     {
         var diagnostic = AspireExportAnalyzer.Diagnostics.s_duplicateInstanceMethodName;
+        var sources = "IYarpConfigurationBuilder.AddCluster(string), IYarpConfigurationBuilder.AddCluster(int)";
 
         var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
             using Aspire.Hosting;
@@ -2220,8 +2221,36 @@ public class AspireExportAnalyzerTests
             }
             """,
             [
-                new DiagnosticResult(diagnostic).WithLocation(9, 12).WithArguments("AddCluster", "IYarpConfigurationBuilder", "addCluster"),
-                new DiagnosticResult(diagnostic).WithLocation(12, 12).WithArguments("AddCluster", "IYarpConfigurationBuilder", "addCluster")
+                new DiagnosticResult(diagnostic).WithLocation(9, 12).WithArguments("AddCluster", "IYarpConfigurationBuilder", "addCluster", sources),
+                new DiagnosticResult(diagnostic).WithLocation(12, 12).WithArguments("AddCluster", "IYarpConfigurationBuilder", "addCluster", sources)
+            ]);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task ExplicitAndAutoDerivedInstanceMethodsCollidingOnPublicName_ReportsASPIREEXPORT015()
+    {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_duplicateInstanceMethodName;
+        var sources = "IYarpConfigurationBuilder.AddCluster(string), IYarpConfigurationBuilder.AddCluster(int)";
+
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            [AspireExport(ExposeMethods = true)]
+            public interface IYarpConfigurationBuilder
+            {
+                [AspireExport("clusters.addCluster")]
+                string AddCluster(string endpoint);
+
+                string AddCluster(int port);
+            }
+            """,
+            [
+                new DiagnosticResult(diagnostic).WithLocation(9, 12).WithArguments("AddCluster", "IYarpConfigurationBuilder", "addCluster", sources),
+                new DiagnosticResult(diagnostic).WithLocation(11, 12).WithArguments("AddCluster", "IYarpConfigurationBuilder", "addCluster", sources)
             ]);
 
         await test.RunAsync();

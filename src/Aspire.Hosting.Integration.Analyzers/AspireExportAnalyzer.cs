@@ -1439,12 +1439,17 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
                 .ThenBy(static e => e.Source, StringComparer.Ordinal)
                 .ToArray();
 
+            // Skip when all duplicates share the same effective export ID — that case is
+            // already covered by ASPIREEXPORT013 (duplicate polyglot capability ID).
+            // ASPIREEXPORT015 only fires when *different* effective IDs collapse to the
+            // same trailing polyglot method name.
             if (exports.Length <= 1 ||
                 exports.Select(static e => e.EffectiveExportId).Distinct(StringComparer.Ordinal).Count() <= 1)
             {
                 continue;
             }
 
+            var sources = string.Join(", ", exports.Select(static e => e.Source).Distinct(StringComparer.Ordinal));
             foreach (var export in exports)
             {
                 context.ReportDiagnostic(Diagnostic.Create(
@@ -1452,7 +1457,8 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
                     export.Location,
                     export.MethodName,
                     kvp.Key.ContainingType,
-                    kvp.Key.PublicMethodName));
+                    kvp.Key.PublicMethodName,
+                    sources));
             }
         }
     }
