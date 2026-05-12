@@ -240,4 +240,28 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
         Assert.DoesNotContain("aspire.config.json", result.Output, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Save-GlobalSettings", result.Output, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public async Task Install_DryRun_DoesNotWriteGlobalChannelField()
+    {
+        // PR1 invariant: install.ps1 must not write the global channel field
+        // to $env:USERPROFILE\.aspire\aspire.config.json. Channel is baked
+        // into the CLI binary and discovered via IdentityChannelReader; a
+        // global override would shadow that and is removed structurally by
+        // PR1. Asserts both -WhatIf stdout shape and absence of the global
+        // config file under MockHome.
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+
+        var result = await cmd.ExecuteAsync("-Quality", "release", "-SkipPath", "-WhatIf");
+
+        result.EnsureSuccessful();
+        Assert.DoesNotContain("config set channel", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("\"channel\"", result.Output);
+
+        var configPath = Path.Combine(env.MockHome, ".aspire", "aspire.config.json");
+        Assert.False(
+            File.Exists(configPath),
+            $"PR1 invariant: install.ps1 must not create global aspire.config.json; found at {configPath}.");
+    }
 }
