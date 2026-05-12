@@ -134,17 +134,14 @@ jobs:
           # so the heavy upstream `golang:1` / `rust:1` COPY stages don't
           # re-pull on every CI build (which would also hit Docker Hub
           # anonymous-pull rate limits).
-          # Fields: display | dockerfile | tag | cache_scope | tarball
-          local_extended=(
-            "Java polyglot image|tests/Shared/Docker/Dockerfile.e2e-polyglot-java|aspire-cli-e2e-polyglot-java:prebuilt|cli-e2e-polyglot-java|aspire-cli-e2e-polyglot-java.tar.gz"
-            "Python polyglot image|tests/Shared/Docker/Dockerfile.e2e-polyglot-python|aspire-cli-e2e-polyglot-python:prebuilt|cli-e2e-polyglot-python|aspire-cli-e2e-polyglot-python.tar.gz"
-            "Go polyglot image|tests/Shared/Docker/Dockerfile.e2e-polyglot-go|aspire-cli-e2e-polyglot-go:prebuilt|cli-e2e-polyglot-go|aspire-cli-e2e-polyglot-go.tar.gz"
-            "Rust polyglot image|tests/Shared/Docker/Dockerfile.e2e-polyglot-rust|aspire-cli-e2e-polyglot-rust:prebuilt|cli-e2e-polyglot-rust|aspire-cli-e2e-polyglot-rust.tar.gz"
-          )
-          for entry in "${local_extended[@]}"; do
-            IFS='|' read -r display dockerfile tag cache_scope tarball <<<"$entry"
-            build_image "$display" "$dockerfile" "$cache_scope" false "$tag"
-            save_image "$tag" "$tarball"
+          for lang in java python go rust; do
+            build_image "${lang^} polyglot image" \
+              "tests/Shared/Docker/Dockerfile.e2e-polyglot-${lang}" \
+              "cli-e2e-polyglot-${lang}" \
+              false \
+              "aspire-cli-e2e-polyglot-${lang}:prebuilt"
+            save_image "aspire-cli-e2e-polyglot-${lang}:prebuilt" \
+              "aspire-cli-e2e-polyglot-${lang}.tar.gz"
           done
 
       - name: Upload CLI E2E .NET Docker image

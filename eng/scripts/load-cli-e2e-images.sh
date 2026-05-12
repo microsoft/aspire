@@ -2,17 +2,39 @@
 
 set -euo pipefail
 
+# All known image variants. Each variant V maps to:
+#   --require-V CLI option,
+#   ${image_dir}/aspire-cli-e2e-V.tar.gz tarball,
+#   aspire-cli-e2e-V:prebuilt image tag,
+#   ASPIRE_E2E_<V>_IMAGE / ASPIRE_E2E_REQUIRE_<V>_IMAGE env vars (where <V> is
+#   the variant with dashes replaced by underscores and uppercased).
+declare -a VARIANTS=(
+  dotnet
+  polyglot
+  polyglot-java
+  polyglot-python
+  polyglot-go
+  polyglot-rust
+)
+
+# Mode for each variant is stored in a shell variable named
+# require_mode__<variant-with-dashes-converted-to-underscores>.
+# Using indirect variable names (via ${!var} / printf -v) rather than an
+# associative array keeps this script portable to bash 3.2 (macOS default).
+mode_var_for() {
+  local variant="$1"
+  printf 'require_mode__%s' "${variant//-/_}"
+}
+
+for variant in "${VARIANTS[@]}"; do
+  printf -v "$(mode_var_for "$variant")" '%s' "false"
+done
+
 image_dir=""
 github_env="${GITHUB_ENV:-}"
-require_dotnet="false"
-require_polyglot="false"
-require_java="false"
-require_python="false"
-require_go="false"
-require_rust="false"
 
 usage() {
-  cat <<'EOF'
+  cat <<EOF
 Usage: load-cli-e2e-images.sh --image-dir <path> [options]
 
 Loads prebuilt Aspire CLI E2E Docker image artifacts and exports the matching
@@ -21,12 +43,11 @@ ASPIRE_E2E_* image environment variables to GITHUB_ENV.
 Options:
   --image-dir <path>          Directory containing the image tarballs.
   --github-env <path>         Environment file to append to. Defaults to GITHUB_ENV.
-  --require-dotnet <mode>     true, false, or auto. Defaults to false.
-  --require-polyglot <mode>   true, false, or auto. Defaults to false.
-  --require-java <mode>       true, false, or auto. Defaults to false.
-  --require-python <mode>     true, false, or auto. Defaults to false.
-  --require-go <mode>         true, false, or auto. Defaults to false.
-  --require-rust <mode>       true, false, or auto. Defaults to false.
+EOF
+  for variant in "${VARIANTS[@]}"; do
+    printf "  --require-%-19s true, false, or auto. Defaults to false.\n" "$variant <mode>"
+  done
+  cat <<'EOF'
 
 Mode behavior:
   true   The tarball must exist. Load it, export IMAGE and REQUIRE=true.
@@ -35,33 +56,15 @@ Mode behavior:
 EOF
 }
 
-read_value_arg() {
-  local option="$1"
-  local value="${2:-}"
-  if [[ -z "$value" ]]; then
-    echo "Missing value for $option" >&2
-    usage >&2
-    exit 2
-  fi
-
-  printf "%s" "$value"
-}
-
 normalize_mode() {
   local option="$1"
   local value="$2"
-  local normalized_value
-  normalized_value="$(printf "%s" "$value" | tr '[:upper:]' '[:lower:]')"
-  case "$normalized_value" in
-    true|1)
-      printf "true"
-      ;;
-    false|0)
-      printf "false"
-      ;;
-    auto)
-      printf "auto"
-      ;;
+  local normalized
+  normalized="$(printf "%s" "$value" | tr '[:upper:]' '[:lower:]')"
+  case "$normalized" in
+    true|1)  printf "true" ;;
+    false|0) printf "false" ;;
+    auto)    printf "auto" ;;
     *)
       echo "Invalid value for $option: $value. Expected true, false, or auto." >&2
       exit 2
@@ -69,78 +72,59 @@ normalize_mode() {
   esac
 }
 
+# Generic --opt=val / --opt val argument splitter. Sets $opt and $val, and
+# consumes one or two positional args from "$@" via outer shifts.
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --image-dir)
-      image_dir="$(read_value_arg "$1" "${2:-}")"
-      shift 2
-      ;;
-    --image-dir=*)
-      image_dir="${1#*=}"
-      shift
-      ;;
-    --github-env)
-      github_env="$(read_value_arg "$1" "${2:-}")"
-      shift 2
-      ;;
-    --github-env=*)
-      github_env="${1#*=}"
-      shift
-      ;;
-    --require-dotnet)
-      require_dotnet="$(normalize_mode "$1" "$(read_value_arg "$1" "${2:-}")")"
-      shift 2
-      ;;
-    --require-dotnet=*)
-      require_dotnet="$(normalize_mode "--require-dotnet" "${1#*=}")"
-      shift
-      ;;
-    --require-polyglot)
-      require_polyglot="$(normalize_mode "$1" "$(read_value_arg "$1" "${2:-}")")"
-      shift 2
-      ;;
-    --require-polyglot=*)
-      require_polyglot="$(normalize_mode "--require-polyglot" "${1#*=}")"
-      shift
-      ;;
-    --require-java)
-      require_java="$(normalize_mode "$1" "$(read_value_arg "$1" "${2:-}")")"
-      shift 2
-      ;;
-    --require-java=*)
-      require_java="$(normalize_mode "--require-java" "${1#*=}")"
-      shift
-      ;;
-    --require-python)
-      require_python="$(normalize_mode "$1" "$(read_value_arg "$1" "${2:-}")")"
-      shift 2
-      ;;
-    --require-python=*)
-      require_python="$(normalize_mode "--require-python" "${1#*=}")"
-      shift
-      ;;
-    --require-go)
-      require_go="$(normalize_mode "$1" "$(read_value_arg "$1" "${2:-}")")"
-      shift 2
-      ;;
-    --require-go=*)
-      require_go="$(normalize_mode "--require-go" "${1#*=}")"
-      shift
-      ;;
-    --require-rust)
-      require_rust="$(normalize_mode "$1" "$(read_value_arg "$1" "${2:-}")")"
-      shift 2
-      ;;
-    --require-rust=*)
-      require_rust="$(normalize_mode "--require-rust" "${1#*=}")"
-      shift
-      ;;
     -h|--help)
-      usage
-      exit 0
+      usage; exit 0
+      ;;
+    --*=*)
+      opt="${1%%=*}"
+      val="${1#*=}"
+      shift
+      ;;
+    --*)
+      opt="$1"
+      if [[ $# -lt 2 ]]; then
+        echo "Missing value for $opt" >&2
+        usage >&2
+        exit 2
+      fi
+      val="$2"
+      shift 2
       ;;
     *)
       echo "Unknown argument: $1" >&2
+      usage >&2
+      exit 2
+      ;;
+  esac
+
+  case "$opt" in
+    --image-dir)
+      image_dir="$val"
+      ;;
+    --github-env)
+      github_env="$val"
+      ;;
+    --require-*)
+      variant="${opt#--require-}"
+      mode_var="$(mode_var_for "$variant")"
+      if [[ -z "${!mode_var+x}" ]]; then
+        echo "Unknown option: $opt" >&2
+        usage >&2
+        exit 2
+      fi
+      # normalize_mode's `exit 2` only kills the $(…) subshell, so capture and
+      # propagate its exit status explicitly.
+      if ! normalized="$(normalize_mode "$opt" "$val")"; then
+        exit 2
+      fi
+      printf -v "$mode_var" '%s' "$normalized"
+      ;;
+    *)
+      echo "Unknown option: $opt" >&2
       usage >&2
       exit 2
       ;;
@@ -159,19 +143,21 @@ if [[ -z "$github_env" ]]; then
 fi
 
 write_env() {
-  local name="$1"
-  local value="$2"
-  printf "%s=%s\n" "$name" "$value" >> "$github_env"
+  printf "%s=%s\n" "$1" "$2" >> "$github_env"
 }
 
 load_image() {
-  local display_name="$1"
+  local variant="$1"
   local mode="$2"
-  local tarball_name="$3"
-  local image_tag="$4"
-  local image_env_name="$5"
-  local require_env_name="$6"
-  local tarball_path="${image_dir%/}/$tarball_name"
+  local tarball_path="${image_dir%/}/aspire-cli-e2e-${variant}.tar.gz"
+  local image_tag="aspire-cli-e2e-${variant}:prebuilt"
+  # Derive env-var names from the variant: 'polyglot-java' -> 'POLYGLOT_JAVA'
+  # (uppercase letters, '-' -> '_'). `tr` aligns the source set [a-z-] with the
+  # target set [A-Z_] positionally, which works on GNU, BSD, and Busybox tr.
+  local suffix
+  suffix="$(printf '%s' "$variant" | tr 'a-z-' 'A-Z_')"
+  local image_env_name="ASPIRE_E2E_${suffix}_IMAGE"
+  local require_env_name="ASPIRE_E2E_REQUIRE_${suffix}_IMAGE"
 
   if [[ "$mode" == "auto" ]]; then
     if [[ -f "$tarball_path" ]]; then
@@ -187,7 +173,7 @@ load_image() {
   fi
 
   if [[ ! -f "$tarball_path" ]]; then
-    echo "::error::$display_name image is required but artifact was not found at $tarball_path"
+    echo "::error::$variant image is required but artifact was not found at $tarball_path"
     exit 1
   fi
 
@@ -197,38 +183,7 @@ load_image() {
   write_env "$require_env_name" "true"
 }
 
-load_image ".NET" "$require_dotnet" \
-  "aspire-cli-e2e-dotnet.tar.gz" \
-  "aspire-cli-e2e-dotnet:prebuilt" \
-  "ASPIRE_E2E_DOTNET_IMAGE" \
-  "ASPIRE_E2E_REQUIRE_DOTNET_IMAGE"
-
-load_image "polyglot" "$require_polyglot" \
-  "aspire-cli-e2e-polyglot.tar.gz" \
-  "aspire-cli-e2e-polyglot:prebuilt" \
-  "ASPIRE_E2E_POLYGLOT_IMAGE" \
-  "ASPIRE_E2E_REQUIRE_POLYGLOT_IMAGE"
-
-load_image "Java polyglot" "$require_java" \
-  "aspire-cli-e2e-polyglot-java.tar.gz" \
-  "aspire-cli-e2e-polyglot-java:prebuilt" \
-  "ASPIRE_E2E_POLYGLOT_JAVA_IMAGE" \
-  "ASPIRE_E2E_REQUIRE_POLYGLOT_JAVA_IMAGE"
-
-load_image "Python polyglot" "$require_python" \
-  "aspire-cli-e2e-polyglot-python.tar.gz" \
-  "aspire-cli-e2e-polyglot-python:prebuilt" \
-  "ASPIRE_E2E_POLYGLOT_PYTHON_IMAGE" \
-  "ASPIRE_E2E_REQUIRE_POLYGLOT_PYTHON_IMAGE"
-
-load_image "Go polyglot" "$require_go" \
-  "aspire-cli-e2e-polyglot-go.tar.gz" \
-  "aspire-cli-e2e-polyglot-go:prebuilt" \
-  "ASPIRE_E2E_POLYGLOT_GO_IMAGE" \
-  "ASPIRE_E2E_REQUIRE_POLYGLOT_GO_IMAGE"
-
-load_image "Rust polyglot" "$require_rust" \
-  "aspire-cli-e2e-polyglot-rust.tar.gz" \
-  "aspire-cli-e2e-polyglot-rust:prebuilt" \
-  "ASPIRE_E2E_POLYGLOT_RUST_IMAGE" \
-  "ASPIRE_E2E_REQUIRE_POLYGLOT_RUST_IMAGE"
+for variant in "${VARIANTS[@]}"; do
+  mode_var="$(mode_var_for "$variant")"
+  load_image "$variant" "${!mode_var}"
+done
