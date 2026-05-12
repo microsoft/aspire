@@ -342,7 +342,7 @@ public class ResourceCommandService
             catch (Exception ex)
             {
                 logger.LogError(ex, "Error executing command '{CommandName}'.", commandName);
-                return new ExecuteCommandResult { Success = false, Message = "Unhandled exception thrown." };
+                return new ExecuteCommandResult { Success = false, Message = ex.Message };
             }
         }
 

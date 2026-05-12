@@ -522,7 +522,7 @@ internal class InteractionService : IInteractionService
     {
         if (!IsAvailable)
         {
-            throw new InvalidOperationException($"InteractionService is not available because the dashboard is not enabled or because this command is running in non-interactive CLI mode. Use the {nameof(IsAvailable)} property to determine whether the service is available.");
+            throw new InvalidOperationException($"{nameof(InteractionService)} is not available because the dashboard is not enabled or because this command is running in non-interactive CLI mode.");
         }
     }
 }
