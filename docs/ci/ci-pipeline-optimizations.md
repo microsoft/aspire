@@ -37,7 +37,6 @@ The main test workflow in `.github/workflows/tests.yml` is organized into these 
    - `tests_requires_nugets_windows`
    - `tests_requires_nugets_macos`
    - `tests_requires_cli_archive`
-   - `polyglot_validation`
    - `extension_tests_win`
 
 5. `results`
@@ -97,7 +96,7 @@ Even though execution is more parallel, the workflow still uses a single `result
 
 ### 1. Linux critical-path builds use the 8-core runner
 
-`build_cli_archive_linux` and `build_packages` both run on `8-core-ubuntu-latest`. The Linux CLI archive is on the critical path for linux-only consumers such as `tests_requires_cli_archive` and `polyglot_validation`, and `build_packages` is shared by every package-dependent lane.
+`build_cli_archive_linux` and `build_packages` both run on `8-core-ubuntu-latest`. The Linux CLI archive is on the critical path for linux-only consumers such as `tests_requires_cli_archive` (which contains the polyglot SDK validation classes in `Aspire.Cli.EndToEnd.Tests`), and `build_packages` is shared by every package-dependent lane.
 
 That makes Linux the best place to spend extra build capacity: finishing the shared package build and Linux archive earlier directly reduces the time before downstream validation lanes can start.
 
@@ -168,7 +167,7 @@ When changing the CI structure, verify:
    - avoid adding cross-OS dependencies unless a consumer truly needs them
 
 3. **Linux-only consumers stay on the shortest path**
-   - especially `tests_requires_cli_archive` and `polyglot_validation`
+   - especially `tests_requires_cli_archive` (which contains the polyglot SDK validation classes)
 
 4. **Matrix bucket sizes stay under GitHub's limits**
    - `split-test-matrix-by-deps.ps1` enforces the 256-job hard limit

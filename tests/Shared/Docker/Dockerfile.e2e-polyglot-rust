@@ -1,0 +1,26 @@
+# Polyglot Dockerfile for Rust AppHost E2E tests.
+# Extends the shared polyglot base with the Rust toolchain (rustup-managed).
+
+# rust:1 always resolves to the latest stable Rust 1.x. Using the official image
+# as a builder stage lets us copy the rustup/cargo toolchain into the runtime
+# image without redoing the rustup install dance.
+FROM rust:1 AS rust-toolchain
+
+FROM aspire-e2e-polyglot-base
+
+ARG UBUNTU_APT_MIRROR=
+
+COPY tests/Shared/Docker/configure-ubuntu-apt-mirror.sh /usr/local/bin/
+RUN sh /usr/local/bin/configure-ubuntu-apt-mirror.sh "$UBUNTU_APT_MIRROR"
+
+COPY --from=rust-toolchain /usr/local/cargo /usr/local/cargo
+COPY --from=rust-toolchain /usr/local/rustup /usr/local/rustup
+
+ENV RUSTUP_HOME=/usr/local/rustup
+ENV CARGO_HOME=/usr/local/cargo
+ENV PATH="/usr/local/cargo/bin:${PATH}"
+
+# Rust builds need a linker and C runtime for proc-macro/build-script crates.
+RUN apt-get update -qq && \
+    apt-get install -y --no-install-recommends build-essential pkg-config libssl-dev && \
+    rm -rf /var/lib/apt/lists/*

@@ -695,6 +695,42 @@ internal static class CliE2EAutomatorHelpers
     }
 
     /// <summary>
+    /// Enables experimental Python polyglot support for CLI tests.
+    /// </summary>
+    internal static async Task EnableExperimentalPythonSupportAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter)
+    {
+        await auto.TypeAsync("aspire config set features:experimentalPolyglot:python true --global --non-interactive");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    /// <summary>
+    /// Enables experimental Go polyglot support for CLI tests.
+    /// </summary>
+    internal static async Task EnableExperimentalGoSupportAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter)
+    {
+        await auto.TypeAsync("aspire config set features:experimentalPolyglot:go true --global --non-interactive");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    /// <summary>
+    /// Enables experimental Rust polyglot support for CLI tests.
+    /// </summary>
+    internal static async Task EnableExperimentalRustSupportAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter)
+    {
+        await auto.TypeAsync("aspire config set features:experimentalPolyglot:rust true --global --non-interactive");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    /// <summary>
     /// Installs a specific GA version of the Aspire CLI using the install script.
     /// </summary>
     internal static async Task InstallAspireCliVersionAsync(

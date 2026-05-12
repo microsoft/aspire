@@ -102,4 +102,56 @@ public sealed class JavaCodegenValidationTests(ITestOutputHelper output)
 
         await pendingRun;
     }
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task RestoreAndCompileAllValidationFixtures()
+    {
+        // Replaces the per-integration enumeration loop in the deleted
+        // test-java-playground.sh: for every tests/PolyglotAppHosts/<Integration>/Java
+        // fixture, run `aspire restore --apphost AppHost.java` and compile the generated
+        // Java SDK sources plus AppHost.java with javac. Catches codegen regressions
+        // specific to individual integrations that the single-scenario test above does
+        // not exercise.
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(
+            repoRoot,
+            strategy,
+            output,
+            variant: CliE2ETestHelpers.DockerfileVariant.PolyglotJava,
+            workspace: workspace,
+            additionalVolumes: new[] { PolyglotFixtureValidation.GetFixtureVolumeMount(repoRoot) });
+
+        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
+
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromMinutes(30));
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.EnableExperimentalJavaSupportAsync(counter);
+
+        await PolyglotFixtureValidation.RunFixtureLoopAsync(
+            auto,
+            counter,
+            workspace,
+            languageSubdir: "Java",
+            appHostFileName: "AppHost.java",
+            // Mirrors the javac invocation from test-java-playground.sh. The generated
+            // .modules/sources.txt is a @-file listing every emitted Java source so we
+            // can compile them all in one javac invocation alongside AppHost.java. The
+            // output directory lives under /tmp/javabuild-<integration> and is fresh per
+            // fixture via the mktemp scaffolding inside the loop's working dir.
+            compileCommand: "build_dir=$(mktemp -d) && "
+                + "javac --enable-preview --source 25 -d \"$build_dir\" @.modules/sources.txt AppHost.java && "
+                + "rm -rf \"$build_dir\"");
+
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
+
+        await pendingRun;
+    }
 }

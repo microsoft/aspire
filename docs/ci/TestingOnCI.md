@@ -162,7 +162,6 @@ In `.github/workflows/tests.yml`, the workflow:
     - `build_cli_archive_linux`, `build_cli_archive_windows`, `build_cli_archive_macos`: Build native CLI archives and the matching RID-specific DCP/Dashboard packages in parallel with `build_packages`
     - `tests_requires_nugets_linux`, `tests_requires_nugets_windows`, `tests_requires_nugets_macos`: Wait for `build_packages` plus only the CLI archive job for their OS
     - `tests_requires_cli_archive`: Waits for `build_packages` and `build_cli_archive_linux`
-    - `polyglot_validation`: Waits for `build_packages` and `build_cli_archive_linux`
 
 Each job invokes `.github/workflows/run-tests.yml` with matrix parameters including `extraTestArgs` for filtering (e.g., `--filter-trait "Partition=X"`).
 
@@ -175,7 +174,7 @@ The workflow intentionally favors shorter dependency chains over a smaller numbe
 1. **`no_nugets` jobs start first** so pure managed/unit test coverage begins as soon as enumeration finishes.
 2. **`build_packages` and the CLI archive jobs run in parallel** because the CLI archive workflow builds its own RID-specific DCP and Dashboard packages locally. That removes a serial dependency where archive creation would otherwise wait for the shared package build.
 3. **`requires_nugets` is split by OS** because each OS-specific test group needs the RID-specific DCP/Dashboard packages produced by that platform's CLI archive job. Splitting the jobs prevents Linux tests from waiting on the slower Windows or macOS archive builds.
-4. **`tests_requires_cli_archive` and `polyglot_validation` only depend on the Linux archive** because the current consumers in those buckets use the Linux CLI archive path. That keeps linux-only validation on the fastest available path instead of blocking on unrelated Windows or macOS work.
+4. **`tests_requires_cli_archive` only depends on the Linux archive** because its consumers use the Linux CLI archive path. That keeps linux-only validation on the fastest available path instead of blocking on unrelated Windows or macOS work. Polyglot SDK smoke and codegen coverage runs as classes under `Aspire.Cli.EndToEnd.Tests` inside `tests_requires_cli_archive`; see [Polyglot SDK validation tests](#polyglot-sdk-validation-tests) below.
 5. **The `results` job depends on every relevant lane** so the workflow still reports a single final status after the parallelized work completes.
 
 #### GitHub Actions 256-Job Limit
@@ -411,3 +410,17 @@ pwsh eng/scripts/expand-test-matrix-github.ps1 `
   -CanonicalMatrixFile artifacts/canonical-test-matrix.json `
   -OutputMatrixFile artifacts/github-matrix.json
 ```
+
+## Polyglot SDK validation tests
+
+Python, Go, Java, Rust, and TypeScript AppHost SDK smoke and codegen coverage lives inside `tests/Aspire.Cli.EndToEnd.Tests`. Each polyglot language has its own test class:
+
+- `PythonPolyglotTests` / `PythonCodegenValidationTests`
+- `GoPolyglotTests` / `GoCodegenValidationTests`
+- `JavaPolyglotTests` / `JavaCodegenValidationTests`
+- `TypeScriptPolyglotTests` / `TypeScriptCodegenValidationTests`
+- `RustPolyglotTests` (quarantined; see below)
+
+The project sets `SplitTestsOnCI=true`, so every class becomes its own runsheet entry under `tests_requires_cli_archive` and runs on its own GitHub Actions runner inside its own Docker container. Each test class pins a `DockerfileVariant` to one of the matching `tests/Shared/Docker/Dockerfile.e2e-polyglot-{base,java,python,go,rust}` images. The polyglot images are prebuilt by `.github/workflows/build-cli-e2e-image.yml` and downloaded per-class in `.github/workflows/run-tests.yml` via `eng/scripts/load-cli-e2e-images.sh`.
+
+`RustPolyglotTests` is decorated with `[QuarantinedTest]`, which keeps it off the PR-blocking path (matching the prior `continue-on-error: true` Rust SDK Validation job) while still running it in the scheduled `Quarantined Tests` workflow.
