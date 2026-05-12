@@ -286,6 +286,182 @@ public partial class AzureKubernetesEnvironmentResource
         }
     }
 
+    /// <summary>
+    /// Applies the AGC <c>ApplicationLoadBalancer</c> custom resource for the supplied
+    /// <see cref="AzureKubernetesLoadBalancerResource"/> into the cluster. Polls the
+    /// cluster for the <c>azure-alb-external</c> GatewayClass first (it appears once the
+    /// AGC ALB controller add-on is fully installed), then <c>kubectl apply</c>s the CR
+    /// pointing at the load balancer's delegated subnet.
+    /// </summary>
+    /// <remarks>
+    /// The CR shape is documented at
+    /// https://learn.microsoft.com/azure/application-gateway/for-containers/quickstart-deploy-application-gateway-for-containers.
+    /// Example:
+    /// <code>
+    /// apiVersion: alb.networking.azure.io/v1
+    /// kind: ApplicationLoadBalancer
+    /// metadata:
+    ///   name: alb-{lb.Name}
+    ///   namespace: default
+    /// spec:
+    ///   associations:
+    ///   - /subscriptions/.../subnets/{albSubnet}
+    /// </code>
+    /// </remarks>
+    internal async Task ApplyAlbCrdAsync(
+        AzureKubernetesLoadBalancerResource lb,
+        PipelineStepContext context)
+    {
+        var applyTask = await context.ReportingStep.CreateTaskAsync(
+            $"Applying AGC ApplicationLoadBalancer CR for {lb.Name}",
+            context.CancellationToken).ConfigureAwait(false);
+
+        await using (applyTask.ConfigureAwait(false))
+        {
+            try
+            {
+                var subnetId = await ((IValueProvider)lb.SubnetIdReference).GetValueAsync(context.CancellationToken).ConfigureAwait(false);
+                if (string.IsNullOrEmpty(subnetId))
+                {
+                    throw new InvalidOperationException(
+                        $"Could not resolve subnet ID for AGC load balancer '{lb.Name}'.");
+                }
+
+                var kubeConfigPath = KubernetesEnvironment.KubeConfigPath
+                    ?? throw new InvalidOperationException(
+                        $"Cannot apply AGC ApplicationLoadBalancer CR for '{lb.Name}': " +
+                        $"kubeconfig was not set by aks-get-credentials-{Name}.");
+
+                // Wait for the azure-alb-external GatewayClass to appear. The AGC ALB
+                // controller add-on installs it asynchronously, so polling is required
+                // even after the AKS cluster reports Succeeded. 10-minute budget matches
+                // the E2E test budget in KubernetesGatewayTlsDeploymentTests.cs.
+                await WaitForAzureAlbGatewayClassAsync(
+                    kubeConfigPath, context.Logger, TimeSpan.FromMinutes(10),
+                    context.CancellationToken).ConfigureAwait(false);
+
+                // Apply the ApplicationLoadBalancer CR via kubectl apply -f - using stdin
+                // so we don't need a temp file. JSON is a valid YAML subset for kubectl.
+                var manifest =
+                    $$"""
+                    {
+                      "apiVersion": "alb.networking.azure.io/v1",
+                      "kind": "ApplicationLoadBalancer",
+                      "metadata": { "name": "{{lb.AlbName}}", "namespace": "{{AzureKubernetesLoadBalancerResource.AlbNamespace}}" },
+                      "spec": { "associations": ["{{subnetId}}"] }
+                    }
+                    """;
+
+                var applyArgs = $"apply --kubeconfig \"{kubeConfigPath}\" -n \"{AzureKubernetesLoadBalancerResource.AlbNamespace}\" -f -";
+                var applySpec = new ProcessSpec("kubectl")
+                {
+                    Arguments = applyArgs,
+                    StandardInputContent = manifest,
+                    InheritEnv = true,
+                    ThrowOnNonZeroReturnCode = false,
+                    OnOutputData = line => context.Logger.LogDebug("kubectl: {Line}", line),
+                    OnErrorData = line => context.Logger.LogDebug("kubectl: {Line}", line)
+                };
+
+                var (applyResultTask, applyDisposable) = ProcessUtil.Run(applySpec);
+                int applyExitCode;
+                await using (applyDisposable.ConfigureAwait(false))
+                {
+                    var result = await applyResultTask.WaitAsync(context.CancellationToken).ConfigureAwait(false);
+                    applyExitCode = result.ExitCode;
+                }
+
+                if (applyExitCode != 0)
+                {
+                    throw new InvalidOperationException(
+                        $"kubectl apply for ApplicationLoadBalancer '{lb.AlbName}' failed (exit code {applyExitCode}).");
+                }
+
+                context.Logger.LogInformation(
+                    "Applied ApplicationLoadBalancer '{AlbName}' in namespace '{AlbNamespace}' bound to subnet '{SubnetId}'",
+                    lb.AlbName, AzureKubernetesLoadBalancerResource.AlbNamespace, subnetId);
+
+                context.Summary.Add(
+                    $"☸ ALB {lb.Name}",
+                    new MarkdownString($"**{lb.AlbName}** in `{AzureKubernetesLoadBalancerResource.AlbNamespace}` (subnet `{subnetId}`)"));
+
+                await applyTask.SucceedAsync(
+                    $"AGC ApplicationLoadBalancer '{lb.AlbName}' applied",
+                    context.CancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                await applyTask.FailAsync(
+                    $"Failed to apply AGC ApplicationLoadBalancer for {lb.Name}: {ex.Message}",
+                    context.CancellationToken).ConfigureAwait(false);
+                throw;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Polls <c>kubectl get gatewayclass azure-alb-external</c> until it succeeds or the
+    /// timeout elapses. The <c>azure-alb-external</c> GatewayClass is installed by the
+    /// AGC ALB controller add-on (<c>ingressProfile.applicationLoadBalancer.enabled</c>),
+    /// but provisioning is asynchronous — the AKS resource may report Succeeded before the
+    /// add-on's CRDs land in the cluster.
+    /// </summary>
+    private static async Task WaitForAzureAlbGatewayClassAsync(
+        string kubeConfigPath,
+        ILogger logger,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        var pollInterval = TimeSpan.FromSeconds(10);
+        var attempt = 0;
+
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            attempt++;
+            var (resultTask, disposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
+            {
+                Arguments = $"get gatewayclass azure-alb-external --kubeconfig \"{kubeConfigPath}\" --no-headers",
+                ThrowOnNonZeroReturnCode = false,
+                InheritEnv = true,
+                OnOutputData = _ => { },
+                OnErrorData = _ => { }
+            });
+
+            int exitCode;
+            await using (disposable.ConfigureAwait(false))
+            {
+                var result = await resultTask.WaitAsync(cancellationToken).ConfigureAwait(false);
+                exitCode = result.ExitCode;
+            }
+
+            if (exitCode == 0)
+            {
+                logger.LogInformation(
+                    "GatewayClass 'azure-alb-external' is available (after {Attempts} probe(s))",
+                    attempt);
+                return;
+            }
+
+            if (DateTime.UtcNow >= deadline)
+            {
+                throw new InvalidOperationException(
+                    "Timed out waiting for the 'azure-alb-external' GatewayClass to appear in the cluster. " +
+                    "Ensure the AKS preview features 'Microsoft.ContainerService/AKSGatewayAPIPreview' and " +
+                    "'Microsoft.ContainerService/AKSAppGatewayContainersPreview' are registered on the subscription, " +
+                    "and that the AGC ALB controller add-on (ingressProfile.applicationLoadBalancer) finished installing.");
+            }
+
+            logger.LogDebug(
+                "GatewayClass 'azure-alb-external' not yet available (attempt {Attempt}); retrying in {Delay}s",
+                attempt, pollInterval.TotalSeconds);
+
+            await Task.Delay(pollInterval, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
     private static string FindAzCli()
     {
         var azPath = PathLookupHelper.FindFullPathFromPath("az");

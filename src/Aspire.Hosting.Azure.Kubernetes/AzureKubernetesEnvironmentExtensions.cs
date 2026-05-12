@@ -350,6 +350,92 @@ public static class AzureKubernetesEnvironmentExtensions
     }
 
     /// <summary>
+    /// Adds an Azure Application Gateway for Containers (AGC) <c>ApplicationLoadBalancer</c>
+    /// to this AKS environment, bound to the supplied delegated subnet. Returns a resource
+    /// builder that can be passed to <c>gateway.WithLoadBalancer(lb)</c> /
+    /// <c>ingress.WithLoadBalancer(lb)</c> to route traffic through this load balancer.
+    /// </summary>
+    /// <param name="builder">The AKS environment resource builder.</param>
+    /// <param name="name">The name of the load balancer resource. Used to derive the in-cluster
+    /// <c>ApplicationLoadBalancer</c> name (<c>alb-{name}</c>) referenced by gateway/ingress annotations.</param>
+    /// <param name="subnet">A subnet that will be associated with the AGC ALB. The subnet is
+    /// automatically delegated to <c>Microsoft.ServiceNetworking/trafficControllers</c>; this is
+    /// required by AGC and is idempotent across multiple <see cref="AddLoadBalancer"/> calls
+    /// against the same subnet.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{AzureKubernetesLoadBalancerResource}"/>.</returns>
+    /// <remarks>
+    /// <para>
+    /// Each AGC <c>ApplicationLoadBalancer</c> caps at 5 frontends, so applications that need
+    /// more should call <c>AddLoadBalancer</c> multiple times (each call may use the same or a
+    /// different subnet) and pin gateways/ingresses to specific load balancers via
+    /// <see cref="AzureKubernetesIngressExtensions.WithLoadBalancer(IResourceBuilder{global::Aspire.Hosting.Kubernetes.KubernetesGatewayResource}, IResourceBuilder{AzureKubernetesLoadBalancerResource})"/>.
+    /// </para>
+    /// <para>
+    /// Calling this method opts the AKS cluster into the managed Gateway API installation
+    /// (<c>ingressProfile.gatewayAPI.installation = 'Standard'</c>) and the AGC ALB controller
+    /// add-on (<c>ingressProfile.applicationLoadBalancer.enabled = true</c>). Both properties
+    /// only exist in preview AKS Bicep API versions (oldest covering both: <c>2025-09-02-preview</c>),
+    /// so this implicitly bumps the cluster's emitted API version. Subscriptions/regions where
+    /// the AKS preview features <c>Microsoft.ContainerService/AKSGatewayAPIPreview</c> and
+    /// <c>Microsoft.ContainerService/AKSAppGatewayContainersPreview</c> are not registered will
+    /// see deployment failures.
+    /// </para>
+    /// <para>
+    /// After provisioning, a per-LB pipeline step (<c>apply-alb-crd-{name}</c>) waits for the
+    /// <c>azure-alb-external</c> GatewayClass to appear in the cluster and then
+    /// <c>kubectl apply</c>s the <c>ApplicationLoadBalancer</c> custom resource pointing at the
+    /// supplied subnet.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
+    /// var aksSubnet = vnet.AddSubnet("aks", "10.0.0.0/22");
+    /// var albSubnet = vnet.AddSubnet("alb", "10.0.4.0/24");
+    ///
+    /// var aks = builder.AddAzureKubernetesEnvironment("aks").WithSubnet(aksSubnet);
+    /// var lb = aks.AddLoadBalancer("lb", albSubnet);
+    ///
+    /// aks.AddGateway("public").WithLoadBalancer(lb);
+    /// </code>
+    /// </example>
+    [AspireExport(Description = "Adds an Azure Application Gateway for Containers ApplicationLoadBalancer to the AKS environment")]
+    public static IResourceBuilder<AzureKubernetesLoadBalancerResource> AddLoadBalancer(
+        this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
+        [ResourceName] string name,
+        IResourceBuilder<AzureSubnetResource> subnet)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentNullException.ThrowIfNull(subnet);
+
+        // AGC requires the Gateway API CRDs, so both ingressProfile properties are
+        // enabled together. These flags drive the preview API version + property
+        // injection in ConfigureAksInfrastructure.
+        builder.Resource.GatewayApiEnabled = true;
+        builder.Resource.ApplicationLoadBalancerEnabled = true;
+
+        // Delegate the subnet to AGC. AKS itself uses non-delegated subnets for node
+        // pools, so this delegation lives only on user-supplied ALB subnets. Multiple
+        // load balancers may share a subnet, so we apply the annotation idempotently:
+        // AzureSubnetResource.AddAsync only reads the last-added delegation, but
+        // duplicating it would be wasteful.
+        if (!subnet.Resource.HasAnnotationOfType<AzureSubnetServiceDelegationAnnotation>())
+        {
+            subnet.WithAnnotation(new AzureSubnetServiceDelegationAnnotation(
+                "Microsoft.ServiceNetworking/trafficControllers",
+                "Microsoft.ServiceNetworking/trafficControllers"));
+        }
+
+        var lb = new AzureKubernetesLoadBalancerResource(name, builder.Resource)
+        {
+            SubnetIdReference = subnet.Resource.Id
+        };
+
+        return builder.ApplicationBuilder.AddResource(lb);
+    }
+
+    /// <summary>
     /// Enables or disables workload identity on the AKS environment, allowing pods to authenticate
     /// to Azure services using federated credentials.
     /// </summary>
@@ -515,6 +601,20 @@ public static class AzureKubernetesEnvironmentExtensions
         }
 
         infrastructure.Add(aks);
+
+        // Surface the preview-only ingress profile properties for AGC / managed Gateway API.
+        // We bump to the oldest preview API version that has both gatewayAPI and
+        // applicationLoadBalancer; the injection itself is reflection-based because the
+        // Azure.Provisioning.ContainerService types that own these properties are internal.
+        // See the xmldoc on AksPreviewIngressProfileInjector for a full explanation.
+        if (aksResource.RequiresPreviewIngressApi)
+        {
+            aks.ResourceVersion = "2025-09-02-preview";
+            AksPreviewIngressProfileInjector.Inject(
+                aks,
+                gatewayApi: aksResource.GatewayApiEnabled,
+                applicationLoadBalancer: aksResource.ApplicationLoadBalancerEnabled);
+        }
 
         // ACR pull role assignment for kubelet identity
         if (aksResource.DefaultContainerRegistry is not null || aksResource.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out _))

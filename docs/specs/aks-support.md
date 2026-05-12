@@ -589,7 +589,57 @@ var aks = builder.AddAzureKubernetesService("aks")
 - 🔲 AKS resource does not implement `IAzureContainerRegistry` (ACR outputs not exposed via standard interface)
 
 #### Ingress controller
-- 🔲 Application Gateway Ingress Controller (AGIC) or other ingress support
+- ✅ Azure Application Gateway for Containers (AGC) via `AddLoadBalancer()` + `WithLoadBalancer()` (see below)
+- 🔲 Cluster-level no-arg `AddLoadBalancer()` (auto VNet + delegated subnet) — left as future work
+- 🔲 Application Gateway Ingress Controller (AGIC v1, the older Application Gateway-based controller) — superseded by AGC for new work
+
+### Application Gateway for Containers (AGC) ingress
+
+Opt-in, multi-LB ingress wired into Aspire's existing `AddGateway`/`AddIngress` model. The single public entry point is `AddLoadBalancer` on the AKS environment:
+
+```csharp
+var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
+var aksSubnet = vnet.AddSubnet("aks", "10.0.0.0/22");
+var alb1Subnet = vnet.AddSubnet("alb1", "10.0.4.0/24");
+var alb2Subnet = vnet.AddSubnet("alb2", "10.0.5.0/24");
+
+var aks = builder.AddAzureKubernetesEnvironment("aks").WithSubnet(aksSubnet);
+
+var lb1 = aks.AddLoadBalancer("public", alb1Subnet);
+var lb2 = aks.AddLoadBalancer("admin", alb2Subnet);
+
+aks.AddGateway("storefront").WithLoadBalancer(lb1);
+aks.AddIngress("api").WithLoadBalancer(lb1);
+aks.AddGateway("admin-portal").WithLoadBalancer(lb2);
+```
+
+What `AddLoadBalancer` does:
+- Flips internal flags on the AKS environment so its emitted Bicep uses the
+  `2025-09-02-preview` API version and includes both
+  `properties.ingressProfile.gatewayAPI.installation: 'Standard'` and
+  `properties.ingressProfile.applicationLoadBalancer.enabled: true`. (These flags are
+  internal-only — the cluster-level toggles are intentionally not exposed as separate
+  public extensions to keep the surface small and prevent users from opting into the
+  preview API by accident.)
+- Applies an idempotent `AzureSubnetServiceDelegationAnnotation` for
+  `Microsoft.ServiceNetworking/trafficControllers` to the supplied subnet (multiple LBs
+  may share the same subnet).
+- Returns an `AzureKubernetesLoadBalancerResource` whose own pipeline step
+  (`apply-alb-crd-{name}`) waits for the `azure-alb-external` GatewayClass to appear,
+  then `kubectl apply -f -` an `ApplicationLoadBalancer` CR named `alb-{name}` in the
+  `default` namespace, pointing at the supplied subnet.
+
+What `WithLoadBalancer` does on a `KubernetesGatewayResource` / `KubernetesIngressResource`:
+- Adds the AGC association annotations
+  (`alb.networking.azure.io/alb-name: alb-{lb}`, `alb.networking.azure.io/alb-namespace: default`)
+  to the rendered Helm template.
+- Defaults the `gatewayClassName` / `ingressClassName` to `azure-alb-external` if the
+  user did not set one explicitly.
+
+Why multi-LB by design: each AGC `ApplicationLoadBalancer` caps at five frontends, so
+larger apps need to spread Gateways/Ingresses across multiple LBs. Each
+`AzureKubernetesLoadBalancerResource` owns its own pipeline step so apply / wait-ready /
+future-destroy lifecycle is per-LB.
 
 #### Managed Prometheus/Grafana
 - 🔲 Azure Monitor workspace for managed Prometheus
