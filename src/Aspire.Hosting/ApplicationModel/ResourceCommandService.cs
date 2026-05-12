@@ -312,6 +312,11 @@ public class ResourceCommandService
                     Arguments = arguments
                 };
 
+                // When non-interactive, set an AsyncLocal scope so that IInteractionService.IsAvailable
+                // returns false during command execution. This lets command callbacks know they should
+                // not attempt to prompt the user.
+                using var _ = nonInteractive ? InteractionService.StartNonInteractiveScope() : default;
+
                 var result = await annotation.ExecuteCommand(context).ConfigureAwait(false);
                 if (result.Success)
                 {

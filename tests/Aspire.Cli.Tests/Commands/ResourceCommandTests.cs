@@ -1019,6 +1019,42 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ResourceCommand_FailsWhenCommandUsesInteractionService()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            // Simulate what happens when a command callback tries to use the interaction service
+            // in non-interactive mode: the AppHost returns a failure because the service is unavailable.
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
+            {
+                Success = false,
+                Message = "InteractionService is not available because the dashboard is not enabled or because this command is running in non-interactive CLI mode. Use the IsAvailable property to determine whether the service is available."
+            },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "web",
+                    CreateCommand("configure", "Configures the resource."))
+            ]
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel, interactionService);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("""resource web configure""");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.FailedToExecuteResourceCommand, exitCode);
+        Assert.Equal(1, backchannel.ExecuteResourceCommandCallCount);
+        Assert.True(backchannel.ExecuteResourceCommandOptions?.NonInteractive == true);
+        var error = Assert.Single(interactionService.DisplayedErrors);
+        Assert.Contains("InteractionService is not available", error);
+    }
+
+    [Fact]
     public async Task ResourceCommand_ForwardsCustomChoiceCommandOptionWhenAllowed()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

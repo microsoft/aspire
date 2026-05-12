@@ -272,6 +272,64 @@ public class InteractionServiceTests
     }
 
     [Fact]
+    public void IsAvailable_NonInteractiveScope_ReturnsFalse()
+    {
+        var interactionService = CreateInteractionService();
+
+        Assert.True(interactionService.IsAvailable);
+
+        using (InteractionService.StartNonInteractiveScope())
+        {
+            Assert.False(interactionService.IsAvailable);
+        }
+
+        Assert.True(interactionService.IsAvailable);
+    }
+
+    [Fact]
+    public async Task IsAvailable_NonInteractiveScope_FlowsAcrossAsyncCalls()
+    {
+        var interactionService = CreateInteractionService();
+
+        Assert.True(interactionService.IsAvailable);
+
+        using (InteractionService.StartNonInteractiveScope())
+        {
+            Assert.False(interactionService.IsAvailable);
+
+            await Task.Yield();
+
+            // AsyncLocal should flow across await points
+            Assert.False(interactionService.IsAvailable);
+        }
+
+        Assert.True(interactionService.IsAvailable);
+    }
+
+    [Fact]
+    public void IsAvailable_NestedNonInteractiveScopes_RestoresPreviousValue()
+    {
+        var interactionService = CreateInteractionService();
+
+        Assert.True(interactionService.IsAvailable);
+
+        using (InteractionService.StartNonInteractiveScope())
+        {
+            Assert.False(interactionService.IsAvailable);
+
+            using (InteractionService.StartNonInteractiveScope())
+            {
+                Assert.False(interactionService.IsAvailable);
+            }
+
+            // Inner scope disposed, but outer scope still active
+            Assert.False(interactionService.IsAvailable);
+        }
+
+        Assert.True(interactionService.IsAvailable);
+    }
+
+    [Fact]
     public async Task PromptInputAsync_ValidationCallbackInvalidData_ReturnErrors()
     {
         var interactionService = CreateInteractionService();
