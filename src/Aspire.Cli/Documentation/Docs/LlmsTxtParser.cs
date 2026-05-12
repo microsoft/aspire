@@ -73,7 +73,7 @@ internal sealed class LlmsSection
 /// <list type="number">
 ///   <item>
 ///     <description>
-///       <b>Standard markdown</b> — headings on their own line, blank lines
+///       Standard markdown — headings on their own line, blank lines
 ///       between sections. Example:
 ///       <code>
 ///       # Document Title
@@ -92,7 +92,7 @@ internal sealed class LlmsSection
 ///   </item>
 ///   <item>
 ///     <description>
-///       <b>Minified ("inline") form</b> — newlines collapsed to single spaces
+///       Minified ("inline") form — newlines collapsed to single spaces
 ///       by site-generation plugins (notably Starlight's
 ///       <see href="https://github.com/delucis/starlight-llms-txt">starlight-llms-txt</see>),
 ///       so the heading marker appears inline with a space prefix
