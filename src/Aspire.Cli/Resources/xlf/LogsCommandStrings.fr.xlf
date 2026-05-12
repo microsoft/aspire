@@ -42,6 +42,11 @@
         <target state="translated">Un nom de ressource est requis si vous n’utilisez pas --follow. Utilisez --follow pour diffuser en continu les journaux de toutes les ressources.</target>
         <note />
       </trans-unit>
+      <trans-unit id="SearchOptionDescription">
+        <source>Full-text search to filter log content</source>
+        <target state="new">Full-text search to filter log content</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SelectAppHostAction">
         <source>stream logs from</source>
         <target state="translated">transmettre les journaux de</target>

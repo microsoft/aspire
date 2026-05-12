@@ -20,7 +20,6 @@ internal static class KnownFeatures
 {
     public static string FeaturePrefix => "features";
     public static string UpdateNotificationsEnabled => "updateNotificationsEnabled";
-    public static string ExecCommandEnabled => "execCommandEnabled";
     public static string ShowDeprecatedPackages => "showDeprecatedPackages";
     public static string StagingChannelEnabled => "stagingChannelEnabled";
     public static string DefaultWatchEnabled => "defaultWatchEnabled";
@@ -37,12 +36,7 @@ internal static class KnownFeatures
             UpdateNotificationsEnabled,
             "Check if update notifications are disabled and set version check environment variable",
             DefaultValue: true),
-        
-        [ExecCommandEnabled] = new(
-            ExecCommandEnabled,
-            "Enable or disable the 'aspire exec' command for executing commands inside running resources",
-            DefaultValue: false),
-        
+
         [ShowDeprecatedPackages] = new(
             ShowDeprecatedPackages,
             "Show or hide deprecated packages in 'aspire add' search results",

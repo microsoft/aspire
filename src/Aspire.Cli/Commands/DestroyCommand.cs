@@ -29,6 +29,8 @@ internal sealed class DestroyCommand : PipelineCommandBase
             Description = DestroyCommandStrings.YesOptionDescription
         };
         Options.Add(_yesOption);
+
+        AddNonInteractiveRequiresYesValidator(this, _yesOption);
     }
 
     protected override string OperationCompletedPrefix => DestroyCommandStrings.OperationCompletedPrefix;

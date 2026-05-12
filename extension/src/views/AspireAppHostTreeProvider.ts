@@ -212,7 +212,11 @@ export function getResourceIcon(resource: ResourceJson): vscode.ThemeIcon {
             if (resource.stateStyle === StateStyle.Error || (resource.exitCode != null && resource.exitCode !== 0)) {
                 return new vscode.ThemeIcon('error', new vscode.ThemeColor('list.errorForeground'));
             }
-            return new vscode.ThemeIcon('pass', new vscode.ThemeColor('charts.green'));
+            // Use a hollow circle (matches the `$(circle-outline)` codicon shown in the
+            // "Stopped" code-lens label) instead of a green check, so a stopped/finished
+            // resource is never visually confused with a Running one (both used to render
+            // as a green check, just in slightly different greens).
+            return new vscode.ThemeIcon('circle-outline', new vscode.ThemeColor('descriptionForeground'));
         case ResourceState.FailedToStart:
         case ResourceState.RuntimeUnhealthy:
             return new vscode.ThemeIcon('error', new vscode.ThemeColor('list.errorForeground'));
@@ -355,6 +359,42 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
     findResourceElement(resourceName: string): TreeElement | undefined {
         const allChildren = this.getChildren();
         return this._findResourceInTree(allChildren, resourceName);
+    }
+
+    /**
+     * Finds the {@link AppHostItem} (global mode) or {@link WorkspaceResourcesItem}
+     * (workspace mode) that corresponds to the given AppHost path.
+     *
+     * Matching prefers an exact path match, then falls back to same-directory match,
+     * which is needed because C# AppHost paths point at the `.csproj` file while a
+     * code lens lives in the sibling `.cs` source.
+     */
+    findAppHostElement(appHostPath: string): TreeElement | undefined {
+        if (!appHostPath) {
+            return undefined;
+        }
+        const targetDir = path.dirname(appHostPath);
+        const elements = this.getChildren();
+        for (const element of elements) {
+            if (element instanceof AppHostItem) {
+                const hostPath = element.appHost.appHostPath;
+                if (!hostPath) {
+                    continue;
+                }
+                if (hostPath === appHostPath || path.dirname(hostPath) === targetDir) {
+                    return element;
+                }
+            } else if (element instanceof WorkspaceResourcesItem) {
+                const hostPath = element.appHostPath;
+                if (!hostPath) {
+                    continue;
+                }
+                if (hostPath === appHostPath || path.dirname(hostPath) === targetDir) {
+                    return element;
+                }
+            }
+        }
+        return undefined;
     }
 
     private _findResourceInTree(elements: TreeElement[], resourceName: string): TreeElement | undefined {

@@ -1,0 +1,26 @@
+﻿Description:
+  Execute a command on a resource (e.g. start, stop, restart)
+
+Usage:
+  Aspire.Cli.Tests resource <resource> <command> [options] [[--] <additional arguments>...]]
+
+Arguments:
+  <resource>  The name of the resource to execute the command on
+  <command>   The name of the command to execute (e.g. start, stop, restart)
+
+Options:
+  --apphost <apphost>                                                    The path to the Aspire AppHost project file or a directory to search
+  --include-hidden                                                       Include hidden resources in the output
+  -?, -h, --help                                                         Show help and usage information
+  -l, --log-level <Critical|Debug|Error|Information|None|Trace|Warning>  Set the minimum log level for console output (Trace, Debug, Information, Warning, Error, Critical)
+  --non-interactive                                                      Run the command in non-interactive mode, disabling all interactive prompts and spinners
+  --nologo                                                               Suppress the startup banner and telemetry notice
+  --banner                                                               Display the animated Aspire CLI welcome banner
+  --wait-for-debugger                                                    Wait for a debugger to attach before executing the command
+
+Additional Arguments:
+  Arguments passed to the application that is being run.
+
+Available resource commands:
+  configure           Configures the browser.
+  wait-for-browser    Waits for text in the browser.

@@ -5,10 +5,13 @@ using System.Text.Json.Nodes;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.NuGet;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.InternalTesting;
 
@@ -16,6 +19,33 @@ namespace Aspire.Cli.Tests.Commands;
 
 public class InitCommandTests(ITestOutputHelper outputHelper)
 {
+    /// <summary>
+    /// Configures the test packaging service factory to return a single implicit channel
+    /// whose template package cache yields one Aspire.ProjectTemplates entry. Init's project-mode path needs this
+    /// to resolve a template version before invoking dotnet new install.
+    /// </summary>
+    private static void ConfigureImplicitTemplateChannel(CliServiceCollectionTestOptions options, string version = "13.3.0")
+    {
+        options.PackagingServiceFactory = _ =>
+        {
+            var fakeCache = new FakeNuGetPackageCache
+            {
+                GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
+                    Task.FromResult<IEnumerable<NuGetPackageCli>>(
+                        [new NuGetPackageCli { Id = "Aspire.ProjectTemplates", Source = "nuget.org", Version = version }])
+            };
+
+            var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache);
+
+            var packagingService = new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([implicitChannel])
+            };
+
+            return packagingService;
+        };
+    }
+
     [Theory]
     [InlineData("Test.csproj")]
     [InlineData("Test.fsproj")]
@@ -36,6 +66,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
+            ConfigureImplicitTemplateChannel(options);
             options.DotNetCliRunnerFactory = _ =>
             {
                 var runner = new TestDotNetCliRunner();
@@ -81,6 +112,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
+            ConfigureImplicitTemplateChannel(options);
             options.DotNetCliRunnerFactory = _ =>
             {
                 var runner = new TestDotNetCliRunner();
@@ -128,6 +160,173 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var appHost = config["appHost"]!.AsObject();
         Assert.Equal("apphost.cs", appHost["path"]!.GetValue<string>());
         Assert.Null(appHost["language"]);
+    }
+
+    [Fact]
+    public async Task InitCommand_SingleFileSkeleton_CreatesAppHostRunJsonWithDashboardEnvVars()
+    {
+        // Regression for https://github.com/microsoft/aspire/issues/15986: without
+        // apphost.run.json, `dotnet run apphost.cs` after `aspire init` crashes because
+        // the dashboard env vars (ASPNETCORE_URLS, ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL)
+        // are not set. Init must emit apphost.run.json alongside aspire.config.json so
+        // the file-based runner picks up a launch profile.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var runJsonPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.run.json");
+        Assert.True(File.Exists(runJsonPath), "apphost.run.json should be created so `dotnet run apphost.cs` works.");
+
+        var runJson = JsonNode.Parse(File.ReadAllText(runJsonPath))!.AsObject();
+        var profiles = runJson["profiles"]!.AsObject();
+
+        var https = profiles["https"]!.AsObject();
+        Assert.Equal("Project", https["commandName"]!.GetValue<string>());
+        Assert.True(https["dotnetRunMessages"]!.GetValue<bool>());
+        var httpsUrls = https["applicationUrl"]!.GetValue<string>();
+        Assert.StartsWith("https://localhost:", httpsUrls);
+        var httpsEnv = https["environmentVariables"]!.AsObject();
+        Assert.Equal("Development", httpsEnv["ASPNETCORE_ENVIRONMENT"]!.GetValue<string>());
+        Assert.Equal("Development", httpsEnv["DOTNET_ENVIRONMENT"]!.GetValue<string>());
+        Assert.StartsWith("https://localhost:", httpsEnv["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]!.GetValue<string>());
+        Assert.StartsWith("https://localhost:", httpsEnv["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]!.GetValue<string>());
+
+        var http = profiles["http"]!.AsObject();
+        Assert.Equal("Project", http["commandName"]!.GetValue<string>());
+        var httpEnv = http["environmentVariables"]!.AsObject();
+        Assert.Equal("Development", httpEnv["ASPNETCORE_ENVIRONMENT"]!.GetValue<string>());
+        Assert.StartsWith("http://localhost:", httpEnv["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]!.GetValue<string>());
+        Assert.StartsWith("http://localhost:", httpEnv["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]!.GetValue<string>());
+        Assert.Equal("true", httpEnv["ASPIRE_ALLOW_UNSECURED_TRANSPORT"]!.GetValue<string>());
+
+        // The two files must agree on ports — otherwise `aspire run` and
+        // `dotnet run apphost.cs` would bind to different dashboard URLs.
+        var aspireConfig = JsonNode.Parse(File.ReadAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json")))!.AsObject();
+        var aspireProfiles = aspireConfig["profiles"]!.AsObject();
+        Assert.Equal(
+            aspireProfiles["https"]!["applicationUrl"]!.GetValue<string>(),
+            httpsUrls);
+        Assert.Equal(
+            aspireProfiles["http"]!["applicationUrl"]!.GetValue<string>(),
+            http["applicationUrl"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task InitCommand_SingleFileSkeleton_AppHostRunJsonAdoptsPortsFromExistingAspireConfig()
+    {
+        // If aspire.config.json already exists with a `profiles` section (e.g. user
+        // re-ran `aspire init` after editing it, or copied a stale file in), the new
+        // apphost.run.json must adopt those same ports — the two files should never
+        // disagree on dashboard / OTLP / resource service endpoints.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        const string existingAspireConfig = """
+            {
+              "appHost": {
+                "path": "apphost.cs"
+              },
+              "profiles": {
+                "https": {
+                  "applicationUrl": "https://localhost:18000;http://localhost:18001",
+                  "environmentVariables": {
+                    "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:18002",
+                    "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:18003"
+                  }
+                },
+                "http": {
+                  "applicationUrl": "http://localhost:18001",
+                  "environmentVariables": {
+                    "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:18005",
+                    "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://localhost:18006",
+                    "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true"
+                  }
+                }
+              }
+            }
+            """;
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json"), existingAspireConfig);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var runJson = JsonNode.Parse(File.ReadAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.run.json")))!.AsObject();
+        var profiles = runJson["profiles"]!.AsObject();
+        var https = profiles["https"]!.AsObject();
+        var http = profiles["http"]!.AsObject();
+
+        Assert.Equal("https://localhost:18000;http://localhost:18001", https["applicationUrl"]!.GetValue<string>());
+        Assert.Equal("https://localhost:18002", https["environmentVariables"]!["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]!.GetValue<string>());
+        Assert.Equal("https://localhost:18003", https["environmentVariables"]!["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]!.GetValue<string>());
+        Assert.Equal("http://localhost:18001", http["applicationUrl"]!.GetValue<string>());
+        Assert.Equal("http://localhost:18005", http["environmentVariables"]!["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"]!.GetValue<string>());
+        Assert.Equal("http://localhost:18006", http["environmentVariables"]!["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task InitCommand_SingleFileSkeleton_PreservesUnparseableExistingProfiles()
+    {
+        // Regression guard for behavioral safety: if aspire.config.json already has a
+        // `profiles` section that doesn't match the expected 6-port shape (e.g. user-customized,
+        // missing one of the env vars, or an https-only setup), `aspire init` must NOT
+        // overwrite those profiles. The user has clearly customized their config and we
+        // shouldn't trash their data — even at the cost of apphost.run.json potentially
+        // binding to different dashboard ports.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        const string customAspireConfig = """
+            {
+              "appHost": {
+                "path": "apphost.cs"
+              },
+              "profiles": {
+                "https": {
+                  "applicationUrl": "https://localhost:18000",
+                  "environmentVariables": {
+                    "MY_CUSTOM_VAR": "custom-value"
+                  }
+                }
+              }
+            }
+            """;
+        var aspireConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json");
+        File.WriteAllText(aspireConfigPath, customAspireConfig);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        // The user's customizations must be preserved verbatim — only the appHost.path
+        // is allowed to be touched (since that's the primary purpose of DropAspireConfig).
+        var aspireConfig = JsonNode.Parse(File.ReadAllText(aspireConfigPath))!.AsObject();
+        var preservedProfiles = aspireConfig["profiles"]!.AsObject();
+        Assert.False(preservedProfiles.ContainsKey("http"), "http profile should NOT have been added.");
+        var preservedHttps = preservedProfiles["https"]!.AsObject();
+        Assert.Equal("https://localhost:18000", preservedHttps["applicationUrl"]!.GetValue<string>());
+        var preservedEnv = preservedHttps["environmentVariables"]!.AsObject();
+        Assert.Equal("custom-value", preservedEnv["MY_CUSTOM_VAR"]!.GetValue<string>());
+        Assert.False(preservedEnv.ContainsKey("ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"), "OTLP env var should NOT have been added to user's custom profile.");
+
+        // apphost.run.json still gets written so `dotnet run apphost.cs` works (with fresh
+        // ports — accepted divergence in this edge case).
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.run.json")));
     }
 
     [Fact]
@@ -376,6 +575,327 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
         Assert.Equal(preExistingContent, await File.ReadAllTextAsync(appHostPath));
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenSolutionExistsAndChannelIsExplicit_PassesTemporaryNuGetConfigToTemplateInstall()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.sln"));
+        File.WriteAllText(solutionFile.FullName, "Fake solution file");
+
+        FileInfo? capturedNuGetConfigFile = null;
+        string? capturedNuGetSource = null;
+        string? capturedTemplateNuGetConfigContents = null;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            // Match the bug repro: user has a global `channel` setting pointing at an explicit channel.
+            options.ConfigurationServiceFactory = _ => new FakeConfigurationServiceWithChannel("staging");
+
+            options.PackagingServiceFactory = _ =>
+            {
+                var fakeCache = new FakeNuGetPackageCache
+                {
+                    GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
+                        Task.FromResult<IEnumerable<NuGetPackageCli>>(
+                            [new NuGetPackageCli { Id = "Aspire.ProjectTemplates", Source = "https://example.test/staging/v3/index.json", Version = "13.3.0" }])
+                };
+
+                var explicitChannel = PackageChannel.CreateExplicitChannel(
+                    "staging",
+                    PackageChannelQuality.Both,
+                    [new PackageMapping("Aspire*", "https://example.test/staging/v3/index.json")],
+                    fakeCache);
+
+                return new TestPackagingService
+                {
+                    GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([explicitChannel])
+                };
+            };
+
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.InstallTemplateAsyncCallback = (_, version, nugetConfigFile, nugetSource, _, _, _) =>
+                {
+                    capturedNuGetConfigFile = nugetConfigFile;
+                    capturedNuGetSource = nugetSource;
+                    if (nugetConfigFile is not null && File.Exists(nugetConfigFile.FullName))
+                    {
+                        capturedTemplateNuGetConfigContents = File.ReadAllText(nugetConfigFile.FullName);
+                    }
+                    return (0, version);
+                };
+                runner.NewProjectAsyncCallback = (_, _, outputPath, _, _) =>
+                {
+                    Directory.CreateDirectory(outputPath);
+                    return 0;
+                };
+                return runner;
+            };
+        });
+
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.NotNull(capturedNuGetConfigFile);
+        Assert.Equal("https://example.test/staging/v3/index.json", capturedNuGetSource);
+        Assert.NotNull(capturedTemplateNuGetConfigContents);
+        Assert.Contains("https://example.test/staging/v3/index.json", capturedTemplateNuGetConfigContents);
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenSolutionExistsAndChannelIsImplicit_LeavesNuGetConfigNull()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.sln"));
+        File.WriteAllText(solutionFile.FullName, "Fake solution file");
+
+        FileInfo? capturedNuGetConfigFile = new FileInfo("sentinel");
+        string? capturedNuGetSource = "sentinel";
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            ConfigureImplicitTemplateChannel(options);
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.InstallTemplateAsyncCallback = (_, version, nugetConfigFile, nugetSource, _, _, _) =>
+                {
+                    capturedNuGetConfigFile = nugetConfigFile;
+                    capturedNuGetSource = nugetSource;
+                    return (0, version);
+                };
+                runner.NewProjectAsyncCallback = (_, _, outputPath, _, _) =>
+                {
+                    Directory.CreateDirectory(outputPath);
+                    return 0;
+                };
+                return runner;
+            };
+        });
+
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Null(capturedNuGetConfigFile);
+        // The implicit channel surfaces the package's Source field as the nugetSource even when no
+        // temporary config is generated, so nugetSource may be non-null. The contract this test guards
+        // is that nugetConfigFile stays null on the implicit channel.
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenSolutionExistsAndPrHivesPresent_DoesNotWidenToAllChannels()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.sln"));
+        File.WriteAllText(solutionFile.FullName, "Fake solution file");
+
+        // Simulate a stale PR hive on disk so executionContext.GetPrHiveCount() returns > 0.
+        var hivesDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives"));
+        Directory.CreateDirectory(Path.Combine(hivesDir.FullName, "pr-12345", "packages"));
+
+        string? capturedTemplateVersion = null;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.PackagingServiceFactory = _ =>
+            {
+                // Implicit channel offers the expected stable version; PR hive channel offers a much
+                // newer version that should NOT be selected because init opts out of PR-hive widening.
+                var implicitCache = new FakeNuGetPackageCache
+                {
+                    GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
+                        Task.FromResult<IEnumerable<NuGetPackageCli>>(
+                            [new NuGetPackageCli { Id = "Aspire.ProjectTemplates", Source = "nuget.org", Version = "13.3.0" }])
+                };
+                var prHiveCache = new FakeNuGetPackageCache
+                {
+                    GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
+                        Task.FromResult<IEnumerable<NuGetPackageCli>>(
+                            [new NuGetPackageCli { Id = "Aspire.ProjectTemplates", Source = "pr-hive", Version = "99.0.0-pr.12345" }])
+                };
+
+                var implicitChannel = PackageChannel.CreateImplicitChannel(implicitCache);
+                var prHiveChannel = PackageChannel.CreateExplicitChannel(
+                    "pr-12345",
+                    PackageChannelQuality.Both,
+                    [new PackageMapping("Aspire*", hivesDir.FullName + "/pr-12345/packages")],
+                    prHiveCache);
+
+                return new TestPackagingService
+                {
+                    GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([implicitChannel, prHiveChannel])
+                };
+            };
+
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.InstallTemplateAsyncCallback = (_, version, _, _, _, _, _) =>
+                {
+                    capturedTemplateVersion = version;
+                    return (0, version);
+                };
+                runner.NewProjectAsyncCallback = (_, _, outputPath, _, _) =>
+                {
+                    Directory.CreateDirectory(outputPath);
+                    return 0;
+                };
+                return runner;
+            };
+        });
+
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal("13.3.0", capturedTemplateVersion);
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenChannelResolutionThrowsChannelNotFound_DisplaysFriendlyError()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.sln"));
+        File.WriteAllText(solutionFile.FullName, "Fake solution file");
+
+        var interactionService = new TestInteractionService();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+
+            // Configure global channel = "missing-channel" so the resolver looks for a channel that doesn't exist.
+            options.ConfigurationServiceFactory = _ => new FakeConfigurationServiceWithChannel("missing-channel");
+
+            // Return only an implicit/default channel so the lookup fails to match "missing-channel".
+            options.PackagingServiceFactory = _ =>
+            {
+                var fakeCache = new FakeNuGetPackageCache
+                {
+                    GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
+                        Task.FromResult<IEnumerable<NuGetPackageCli>>(
+                            [new NuGetPackageCli { Id = "Aspire.ProjectTemplates", Source = "nuget.org", Version = "13.3.0" }])
+                };
+                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache);
+                return new TestPackagingService
+                {
+                    GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([implicitChannel])
+                };
+            };
+
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.InstallTemplateAsyncCallback = (_, _, _, _, _, _, _) =>
+                {
+                    throw new InvalidOperationException("InstallTemplateAsync should not run when channel resolution fails.");
+                };
+                return runner;
+            };
+        });
+
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.FailedToInstallTemplates, exitCode);
+        Assert.Contains(interactionService.DisplayedErrors, e => e.Contains("missing-channel", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task InitCommand_WhenChannelTemplateSearchFails_DisplaysFriendlyError()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var solutionFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Test.sln"));
+        File.WriteAllText(solutionFile.FullName, "Fake solution file");
+
+        var interactionService = new TestInteractionService();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+
+            // Fake cache throws NuGetPackageCacheException to simulate offline / inaccessible feed.
+            options.PackagingServiceFactory = _ =>
+            {
+                var fakeCache = new FakeNuGetPackageCache
+                {
+                    GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
+                        throw new NuGetPackageCacheException("Package search failed: simulated network failure")
+                };
+                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache);
+                return new TestPackagingService
+                {
+                    GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([implicitChannel])
+                };
+            };
+
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.InstallTemplateAsyncCallback = (_, _, _, _, _, _, _) =>
+                {
+                    throw new InvalidOperationException("InstallTemplateAsync should not run when channel search fails.");
+                };
+                return runner;
+            };
+        });
+
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.FailedToInstallTemplates, exitCode);
+        Assert.Contains(interactionService.DisplayedErrors, e => e.Contains("simulated network failure", StringComparison.Ordinal));
+    }
+
+    private sealed class FakeConfigurationServiceWithChannel(string channelValue) : IConfigurationService
+    {
+        public Task<string?> GetConfigurationAsync(string key, CancellationToken cancellationToken = default)
+            => Task.FromResult<string?>(string.Equals(key, "channel", StringComparison.Ordinal) ? channelValue : null);
+
+        public Task<string?> GetConfigurationFromDirectoryAsync(string key, DirectoryInfo startDirectory, CancellationToken cancellationToken = default)
+            => GetConfigurationAsync(key, cancellationToken);
+
+        public Task SetConfigurationAsync(string key, string value, bool isGlobal = false, CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
+
+        public Task<bool> DeleteConfigurationAsync(string key, bool isGlobal = false, CancellationToken cancellationToken = default)
+            => Task.FromResult(false);
+
+        public Task<Dictionary<string, string>> GetAllConfigurationAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(new Dictionary<string, string>());
+
+        public Task<Dictionary<string, string>> GetLocalConfigurationAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(new Dictionary<string, string>());
+
+        public Task<Dictionary<string, string>> GetGlobalConfigurationAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(new Dictionary<string, string>());
+
+        public string GetSettingsFilePath(bool isGlobal) => string.Empty;
     }
 
     private sealed class TestScaffoldingService : IScaffoldingService

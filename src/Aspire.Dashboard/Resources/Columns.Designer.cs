@@ -118,6 +118,15 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to {0} failed to start.
+        /// </summary>
+        public static string StateColumnResourceFailedToStart {
+            get {
+                return ResourceManager.GetString("StateColumnResourceFailedToStart", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to {0} exited unexpectedly with exit code {1}.
         /// </summary>
         public static string StateColumnResourceExitedUnexpectedly {

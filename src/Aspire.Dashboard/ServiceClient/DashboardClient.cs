@@ -751,17 +751,27 @@ internal sealed class DashboardClient : IDashboardClient
         return resourceLogLines;
     }
 
-    public async Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, CancellationToken cancellationToken)
+    public async Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, ExecuteResourceCommandOptions options, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(options);
+
         EnsureInitialized();
 
         var request = new ResourceCommandRequest()
         {
             CommandName = command.Name,
-            Parameter = command.Parameter,
             ResourceName = resourceName,
-            ResourceType = resourceType
+            ResourceType = resourceType,
+            NonInteractive = options.NonInteractive
         };
+
+        if (options.Arguments is { } arguments)
+        {
+            foreach (var (key, value) in arguments)
+            {
+                request.Arguments.Add(key, value);
+            }
+        }
 
         try
         {

@@ -106,6 +106,10 @@ internal sealed class LogsCommand : BaseCommand
     {
         Description = LogsCommandStrings.IncludeHiddenOptionDescription
     };
+    private static readonly Option<string?> s_searchOption = new("--search")
+    {
+        Description = LogsCommandStrings.SearchOptionDescription
+    };
 
     private readonly ResourceColorMap _resourceColorMap;
 
@@ -135,6 +139,7 @@ internal sealed class LogsCommand : BaseCommand
         Options.Add(s_tailOption);
         Options.Add(s_timestampsOption);
         Options.Add(s_includeHiddenOption);
+        Options.Add(s_searchOption);
     }
 
     protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -148,6 +153,7 @@ internal sealed class LogsCommand : BaseCommand
         var tail = parseResult.GetValue(s_tailOption);
         var timestamps = parseResult.GetValue(s_timestampsOption);
         var includeHidden = parseResult.GetValue(s_includeHiddenOption);
+        var search = parseResult.GetValue(s_searchOption);
 
         // Validate --tail value
         if (tail.HasValue && tail.Value < 1)
@@ -200,7 +206,7 @@ internal sealed class LogsCommand : BaseCommand
         {
             try
             {
-                return await ExecuteWatchAsync(connection, resourceWatcher, resourceName, format, tail, timestamps, cancellationToken);
+                return await ExecuteWatchAsync(connection, resourceWatcher, resourceName, format, tail, timestamps, search, cancellationToken);
             }
             catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken || cancellationToken.IsCancellationRequested)
             {
@@ -224,7 +230,7 @@ internal sealed class LogsCommand : BaseCommand
         }
         else
         {
-            return await ExecuteGetAsync(connection, resourceWatcher, resourceName, format, tail, timestamps, cancellationToken);
+            return await ExecuteGetAsync(connection, resourceWatcher, resourceName, format, tail, timestamps, search, cancellationToken);
         }
     }
 
@@ -235,12 +241,19 @@ internal sealed class LogsCommand : BaseCommand
         OutputFormat format,
         int? tail,
         bool timestamps,
+        string? search,
         CancellationToken cancellationToken)
     {
         // Collect all logs, parsing into LogEntry with resolved resource names sorted by timestamp
         var entries = await _interactionService.ShowStatusAsync(
             LogsCommandStrings.GettingLogs,
             async () => await CollectLogsAsync(connection, resourceWatcher, resourceName, cancellationToken).ConfigureAwait(false));
+
+        // Apply full-text search filter on log content
+        if (!string.IsNullOrEmpty(search))
+        {
+            entries = entries.Where(e => MatchesSearch(e, search)).ToList();
+        }
 
         // Apply tail filter (tail.Value is guaranteed >= 1 by earlier validation)
         if (tail.HasValue && entries.Count > tail.Value)
@@ -284,6 +297,7 @@ internal sealed class LogsCommand : BaseCommand
         OutputFormat format,
         int? tail,
         bool timestamps,
+        string? search,
         CancellationToken cancellationToken)
     {
         var logParser = new LogParser(ConsoleColor.Black);
@@ -294,6 +308,12 @@ internal sealed class LogsCommand : BaseCommand
             var entries = await _interactionService.ShowStatusAsync(
                 LogsCommandStrings.GettingLogs,
                 async () => await CollectLogsAsync(connection, resourceWatcher, resourceName, cancellationToken).ConfigureAwait(false));
+
+            // Apply full-text search filter before tail so tail count reflects matching entries
+            if (!string.IsNullOrEmpty(search))
+            {
+                entries = entries.Where(e => MatchesSearch(e, search)).ToList();
+            }
 
             // Output last N lines
             var tailedEntries = entries.Count > tail.Value
@@ -322,6 +342,13 @@ internal sealed class LogsCommand : BaseCommand
             }
 
             var entry = ParseLogLine(logLine, logParser, resourceWatcher.GetAllResources());
+
+            // Apply full-text search filter on streamed log content
+            if (!string.IsNullOrEmpty(search) && !MatchesSearch(entry, search))
+            {
+                continue;
+            }
+
             OutputLogLine(entry, format, timestamps);
         }
 
@@ -403,6 +430,14 @@ internal sealed class LogsCommand : BaseCommand
     private static string FormatTimestamp(DateTime timestamp)
     {
         return timestamp.ToString("yyyy-MM-ddTHH:mm:ss.fffK", CultureInfo.InvariantCulture);
+    }
+
+    private static bool MatchesSearch(LogEntry entry, string search)
+    {
+        var content = entry.RawContent ?? entry.Content ?? string.Empty;
+        var prefix = entry.ResourcePrefix ?? string.Empty;
+        return content.Contains(search, StringComparisons.FullTextSearch) ||
+               prefix.Contains(search, StringComparisons.FullTextSearch);
     }
 
     private static string ResolveResourceName(string resourceName, IEnumerable<ResourceSnapshot> snapshots)

@@ -247,31 +247,6 @@ internal static partial class HelmDeploymentEngine
         {
             try
             {
-                // Update the chart version if configured via annotation
-                if (environment.TryGetLastAnnotation<HelmChartVersionAnnotation>(out var versionAnnotation))
-                {
-                    var version = await versionAnnotation.Version.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
-                    if (!string.IsNullOrEmpty(version))
-                    {
-                        environment.HelmChartVersion = version;
-
-                        // Re-write Chart.yaml with updated version
-                        var chartFilePath = Path.Combine(outputPath, "Chart.yaml");
-                        if (File.Exists(chartFilePath))
-                        {
-                            var chartContent = await File.ReadAllTextAsync(chartFilePath, context.CancellationToken).ConfigureAwait(false);
-                            // Simple replacement of the version line in Chart.yaml.
-                            // Use a MatchEvaluator to avoid interpreting '$' in version as regex backreferences.
-                            chartContent = System.Text.RegularExpressions.Regex.Replace(
-                                chartContent,
-                                @"^version:\s*.*$",
-                                _ => $"version: {version}",
-                                System.Text.RegularExpressions.RegexOptions.Multiline);
-                            await File.WriteAllTextAsync(chartFilePath, chartContent, context.CancellationToken).ConfigureAwait(false);
-                        }
-                    }
-                }
-
                 // Resolve captured parameter/secret values and write a deploy override file.
                 // During publish, secrets and parameters without defaults are written as empty
                 // placeholders in values.yaml. During deploy, we resolve them and provide the

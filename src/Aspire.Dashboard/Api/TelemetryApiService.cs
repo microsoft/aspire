@@ -29,7 +29,7 @@ internal sealed class TelemetryApiService(
     /// Returns null if resource filter is specified but not found.
     /// Supports multiple resource names.
     /// </summary>
-    public TelemetryApiResponse? GetSpans(string[]? resourceNames, string? traceId, bool? hasError, int? limit)
+    public TelemetryApiResponse? GetSpans(string[]? resourceNames, string? traceId, bool? hasError, int? limit, string? search = null)
     {
         // Resolve resource keys for all specified resources
         var resources = telemetryRepository.GetResources();
@@ -77,6 +77,12 @@ internal sealed class TelemetryApiService(
             spans = spans.Where(s => s.Status != OtlpSpanStatusCode.Error).ToList();
         }
 
+        // Apply full-text search across all span fields
+        if (!string.IsNullOrEmpty(search))
+        {
+            spans = spans.Where(s => MatchesSearch(s, search)).ToList();
+        }
+
         var totalCount = spans.Count;
 
         // Apply limit (take from end for most recent)
@@ -100,7 +106,7 @@ internal sealed class TelemetryApiService(
     /// Returns null if resource filter is specified but not found.
     /// Supports multiple resource names.
     /// </summary>
-    public TelemetryApiResponse? GetTraces(string[]? resourceNames, bool? hasError, int? limit)
+    public TelemetryApiResponse? GetTraces(string[]? resourceNames, bool? hasError, int? limit, string? search = null)
     {
         // Resolve resource keys for all specified resources
         var resources = telemetryRepository.GetResources();
@@ -137,6 +143,14 @@ internal sealed class TelemetryApiService(
         else if (hasError == false)
         {
             traces = traces.Where(t => !t.Spans.Any(s => s.Status == OtlpSpanStatusCode.Error)).ToList();
+        }
+
+        // Apply full-text search: a trace matches if its name matches or any span within it matches
+        if (!string.IsNullOrEmpty(search))
+        {
+            traces = traces.Where(t =>
+                t.FullName.Contains(search, StringComparisons.FullTextSearch) ||
+                t.Spans.Any(s => MatchesSearch(s, search))).ToList();
         }
 
         var totalCount = traces.Count;
@@ -189,7 +203,7 @@ internal sealed class TelemetryApiService(
     /// Returns null if resource filter is specified but not found.
     /// Supports multiple resource names.
     /// </summary>
-    public TelemetryApiResponse? GetLogs(string[]? resourceNames, string? traceId, string? severity, int? limit)
+    public TelemetryApiResponse? GetLogs(string[]? resourceNames, string? traceId, string? severity, int? limit, string? search = null)
     {
         // Resolve resource keys for all specified resources
         var resources = telemetryRepository.GetResources();
@@ -243,6 +257,13 @@ internal sealed class TelemetryApiService(
         }
 
         var logs = allLogs;
+
+        // Apply full-text search across all log fields
+        if (!string.IsNullOrEmpty(search))
+        {
+            logs = logs.Where(l => MatchesSearch(l, search)).ToList();
+        }
+
         var totalCount = logs.Count;
 
         // Apply limit (take from end for most recent)
@@ -269,6 +290,7 @@ internal sealed class TelemetryApiService(
         string[]? resourceNames,
         string? traceId,
         bool? hasError,
+        string? search,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         // Resolve resource keys
@@ -307,6 +329,12 @@ internal sealed class TelemetryApiService(
                 continue;
             }
 
+            // Apply full-text search filter
+            if (!string.IsNullOrEmpty(search) && !MatchesSearch(span, search))
+            {
+                continue;
+            }
+
             // Use compact JSON for NDJSON streaming (no indentation)
             yield return TelemetryExportService.ConvertSpanToJson(span, _outgoingPeerResolvers, logs: null, indent: false);
         }
@@ -320,6 +348,7 @@ internal sealed class TelemetryApiService(
         string[]? resourceNames,
         string? traceId,
         string? severity,
+        string? search,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         // Resolve resource keys
@@ -373,6 +402,12 @@ internal sealed class TelemetryApiService(
                 continue;
             }
 
+            // Apply full-text search filter
+            if (!string.IsNullOrEmpty(search) && !MatchesSearch(log, search))
+            {
+                continue;
+            }
+
             var otlpData = TelemetryExportService.ConvertLogsToOtlpJson([log]);
             yield return JsonSerializer.Serialize(otlpData, OtlpJsonSerializerContext.DefaultOptions);
         }
@@ -396,6 +431,127 @@ internal sealed class TelemetryApiService(
                 HasMetrics = r.HasMetrics
             })
             .ToArray();
+    }
+
+    /// <summary>
+    /// Checks whether a log entry matches a full-text search string.
+    /// Searches across message, attribute values, scope name, event name, trace ID, span ID,
+    /// severity, and resource name using case-insensitive contains matching.
+    /// </summary>
+    private static bool MatchesSearch(OtlpLogEntry log, string search)
+    {
+        if (log.Message.Contains(search, StringComparisons.FullTextSearch))
+        {
+            return true;
+        }
+
+        if (log.Scope.Name.Contains(search, StringComparisons.FullTextSearch))
+        {
+            return true;
+        }
+
+        if (log.EventName is not null && log.EventName.Contains(search, StringComparisons.FullTextSearch))
+        {
+            return true;
+        }
+
+        if (log.TraceId.Contains(search, StringComparisons.FullTextSearch))
+        {
+            return true;
+        }
+
+        if (log.SpanId.Contains(search, StringComparisons.FullTextSearch))
+        {
+            return true;
+        }
+
+        if (log.Severity.ToString().Contains(search, StringComparisons.FullTextSearch))
+        {
+            return true;
+        }
+
+        if (log.ResourceView.Resource.ResourceName.Contains(search, StringComparisons.FullTextSearch))
+        {
+            return true;
+        }
+
+        foreach (var attribute in log.Attributes)
+        {
+            if (attribute.Key.Contains(search, StringComparisons.FullTextSearch) ||
+                attribute.Value.Contains(search, StringComparisons.FullTextSearch))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Checks whether a span matches a full-text search string.
+    /// Searches across name, attribute values, span ID, trace ID, status message,
+    /// scope name, event names, and resource name using case-insensitive contains matching.
+    /// </summary>
+    private static bool MatchesSearch(OtlpSpan span, string search)
+    {
+        if (span.Name.Contains(search, StringComparisons.FullTextSearch))
+        {
+            return true;
+        }
+
+        if (span.SpanId.Contains(search, StringComparisons.FullTextSearch))
+        {
+            return true;
+        }
+
+        if (span.TraceId.Contains(search, StringComparisons.FullTextSearch))
+        {
+            return true;
+        }
+
+        if (span.StatusMessage is not null && span.StatusMessage.Contains(search, StringComparisons.FullTextSearch))
+        {
+            return true;
+        }
+
+        if (span.Scope.Name.Contains(search, StringComparisons.FullTextSearch))
+        {
+            return true;
+        }
+
+        if (span.Source.Resource.ResourceName.Contains(search, StringComparisons.FullTextSearch))
+        {
+            return true;
+        }
+
+        if (span.Status.ToString().Contains(search, StringComparisons.FullTextSearch))
+        {
+            return true;
+        }
+
+        if (span.Kind.ToString().Contains(search, StringComparisons.FullTextSearch))
+        {
+            return true;
+        }
+
+        foreach (var attribute in span.Attributes)
+        {
+            if (attribute.Key.Contains(search, StringComparisons.FullTextSearch) ||
+                attribute.Value.Contains(search, StringComparisons.FullTextSearch))
+            {
+                return true;
+            }
+        }
+
+        foreach (var evt in span.Events)
+        {
+            if (evt.Name.Contains(search, StringComparisons.FullTextSearch))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

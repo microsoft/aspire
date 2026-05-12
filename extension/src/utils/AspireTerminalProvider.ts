@@ -98,15 +98,16 @@ export class AspireTerminalProvider implements vscode.Disposable {
         const aspireTerminal = this.getAspireTerminal();
         extensionLogOutputChannel.info(`Sending command to Aspire terminal: ${command}`);
 
-        // Clear any pre-existing text in the terminal input buffer before sending the command.
-        // Unix (bash/zsh): Ctrl+U (\x15) clears the current line via unix-line-discard.
-        // Windows (PowerShell): Escape (\x1b) clears the current line in PSReadLine's default Windows edit mode.
-        // Sending \x1b alone (without a trailing bracket sequence) via a separate sendText call is safe —
-        // PSReadLine's escape-sequence timeout ensures it is processed as a standalone Escape keypress.
-        const clearSequence = process.platform === 'win32' ? '\x1b' : '\x15';
-        aspireTerminal.terminal.sendText(clearSequence, false);
+        if (aspireTerminal.terminal.shellIntegration) {
+            aspireTerminal.terminal.shellIntegration.executeCommand(command);
+        }
+        else {
+            // Without shell integration, VS Code can't tell whether the terminal is idle or
+            // a foreground process is running, so keep the previous safe interruption behavior.
+            aspireTerminal.terminal.sendText('\x03', false);
+            aspireTerminal.terminal.sendText(command);
+        }
 
-        aspireTerminal.terminal.sendText(command);
         if (showTerminal) {
             aspireTerminal.terminal.show();
         }

@@ -42,6 +42,13 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     bool SupportsV2 { get; }
 
     /// <summary>
+    /// Gets AppHost information using the v2 API.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The AppHost information response.</returns>
+    Task<GetAppHostInfoResponse?> GetAppHostInfoV2Async(CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Gets the Dashboard URLs from the AppHost.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -110,11 +117,13 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     /// </summary>
     /// <param name="resourceName">The name of the resource.</param>
     /// <param name="commandName">The name of the command (e.g., "start", "stop", "restart").</param>
+    /// <param name="options">Options for command execution.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The result of the command execution.</returns>
     Task<ExecuteResourceCommandResponse> ExecuteResourceCommandAsync(
         string resourceName,
         string commandName,
+        ExecuteResourceCommandOptions? options = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

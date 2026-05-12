@@ -21,38 +21,14 @@ public class TelemetryApiServiceTests
     [Fact]
     public async Task FollowSpansAsync_StreamsAllSpans()
     {
-        // Arrange
         var repository = CreateRepository();
-
-        // Add 5 spans
-        for (var i = 1; i <= 5; i++)
-        {
-            repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
-            {
-                new ResourceSpans
-                {
-                    Resource = CreateResource(name: "service1", instanceId: "inst1"),
-                    ScopeSpans =
-                    {
-                        new ScopeSpans
-                        {
-                            Scope = CreateScope(),
-                            Spans =
-                            {
-                                CreateSpan(traceId: $"trace{i}", spanId: $"span{i}", startTime: s_testTime.AddMinutes(i), endTime: s_testTime.AddMinutes(i + 1))
-                            }
-                        }
-                    }
-                }
-            });
-        }
+        AddSpans(repository, count: 5);
 
         var service = CreateService(repository);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
 
-        // Act - stream spans
         var receivedItems = new List<string>();
-        await foreach (var item in service.FollowSpansAsync(null, null, null, cts.Token))
+        await foreach (var item in service.FollowSpansAsync(null, null, null, null, cts.Token))
         {
             receivedItems.Add(item);
             if (receivedItems.Count >= 5)
@@ -61,45 +37,20 @@ public class TelemetryApiServiceTests
             }
         }
 
-        // Assert - should receive all 5 items
         Assert.Equal(5, receivedItems.Count);
     }
 
     [Fact]
     public async Task FollowLogsAsync_StreamsAllLogs()
     {
-        // Arrange
         var repository = CreateRepository();
-
-        // Add 5 logs
-        for (var i = 1; i <= 5; i++)
-        {
-            repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
-            {
-                new ResourceLogs
-                {
-                    Resource = CreateResource(name: "service1", instanceId: "inst1"),
-                    ScopeLogs =
-                    {
-                        new ScopeLogs
-                        {
-                            Scope = CreateScope("TestLogger"),
-                            LogRecords =
-                            {
-                                CreateLogRecord(time: s_testTime.AddMinutes(i), message: $"log{i}", severity: SeverityNumber.Info)
-                            }
-                        }
-                    }
-                }
-            });
-        }
+        AddLogs(repository, ["log1", "log2", "log3", "log4", "log5"]);
 
         var service = CreateService(repository);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
 
-        // Act - stream logs
         var receivedItems = new List<string>();
-        await foreach (var item in service.FollowLogsAsync(null, null, null, cts.Token))
+        await foreach (var item in service.FollowLogsAsync(null, null, null, null, cts.Token))
         {
             receivedItems.Add(item);
             if (receivedItems.Count >= 5)
@@ -108,304 +59,91 @@ public class TelemetryApiServiceTests
             }
         }
 
-        // Assert - should receive all 5 items
         Assert.Equal(5, receivedItems.Count);
     }
 
-    [Fact]
-    public void GetSpans_HasErrorFalse_ExcludesErrorSpans()
+    [Theory]
+    [InlineData(false, "ok-span", "error-span")]
+    [InlineData(true, "error-span", "ok-span")]
+    public void GetSpans_HasErrorFilter_ReturnsExpectedSpans(bool hasError, string expectedSpan, string excludedSpan)
     {
-        // Arrange
         var repository = CreateRepository();
-
-        // Add spans - one with error, one without
-        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
-        {
-            new ResourceSpans
-            {
-                Resource = CreateResource(name: "service1", instanceId: "inst1"),
-                ScopeSpans =
-                {
-                    new ScopeSpans
-                    {
-                        Scope = CreateScope(),
-                        Spans =
-                        {
-                            CreateSpan(traceId: "trace1", spanId: "ok-span", startTime: s_testTime, endTime: s_testTime.AddMinutes(1), status: new Status { Code = Status.Types.StatusCode.Ok }),
-                            CreateSpan(traceId: "trace2", spanId: "error-span", startTime: s_testTime.AddMinutes(2), endTime: s_testTime.AddMinutes(3), status: new Status { Code = Status.Types.StatusCode.Error })
-                        }
-                    }
-                }
-            }
-        });
+        AddSpansWithStatus(repository);
 
         var service = CreateService(repository);
 
-        // Act - get spans with hasError=false
-        var result = service.GetSpans(resourceNames: null, traceId: null, hasError: false, limit: null);
+        var result = service.GetSpans(resourceNames: null, traceId: null, hasError: hasError, limit: null);
 
-        // Assert - should only return the non-error span
         Assert.NotNull(result);
         Assert.Equal(1, result.ReturnedCount);
-        
-        // Serialize to check content
+
         var json = System.Text.Json.JsonSerializer.Serialize(result.Data);
-        Assert.DoesNotContain("error-span", json);
-        Assert.Contains("ok-span", json);
+        Assert.Contains(expectedSpan, json);
+        Assert.DoesNotContain(excludedSpan, json);
     }
 
-    [Fact]
-    public void GetSpans_HasErrorTrue_OnlyReturnsErrorSpans()
+    [Theory]
+    [InlineData(false, 1)]
+    [InlineData(true, 1)]
+    [InlineData(null, 2)]
+    public void GetTraces_HasErrorFilter_ReturnsExpectedTraces(bool? hasError, int expectedCount)
     {
-        // Arrange
         var repository = CreateRepository();
-
-        // Add spans - one with error, one without
-        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
-        {
-            new ResourceSpans
-            {
-                Resource = CreateResource(name: "service1", instanceId: "inst1"),
-                ScopeSpans =
-                {
-                    new ScopeSpans
-                    {
-                        Scope = CreateScope(),
-                        Spans =
-                        {
-                            CreateSpan(traceId: "trace1", spanId: "ok-span", startTime: s_testTime, endTime: s_testTime.AddMinutes(1), status: new Status { Code = Status.Types.StatusCode.Ok }),
-                            CreateSpan(traceId: "trace2", spanId: "error-span", startTime: s_testTime.AddMinutes(2), endTime: s_testTime.AddMinutes(3), status: new Status { Code = Status.Types.StatusCode.Error })
-                        }
-                    }
-                }
-            }
-        });
+        AddTracesWithStatus(repository);
 
         var service = CreateService(repository);
 
-        // Act - get spans with hasError=true
-        var result = service.GetSpans(resourceNames: null, traceId: null, hasError: true, limit: null);
+        var result = service.GetTraces(resourceNames: null, hasError: hasError, limit: null);
 
-        // Assert - should only return the error span
         Assert.NotNull(result);
-        Assert.Equal(1, result.ReturnedCount);
-        
-        var json = System.Text.Json.JsonSerializer.Serialize(result.Data);
-        Assert.Contains("error-span", json);
-        Assert.DoesNotContain("ok-span", json);
-    }
-
-    [Fact]
-    public void GetTraces_HasErrorFalse_ExcludesTracesWithErrors()
-    {
-        // Arrange
-        var repository = CreateRepository();
-
-        // Add two traces - one with error span, one without
-        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
-        {
-            new ResourceSpans
-            {
-                Resource = CreateResource(name: "service1", instanceId: "inst1"),
-                ScopeSpans =
-                {
-                    new ScopeSpans
-                    {
-                        Scope = CreateScope(),
-                        Spans =
-                        {
-                            CreateSpan(traceId: "ok-trace", spanId: "span1", startTime: s_testTime, endTime: s_testTime.AddMinutes(1), status: new Status { Code = Status.Types.StatusCode.Ok })
-                        }
-                    }
-                }
-            }
-        });
-
-        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
-        {
-            new ResourceSpans
-            {
-                Resource = CreateResource(name: "service1", instanceId: "inst1"),
-                ScopeSpans =
-                {
-                    new ScopeSpans
-                    {
-                        Scope = CreateScope(),
-                        Spans =
-                        {
-                            CreateSpan(traceId: "error-trace", spanId: "span2", startTime: s_testTime.AddMinutes(2), endTime: s_testTime.AddMinutes(3), status: new Status { Code = Status.Types.StatusCode.Error })
-                        }
-                    }
-                }
-            }
-        });
-
-        var service = CreateService(repository);
-
-        // Act - get traces with hasError=false (no error, should exclude the error trace)
-        var result = service.GetTraces(resourceNames: null, hasError: false, limit: null);
-
-        // Assert - should only return 1 trace (the one without errors)
-        Assert.NotNull(result);
-        Assert.Equal(1, result.ReturnedCount);
-        
-        // Verify with null filter returns both
-        var allResult = service.GetTraces(resourceNames: null, hasError: null, limit: null);
-        Assert.NotNull(allResult);
-        Assert.Equal(2, allResult.ReturnedCount);
-    }
-
-    [Fact]
-    public void GetTraces_HasErrorTrue_OnlyReturnsTracesWithErrors()
-    {
-        // Arrange
-        var repository = CreateRepository();
-
-        // Add two traces - one with error span, one without
-        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
-        {
-            new ResourceSpans
-            {
-                Resource = CreateResource(name: "service1", instanceId: "inst1"),
-                ScopeSpans =
-                {
-                    new ScopeSpans
-                    {
-                        Scope = CreateScope(),
-                        Spans =
-                        {
-                            CreateSpan(traceId: "ok-trace", spanId: "span1", startTime: s_testTime, endTime: s_testTime.AddMinutes(1), status: new Status { Code = Status.Types.StatusCode.Ok })
-                        }
-                    }
-                }
-            }
-        });
-
-        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
-        {
-            new ResourceSpans
-            {
-                Resource = CreateResource(name: "service1", instanceId: "inst1"),
-                ScopeSpans =
-                {
-                    new ScopeSpans
-                    {
-                        Scope = CreateScope(),
-                        Spans =
-                        {
-                            CreateSpan(traceId: "error-trace", spanId: "span2", startTime: s_testTime.AddMinutes(2), endTime: s_testTime.AddMinutes(3), status: new Status { Code = Status.Types.StatusCode.Error })
-                        }
-                    }
-                }
-            }
-        });
-
-        var service = CreateService(repository);
-
-        // Act - get traces with hasError=true (error only)
-        var result = service.GetTraces(resourceNames: null, hasError: true, limit: null);
-
-        // Assert - should only return 1 trace (the one with errors)
-        Assert.NotNull(result);
-        Assert.Equal(1, result.ReturnedCount);
-        
-        // Verify with null filter returns both
-        var allResult = service.GetTraces(resourceNames: null, hasError: null, limit: null);
-        Assert.NotNull(allResult);
-        Assert.Equal(2, allResult.ReturnedCount);
+        Assert.Equal(expectedCount, result.ReturnedCount);
     }
 
     [Fact]
     public async Task FollowSpansAsync_WithInvalidResourceName_ReturnsNoSpans()
     {
-        // Arrange
         var repository = CreateRepository();
-
-        // Add spans for service1
-        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
-        {
-            new ResourceSpans
-            {
-                Resource = CreateResource(name: "service1", instanceId: "inst1"),
-                ScopeSpans =
-                {
-                    new ScopeSpans
-                    {
-                        Scope = CreateScope(),
-                        Spans =
-                        {
-                            CreateSpan(traceId: "trace1", spanId: "span1", startTime: s_testTime, endTime: s_testTime.AddMinutes(1))
-                        }
-                    }
-                }
-            }
-        });
+        AddSpans(repository, count: 1);
 
         var service = CreateService(repository);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
 
-        // Act - stream spans for a non-existent resource
         var receivedItems = new List<string>();
         try
         {
-            await foreach (var item in service.FollowSpansAsync(["nonexistent-service"], null, null, cts.Token))
+            await foreach (var item in service.FollowSpansAsync(["nonexistent-service"], null, null, null, cts.Token))
             {
                 receivedItems.Add(item);
             }
         }
         catch (OperationCanceledException)
         {
-            // Expected - timeout
         }
 
-        // Assert - should receive NO items because the resource doesn't exist
         Assert.Empty(receivedItems);
     }
 
     [Fact]
     public async Task FollowLogsAsync_WithInvalidResourceName_ReturnsNoLogs()
     {
-        // Arrange
         var repository = CreateRepository();
-
-        // Add logs for service1
-        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
-        {
-            new ResourceLogs
-            {
-                Resource = CreateResource(name: "service1", instanceId: "inst1"),
-                ScopeLogs =
-                {
-                    new ScopeLogs
-                    {
-                        Scope = CreateScope("TestLogger"),
-                        LogRecords =
-                        {
-                            CreateLogRecord(time: s_testTime, message: "log1", severity: SeverityNumber.Info)
-                        }
-                    }
-                }
-            }
-        });
+        AddLogs(repository, ["log1"]);
 
         var service = CreateService(repository);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
 
-        // Act - stream logs for a non-existent resource
         var receivedItems = new List<string>();
         try
         {
-            await foreach (var item in service.FollowLogsAsync(["nonexistent-service"], null, null, cts.Token))
+            await foreach (var item in service.FollowLogsAsync(["nonexistent-service"], null, null, null, cts.Token))
             {
                 receivedItems.Add(item);
             }
         }
         catch (OperationCanceledException)
         {
-            // Expected - timeout
         }
 
-        // Assert - should receive NO items because the resource doesn't exist
         Assert.Empty(receivedItems);
     }
 
@@ -419,24 +157,9 @@ public class TelemetryApiServiceTests
         var repository = CreateRepository();
         var traceId = Encoding.UTF8.GetString(Convert.FromHexString("747261636531"));
 
-        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
-        {
-            new ResourceSpans
-            {
-                Resource = CreateResource(name: "service1", instanceId: "inst1"),
-                ScopeSpans =
-                {
-                    new ScopeSpans
-                    {
-                        Scope = CreateScope(),
-                        Spans =
-                        {
-                            CreateSpan(traceId: traceId, spanId: "span1", startTime: s_testTime, endTime: s_testTime.AddMinutes(1))
-                        }
-                    }
-                }
-            }
-        });
+        AddSpansToRepository(repository, [
+            CreateSpan(traceId: traceId, spanId: "span1", startTime: s_testTime, endTime: s_testTime.AddMinutes(1))
+        ]);
 
         var service = CreateService(repository);
 
@@ -457,27 +180,11 @@ public class TelemetryApiServiceTests
     public void GetSpans_WithLimit_ReturnsMostRecentSpans()
     {
         var repository = CreateRepository();
-
-        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
-        {
-            new ResourceSpans
-            {
-                Resource = CreateResource(name: "service1", instanceId: "inst1"),
-                ScopeSpans =
-                {
-                    new ScopeSpans
-                    {
-                        Scope = CreateScope(),
-                        Spans =
-                        {
-                            CreateSpan(traceId: "trace1", spanId: "old-span", startTime: s_testTime, endTime: s_testTime.AddMinutes(1)),
-                            CreateSpan(traceId: "trace2", spanId: "mid-span", startTime: s_testTime.AddMinutes(2), endTime: s_testTime.AddMinutes(3)),
-                            CreateSpan(traceId: "trace3", spanId: "new-span", startTime: s_testTime.AddMinutes(4), endTime: s_testTime.AddMinutes(5))
-                        }
-                    }
-                }
-            }
-        });
+        AddSpansToRepository(repository, [
+            CreateSpan(traceId: "trace1", spanId: "old-span", startTime: s_testTime, endTime: s_testTime.AddMinutes(1)),
+            CreateSpan(traceId: "trace2", spanId: "mid-span", startTime: s_testTime.AddMinutes(2), endTime: s_testTime.AddMinutes(3)),
+            CreateSpan(traceId: "trace3", spanId: "new-span", startTime: s_testTime.AddMinutes(4), endTime: s_testTime.AddMinutes(5))
+        ]);
 
         var service = CreateService(repository);
 
@@ -497,28 +204,7 @@ public class TelemetryApiServiceTests
     public void GetTraces_WithLimit_ReturnsMostRecentTraces()
     {
         var repository = CreateRepository();
-
-        for (var i = 1; i <= 3; i++)
-        {
-            repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
-            {
-                new ResourceSpans
-                {
-                    Resource = CreateResource(name: "service1", instanceId: "inst1"),
-                    ScopeSpans =
-                    {
-                        new ScopeSpans
-                        {
-                            Scope = CreateScope(),
-                            Spans =
-                            {
-                                CreateSpan(traceId: $"trace{i}", spanId: $"span{i}", startTime: s_testTime.AddMinutes(i * 10), endTime: s_testTime.AddMinutes(i * 10 + 1))
-                            }
-                        }
-                    }
-                }
-            });
-        }
+        AddSpans(repository, count: 3, startMinuteSpacing: 10);
 
         var service = CreateService(repository);
 
@@ -538,27 +224,7 @@ public class TelemetryApiServiceTests
     public void GetLogs_WithLimit_ReturnsMostRecentLogs()
     {
         var repository = CreateRepository();
-
-        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
-        {
-            new ResourceLogs
-            {
-                Resource = CreateResource(name: "service1", instanceId: "inst1"),
-                ScopeLogs =
-                {
-                    new ScopeLogs
-                    {
-                        Scope = CreateScope("TestLogger"),
-                        LogRecords =
-                        {
-                            CreateLogRecord(time: s_testTime, message: "old-log", severity: SeverityNumber.Info),
-                            CreateLogRecord(time: s_testTime.AddMinutes(1), message: "mid-log", severity: SeverityNumber.Info),
-                            CreateLogRecord(time: s_testTime.AddMinutes(2), message: "new-log", severity: SeverityNumber.Info)
-                        }
-                    }
-                }
-            }
-        });
+        AddLogs(repository, ["old-log", "mid-log", "new-log"]);
 
         var service = CreateService(repository);
 
@@ -586,6 +252,197 @@ public class TelemetryApiServiceTests
             logRecords.Add(CreateLogRecord(time: s_testTime.AddMilliseconds(i), message: $"log{i}", severity: SeverityNumber.Info));
         }
 
+        AddLogsToRepository(repository, logRecords);
+
+        var service = CreateService(repository);
+
+        var result = service.GetLogs(resourceNames: null, traceId: null, severity: null, limit: 100_000);
+
+        Assert.NotNull(result);
+        Assert.Equal(totalLogs, result.TotalCount);
+        Assert.Equal(totalLogs, result.ReturnedCount);
+    }
+
+    [Theory]
+    [InlineData("Connection", 2)]
+    [InlineData("nonexistent", 0)]
+    public void GetLogs_WithSearch_FiltersLogsByMessage(string search, int expectedCount)
+    {
+        var repository = CreateRepository();
+        AddLogs(repository, ["Connection established", "Request received", "Connection closed"]);
+
+        var service = CreateService(repository);
+
+        var result = service.GetLogs(resourceNames: null, traceId: null, severity: null, limit: null, search: search);
+
+        Assert.NotNull(result);
+        Assert.Equal(expectedCount, result.ReturnedCount);
+    }
+
+    [Fact]
+    public void GetLogs_WithSearch_IsCaseInsensitive()
+    {
+        var repository = CreateRepository();
+        AddLogs(repository, ["UPPERCASE warning detected"]);
+        AddLogs(repository, ["Normal log"]);
+
+        var service = CreateService(repository);
+
+        var result = service.GetLogs(resourceNames: null, traceId: null, severity: null, limit: null, search: "uppercase warning");
+
+        Assert.NotNull(result);
+        Assert.Equal(1, result.ReturnedCount);
+    }
+
+    [Fact]
+    public void GetLogs_WithSearch_MatchesAttributes()
+    {
+        var repository = CreateRepository();
+        AddLogsToRepository(repository, [
+            CreateLogRecord(time: s_testTime, message: "log1", severity: SeverityNumber.Info,
+                attributes: [new KeyValuePair<string, string>("http.url", "/api/products")]),
+            CreateLogRecord(time: s_testTime.AddMinutes(1), message: "log2", severity: SeverityNumber.Info,
+                attributes: [new KeyValuePair<string, string>("http.url", "/api/orders")])
+        ]);
+
+        var service = CreateService(repository);
+
+        var result = service.GetLogs(resourceNames: null, traceId: null, severity: null, limit: null, search: "products");
+
+        Assert.NotNull(result);
+        Assert.Equal(1, result.ReturnedCount);
+    }
+
+    [Theory]
+    [InlineData("span1", 1)]
+    [InlineData("products", 1)]
+    public void GetSpans_WithSearch_FiltersSpans(string search, int expectedCount)
+    {
+        var repository = CreateRepository();
+        AddSpansToRepository(repository, [
+            CreateSpan(traceId: "trace1", spanId: "span1", startTime: s_testTime, endTime: s_testTime.AddMinutes(1),
+                attributes: [new KeyValuePair<string, string>("http.url", "/api/products")]),
+            CreateSpan(traceId: "trace2", spanId: "span2", startTime: s_testTime.AddMinutes(2), endTime: s_testTime.AddMinutes(3),
+                attributes: [new KeyValuePair<string, string>("http.url", "/api/orders")])
+        ]);
+
+        var service = CreateService(repository);
+
+        var result = service.GetSpans(resourceNames: null, traceId: null, hasError: null, limit: null, search: search);
+
+        Assert.NotNull(result);
+        Assert.Equal(expectedCount, result.ReturnedCount);
+    }
+
+    [Theory]
+    [InlineData("span1", 1)]
+    [InlineData("nonexistent-xyz", 0)]
+    public void GetTraces_WithSearch_FiltersTraces(string search, int expectedCount)
+    {
+        var repository = CreateRepository();
+
+        // Each trace needs a separate AddTraces call to get distinct trace IDs in the repository
+        AddSpansToRepository(repository, [
+            CreateSpan(traceId: "trace1", spanId: "span1", startTime: s_testTime, endTime: s_testTime.AddMinutes(1))
+        ]);
+        AddSpansToRepository(repository, [
+            CreateSpan(traceId: "trace2", spanId: "span2", startTime: s_testTime.AddMinutes(10), endTime: s_testTime.AddMinutes(11))
+        ]);
+
+        var service = CreateService(repository);
+
+        var result = service.GetTraces(resourceNames: null, hasError: null, limit: null, search: search);
+
+        Assert.NotNull(result);
+        Assert.Equal(expectedCount, result.ReturnedCount);
+
+        if (expectedCount > 0)
+        {
+            var allResult = service.GetTraces(resourceNames: null, hasError: null, limit: null);
+            Assert.NotNull(allResult);
+            Assert.Equal(2, allResult.ReturnedCount);
+        }
+    }
+
+    /// <summary>
+    /// Adds spans with sequential trace/span IDs to the repository. Each span is added in a separate
+    /// AddTraces call so that it gets its own trace entry.
+    /// </summary>
+    private static void AddSpans(TelemetryRepository repository, int count, int startMinuteSpacing = 1)
+    {
+        for (var i = 1; i <= count; i++)
+        {
+            AddSpansToRepository(repository, [
+                CreateSpan(traceId: $"trace{i}", spanId: $"span{i}", startTime: s_testTime.AddMinutes(i * startMinuteSpacing), endTime: s_testTime.AddMinutes(i * startMinuteSpacing + 1))
+            ]);
+        }
+    }
+
+    /// <summary>
+    /// Adds a batch of spans (as raw Span objects) to the repository under a single resource.
+    /// </summary>
+    private static void AddSpansToRepository(TelemetryRepository repository, IEnumerable<Span> spans)
+    {
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "service1", instanceId: "inst1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans = { spans }
+                    }
+                }
+            }
+        });
+    }
+
+    /// <summary>
+    /// Adds one OK span and one Error span to the repository for hasError filter tests.
+    /// </summary>
+    private static void AddSpansWithStatus(TelemetryRepository repository)
+    {
+        AddSpansToRepository(repository, [
+            CreateSpan(traceId: "trace1", spanId: "ok-span", startTime: s_testTime, endTime: s_testTime.AddMinutes(1), status: new Status { Code = Status.Types.StatusCode.Ok }),
+            CreateSpan(traceId: "trace2", spanId: "error-span", startTime: s_testTime.AddMinutes(2), endTime: s_testTime.AddMinutes(3), status: new Status { Code = Status.Types.StatusCode.Error })
+        ]);
+    }
+
+    /// <summary>
+    /// Adds two traces (separate trace IDs) with OK and Error status for hasError filter tests.
+    /// </summary>
+    private static void AddTracesWithStatus(TelemetryRepository repository)
+    {
+        AddSpansToRepository(repository, [
+            CreateSpan(traceId: "ok-trace", spanId: "span1", startTime: s_testTime, endTime: s_testTime.AddMinutes(1), status: new Status { Code = Status.Types.StatusCode.Ok })
+        ]);
+        AddSpansToRepository(repository, [
+            CreateSpan(traceId: "error-trace", spanId: "span2", startTime: s_testTime.AddMinutes(2), endTime: s_testTime.AddMinutes(3), status: new Status { Code = Status.Types.StatusCode.Error })
+        ]);
+    }
+
+    /// <summary>
+    /// Adds log entries with the specified messages to the repository.
+    /// </summary>
+    private static void AddLogs(TelemetryRepository repository, string[] messages, SeverityNumber severity = SeverityNumber.Info)
+    {
+        var logRecords = new RepeatedField<LogRecord>();
+        for (var i = 0; i < messages.Length; i++)
+        {
+            logRecords.Add(CreateLogRecord(time: s_testTime.AddMinutes(i), message: messages[i], severity: severity));
+        }
+
+        AddLogsToRepository(repository, logRecords);
+    }
+
+    /// <summary>
+    /// Adds a batch of raw LogRecord objects to the repository under a single resource.
+    /// </summary>
+    private static void AddLogsToRepository(TelemetryRepository repository, RepeatedField<LogRecord> logRecords)
+    {
         repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
@@ -601,19 +458,8 @@ public class TelemetryApiServiceTests
                 }
             }
         });
-
-        var service = CreateService(repository);
-
-        var result = service.GetLogs(resourceNames: null, traceId: null, severity: null, limit: 100_000);
-
-        Assert.NotNull(result);
-        Assert.Equal(totalLogs, result.TotalCount);
-        Assert.Equal(totalLogs, result.ReturnedCount);
     }
 
-    /// <summary>
-    /// Creates a TelemetryApiService instance for testing with optional custom dependencies.
-    /// </summary>
     private static TelemetryApiService CreateService(
         TelemetryRepository? repository = null,
         IOutgoingPeerResolver[]? peerResolvers = null)

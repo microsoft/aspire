@@ -217,7 +217,7 @@ public sealed class TypeScriptReusablePackageTests(ITestOutputHelper output)
                     "flush",
                     "Flush Redis cache",
                     async (context: ExecuteCommandContext): Promise<ExecuteCommandResult> => ({
-                        success: (await context.resourceName.get()).length > 0
+                        success: (await context.resourceName()).length > 0
                     }));
             }
             """);

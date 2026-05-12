@@ -125,6 +125,10 @@
     <value>{0} is no longer running</value>
     <comment>{0} is a resource type</comment>
   </data>
+  <data name="StateColumnResourceFailedToStart" xml:space="preserve">
+    <value>{0} failed to start</value>
+    <comment>{0} is a resource type</comment>
+  </data>
   <data name="SourceColumnDisplayCopyCommandToClipboard" xml:space="preserve">
     <value>Copy full command to clipboard</value>
   </data>

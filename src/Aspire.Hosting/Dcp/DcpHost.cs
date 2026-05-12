@@ -11,6 +11,7 @@ using Aspire.Dashboard.Utils;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Resources;
+using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -490,7 +491,7 @@ internal sealed class DcpHost
         if (string.IsNullOrEmpty(containerRuntime))
         {
             // Default runtime is Docker
-            containerRuntime = "docker";
+            containerRuntime = KnownContainerRuntimes.Docker;
         }
 
         var installed = dcpInfo.Containers?.Installed ?? false;

@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Microsoft.Extensions.Logging;
@@ -19,6 +20,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
     private readonly Process _serverProcess;
     private readonly OutputCollector _output;
     private readonly string _socketPath;
+    private readonly ProfilingTelemetry.ActivityScope _activity;
     private IAppHostRpcClient? _rpcClient;
     private bool _disposed;
 
@@ -27,13 +29,15 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         OutputCollector output,
         string socketPath,
         string authenticationToken,
-        ILogger logger)
+        ILogger logger,
+        ProfilingTelemetry.ActivityScope activity = default)
     {
         _serverProcess = serverProcess;
         _output = output;
         _socketPath = socketPath;
         _authenticationToken = authenticationToken;
         _logger = logger;
+        _activity = activity;
     }
 
     /// <inheritdoc />
@@ -57,12 +61,14 @@ internal sealed class AppHostServerSession : IAppHostServerSession
     /// <param name="environmentVariables">The environment variables to pass to the server.</param>
     /// <param name="debug">Whether to enable debug logging for the server.</param>
     /// <param name="logger">The logger to use for lifecycle diagnostics.</param>
+    /// <param name="profilingTelemetry">Optional profiling telemetry for the server process lifetime.</param>
     /// <returns>The started AppHost server session.</returns>
     internal static AppHostServerSession Start(
         IAppHostServerProject appHostServerProject,
         Dictionary<string, string>? environmentVariables,
         bool debug,
-        ILogger logger)
+        ILogger logger,
+        ProfilingTelemetry? profilingTelemetry = null)
     {
         var currentPid = Environment.ProcessId;
         var serverEnvironmentVariables = environmentVariables is null
@@ -72,17 +78,37 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         var authenticationToken = TokenGenerator.GenerateToken();
         serverEnvironmentVariables[KnownConfigNames.RemoteAppHostToken] = authenticationToken;
 
-        var (socketPath, serverProcess, serverOutput) = appHostServerProject.Run(
-            currentPid,
-            serverEnvironmentVariables,
-            debug: debug);
+        var activity = profilingTelemetry is null
+            ? default
+            : profilingTelemetry.StartAppHostServerLifetime(appHostServerProject.GetType().Name);
+
+        string socketPath;
+        Process serverProcess;
+        OutputCollector serverOutput;
+        try
+        {
+            (socketPath, serverProcess, serverOutput) = appHostServerProject.Run(
+                currentPid,
+                serverEnvironmentVariables,
+                debug: debug);
+        }
+        catch (Exception ex)
+        {
+            activity.SetError(ex.Message);
+            activity.Dispose();
+            throw;
+        }
+
+        activity.SetProcessId(serverProcess.Id);
+        activity.SetProcessExecutableName(Path.GetFileName(serverProcess.StartInfo.FileName));
 
         return new AppHostServerSession(
             serverProcess,
             serverOutput,
             socketPath,
             authenticationToken,
-            logger);
+            logger,
+            activity);
     }
 
     /// <inheritdoc />
@@ -114,6 +140,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
             try
             {
                 _serverProcess.Kill(entireProcessTree: true);
+                _activity.SetError("AppHost server process was terminated during session disposal.");
             }
             catch (Exception ex)
             {
@@ -121,7 +148,13 @@ internal sealed class AppHostServerSession : IAppHostServerSession
             }
         }
 
+        if (_serverProcess.HasExited)
+        {
+            _activity.SetProcessExitCode(_serverProcess.ExitCode);
+        }
+
         _serverProcess.Dispose();
+        _activity.Dispose();
     }
 }
 
@@ -132,13 +165,16 @@ internal sealed class AppHostServerSessionFactory : IAppHostServerSessionFactory
 {
     private readonly IAppHostServerProjectFactory _projectFactory;
     private readonly ILogger<AppHostServerSession> _logger;
+    private readonly ProfilingTelemetry _profilingTelemetry;
 
     public AppHostServerSessionFactory(
         IAppHostServerProjectFactory projectFactory,
-        ILogger<AppHostServerSession> logger)
+        ILogger<AppHostServerSession> logger,
+        ProfilingTelemetry profilingTelemetry)
     {
         _projectFactory = projectFactory;
         _logger = logger;
+        _profilingTelemetry = profilingTelemetry;
     }
 
     /// <inheritdoc />
@@ -167,7 +203,8 @@ internal sealed class AppHostServerSessionFactory : IAppHostServerSessionFactory
             appHostServerProject,
             launchSettingsEnvVars,
             debug,
-            _logger);
+            _logger,
+            _profilingTelemetry);
 
         return new AppHostServerSessionResult(
             Success: true,

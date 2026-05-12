@@ -3,6 +3,7 @@
 
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using ModelContextProtocol.Protocol;
 
@@ -29,6 +30,11 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     /// Gets or sets the dashboard URLs state to return from GetDashboardUrlsAsync.
     /// </summary>
     public DashboardUrlsState? DashboardUrlsState { get; set; }
+
+    /// <summary>
+    /// Gets or sets the AppHost info response to return from GetAppHostInfoV2Async.
+    /// </summary>
+    public GetAppHostInfoResponse? AppHostInfoResponse { get; set; }
 
     /// <summary>
     /// Gets or sets the log lines to return from GetResourceLogsAsync.
@@ -66,6 +72,30 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     public Task<DashboardUrlsState?> GetDashboardUrlsAsync(CancellationToken cancellationToken = default)
     {
         return Task.FromResult(DashboardUrlsState);
+    }
+
+    public Task<GetAppHostInfoResponse?> GetAppHostInfoV2Async(CancellationToken cancellationToken = default)
+    {
+        _ = cancellationToken;
+
+        if (AppHostInfoResponse is not null)
+        {
+            return Task.FromResult<GetAppHostInfoResponse?>(AppHostInfoResponse);
+        }
+
+        if (AppHostInfo is null)
+        {
+            return Task.FromResult<GetAppHostInfoResponse?>(null);
+        }
+
+        return Task.FromResult<GetAppHostInfoResponse?>(new GetAppHostInfoResponse
+        {
+            Pid = AppHostInfo.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            AspireHostVersion = "unknown",
+            AppHostPath = AppHostInfo.AppHostPath,
+            CliProcessId = AppHostInfo.CliProcessId,
+            StartedAt = AppHostInfo.StartedAt
+        });
     }
 
     public Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(bool includeHidden, CancellationToken cancellationToken = default)
@@ -140,11 +170,21 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     /// </summary>
     public ExecuteResourceCommandResponse ExecuteResourceCommandResult { get; set; } = new ExecuteResourceCommandResponse { Success = true };
 
+    public JsonNode? ExecuteResourceCommandArguments { get; private set; }
+
+    public ExecuteResourceCommandOptions? ExecuteResourceCommandOptions { get; private set; }
+
+    public int ExecuteResourceCommandCallCount { get; private set; }
+
     public Task<ExecuteResourceCommandResponse> ExecuteResourceCommandAsync(
         string resourceName,
         string commandName,
+        ExecuteResourceCommandOptions? options = null,
         CancellationToken cancellationToken = default)
     {
+        ExecuteResourceCommandCallCount++;
+        ExecuteResourceCommandOptions = options;
+        ExecuteResourceCommandArguments = options?.Arguments;
         return Task.FromResult(ExecuteResourceCommandResult);
     }
 

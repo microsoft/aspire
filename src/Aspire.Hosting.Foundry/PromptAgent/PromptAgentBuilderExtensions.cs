@@ -292,7 +292,7 @@ public static class PromptAgentBuilderExtensions
     /// ground their responses using data from an Azure AI Search index.
     /// </summary>
     /// <remarks>
-    /// After creating the tool, call <see cref="WithReference(IResourceBuilder{AzureAISearchToolResource}, IResourceBuilder{AzureSearchResource})"/>
+    /// After creating the tool, call <see cref="WithReference(IResourceBuilder{Foundry.AzureAISearchToolResource}, IResourceBuilder{AzureSearchResource})"/>
     /// to link it to the backing Azure AI Search resource.
     /// </remarks>
     /// <param name="project">The <see cref="IResourceBuilder{T}"/> for the Microsoft Foundry project.</param>

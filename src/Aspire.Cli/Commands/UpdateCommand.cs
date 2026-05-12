@@ -80,6 +80,8 @@ internal sealed class UpdateCommand : BaseCommand
         Options.Add(s_yesOption);
         Options.Add(s_nugetConfigDirOption);
 
+        AddNonInteractiveRequiresYesValidator(this, s_yesOption);
+
         // Customize description based on whether staging channel is enabled
         var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(_features, _configuration);
 
@@ -155,19 +157,41 @@ internal sealed class UpdateCommand : BaseCommand
             var project = _projectFactory.GetProject(projectFile);
             var isProjectReferenceMode = project.IsUsingProjectReferences(projectFile);
 
-            // Check if channel or quality option was provided (channel takes precedence)
+            // Resolve the channel using the documented precedence:
+            //   1. explicit --channel / hidden --quality
+            //   2. local app config "channel" (relative to the resolved AppHost project, NOT cwd)
+            //   3. global config "channel"
+            //   4. interactive channel prompt when appropriate (PR hives present)
+            //   5. implicit/default channel as the documented fallback
+            // The directory-scoped lookup is critical: `aspire update --apphost <elsewhere>`
+            // must consult the project's directory tree, not the user's launch cwd. The
+            // process-wide IConfiguration is rooted at the launch cwd at startup, so using
+            // it here would silently read the wrong app's local config (issue #16650).
             var channelName = parseResult.GetValue(_channelOption) ?? parseResult.GetValue(_qualityOption);
+            var channelFromConfig = false;
+            if (string.IsNullOrWhiteSpace(channelName))
+            {
+                var configLookupDirectory = projectFile.Directory ?? ExecutionContext.WorkingDirectory;
+                channelName = await _configurationService.GetConfigurationFromDirectoryAsync("channel", configLookupDirectory, cancellationToken);
+                channelFromConfig = !string.IsNullOrWhiteSpace(channelName);
+            }
+
             PackageChannel channel;
 
             var allChannels = await InteractionService.ShowStatusAsync(
                 UpdateCommandStrings.CheckingForUpdates,
                 async () => await _packagingService.GetChannelsAsync(cancellationToken));
 
-            if (!string.IsNullOrEmpty(channelName))
+            if (!string.IsNullOrWhiteSpace(channelName))
             {
                 // Try to find a channel matching the provided channel/quality
                 channel = allChannels.FirstOrDefault(c => string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase))
                     ?? throw new ChannelNotFoundException($"No channel found matching '{channelName}'. Valid options are: {string.Join(", ", allChannels.Select(c => c.Name))}");
+
+                if (channelFromConfig)
+                {
+                    _logger.LogDebug("Using channel '{ChannelName}' from configuration.", channel.Name);
+                }
             }
             else if (isProjectReferenceMode)
             {
@@ -200,7 +224,10 @@ internal sealed class UpdateCommand : BaseCommand
             }
 
             // Update packages using the appropriate project handler
-            var confirmBinding = PromptBinding.CreateWithInteractiveDefault(parseResult, s_yesOption, true);
+            // The validator ensures --yes is required when --non-interactive is specified,
+            // so by this point --yes is always explicitly provided in non-interactive mode.
+            // defaultValue: true means the interactive prompt defaults to "yes" (accept).
+            var confirmBinding = PromptBinding.Create(parseResult, s_yesOption, defaultValue: true);
             var nugetConfigDirBinding = PromptBinding.Create(parseResult, s_nugetConfigDirOption);
             var updateContext = new UpdatePackagesContext
             {

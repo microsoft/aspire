@@ -1,17 +1,125 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Reflection;
+using System.Reflection.Emit;
+using System.Text.Json;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Backchannel;
 
+#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to describe command argument metadata in tests.
+
 [Trait("Partition", "4")]
 public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 {
+    [Theory]
+    [InlineData("8.0.0-preview.1", "8.0.0-preview.1")]
+    [InlineData("8.0.0-preview.1+asdlkjfdijee", "8.0.0-preview.1")]
+    [InlineData("8.0.0-preview.1+asdlkjfdijee+someothersuffix", "8.0.0-preview.1")]
+    [InlineData("+asdlkjfdijee", "+asdlkjfdijee")]
+    [InlineData("Plain old text", "Plain old text")]
+    [InlineData("", "")]
+    public void GetDisplayVersionUsesDashboardDisplayVersionImplementation(string informationalVersion, string expectedDisplayVersion)
+    {
+        var assembly = CreateAssembly(CreateAttribute<AssemblyInformationalVersionAttribute>(informationalVersion));
+
+        var actualDisplayVersion = AuxiliaryBackchannelRpcTarget.GetDisplayVersion(assembly);
+
+        Assert.Equal(expectedDisplayVersion, actualDisplayVersion);
+    }
+
+    [Fact]
+    public void GetDisplayVersionUsesFileVersionWhenInformationalVersionIsMissing()
+    {
+        var assembly = CreateAssembly(
+            CreateAttribute<AssemblyFileVersionAttribute>("42.42.42.42424"),
+            CreateAttribute<AssemblyVersionAttribute>("8.0.0.0"));
+
+        var actualDisplayVersion = AuxiliaryBackchannelRpcTarget.GetDisplayVersion(assembly);
+
+        Assert.Equal("42.42.42.42424", actualDisplayVersion);
+    }
+
+    [Fact]
+    public void GetDisplayVersionUsesAssemblyVersionWhenInformationalAndFileVersionsAreMissing()
+    {
+        var assembly = CreateAssembly(CreateAttribute<AssemblyVersionAttribute>("8.0.0.0"));
+
+        var actualDisplayVersion = AuxiliaryBackchannelRpcTarget.GetDisplayVersion(assembly);
+
+        Assert.Equal("8.0.0.0", actualDisplayVersion);
+    }
+
+    [Fact]
+    public void GetDisplayVersionReturnsNullWhenVersionAttributesAreMissing()
+    {
+        var assembly = CreateAssembly();
+
+        var actualDisplayVersion = AuxiliaryBackchannelRpcTarget.GetDisplayVersion(assembly);
+
+        Assert.Null(actualDisplayVersion);
+    }
+
+    [Fact]
+    public async Task GetAppHostInfoAsync_ReturnsAssemblyDisplayVersion()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AppHost:Path"] = "/path/to/apphost.csproj"
+            })
+            .Build();
+
+        using var services = new ServiceCollection()
+            .AddSingleton<IConfiguration>(configuration)
+            .BuildServiceProvider();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            services);
+
+        var result = await target.GetAppHostInfoAsync().DefaultTimeout();
+        var expectedVersion = typeof(AuxiliaryBackchannelRpcTarget).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        var plusIndex = expectedVersion?.IndexOf('+') ?? -1;
+        if (plusIndex > 0)
+        {
+            expectedVersion = expectedVersion![..plusIndex];
+        }
+        expectedVersion ??= typeof(AuxiliaryBackchannelRpcTarget).Assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version
+            ?? typeof(AuxiliaryBackchannelRpcTarget).Assembly.GetCustomAttribute<AssemblyVersionAttribute>()?.Version
+            ?? "unknown";
+
+        Assert.Equal(expectedVersion, result.AspireHostVersion);
+    }
+
+    private static AssemblyBuilder CreateAssembly(params CustomAttributeBuilder[] attributes)
+    {
+        var assembly = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName($"TestAssembly{Guid.NewGuid():N}"), AssemblyBuilderAccess.Run);
+
+        foreach (var attribute in attributes)
+        {
+            assembly.SetCustomAttribute(attribute);
+        }
+
+        return assembly;
+    }
+
+    private static CustomAttributeBuilder CreateAttribute<TAttribute>(string value)
+        where TAttribute : Attribute
+    {
+        var constructor = typeof(TAttribute).GetConstructor([typeof(string)]);
+        Assert.NotNull(constructor);
+
+        return new CustomAttributeBuilder(constructor, [value]);
+    }
+
     [Fact]
     public async Task GetResourceSnapshotsAsync_EnumeratesResources()
     {
@@ -102,7 +210,30 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
                 new EnvironmentVariableSnapshot("ANOTHER_VAR", "another-value", true)
             ],
             Commands = [
-                new ResourceCommandSnapshot("start", ResourceCommandState.Enabled, "Start", "Start the resource", null, null, null, null, false),
+                new ResourceCommandSnapshot("start", ResourceCommandState.Enabled, "Start", "Start the resource", null, null, null, null, false)
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "selector",
+                            Label = "Selector",
+                            Description = "CSS selector to click.",
+                            EnableDescriptionMarkdown = true,
+                            InputType = InputType.Text,
+                            Required = true,
+                            Placeholder = "#submit",
+                            Options =
+                            [
+                                new("mode", "Primary"),
+                                new("mode", "Secondary")
+                            ],
+                            Disabled = true,
+                            MaxLength = 128
+                        }
+                    ],
+                    Visibility = ResourceCommandVisibility.Api
+                },
                 new ResourceCommandSnapshot("stop", ResourceCommandState.Disabled, "Stop", "Stop the resource", null, null, null, null, false),
                 new ResourceCommandSnapshot("restart", ResourceCommandState.Hidden, "Restart", null, null, null, null, null, true)
             ],
@@ -167,7 +298,19 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
         // Commands
         Assert.Equal(3, snapshot.Commands.Length);
-        Assert.Contains(snapshot.Commands, c => c.Name == "start" && c.DisplayName == "Start" && c.Description == "Start the resource" && c.State == "Enabled");
+        var startCommand = Assert.Single(snapshot.Commands, c => c.Name == "start" && c.DisplayName == "Start" && c.Description == "Start the resource" && c.State == "Enabled");
+        var argumentInput = Assert.Single(startCommand.ArgumentInputs);
+        Assert.Equal("selector", argumentInput.Name);
+        Assert.Equal("Selector", argumentInput.Label);
+        Assert.Equal("CSS selector to click.", argumentInput.Description);
+        Assert.True(argumentInput.EnableDescriptionMarkdown);
+        Assert.Equal(nameof(InputType.Text), argumentInput.InputType);
+        Assert.True(argumentInput.Required);
+        Assert.Equal("#submit", argumentInput.Placeholder);
+        Assert.Equal("Secondary", argumentInput.Options!["mode"]);
+        Assert.True(argumentInput.Disabled);
+        Assert.Equal(128, argumentInput.MaxLength);
+        Assert.Equal(nameof(ResourceCommandVisibility.Api), startCommand.Visibility);
         Assert.Contains(snapshot.Commands, c => c.Name == "stop" && c.DisplayName == "Stop" && c.Description == "Stop the resource" && c.State == "Disabled");
         Assert.Contains(snapshot.Commands, c => c.Name == "restart" && c.DisplayName == "Restart" && c.Description == null && c.State == "Hidden");
 
@@ -665,6 +808,331 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ExecuteResourceCommandAsync_MapsJsonArgumentsToInteractionInputs()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        InteractionInputCollection? capturedArguments = null;
+        var custom = builder.AddResource(new CustomResource("myresource"));
+        custom.WithCommand(
+            name: "click",
+            displayName: "Click",
+            executeCommand: context =>
+            {
+                capturedArguments = context.Arguments;
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new CommandOptions
+            {
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "selector",
+                        InputType = InputType.Text
+                    },
+                    new InteractionInput
+                    {
+                        Name = "clickCount",
+                        InputType = InputType.Number
+                    },
+                    new InteractionInput
+                    {
+                        Name = "snapshotAfter",
+                        InputType = InputType.Boolean
+                    }
+                ]
+            });
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services);
+
+        var response = await target.ExecuteResourceCommandAsync(new ExecuteResourceCommandRequest
+        {
+            ResourceName = "myresource",
+            CommandName = "click",
+            Arguments = JsonSerializer.SerializeToNode(new
+            {
+                selector = "#submit",
+                clickCount = 2,
+                snapshotAfter = true
+            })
+        }).DefaultTimeout();
+
+        Assert.True(response.Success);
+        Assert.NotNull(capturedArguments);
+        Assert.Equal("#submit", capturedArguments.GetString("selector"));
+        Assert.Equal(2, capturedArguments.GetInt32("clickCount"));
+        Assert.True(capturedArguments.GetBoolean("snapshotAfter"));
+    }
+
+    [Fact]
+    public async Task ExecuteResourceCommandAsync_UnknownJsonArgument_ReturnsFailure()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        var executed = false;
+        var custom = builder.AddResource(new CustomResource("myresource"));
+        custom.WithCommand(
+            name: "click",
+            displayName: "Click",
+            executeCommand: _ =>
+            {
+                executed = true;
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new CommandOptions
+            {
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "selector",
+                        InputType = InputType.Text
+                    }
+                ]
+            });
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services);
+
+        var response = await target.ExecuteResourceCommandAsync(new ExecuteResourceCommandRequest
+        {
+            ResourceName = "myresource",
+            CommandName = "click",
+            Arguments = JsonSerializer.SerializeToNode(new
+            {
+                selecter = "#submit"
+            })
+        }).DefaultTimeout();
+
+        Assert.False(response.Success);
+        Assert.False(executed);
+        Assert.Equal("Unknown argument 'selecter' for command 'click'.", response.Message);
+    }
+
+    [Fact]
+    public async Task ExecuteResourceCommandAsync_MapsJsonArrayArgumentsToInteractionInputsByOrder()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        InteractionInputCollection? capturedArguments = null;
+        var custom = builder.AddResource(new CustomResource("myresource"));
+        custom.WithCommand(
+            name: "click",
+            displayName: "Click",
+            executeCommand: context =>
+            {
+                capturedArguments = context.Arguments;
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new CommandOptions
+            {
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "selector",
+                        InputType = InputType.Text
+                    },
+                    new InteractionInput
+                    {
+                        Name = "clickCount",
+                        InputType = InputType.Number
+                    },
+                    new InteractionInput
+                    {
+                        Name = "snapshotAfter",
+                        InputType = InputType.Boolean
+                    }
+                ]
+            });
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services);
+
+        var response = await target.ExecuteResourceCommandAsync(new ExecuteResourceCommandRequest
+        {
+            ResourceName = "myresource",
+            CommandName = "click",
+            Arguments = JsonSerializer.SerializeToNode(new object[] { "#submit", 2, true })
+        }).DefaultTimeout();
+
+        Assert.True(response.Success);
+        Assert.NotNull(capturedArguments);
+        Assert.Equal("#submit", capturedArguments.GetString("selector"));
+        Assert.Equal(2, capturedArguments.GetInt32("clickCount"));
+        Assert.True(capturedArguments.GetBoolean("snapshotAfter"));
+
+        await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task ExecuteResourceCommandAsync_TooManyJsonArrayArguments_ReturnsFailure()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        var executed = false;
+        var custom = builder.AddResource(new CustomResource("myresource"));
+        custom.WithCommand(
+            name: "click",
+            displayName: "Click",
+            executeCommand: context =>
+            {
+                executed = true;
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new CommandOptions
+            {
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "selector",
+                        InputType = InputType.Text
+                    }
+                ]
+            });
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services);
+
+        var response = await target.ExecuteResourceCommandAsync(new ExecuteResourceCommandRequest
+        {
+            ResourceName = "myresource",
+            CommandName = "click",
+            Arguments = JsonSerializer.SerializeToNode(new[] { "#submit", "extra" })
+        }).DefaultTimeout();
+
+        Assert.False(response.Success);
+        Assert.False(executed);
+        Assert.Equal("Command 'click' accepts 1 argument(s), but 2 were provided.", response.Message);
+    }
+
+    [Fact]
+    public async Task ExecuteResourceCommandAsync_ValidateOnlyWithInvalidArguments_ReturnsValidationErrors()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        var executed = false;
+        var custom = builder.AddResource(new CustomResource("myresource"));
+        custom.WithCommand(
+            name: "validate",
+            displayName: "Validate",
+            executeCommand: context =>
+            {
+                executed = true;
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new CommandOptions
+            {
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "target",
+                        InputType = InputType.Text
+                    }
+                ],
+                ValidateArguments = context =>
+                {
+                    var target = context.Inputs.Single(argument => argument.Name == "target");
+                    context.AddValidationError(target, "Target must not be prod.");
+
+                    return Task.CompletedTask;
+                }
+            });
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services);
+
+        var response = await target.ExecuteResourceCommandAsync(new ExecuteResourceCommandRequest
+        {
+            ResourceName = "myresource",
+            CommandName = "validate",
+            ValidateOnly = true,
+            Arguments = JsonSerializer.SerializeToNode(new
+            {
+                target = "prod"
+            })
+        }).DefaultTimeout();
+
+        Assert.False(response.Success);
+        Assert.False(executed);
+        var validationError = Assert.Single(response.ValidationErrors);
+        Assert.Equal("target", validationError.ArgumentName);
+        Assert.Equal("Target must not be prod.", validationError.ErrorMessage);
+    }
+
+    [Fact]
+    public async Task ExecuteResourceCommandAsync_ValidateOnlyWithMissingResource_ReturnsNotFound()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services);
+
+        var response = await target.ExecuteResourceCommandAsync(new ExecuteResourceCommandRequest
+        {
+            ResourceName = "missing-resource",
+            CommandName = "validate",
+            ValidateOnly = true
+        }).DefaultTimeout();
+
+        Assert.False(response.Success);
+        Assert.Equal("Resource 'missing-resource' not found.", response.Message);
+    }
+
+    [Fact]
+    public async Task ExecuteResourceCommandAsync_ValidateOnlyWithMissingCommand_ReturnsNotFound()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        builder.AddResource(new CustomResource("myresource"));
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services);
+
+        var response = await target.ExecuteResourceCommandAsync(new ExecuteResourceCommandRequest
+        {
+            ResourceName = "myresource",
+            CommandName = "missing-command",
+            ValidateOnly = true
+        }).DefaultTimeout();
+
+        Assert.False(response.Success);
+        Assert.Equal("Command 'missing-command' not available for resource 'myresource'.", response.Message);
+    }
+
+    [Fact]
     public async Task WaitForResourceAsync_ReturnsNotFound_WhenResourceDoesNotExist()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
@@ -721,3 +1189,5 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         await app.StopAsync().DefaultTimeout();
     }
 }
+
+#pragma warning restore ASPIREINTERACTION001

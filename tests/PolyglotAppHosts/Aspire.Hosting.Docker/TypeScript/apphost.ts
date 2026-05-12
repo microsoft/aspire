@@ -68,6 +68,9 @@ await api.publishAsDockerComposeService(async (composeService, service) => {
 
     const _serviceContainerName: string = await service.containerName.get();
     const _serviceRestart: string = await service.restart.get();
+    const _serviceConfigsCount: number = await service.configs.count();
+    const _serviceSecretsCount: number = await service.secrets.count();
+    const _serviceUlimitsCount: number = await service.ulimits.count();
 });
 
 const _resolvedDefaultNetworkName: string = await compose.defaultNetworkName.get();

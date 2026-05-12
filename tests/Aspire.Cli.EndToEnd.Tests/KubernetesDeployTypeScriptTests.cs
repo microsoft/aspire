@@ -96,9 +96,11 @@ const chartVersion = await builder.addParameter("chartversion");
 
 // Add Kubernetes environment with Helm deployment
 const k8sEnv = await builder.addKubernetesEnvironment("env");
-await k8sEnv.withHelm(async (helm) => {
-    await helm.withNamespace(k8sNamespace);
-    await helm.withChartVersion(chartVersion);
+await k8sEnv.withHelm({
+    configure: async (helm) => {
+        await helm.withNamespace(k8sNamespace);
+        await helm.withChartVersion(chartVersion);
+    },
 });
 
 await builder.build().run();

@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.InternalTesting;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 using Spectre.Console;
@@ -20,8 +21,8 @@ public class ConsoleInteractionServiceTests
     private static readonly DirectoryInfo s_runtimeDirectory = s_tempRoot.CreateSubdirectory("runtimes");
     private static readonly DirectoryInfo s_logsDirectory = s_tempRoot.CreateSubdirectory("logs");
 
-    private static CliExecutionContext CreateExecutionContext(bool debugMode = false) =>
-        new(new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo("."), s_runtimeDirectory, s_logsDirectory, "test.log", debugMode: debugMode);
+    private static CliExecutionContext CreateExecutionContext(bool debugMode = false, string? logFilePath = null) =>
+        new(new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo("."), s_runtimeDirectory, s_logsDirectory, logFilePath ?? "test.log", debugMode: debugMode);
 
     private static ConsoleInteractionService CreateInteractionService(IAnsiConsole console, CliExecutionContext? executionContext = null, ICliHostEnvironment? hostEnvironment = null)
     {
@@ -205,6 +206,56 @@ public class ConsoleInteractionServiceTests
         Assert.Contains("Target Azure subscription", outputString);
         Assert.True(outputString.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length >= 3);
     }
+
+    [Theory]
+    [MemberData(nameof(DisplayMarkdown_BetweenPlainText_Data))]
+    public void DisplayMarkdown_BetweenPlainText_DoesNotInsertExtraEmptyLine(string markdown, string expectedOutput)
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output))
+        });
+
+        var interactionService = CreateInteractionService(console);
+
+        interactionService.DisplayPlainText("before markdown");
+        interactionService.DisplayMarkdown(markdown);
+        interactionService.DisplayPlainText("after markdown");
+
+        Assert.Equal(expectedOutput, output.ToString(), ignoreLineEndingDifferences: true);
+    }
+
+    public static TheoryData<string, string> DisplayMarkdown_BetweenPlainText_Data => new()
+    {
+        {
+            """
+            # Heading
+
+            This is a paragraph.
+            """,
+            """
+            before markdown
+            Heading
+
+            This is a paragraph.
+
+            after markdown
+
+            """
+        },
+        {
+            "**bold**",
+            """
+            before markdown
+            bold
+            after markdown
+
+            """
+        },
+    };
 
     [Fact]
     public async Task ShowStatusAsync_InDebugMode_DisplaysSubtleMessageInsteadOfSpinner()
@@ -424,6 +475,82 @@ public class ConsoleInteractionServiceTests
         Assert.Null(exception);
         var outputString = output.ToString();
         Assert.Contains("C:\\Users\\test [Dev]\\logs\\aspire.log", outputString);
+    }
+
+    [Fact]
+    public void DisplayMessage_WithFileLinkMarkup_RendersClickableLinkWhenAllowMarkup()
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.Yes,
+            ColorSystem = ColorSystemSupport.TrueColor,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Capabilities.Links = true;
+        console.Profile.Width = int.MaxValue;
+
+        var logFilePath = Path.Combine(s_logsDirectory.FullName, "cli [dev team].log");
+        var interactionService = CreateInteractionService(console, CreateExecutionContext(logFilePath: logFilePath));
+
+        var fileLinkMarkup = MarkupHelpers.SafeFileLink(interactionService, logFilePath);
+        interactionService.DisplayMessage(
+            KnownEmojis.PageFacingUp,
+            $"See logs at {fileLinkMarkup}",
+            allowMarkup: true);
+
+        var outputString = output.ToString();
+        var fileUri = new Uri(Path.GetFullPath(logFilePath)).AbsoluteUri;
+        TerminalLinkAssert.ContainsLink(outputString, fileUri, logFilePath);
+    }
+
+    [Fact]
+    public void DisplayError_WithAllowMarkup_RendersMarkupAsIs()
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.Yes,
+            ColorSystem = ColorSystemSupport.TrueColor,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Capabilities.Links = true;
+        console.Profile.Width = int.MaxValue;
+
+        var logFilePath = Path.Combine(s_logsDirectory.FullName, "cli [dev team].log");
+        var interactionService = CreateInteractionService(console, CreateExecutionContext(logFilePath: logFilePath));
+
+        var fileLinkMarkup = MarkupHelpers.SafeFileLink(interactionService, logFilePath);
+        interactionService.DisplayError($"Build failed. Logs: {fileLinkMarkup}", allowMarkup: true);
+
+        var outputString = output.ToString();
+        var fileUri = new Uri(Path.GetFullPath(logFilePath)).AbsoluteUri;
+        Assert.Contains("Build failed.", outputString);
+        TerminalLinkAssert.ContainsLink(outputString, fileUri, logFilePath);
+    }
+
+    [Fact]
+    public void DisplayError_WithoutAllowMarkup_EscapesBrackets()
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output))
+        });
+
+        var interactionService = CreateInteractionService(console);
+
+        // Bracket characters in the error message would normally break Spectre markup parsing,
+        // but DisplayError escapes them by default.
+        var message = "Build failed for [Project Alpha].";
+        var exception = Record.Exception(() => interactionService.DisplayError(message));
+
+        Assert.Null(exception);
+        Assert.Contains("Build failed for [Project Alpha].", output.ToString());
     }
 
     [Fact]

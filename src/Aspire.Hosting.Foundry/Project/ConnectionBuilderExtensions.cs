@@ -199,7 +199,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// <summary>
     /// Adds an Azure AI Search connection to a Microsoft Foundry project.
     /// </summary>
-    [AspireExport("addSearchConnectionFromResource", Description = "Adds an Azure AI Search connection to a Microsoft Foundry project.")]
+    [AspireExportIgnore(Reason = "Raw AzureSearchResource parameters are not ATS-compatible. Use the resource-builder overload instead.")]
     public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         AzureSearchResource search)

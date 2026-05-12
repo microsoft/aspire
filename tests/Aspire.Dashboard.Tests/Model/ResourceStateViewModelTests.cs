@@ -31,6 +31,13 @@ public class ResourceStateViewModelTests
     [InlineData(
         /* state */ "CustomResource", KnownResourceState.Finished, null, null, null,
         /* expected output */ $"Localized:{nameof(Columns.StateColumnResourceExited)}:CustomResource", "RecordStop", Color.Info, "Finished")]
+    // Resource failed to start - should use dedicated message, not "no longer running"
+    [InlineData(
+        /* state */ "Container", KnownResourceState.FailedToStart, null, null, null,
+        /* expected output */ $"Localized:{nameof(Columns.StateColumnResourceFailedToStart)}:Container", "Warning", Color.Warning, "Failed to start")]
+    [InlineData(
+        /* state */ "CustomResource", KnownResourceState.FailedToStart, null, null, null,
+        /* expected output */ $"Localized:{nameof(Columns.StateColumnResourceFailedToStart)}:CustomResource", "Warning", Color.Warning, "Failed to start")]
     [InlineData(
         /* state */ "Container", KnownResourceState.Unknown, null, null, null,
         /* expected output */ "Unknown", "CircleHint", Color.Info, "Unknown")]

@@ -196,7 +196,7 @@ extension/dist/
 extension/.localization/
 extension/out/
 extension/node_modules/
-extension/.vscode-test/
+**/.vscode-test/
 extension/.version
 
 # Generated extension localization files (regenerated from XLF during build)

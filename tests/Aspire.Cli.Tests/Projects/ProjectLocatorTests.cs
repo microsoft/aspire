@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.InternalTesting;
 using System.Text.Json;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -219,6 +220,240 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
         var foundAppHost = await projectLocator.UseOrFindAppHostProjectFileAsync(null, createSettingsFile: false).DefaultTimeout();
 
         Assert.Equal(realAppHostProjectFile.FullName, foundAppHost?.FullName);
+    }
+
+    [Fact]
+    public async Task UseOrFindAppHostProjectFileUsesValidSettingsWithoutScanning()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var targetAppHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("TargetAppHost");
+        var targetAppHostProjectFile = new FileInfo(Path.Combine(targetAppHostDirectory.FullName, "TargetAppHost.csproj"));
+        await File.WriteAllTextAsync(targetAppHostProjectFile.FullName, "Not a real apphost");
+
+        var decoyAppHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("DecoyAppHost");
+        var decoyAppHostProjectFile = new FileInfo(Path.Combine(decoyAppHostDirectory.FullName, "DecoyAppHost.csproj"));
+        await File.WriteAllTextAsync(decoyAppHostProjectFile.FullName, "Not a real apphost");
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, JsonSerializer.Serialize(new
+        {
+            appHost = new
+            {
+                path = Path.GetRelativePath(workspace.WorkspaceRoot.FullName, targetAppHostProjectFile.FullName).Replace(Path.DirectorySeparatorChar, '/')
+            }
+        }));
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(
+            executionContext,
+            languageDiscovery: new ThrowingLanguageDiscovery());
+
+        var result = await projectLocator.UseOrFindAppHostProjectFileAsync(
+            projectFile: null,
+            multipleAppHostProjectsFoundBehavior: MultipleAppHostProjectsFoundBehavior.Prompt,
+            createSettingsFile: false,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(targetAppHostProjectFile.FullName, result.SelectedProjectFile?.FullName);
+        var candidate = Assert.Single(result.AllProjectFileCandidates);
+        Assert.Equal(targetAppHostProjectFile.FullName, candidate.FullName);
+    }
+
+    [Fact]
+    public async Task UseOrFindAppHostProjectFileUsesValidSettingsWithoutScanningInThrowMode()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var targetAppHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("TargetAppHost");
+        var targetAppHostProjectFile = new FileInfo(Path.Combine(targetAppHostDirectory.FullName, "TargetAppHost.csproj"));
+        await File.WriteAllTextAsync(targetAppHostProjectFile.FullName, "Not a real apphost");
+
+        var decoyAppHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("DecoyAppHost");
+        var decoyAppHostProjectFile = new FileInfo(Path.Combine(decoyAppHostDirectory.FullName, "DecoyAppHost.csproj"));
+        await File.WriteAllTextAsync(decoyAppHostProjectFile.FullName, "Not a real apphost");
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, JsonSerializer.Serialize(new
+        {
+            appHost = new
+            {
+                path = Path.GetRelativePath(workspace.WorkspaceRoot.FullName, targetAppHostProjectFile.FullName).Replace(Path.DirectorySeparatorChar, '/')
+            }
+        }));
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(
+            executionContext,
+            languageDiscovery: new ThrowingLanguageDiscovery());
+
+        var result = await projectLocator.UseOrFindAppHostProjectFileAsync(
+            projectFile: null,
+            multipleAppHostProjectsFoundBehavior: MultipleAppHostProjectsFoundBehavior.Throw,
+            createSettingsFile: false,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(targetAppHostProjectFile.FullName, result.SelectedProjectFile?.FullName);
+        var candidate = Assert.Single(result.AllProjectFileCandidates);
+        Assert.Equal(targetAppHostProjectFile.FullName, candidate.FullName);
+    }
+
+    [Fact]
+    public async Task UseOrFindAppHostProjectFileUsesValidGuestAppHostSettingsWithoutScanning()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var guestAppHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"));
+        await File.WriteAllTextAsync(guestAppHostFile.FullName, "// guest apphost");
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, JsonSerializer.Serialize(new
+        {
+            appHost = new
+            {
+                path = "apphost.ts"
+            }
+        }));
+
+        var projectFactory = new GuestAppHostFileProjectFactory("apphost.ts");
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(
+            executionContext,
+            projectFactory: projectFactory,
+            languageDiscovery: new ThrowingLanguageDiscovery());
+
+        var result = await projectLocator.UseOrFindAppHostProjectFileAsync(
+            projectFile: null,
+            multipleAppHostProjectsFoundBehavior: MultipleAppHostProjectsFoundBehavior.Prompt,
+            createSettingsFile: false,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(guestAppHostFile.FullName, result.SelectedProjectFile?.FullName);
+        var candidate = Assert.Single(result.AllProjectFileCandidates);
+        Assert.Equal(guestAppHostFile.FullName, candidate.FullName);
+    }
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public async Task UseOrFindAppHostProjectFileFallsBackToDiscoveryWhenConfiguredAppHostIsInvalid(bool isUnsupported, bool isPossiblyUnbuildable)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var configuredAppHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("ConfiguredAppHost");
+        var configuredAppHostProjectFile = new FileInfo(Path.Combine(configuredAppHostDirectory.FullName, "ConfiguredAppHost.csproj"));
+        await File.WriteAllTextAsync(configuredAppHostProjectFile.FullName, "Not a real apphost");
+
+        var realAppHostProjectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "RealAppHost.csproj"));
+        await File.WriteAllTextAsync(realAppHostProjectFile.FullName, "Not a real apphost");
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, JsonSerializer.Serialize(new
+        {
+            appHost = new
+            {
+                path = Path.GetRelativePath(workspace.WorkspaceRoot.FullName, configuredAppHostProjectFile.FullName).Replace(Path.DirectorySeparatorChar, '/')
+            }
+        }));
+
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            ValidateAppHostCallback = projectFile =>
+            {
+                if (projectFile.FullName == realAppHostProjectFile.FullName)
+                {
+                    return new AppHostValidationResult(IsValid: true);
+                }
+                if (projectFile.FullName == configuredAppHostProjectFile.FullName)
+                {
+                    return new AppHostValidationResult(IsValid: false, IsUnsupported: isUnsupported, IsPossiblyUnbuildable: isPossiblyUnbuildable);
+                }
+                return new AppHostValidationResult(IsValid: false);
+            }
+        };
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
+
+        var result = await projectLocator.UseOrFindAppHostProjectFileAsync(
+            projectFile: null,
+            multipleAppHostProjectsFoundBehavior: MultipleAppHostProjectsFoundBehavior.None,
+            createSettingsFile: false,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(realAppHostProjectFile.FullName, result.SelectedProjectFile?.FullName);
+    }
+
+    [Fact]
+    public async Task UseOrFindAppHostProjectFileScansWhenCandidateListingModeHasValidSettings()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var targetAppHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("TargetAppHost");
+        var targetAppHostProjectFile = new FileInfo(Path.Combine(targetAppHostDirectory.FullName, "TargetAppHost.csproj"));
+        await File.WriteAllTextAsync(targetAppHostProjectFile.FullName, "Not a real apphost");
+
+        var otherAppHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("OtherAppHost");
+        var otherAppHostProjectFile = new FileInfo(Path.Combine(otherAppHostDirectory.FullName, "OtherAppHost.csproj"));
+        await File.WriteAllTextAsync(otherAppHostProjectFile.FullName, "Not a real apphost");
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, JsonSerializer.Serialize(new
+        {
+            appHost = new
+            {
+                path = Path.GetRelativePath(workspace.WorkspaceRoot.FullName, targetAppHostProjectFile.FullName).Replace(Path.DirectorySeparatorChar, '/')
+            }
+        }));
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext);
+
+        var result = await projectLocator.UseOrFindAppHostProjectFileAsync(
+            projectFile: null,
+            multipleAppHostProjectsFoundBehavior: MultipleAppHostProjectsFoundBehavior.None,
+            createSettingsFile: false,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(targetAppHostProjectFile.FullName, result.SelectedProjectFile?.FullName);
+        Assert.Equal(2, result.AllProjectFileCandidates.Count);
+        Assert.Contains(result.AllProjectFileCandidates, file => file.FullName == targetAppHostProjectFile.FullName);
+        Assert.Contains(result.AllProjectFileCandidates, file => file.FullName == otherAppHostProjectFile.FullName);
+    }
+
+    [Fact]
+    public async Task UseOrFindAppHostProjectFileIncludesSettingsAppHostInCandidatesWhenOutsideDiscovery()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Settings AppHost lives in the workspace root.
+        var settingsAppHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "SettingsAppHost.csproj"));
+        await File.WriteAllTextAsync(settingsAppHostFile.FullName, "Not a real apphost");
+
+        // CLI working directory is a subdirectory; discovery from there cannot reach files in the parent.
+        var workingDirectory = workspace.WorkspaceRoot.CreateSubdirectory("WorkingDir");
+
+        var configPath = Path.Combine(workingDirectory.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, JsonSerializer.Serialize(new
+        {
+            appHost = new
+            {
+                path = "../SettingsAppHost.csproj"
+            }
+        }));
+
+        var executionContext = CreateExecutionContext(workingDirectory);
+        var projectLocator = CreateProjectLocator(executionContext);
+
+        var result = await projectLocator.UseOrFindAppHostProjectFileAsync(
+            projectFile: null,
+            multipleAppHostProjectsFoundBehavior: MultipleAppHostProjectsFoundBehavior.None,
+            createSettingsFile: false,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(settingsAppHostFile.FullName, result.SelectedProjectFile?.FullName);
+        Assert.Contains(result.AllProjectFileCandidates, file => file.FullName == settingsAppHostFile.FullName);
     }
 
     [Fact]
@@ -631,6 +866,33 @@ builder.Build().Run();");
     }
 
     [Fact]
+    public async Task FindAppHostProjectFilesAsync_DoesNotDuplicateFilesThatMatchMultiplePatterns()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
+
+        var overlappingLanguage = new LanguageInfo(
+            LanguageId: new LanguageId("overlapping"),
+            DisplayName: "Overlapping",
+            PackageName: "",
+            DetectionPatterns: ["AppHost.csproj"],
+            CodeGenerator: "",
+            AppHostFileName: "AppHost.csproj");
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(
+            executionContext,
+            languageDiscovery: new TestLanguageDiscovery(overlappingLanguage));
+
+        var foundFiles = await projectLocator.FindAppHostProjectFilesAsync(workspace.WorkspaceRoot.FullName, CancellationToken.None).DefaultTimeout();
+
+        var foundFile = Assert.Single(foundFiles);
+        Assert.Equal(projectFile.FullName, foundFile.FullName);
+    }
+
+    [Fact]
     public async Task UseOrFindAppHostProjectFileAsync_AcceptsExplicitSingleFileAppHost()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -795,11 +1057,105 @@ builder.Build().Run();");
             return Task.FromResult<string?>(null);
         }
 
+        public Task<string?> GetConfigurationFromDirectoryAsync(string key, DirectoryInfo startDirectory, CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult<string?>(null);
+        }
+
         public string GetSettingsFilePath(bool isGlobal)
         {
             return isGlobal
                 ? Path.Combine(executionContext.HomeDirectory.FullName, ".aspire", AspireConfigFile.FileName)
                 : Path.Combine(executionContext.WorkingDirectory.FullName, AspireConfigFile.FileName);
+        }
+    }
+
+    private sealed class ThrowingLanguageDiscovery : ILanguageDiscovery
+    {
+        public Task<IEnumerable<LanguageInfo>> GetAvailableLanguagesAsync(CancellationToken cancellationToken = default)
+            => throw new InvalidOperationException("Recursive AppHost discovery should not run when a valid configured AppHost path exists.");
+
+        public Task<string?> GetPackageForLanguageAsync(LanguageId languageId, CancellationToken cancellationToken = default)
+            => Task.FromResult<string?>(null);
+
+        public Task<LanguageId?> DetectLanguageAsync(DirectoryInfo directory, CancellationToken cancellationToken = default)
+            => Task.FromResult<LanguageId?>(null);
+
+        public Task<LanguageId?> DetectLanguageRecursiveAsync(DirectoryInfo directory, CancellationToken cancellationToken = default)
+            => Task.FromResult<LanguageId?>(null);
+
+        public LanguageInfo? GetLanguageById(LanguageId languageId)
+            => null;
+
+        public LanguageInfo? GetLanguageByFile(FileInfo file)
+            => null;
+    }
+
+    private sealed class GuestAppHostFileProjectFactory : IAppHostProjectFactory
+    {
+        private readonly string _supportedFileName;
+        private readonly GuestAppHostTestProject _project;
+
+        public GuestAppHostFileProjectFactory(string supportedFileName)
+        {
+            _supportedFileName = supportedFileName;
+            _project = new GuestAppHostTestProject(supportedFileName);
+        }
+
+        public IAppHostProject GetProject(LanguageInfo language) => _project;
+
+        public IAppHostProject GetProject(FileInfo appHostFile)
+            => TryGetProject(appHostFile) ?? throw new NotSupportedException($"No handler available for AppHost file '{appHostFile.Name}'.");
+
+        public IAppHostProject? TryGetProject(FileInfo appHostFile)
+            => appHostFile.Name.Equals(_supportedFileName, StringComparison.OrdinalIgnoreCase) ? _project : null;
+
+        public IAppHostProject? GetProjectByLanguageId(string languageId)
+            => string.Equals(languageId, _project.LanguageId, StringComparison.OrdinalIgnoreCase) ? _project : null;
+
+        public IEnumerable<IAppHostProject> GetAllProjects() => [_project];
+
+        private sealed class GuestAppHostTestProject(string supportedFileName) : IAppHostProject
+        {
+            public bool IsUnsupported { get; set; }
+            public string LanguageId => "typescript";
+            public string DisplayName => "TypeScript";
+            public string? AppHostFileName => supportedFileName;
+
+            public bool IsUsingProjectReferences(FileInfo appHostFile) => false;
+
+            public Task<string[]> GetDetectionPatternsAsync(CancellationToken cancellationToken)
+                => Task.FromResult<string[]>([supportedFileName]);
+
+            public bool CanHandle(FileInfo appHostFile)
+                => appHostFile.Name.Equals(supportedFileName, StringComparison.OrdinalIgnoreCase);
+
+            public Task ScaffoldAsync(DirectoryInfo directory, string? projectName, CancellationToken cancellationToken)
+                => throw new NotImplementedException();
+
+            public Task<int> RunAsync(AppHostProjectContext context, CancellationToken cancellationToken)
+                => throw new NotImplementedException();
+
+            public Task<int> PublishAsync(PublishContext context, CancellationToken cancellationToken)
+                => throw new NotImplementedException();
+
+            public Task<IReadOnlyList<(string PackageId, string Version)>> GetPackageReferencesAsync(FileInfo appHostFile, CancellationToken cancellationToken)
+                => throw new NotImplementedException();
+
+            public Task<AppHostValidationResult> ValidateAppHostAsync(FileInfo appHostFile, CancellationToken cancellationToken)
+                => Task.FromResult(new AppHostValidationResult(IsValid: appHostFile.Name.Equals(supportedFileName, StringComparison.OrdinalIgnoreCase)));
+
+            public Task<bool> AddPackageAsync(AddPackageContext context, CancellationToken cancellationToken)
+                => throw new NotImplementedException();
+
+            public Task<UpdatePackagesResult> UpdatePackagesAsync(UpdatePackagesContext context, CancellationToken cancellationToken)
+                => throw new NotImplementedException();
+
+            public Task<RunningInstanceResult> FindAndStopRunningInstanceAsync(FileInfo appHostFile, DirectoryInfo homeDirectory, CancellationToken cancellationToken)
+                => Task.FromResult(RunningInstanceResult.NoRunningInstance);
+
+            public Task<string?> GetUserSecretsIdAsync(FileInfo appHostFile, bool autoInit, CancellationToken cancellationToken)
+                => Task.FromResult<string?>(null);
         }
     }
 
@@ -1122,6 +1478,32 @@ builder.Build().Run();");
 
         Assert.Single(foundFiles);
         Assert.Equal(projectFile.FullName, foundFiles[0].FullName);
+    }
+
+    [Fact]
+    public async Task FindAppHostProjectsAsync_WritesSdkWarningToErrorStreamWhenFindingCandidatesForLs()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
+
+        var sdkInstaller = new TestDotNetSdkInstaller
+        {
+            CheckAsyncCallback = _ => (false, null, "10.0.100")
+        };
+        var interactionService = new TestInteractionService();
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, interactionService: interactionService, sdkInstaller: sdkInstaller);
+
+        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
+
+        Assert.Empty(found);
+        Assert.Empty(interactionService.DisplayedErrors);
+        var warning = Assert.Single(interactionService.DisplayedRawText);
+        Assert.Equal(ErrorStrings.DotNetSdkUnavailableAppHostDiscoveryWarning, warning.Text);
+        Assert.Equal(ConsoleOutput.Error, warning.ConsoleOverride);
     }
 
     [Fact]
@@ -1510,12 +1892,286 @@ builder.Build().Run();");
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var projectLocator = CreateProjectLocator(executionContext);
 
-        // With Prompt behavior and a valid cached selection, should use the cached one
+        // With Prompt behavior and a valid cached selection, should use the cached one without scanning
         var result = await projectLocator.UseOrFindAppHostProjectFileAsync(null, MultipleAppHostProjectsFoundBehavior.Prompt, createSettingsFile: false, CancellationToken.None).DefaultTimeout();
 
         Assert.NotNull(result.SelectedProjectFile);
         Assert.Equal(appHost1File.FullName, result.SelectedProjectFile!.FullName);
-        Assert.Equal(2, result.AllProjectFileCandidates.Count);
+        var candidate = Assert.Single(result.AllProjectFileCandidates);
+        Assert.Equal(appHost1File.FullName, candidate.FullName);
+    }
+
+    [Fact]
+    public async Task FindAppHostProjectsAsync_DefaultFiltered_ExcludesNodeModulesByDefault_NonGitRepo()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Real AppHost project under a normal directory.
+        var realAppHost = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "App", "AppHost.csproj"));
+        Directory.CreateDirectory(realAppHost.DirectoryName!);
+        await File.WriteAllTextAsync(realAppHost.FullName, "Not a real project file.");
+
+        // Stale copy inside node_modules — must be skipped by default.
+        var staleAppHost = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "node_modules", "foo", "AppHost.csproj"));
+        Directory.CreateDirectory(staleAppHost.DirectoryName!);
+        await File.WriteAllTextAsync(staleAppHost.FullName, "Not a real project file.");
+
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            ValidateAppHostCallback = _ => new AppHostValidationResult(IsValid: true)
+        };
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
+
+        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
+
+        Assert.Single(found);
+        Assert.Equal(realAppHost.FullName, found[0].AppHostFile.FullName);
+    }
+
+    [Fact]
+    public async Task FindAppHostProjectsAsync_AllFilesScope_IncludesEverything()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var realAppHost = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "App", "AppHost.csproj"));
+        Directory.CreateDirectory(realAppHost.DirectoryName!);
+        await File.WriteAllTextAsync(realAppHost.FullName, "Not a real project file.");
+
+        var staleAppHost = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "node_modules", "foo", "AppHost.csproj"));
+        Directory.CreateDirectory(staleAppHost.DirectoryName!);
+        await File.WriteAllTextAsync(staleAppHost.FullName, "Not a real project file.");
+
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            ValidateAppHostCallback = _ => new AppHostValidationResult(IsValid: true)
+        };
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
+
+        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.AllFiles, CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(2, found.Count);
+        var paths = found.Select(c => c.AppHostFile.FullName).ToHashSet();
+        Assert.Contains(realAppHost.FullName, paths);
+        Assert.Contains(staleAppHost.FullName, paths);
+    }
+
+    [Fact]
+    public async Task FindAppHostProjectFilesAsync_LegacyStringOverload_UsesAllFilesScope()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var realAppHost = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "App", "AppHost.csproj"));
+        Directory.CreateDirectory(realAppHost.DirectoryName!);
+        await File.WriteAllTextAsync(realAppHost.FullName, "Not a real project file.");
+
+        var skipListedAppHost = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "node_modules", "foo", "AppHost.csproj"));
+        Directory.CreateDirectory(skipListedAppHost.DirectoryName!);
+        await File.WriteAllTextAsync(skipListedAppHost.FullName, "Not a real project file.");
+
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            ValidateAppHostCallback = _ => new AppHostValidationResult(IsValid: true)
+        };
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
+
+        var found = await projectLocator.FindAppHostProjectFilesAsync(workspace.WorkspaceRoot.FullName, CancellationToken.None).DefaultTimeout();
+
+        var paths = found.Select(file => file.FullName).ToHashSet();
+        Assert.Equal(2, paths.Count);
+        Assert.Contains(realAppHost.FullName, paths);
+        Assert.Contains(skipListedAppHost.FullName, paths);
+    }
+
+    [Fact]
+    public async Task FindAppHostProjectsAsync_IncludesCandidateStatus()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var buildableAppHost = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Buildable", "AppHost.csproj"));
+        Directory.CreateDirectory(buildableAppHost.DirectoryName!);
+        await File.WriteAllTextAsync(buildableAppHost.FullName, "Not a real project file.");
+
+        var unbuildableAppHost = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Unbuildable", "AppHost.csproj"));
+        Directory.CreateDirectory(unbuildableAppHost.DirectoryName!);
+        await File.WriteAllTextAsync(unbuildableAppHost.FullName, "Not a real project file.");
+
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            ValidateAppHostCallback = projectFile => projectFile.FullName == buildableAppHost.FullName
+                ? new AppHostValidationResult(IsValid: true)
+                : new AppHostValidationResult(IsValid: false, IsPossiblyUnbuildable: true)
+        };
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory);
+
+        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.AllFiles, CancellationToken.None).DefaultTimeout();
+
+        Assert.Collection(found.OrderBy(candidate => candidate.AppHostFile.FullName),
+            candidate =>
+            {
+                Assert.Equal(buildableAppHost.FullName, candidate.AppHostFile.FullName);
+                Assert.Equal(AppHostProjectCandidateStatus.Buildable, candidate.Status);
+            },
+            candidate =>
+            {
+                Assert.Equal(unbuildableAppHost.FullName, candidate.AppHostFile.FullName);
+                Assert.Equal(AppHostProjectCandidateStatus.PossiblyUnbuildable, candidate.Status);
+            });
+    }
+
+    [Fact]
+    public async Task FindAppHostProjectsAsync_ExplicitDirectoryScope_AppliesSkipListButNotGit()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // AppHost in a normal location.
+        var realAppHost = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "App", "AppHost.csproj"));
+        Directory.CreateDirectory(realAppHost.DirectoryName!);
+        await File.WriteAllTextAsync(realAppHost.FullName, "Not a real project file.");
+
+        // node_modules sibling — must still be skipped.
+        var staleAppHost = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "node_modules", "foo", "AppHost.csproj"));
+        Directory.CreateDirectory(staleAppHost.DirectoryName!);
+        await File.WriteAllTextAsync(staleAppHost.FullName, "Not a real project file.");
+
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            ValidateAppHostCallback = _ => new AppHostValidationResult(IsValid: true)
+        };
+
+        // Use a TestGitRepository that returns a populated set including the stale path.
+        // ExplicitDirectory scope must ignore the git list entirely and rely on the filesystem walk + skip list.
+        var sentinelGit = new TestGitRepository
+        {
+            GetIncludedFilesAsyncCallback = (_, _) => Task.FromResult<IReadOnlySet<string>?>(new HashSet<string>
+            {
+                realAppHost.FullName,
+                staleAppHost.FullName
+            })
+        };
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory, gitRepository: sentinelGit);
+
+        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.ExplicitDirectory, CancellationToken.None).DefaultTimeout();
+
+        Assert.Single(found);
+        Assert.Equal(realAppHost.FullName, found[0].AppHostFile.FullName);
+    }
+
+    [Fact]
+    public async Task FindAppHostProjectsAsync_DefaultFiltered_GitMode_OnlyIncludesGitListedFiles()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Two AppHosts on disk; only one is in the git-included set.
+        var trackedAppHost = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "App", "AppHost.csproj"));
+        Directory.CreateDirectory(trackedAppHost.DirectoryName!);
+        await File.WriteAllTextAsync(trackedAppHost.FullName, "Not a real project file.");
+
+        var ignoredAppHost = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "legacy", "Stale.csproj"));
+        Directory.CreateDirectory(ignoredAppHost.DirectoryName!);
+        await File.WriteAllTextAsync(ignoredAppHost.FullName, "Not a real project file.");
+
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            ValidateAppHostCallback = _ => new AppHostValidationResult(IsValid: true)
+        };
+
+        var fakeGit = new TestGitRepository
+        {
+            GetIncludedFilesAsyncCallback = (_, _) => Task.FromResult<IReadOnlySet<string>?>(new HashSet<string>
+            {
+                trackedAppHost.FullName
+            })
+        };
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory, gitRepository: fakeGit);
+
+        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
+
+        Assert.Single(found);
+        Assert.Equal(trackedAppHost.FullName, found[0].AppHostFile.FullName);
+    }
+
+    [Fact]
+    public async Task FindAppHostProjectsAsync_DefaultFiltered_GitMode_AppliesSkipListEvenWhenGitIncludesPath()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var realAppHost = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "App", "AppHost.csproj"));
+        Directory.CreateDirectory(realAppHost.DirectoryName!);
+        await File.WriteAllTextAsync(realAppHost.FullName, "Not a real project file.");
+
+        // Pretend the user committed node_modules — the skip list still removes it.
+        var nodeModulesAppHost = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "node_modules", "foo", "AppHost.csproj"));
+        Directory.CreateDirectory(nodeModulesAppHost.DirectoryName!);
+        await File.WriteAllTextAsync(nodeModulesAppHost.FullName, "Not a real project file.");
+
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            ValidateAppHostCallback = _ => new AppHostValidationResult(IsValid: true)
+        };
+
+        var fakeGit = new TestGitRepository
+        {
+            GetIncludedFilesAsyncCallback = (_, _) => Task.FromResult<IReadOnlySet<string>?>(new HashSet<string>
+            {
+                realAppHost.FullName,
+                nodeModulesAppHost.FullName
+            })
+        };
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory, gitRepository: fakeGit);
+
+        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
+
+        Assert.Single(found);
+        Assert.Equal(realAppHost.FullName, found[0].AppHostFile.FullName);
+    }
+
+    [Fact]
+    public async Task FindAppHostProjectsAsync_DefaultFiltered_GitMode_DropsDeletedTrackedFiles()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var realAppHost = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "App", "AppHost.csproj"));
+        Directory.CreateDirectory(realAppHost.DirectoryName!);
+        await File.WriteAllTextAsync(realAppHost.FullName, "Not a real project file.");
+
+        // git tracked this path but it is no longer present on disk.
+        var phantomAppHost = Path.Combine(workspace.WorkspaceRoot.FullName, "Removed", "AppHost.csproj");
+
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            ValidateAppHostCallback = _ => new AppHostValidationResult(IsValid: true)
+        };
+
+        var fakeGit = new TestGitRepository
+        {
+            GetIncludedFilesAsyncCallback = (_, _) => Task.FromResult<IReadOnlySet<string>?>(new HashSet<string>
+            {
+                realAppHost.FullName,
+                phantomAppHost
+            })
+        };
+
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var projectLocator = CreateProjectLocator(executionContext, projectFactory: projectFactory, gitRepository: fakeGit);
+
+        var found = await projectLocator.FindAppHostProjectsAsync(workspace.WorkspaceRoot, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None).DefaultTimeout();
+
+        Assert.Single(found);
+        Assert.Equal(realAppHost.FullName, found[0].AppHostFile.FullName);
     }
 
     private static ProjectLocator CreateProjectLocator(
@@ -1525,9 +2181,15 @@ builder.Build().Run();");
         IAppHostProjectFactory? projectFactory = null,
         ILanguageDiscovery? languageDiscovery = null,
         IDotNetSdkInstaller? sdkInstaller = null,
+        IGitRepository? gitRepository = null,
         AspireCliTelemetry? telemetry = null)
     {
         var logger = NullLogger<ProjectLocator>.Instance;
+        var appHostCandidateFinder = new AppHostCandidateFinder(
+            gitRepository ?? new TestGitRepository(),
+            new ProfilingTelemetry(new ConfigurationBuilder().Build()),
+            NullLogger<AppHostCandidateFinder>.Instance);
+
         return new ProjectLocator(
             logger,
             executionContext,
@@ -1536,6 +2198,7 @@ builder.Build().Run();");
             projectFactory ?? new TestAppHostProjectFactory(),
             languageDiscovery ?? new TestLanguageDiscovery(),
             sdkInstaller ?? new TestDotNetSdkInstaller(),
+            appHostCandidateFinder,
             telemetry ?? TestTelemetryHelper.CreateInitializedTelemetry());
     }
 }

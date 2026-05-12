@@ -118,7 +118,7 @@ public partial class FoundryModel
         /// Command A is a highly efficient generative model that excels at agentic and multilingual use cases.
         /// </summary>
         [AspireValue("FoundryModels")]
-        public static readonly FoundryModel CohereCommandA = new() { Name = "cohere-command-a", Version = "4", Format = "Cohere" };
+        public static readonly FoundryModel CohereCommandA = new() { Name = "COHERE-COMMAND-A", Version = "4", Format = "Cohere" };
 
         /// <summary>
         /// Command R is a scalable generative model targeting RAG and Tool Use to enable production-scale AI for enterprise.
@@ -221,6 +221,12 @@ public partial class FoundryModel
         /// </summary>
         [AspireValue("FoundryModels")]
         public static readonly FoundryModel DeepSeekV32Speciale = new() { Name = "DeepSeek-V3.2-Speciale", Version = "1", Format = "DeepSeek" };
+
+        /// <summary>
+        /// DeepSeek V4 is an efficient MoE model family with 1M context and near state-of-the-art open-source reasoning performance.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel DeepSeekV4Flash = new() { Name = "DeepSeek-V4-Flash", Version = "2026-04-23", Format = "DeepSeek" };
     }
 
     /// <summary>
@@ -1333,10 +1339,22 @@ public partial class FoundryModel
         public static readonly FoundryModel AzureLanguageConversationalPiiRedaction = new() { Name = "Azure-Language-Conversational-PII-redaction", Version = "1", Format = "Microsoft" };
 
         /// <summary>
+        /// PII Redaction for Documents automatically detects and masks sensitive information such as names, addresses, phone numbers, credit card details, and other personally identifiable information (PII) in native documents including PDF, Word, and text files.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel AzureLanguageDocumentPiiRedaction = new() { Name = "Azure-Language-Document-PII-redaction", Version = "1", Format = "Microsoft" };
+
+        /// <summary>
         /// Language detection quickly and accurately identifies the language of any text, supporting over 100 languages and dialects, including the ISO 15924 standard for a select number of languages.
         /// </summary>
         [AspireValue("FoundryModels")]
         public static readonly FoundryModel AzureLanguageLanguageDetection = new() { Name = "Azure-Language-Language-detection", Version = "1", Format = "Microsoft" };
+
+        /// <summary>
+        /// Text Analytics for Health extracts and labels relevant medical information from unstructured clinical text, including doctors' notes, discharge summaries, and electronic health records, using named entity recognition, relation extraction, entity linking, a
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel AzureLanguageTextAnalyticsForHealth = new() { Name = "Azure-Language-Text-Analytics-for-Health", Version = "1", Format = "Microsoft" };
 
         /// <summary>
         /// PII Redaction for Text automatically detects and masks sensitive information such as names, addresses, phone numbers, credit card details, and other personally identifiable information (PII) in unstructured text.
@@ -2984,6 +3002,12 @@ public partial class FoundryModel
         public static readonly FoundryModel GptAudioMini = new() { Name = "gpt-audio-mini", Version = "2025-10-06", Format = "OpenAI" };
 
         /// <summary>
+        /// gpt-chat-latest (preview) is an advanced, natural, multimodal, and context-aware conversations for enterprise applications.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel GptChatLatest = new() { Name = "gpt-chat-latest", Version = "2026-05-05", Format = "OpenAI" };
+
+        /// <summary>
         /// An efficient AI solution for diverse text and image tasks, including text to image, image to image, inpainting, and prompt transformation.
         /// </summary>
         [AspireValue("FoundryModels")]
@@ -3036,6 +3060,18 @@ public partial class FoundryModel
         /// </summary>
         [AspireValue("FoundryModels")]
         public static readonly FoundryModel GptRealtimeMini = new() { Name = "gpt-realtime-mini", Version = "2025-12-15", Format = "OpenAI" };
+
+        /// <summary>
+        /// Gpt‑realtime‑translate is a low‑latency streaming model that converts spoken audio into translated output in real time, enabling live cross‑language communication within voice applications.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel GptRealtimeTranslate = new() { Name = "gpt-realtime-translate", Version = "2026-05-07", Format = "OpenAI" };
+
+        /// <summary>
+        /// A new STT (speech to text) model with realtime capability.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel GptRealtimeWhisper = new() { Name = "gpt-realtime-whisper", Version = "2026-05-07", Format = "OpenAI" };
 
         /// <summary>
         /// Focused on advanced reasoning and solving complex problems, including math and science tasks. Ideal for applications that require deep contextual understanding and agentic workflows.
@@ -3680,7 +3716,7 @@ public partial class FoundryModel
         ///     <item>
         ///       <description>
         ///         <para>
-        ///           <b>Seamless Azure integration:</b> Standard Azure AI Foundry experience, with support managed by the model provider.</para>
+        ///           <b>Seamless Azure integration:</b> Standard Microsoft Foundry experience, with support managed by the model provider.</para>
         ///       </description>
         ///     </item>
         ///     <item>
@@ -3815,7 +3851,7 @@ public partial class FoundryModel
         ///     <item>
         ///       <description>
         ///         <para>
-        ///           <b>Seamless Azure integration:</b> Standard Azure AI Foundry experience, with support managed by the model provider.</para>
+        ///           <b>Seamless Azure integration:</b> Standard Microsoft Foundry experience, with support managed by the model provider.</para>
         ///       </description>
         ///     </item>
         ///     <item>
@@ -3979,7 +4015,7 @@ public partial class FoundryModel
         ///     <item>
         ///       <description>
         ///         <para>
-        ///           <b>Seamless Azure integration:</b> Standard Azure AI Foundry experience, with support managed by the model provider.</para>
+        ///           <b>Seamless Azure integration:</b> Standard Microsoft Foundry experience, with support managed by the model provider.</para>
         ///       </description>
         ///     </item>
         ///     <item>

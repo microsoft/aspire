@@ -112,6 +112,9 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             return new(previousResultExitCode, [], []);
         }
 
+        // Add a separating line between prompt and previous work in aspire new and aspire init.
+        interactionService.DisplayEmptyLine();
+
         var runAgentInit = await interactionService.PromptConfirmAsync(
             SharedCommandStrings.PromptRunAgentInit,
             binding: agentInitBinding,
@@ -369,7 +372,10 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         if (hasErrors)
         {
             _interactionService.DisplayMessage(KnownEmojis.Warning, AgentCommandStrings.ConfigurationCompletedWithErrors);
-            _interactionService.DisplayMessage(KnownEmojis.PageFacingUp, string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, ExecutionContext.LogFilePath));
+            _interactionService.DisplayMessage(
+                KnownEmojis.PageFacingUp,
+                string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, MarkupHelpers.SafeFileLink(_interactionService, ExecutionContext.LogFilePath)),
+                allowMarkup: true);
         }
         else
         {

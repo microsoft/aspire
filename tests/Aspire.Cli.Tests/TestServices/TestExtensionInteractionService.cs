@@ -14,6 +14,7 @@ namespace Aspire.Cli.Tests.TestServices;
 internal sealed class TestExtensionInteractionService(IServiceProvider serviceProvider) : IExtensionInteractionService
 {
     public ConsoleOutput Console { get; set; }
+    public bool SupportsLinks { get; set; }
     public Action<string>? DisplayErrorCallback { get; set; }
     public Action<string>? DisplaySubtleMessageCallback { get; set; }
     public Action<string>? DisplayConsoleWriteLineMessage { get; set; }
@@ -75,7 +76,7 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
         return 0;
     }
 
-    public void DisplayError(string errorMessage)
+    public void DisplayError(string errorMessage, bool allowMarkup = false)
     {
         DisplayErrorCallback?.Invoke(errorMessage);
     }

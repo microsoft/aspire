@@ -460,4 +460,70 @@ public class ListTracesToolTests
         monitor.AddConnection("hash1", "socket.hash1", connection);
         return monitor;
     }
+
+    [Fact]
+    public async Task ListTracesTool_WithSearch_PassesSearchToUrl()
+    {
+        var resources = new ResourceInfoJson[]
+        {
+            new() { Name = "api-service", InstanceId = null, HasLogs = true, HasTraces = true, HasMetrics = true }
+        };
+        var resourcesResponse = JsonSerializer.Serialize(resources, OtlpJsonSerializerContext.Default.ResourceInfoJsonArray);
+
+        var apiResponseObj = new TelemetryApiResponse
+        {
+            Data = new OtlpTelemetryDataJson { ResourceSpans = [] },
+            TotalCount = 0,
+            ReturnedCount = 0
+        };
+        var apiResponse = JsonSerializer.Serialize(apiResponseObj, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+
+        string? capturedUrl = null;
+        using var mockHandler = new MockHttpMessageHandler(request =>
+        {
+            var url = request.RequestUri!.ToString();
+            if (request.RequestUri?.AbsolutePath.Contains("/resources") == true)
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(resourcesResponse, System.Text.Encoding.UTF8, "application/json")
+                };
+            }
+
+            capturedUrl = url;
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(apiResponse, System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+        var mockHttpClientFactory = new MockHttpClientFactory(mockHandler);
+
+        var monitor = CreateMonitorWithDashboard();
+        var tool = CreateTool(monitor, mockHttpClientFactory);
+
+        var arguments = new Dictionary<string, JsonElement>
+        {
+            ["search"] = JsonDocument.Parse("\"GET /api\"").RootElement
+        };
+
+        var result = await tool.CallToolAsync(CallToolContextTestHelper.Create(arguments), CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.IsError is null or false);
+        Assert.NotNull(capturedUrl);
+        Assert.Contains("search=", capturedUrl);
+    }
+
+    [Fact]
+    public void ListTracesTool_InputSchema_HasSearchProperty()
+    {
+        var tool = CreateTool();
+
+        var schema = tool.GetInputSchema();
+
+        Assert.Equal(JsonValueKind.Object, schema.ValueKind);
+        Assert.True(schema.TryGetProperty("properties", out var properties));
+        Assert.True(properties.TryGetProperty("search", out var search));
+        Assert.True(search.TryGetProperty("type", out var type));
+        Assert.Equal("string", type.GetString());
+    }
 }

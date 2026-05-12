@@ -5,11 +5,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 
-builder.AddNatsClient("nats", configureOptions: opts =>
-{
-    var jsonRegistry = new NatsJsonContextSerializerRegistry(AppJsonContext.Default);
-    return opts with { SerializerRegistry = jsonRegistry };
-});
+builder.AddNatsClient("nats");
 
 builder.Services.AddHostedService<AppEventsBackendService>();
 
@@ -17,7 +13,7 @@ var app = builder.Build();
 app.MapDefaultEndpoints();
 app.Run();
 
-public class AppEventsBackendService(INatsConnection nats,  ILogger<AppEventsBackendService> logger) : IHostedService
+public class AppEventsBackendService(INatsClient nats,  ILogger<AppEventsBackendService> logger) : IHostedService
 {
     private readonly CancellationTokenSource _cts = new();
     private Task? _subscription;

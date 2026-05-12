@@ -126,6 +126,9 @@
   <data name="HeaderPath" xml:space="preserve">
     <value>Path</value>
   </data>
+  <data name="HeaderSdk" xml:space="preserve">
+    <value>SDK</value>
+  </data>
   <data name="HeaderPid" xml:space="preserve">
     <value>PID</value>
   </data>

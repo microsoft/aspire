@@ -90,8 +90,8 @@ internal static class ContainerRuntimeDetector
 
     private static readonly (string Executable, string Name, bool IsDefault)[] s_knownRuntimes =
     [
-        ("docker", "Docker", true),
-        ("podman", "Podman", false)
+        (KnownContainerRuntimes.Docker, "Docker", true),
+        (KnownContainerRuntimes.Podman, "Podman", false)
     ];
 
     /// <summary>

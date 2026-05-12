@@ -42,6 +42,11 @@
         <target state="translated">不使用 --follow 时必须指定资源名称。使用 --follow 流式传输所有资源的日志。</target>
         <note />
       </trans-unit>
+      <trans-unit id="SearchOptionDescription">
+        <source>Full-text search to filter log content</source>
+        <target state="new">Full-text search to filter log content</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SelectAppHostAction">
         <source>stream logs from</source>
         <target state="translated">从以下位置流式传输日志</target>

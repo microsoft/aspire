@@ -238,7 +238,7 @@ jobs:
           ## What's New in Aspire $VERSION
 
           See the full changelog and documentation at:
-          - 📖 [Documentation](https://learn.microsoft.com/microsoft/aspire/)
+          - 📖 [Documentation](https://aspire.dev/docs)
           - 🐛 [Known Issues](https://github.com/microsoft/aspire/issues?q=is%3Aissue+is%3Aopen+label%3A%22known-issue%22)
 
           ### Installation
