@@ -140,6 +140,33 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
     }
 
     [Fact]
+    public async Task LocalDir_WhatIf_AutoDetectsRawBuildOutput()
+    {
+        // When -LocalDir points at a directory that contains only a raw 'aspire' executable
+        // (no aspire-cli-*.tar.gz/.zip archive), auto-detect must dispatch to the raw-build flow
+        // (Install-AspireCliFromLocalBinary) instead of erroring on a missing archive.
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+        var localDir = Path.Combine(env.TempDirectory, "raw-build");
+        Directory.CreateDirectory(localDir);
+        // Drop a fake 'aspire' executable — no archive, no nupkgs.
+        await File.WriteAllTextAsync(Path.Combine(localDir, "aspire"), "#!/bin/sh\necho fake\n");
+
+        var result = await cmd.ExecuteAsync(
+            "-LocalDir", localDir,
+            "-HiveLabel", "test-hive",
+            "-WhatIf",
+            "-SkipPath");
+
+        result.EnsureSuccessful();
+        Assert.Contains("Installing from local directory", result.Output);
+        // WhatIf preview from Install-AspireCliFromLocalBinary's ShouldProcess message
+        // (or the script's error if dispatch is wrong) — we expect the raw-binary path.
+        Assert.Contains("raw Aspire CLI binary tree", result.Output);
+        Assert.DoesNotContain("Downloading CLI from GitHub", result.Output);
+    }
+
+    [Fact]
     public async Task OSOverride_IsRecognized()
     {
         using var env = new TestEnvironment();

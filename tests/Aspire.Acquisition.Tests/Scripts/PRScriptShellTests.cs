@@ -131,6 +131,31 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
     }
 
     [Fact]
+    public async Task LocalDir_DryRun_AutoDetectsRawBuildOutput()
+    {
+        // When --local-dir points at a directory that contains only a raw 'aspire' executable
+        // (no aspire-cli-*.tar.gz/.zip archive), auto-detect must dispatch to the raw-build flow
+        // (install_aspire_cli_from_binary) instead of erroring on a missing archive.
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+        var localDir = Path.Combine(env.TempDirectory, "raw-build");
+        Directory.CreateDirectory(localDir);
+        // Drop a fake 'aspire' executable — no archive, no nupkgs.
+        await File.WriteAllTextAsync(Path.Combine(localDir, "aspire"), "#!/bin/sh\necho fake\n");
+
+        var result = await cmd.ExecuteAsync(
+            "--local-dir", localDir,
+            "--hive-label", "test-hive",
+            "--dry-run",
+            "--skip-path");
+
+        result.EnsureSuccessful();
+        Assert.Contains("Installing from local directory", result.Output);
+        Assert.Contains("[DRY RUN] Would install raw CLI binary", result.Output);
+        Assert.DoesNotContain("Downloading CLI from GitHub", result.Output);
+    }
+
+    [Fact]
     public async Task RunIdAsFirstArg_DryRun_Succeeds()
     {
         using var env = new TestEnvironment();

@@ -21,7 +21,11 @@
 
 .PARAMETER LocalDir
     Use pre-downloaded artifacts from a local directory instead of downloading from GitHub.
-    Mutually exclusive with PRNumber and WorkflowRunId.
+    Mutually exclusive with PRNumber and WorkflowRunId. The directory is auto-detected:
+    if it contains an aspire-cli-*.tar.gz / .zip archive the archive flow is used; otherwise
+    it is treated as raw 'dotnet build' / 'dotnet publish' output and the contained
+    'aspire' or 'aspire.exe' executable is installed directly. NuGet packages (*.nupkg)
+    in the directory are always installed into the hive.
 
 .PARAMETER HiveLabel
     Override the NuGet hive label (default: pr-PRNUMBER, run-RUNID, or local for LocalDir).
@@ -60,6 +64,9 @@
 
 .EXAMPLE
     .\get-aspire-cli-pr.ps1 -LocalDir "C:\path\to\artifacts" -HiveLabel my-build
+
+.EXAMPLE
+    .\get-aspire-cli-pr.ps1 -LocalDir "artifacts\bin\Aspire.Cli\Debug\net10.0"
 
 .EXAMPLE
     .\get-aspire-cli-pr.ps1 1234 -InstallPath "C:\my-aspire"
@@ -1218,6 +1225,68 @@ function Install-AspireCliFromDownload {
     Write-Message "Aspire CLI successfully installed to: $cliPath" -Level Success
 }
 
+# Function to install a raw 'dotnet build' / 'dotnet publish' CLI binary tree.
+# Used by the auto-detect raw-build branch of Start-InstallFromLocalDir to bypass the
+# archive (.tar.gz/.zip) search & extraction. Searches recursively under $SourceDir for
+# 'aspire' or 'aspire.exe' and copies the containing directory's files into $CliBinDir.
+function Install-AspireCliFromLocalBinary {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SourceDir,
+
+        [Parameter(Mandatory = $true)]
+        [string]$CliBinDir
+    )
+
+    if (!$PSCmdlet.ShouldProcess($CliBinDir, "Installing raw Aspire CLI binary tree from $SourceDir")) {
+        return
+    }
+
+    $exeFiles = Get-ChildItem -Path $SourceDir -File -Recurse -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -eq "aspire" -or $_.Name -eq "aspire.exe" } |
+        Sort-Object FullName
+
+    if ($exeFiles.Count -eq 0) {
+        Write-Message "No 'aspire' or 'aspire.exe' executable found in: $SourceDir" -Level Error
+        Write-Message "Expected raw 'dotnet build' or 'dotnet publish' output containing the aspire executable." -Level Info
+        Get-ChildItem -Path $SourceDir -File -Recurse -ErrorAction SilentlyContinue |
+            Select-Object -First 25 |
+            ForEach-Object { Write-Message "  $($_.FullName)" -Level Info }
+        throw "aspire executable not found"
+    }
+
+    $exeFile = $null
+    if ($exeFiles.Count -eq 1) {
+        $exeFile = $exeFiles[0]
+    }
+    else {
+        # When multiple matches exist (e.g. both build and publish outputs are present),
+        # prefer the 'publish' directory because it carries the full set of runtime deps.
+        $exeFile = $exeFiles | Where-Object { $_.FullName -match '[\\/]publish[\\/]' } | Select-Object -First 1
+        if (-not $exeFile) {
+            Write-Message "Multiple aspire executables found under $SourceDir (specify a more precise -LocalDir):" -Level Error
+            $exeFiles | ForEach-Object { Write-Message "  $($_.FullName)" -Level Error }
+            throw "Multiple aspire executables found"
+        }
+        Write-Message "Multiple aspire executables found; preferring publish output: $($exeFile.FullName)" -Level Verbose
+    }
+
+    $exeDir = $exeFile.Directory.FullName
+    Write-Message "Installing raw CLI binary tree from: $exeDir" -Level Verbose
+
+    if (-not (Test-Path $CliBinDir -PathType Container)) {
+        Write-Message "Creating install directory: $CliBinDir" -Level Verbose
+        New-Item -ItemType Directory -Path $CliBinDir -Force | Out-Null
+    }
+
+    # Copy the contents of the exe's directory (binary + runtime deps + config) into the install dir.
+    Copy-Item -Path (Join-Path $exeDir '*') -Destination $CliBinDir -Recurse -Force
+
+    $installedExe = Join-Path $CliBinDir $exeFile.Name
+    Write-Message "Aspire CLI successfully installed from raw build to: $installedExe" -Level Success
+}
+
 # Main function to install from a local directory of pre-built artifacts
 function Start-InstallFromLocalDir {
     [CmdletBinding(SupportsShouldProcess)]
@@ -1259,11 +1328,34 @@ function Start-InstallFromLocalDir {
 
     $rid = Get-RuntimeIdentifier $OS $Architecture
 
-    # Install CLI from local directory
+    # Install CLI from local directory: auto-detect archive vs. raw 'dotnet build'/'dotnet publish' output.
     if ($HiveOnly) {
         Write-Message "Skipping CLI installation due to -HiveOnly flag" -Level Info
     } else {
-        Install-AspireCliFromDownload -DownloadDir $LocalDirPath -CliBinDir $cliBinDir
+        $archiveMatch = Get-ChildItem -Path $LocalDirPath -File -Recurse -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -match "^$Script:AspireCliArtifactNamePrefix-.*\.(tar\.gz|zip)$" } |
+            Select-Object -First 1
+
+        if ($archiveMatch) {
+            Install-AspireCliFromDownload -DownloadDir $LocalDirPath -CliBinDir $cliBinDir
+        }
+        else {
+            $rawExe = Get-ChildItem -Path $LocalDirPath -File -Recurse -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -eq "aspire" -or $_.Name -eq "aspire.exe" } |
+                Select-Object -First 1
+            if ($rawExe) {
+                Write-Message "No CLI archive found; detected raw aspire executable at: $($rawExe.FullName) (raw-build flow)" -Level Verbose
+                Install-AspireCliFromLocalBinary -SourceDir $LocalDirPath -CliBinDir $cliBinDir
+            }
+            else {
+                Write-Message "No CLI archive ($Script:AspireCliArtifactNamePrefix-*.tar.gz or .zip) and no 'aspire'/'aspire.exe' executable found in: $LocalDirPath" -Level Error
+                Write-Message "Expected either a published CLI archive or a 'dotnet build'/'dotnet publish' output directory." -Level Info
+                Get-ChildItem -Path $LocalDirPath -File -Recurse -ErrorAction SilentlyContinue |
+                    Select-Object -First 25 |
+                    ForEach-Object { Write-Message "  $($_.FullName)" -Level Info }
+                throw "CLI archive or aspire executable not found"
+            }
+        }
     }
 
     # Install NuGet packages from local directory

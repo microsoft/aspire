@@ -4,6 +4,7 @@
 # Usage: ./get-aspire-cli-pr.sh PR_NUMBER [OPTIONS]
 #        ./get-aspire-cli-pr.sh --run-id WORKFLOW_RUN_ID [OPTIONS]
 #        ./get-aspire-cli-pr.sh --local-dir /path/to/artifacts [OPTIONS]
+#        ./get-aspire-cli-pr.sh --local-dir /path/to/build-output [OPTIONS]   # raw 'dotnet build' output
 
 set -euo pipefail
 
@@ -68,8 +69,11 @@ USAGE:
     --run-id, -r WORKFLOW_ID    Workflow run ID to download from (optional with PR, required without)
     --local-dir PATH            Use pre-downloaded artifacts from a local directory instead of downloading
                                 from GitHub. Mutually exclusive with PR_NUMBER and --run-id.
-                                The directory must contain CLI archive files (aspire-cli-*.tar.gz or .zip)
-                                and optionally NuGet packages (*.nupkg).
+                                The directory is auto-detected: if it contains a CLI archive
+                                (aspire-cli-*.tar.gz or .zip) the archive flow is used; otherwise it is
+                                treated as raw 'dotnet build'/'dotnet publish' output and the contained
+                                'aspire' or 'aspire.exe' executable is installed directly.
+                                NuGet packages (*.nupkg) in the directory are always installed into the hive.
     --hive-label LABEL          Override the NuGet hive label (default: pr-<PR_NUMBER>, run-<RUN_ID>,
                                 or local for --local-dir)
     -i, --install-path PATH     Directory prefix to install (default: ~/.aspire)
@@ -92,6 +96,7 @@ EXAMPLES:
     ./get-aspire-cli-pr.sh --run-id 12345678
     ./get-aspire-cli-pr.sh --local-dir /path/to/artifacts
     ./get-aspire-cli-pr.sh --local-dir /path/to/artifacts --hive-label my-build
+    ./get-aspire-cli-pr.sh --local-dir artifacts/bin/Aspire.Cli/Debug/net10.0
     ./get-aspire-cli-pr.sh 1234 --install-path ~/my-aspire
     ./get-aspire-cli-pr.sh 1234 --os linux --arch arm64 --verbose
     ./get-aspire-cli-pr.sh 1234 --hive-only
@@ -944,6 +949,75 @@ install_aspire_extension() {
     fi
 }
 
+# Function to install a raw 'dotnet build' / 'dotnet publish' CLI binary tree.
+# Used by the auto-detect raw-build branch of install_from_local_dir to bypass the
+# archive (.tar.gz/.zip) search & extraction. Searches recursively under "$source_dir"
+# for 'aspire' or 'aspire.exe' and copies the containing directory's files into "$cli_install_dir".
+install_aspire_cli_from_binary() {
+    local source_dir="$1"
+    local cli_install_dir="$2"
+
+    if [[ "$DRY_RUN" == true ]]; then
+        say_info "[DRY RUN] Would install raw CLI binary from $source_dir to $cli_install_dir"
+        return 0
+    fi
+
+    local -a exe_paths=()
+    while IFS= read -r -d '' f; do
+        exe_paths+=("$f")
+    done < <(find "$source_dir" -type f \( -name "aspire" -o -name "aspire.exe" \) -print0 | sort -z)
+
+    if [[ ${#exe_paths[@]} -eq 0 ]]; then
+        say_error "No 'aspire' or 'aspire.exe' executable found in: $source_dir"
+        say_info "Expected raw 'dotnet build' or 'dotnet publish' output containing the aspire executable."
+        say_info "Showing up to first 25 files under local directory (for debugging):"
+        find "$source_dir" -type f | head -25 | sed 's/^/  /'
+        return 1
+    fi
+
+    local exe_path=""
+    if [[ ${#exe_paths[@]} -eq 1 ]]; then
+        exe_path="${exe_paths[0]}"
+    else
+        # When multiple matches exist (e.g. both build and publish outputs are present),
+        # prefer the 'publish' directory because it carries the full set of runtime deps.
+        local p
+        for p in "${exe_paths[@]}"; do
+            if [[ "$p" == *"/publish/"* ]]; then
+                exe_path="$p"
+                break
+            fi
+        done
+        if [[ -z "$exe_path" ]]; then
+            say_error "Multiple aspire executables found under $source_dir (specify a more precise --local-dir):"
+            printf '  %s\n' "${exe_paths[@]}"
+            return 1
+        fi
+        say_verbose "Multiple aspire executables found; preferring publish output: $exe_path"
+    fi
+
+    local exe_dir
+    exe_dir=$(dirname "$exe_path")
+    say_verbose "Installing raw CLI binary tree from: $exe_dir"
+
+    if [[ ! -d "$cli_install_dir" ]]; then
+        say_verbose "Creating install directory: $cli_install_dir"
+        mkdir -p "$cli_install_dir"
+    fi
+
+    # Copy the contents of the exe's directory (binary + runtime deps + config) into the install dir.
+    # 'cp -R "$exe_dir"/. "$cli_install_dir"/' preserves attributes and copies the directory contents,
+    # not the directory itself.
+    if ! cp -R "$exe_dir"/. "$cli_install_dir"/; then
+        say_error "Failed to copy CLI binary files from $exe_dir to $cli_install_dir"
+        return 1
+    fi
+
+    local installed_exe="$cli_install_dir/$(basename "$exe_path")"
+    say_info "Aspire CLI successfully installed from raw build to: ${GREEN}$installed_exe${RESET}"
+    return 0
+}
+
 # Function to install downloaded CLI
 install_aspire_cli() {
     local cli_archive_path="$1"
@@ -1010,7 +1084,7 @@ install_from_local_dir() {
     fi
     say_verbose "Computed RID: $rid"
 
-    # Find CLI archive in local directory
+    # Find CLI archive in local directory, or auto-detect raw build output.
     if [[ "$HIVE_ONLY" == true ]]; then
         say_info "Skipping CLI installation due to --hive-only flag"
     else
@@ -1020,22 +1094,32 @@ install_from_local_dir() {
         done < <(find "$local_dir" -type f \( -name "${ASPIRE_CLI_ARTIFACT_NAME_PREFIX}-*.tar.gz" -o -name "${ASPIRE_CLI_ARTIFACT_NAME_PREFIX}-*.zip" \) -print0 | sort -z)
 
         if [[ ${#cli_files[@]} -eq 0 ]]; then
-            say_error "No CLI archive found in local directory. Expected ${ASPIRE_CLI_ARTIFACT_NAME_PREFIX}-*.tar.gz or .zip in: $local_dir"
-            say_info "Showing up to first 25 files under local directory (for debugging):"
-            find "$local_dir" -type f | head -25 | sed 's/^/  /'
-            return 1
-        fi
-        if [[ ${#cli_files[@]} -gt 1 ]]; then
+            # Auto-detect: no archive present, try raw 'dotnet build' / 'dotnet publish' output.
+            local raw_exe=""
+            raw_exe=$(find "$local_dir" -type f \( -name 'aspire' -o -name 'aspire.exe' \) -print -quit 2>/dev/null || true)
+            if [[ -n "$raw_exe" ]]; then
+                say_verbose "No CLI archive found; detected raw aspire executable at: $raw_exe (raw-build flow)"
+                if ! install_aspire_cli_from_binary "$local_dir" "$cli_install_dir"; then
+                    return 1
+                fi
+            else
+                say_error "No CLI archive (${ASPIRE_CLI_ARTIFACT_NAME_PREFIX}-*.tar.gz or .zip) and no 'aspire'/'aspire.exe' executable found in: $local_dir"
+                say_info "Expected either a published CLI archive or a 'dotnet build'/'dotnet publish' output directory."
+                say_info "Showing up to first 25 files under local directory (for debugging):"
+                find "$local_dir" -type f | head -25 | sed 's/^/  /'
+                return 1
+            fi
+        elif [[ ${#cli_files[@]} -gt 1 ]]; then
             say_error "Multiple CLI archives found (expected exactly one). Matches:"
             printf '  %s\n' "${cli_files[@]}"
             return 1
-        fi
+        else
+            local cli_archive_path="${cli_files[0]}"
+            say_verbose "Using CLI archive: $cli_archive_path"
 
-        local cli_archive_path="${cli_files[0]}"
-        say_verbose "Using CLI archive: $cli_archive_path"
-
-        if ! install_aspire_cli "$cli_archive_path" "$cli_install_dir"; then
-            return 1
+            if ! install_aspire_cli "$cli_archive_path" "$cli_install_dir"; then
+                return 1
+            fi
         fi
     fi
 
