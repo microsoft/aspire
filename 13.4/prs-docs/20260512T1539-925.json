@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Reverts a frontend lockfile dependency in the docs site (pnpm-lock.yaml). Not related to any product changelog entry.",
+  "mergedAt": "2026-05-12T15:39:55Z",
+  "number": 925,
+  "runDate": "2026-05-12T16:45:29Z",
+  "status": "excluded",
+  "title": "Revert @clack/prompts update"
+}

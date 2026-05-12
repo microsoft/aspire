@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Test-only change — increases timing tolerance in a flaky test assertion from 50ms to 200ms. No user-facing behavior or public API was modified.",
+  "mergedAt": "2026-05-12T16:09:32Z",
+  "number": 16975,
+  "runDate": "2026-05-12T16:45:29Z",
+  "status": "excluded",
+  "title": "Fix flaky test: Subscription_MultipleUpdates_MinExecuteIntervalApplied"
+}
