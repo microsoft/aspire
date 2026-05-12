@@ -220,12 +220,6 @@ public partial class FoundryModel
         /// DeepSeek-V3.2 Speciale, a model that harmonizes high computational efficiency with superior reasoning and agent performance
         /// </summary>
         [AspireValue("FoundryModels")]
-        public static readonly FoundryModel DeepseekV32Speciale = new() { Name = "DEEPSEEK-V3.2-SPECIALE", Version = "1", Format = "DeepSeek" };
-
-        /// <summary>
-        /// DeepSeek-V3.2 Speciale, a model that harmonizes high computational efficiency with superior reasoning and agent performance
-        /// </summary>
-        [AspireValue("FoundryModels")]
         public static readonly FoundryModel DeepSeekV32Speciale = new() { Name = "DeepSeek-V3.2-Speciale", Version = "1", Format = "DeepSeek" };
 
         /// <summary>
@@ -4220,12 +4214,6 @@ public partial class FoundryModel
         /// </summary>
         [AspireValue("FoundryModels")]
         public static readonly FoundryModel Grok420NonReasoning = new() { Name = "grok-4-20-non-reasoning", Version = "1", Format = "xAI" };
-
-        /// <summary>
-        /// Grok 4.2 is xAI’s latest large language model, built for strong reasoning, multimodal understanding, and enterprise use. It improves instruction following, honesty, and calibration over earlier Grok versions, while supporting both single‑agent and multi‑ag
-        /// </summary>
-        [AspireValue("FoundryModels")]
-        public static readonly FoundryModel Grok420Reasoning = new() { Name = "GROK-4-20-REASONING", Version = "1", Format = "xAI" };
 
         /// <summary>
         /// Grok 4.2 is xAI’s latest large language model, built for strong reasoning, multimodal understanding, and enterprise use. It improves instruction following, honesty, and calibration over earlier Grok versions, while supporting both single‑agent and multi‑ag
