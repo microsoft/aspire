@@ -64,18 +64,23 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
 
                         try
                         {
-                            // This throws an error because InteractionService is not available in non-interactive mode.
+                            // This should throw because InteractionService is not available in non-interactive mode.
+                            // Bound the wait to avoid hanging the E2E run if behavior regresses.
                             _ = await interactionService.PromptInputAsync(
                                 title: "Prompt title",
                                 message: "Prompt message",
                                 inputLabel: "Name",
-                                placeHolder: "placeholder");
+                                placeHolder: "placeholder").WaitAsync(TimeSpan.FromSeconds(5));
 
-                            return CommandResults.Success();
+                            return CommandResults.Failure("Prompt unexpectedly completed without throwing.");
                         }
                         catch (InvalidOperationException ex)
                         {
                             return CommandResults.Failure(ex.Message);
+                        }
+                        catch (TimeoutException)
+                        {
+                            return CommandResults.Failure("Prompt timed out after 5 seconds.");
                         }
                     });
 
