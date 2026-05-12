@@ -60,10 +60,7 @@ string GenerateHostedCode(string csNamespace, List<ModelEntity> models)
     sb.AppendLine("{");
 
     // Group models by publisher (only include models that are visible and have names & publishers)
-    var modelsByPublisher = models
-        .Where(m => m.Annotations?.SystemCatalogData?.Publisher != null &&
-                    m.Annotations?.Name != null &&
-                    IsVisible(m.Annotations?.InvisibleUntil))
+    var modelsByPublisher = GetDistinctHostedModels(models)
         .GroupBy(m => m.Annotations!.SystemCatalogData!.Publisher!)
         .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase);
 
@@ -109,6 +106,33 @@ string GenerateHostedCode(string csNamespace, List<ModelEntity> models)
 
     sb.AppendLine("}");
     return sb.ToString();
+}
+
+static IEnumerable<ModelEntity> GetDistinctHostedModels(IEnumerable<ModelEntity> models)
+{
+    return models
+        .Where(m => m.Annotations?.SystemCatalogData?.Publisher != null &&
+                    m.Annotations?.Name != null &&
+                    IsVisible(m.Annotations?.InvisibleUntil))
+        .GroupBy(GetHostedModelDeduplicationKey, StringComparer.OrdinalIgnoreCase)
+        .Select(g => g
+            .OrderBy(m => IsAllUppercaseAscii(m.Annotations!.Name!) ? 1 : 0)
+            .ThenBy(m => m.Annotations!.Name!, StringComparer.Ordinal)
+            .First());
+}
+
+static string GetHostedModelDeduplicationKey(ModelEntity model)
+{
+    var publisher = model.Annotations!.SystemCatalogData!.Publisher!;
+    var modelName = model.Annotations!.Name!;
+    var version = GetModelVersion(model);
+
+    return string.Join('\u001f', publisher, modelName, version);
+}
+
+static bool IsAllUppercaseAscii(string value)
+{
+    return value.Any(char.IsAsciiLetter) && !value.Any(char.IsAsciiLetterLower);
 }
 
 string GenerateLocalCode(string csNamespace, List<ModelEntity> models)

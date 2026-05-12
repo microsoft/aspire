@@ -125,6 +125,8 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Aspire.Hosting.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Yarp.Tests" />
+    <InternalsVisibleTo Include="Aspire.Hosting.Go" />
+    <InternalsVisibleTo Include="Aspire.Hosting.Go.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.JavaScript" />
     <InternalsVisibleTo Include="Aspire.Hosting.JavaScript.Tests" />
     <InternalsVisibleTo Include="Aspire.Hosting.Python" />

@@ -46,6 +46,13 @@ void main() throws Exception {
         serviceContainer.publishAsKubernetesService((service) -> {
             var _serviceName = service.name();
             var _serviceParent = service.parent();
+            service.addManifest("keda.sh/v1alpha1", "ScaledObject", "kube-service-scaler", (manifest) -> {
+                manifest.withLabel("example.com/custom", "true");
+                manifest.withAnnotation("example.com/source", "java");
+                manifest.withField("spec.scaleTargetRef.kind", "Deployment");
+                manifest.withField("spec.scaleTargetRef.name", "kube-service");
+                manifest.withField("spec.maxReplicaCount", 3);
+            });
         });
         builder.build().run();
     }
