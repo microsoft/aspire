@@ -177,7 +177,15 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         // Run aspire init in brownfield mode
         await auto.TypeAsync($"aspire init --language typescript --non-interactive{channelArgument}");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitUntilAsync(
+            snapshot =>
+            {
+                var screenText = snapshot.GetScreenText();
+                return screenText.Contains("Created aspire-apphost/apphost.ts", StringComparison.Ordinal) ||
+                    screenText.Contains("Created apphost.ts", StringComparison.Ordinal);
+            },
+            timeout: TimeSpan.FromMinutes(2),
+            description: "waiting for TypeScript AppHost creation message");
         await auto.DeclineAgentInitPromptAsync(counter);
 
         // Verify brownfield augmentation preserved existing config
