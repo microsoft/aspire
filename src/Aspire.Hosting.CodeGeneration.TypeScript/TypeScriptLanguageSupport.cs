@@ -29,6 +29,7 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
     private const string AppHostFileName = "apphost.mts";
     private const string PackageJsonFileName = "package.json";
     private const string AppHostTsConfigFileName = "tsconfig.apphost.json";
+    private const string AppHostPackageName = "aspire-apphost";
 
     /// <summary>
     /// The default content for tsconfig.apphost.json, shared between scaffolding and migration.
@@ -156,13 +157,13 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
         // combining with on-disk content. Including existing entries in the scaffold output
         // would cause a double-merge where correctness depends on JsonObject iteration order.
         var packageJson = new JsonObject();
-        var packageJsonPath = Path.Combine(request.TargetPath, PackageJsonFileName);
-
-        var isGreenfield = !File.Exists(packageJsonPath);
-        if (isGreenfield)
+        var hasExistingPackageJson = HasExistingPackageJson(request);
+        if (!hasExistingPackageJson)
         {
-            // Greenfield: include root metadata so the scaffold output is a complete package.json.
-            var packageName = request.ProjectName?.ToLowerInvariant() ?? "aspire-apphost";
+            // Fresh package: include metadata so the scaffold output is a complete package.json.
+            var packageName = IsNestedBrownfieldPackage(request.TargetPath)
+                ? AppHostPackageName
+                : request.ProjectName?.ToLowerInvariant() ?? AppHostPackageName;
             packageJson["name"] = packageName;
             packageJson["version"] = "1.0.0";
             packageJson["private"] = true;
@@ -181,7 +182,7 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
         scripts["aspire:build"] = $"tsc -p {AppHostTsConfigFileName}";
         scripts["aspire:dev"] = $"tsc --watch -p {AppHostTsConfigFileName}";
 
-        if (isGreenfield)
+        if (!hasExistingPackageJson)
         {
             scripts["lint"] = "npm run aspire:lint";
             scripts["predev"] = "npm run aspire:lint";
@@ -200,6 +201,20 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
         EnsureDependency(packageJson, "devDependencies", "typescript-eslint", "^8.57.1");
 
         return packageJson.ToJsonString(s_jsonSerializerOptions);
+    }
+
+    private static bool IsNestedBrownfieldPackage(string targetPath)
+    {
+        var targetDirectory = new DirectoryInfo(targetPath);
+        return string.Equals(targetDirectory.Name, AppHostPackageName, StringComparison.OrdinalIgnoreCase) &&
+            targetDirectory.Parent is { } parent &&
+            File.Exists(Path.Combine(parent.FullName, PackageJsonFileName));
+    }
+
+    private static bool HasExistingPackageJson(ScaffoldRequest request)
+    {
+        var packageJsonPath = Path.Combine(request.TargetPath, PackageJsonFileName);
+        return File.Exists(packageJsonPath);
     }
 
     private static void EnsureDependency(JsonObject packageJson, string sectionName, string packageName, string version)

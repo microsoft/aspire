@@ -421,6 +421,54 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task InitCommand_WhenBrownfieldTypeScriptSelected_DisplaysNestedAppHostPath()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{}");
+
+        var interactionService = new TestInteractionService();
+        var scaffoldingService = new TestScaffoldingService
+        {
+            ScaffoldAsyncCallback = (context, _) =>
+            {
+                var scaffoldDirectory = ScaffoldingService.GetScaffoldDirectory(context.TargetDirectory, context.Language);
+                Directory.CreateDirectory(scaffoldDirectory.FullName);
+                File.WriteAllText(Path.Combine(scaffoldDirectory.FullName, context.Language.AppHostFileName!), string.Empty);
+                return Task.FromResult(true);
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.LanguageServiceFactory = (sp) =>
+            {
+                var projectFactory = sp.GetRequiredService<IAppHostProjectFactory>();
+                var tsProject = projectFactory.GetProject(new LanguageInfo(
+                    LanguageId: new LanguageId(KnownLanguageId.TypeScript),
+                    DisplayName: "TypeScript (Node.js)",
+                    PackageName: "@aspire/app-host",
+                    DetectionPatterns: ["apphost.mts", "apphost.ts"],
+                    CodeGenerator: "TypeScript",
+                    AppHostFileName: "apphost.mts"));
+                return new TestLanguageService { DefaultProject = tsProject };
+            };
+            options.ScaffoldingServiceFactory = _ => scaffoldingService;
+        });
+
+        var serviceProvider = services.BuildServiceProvider();
+        var initCommand = serviceProvider.GetRequiredService<InitCommand>();
+
+        var parseResult = initCommand.Parse("init --language typescript");
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts")));
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire-apphost", "apphost.mts")));
+        Assert.Contains(interactionService.DisplayedMessages, m => m.Message == "Created aspire-apphost/apphost.mts");
+    }
+
+    [Fact]
     public async Task InitCommand_WhenAspireifySkillSelected_PrintsToolSpecificFollowUpCommands()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -927,8 +975,15 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
     private sealed class TestScaffoldingService : IScaffoldingService
     {
+        public Func<ScaffoldContext, CancellationToken, Task<bool>>? ScaffoldAsyncCallback { get; set; }
+
         public Task<bool> ScaffoldAsync(ScaffoldContext context, CancellationToken cancellationToken)
         {
+            if (ScaffoldAsyncCallback is not null)
+            {
+                return ScaffoldAsyncCallback(context, cancellationToken);
+            }
+
             var appHostFileName = context.Language.AppHostFileName ?? "apphost";
             File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, appHostFileName), string.Empty);
 

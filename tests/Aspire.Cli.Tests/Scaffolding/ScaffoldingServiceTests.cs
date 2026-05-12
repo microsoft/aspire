@@ -2,11 +2,85 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Scaffolding;
+using Aspire.Cli.Projects;
 
 namespace Aspire.Cli.Tests.Scaffolding;
 
 public class ScaffoldingServiceTests
 {
+    private static readonly LanguageInfo s_typeScriptLanguage = new(
+        LanguageId: new LanguageId(KnownLanguageId.TypeScript),
+        DisplayName: "TypeScript (Node.js)",
+        PackageName: "@aspire/app-host",
+        DetectionPatterns: ["apphost.mts", "apphost.ts"],
+        CodeGenerator: "TypeScript",
+        AppHostFileName: "apphost.mts");
+
+    private static readonly LanguageInfo s_pythonLanguage = new(
+        LanguageId: new LanguageId("python"),
+        DisplayName: "Python",
+        PackageName: "aspire-app-host",
+        DetectionPatterns: ["apphost.py"],
+        CodeGenerator: "python",
+        AppHostFileName: "apphost.py");
+
+    [Fact]
+    public void GetScaffoldDirectory_UsesNestedPackage_ForBrownfieldTypeScript()
+    {
+        var rootDirectory = Directory.CreateTempSubdirectory();
+
+        try
+        {
+            File.WriteAllText(Path.Combine(rootDirectory.FullName, "package.json"), "{}");
+
+            var scaffoldDirectory = ScaffoldingService.GetScaffoldDirectory(rootDirectory, s_typeScriptLanguage);
+
+            Assert.Equal(
+                Path.Combine(rootDirectory.FullName, ScaffoldingService.BrownfieldTypeScriptAppHostDirectoryName),
+                scaffoldDirectory.FullName);
+        }
+        finally
+        {
+            rootDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void GetScaffoldDirectory_UsesRoot_ForGreenfieldTypeScript()
+    {
+        var rootDirectory = Directory.CreateTempSubdirectory();
+
+        try
+        {
+            var scaffoldDirectory = ScaffoldingService.GetScaffoldDirectory(rootDirectory, s_typeScriptLanguage);
+
+            Assert.Equal(rootDirectory.FullName, scaffoldDirectory.FullName);
+        }
+        finally
+        {
+            rootDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void GetScaffoldDirectory_UsesRoot_ForNonTypeScript()
+    {
+        var rootDirectory = Directory.CreateTempSubdirectory();
+
+        try
+        {
+            File.WriteAllText(Path.Combine(rootDirectory.FullName, "package.json"), "{}");
+
+            var scaffoldDirectory = ScaffoldingService.GetScaffoldDirectory(rootDirectory, s_pythonLanguage);
+
+            Assert.Equal(rootDirectory.FullName, scaffoldDirectory.FullName);
+        }
+        finally
+        {
+            rootDirectory.Delete(recursive: true);
+        }
+    }
+
     [Fact]
     public void GetConflictingScaffoldFiles_IgnoresMergeableFilesButReturnsOtherExistingFiles()
     {

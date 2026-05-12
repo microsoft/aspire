@@ -276,6 +276,9 @@ public sealed class TypeScriptAppHostToolchainResolverTests(ITestOutputHelper ou
 
         var runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(baseRuntimeSpec, TypeScriptAppHostToolchain.Pnpm);
 
+        var installDependencies = Assert.IsType<CommandSpec>(runtimeSpec.InstallDependencies);
+        Assert.Equal("pnpm", installDependencies.Command);
+        Assert.Equal(["install", "--ignore-workspace"], installDependencies.Args);
         var preExecute = Assert.Single(runtimeSpec.PreExecute!);
         Assert.Equal("pnpm", preExecute.Command);
         Assert.Equal(["exec", "tsc", "--noEmit", "-p", "tsconfig.apphost.json"], preExecute.Args);

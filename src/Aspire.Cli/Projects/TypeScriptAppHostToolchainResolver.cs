@@ -162,10 +162,18 @@ internal static class TypeScriptAppHostToolchainResolver
 
     private static CommandSpec CreateInstallCommand(TypeScriptAppHostToolchain toolchain)
     {
+        // pnpm resolves a parent pnpm-workspace.yaml when install runs in a nested package.
+        // The generated brownfield AppHost intentionally lives outside the user's workspace
+        // package graph, so install only that package instead of requiring edits to the
+        // user's workspace file. See https://pnpm.io/workspaces.
+        string[] args = toolchain == TypeScriptAppHostToolchain.Pnpm
+            ? ["install", "--ignore-workspace"]
+            : ["install"];
+
         return new CommandSpec
         {
             Command = GetCommandName(toolchain),
-            Args = ["install"]
+            Args = args
         };
     }
 
