@@ -2,8 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Text;
 using Aspire.Cli.Commands;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
@@ -11,6 +13,8 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Shared;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using Spectre.Console;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -421,6 +425,49 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         var info = DashboardRunCommand.ResolveDashboardInfo(args, unmatchedTokens, executionContext, browserToken: "abc123");
 
         Assert.Equal("http://localhost:18888/login?t=abc123", info.DashboardUrl);
+    }
+
+    [Fact]
+    public void RenderDashboardSummary_RendersLogsPathAsClickableFileLink()
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.Yes,
+            ColorSystem = ColorSystemSupport.TrueColor,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Width = int.MaxValue;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var logFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "cli [dashboard].log");
+        var executionContext = new CliExecutionContext(
+            workingDirectory: workspace.WorkspaceRoot,
+            hivesDirectory: workspace.WorkspaceRoot,
+            cacheDirectory: workspace.WorkspaceRoot,
+            sdksDirectory: workspace.WorkspaceRoot,
+            logsDirectory: workspace.WorkspaceRoot,
+            logFilePath: logFilePath);
+
+        var interactionService = new ConsoleInteractionService(
+            new ConsoleEnvironment(console, console),
+            executionContext,
+            TestHelpers.CreateInteractiveHostEnvironment(),
+            NullLoggerFactory.Instance);
+
+        var dashboardInfo = new DashboardRunCommand.DashboardInfo(
+            DashboardUrl: "http://localhost:18888",
+            OtlpGrpcUrl: "http://localhost:4317",
+            OtlpHttpUrl: "http://localhost:4318");
+
+        DashboardRunCommand.RenderDashboardSummary(interactionService, dashboardInfo, logFilePath);
+
+        var outputString = output.ToString();
+        var fileUri = new Uri(Path.GetFullPath(logFilePath)).AbsoluteUri;
+
+        Assert.Contains("Logs", outputString);
+        TerminalLinkAssert.ContainsLink(outputString, fileUri, logFilePath);
     }
 
     private (IServiceCollection Services, string ManagedPath, TestProcessExecutionFactory ExecutionFactory) CreateServicesWithLayout(

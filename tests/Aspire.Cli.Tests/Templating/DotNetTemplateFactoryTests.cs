@@ -443,7 +443,7 @@ public class DotNetTemplateFactoryTests
             => throw new NotImplementedException();
 
         public void DisplaySuccess(string message, bool allowMarkup = false) { }
-        public void DisplayError(string message) { }
+        public void DisplayError(string message, bool allowMarkup = false) { }
         public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false) { }
         public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines) { }
         public void DisplayCancellationMessage() { }

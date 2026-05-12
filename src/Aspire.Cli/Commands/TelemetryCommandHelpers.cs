@@ -324,7 +324,10 @@ internal static class TelemetryCommandHelpers
             interactionService.DisplayMessage(KnownEmojis.Information, hint);
         }
 
-        interactionService.DisplayMessage(KnownEmojis.PageFacingUp, string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, logFilePath));
+        interactionService.DisplayMessage(
+            KnownEmojis.PageFacingUp,
+            string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, MarkupHelpers.SafeFileLink(interactionService, logFilePath)),
+            allowMarkup: true);
     }
 
     /// <summary>

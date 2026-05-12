@@ -338,9 +338,10 @@ internal class ConsoleInteractionService : IInteractionService
         return ExitCodeConstants.AppHostIncompatible;
     }
 
-    public void DisplayError(string errorMessage)
+    public void DisplayError(string errorMessage, bool allowMarkup = false)
     {
-        DisplayMessage(KnownEmojis.CrossMark, $"[red bold]{errorMessage.EscapeMarkup()}[/]", allowMarkup: true);
+        var formatted = allowMarkup ? errorMessage : errorMessage.EscapeMarkup();
+        DisplayMessage(KnownEmojis.CrossMark, $"[red bold]{formatted}[/]", allowMarkup: true);
     }
 
     public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false)

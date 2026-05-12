@@ -1807,6 +1807,19 @@ class InteractionInput(typing.TypedDict, total=False):
     Disabled: bool
     MaxLength: int
 
+class ProcessCommandExportOptions(typing.TypedDict, total=False):
+    ExecutablePath: str
+    Arguments: typing.Iterable[str]
+    WorkingDirectory: str
+    EnvironmentVariables: typing.Mapping[str, str]
+    InheritEnvironmentVariables: bool
+    StandardInputContent: str
+    KillEntireProcessTree: bool
+    CommandOptions: CommandOptions
+    MaxOutputLineCount: int
+    DisplayImmediately: bool
+    SuccessExitCodes: typing.Iterable[int]
+
 class ReferenceEnvironmentInjectionOptions(typing.TypedDict, total=False):
     ConnectionString: bool
     ConnectionProperties: bool
@@ -5699,6 +5712,10 @@ class AbstractResource(abc.ABC):
         """Adds a resource command"""
 
     @abc.abstractmethod
+    def with_process_command(self, command_name: str, display_name: str, options: ProcessCommandExportOptions) -> typing.Self:
+        """Adds a process resource command"""
+
+    @abc.abstractmethod
     def with_relationship(self, resource_builder: AbstractResource, type: str) -> typing.Self:
         """Adds a relationship to another resource"""
 
@@ -6052,6 +6069,7 @@ class _BaseResourceKwargs(typing.TypedDict, total=False):
     explicit_start: typing.Literal[True]
     health_check: str
     command: tuple[str, str, typing.Callable[[ExecuteCommandContext], ExecuteCommandResult]] | CommandParameters
+    process_command: tuple[str, str, ProcessCommandExportOptions]
     relationship: tuple[AbstractResource, str]
     parent_relationship: AbstractResource
     child_relationship: AbstractResource
@@ -6210,6 +6228,19 @@ class _BaseResource(AbstractResource):
             rpc_args['commandOptions'] = command_options
         result = self._client.invoke_capability(
             'Aspire.Hosting/withCommand',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
+    def with_process_command(self, command_name: str, display_name: str, options: ProcessCommandExportOptions) -> typing.Self:
+        """Adds a process resource command"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['commandName'] = command_name
+        rpc_args['displayName'] = display_name
+        rpc_args['options'] = options
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withProcessCommand',
             rpc_args,
         )
         self._handle = self._wrap_builder(result)
@@ -6680,6 +6711,15 @@ class _BaseResource(AbstractResource):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withCommand', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'command'. Expected: (str, str, Callable[[ExecuteCommandContext], ExecuteCommandResult]) or CommandParameters")
+        if _process_command := kwargs.pop("process_command", None):
+            if _validate_tuple_types(_process_command, (str, str, ProcessCommandExportOptions)):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["commandName"] = typing.cast(tuple[str, str, ProcessCommandExportOptions], _process_command)[0]
+                rpc_args["displayName"] = typing.cast(tuple[str, str, ProcessCommandExportOptions], _process_command)[1]
+                rpc_args["options"] = typing.cast(tuple[str, str, ProcessCommandExportOptions], _process_command)[2]
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withProcessCommand', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'process_command'. Expected: (str, str, ProcessCommandExportOptions)")
         if _relationship := kwargs.pop("relationship", None):
             if _validate_tuple_types(_relationship, (AbstractResource, str)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
