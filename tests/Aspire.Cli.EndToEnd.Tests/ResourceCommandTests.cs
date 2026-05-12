@@ -37,30 +37,34 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
         {
             await auto.PrepareDockerEnvironmentAsync(counter, workspace, enableDcpDiagnostics: true);
             await auto.InstallAspireCliAsync(strategy, counter);
-            await auto.AspireNewAsync(projectName, counter);
+            await auto.AspireNewAsync(projectName, counter, template: AspireTemplate.EmptyAppHost);
 
-            await auto.TypeAsync($"cd {projectName}/{projectName}.AppHost");
+            await auto.TypeAsync($"cd {projectName}");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 
-            var appHostFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, projectName, $"{projectName}.AppHost", "AppHost.cs");
+            // Read the generated apphost.cs so we can extract the #:sdk line with the
+            // resolved version, then replace the entire file with a minimal app host
+            // that has a placeholder resource and a command that uses IInteractionService.
+            var appHostFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, projectName, "apphost.cs");
             var content = File.ReadAllText(appHostFilePath);
 
-            if (!content.Contains("using Microsoft.Extensions.DependencyInjection;", StringComparison.Ordinal))
-            {
-                content = content.Replace(
-                    "using Aspire.Hosting;",
-                    "using Aspire.Hosting;\nusing Microsoft.Extensions.DependencyInjection;",
-                    StringComparison.Ordinal);
-            }
+            // Extract the first line (#:sdk directive) so the replacement uses the same SDK version.
+            var sdkLine = content.Split('\n', 2)[0].TrimEnd('\r');
 
-            var commandInjection = """
+            var newContent = $$"""
+                {{sdkLine}}
+
+                var builder = DistributedApplication.CreateBuilder(args);
+
+                var cache = builder.AddContainer("cache", "redis");
+
                 cache.WithCommand(
                     name: "needs-interaction",
                     displayName: "Needs interaction",
                     executeCommand: async context =>
                     {
-                        var interactionService = context.ServiceProvider.GetRequiredService<IInteractionService>();
+                        var interactionService = (IInteractionService)context.ServiceProvider.GetService(typeof(IInteractionService))!;
 
                         try
                         {
@@ -74,31 +78,16 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
 
                             return CommandResults.Failure("Prompt unexpectedly completed without throwing.");
                         }
-                        catch (InvalidOperationException ex)
-                        {
-                            return CommandResults.Failure(ex.Message);
-                        }
                         catch (TimeoutException)
                         {
                             return CommandResults.Failure("Prompt timed out after 5 seconds.");
                         }
                     });
 
+                builder.Build().Run();
                 """;
 
-            if (content.Contains("builder.Build().Run();", StringComparison.Ordinal))
-            {
-                content = content.Replace(
-                    "builder.Build().Run();",
-                    $"{commandInjection}builder.Build().Run();",
-                    StringComparison.Ordinal);
-            }
-            else
-            {
-                throw new InvalidOperationException("Could not locate AppHost build statement while injecting resource command test hook.");
-            }
-
-            File.WriteAllText(appHostFilePath, content);
+            File.WriteAllText(appHostFilePath, newContent);
 
             await auto.TypeAsync("aspire start");
             await auto.EnterAsync();
