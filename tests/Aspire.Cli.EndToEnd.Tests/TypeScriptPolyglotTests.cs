@@ -215,7 +215,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         var appHostScripts = appHostPackageJson["scripts"]!.AsObject();
         var appHostDependencies = appHostPackageJson["dependencies"]!.AsObject();
         var appHostDevDependencies = appHostPackageJson["devDependencies"]!.AsObject();
-        Assert.Null(appHostPackageJson["type"]);
+        Assert.Equal("module", appHostPackageJson["type"]?.GetValue<string>());
         Assert.Equal("aspire-apphost", appHostPackageJson["name"]?.GetValue<string>());
         Assert.Equal("aspire run", appHostScripts["aspire:start"]?.GetValue<string>());
         Assert.NotNull(appHostDependencies["vscode-jsonrpc"]);

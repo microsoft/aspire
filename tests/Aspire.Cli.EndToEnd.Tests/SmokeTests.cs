@@ -136,13 +136,13 @@ public sealed class SmokeTests(ITestOutputHelper output)
         await auto.AspireNewTypeScriptEmptyAppHostAsync(projectName, counter, channel: "stable");
 
         var projectPath = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
-        var appHostPath = Path.Combine(projectPath, "apphost.mts");
+        var appHostPath = GetTypeScriptAppHostPath(projectPath);
         if (!File.Exists(appHostPath))
         {
             throw new FileNotFoundException($"Expected TypeScript AppHost file to exist: {appHostPath}", appHostPath);
         }
 
-        AssertStableTypeScriptAppHostConfig(Path.Combine(projectPath, "aspire.config.json"));
+        AssertStableTypeScriptAppHostConfig(Path.Combine(projectPath, "aspire.config.json"), Path.GetFileName(appHostPath));
         output.WriteLine("Stable TypeScript AppHost config verified.");
 
         await auto.RunCommandFailFastAsync($"cd {projectName}", counter);
@@ -169,14 +169,21 @@ public sealed class SmokeTests(ITestOutputHelper output)
             : throw new InvalidOperationException($"Could not find Aspire.AppHost.Sdk directive in {appHostPath}.");
     }
 
-    private static void AssertStableTypeScriptAppHostConfig(string configPath)
+    private static string GetTypeScriptAppHostPath(string projectPath)
+    {
+        var appHostPath = Path.Combine(projectPath, "apphost.mts");
+        return File.Exists(appHostPath) ? appHostPath : Path.Combine(projectPath, "apphost.ts");
+    }
+
+    private static void AssertStableTypeScriptAppHostConfig(string configPath, string expectedAppHostPath)
     {
         if (!File.Exists(configPath))
         {
             throw new FileNotFoundException($"Expected Aspire config file to exist: {configPath}", configPath);
         }
 
-        // Expected shape: { "appHost": { "path": "apphost.mts", "language": "typescript/nodejs" }, "sdk": { "version": "13.2.0" }, "channel": "stable" }
+        // Stable channel can lag behind current TypeScript template naming, so the
+        // AppHost path is expected to match whichever stable template was created.
         using var config = JsonDocument.Parse(File.ReadAllText(configPath));
         var root = config.RootElement;
         AssertJsonStringProperty(root, "channel", "stable", configPath);
@@ -189,7 +196,7 @@ public sealed class SmokeTests(ITestOutputHelper output)
         }
 
         var appHost = GetRequiredJsonObjectProperty(root, "appHost", configPath);
-        AssertJsonStringProperty(appHost, "path", "apphost.mts", configPath);
+        AssertJsonStringProperty(appHost, "path", expectedAppHostPath, configPath);
         AssertJsonStringProperty(appHost, "language", "typescript/nodejs", configPath);
     }
 

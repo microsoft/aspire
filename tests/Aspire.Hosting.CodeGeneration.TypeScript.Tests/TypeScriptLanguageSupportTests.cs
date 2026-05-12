@@ -34,7 +34,7 @@ public sealed class TypeScriptLanguageSupportTests
         Assert.Equal("brownfieldapp", packageJson["name"]?.GetValue<string>());
         Assert.Equal("1.0.0", packageJson["version"]?.GetValue<string>());
         Assert.True(packageJson["private"]?.GetValue<bool>());
-        Assert.Null(packageJson["type"]);
+        Assert.Equal("module", packageJson["type"]?.GetValue<string>());
         Assert.Equal("aspire run", scripts["aspire:start"]?.GetValue<string>());
         Assert.Equal("tsc -p tsconfig.apphost.json", scripts["aspire:build"]?.GetValue<string>());
         Assert.Equal("tsc --watch -p tsconfig.apphost.json", scripts["aspire:dev"]?.GetValue<string>());
@@ -147,7 +147,7 @@ public sealed class TypeScriptLanguageSupportTests
         Assert.Equal("aspire-apphost", packageJson["name"]?.GetValue<string>());
         Assert.Equal("1.0.0", packageJson["version"]?.GetValue<string>());
         Assert.True(packageJson["private"]?.GetValue<bool>());
-        Assert.Null(packageJson["type"]);
+        Assert.Equal("module", packageJson["type"]?.GetValue<string>());
     }
 
     [Fact]

@@ -167,6 +167,7 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
             packageJson["name"] = packageName;
             packageJson["version"] = "1.0.0";
             packageJson["private"] = true;
+            packageJson["type"] = "module";
         }
 
         // NOTE: The engines.node constraint must match ESLint 10's own requirement

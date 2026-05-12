@@ -140,6 +140,13 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
 
         TypeScriptAppHostToolchainTestHelpers.SetPackageManager(workspace.WorkspaceRoot.FullName, toolchain, cleanInstallState: true);
+        if (TypeScriptAppHostToolchainTestHelpers.UsesCorepack(toolchain))
+        {
+            await auto.RunCommandFailFastAsync(
+                $"COREPACK_ENABLE_DOWNLOAD_PROMPT=0 corepack prepare {TypeScriptAppHostToolchainTestHelpers.GetPackageManager(toolchain)} --activate",
+                counter,
+                TimeSpan.FromMinutes(2));
+        }
 
         // Verify the configured toolchain can start and stop the generated AppHost
         // before doctor is asked to report that the toolchain is missing from PATH.
