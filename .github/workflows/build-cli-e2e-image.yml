@@ -15,33 +15,14 @@ on:
         type: boolean
         default: true
 
-env:
-  CLI_E2E_DOTNET_IMAGE_ARTIFACT: cli-e2e-dotnet-image
-  CLI_E2E_DOTNET_IMAGE_TAG: aspire-cli-e2e-dotnet:prebuilt
-  CLI_E2E_DOTNET_IMAGE_CACHE_SCOPE: cli-e2e-dotnet
-  CLI_E2E_POLYGLOT_IMAGE_ARTIFACT: cli-e2e-polyglot-image
-  CLI_E2E_POLYGLOT_IMAGE_TAG: aspire-cli-e2e-polyglot:prebuilt
-  CLI_E2E_POLYGLOT_JAVA_IMAGE_ARTIFACT: cli-e2e-polyglot-java-image
-  CLI_E2E_POLYGLOT_JAVA_IMAGE_TAG: aspire-cli-e2e-polyglot-java:prebuilt
-  CLI_E2E_POLYGLOT_JAVA_IMAGE_CACHE_SCOPE: cli-e2e-polyglot-java
-  CLI_E2E_POLYGLOT_PYTHON_IMAGE_ARTIFACT: cli-e2e-polyglot-python-image
-  CLI_E2E_POLYGLOT_PYTHON_IMAGE_TAG: aspire-cli-e2e-polyglot-python:prebuilt
-  CLI_E2E_POLYGLOT_PYTHON_IMAGE_CACHE_SCOPE: cli-e2e-polyglot-python
-  CLI_E2E_POLYGLOT_GO_IMAGE_ARTIFACT: cli-e2e-polyglot-go-image
-  CLI_E2E_POLYGLOT_GO_IMAGE_TAG: aspire-cli-e2e-polyglot-go:prebuilt
-  CLI_E2E_POLYGLOT_GO_IMAGE_CACHE_SCOPE: cli-e2e-polyglot-go
-  CLI_E2E_POLYGLOT_RUST_IMAGE_ARTIFACT: cli-e2e-polyglot-rust-image
-  CLI_E2E_POLYGLOT_RUST_IMAGE_TAG: aspire-cli-e2e-polyglot-rust:prebuilt
-  CLI_E2E_POLYGLOT_RUST_IMAGE_CACHE_SCOPE: cli-e2e-polyglot-rust
-  CLI_E2E_POLYGLOT_BASE_IMAGE_TAG: aspire-e2e-polyglot-base:latest
-  CLI_E2E_POLYGLOT_BASE_IMAGE_CACHE_SCOPE: cli-e2e-polyglot-base
-  CLI_E2E_INCLUDE_POLYGLOT_IMAGES: ${{ inputs.includePolyglotImages }}
-
 jobs:
   build:
     name: Build CLI E2E Docker image
     runs-on: ${{ github.repository_owner == 'microsoft' && '8-core-ubuntu-latest' || 'ubuntu-latest' }}
     timeout-minutes: 45
+    env:
+      INCLUDE_POLYGLOT: ${{ inputs.includePolyglotImages }}
+      UPLOAD_ARTIFACTS: ${{ inputs.uploadImageArtifacts }}
 
     steps:
       - name: Checkout code
@@ -62,7 +43,7 @@ jobs:
               }
             }
 
-      - name: Build CLI E2E Docker image
+      - name: Build (and optionally save) CLI E2E Docker images
         shell: bash
         run: |
           set -euo pipefail
@@ -70,144 +51,107 @@ jobs:
           docker buildx create --name cli-e2e-builder --use
           docker buildx inspect --bootstrap
 
-          build_image() {
-            local display_name="$1"
-            local dockerfile="$2"
-            local tag="$3"
-            local cache_scope="$4"
-            local mirror="$5"
-            local -a build_args=(--build-arg SKIP_SOURCE_BUILD=true)
-
-            if [[ -n "$mirror" ]]; then
-              echo "Building $display_name with Ubuntu apt mirror: $mirror"
-              build_args+=(--build-arg "UBUNTU_APT_MIRROR=$mirror")
-            else
-              echo "Building $display_name with the default Ubuntu apt sources"
-            fi
-
-            docker buildx build \
-              --load \
-              --cache-from "type=gha,scope=$cache_scope" \
-              --cache-to "type=gha,scope=$cache_scope,mode=max,ignore-error=true" \
-              "${build_args[@]}" \
-              -f "$dockerfile" \
-              -t "$tag" \
-              .
-          }
-
-          build_java_image() {
-            local mirror="$1"
-            local -a build_args=()
-
-            if [[ -n "$mirror" ]]; then
-              echo "Building Java polyglot image with Ubuntu apt mirror: $mirror"
-              build_args+=(--build-arg "UBUNTU_APT_MIRROR=$mirror")
-            else
-              echo "Building Java polyglot image with the default Ubuntu apt sources"
-            fi
-
-            docker buildx build \
-              --load \
-              --cache-from "type=gha,scope=$CLI_E2E_POLYGLOT_JAVA_IMAGE_CACHE_SCOPE" \
-              --cache-to "type=gha,scope=$CLI_E2E_POLYGLOT_JAVA_IMAGE_CACHE_SCOPE,mode=max,ignore-error=true" \
-              "${build_args[@]}" \
-              -f tests/Shared/Docker/Dockerfile.e2e-polyglot-java \
-              -t "$CLI_E2E_POLYGLOT_JAVA_IMAGE_TAG" \
-              .
-          }
-
-          # All extended polyglot images (java, python, go, rust) layer on top of the
-          # polyglot base. They each install a language toolchain via apt or via a
-          # multi-stage COPY from the official language image. Route them through
-          # buildx with GHA layer cache so the heavy upstream `golang:1` / `rust:1`
-          # COPY stages don't re-pull on every CI build (which would also hit Docker
-          # Hub anonymous-pull rate limits and could fail the whole image-build job).
-          build_extended_polyglot_image() {
-            local display_name="$1"
-            local dockerfile="$2"
-            local tag="$3"
-            local cache_scope="$4"
-            local mirror="$5"
-            local -a build_args=()
-
-            if [[ -n "$mirror" ]]; then
-              echo "Building $display_name with Ubuntu apt mirror: $mirror"
-              build_args+=(--build-arg "UBUNTU_APT_MIRROR=$mirror")
-            else
-              echo "Building $display_name with the default Ubuntu apt sources"
-            fi
-
-            docker buildx build \
-              --load \
-              --cache-from "type=gha,scope=$cache_scope" \
-              --cache-to "type=gha,scope=$cache_scope,mode=max,ignore-error=true" \
-              "${build_args[@]}" \
-              -f "$dockerfile" \
-              -t "$tag" \
-              .
-          }
-
-          build_extended_polyglot_with_mirror_retry() {
-            local display_name="$1"
-            local dockerfile="$2"
-            local tag="$3"
-            local cache_scope="$4"
-
-            if ! build_extended_polyglot_image "$display_name" "$dockerfile" "$tag" "$cache_scope" "http://azure.archive.ubuntu.com/ubuntu/"; then
-              echo "$display_name build failed with the Azure Ubuntu apt mirror; retrying with default Ubuntu apt sources"
-              build_extended_polyglot_image "$display_name" "$dockerfile" "$tag" "$cache_scope" ""
-            fi
-          }
-
-          build_with_mirror_retry() {
-            local display_name="$1"
-            local dockerfile="$2"
-            local tag="$3"
-            local cache_scope="$4"
-
-            if ! build_image "$display_name" "$dockerfile" "$tag" "$cache_scope" "http://azure.archive.ubuntu.com/ubuntu/"; then
-              echo "$display_name build failed with the Azure Ubuntu apt mirror; retrying with default Ubuntu apt sources"
-              build_image "$display_name" "$dockerfile" "$tag" "$cache_scope" ""
-            fi
-          }
-
-          build_with_mirror_retry ".NET image" "tests/Shared/Docker/Dockerfile.e2e" "$CLI_E2E_DOTNET_IMAGE_TAG" "$CLI_E2E_DOTNET_IMAGE_CACHE_SCOPE"
-
-          if [[ "$CLI_E2E_INCLUDE_POLYGLOT_IMAGES" == "true" ]]; then
-            build_with_mirror_retry "polyglot base image" "tests/Shared/Docker/Dockerfile.e2e-polyglot-base" "$CLI_E2E_POLYGLOT_BASE_IMAGE_TAG" "$CLI_E2E_POLYGLOT_BASE_IMAGE_CACHE_SCOPE"
-            docker tag "$CLI_E2E_POLYGLOT_BASE_IMAGE_TAG" "$CLI_E2E_POLYGLOT_IMAGE_TAG"
-
-            if ! build_java_image "http://azure.archive.ubuntu.com/ubuntu/"; then
-              echo "Java polyglot image build failed with the Azure Ubuntu apt mirror; retrying with default Ubuntu apt sources"
-              build_java_image ""
-            fi
-
-            build_extended_polyglot_with_mirror_retry "Python polyglot image" "tests/Shared/Docker/Dockerfile.e2e-polyglot-python" "$CLI_E2E_POLYGLOT_PYTHON_IMAGE_TAG" "$CLI_E2E_POLYGLOT_PYTHON_IMAGE_CACHE_SCOPE"
-            build_extended_polyglot_with_mirror_retry "Go polyglot image" "tests/Shared/Docker/Dockerfile.e2e-polyglot-go" "$CLI_E2E_POLYGLOT_GO_IMAGE_TAG" "$CLI_E2E_POLYGLOT_GO_IMAGE_CACHE_SCOPE"
-            build_extended_polyglot_with_mirror_retry "Rust polyglot image" "tests/Shared/Docker/Dockerfile.e2e-polyglot-rust" "$CLI_E2E_POLYGLOT_RUST_IMAGE_TAG" "$CLI_E2E_POLYGLOT_RUST_IMAGE_CACHE_SCOPE"
-          fi
-
-      - name: Save CLI E2E Docker image tarballs
-        if: ${{ inputs.uploadImageArtifacts }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
           mkdir -p artifacts/cli-e2e-image
-          docker save "$CLI_E2E_DOTNET_IMAGE_TAG" | gzip > artifacts/cli-e2e-image/aspire-cli-e2e-dotnet.tar.gz
-          if [[ "$CLI_E2E_INCLUDE_POLYGLOT_IMAGES" == "true" ]]; then
-            docker save "$CLI_E2E_POLYGLOT_IMAGE_TAG" | gzip > artifacts/cli-e2e-image/aspire-cli-e2e-polyglot.tar.gz
-            docker save "$CLI_E2E_POLYGLOT_JAVA_IMAGE_TAG" | gzip > artifacts/cli-e2e-image/aspire-cli-e2e-polyglot-java.tar.gz
-            docker save "$CLI_E2E_POLYGLOT_PYTHON_IMAGE_TAG" | gzip > artifacts/cli-e2e-image/aspire-cli-e2e-polyglot-python.tar.gz
-            docker save "$CLI_E2E_POLYGLOT_GO_IMAGE_TAG" | gzip > artifacts/cli-e2e-image/aspire-cli-e2e-polyglot-go.tar.gz
-            docker save "$CLI_E2E_POLYGLOT_RUST_IMAGE_TAG" | gzip > artifacts/cli-e2e-image/aspire-cli-e2e-polyglot-rust.tar.gz
+
+          # Build a single image with GHA layer cache and apt-mirror fallback. We
+          # try the Azure Ubuntu mirror first (faster + more reliable from
+          # GitHub-hosted runners) and fall back to the default sources on
+          # failure. SKIP_SOURCE_BUILD is only relevant to the .NET image so it
+          # is opt-in via the trailing flag. All remaining args are tags (-t)
+          # — the polyglot base passes two tags so both the FROM-referenced
+          # base name and the artifact-friendly polyglot name resolve locally
+          # without a follow-up `docker tag` step.
+          build_image() {
+            local display="$1" dockerfile="$2" cache_scope="$3" skip_source="$4"
+            shift 4
+            local -a tag_args=()
+            local t
+            for t in "$@"; do
+              tag_args+=(-t "$t")
+            done
+
+            local -a extra_args=()
+            if [[ "$skip_source" == "true" ]]; then
+              extra_args+=(--build-arg SKIP_SOURCE_BUILD=true)
+            fi
+
+            local mirror="http://azure.archive.ubuntu.com/ubuntu/"
+            while :; do
+              local -a mirror_args=()
+              if [[ -n "$mirror" ]]; then
+                echo "Building $display with Ubuntu apt mirror: $mirror"
+                mirror_args+=(--build-arg "UBUNTU_APT_MIRROR=$mirror")
+              else
+                echo "Building $display with the default Ubuntu apt sources"
+              fi
+
+              if docker buildx build \
+                  --load \
+                  --cache-from "type=gha,scope=$cache_scope" \
+                  --cache-to "type=gha,scope=$cache_scope,mode=max,ignore-error=true" \
+                  "${extra_args[@]}" \
+                  "${mirror_args[@]}" \
+                  "${tag_args[@]}" \
+                  -f "$dockerfile" \
+                  .; then
+                return 0
+              fi
+
+              if [[ -z "$mirror" ]]; then
+                return 1
+              fi
+              echo "$display build failed with the Azure Ubuntu apt mirror; retrying with default Ubuntu apt sources"
+              mirror=""
+            done
+          }
+
+          save_image() {
+            local tag="$1" tarball="$2"
+            [[ "$UPLOAD_ARTIFACTS" == "true" ]] || return 0
+            docker save "$tag" | gzip > "artifacts/cli-e2e-image/$tarball"
+          }
+
+          # .NET image (uses SKIP_SOURCE_BUILD=true).
+          build_image ".NET image" tests/Shared/Docker/Dockerfile.e2e cli-e2e-dotnet true \
+            aspire-cli-e2e-dotnet:prebuilt
+          save_image aspire-cli-e2e-dotnet:prebuilt aspire-cli-e2e-dotnet.tar.gz
+
+          if [[ "$INCLUDE_POLYGLOT" != "true" ]]; then
+            exit 0
           fi
+
+          # Polyglot base image. Tag with both the FROM-referenced base name
+          # (used by the extended dockerfiles below) and the artifact-friendly
+          # polyglot tag (used by downstream loaders in load-cli-e2e-images.sh).
+          build_image "polyglot base image" tests/Shared/Docker/Dockerfile.e2e-polyglot-base cli-e2e-polyglot-base false \
+            aspire-e2e-polyglot-base:latest \
+            aspire-cli-e2e-polyglot:prebuilt
+          save_image aspire-cli-e2e-polyglot:prebuilt aspire-cli-e2e-polyglot.tar.gz
+
+          # Extended polyglot images. All layer on top of the polyglot base and
+          # install a language toolchain via apt or a multi-stage COPY from the
+          # official language image. Routed through buildx with GHA layer cache
+          # so the heavy upstream `golang:1` / `rust:1` COPY stages don't
+          # re-pull on every CI build (which would also hit Docker Hub
+          # anonymous-pull rate limits).
+          # Fields: display | dockerfile | tag | cache_scope | tarball
+          local_extended=(
+            "Java polyglot image|tests/Shared/Docker/Dockerfile.e2e-polyglot-java|aspire-cli-e2e-polyglot-java:prebuilt|cli-e2e-polyglot-java|aspire-cli-e2e-polyglot-java.tar.gz"
+            "Python polyglot image|tests/Shared/Docker/Dockerfile.e2e-polyglot-python|aspire-cli-e2e-polyglot-python:prebuilt|cli-e2e-polyglot-python|aspire-cli-e2e-polyglot-python.tar.gz"
+            "Go polyglot image|tests/Shared/Docker/Dockerfile.e2e-polyglot-go|aspire-cli-e2e-polyglot-go:prebuilt|cli-e2e-polyglot-go|aspire-cli-e2e-polyglot-go.tar.gz"
+            "Rust polyglot image|tests/Shared/Docker/Dockerfile.e2e-polyglot-rust|aspire-cli-e2e-polyglot-rust:prebuilt|cli-e2e-polyglot-rust|aspire-cli-e2e-polyglot-rust.tar.gz"
+          )
+          for entry in "${local_extended[@]}"; do
+            IFS='|' read -r display dockerfile tag cache_scope tarball <<<"$entry"
+            build_image "$display" "$dockerfile" "$cache_scope" false "$tag"
+            save_image "$tag" "$tarball"
+          done
 
       - name: Upload CLI E2E .NET Docker image
         if: ${{ inputs.uploadImageArtifacts }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          name: ${{ env.CLI_E2E_DOTNET_IMAGE_ARTIFACT }}
+          name: cli-e2e-dotnet-image
           path: artifacts/cli-e2e-image/aspire-cli-e2e-dotnet.tar.gz
           retention-days: 1
 
@@ -215,7 +159,7 @@ jobs:
         if: ${{ inputs.uploadImageArtifacts && inputs.includePolyglotImages }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          name: ${{ env.CLI_E2E_POLYGLOT_IMAGE_ARTIFACT }}
+          name: cli-e2e-polyglot-image
           path: artifacts/cli-e2e-image/aspire-cli-e2e-polyglot.tar.gz
           retention-days: 1
 
@@ -223,7 +167,7 @@ jobs:
         if: ${{ inputs.uploadImageArtifacts && inputs.includePolyglotImages }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          name: ${{ env.CLI_E2E_POLYGLOT_JAVA_IMAGE_ARTIFACT }}
+          name: cli-e2e-polyglot-java-image
           path: artifacts/cli-e2e-image/aspire-cli-e2e-polyglot-java.tar.gz
           retention-days: 1
 
@@ -231,7 +175,7 @@ jobs:
         if: ${{ inputs.uploadImageArtifacts && inputs.includePolyglotImages }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          name: ${{ env.CLI_E2E_POLYGLOT_PYTHON_IMAGE_ARTIFACT }}
+          name: cli-e2e-polyglot-python-image
           path: artifacts/cli-e2e-image/aspire-cli-e2e-polyglot-python.tar.gz
           retention-days: 1
 
@@ -239,7 +183,7 @@ jobs:
         if: ${{ inputs.uploadImageArtifacts && inputs.includePolyglotImages }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          name: ${{ env.CLI_E2E_POLYGLOT_GO_IMAGE_ARTIFACT }}
+          name: cli-e2e-polyglot-go-image
           path: artifacts/cli-e2e-image/aspire-cli-e2e-polyglot-go.tar.gz
           retention-days: 1
 
@@ -247,6 +191,6 @@ jobs:
         if: ${{ inputs.uploadImageArtifacts && inputs.includePolyglotImages }}
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
-          name: ${{ env.CLI_E2E_POLYGLOT_RUST_IMAGE_ARTIFACT }}
+          name: cli-e2e-polyglot-rust-image
           path: artifacts/cli-e2e-image/aspire-cli-e2e-polyglot-rust.tar.gz
           retention-days: 1
