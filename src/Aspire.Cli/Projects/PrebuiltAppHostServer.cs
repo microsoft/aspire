@@ -419,12 +419,14 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             return null;
         }
 
-        // Skip PSM only for the local-build identity hive — it exists for dev convenience
-        // (a locally-built CLI consuming its own per-run hive) and should not restrict NuGet
-        // resolution. For all other channels (stable, staging, daily, pr-*) PSM
-        // must emit so restore honors the channel's package source mappings even when
-        // channelName == ExecutionContext.Channel.
-        if (string.Equals(_executionContext.IdentityChannel, PackageChannelNames.Local, StringComparison.OrdinalIgnoreCase))
+        // Skip PSM only when the resolved channel is the local hive — that hive is a transient
+        // dev-build artifact with no real package mappings, so emitting PSM for it would just
+        // constrain restore to an empty source set. For every other channel (stable, staging,
+        // daily, pr-*) PSM must emit so restore honours the channel's package source mappings —
+        // regardless of which CLI identity (CliExecutionContext.IdentityChannel) is running.
+        // Keying on the resolved channel.Name (rather than the input requestedChannel) is robust
+        // to alias/normalization in the channel lookup above.
+        if (string.Equals(channel.Name, PackageChannelNames.Local, StringComparison.OrdinalIgnoreCase))
         {
             return null;
         }
