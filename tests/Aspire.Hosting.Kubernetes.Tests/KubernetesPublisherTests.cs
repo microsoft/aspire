@@ -232,6 +232,17 @@ public class KubernetesPublisherTests()
     }
 
     [Fact]
+    public void KubernetesManifestResourceWithFieldThrowsWhenIntermediatePathIsScalar()
+    {
+        var manifest = new KubernetesManifestResource("example.com/v1", "Example", "example");
+        manifest.WithField("spec", "scalar");
+
+        var exception = Assert.Throws<ArgumentException>(() => manifest.WithField("spec.replicas", 3));
+
+        Assert.Contains("Cannot set nested manifest field 'spec.replicas' because 'spec' already has a scalar value.", exception.Message);
+    }
+
+    [Fact]
     public async Task PublishAsync_HandlesSpecialResourceName()
     {
         using var tempDir = new TestTempDirectory();

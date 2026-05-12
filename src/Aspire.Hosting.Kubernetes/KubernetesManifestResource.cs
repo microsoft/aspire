@@ -74,6 +74,10 @@ internal sealed class KubernetesManifestResource : BaseKubernetesResource
     /// <summary>
     /// Adds or updates a manifest field using a dot-separated path.
     /// </summary>
+    /// <remarks>
+    /// Polyglot SDKs currently support scalar field values only. Use dot-separated paths to build nested objects with
+    /// scalar leaf values; array values are not supported by this method.
+    /// </remarks>
     /// <param name="path">The dot-separated manifest field path, for example <c>spec.replicas</c> or <c>data.username</c>.</param>
     /// <param name="value">The field value.</param>
     /// <returns>This manifest resource.</returns>
@@ -84,7 +88,7 @@ internal sealed class KubernetesManifestResource : BaseKubernetesResource
     {
         var segments = ParseFieldPath(path);
 
-        SetField(Fields, segments, NormalizeManifestValue(value));
+        SetField(Fields, segments, path, NormalizeManifestValue(value));
 
         return this;
     }
@@ -107,23 +111,31 @@ internal sealed class KubernetesManifestResource : BaseKubernetesResource
         return segments;
     }
 
-    private static void SetField(Dictionary<string, object?> fields, ReadOnlySpan<string> path, object? value)
+    private static void SetField(Dictionary<string, object?> fields, ReadOnlySpan<string> segments, string path, object? value)
     {
         var current = fields;
 
-        for (var i = 0; i < path.Length - 1; i++)
+        for (var i = 0; i < segments.Length - 1; i++)
         {
-            var segment = path[i];
-            if (!current.TryGetValue(segment, out var child) || child is not Dictionary<string, object?> childFields)
+            var segment = segments[i];
+            if (current.TryGetValue(segment, out var child))
             {
-                childFields = [];
-                current[segment] = childFields;
-            }
+                if (child is not Dictionary<string, object?> childFields)
+                {
+                    throw new ArgumentException($"Cannot set nested manifest field '{path}' because '{segment}' already has a scalar value.", nameof(path));
+                }
 
-            current = childFields;
+                current = childFields;
+            }
+            else
+            {
+                var childFields = new Dictionary<string, object?>(StringComparer.Ordinal);
+                current[segment] = childFields;
+                current = childFields;
+            }
         }
 
-        current[path[^1]] = value;
+        current[segments[^1]] = value;
     }
 
     internal static object? NormalizeManifestValue(object? value)
