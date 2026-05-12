@@ -18,9 +18,9 @@ internal static class VersionHelper
     public static bool IsLocalBuildChannel(string? channelName)
     {
         return channelName is not null &&
-            (channelName.Equals(PackageChannelNames.Local, StringComparison.OrdinalIgnoreCase) ||
-             channelName.StartsWith("pr-", StringComparison.OrdinalIgnoreCase) ||
-             channelName.StartsWith("run-", StringComparison.OrdinalIgnoreCase));
+            (channelName.Equals(PackageChannelNames.Local, StringComparison.Ordinal) ||
+             channelName.StartsWith("pr-", StringComparison.Ordinal) ||
+             channelName.StartsWith("run-", StringComparison.Ordinal));
     }
 
     /// <summary>
@@ -79,4 +79,3 @@ internal static class VersionHelper
         return version;
     }
 }
-

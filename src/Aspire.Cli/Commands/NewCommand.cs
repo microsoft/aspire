@@ -336,14 +336,14 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
                     VersionHelper.IsLocalBuildChannel(ExecutionContext.IdentityChannel))
                 {
                     localBuildChannel = channels.FirstOrDefault(c =>
-                        string.Equals(c.Name, ExecutionContext.IdentityChannel, StringComparison.OrdinalIgnoreCase));
+                        string.Equals(c.Name, ExecutionContext.IdentityChannel, StringComparison.Ordinal));
                 }
 
                 var selectedChannel = string.IsNullOrWhiteSpace(configuredChannelName)
                     ? localBuildChannel
                         ?? channels.FirstOrDefault(c => c.Type is PackageChannelType.Implicit)
                         ?? channels.FirstOrDefault()
-                    : channels.FirstOrDefault(c => string.Equals(c.Name, configuredChannelName, StringComparison.OrdinalIgnoreCase));
+                    : channels.FirstOrDefault(c => string.Equals(c.Name, configuredChannelName, StringComparison.Ordinal));
 
                 if (selectedChannel is null)
                 {

@@ -328,7 +328,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         // This is additive — it preserves the user's nuget.config and adds channel-specific sources
         var channelSources = new List<string>();
         var matchedChannels = !string.IsNullOrEmpty(configuredChannelName)
-            ? channels.Where(c => string.Equals(c.Name, configuredChannelName, StringComparison.OrdinalIgnoreCase))
+            ? channels.Where(c => string.Equals(c.Name, configuredChannelName, StringComparison.Ordinal))
             : channels.Where(c => c.Type == PackageChannelType.Explicit);
 
         foreach (var ch in matchedChannels)

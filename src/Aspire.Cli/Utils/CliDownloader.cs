@@ -32,7 +32,7 @@ internal class CliDownloader(
     {
         // Get the channel information from PackagingService
         var channels = await packagingService.GetChannelsAsync(cancellationToken);
-        var channel = channels.FirstOrDefault(c => c.Name.Equals(channelName, StringComparison.OrdinalIgnoreCase));
+        var channel = channels.FirstOrDefault(c => c.Name.Equals(channelName, StringComparison.Ordinal));
         
         if (channel is null)
         {
