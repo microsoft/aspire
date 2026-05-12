@@ -2,12 +2,15 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREJAVASCRIPT001 // Type is for evaluation purposes only
+#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only
 
 using System.Diagnostics;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
 using Aspire.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.JavaScript.Tests;
 
@@ -134,7 +137,7 @@ public class AddJavaScriptAppTests
         var app = builder.AddJavaScriptApp("js", appDir, "migrate")
             .WithBun();
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => ManifestUtils.GetManifest(app.Resource, tempDir.Path));
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => ManifestUtils.GetManifest(app.Resource, tempDir.Path));
 
         Assert.Contains("runScriptName", exception.Message);
         Assert.Contains("WithRunScript", exception.Message);
@@ -153,7 +156,7 @@ public class AddJavaScriptAppTests
 
         using var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => ManifestUtils.GetManifestForModel(appModel, tempDir.Path));
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => ManifestUtils.GetManifestForModel(appModel, tempDir.Path));
 
         Assert.Contains("runScriptName", exception.Message);
         Assert.Contains("WithRunScript", exception.Message);
@@ -171,7 +174,34 @@ public class AddJavaScriptAppTests
             .WithBun()
             .WithRunScript("migrate");
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => ManifestUtils.GetManifest(app.Resource, tempDir.Path));
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => ManifestUtils.GetManifest(app.Resource, tempDir.Path));
+
+        Assert.Contains("runScriptName", exception.Message);
+        Assert.Contains("WithRunScript", exception.Message);
+        Assert.Contains("Dockerfile", exception.Message);
+    }
+
+    [Fact]
+    public async Task PublishPipelineWithExistingDockerfileThrowsFromValidationStepWhenRunScriptNameIsExplicit()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "validate-javascript-dockerfile-run-script-js").WithResourceCleanUp(true);
+        builder.Services.AddSingleton<IPipelineActivityReporter, NullPublishingActivityReporter>();
+
+        var appDir = CreateJavaScriptAppWithDockerfile(tempDir.Path);
+        builder.AddJavaScriptApp("js", appDir, "migrate")
+            .WithBun();
+
+        using var app = builder.Build();
+        var pipeline = new DistributedApplicationPipeline();
+        var context = new PipelineContext(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            app.Services.GetRequiredService<ILogger<AddJavaScriptAppTests>>(),
+            CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => pipeline.ExecuteAsync(context));
 
         Assert.Contains("runScriptName", exception.Message);
         Assert.Contains("WithRunScript", exception.Message);
