@@ -343,7 +343,7 @@ internal sealed class InitCommand : BaseCommand
             selection = await _templateNuGetConfigService.ResolveTemplatePackageAsync(query, cancellationToken);
         }
         catch (ChannelNotFoundException) when
-            (string.Equals(_executionContext.IdentityChannel, PackageChannelNames.Local, StringComparison.Ordinal))
+            (string.Equals(_executionContext.IdentityChannel, PackageChannelNames.Local, StringComparison.OrdinalIgnoreCase))
         {
             // Locally-built CLI (identity=local) on a machine where ~/.aspire/hives/local
             // isn't installed. The PackagingService produces no "local" channel in that

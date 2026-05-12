@@ -369,7 +369,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             IEnumerable<PackageChannel> explicitChannels;
             if (!string.IsNullOrEmpty(requestedChannel))
             {
-                var matchingChannel = channels.FirstOrDefault(c => string.Equals(c.Name, requestedChannel, StringComparison.Ordinal));
+                var matchingChannel = channels.FirstOrDefault(c => string.Equals(c.Name, requestedChannel, StringComparison.OrdinalIgnoreCase));
                 explicitChannels = matchingChannel is not null ? [matchingChannel] : channels.Where(c => c.Type == PackageChannelType.Explicit);
             }
             else
@@ -412,7 +412,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         var channel = channels.FirstOrDefault(c =>
             c.Type == PackageChannelType.Explicit &&
             c.Mappings is { Length: > 0 } &&
-            string.Equals(c.Name, requestedChannel, StringComparison.Ordinal));
+            string.Equals(c.Name, requestedChannel, StringComparison.OrdinalIgnoreCase));
 
         if (channel?.Mappings is null)
         {
@@ -426,7 +426,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         // regardless of which CLI identity (CliExecutionContext.IdentityChannel) is running.
         // Keying on the resolved channel.Name (rather than the input requestedChannel) is robust
         // to alias/normalization in the channel lookup above.
-        if (string.Equals(channel.Name, PackageChannelNames.Local, StringComparison.Ordinal))
+        if (string.Equals(channel.Name, PackageChannelNames.Local, StringComparison.OrdinalIgnoreCase))
         {
             return null;
         }

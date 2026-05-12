@@ -27,7 +27,7 @@ internal sealed class IntegrationPackageSearchService(
 
         if (!string.IsNullOrEmpty(configuredChannel))
         {
-            allChannels = allChannels.Where(c => string.Equals(c.Name, configuredChannel, StringComparison.Ordinal));
+            allChannels = allChannels.Where(c => string.Equals(c.Name, configuredChannel, StringComparison.OrdinalIgnoreCase));
         }
 
         var hasHives = executionContext.GetHiveCount() > 0;

@@ -87,7 +87,7 @@ internal sealed class TemplateNuGetConfigService(
 
         var channels = await packagingService.GetChannelsAsync(cancellationToken);
         var matchingChannel = channels.FirstOrDefault(c =>
-            string.Equals(c.Name, channelName, StringComparison.Ordinal));
+            string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
 
         if (matchingChannel is null)
         {
@@ -125,7 +125,7 @@ internal sealed class TemplateNuGetConfigService(
 
         var channels = await packagingService.GetChannelsAsync(cancellationToken);
         var matchingChannel = channels.FirstOrDefault(c =>
-            string.Equals(c.Name, channelName, StringComparison.Ordinal));
+            string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
 
         if (matchingChannel is null || matchingChannel.Type is not PackageChannelType.Explicit)
         {
@@ -165,7 +165,7 @@ internal sealed class TemplateNuGetConfigService(
         if (!string.IsNullOrEmpty(query.RequestedChannel))
         {
             var matchingChannel = allChannels.FirstOrDefault(c =>
-                    string.Equals(c.Name, query.RequestedChannel, StringComparison.Ordinal))
+                    string.Equals(c.Name, query.RequestedChannel, StringComparison.OrdinalIgnoreCase))
                 ?? throw new ChannelNotFoundException(
                     $"No channel found matching '{query.RequestedChannel}'. Valid options are: " +
                     $"{string.Join(", ", allChannels.Select(c => c.Name))}");

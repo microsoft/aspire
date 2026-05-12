@@ -193,7 +193,7 @@ internal sealed class UpdateCommand : BaseCommand
             if (!string.IsNullOrWhiteSpace(channelName))
             {
                 // Try to find a channel matching the provided channel/quality
-                channel = allChannels.FirstOrDefault(c => string.Equals(c.Name, channelName, StringComparison.Ordinal))
+                channel = allChannels.FirstOrDefault(c => string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase))
                     ?? throw new ChannelNotFoundException($"No channel found matching '{channelName}'. Valid options are: {string.Join(", ", allChannels.Select(c => c.Name))}");
 
                 if (channelFromConfig)
