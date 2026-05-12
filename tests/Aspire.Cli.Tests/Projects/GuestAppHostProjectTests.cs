@@ -3,10 +3,13 @@
 
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Diagnostics;
+using Aspire.Cli.Interaction;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -541,7 +544,86 @@ public class GuestAppHostProjectTests : IDisposable
         Assert.Equal("Testing", envVars["ASPIRE_ENVIRONMENT"]);
     }
 
+    /// <summary>
+    /// Regression test for wf3: <c>aspire update</c> on a project with an Implicit channel
+    /// (i.e. the user has not pinned a channel via <c>--channel</c>, per-project
+    /// <c>aspire.config.json#channel</c>, or a prompt selection) must NOT silently pin the
+    /// running CLI's identity channel into <c>aspire.config.json#channel</c>.
+    /// </summary>
+    /// <remarks>
+    /// The test drives <see cref="GuestAppHostProject.UpdatePackagesAsync"/> through the
+    /// code path that detects updates and saves the config to disk, then expects the call
+    /// to throw from <c>BuildAndGenerateSdkAsync</c> (because
+    /// <see cref="TestAppHostServerProjectFactory.CreateAsync"/> throws). The channel save
+    /// happens before that throw, so we can inspect the on-disk
+    /// <c>aspire.config.json#channel</c> to assert it was NOT changed.
+    /// </remarks>
+    [Fact]
+    public async Task UpdatePackagesAsync_ImplicitChannel_DoesNotPinIdentityIntoConfig()
+    {
+        // Seed aspire.config.json with no channel pinned, an SDK version that is behind,
+        // and a single package entry. The fake nuget cache will return a newer version so
+        // the early "nothing to update" return is not taken.
+        var configPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, """
+            {
+              "sdk": { "version": "1.0.0" },
+              "packages": { "Aspire.Hosting": "1.0.0" }
+            }
+            """);
+
+        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
+        await File.WriteAllTextAsync(appHostPath, "// test apphost");
+
+        var fakeCache = new FakeNuGetPackageCache
+        {
+            GetPackagesAsyncCallback = (_, packageId, _, _, _, _, _) =>
+                Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(
+                [
+                    new Aspire.Shared.NuGetPackageCli { Id = packageId, Version = "2.0.0", Source = "test" }
+                ])
+        };
+
+        var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache);
+
+        var interactionService = new TestInteractionService
+        {
+            // Confirm the "Perform updates?" prompt so the channel-write code path runs.
+            ConfirmCallback = (_, _) => true
+        };
+
+        var project = CreateGuestAppHostProject(
+            interactionService: interactionService,
+            identityChannel: "pr-99999");
+
+        var context = new UpdatePackagesContext
+        {
+            AppHostFile = new FileInfo(appHostPath),
+            Channel = implicitChannel,
+            ConfirmBinding = PromptBinding.CreateDefault<bool>(false),
+            NuGetConfigDirBinding = PromptBinding.CreateDefault<string?>(null),
+        };
+
+        // BuildAndGenerateSdkAsync calls IAppHostServerProjectFactory.CreateAsync, which the
+        // test factory throws from. The channel save happens BEFORE that, so the on-disk
+        // assertion below is still meaningful.
+        await Assert.ThrowsAnyAsync<Exception>(
+            () => project.UpdatePackagesAsync(context, CancellationToken.None));
+
+        var reloaded = AspireConfigFile.Load(_workspace.WorkspaceRoot.FullName);
+        Assert.NotNull(reloaded);
+        // Pre-fix, this would have been "pr-99999" (the identity channel). Post-fix, the
+        // implicit-channel update path leaves the channel untouched.
+        Assert.Null(reloaded.Channel);
+    }
+
     private GuestAppHostProject CreateGuestAppHostProject()
+        => CreateGuestAppHostProject(interactionService: null, identityChannel: "local");
+
+    private GuestAppHostProject CreateGuestAppHostProject(
+        TestInteractionService? interactionService = null,
+        string identityChannel = "local",
+        TestAppHostServerProjectFactory? appHostServerProjectFactory = null)
     {
         var language = new LanguageInfo(
             LanguageId: "typescript/nodejs",
@@ -559,13 +641,14 @@ public class GuestAppHostProjectTests : IDisposable
             cacheDirectory: workspace,
             sdksDirectory: workspace,
             logsDirectory: workspace,
-            logFilePath: logFilePath);
+            logFilePath: logFilePath,
+            identityChannel: identityChannel);
 
         return new GuestAppHostProject(
             language: language,
-            interactionService: new TestInteractionService(),
+            interactionService: interactionService ?? new TestInteractionService(),
             backchannel: new TestAppHostBackchannel(),
-            appHostServerProjectFactory: new TestAppHostServerProjectFactory(),
+            appHostServerProjectFactory: appHostServerProjectFactory ?? new TestAppHostServerProjectFactory(),
             certificateService: new TestCertificateService(),
             runner: new TestDotNetCliRunner(),
             packagingService: new TestPackagingService(),

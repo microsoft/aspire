@@ -1213,11 +1213,18 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         {
             config.SdkVersion = newSdkVersion;
         }
-        // Explicit channel wins; otherwise fall back to the channel baked into the
-        // running CLI (CliExecutionContext.Channel).
-        config.Channel = context.Channel.Type == Packaging.PackageChannelType.Explicit
-            ? context.Channel.Name
-            : _executionContext.Channel;
+        // Persist the channel only when the update resolved an explicit channel (--channel,
+        // per-project config, or prompt selection). When the resolved channel is Implicit
+        // — i.e. the user hasn't pinned a channel — leave the project's existing setting
+        // untouched rather than silently pinning the running CLI's identity, which would
+        // propagate dev/PR-build identities into the project file. The scaffolding /
+        // build-time paths intentionally do auto-pin identity (see GuestAppHostProject.cs:354
+        // and ScaffoldingService.cs:208) — but `aspire update` is a no-pin path: the user
+        // is updating, not initialising, and we should not change the channel pin state.
+        if (context.Channel.Type == Packaging.PackageChannelType.Explicit)
+        {
+            config.Channel = context.Channel.Name;
+        }
         foreach (var (packageId, _, newVersion) in updates)
         {
             config.AddOrUpdatePackage(packageId, newVersion);
