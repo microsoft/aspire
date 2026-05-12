@@ -7,7 +7,8 @@
   "communityContributors": [],
   "description": "Added a new experimental `WithProcessCommand` API so AppHost authors can expose process-backed resource commands — commands that run local tools, scripts, or CLIs and capture their output. Supports static and dynamic process specs, stdin, environment variables, bounded output, and a factory variant (`withProcessCommandFactory`) for TypeScript and other polyglot AppHosts that builds the process spec from invocation-time arguments.",
   "docsPrs": [
-    918
+    918,
+    923
   ],
   "docsRequired": true,
   "emoji": "⚙️",

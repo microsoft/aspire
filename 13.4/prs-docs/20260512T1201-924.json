@@ -1,0 +1,9 @@
+{
+  "author": "app/dependabot",
+  "comment": "Dependabot npm dependency bump in aspire.dev, not related to milestone changelog",
+  "mergedAt": "2026-05-12T12:01:09Z",
+  "number": 924,
+  "runDate": "2026-05-12T12:40:56Z",
+  "status": "excluded",
+  "title": "build(deps): bump the npm-all group across 1 directory with 5 updates"
+}

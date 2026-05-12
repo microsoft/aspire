@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents process-backed resource commands (WithProcessCommand/withProcessCommandFactory) from microsoft/aspire#16972",
+  "mergedAt": "2026-05-12T12:02:17Z",
+  "number": 923,
+  "runDate": "2026-05-12T12:40:56Z",
+  "status": "included",
+  "title": "[docs] Add Custom process commands docs (withProcessCommand / withProcessCommandFactory)"
+}
