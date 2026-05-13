@@ -171,11 +171,11 @@ builder.Build().Run();
 
             // Step 8: Set environment variables for deployment.
             // - Unset ASPIRE_PLAYGROUND to avoid conflicts.
-            // - Set Azure location to australiaeast (matches Standard_D2as_v5 quota story used by
+            // - Set Azure location to westus3 (where we have Standard_D2as_v5 capacity, matching
             //   the rest of the AKS deployment tests).
             // - Set AZURE__RESOURCEGROUP to use our unique resource group name so the finally
             //   block can clean it up.
-            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=australiaeast && export AZURE__RESOURCEGROUP={resourceGroupName}");
+            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 
