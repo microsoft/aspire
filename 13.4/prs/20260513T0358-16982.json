@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Improved CLI docs parsing and search: switched to llms-full.txt, 3x parser speedup, reduced query allocations",
+  "mergedAt": "2026-05-13T03:58:44Z",
+  "number": 16982,
+  "runDate": "2026-05-13T05:18:10Z",
+  "status": "included",
+  "title": "Improve Aspire CLI docs parsing and search"
+}

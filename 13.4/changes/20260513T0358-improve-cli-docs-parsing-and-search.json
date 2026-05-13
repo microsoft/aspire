@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "CLI docs source switched to llms-full.txt for correctly formatted code blocks, with a 3x faster parser, reduced query allocations, and new BenchmarkDotNet harness for ongoing profiling.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔍",
+  "firstMergedAt": "2026-05-13T03:58:44Z",
+  "lastMergedAt": "2026-05-13T03:58:44Z",
+  "name": "Improved CLI docs parsing and search",
+  "owner": "davidfowl",
+  "prs": [
+    16982
+  ]
+}
