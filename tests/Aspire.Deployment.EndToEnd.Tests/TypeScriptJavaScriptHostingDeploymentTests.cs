@@ -134,7 +134,8 @@ public sealed class TypeScriptJavaScriptHostingDeploymentTests(ITestOutputHelper
 
             const staticsite = await builder.addJavaScriptApp('staticsite', './staticsite');
             await staticsite.publishAsStaticWebsite({ apiPath: '/api', apiTarget: api });
-            await staticsite.withEndpoint({ name: 'http', scheme: 'http', targetPort: 5000, isExternal: true });
+            await staticsite.withHttpEndpoint({ name: 'http', targetPort: 5000 });
+            await staticsite.withExternalHttpEndpoints();
 
             await builder.build().run();
             """);

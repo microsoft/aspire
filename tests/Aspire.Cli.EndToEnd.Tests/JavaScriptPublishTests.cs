@@ -191,7 +191,8 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
 
             const staticsite = await builder.addViteApp('staticsite', './staticsite');
             await staticsite.publishAsStaticWebsite({ apiPath: '/api', apiTarget: api });
-            await staticsite.withEndpoint({ name: 'http', scheme: 'http', targetPort: 5000, isExternal: true });
+            await staticsite.withHttpEndpoint({ name: 'http', targetPort: 5000 });
+            await staticsite.withExternalHttpEndpoints();
 
             const nodeserver = await builder.addViteApp('nodeserver', './nodeserver');
             await nodeserver.publishAsNodeServer('build/server.js', { outputPath: 'build' });
