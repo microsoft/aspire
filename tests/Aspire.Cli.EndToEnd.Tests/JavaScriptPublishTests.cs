@@ -15,11 +15,6 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class JavaScriptPublishTests(ITestOutputHelper output)
 {
-    private const int NodeNpmPort = 3101;
-    private const int JavaScriptPnpmPort = 3102;
-    private const int ViteYarnPort = 3103;
-    private const int NextBunPort = 3104;
-
     private static readonly string s_fixturesDir = Path.Combine(
         CliE2ETestHelpers.GetRepoRoot(),
         "tests", "Aspire.Cli.EndToEnd.Tests", "Fixtures", "JsPublish");
@@ -224,20 +219,17 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
             const nodeNpm = await builder.addNodeApp('node-npm', './node-npm', 'server.js');
             await nodeNpm.withNpm({ install: false });
             await nodeNpm.withRunScript('start');
-            await nodeNpm.withHttpEndpoint({ name: 'http', port: {{NodeNpmPort}}, env: 'PORT' });
+            await nodeNpm.withHttpEndpoint({ name: 'http', env: 'PORT' });
 
             const javaScriptPnpm = await builder.addJavaScriptApp('javascript-pnpm', './javascript-pnpm', { runScriptName: 'dev' });
             await javaScriptPnpm.withPnpm({ install: false });
-            await javaScriptPnpm.withHttpEndpoint({ name: 'http', port: {{JavaScriptPnpmPort}}, env: 'PORT' });
 
             const viteYarn = await builder.addViteApp('vite-yarn', './vite-yarn', { runScriptName: 'dev' });
             await viteYarn.withYarn({ install: false });
-            await viteYarn.withHttpEndpoint({ name: 'http', port: {{ViteYarnPort}}, env: 'PORT' });
 
             const nextBun = await builder.addNextJsApp('next-bun', './next-bun', { runScriptName: 'dev' });
             await nextBun.disableBuildValidation();
             await nextBun.withBun({ install: false });
-            await nextBun.withHttpEndpoint({ name: 'http', port: {{NextBunPort}}, env: 'PORT' });
 
             await builder.build().run();
             """);
@@ -268,6 +260,7 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
 
         File.WriteAllText(Path.Combine(appDir, "server.js"), $$"""
             const http = require('http');
+            const fs = require('fs');
 
             const portArgumentIndex = process.argv.findIndex(arg => arg === '--port' || arg === '-p');
             const port = process.env.PORT || (portArgumentIndex >= 0 ? process.argv[portArgumentIndex + 1] : undefined) || 3000;
@@ -276,6 +269,7 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
               res.writeHead(200, { 'Content-Type': 'application/json' });
               res.end(JSON.stringify({ app: '{{appName}}', ok: true }));
             }).listen(port, '0.0.0.0', () => {
+              fs.writeFileSync('ready-port', port.toString());
               console.log('{{appName}} listening on ' + port);
             });
             """);
@@ -289,9 +283,16 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
 
             check_endpoint() {
                 local name="$1"
-                local port="$2"
+                local port_file="${name}/ready-port"
 
                 for i in $(seq 1 30); do
+                    if [ ! -f "${port_file}" ]; then
+                        sleep 1
+                        continue
+                    fi
+
+                    local port
+                    port="$(cat "${port_file}")"
                     if curl -sf --max-time 5 "http://localhost:${port}/" | grep -q "\"app\":\"${name}\""; then
                         echo "${name}_OK"
                         return 0
@@ -301,13 +302,16 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
                 done
 
                 echo "${name}_FAIL"
+                echo "===== aspire-run.log ====="
+                cat aspire-run.log || true
+                echo "===== end aspire-run.log ====="
                 return 1
             }
 
-            check_endpoint "node-npm" "{{NodeNpmPort}}"
-            check_endpoint "javascript-pnpm" "{{JavaScriptPnpmPort}}"
-            check_endpoint "vite-yarn" "{{ViteYarnPort}}"
-            check_endpoint "next-bun" "{{NextBunPort}}"
+            check_endpoint "node-npm"
+            check_endpoint "javascript-pnpm"
+            check_endpoint "vite-yarn"
+            check_endpoint "next-bun"
 
             echo "RUNTIME_ALL_OK"
             """);
