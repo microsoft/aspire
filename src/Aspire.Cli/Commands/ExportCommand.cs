@@ -80,7 +80,7 @@ internal sealed class ExportCommand : BaseCommand
         Options.Add(s_includeHiddenOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
@@ -94,8 +94,7 @@ internal sealed class ExportCommand : BaseCommand
         // Validate mutual exclusivity of --apphost and --dashboard-url
         if (passedAppHostProjectFile is not null && dashboardUrl is not null)
         {
-            _interactionService.DisplayError(TelemetryCommandStrings.DashboardUrlAndAppHostExclusive);
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(ExitCodeConstants.InvalidCommand, TelemetryCommandStrings.DashboardUrlAndAppHostExclusive);
         }
 
         // Default file name if not specified
@@ -117,7 +116,7 @@ internal sealed class ExportCommand : BaseCommand
 
         if (!dashboardApi.Success)
         {
-            return dashboardApi.ExitCode;
+            return CommandResult.FromExitCode(dashboardApi.ExitCode);
         }
 
         if (dashboardApi.BaseUrl is null)
@@ -127,20 +126,19 @@ internal sealed class ExportCommand : BaseCommand
 
         try
         {
-            return await ExportDataAsync(resourceName, includeHidden, dashboardApi.Connection, dashboardApi.BaseUrl, dashboardApi.ApiToken, outputPath, cancellationToken);
+            return CommandResult.FromExitCode(await ExportDataAsync(resourceName, includeHidden, dashboardApi.Connection, dashboardApi.BaseUrl, dashboardApi.ApiToken, outputPath, cancellationToken));
         }
         catch (HttpRequestException ex) when (dashboardUrl is not null)
         {
             _logger.LogError(ex, "Failed to export telemetry data from dashboard");
             var errorInfo = await TelemetryCommandHelpers.FormatTelemetryErrorAsync(ex, dashboardApi.BaseUrl!, true, _httpClientFactory, _logger, cancellationToken);
             TelemetryCommandHelpers.DisplayTelemetryError(_interactionService, errorInfo);
-            return ExitCodeConstants.DashboardFailure;
+            return CommandResult.Failure(ExitCodeConstants.DashboardFailure);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to export telemetry data");
-            _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, ExportCommandStrings.FailedToExport, ex.Message));
-            return ExitCodeConstants.DashboardFailure;
+            return CommandResult.Failure(ExitCodeConstants.DashboardFailure, string.Format(CultureInfo.CurrentCulture, ExportCommandStrings.FailedToExport, ex.Message));
         }
     }
 

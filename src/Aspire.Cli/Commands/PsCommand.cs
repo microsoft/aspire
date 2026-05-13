@@ -95,7 +95,7 @@ internal sealed class PsCommand : BaseCommand
         Options.Add(s_resourcesOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
@@ -123,7 +123,7 @@ internal sealed class PsCommand : BaseCommand
             {
                 _interactionService.DisplayMessage(KnownEmojis.Information, SharedCommandStrings.AppHostNotRunning);
             }
-            return ExitCodeConstants.Success;
+            return CommandResult.Success();
         }
 
         // Order: in-scope first, then out-of-scope
@@ -145,7 +145,7 @@ internal sealed class PsCommand : BaseCommand
             DisplayTable(appHostInfos);
         }
 
-        return ExitCodeConstants.Success;
+        return CommandResult.Success();
     }
 
     private async Task<List<AppHostDisplayInfo>> GatherAppHostInfosAsync(List<IAppHostAuxiliaryBackchannel> connections, bool includeResources, CancellationToken cancellationToken)

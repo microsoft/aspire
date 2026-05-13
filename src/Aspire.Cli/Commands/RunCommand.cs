@@ -132,7 +132,7 @@ internal sealed class RunCommand : BaseCommand
         TreatUnmatchedTokensAsErrors = false;
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var passedAppHostProjectFile = parseResult.GetValue(AppHostLauncher.s_appHostOption);
         var detach = parseResult.GetValue(s_detachOption);
@@ -151,8 +151,7 @@ internal sealed class RunCommand : BaseCommand
         // Validate that --format is only used with --detach
         if (format == OutputFormat.Json && !detach)
         {
-            InteractionService.DisplayError(RunCommandStrings.FormatRequiresDetach);
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(ExitCodeConstants.InvalidCommand, RunCommandStrings.FormatRequiresDetach);
         }
 
         // Validate that --no-build is not used when watch mode would be enabled
@@ -160,14 +159,13 @@ internal sealed class RunCommand : BaseCommand
         var watchModeEnabled = _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false) || (isExtensionHost && !startDebugSession);
         if (noBuild && watchModeEnabled)
         {
-            InteractionService.DisplayError(RunCommandStrings.NoBuildNotSupportedWithWatchMode);
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(ExitCodeConstants.InvalidCommand, RunCommandStrings.NoBuildNotSupportedWithWatchMode);
         }
 
         // Handle detached mode - spawn child process and exit
         if (detach)
         {
-            return await ExecuteDetachedAsync(parseResult, passedAppHostProjectFile, isExtensionHost, cancellationToken);
+            return CommandResult.FromExitCode(await ExecuteDetachedAsync(parseResult, passedAppHostProjectFile, isExtensionHost, cancellationToken));
         }
 
         // A user may run `aspire run` in an Aspire terminal in VS Code. In this case, intercept and prompt
@@ -181,7 +179,7 @@ internal sealed class RunCommand : BaseCommand
         {
             extensionInteractionService.DisplayConsolePlainText(RunCommandStrings.StartingDebugSessionInExtension);
             await extensionInteractionService.StartDebugSessionAsync(ExecutionContext.WorkingDirectory.FullName, passedAppHostProjectFile?.FullName, startDebugSession, new DebugSessionOptions { Command = "run" });
-            return ExitCodeConstants.Success;
+            return CommandResult.Success();
         }
 
         AppHostProjectContext? context = null;
@@ -215,7 +213,7 @@ internal sealed class RunCommand : BaseCommand
             if (effectiveAppHostFile is null)
             {
                 runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "project_not_found");
-                return ExitCodeConstants.FailedToFindProject;
+                return CommandResult.Failure(ExitCodeConstants.FailedToFindProject);
             }
 
             // Resolve the language for this file and get the appropriate handler
@@ -223,8 +221,7 @@ internal sealed class RunCommand : BaseCommand
             if (project is null)
             {
                 runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "project_not_found");
-                InteractionService.DisplayError("Unrecognized app host type.");
-                return ExitCodeConstants.FailedToFindProject;
+                return CommandResult.Failure(ExitCodeConstants.FailedToFindProject, "Unrecognized app host type.");
             }
 
             runActivity?.SetTag(TelemetryConstants.Tags.AppHostLanguage, project.LanguageId);
@@ -290,8 +287,7 @@ internal sealed class RunCommand : BaseCommand
                 {
                     InteractionService.DisplayLines(outputCollector.GetLines());
                 }
-                InteractionService.DisplayError(InteractionServiceStrings.ProjectCouldNotBeBuilt);
-                return await pendingRun;
+                return CommandResult.Failure(await pendingRun, InteractionServiceStrings.ProjectCouldNotBeBuilt);
             }
 
             // If --wait-for-debugger, display a message so the user knows the AppHost is paused.
@@ -429,14 +425,14 @@ internal sealed class RunCommand : BaseCommand
                 await pendingLogCapture;
                 var exitCode = await pendingRun;
                 lifetimeActivity.SetProcessExitCode(exitCode);
-                return exitCode;
+                return CommandResult.FromExitCode(exitCode);
             }
         }
         catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken || ex is ExtensionOperationCanceledException)
         {
             runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "canceled");
             InteractionService.DisplayCancellationMessage();
-            return ExitCodeConstants.Success;
+            return CommandResult.Success();
         }
         catch (ProjectLocatorException ex)
         {
@@ -447,37 +443,34 @@ internal sealed class RunCommand : BaseCommand
         {
             runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "incompatible_version");
             Telemetry.RecordError(ex.Message, ex);
-            return InteractionService.DisplayIncompatibleVersionError(ex, ex.AspireHostingVersion ?? ex.RequiredCapability);
+            return CommandResult.FromExitCode(InteractionService.DisplayIncompatibleVersionError(ex, ex.AspireHostingVersion ?? ex.RequiredCapability));
         }
         catch (CertificateServiceException ex)
         {
             runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "certificate_trust_failed");
             var errorMessage = string.Format(CultureInfo.CurrentCulture, TemplatingStrings.CertificateTrustError, ex.Message);
             Telemetry.RecordError(errorMessage, ex);
-            InteractionService.DisplayError(errorMessage);
-            return ExitCodeConstants.FailedToTrustCertificates;
+            return CommandResult.Failure(ExitCodeConstants.FailedToTrustCertificates, errorMessage);
         }
         catch (FailedToConnectBackchannelConnection ex)
         {
             runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "backchannel_connection_failed");
             var errorMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ErrorConnectingToAppHost, ex.Message);
             Telemetry.RecordError(errorMessage, ex);
-            InteractionService.DisplayError(errorMessage);
-            return ExitCodeConstants.FailedToDotnetRunAppHost;
+            return CommandResult.Failure(ExitCodeConstants.FailedToDotnetRunAppHost, errorMessage);
         }
         catch (ConnectionLostException) when (isExtensionHost)
         {
             // When the extension manages the AppHost lifecycle (e.g., VS Code debug session),
             // it terminates the process on stop/restart, causing the backchannel to drop.
-            return ExitCodeConstants.Success;
+            return CommandResult.Success();
         }
         catch (Exception ex)
         {
             runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, ex.GetType().FullName);
             var errorMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.UnexpectedErrorOccurred, ex.Message);
             Telemetry.RecordError(errorMessage, ex);
-            InteractionService.DisplayError(errorMessage);
-            return ExitCodeConstants.FailedToDotnetRunAppHost;
+            return CommandResult.Failure(ExitCodeConstants.FailedToDotnetRunAppHost, errorMessage);
         }
         finally
         {

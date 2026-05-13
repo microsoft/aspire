@@ -142,7 +142,7 @@ internal sealed class LogsCommand : BaseCommand
         Options.Add(s_searchOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
@@ -158,8 +158,7 @@ internal sealed class LogsCommand : BaseCommand
         // Validate --tail value
         if (tail.HasValue && tail.Value < 1)
         {
-            _interactionService.DisplayError(LogsCommandStrings.TailMustBePositive);
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(ExitCodeConstants.InvalidCommand, LogsCommandStrings.TailMustBePositive);
         }
 
         var result = await _connectionResolver.ResolveConnectionAsync(
@@ -171,7 +170,7 @@ internal sealed class LogsCommand : BaseCommand
 
         if (!result.Success)
         {
-            return AppHostConnectionResultHandler.DisplayFailureAsInformation(result, _interactionService);
+            return CommandResult.FromExitCode(AppHostConnectionResultHandler.DisplayFailureAsInformation(result, _interactionService));
         }
 
         var connection = result.Connection!;
@@ -189,8 +188,7 @@ internal sealed class LogsCommand : BaseCommand
         {
             if (!ResourceSnapshotMapper.WhereMatchesResourceName(resourceWatcher.GetAllResources(), resourceName).Any())
             {
-                _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, LogsCommandStrings.ResourceNotFound, resourceName));
-                return ExitCodeConstants.InvalidCommand;
+                return CommandResult.Failure(ExitCodeConstants.InvalidCommand, string.Format(CultureInfo.CurrentCulture, LogsCommandStrings.ResourceNotFound, resourceName));
             }
         }
         else
@@ -198,7 +196,7 @@ internal sealed class LogsCommand : BaseCommand
             if (!resourceWatcher.GetResources().Any())
             {
                 _interactionService.DisplayMessage(KnownEmojis.Information, LogsCommandStrings.NoResourcesFound);
-                return ExitCodeConstants.Success;
+                return CommandResult.Success();
             }
         }
 
@@ -206,17 +204,17 @@ internal sealed class LogsCommand : BaseCommand
         {
             try
             {
-                return await ExecuteWatchAsync(connection, resourceWatcher, resourceName, format, tail, timestamps, search, cancellationToken);
+                return CommandResult.FromExitCode(await ExecuteWatchAsync(connection, resourceWatcher, resourceName, format, tail, timestamps, search, cancellationToken));
             }
             catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken || cancellationToken.IsCancellationRequested)
             {
-                return ExitCodeConstants.Success;
+                return CommandResult.Success();
             }
             catch (Exception ex) when (AppHostFollowDisconnectHelpers.IsExpectedDisconnect(ex))
             {
                 if (cancellationToken.IsCancellationRequested)
                 {
-                    return ExitCodeConstants.Success;
+                    return CommandResult.Success();
                 }
 
                 // Stopping or restarting the AppHost can tear down the JSON-RPC stream while
@@ -225,12 +223,12 @@ internal sealed class LogsCommand : BaseCommand
                 // message on stderr so JSON output on stdout remains parseable.
                 AppHostFollowDisconnectHelpers.WriteStatusMessage(_interactionService, connection);
 
-                return ExitCodeConstants.Success;
+                return CommandResult.Success();
             }
         }
         else
         {
-            return await ExecuteGetAsync(connection, resourceWatcher, resourceName, format, tail, timestamps, search, cancellationToken);
+            return CommandResult.FromExitCode(await ExecuteGetAsync(connection, resourceWatcher, resourceName, format, tail, timestamps, search, cancellationToken));
         }
     }
 

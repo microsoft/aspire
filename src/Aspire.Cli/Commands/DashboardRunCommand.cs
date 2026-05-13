@@ -82,20 +82,18 @@ internal sealed class DashboardRunCommand : BaseCommand
         TreatUnmatchedTokensAsErrors = false;
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var layout = await _bundleService.EnsureExtractedAndGetLayoutAsync(cancellationToken).ConfigureAwait(false);
         if (layout is null)
         {
-            _interactionService.DisplayError(DashboardCommandStrings.BundleLayoutNotFound);
-            return ExitCodeConstants.DashboardFailure;
+            return CommandResult.Failure(ExitCodeConstants.DashboardFailure, DashboardCommandStrings.BundleLayoutNotFound);
         }
 
         var managedPath = layout.GetManagedPath();
         if (managedPath is null || !File.Exists(managedPath))
         {
-            _interactionService.DisplayError(DashboardCommandStrings.ManagedBinaryNotFound);
-            return ExitCodeConstants.DashboardFailure;
+            return CommandResult.Failure(ExitCodeConstants.DashboardFailure, DashboardCommandStrings.ManagedBinaryNotFound);
         }
 
         var dashboardArgs = new List<string> { "dashboard" };
@@ -138,7 +136,7 @@ internal sealed class DashboardRunCommand : BaseCommand
         // Resolve URLs for the summary display.
         var dashboardInfo = ResolveDashboardInfo(dashboardArgs, unmatchedTokens, ExecutionContext, browserToken);
 
-        return await ExecuteForegroundAsync(managedPath, dashboardArgs, dashboardInfo, environmentVariables, cancellationToken).ConfigureAwait(false);
+        return CommandResult.FromExitCode(await ExecuteForegroundAsync(managedPath, dashboardArgs, dashboardInfo, environmentVariables, cancellationToken).ConfigureAwait(false));
     }
 
     private static void AddOptionArgs(ParseResult parseResult, List<string> args, IReadOnlyList<string> unmatchedTokens, CliExecutionContext executionContext)

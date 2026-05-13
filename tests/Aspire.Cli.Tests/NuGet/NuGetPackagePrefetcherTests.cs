@@ -240,9 +240,9 @@ internal sealed class TestCommand : BaseCommand
     {
     }
 
-    protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
-        return Task.FromResult(0);
+        return Task.FromResult(CommandResult.Success());
     }
 }
 
@@ -255,8 +255,8 @@ internal sealed class TestCommandWithInterface : BaseCommand, IPackageMetaPrefet
     public bool PrefetchesTemplatePackageMetadata => true;
     public bool PrefetchesCliPackageMetadata => true;
 
-    protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
-        return Task.FromResult(0);
+        return Task.FromResult(CommandResult.Success());
     }
 }

@@ -90,12 +90,12 @@ internal sealed class AgentMcpCommand : BaseCommand
     /// Public entry point for executing the MCP server command.
     /// This allows McpStartCommand to delegate to this implementation.
     /// </summary>
-    internal Task<int> ExecuteCommandAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    internal Task<CommandResult> ExecuteCommandAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         return ExecuteAsync(parseResult, cancellationToken);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var dashboardUrl = parseResult.GetValue(s_dashboardUrlOption);
         var apiKey = parseResult.GetValue(s_apiKeyOption);
@@ -105,7 +105,7 @@ internal sealed class AgentMcpCommand : BaseCommand
             if (!UrlHelper.IsHttpUrl(dashboardUrl))
             {
                 _logger.LogError("Invalid --dashboard-url: {DashboardUrl}", dashboardUrl);
-                return ExitCodeConstants.InvalidCommand;
+                return CommandResult.Failure(ExitCodeConstants.InvalidCommand);
             }
 
             _dashboardOnlyMode = true;
@@ -166,7 +166,7 @@ internal sealed class AgentMcpCommand : BaseCommand
         _resourceToolRefreshService.SetMcpServer(null);
         _server = null;
 
-        return ExitCodeConstants.Success;
+        return CommandResult.Success();
     }
 
     private async ValueTask<ListToolsResult> HandleListToolsAsync(RequestContext<ListToolsRequestParams> request, CancellationToken cancellationToken)

@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.CommandLine;
-using System.CommandLine.Help;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
@@ -14,7 +12,7 @@ namespace Aspire.Cli.Commands;
 /// <summary>
 /// Manages AppHost user secrets (set, get, list, delete).
 /// </summary>
-internal sealed class SecretCommand : BaseCommand
+internal sealed class SecretCommand : ParentCommand
 {
     internal static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", SharedCommandStrings.AppHostOptionDescription);
 
@@ -38,11 +36,5 @@ internal sealed class SecretCommand : BaseCommand
         Subcommands.Add(listCommand);
         Subcommands.Add(pathCommand);
         Subcommands.Add(deleteCommand);
-    }
-
-    protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
-    {
-        new HelpAction().Invoke(parseResult);
-        return Task.FromResult(ExitCodeConstants.InvalidCommand);
     }
 }

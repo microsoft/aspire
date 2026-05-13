@@ -105,7 +105,7 @@ internal sealed class AppHostLauncher(
         }
         catch (ProjectLocatorException ex)
         {
-            return BaseCommand.HandleProjectLocatorException(ex, interactionService, telemetry);
+            return BaseCommand.HandleProjectLocatorException(ex, interactionService, telemetry).ExitCode;
         }
 
         var effectiveAppHostFile = searchResult.SelectedProjectFile;

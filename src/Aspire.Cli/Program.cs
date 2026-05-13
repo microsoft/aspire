@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
-using System.CommandLine.Parsing;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
@@ -855,7 +854,7 @@ public class Program
         // Walk the parent command tree to find the top-level command name and get the full command name for this parseresult.
         var parentNames = new List<string> { r.CommandResult.Command.Name };
         var current = r.CommandResult.Parent;
-        while (current is CommandResult parentCommandResult)
+        while (current is System.CommandLine.Parsing.CommandResult parentCommandResult)
         {
             parentNames.Add(parentCommandResult.Command.Name);
             current = parentCommandResult.Parent;

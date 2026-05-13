@@ -111,7 +111,7 @@ internal sealed class UpdateCommand : BaseCommand
         return DotNetToolDetection.GetDotNetToolUpdateCommand();
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var isSelfUpdate = parseResult.GetValue(s_selfOption);
 
@@ -124,23 +124,22 @@ internal sealed class UpdateCommand : BaseCommand
             {
                 InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.DotNetToolSelfUpdateMessage);
                 InteractionService.DisplayPlainText($"  {dotNetToolUpdateCommand}");
-                return 0;
+                return CommandResult.FromExitCode(0);
             }
 
             if (_cliDownloader is null)
             {
-                InteractionService.DisplayError("CLI self-update is not available in this environment.");
-                return ExitCodeConstants.InvalidCommand;
+                return CommandResult.Failure(ExitCodeConstants.InvalidCommand, "CLI self-update is not available in this environment.");
             }
 
             try
             {
-                return await ExecuteSelfUpdateAsync(parseResult, cancellationToken);
+                return CommandResult.FromExitCode(await ExecuteSelfUpdateAsync(parseResult, cancellationToken));
             }
             catch (OperationCanceledException)
             {
                 InteractionService.DisplayCancellationMessage();
-                return ExitCodeConstants.InvalidCommand;
+                return CommandResult.Failure(ExitCodeConstants.InvalidCommand);
             }
         }
 
@@ -151,7 +150,7 @@ internal sealed class UpdateCommand : BaseCommand
             var projectFile = await _projectLocator.UseOrFindAppHostProjectFileAsync(passedAppHostProjectFile, createSettingsFile: true, cancellationToken);
             if (projectFile is null)
             {
-                return ExitCodeConstants.FailedToFindProject;
+                return CommandResult.Failure(ExitCodeConstants.FailedToFindProject);
             }
 
             var project = _projectFactory.GetProject(projectFile);
@@ -264,11 +263,11 @@ internal sealed class UpdateCommand : BaseCommand
                     {
                         InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.DotNetToolSelfUpdateMessage);
                         InteractionService.DisplayPlainText($"  {dotNetToolUpdateCommand}");
-                        return ExitCodeConstants.Success;
+                        return CommandResult.Success();
                     }
 
                     // Use the same channel that was selected for the project update
-                    return await ExecuteSelfUpdateAsync(parseResult, cancellationToken, channel.Name);
+                    return CommandResult.FromExitCode(await ExecuteSelfUpdateAsync(parseResult, cancellationToken, channel.Name));
                 }
             }
         }
@@ -276,15 +275,13 @@ internal sealed class UpdateCommand : BaseCommand
         {
             var message = Markup.Escape(ex.Message);
             Telemetry.RecordError(message, ex);
-            InteractionService.DisplayError(message);
-            return ExitCodeConstants.FailedToUpgradeProject;
+            return CommandResult.Failure(ExitCodeConstants.FailedToUpgradeProject, message);
         }
         catch (ChannelNotFoundException ex)
         {
             var message = Markup.Escape(ex.Message);
             Telemetry.RecordError(message, ex);
-            InteractionService.DisplayError(message);
-            return ExitCodeConstants.FailedToUpgradeProject;
+            return CommandResult.Failure(ExitCodeConstants.FailedToUpgradeProject, message);
         }
         catch (ProjectLocatorException ex)
         {
@@ -301,7 +298,7 @@ internal sealed class UpdateCommand : BaseCommand
 
                     if (shouldUpdateCli)
                     {
-                        return await ExecuteSelfUpdateAsync(parseResult, cancellationToken);
+                        return CommandResult.FromExitCode(await ExecuteSelfUpdateAsync(parseResult, cancellationToken));
                     }
                 }
             }
@@ -311,10 +308,10 @@ internal sealed class UpdateCommand : BaseCommand
         catch (OperationCanceledException)
         {
             InteractionService.DisplayCancellationMessage();
-            return ExitCodeConstants.FailedToUpgradeProject;
+            return CommandResult.Failure(ExitCodeConstants.FailedToUpgradeProject);
         }
 
-        return 0;
+        return CommandResult.FromExitCode(0);
     }
 
     private async Task<int> ExecuteSelfUpdateAsync(ParseResult parseResult, CancellationToken cancellationToken, string? selectedChannel = null)

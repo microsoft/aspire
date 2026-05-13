@@ -76,7 +76,7 @@ internal sealed class TelemetrySpansCommand : BaseCommand
         Options.Add(s_searchOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
@@ -94,8 +94,7 @@ internal sealed class TelemetrySpansCommand : BaseCommand
         // Validate --limit value
         if (limit.HasValue && limit.Value < 1)
         {
-            _interactionService.DisplayError(TelemetryCommandStrings.LimitMustBePositive);
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(ExitCodeConstants.InvalidCommand, TelemetryCommandStrings.LimitMustBePositive);
         }
 
         var dashboardApi = await TelemetryCommandHelpers.GetDashboardApiAsync(
@@ -103,10 +102,10 @@ internal sealed class TelemetrySpansCommand : BaseCommand
 
         if (!dashboardApi.Success)
         {
-            return dashboardApi.ExitCode;
+            return CommandResult.FromExitCode(dashboardApi.ExitCode);
         }
 
-        return await FetchSpansAsync(dashboardApi.BaseUrl!, dashboardApi.ApiToken!, resourceName, traceId, hasError, limit, follow, format, dashboardOnly: dashboardUrl is not null, dashboardApi.DashboardUrl!, search, cancellationToken);
+        return CommandResult.FromExitCode(await FetchSpansAsync(dashboardApi.BaseUrl!, dashboardApi.ApiToken!, resourceName, traceId, hasError, limit, follow, format, dashboardOnly: dashboardUrl is not null, dashboardApi.DashboardUrl!, search, cancellationToken));
     }
 
     private async Task<int> FetchSpansAsync(
