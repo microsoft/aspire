@@ -13,6 +13,7 @@ internal interface ICliUpdateNotifier
 {
     Task CheckForCliUpdatesAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken);
     void NotifyIfUpdateAvailable();
+    Task NotifyIfUpdateAvailableAsync(DirectoryInfo workingDirectory, TimeSpan waitTimeout, CancellationToken cancellationToken);
     bool IsUpdateAvailable();
 }
 
@@ -21,20 +22,20 @@ internal class CliUpdateNotifier(
     INuGetPackageCache nuGetPackageCache,
     IInteractionService interactionService) : ICliUpdateNotifier
 {
+    private readonly object _updateCheckLock = new();
     private IEnumerable<Shared.NuGetPackageCli>? _availablePackages;
+    private Task<IEnumerable<Shared.NuGetPackageCli>>? _updateCheckTask;
 
     public async Task CheckForCliUpdatesAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
-        _availablePackages = await nuGetPackageCache.GetCliPackagesAsync(
-            workingDirectory: workingDirectory,
-            prerelease: true,
-            nugetConfigFile: null,
-            cancellationToken: cancellationToken);
+        var updateCheckTask = GetOrStartUpdateCheckTask(workingDirectory, cancellationToken);
+        SetAvailablePackages(await updateCheckTask);
     }
 
     public void NotifyIfUpdateAvailable()
     {
-        if (_availablePackages is null)
+        var availablePackages = GetAvailablePackages();
+        if (availablePackages is null)
         {
             return;
         }
@@ -46,7 +47,7 @@ internal class CliUpdateNotifier(
             return;
         }
 
-        var newerVersion = PackageUpdateHelpers.GetNewerVersion(logger, currentVersion, _availablePackages);
+        var newerVersion = PackageUpdateHelpers.GetNewerVersion(logger, currentVersion, availablePackages);
 
         if (newerVersion is not null)
         {
@@ -56,9 +57,37 @@ internal class CliUpdateNotifier(
         }
     }
 
+    public async Task NotifyIfUpdateAvailableAsync(DirectoryInfo workingDirectory, TimeSpan waitTimeout, CancellationToken cancellationToken)
+    {
+        var updateCheckTask = GetOrStartUpdateCheckTask(workingDirectory, cancellationToken);
+
+        if (updateCheckTask is not null)
+        {
+            using var timeoutCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCancellationTokenSource.CancelAfter(waitTimeout);
+
+            try
+            {
+                var availablePackages = await updateCheckTask.WaitAsync(timeoutCancellationTokenSource.Token);
+                SetAvailablePackages(availablePackages);
+            }
+            catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested && ex.CancellationToken == timeoutCancellationTokenSource.Token)
+            {
+                return;
+            }
+            catch (Exception)
+            {
+                return;
+            }
+        }
+
+        NotifyIfUpdateAvailable();
+    }
+
     public bool IsUpdateAvailable()
     {
-        if (_availablePackages is null)
+        var availablePackages = GetAvailablePackages();
+        if (availablePackages is null)
         {
             return false;
         }
@@ -69,12 +98,45 @@ internal class CliUpdateNotifier(
             return false;
         }
 
-        var newerVersion = PackageUpdateHelpers.GetNewerVersion(logger, currentVersion, _availablePackages);
+        var newerVersion = PackageUpdateHelpers.GetNewerVersion(logger, currentVersion, availablePackages);
         return newerVersion is not null;
     }
 
     protected virtual SemVersion? GetCurrentVersion()
     {
         return PackageUpdateHelpers.GetCurrentPackageVersion();
+    }
+
+    private Task<IEnumerable<Shared.NuGetPackageCli>> GetOrStartUpdateCheckTask(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
+    {
+        lock (_updateCheckLock)
+        {
+            if (_updateCheckTask is null || _updateCheckTask.IsCanceled || _updateCheckTask.IsFaulted || _updateCheckTask.IsCompletedSuccessfully)
+            {
+                _updateCheckTask = nuGetPackageCache.GetCliPackagesAsync(
+                    workingDirectory: workingDirectory,
+                    prerelease: true,
+                    nugetConfigFile: null,
+                    cancellationToken: cancellationToken);
+            }
+
+            return _updateCheckTask;
+        }
+    }
+
+    private IEnumerable<Shared.NuGetPackageCli>? GetAvailablePackages()
+    {
+        lock (_updateCheckLock)
+        {
+            return _availablePackages;
+        }
+    }
+
+    private void SetAvailablePackages(IEnumerable<Shared.NuGetPackageCli> availablePackages)
+    {
+        lock (_updateCheckLock)
+        {
+            _availablePackages = availablePackages;
+        }
     }
 }

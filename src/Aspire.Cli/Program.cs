@@ -777,6 +777,7 @@ public class Program
             // Disable default exception handler so we can log exceptions to telemetry.
             EnableDefaultExceptionHandler = false
         };
+        var versionOption = GetVersionOption(rootCommand);
 
         app.Services.GetRequiredService<CliExecutionContext>();
         using var mainActivity = telemetry.StartReportedActivity(TelemetryConstants.Activities.Main, ActivityKind.Internal);
@@ -797,6 +798,11 @@ public class Program
 
             logger.LogDebug("Parsing arguments: {Args}", string.Join(" ", args));
             var parseResult = rootCommand.Parse(args);
+            var executionContext = app.Services.GetRequiredService<CliExecutionContext>();
+            CaptureParsedCommand(parseResult, executionContext);
+            var versionUpdateNotificationTask = IsVersionOptionRequested(versionOption, parseResult)
+                ? TryNotifyVersionUpdateAsync(app.Services, executionContext, cts.Token)
+                : Task.CompletedTask;
 
             var commandName = GetCommandName(parseResult);
             logger.LogDebug("Executing command: {CommandName}", commandName);
@@ -807,6 +813,8 @@ public class Program
 
             // Log exit code for debugging
             logger.LogInformation("Exit code: {ExitCode}", exitCode);
+
+            await versionUpdateNotificationTask;
 
             mainActivity?.SetTag(TelemetryConstants.Tags.ProcessExitCode, exitCode);
             mainActivity?.Stop();
@@ -848,6 +856,44 @@ public class Program
             await app.StopAsync().ConfigureAwait(false);
             await shutdownTelemetryTask;
         }
+    }
+
+    internal static void CaptureParsedCommand(ParseResult parseResult, CliExecutionContext executionContext)
+    {
+        ArgumentNullException.ThrowIfNull(parseResult);
+        ArgumentNullException.ThrowIfNull(executionContext);
+
+        executionContext.Command = parseResult.CommandResult.Command;
+    }
+
+    internal static bool IsVersionOptionRequested(RootCommand rootCommand, ParseResult parseResult)
+    {
+        ArgumentNullException.ThrowIfNull(rootCommand);
+
+        return IsVersionOptionRequested(GetVersionOption(rootCommand), parseResult);
+    }
+
+    internal static bool IsVersionOptionRequested(VersionOption? versionOption, ParseResult parseResult)
+    {
+        ArgumentNullException.ThrowIfNull(parseResult);
+        return versionOption is not null && parseResult.GetResult(versionOption) is { Implicit: false };
+    }
+
+    private static async Task TryNotifyVersionUpdateAsync(IServiceProvider services, CliExecutionContext executionContext, CancellationToken cancellationToken)
+    {
+        var features = services.GetRequiredService<IFeatures>();
+        if (!features.IsFeatureEnabled(KnownFeatures.UpdateNotificationsEnabled, true))
+        {
+            return;
+        }
+
+        var updateNotifier = services.GetRequiredService<ICliUpdateNotifier>();
+        await updateNotifier.NotifyIfUpdateAvailableAsync(executionContext.WorkingDirectory, TimeSpan.FromMilliseconds(250), cancellationToken);
+    }
+
+    private static VersionOption? GetVersionOption(RootCommand rootCommand)
+    {
+        return rootCommand.Options.OfType<VersionOption>().FirstOrDefault();
     }
 
     private static string GetCommandName(ParseResult r)

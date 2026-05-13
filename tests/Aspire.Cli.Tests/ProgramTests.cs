@@ -3,6 +3,7 @@
 
 using System.Reflection;
 using System.Text;
+using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -110,5 +111,35 @@ public class ProgramTests(ITestOutputHelper outputHelper)
 
         Assert.Empty(errorWriter.Lines);
         Assert.Empty(errorWriter.MarkupLines);
+    }
+
+    [Fact]
+    public void CaptureParsedCommand_UsesRootCommandForVersionOption()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var rootCommand = provider.GetRequiredService<RootCommand>();
+        var executionContext = provider.GetRequiredService<CliExecutionContext>();
+        var parseResult = rootCommand.Parse(["--version"]);
+
+        Program.CaptureParsedCommand(parseResult, executionContext);
+
+        Assert.Same(rootCommand, executionContext.Command);
+        Assert.True(Program.IsVersionOptionRequested(rootCommand, parseResult));
+    }
+
+    [Fact]
+    public void IsVersionOptionRequested_IgnoresSubcommandVersionOption()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var rootCommand = provider.GetRequiredService<RootCommand>();
+        var parseResult = rootCommand.Parse(["add", "Aspire.Hosting.Redis", "--version", "9.4.0"]);
+
+        Assert.False(Program.IsVersionOptionRequested(rootCommand, parseResult));
     }
 }

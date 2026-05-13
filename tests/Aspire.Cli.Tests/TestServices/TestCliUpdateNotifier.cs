@@ -31,6 +31,12 @@ internal sealed class TestCliUpdateNotifier : ICliUpdateNotifier
         NotifyIfUpdateAvailableCallback?.Invoke();
     }
 
+    public Task NotifyIfUpdateAvailableAsync(DirectoryInfo workingDirectory, TimeSpan waitTimeout, CancellationToken cancellationToken)
+    {
+        NotifyIfUpdateAvailable();
+        return Task.CompletedTask;
+    }
+
     public bool IsUpdateAvailable()
     {
         return IsUpdateAvailableCallback?.Invoke() ?? false;
