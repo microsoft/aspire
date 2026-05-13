@@ -10,6 +10,10 @@ using Aspire.TestUtilities;
 namespace Aspire.Hosting.Yarp.Tests;
 public class YarpFunctionalTests(ITestOutputHelper testOutputHelper)
 {
+    // The floating aspnetapp tag can move to a platform-specific manifest; pin
+    // this functional test to a multi-platform tag because it runs on Linux CI.
+    private const string BackendImage = "mcr.microsoft.com/dotnet/samples:aspnetapp-8.0";
+
     [Fact]
     [RequiresFeature(TestFeature.Docker)]
     public async Task VerifyYarpResourceExtensionsConfig()
@@ -31,7 +35,7 @@ public class YarpFunctionalTests(ITestOutputHelper testOutputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var backend = builder
-            .AddContainer("backend", "mcr.microsoft.com/dotnet/samples:aspnetapp")
+            .AddContainer("backend", BackendImage)
             .WithHttpEndpoint(targetPort: 8080)
             .WithExternalHttpEndpoints();
 
