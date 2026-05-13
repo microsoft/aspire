@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Major CLI channel identity architecture change: bake channel into assembly metadata to eliminate cross-install drift",
+  "mergedAt": "2026-05-13T00:09:35Z",
+  "number": 16820,
+  "runDate": "2026-05-13T00:32:51Z",
+  "status": "included",
+  "title": "CLI: bake channel into assembly metadata; drop global-channel writes"
+}

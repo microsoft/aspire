@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Improvement to IInteractionService to return IsAvailable=false during non-interactive CLI resource command execution",
+  "mergedAt": "2026-05-13T00:05:08Z",
+  "number": 16973,
+  "runDate": "2026-05-13T00:32:51Z",
+  "status": "included",
+  "title": "Handle non-interactive interaction service availability for resource commands"
+}

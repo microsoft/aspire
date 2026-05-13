@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The CLI channel identity is now baked into assembly metadata at build time, eliminating cross-install drift where different acquisition routes could silently overwrite each other's channel selection. The channel is set as an assembly attribute and read at startup, making the CLI self-describing.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🏷️",
+  "firstMergedAt": "2026-05-13T00:09:35Z",
+  "lastMergedAt": "2026-05-13T00:09:35Z",
+  "name": "CLI channel identity baked into assembly metadata",
+  "owner": "radical",
+  "prs": [
+    16820
+  ]
+}

@@ -5,7 +5,7 @@
   "breaking": false,
   "changeType": "New features",
   "communityContributors": [],
-  "description": "Added a new experimental `WithProcessCommand` API so AppHost authors can expose process-backed resource commands — commands that run local tools, scripts, or CLIs and capture their output. Supports static and dynamic process specs, stdin, environment variables, bounded output, and a factory variant (`withProcessCommandFactory`) for TypeScript and other polyglot AppHosts that builds the process spec from invocation-time arguments.",
+  "description": "Added a new experimental `WithProcessCommand` API so AppHost authors can expose process-backed resource commands — commands that run local tools, scripts, or CLIs and capture their output. Supports static and dynamic process specs, stdin, environment variables, bounded output, and a factory variant for TypeScript polyglot AppHosts. The `IInteractionService` now correctly returns `IsAvailable=false` during non-interactive CLI resource command execution.",
   "docsPrs": [
     918,
     923
@@ -13,11 +13,12 @@
   "docsRequired": true,
   "emoji": "⚙️",
   "firstMergedAt": "2026-05-11T23:10:57Z",
-  "lastMergedAt": "2026-05-12T06:52:28Z",
+  "lastMergedAt": "2026-05-13T00:05:08Z",
   "name": "Process-backed resource commands",
   "owner": "davidfowl",
   "prs": [
     16923,
-    16972
+    16972,
+    16973
   ]
 }
