@@ -50,6 +50,7 @@ export async function onRuntimeConfigLoaded(config) {
             }
         }
     } catch (error) {
+        console.warn('Failed to load Aspire client configuration:', error);
     }
 }
 
