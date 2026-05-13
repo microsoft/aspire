@@ -308,7 +308,13 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         // Make CreateExecution return an execution whose Start() returns false,
         // which causes LayoutProcessRunner.Start to throw InvalidOperationException.
         executionFactory.CreateExecutionCallback = (_, _, _, _) =>
-            new TestProcessExecution("fake", [], null, new ProcessInvocationOptions(), (_, _) => (0, null), () => 0)
+            new TestProcessExecution(
+                "fake",
+                [],
+                null,
+                new ProcessInvocationOptions(),
+                (_, _, _) => Task.FromResult((0, (string?)null)),
+                () => 0)
             {
                 StartReturnValue = false
             };

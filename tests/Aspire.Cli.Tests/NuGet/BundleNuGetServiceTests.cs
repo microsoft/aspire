@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using Aspire.Cli.Layout;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Tests.Mcp;
@@ -299,6 +300,77 @@ public class BundleNuGetServiceTests(ITestOutputHelper outputHelper)
 
         Assert.StartsWith(restoreRoot, divergedManifest, StringComparison.OrdinalIgnoreCase);
         Assert.NotEqual(sharedManifestSecond, divergedManifest);
+    }
+
+    [Fact]
+    public async Task RestorePackagesAsync_SerializesConcurrentRestoreForSameCachePath()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appHostDirectory = workspace.CreateDirectory("apphost");
+        var layoutRoot = workspace.CreateDirectory("layout");
+        var managedDirectory = layoutRoot.CreateSubdirectory(BundleDiscovery.ManagedDirectoryName);
+        var managedPath = Path.Combine(
+            managedDirectory.FullName,
+            BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName));
+        File.WriteAllText(managedPath, string.Empty);
+
+        var invocations = new ConcurrentQueue<string[]>();
+        var firstRestoreStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allowFirstRestoreToComplete = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var restoreAttemptCount = 0;
+        var manifestAttemptCount = 0;
+
+        var executionFactory = new TestProcessExecutionFactory
+        {
+            AssertionCallback = (args, _, _, _) => invocations.Enqueue(args.ToArray()),
+            AsyncAttemptCallback = async (attempt, _, cancellationToken) =>
+            {
+                var args = invocations.ElementAt(attempt - 1);
+                if (args.Contains("restore"))
+                {
+                    if (Interlocked.Increment(ref restoreAttemptCount) == 1)
+                    {
+                        firstRestoreStarted.SetResult();
+                        await allowFirstRestoreToComplete.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+                    }
+
+                    return (0, null);
+                }
+
+                if (args.Contains("manifest"))
+                {
+                    Interlocked.Increment(ref manifestAttemptCount);
+                    await File.WriteAllTextAsync(
+                        GetArgumentValue(args, "--output"),
+                        """{"managedAssemblies":[],"nativeLibraries":[]}""",
+                        cancellationToken).ConfigureAwait(false);
+                }
+
+                return (0, null);
+            }
+        };
+
+        var service = new BundleNuGetService(
+            new FixedLayoutDiscovery(new LayoutConfiguration { LayoutPath = layoutRoot.FullName }),
+            new LayoutProcessRunner(executionFactory),
+            new TestFeatures(),
+            TestExecutionContextFactory.CreateTestContext(),
+            NullLogger<BundleNuGetService>.Instance);
+
+        var packageList = new List<(string Id, string Version)> { ("Aspire.Hosting.JavaScript", "9.4.0") };
+        var firstRestoreTask = service.RestorePackagesAsync(packageList, workingDirectory: appHostDirectory.FullName);
+        await firstRestoreStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        var secondRestoreTask = service.RestorePackagesAsync(packageList, workingDirectory: appHostDirectory.FullName);
+        allowFirstRestoreToComplete.SetResult();
+
+        var manifests = await Task.WhenAll(firstRestoreTask, secondRestoreTask);
+
+        Assert.Equal(manifests[0], manifests[1]);
+        Assert.Equal(1, restoreAttemptCount);
+        Assert.Equal(1, manifestAttemptCount);
+        Assert.Equal(2, invocations.Count);
     }
 
     [Fact]

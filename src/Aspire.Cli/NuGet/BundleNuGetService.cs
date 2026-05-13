@@ -98,8 +98,15 @@ internal sealed class BundleNuGetService : INuGetService
         var objDir = Path.Combine(restoreDir, "obj");
         var manifestPath = Path.Combine(restoreDir, IntegrationPackageProbeManifest.FileName);
         var assetsPath = Path.Combine(objDir, "project.assets.json");
+        var lockPath = Path.Combine(restoreDir, "restore.lock");
 
-        // Check if already restored
+        // The package cache is shared by every AppHost in the workspace. Serialize the
+        // restore and manifest write so one process cannot start RemoteHost while another
+        // process is rewriting the same manifest or project.assets.json file.
+        using var fileLock = await FileLock.AcquireAsync(lockPath, ct).ConfigureAwait(false);
+
+        // Check if already restored after acquiring the lock because another process may
+        // have populated the shared cache while this process was waiting.
         if (File.Exists(manifestPath) && TryValidatePackageManifest(manifestPath, _logger))
         {
             _logger.LogDebug("Using cached package manifest at {Path}", manifestPath);
