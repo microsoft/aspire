@@ -14,7 +14,7 @@ internal static partial class DetachedProcessLauncher
 {
     /// <summary>
     /// Windows implementation using CreateProcess with CREATE_NEW_CONSOLE,
-    /// CREATE_NO_WINDOW, STARTUPINFOEX, and PROC_THREAD_ATTRIBUTE_HANDLE_LIST
+    /// STARTUPINFOEX, SW_HIDE, and PROC_THREAD_ATTRIBUTE_HANDLE_LIST
     /// to detach from the launching console and prevent handle inheritance to grandchildren.
     /// </summary>
     [SupportedOSPlatform("windows")]
@@ -83,6 +83,8 @@ internal static partial class DetachedProcessLauncher
                     si.hStdOutput = nulRawHandle;
                     si.hStdError = nulRawHandle;
                     si.lpAttributeList = attrList;
+                    // CREATE_NO_WINDOW is ignored with CREATE_NEW_CONSOLE; hide the independent
+                    // console through STARTUPINFO instead.
                     si.wShowWindow = ShowWindowHide;
 
                     // Build the command line string: "fileName" arg1 arg2 ...
@@ -309,9 +311,8 @@ internal static partial class DetachedProcessLauncher
     private const uint CreateUnicodeEnvironment = 0x00000400;
     private const uint ExtendedStartupInfoPresent = 0x00080000;
     private const uint CreateNewConsole = 0x00000010;
-    private const uint CreateNoWindow = 0x08000000;
-    internal const uint WindowsDetachedProcessCreationFlags =
-        CreateUnicodeEnvironment | ExtendedStartupInfoPresent | CreateNewConsole | CreateNoWindow;
+    private const uint WindowsDetachedProcessCreationFlags =
+        CreateUnicodeEnvironment | ExtendedStartupInfoPresent | CreateNewConsole;
     private const ushort ShowWindowHide = 0x0000;
     private static readonly nint s_procThreadAttributeHandleList = (nint)0x00020002;
 

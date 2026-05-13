@@ -36,9 +36,8 @@ namespace Aspire.Cli.Processes;
 // The solution is platform-specific:
 //
 // ┌─────────┬────────────────────────────────────────────────────────────────┐
-// │ Windows │ P/Invoke CreateProcess with CREATE_NEW_CONSOLE and            │
-// │         │ CREATE_NO_WINDOW,                                             │
-// │         │ STARTUPINFOEX, and an explicit                                │
+// │ Windows │ P/Invoke CreateProcess with CREATE_NEW_CONSOLE,               │
+// │         │ STARTUPINFOEX, SW_HIDE, and an explicit                       │
 // │         │ PROC_THREAD_ATTRIBUTE_HANDLE_LIST. This gives the child an    │
 // │         │ independent console lifetime while still letting us set       │
 // │         │ bInheritHandles=TRUE (required to assign hStdOutput to NUL)   │
