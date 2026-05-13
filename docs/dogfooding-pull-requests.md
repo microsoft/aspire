@@ -163,6 +163,14 @@ The scripts auto-detect your OS and architecture and locate the latest `ci.yml` 
     ./eng/scripts/get-aspire-cli-pr.ps1 1234 -HiveOnly -Verbose
     ```
 
+## C# AppHost scaffolding
+
+When you run `aspire init` against a workspace using a `pr-<N>` CLI (such as one installed by the scripts above), the command writes a workspace-scoped `NuGet.config` to the solution root pinned to the matching `~/.aspire/hives/pr-<N>/packages/` feed. Package restore in the scaffolded C# AppHost resolves the PR build's `Aspire.Hosting.*` packages and `Aspire.AppHost.Sdk` from that hive.
+
+The same behavior applies to other non-stable CLI channels (`staging`, `daily`, locally-built `local`), with the workspace `NuGet.config` pinned to the matching channel feed — a remote Azure DevOps feed for `staging` / `daily`, a local hive for `local` / `run-*`.
+
+The file is scoped to the solution directory and only affects projects under it. It does not modify your user-level or machine-level NuGet configuration.
+
 ## Troubleshooting
 
 - "No workflow run found":

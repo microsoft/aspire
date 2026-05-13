@@ -51,6 +51,41 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         Assert.False(dailyChannel.ConfigureGlobalPackagesFolder);
     }
 
+    /// <summary>
+    /// Locks in the structural invariant that <c>aspire init</c> and <c>aspire new</c> depend
+    /// on: the <c>stable</c> channel is always <see cref="PackageChannelType.Explicit"/> with a
+    /// non-empty <see cref="PackageChannel.Mappings"/> array containing a <see cref="PackageMapping.AllPackages"/>
+    /// pattern. <c>TemplateNuGetConfigService.CreateOrUpdateNuGetConfigWithoutPromptAsync</c>
+    /// short-circuits if the matching channel is not explicit or has no mappings, so a future
+    /// refactor that flipped stable to implicit / removed its mappings would silently turn the
+    /// workspace-NuGet.config write into a no-op for every stable-channel CLI user. The
+    /// InitCommand-level tests use a fake stable channel and cannot catch this regression at the
+    /// real <see cref="PackagingService"/> layer.
+    /// </summary>
+    [Fact]
+    public async Task GetChannelsAsync_StableChannel_IsExplicitWithAllPackagesMappingToNuGetOrg()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+
+        var features = new TestFeatures();
+        var configuration = new ConfigurationBuilder().Build();
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), features, configuration, NullLogger<PackagingService>.Instance);
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        var stableChannel = channels.First(c => c.Name == PackageChannelNames.Stable);
+        Assert.Equal(PackageChannelType.Explicit, stableChannel.Type);
+        Assert.NotNull(stableChannel.Mappings);
+        Assert.NotEmpty(stableChannel.Mappings!);
+        Assert.Contains(stableChannel.Mappings!, m =>
+            m.PackageFilter == PackageMapping.AllPackages &&
+            m.Source == "https://api.nuget.org/v3/index.json");
+    }
+
     [Fact]
     public async Task GetChannelsAsync_WhenStagingChannelEnabled_IncludesStagingChannelWithOverrideFeed()
     {
