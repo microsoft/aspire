@@ -37,6 +37,16 @@ app.UseHttpsRedirection();
 
 app.MapDefaultEndpoints();
 
+// Serve the Blazor WASM client configuration endpoint.
+// The Aspire host sets Client__ConfigEndpointPath and Client__ConfigResponse
+// as environment variables; the server reads them and serves the JSON response.
+var configEndpointPath = app.Configuration["Client:ConfigEndpointPath"];
+var configResponse = app.Configuration["Client:ConfigResponse"];
+if (!string.IsNullOrEmpty(configEndpointPath) && !string.IsNullOrEmpty(configResponse))
+{
+    app.MapGet(configEndpointPath, () => Results.Content(configResponse, "application/json"));
+}
+
 app.UseAntiforgery();
 
 app.MapStaticAssets();

@@ -33,19 +33,24 @@ internal static class GatewayConfigurationBuilder
 
             // Per-app client config: use an IValueProvider that resolves the gateway URL
             // at startup and builds the final JSON response.
+            var services = new HostedClientService[reg.ServiceNames.Length];
+            for (var i = 0; i < reg.ServiceNames.Length; i++)
+            {
+                services[i] = new HostedClientService(reg.ServiceNames[i], reg.ApiPrefix);
+            }
+
             env[$"{envPrefix}__ConfigResponse"] = new ClientConfigValueProvider(
                 gatewayEndpoint,
                 httpClientEndpoint,
                 httpsClientEndpoint,
                 prefix,
                 reg.Resource.Name,
-                reg.ServiceNames,
+                services,
                 reg.ProxyTelemetry,
-                reg.ApiPrefix,
                 reg.OtlpPrefix);
 
-            EmitYarpRoutes(env, prefix, reg.Resource.Name, reg.ServiceNames, reg.ProxyTelemetry, addedClusters,
-                reg.ApiPrefix, reg.OtlpPrefix);
+            EmitYarpRoutes(env, prefix, reg.Resource.Name, services, reg.ProxyTelemetry, addedClusters,
+                reg.OtlpPrefix);
         }
 
         if (apps.Any(app => app.ProxyTelemetry))
@@ -63,10 +68,9 @@ internal static class GatewayConfigurationBuilder
         EndpointReference hostEndpoint,
         EndpointReference? httpHostEndpoint,
         string resourceName,
-        string[] serviceNames,
+        IReadOnlyList<HostedClientService> services,
         bool proxyTelemetry,
         string? httpOtlpEndpointUrl,
-        string apiPrefix = DefaultApiPrefix,
         string otlpPrefix = DefaultOtlpPrefix)
     {
         var httpClientEndpoint = httpHostEndpoint ?? (hostEndpoint.IsHttp ? hostEndpoint : null);
@@ -78,14 +82,13 @@ internal static class GatewayConfigurationBuilder
             httpsClientEndpoint,
             prefix: null,
             resourceName,
-            serviceNames,
+            services,
             proxyTelemetry,
-            apiPrefix,
             otlpPrefix);
         env["Client__ConfigEndpointPath"] = "/_blazor/_configuration";
 
-        EmitYarpRoutes(env, prefix: null, resourceName, serviceNames, proxyTelemetry, addedClusters: null,
-            apiPrefix, otlpPrefix);
+        EmitYarpRoutes(env, prefix: null, resourceName, services, proxyTelemetry, addedClusters: null,
+            otlpPrefix);
 
         if (proxyTelemetry)
         {
@@ -107,26 +110,25 @@ internal static class GatewayConfigurationBuilder
         IDictionary<string, object> env,
         string? prefix,
         string resourceName,
-        string[] serviceNames,
+        IReadOnlyList<HostedClientService> services,
         bool proxyTelemetry,
         HashSet<string>? addedClusters,
-        string apiPrefix = DefaultApiPrefix,
         string otlpPrefix = DefaultOtlpPrefix)
     {
         var pathBase = prefix != null ? $"/{prefix}" : "";
 
-        foreach (var svc in serviceNames)
+        foreach (var svc in services)
         {
-            var routeId = prefix != null ? $"route-{resourceName}-{svc}" : $"route-{svc}";
-            var clusterId = $"cluster-{svc}";
+            var routeId = prefix != null ? $"route-{resourceName}-{svc.ServiceName}" : $"route-{svc.ServiceName}";
+            var clusterId = $"cluster-{svc.ServiceName}";
 
             env[$"ReverseProxy__Routes__{routeId}__ClusterId"] = clusterId;
-            env[$"ReverseProxy__Routes__{routeId}__Match__Path"] = $"{pathBase}/{apiPrefix}/{svc}/{{**catch-all}}";
-            env[$"ReverseProxy__Routes__{routeId}__Transforms__0__PathRemovePrefix"] = $"{pathBase}/{apiPrefix}/{svc}";
+            env[$"ReverseProxy__Routes__{routeId}__Match__Path"] = $"{pathBase}/{svc.ApiPrefix}/{svc.ServiceName}/{{**catch-all}}";
+            env[$"ReverseProxy__Routes__{routeId}__Transforms__0__PathRemovePrefix"] = $"{pathBase}/{svc.ApiPrefix}/{svc.ServiceName}";
 
             if (addedClusters == null || addedClusters.Add(clusterId))
             {
-                env[$"ReverseProxy__Clusters__{clusterId}__Destinations__d1__Address"] = $"https+http://{svc}";
+                env[$"ReverseProxy__Clusters__{clusterId}__Destinations__d1__Address"] = $"https+http://{svc.ServiceName}";
             }
         }
 
@@ -156,18 +158,15 @@ internal static class GatewayConfigurationBuilder
 
     /// <summary>
     /// Emits the shared OTLP dashboard YARP cluster.
-    /// Prefers the HTTP OTLP endpoint (for HTTP/protobuf from WASM clients) when available;
-    /// falls back to OTEL_EXPORTER_OTLP_ENDPOINT (typically the gRPC endpoint).
+    /// Uses the HTTP OTLP endpoint (for HTTP/protobuf from WASM clients) when available.
+    /// Does NOT fall back to OTEL_EXPORTER_OTLP_ENDPOINT because that is typically the
+    /// gRPC endpoint which cannot be used from browser-based clients.
     /// </summary>
     private static void EmitOtlpCluster(IDictionary<string, object> env, string? httpOtlpEndpointUrl = null)
     {
-        if (httpOtlpEndpointUrl != null)
+        if (httpOtlpEndpointUrl is not null)
         {
             env["ReverseProxy__Clusters__cluster-otlp-dashboard__Destinations__d1__Address"] = httpOtlpEndpointUrl;
-        }
-        else if (env.TryGetValue("OTEL_EXPORTER_OTLP_ENDPOINT", out var otlpEndpoint))
-        {
-            env["ReverseProxy__Clusters__cluster-otlp-dashboard__Destinations__d1__Address"] = otlpEndpoint;
         }
     }
 
@@ -184,9 +183,8 @@ internal static class GatewayConfigurationBuilder
         EndpointReference? httpsEndpoint,
         string? prefix,
         string resourceName,
-        string[] serviceNames,
+        IReadOnlyList<HostedClientService> services,
         bool proxyTelemetry,
-        string apiPrefix = DefaultApiPrefix,
         string otlpPrefix = DefaultOtlpPrefix) : IValueProvider, IManifestExpressionProvider
     {
         string IManifestExpressionProvider.ValueExpression =>
@@ -246,16 +244,16 @@ internal static class GatewayConfigurationBuilder
             var normalizedHttpBaseUrl = NormalizeUrl(httpBaseUrl ?? (primaryEndpoint.IsHttp ? normalizedPrimaryBaseUrl : null));
             var normalizedHttpsBaseUrl = NormalizeUrl(httpsBaseUrl ?? (primaryEndpoint.IsHttps ? normalizedPrimaryBaseUrl : null));
 
-            foreach (var svc in serviceNames)
+            foreach (var svc in services)
             {
                 if (normalizedHttpsBaseUrl is not null)
                 {
-                    environment[$"services__{svc}__https__0"] = $"{normalizedHttpsBaseUrl}{pathBase}/{apiPrefix}/{svc}";
+                    environment[$"services__{svc.ServiceName}__https__0"] = $"{normalizedHttpsBaseUrl}{pathBase}/{svc.ApiPrefix}/{svc.ServiceName}";
                 }
 
                 if (normalizedHttpBaseUrl is not null)
                 {
-                    environment[$"services__{svc}__http__0"] = $"{normalizedHttpBaseUrl}{pathBase}/{apiPrefix}/{svc}";
+                    environment[$"services__{svc.ServiceName}__http__0"] = $"{normalizedHttpBaseUrl}{pathBase}/{svc.ApiPrefix}/{svc.ServiceName}";
                 }
             }
 

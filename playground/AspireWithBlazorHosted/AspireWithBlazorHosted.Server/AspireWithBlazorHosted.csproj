@@ -9,7 +9,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\AspireWithBlazorHosted.Client\AspireWithBlazorHosted.Client.csproj" />
-    <ProjectReference Include="..\AspireWithBlazorHosted.ServiceDefaults\AspireWithBlazorHosted.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\..\Playground.ServiceDefaults\Playground.ServiceDefaults.csproj" />
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" />
     <PackageReference Include="Yarp.ReverseProxy" />
     <PackageReference Include="Microsoft.Extensions.ServiceDiscovery.Yarp" />

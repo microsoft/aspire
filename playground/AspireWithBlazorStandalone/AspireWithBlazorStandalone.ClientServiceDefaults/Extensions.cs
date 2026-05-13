@@ -34,6 +34,8 @@ public static class BlazorClientExtensions
 
     private static WebAssemblyHostBuilder ConfigureBlazorClientOpenTelemetry(this WebAssemblyHostBuilder builder)
     {
+        var serviceName = builder.Configuration["OTEL_SERVICE_NAME"] ?? "blazor-client";
+
         // Build a resilience pipeline matching OTLP retry spec behavior:
         //   - Initial backoff: 1s (OTLP default), max 5s
         //   - Exponential backoff with jitter
@@ -67,12 +69,12 @@ public static class BlazorClientExtensions
         {
             logging.IncludeFormattedMessage = true;
             logging.IncludeScopes = true;
-            logging.SetResourceBuilder(ResourceBuilder.CreateDefault().AddService("blazorapp.Client"));
+            logging.SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(serviceName));
             logging.AddOtlpExporter();
         });
 
         builder.Services.AddOpenTelemetry()
-            .ConfigureResource(r => r.AddService("blazorapp.Client"))
+            .ConfigureResource(r => r.AddService(serviceName))
             .WithMetrics(metrics =>
             {
                 metrics.AddMeter("Microsoft.AspNetCore.Components");

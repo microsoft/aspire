@@ -59,7 +59,11 @@ foreach (var ep in manifest.Endpoints)
 manifest.Endpoints = [.. manifest.Endpoints, .. fallbackEndpoints];
 
 var dir = Path.GetDirectoryName(outputPath);
-if (dir is not null) Directory.CreateDirectory(dir);
+if (dir is not null)
+{
+    Directory.CreateDirectory(dir);
+}
+
 File.WriteAllText(outputPath, JsonSerializer.Serialize(manifest, ManifestJsonContext.Default.EndpointsManifest));
 
 return 0;
@@ -104,7 +108,6 @@ class EndpointResponseHeader
 [JsonSerializable(typeof(EndpointsManifest))]
 [JsonSerializable(typeof(EndpointEntry))]
 [JsonSourceGenerationOptions(
-    PropertyNamingPolicy = JsonKnownNamingPolicy.Unspecified,
     WriteIndented = true)]
 partial class ManifestJsonContext : JsonSerializerContext
 {

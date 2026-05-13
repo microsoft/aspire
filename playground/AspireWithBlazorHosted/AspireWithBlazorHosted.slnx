@@ -4,5 +4,5 @@
   <Project Path="AspireWithBlazorHosted.Client\AspireWithBlazorHosted.Client.csproj" />
   <Project Path="AspireWithBlazorHosted.ClientServiceDefaults\AspireWithBlazorHosted.ClientServiceDefaults.csproj" />
   <Project Path="AspireWithBlazorHosted.WeatherApi\AspireWithBlazorHosted.WeatherApi.csproj" />
-  <Project Path="AspireWithBlazorHosted.ServiceDefaults\AspireWithBlazorHosted.ServiceDefaults.csproj" />
+  <Project Path="..\Playground.ServiceDefaults\Playground.ServiceDefaults.csproj" />
 </Solution>

@@ -182,6 +182,35 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         Assert.DoesNotContain("OTEL_EXPORTER_OTLP_ENDPOINT", configJson);
     }
 
+    [Fact]
+    public async Task ProxyService_DifferentApiPrefixPerService()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var weatherApi = builder.AddProject<TestProjectMetadata>("weatherapi");
+        var catalogApi = builder.AddProject<TestProjectMetadata>("catalogapi");
+
+        builder.AddProject<TestProjectMetadata>("blazorapp")
+            .WithHttpsEndpoint()
+            .ProxyService(weatherApi, apiPrefix: "weather")
+            .ProxyService(catalogApi, apiPrefix: "catalog");
+
+        var blazorApp = builder.Resources.Single(r => r.Name == "blazorapp");
+        var env = await GetEnvironmentVariables(blazorApp, builder);
+
+        // Each service gets its own prefix in YARP routes
+        Assert.Equal("/weather/weatherapi/{**catch-all}", env["ReverseProxy__Routes__route-weatherapi__Match__Path"]);
+        Assert.Equal("/weather/weatherapi", env["ReverseProxy__Routes__route-weatherapi__Transforms__0__PathRemovePrefix"]);
+        Assert.Equal("/catalog/catalogapi/{**catch-all}", env["ReverseProxy__Routes__route-catalogapi__Match__Path"]);
+        Assert.Equal("/catalog/catalogapi", env["ReverseProxy__Routes__route-catalogapi__Transforms__0__PathRemovePrefix"]);
+
+        // Client config also reflects per-service prefixes
+        var configJson = ResolveManifestExpression(env["Client__ConfigResponse"]);
+        Assert.Contains("/weather/weatherapi", configJson);
+        Assert.Contains("/catalog/catalogapi", configJson);
+        Assert.DoesNotContain("/_api/", configJson);
+    }
+
     private static async Task<Dictionary<string, object>> GetEnvironmentVariables(
         IResource resource, IDistributedApplicationBuilder builder)
     {
