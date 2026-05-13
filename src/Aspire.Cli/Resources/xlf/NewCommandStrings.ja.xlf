@@ -52,9 +52,14 @@
         <target state="needs-review-translation">プロジェクトの出力パス。</target>
         <note />
       </trans-unit>
-      <trans-unit id="OutputDirectoryNotEmpty">
+      <trans-unit id="OutputDirectoryNotEmptyNonInteractive">
         <source>The output directory '{0}' already exists and is not empty. Specify --output with a different location.</source>
         <target state="new">The output directory '{0}' already exists and is not empty. Specify --output with a different location.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OutputDirectoryNotEmptyInteractive">
+        <source>The output directory '{0}' already exists and is not empty. Specify a different location.</source>
+        <target state="new">The output directory '{0}' already exists and is not empty. Specify a different location.</target>
         <note />
       </trans-unit>
       <trans-unit id="OutputPathContainsInvalidCharacters">
