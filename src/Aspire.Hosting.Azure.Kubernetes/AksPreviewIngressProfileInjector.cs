@@ -74,7 +74,14 @@ namespace Aspire.Hosting.Azure.Kubernetes;
 /// <c>ApplicationLoadBalancer</c> properties on it). When that ships, this class can be
 /// replaced with the standard public-subclass pattern and deleted.
 /// </para>
+/// <para>
+/// Tracked by <see href="https://github.com/microsoft/aspire/issues/17060"/> (Aspire) and
+/// <see href="https://github.com/Azure/azure-sdk-for-net/issues/59225"/> (upstream).
+/// </para>
 /// </remarks>
+// TODO: https://github.com/microsoft/aspire/issues/17060 - delete this class once
+// Azure.Provisioning.ContainerService exposes ManagedClusterIngressProfile publicly
+// with typed GatewayApi and ApplicationLoadBalancer properties.
 internal static class AksPreviewIngressProfileInjector
 {
     private const string IngressProfileTypeFullName = "Azure.Provisioning.ContainerService.ManagedClusterIngressProfile";

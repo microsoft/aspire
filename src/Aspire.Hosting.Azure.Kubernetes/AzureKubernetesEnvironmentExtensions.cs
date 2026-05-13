@@ -432,19 +432,30 @@ public static class AzureKubernetesEnvironmentExtensions
         // the delegation actually emitted.
         var existingDelegations = subnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>().ToList();
         var lastDelegation = existingDelegations.Count > 0 ? existingDelegations[^1] : null;
+        string? displacedDelegationServiceName = null;
         if (lastDelegation is null
             || !string.Equals(lastDelegation.ServiceName, "Microsoft.ServiceNetworking/trafficControllers", StringComparison.Ordinal))
         {
+            // Capture the displaced delegation (if any) so the LB pipeline step can warn
+            // the user at deploy time that their explicit delegation was silently overridden.
+            // We can't log here because no ILogger is available during model construction;
+            // the resource's apply-alb-crd pipeline step has access to context.Logger.
+            if (lastDelegation is not null)
+            {
+                displacedDelegationServiceName = lastDelegation.ServiceName;
+            }
+
             subnet.WithAnnotation(new AzureSubnetServiceDelegationAnnotation(
                 "Microsoft.ServiceNetworking/trafficControllers",
                 "Microsoft.ServiceNetworking/trafficControllers"));
         }
 
-        var lb = new AzureKubernetesLoadBalancerResource(name, builder.Resource)
-        {
-            SubnetIdReference = subnet.Resource.Id,
-            SubnetResource = subnet.Resource
-        };
+        var lb = new AzureKubernetesLoadBalancerResource(
+            name,
+            builder.Resource,
+            subnet.Resource.Id,
+            subnet.Resource,
+            displacedDelegationServiceName);
 
         // Track the LB on the env so ConfigureAksInfrastructure can emit a role
         // assignment binding the AKS-auto-created AGC controller identity to the

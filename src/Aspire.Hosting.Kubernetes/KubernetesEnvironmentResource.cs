@@ -1198,7 +1198,23 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         }
         finally
         {
-            try { tempDir.Delete(recursive: true); } catch { }
+            DeleteTempDirSafely(tempDir, context.Logger);
+        }
+    }
+
+    // Best-effort cleanup for kubectl/cert temp directories. Swallowing OperationCanceledException
+    // here would mask shutdown signals; instead narrow to file-system failures (a transient
+    // antivirus lock or permission issue) and surface them at debug level so the next deploy
+    // attempt - or `aspire run` with verbose logging - can diagnose if leakage occurs.
+    private static void DeleteTempDirSafely(DirectoryInfo tempDir, ILogger logger)
+    {
+        try
+        {
+            tempDir.Delete(recursive: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogDebug(ex, "Failed to delete temporary directory '{TempDir}'.", tempDir.FullName);
         }
     }
 
@@ -1488,7 +1504,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             }
             finally
             {
-                try { tempDir.Delete(recursive: true); } catch { }
+                DeleteTempDirSafely(tempDir, context.Logger);
             }
         }
         catch (System.Text.Json.JsonException ex)
@@ -1592,7 +1608,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             }
             finally
             {
-                try { tempDir.Delete(recursive: true); } catch { }
+                DeleteTempDirSafely(tempDir, context.Logger);
             }
         }
     }

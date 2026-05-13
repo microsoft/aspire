@@ -40,11 +40,41 @@ public sealed class AzureKubernetesLoadBalancerResource :
     /// <param name="name">The name of the load balancer resource. Used to derive the in-cluster
     /// <c>ApplicationLoadBalancer</c> name (<c>alb-{name}</c>) referenced by gateway/ingress annotations.</param>
     /// <param name="parent">The parent AKS environment that owns this load balancer.</param>
-    public AzureKubernetesLoadBalancerResource(string name, AzureKubernetesEnvironmentResource parent)
+    /// <param name="subnetIdReference">Reference to the resource ID of the delegated subnet
+    /// this load balancer associates with. Resolved at deployment time by the
+    /// <c>apply-alb-crd-{name}</c> pipeline step and emitted into the <c>spec.associations</c>
+    /// field of the <c>ApplicationLoadBalancer</c> CR.</param>
+    /// <param name="subnetResource">The Aspire subnet resource that backs this load balancer.</param>
+    /// <param name="displacedDelegationServiceName">If non-<see langword="null"/>, the name of an
+    /// existing subnet service delegation that <see cref="AzureKubernetesEnvironmentExtensions.AddLoadBalancer"/>
+    /// silently overrode with the AGC <c>trafficControllers</c> delegation. The pipeline step logs
+    /// a warning at deploy time so the user can investigate.</param>
+    /// <remarks>
+    /// All deploy-time state (<paramref name="subnetIdReference"/>, <paramref name="subnetResource"/>)
+    /// is taken as a constructor parameter rather than via object-initializer setters because the
+    /// constructor eagerly registers a <see cref="PipelineStepAnnotation"/> whose deferred action
+    /// dereferences these fields. Using <c>= default!</c> properties with <c>{ get; set; }</c> would
+    /// create a window where forgetting to set the property results in a runtime
+    /// <see cref="NullReferenceException"/> at deploy with no compile-time signal. Compare
+    /// <c>AzureContainerAppResource</c>, <c>AzureContainerRegistryResource</c>, and
+    /// <c>AzureAppServiceWebSiteResource</c>, which follow the same pattern.
+    /// </remarks>
+    internal AzureKubernetesLoadBalancerResource(
+        string name,
+        AzureKubernetesEnvironmentResource parent,
+        BicepOutputReference subnetIdReference,
+        Aspire.Hosting.Azure.AzureSubnetResource subnetResource,
+        string? displacedDelegationServiceName = null)
         : base(name)
     {
         ArgumentNullException.ThrowIfNull(parent);
+        ArgumentNullException.ThrowIfNull(subnetIdReference);
+        ArgumentNullException.ThrowIfNull(subnetResource);
+
         Parent = parent;
+        SubnetIdReference = subnetIdReference;
+        SubnetResource = subnetResource;
+        DisplacedDelegationServiceName = displacedDelegationServiceName;
 
         // Register the per-LB pipeline step that applies the ApplicationLoadBalancer
         // CR into the cluster after credentials are available. Using a factory lambda
@@ -74,7 +104,7 @@ public sealed class AzureKubernetesLoadBalancerResource :
     /// associates with. Resolved at deployment time and emitted into the
     /// <c>spec.associations</c> field of the <c>ApplicationLoadBalancer</c> CR.
     /// </summary>
-    internal BicepOutputReference SubnetIdReference { get; set; } = default!;
+    internal BicepOutputReference SubnetIdReference { get; }
 
     /// <summary>
     /// The Aspire subnet resource that backs this load balancer. Captured so the AKS
@@ -86,7 +116,15 @@ public sealed class AzureKubernetesLoadBalancerResource :
     /// any user-supplied subnet outside that RG fails with <c>LinkedAuthorizationFailed</c>
     /// when the controller tries to create the AGC association.
     /// </summary>
-    internal Aspire.Hosting.Azure.AzureSubnetResource SubnetResource { get; set; } = default!;
+    internal Aspire.Hosting.Azure.AzureSubnetResource SubnetResource { get; }
+
+    /// <summary>
+    /// The name of an existing subnet service delegation that <see cref="AzureKubernetesEnvironmentExtensions.AddLoadBalancer"/>
+    /// silently overrode with the AGC <c>trafficControllers</c> delegation, or <see langword="null"/>
+    /// if no override occurred. The deploy-time pipeline step logs a warning when this is set so the
+    /// user is alerted that their original delegation will not be emitted into Bicep.
+    /// </summary>
+    internal string? DisplacedDelegationServiceName { get; }
 
     /// <summary>
     /// The in-cluster name of the <c>ApplicationLoadBalancer</c> CR. This is the value

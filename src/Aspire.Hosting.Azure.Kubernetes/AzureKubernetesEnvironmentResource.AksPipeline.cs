@@ -320,6 +320,21 @@ public partial class AzureKubernetesEnvironmentResource
         {
             try
             {
+                if (lb.DisplacedDelegationServiceName is { } displaced)
+                {
+                    // The subnet had an explicit non-trafficControllers service delegation when
+                    // AddLoadBalancer was called. AzureSubnetResource emits only the LAST
+                    // AzureSubnetServiceDelegationAnnotation, so AGC's trafficControllers
+                    // delegation displaced the user's. Warn at deploy time so the user can
+                    // either remove the original delegation or use a separate subnet.
+                    context.Logger.LogWarning(
+                        "AddLoadBalancer overrode an existing service delegation '{DisplacedServiceName}' " +
+                        "on the subnet for AGC load balancer '{LoadBalancerName}' with " +
+                        "'Microsoft.ServiceNetworking/trafficControllers'. AGC requires this delegation; " +
+                        "if you need '{DisplacedServiceName}' to remain, use a separate subnet for the load balancer.",
+                        displaced, lb.Name, displaced);
+                }
+
                 var subnetId = await ((IValueProvider)lb.SubnetIdReference).GetValueAsync(context.CancellationToken).ConfigureAwait(false);
                 if (string.IsNullOrEmpty(subnetId))
                 {
