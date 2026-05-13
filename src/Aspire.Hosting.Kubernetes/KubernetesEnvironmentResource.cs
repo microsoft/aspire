@@ -994,6 +994,22 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             var gatewayName = gateway.Name.ToKubernetesResourceName();
             var secretName = await ResolveExpressionAsync(secretNameExpr, context.CancellationToken).ConfigureAwait(false);
 
+            // Pre-create a placeholder bootstrap TLS secret BEFORE waiting for the Gateway
+            // address. Some controllers (notably Azure Application Gateway for Containers)
+            // refuse to program a Gateway whose HTTPS listener references a non-existent
+            // Secret — they log "Secret 'X' not found" and stop reconciling. That creates a
+            // deadlock with the FQDN discovery flow, which itself waits for the Gateway to
+            // be programmed. Uploading a self-signed placeholder up front breaks the
+            // chicken-and-egg: the Gateway can program with the placeholder cert, get an
+            // address, and we then patch the listener hostname so cert-manager can replace
+            // the placeholder with a real certificate.
+            await EnsureBootstrapTlsSecretAsync(
+                secretName,
+                hostname: "bootstrap.invalid",
+                @namespace,
+                environment,
+                context).ConfigureAwait(false);
+
             // Poll for the Gateway's assigned hostname address.
             // We use -o json and parse the full status to select Hostname-type addresses,
             // since some controllers return IP addresses which are not valid for TLS hostnames.
@@ -1085,88 +1101,104 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                     gatewayName, @namespace, environment, context).ConfigureAwait(false);
             }
 
-            // Check if bootstrap TLS secret already exists
-            var checkArgs = $"get secret {secretName} --namespace {@namespace}";
+            // Bootstrap TLS secret was already pre-created above. Nothing further to do
+            // here — cert-manager will replace it with a real certificate once the
+            // listener hostname is detected on the Gateway.
+        }
+    }
+
+    /// <summary>
+    /// Creates a self-signed bootstrap TLS secret with the given hostname as the CN/SAN
+    /// if it doesn't already exist. Used by the FQDN discovery flow to break the
+    /// chicken-and-egg between Gateway controllers (which need the secret to program the
+    /// Gateway) and FQDN discovery (which needs the Gateway to be programmed).
+    /// </summary>
+    private static async Task EnsureBootstrapTlsSecretAsync(
+        string secretName,
+        string hostname,
+        string @namespace,
+        KubernetesEnvironmentResource environment,
+        PipelineStepContext context)
+    {
+        var checkArgs = $"get secret {secretName} --namespace {@namespace}";
+        if (environment.KubeConfigPath is not null)
+        {
+            checkArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
+        }
+
+        var (checkResult, checkDisposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
+        {
+            Arguments = checkArgs,
+            ThrowOnNonZeroReturnCode = false,
+            InheritEnv = true,
+            OnOutputData = _ => { },
+            OnErrorData = _ => { }
+        });
+
+        await using (checkDisposable.ConfigureAwait(false))
+        {
+            var result = await checkResult.WaitAsync(context.CancellationToken).ConfigureAwait(false);
+            if (result.ExitCode == 0)
+            {
+                context.Logger.LogInformation("TLS secret '{SecretName}' already exists, skipping bootstrap.", secretName);
+                return;
+            }
+        }
+
+        context.Logger.LogInformation("Creating bootstrap TLS secret '{SecretName}' for '{Hostname}'.", secretName, hostname);
+
+        using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var certRequest = new CertificateRequest($"CN={hostname}", ecdsa, HashAlgorithmName.SHA256);
+        var sanBuilder = new SubjectAlternativeNameBuilder();
+        sanBuilder.AddDnsName(hostname);
+        certRequest.CertificateExtensions.Add(sanBuilder.Build());
+        using var cert = certRequest.CreateSelfSigned(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddDays(1));
+
+        var certPem = cert.ExportCertificatePem();
+        var keyPem = ecdsa.ExportECPrivateKeyPem();
+
+        var tempDir = Directory.CreateTempSubdirectory(".aspire-tls-discovery");
+        try
+        {
+            var certPath = Path.Combine(tempDir.FullName, "tls.crt");
+            var keyPath = Path.Combine(tempDir.FullName, "tls.key");
+            await File.WriteAllTextAsync(certPath, certPem, context.CancellationToken).ConfigureAwait(false);
+            await File.WriteAllTextAsync(keyPath, keyPem, context.CancellationToken).ConfigureAwait(false);
+
+            var createArgs = $"create secret tls {secretName} --cert=\"{certPath}\" --key=\"{keyPath}\" --namespace {@namespace}";
             if (environment.KubeConfigPath is not null)
             {
-                checkArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
+                createArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
             }
 
-            var (checkResult, checkDisposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
+            var (createResult, createDisposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
             {
-                Arguments = checkArgs,
+                Arguments = createArgs,
                 ThrowOnNonZeroReturnCode = false,
                 InheritEnv = true,
-                OnOutputData = _ => { },
-                OnErrorData = _ => { }
+                OnOutputData = line => context.Logger.LogDebug("{Line}", line),
+                OnErrorData = line => context.Logger.LogDebug("{Line}", line)
             });
 
-            await using (checkDisposable.ConfigureAwait(false))
+            await using (createDisposable.ConfigureAwait(false))
             {
-                var result = await checkResult.WaitAsync(context.CancellationToken).ConfigureAwait(false);
-                if (result.ExitCode == 0)
+                var createExitResult = await createResult.WaitAsync(context.CancellationToken).ConfigureAwait(false);
+                if (createExitResult.ExitCode != 0)
                 {
-                    context.Logger.LogInformation("TLS secret '{SecretName}' already exists, skipping bootstrap.", secretName);
-                    continue;
+                    context.Logger.LogWarning("Failed to create bootstrap TLS secret '{SecretName}' (exit code {ExitCode}).", secretName, createExitResult.ExitCode);
+                }
+                else
+                {
+                    context.Logger.LogInformation(
+                        "Bootstrap TLS secret '{SecretName}' created for '{Hostname}'. " +
+                        "cert-manager will replace this with a real certificate once the hostname is detected on the Gateway listener.",
+                        secretName, hostname);
                 }
             }
-
-            // Create a bootstrap self-signed cert with the discovered FQDN
-            context.Logger.LogInformation("Creating bootstrap TLS secret '{SecretName}' for '{Hostname}'.", secretName, discoveredFqdn);
-
-            using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-            var certRequest = new CertificateRequest($"CN={discoveredFqdn}", ecdsa, HashAlgorithmName.SHA256);
-            var sanBuilder = new SubjectAlternativeNameBuilder();
-            sanBuilder.AddDnsName(discoveredFqdn);
-            certRequest.CertificateExtensions.Add(sanBuilder.Build());
-            using var cert = certRequest.CreateSelfSigned(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddDays(1));
-
-            var certPem = cert.ExportCertificatePem();
-            var keyPem = ecdsa.ExportECPrivateKeyPem();
-
-            var tempDir = Directory.CreateTempSubdirectory(".aspire-tls-discovery");
-            try
-            {
-                var certPath = Path.Combine(tempDir.FullName, "tls.crt");
-                var keyPath = Path.Combine(tempDir.FullName, "tls.key");
-                await File.WriteAllTextAsync(certPath, certPem, context.CancellationToken).ConfigureAwait(false);
-                await File.WriteAllTextAsync(keyPath, keyPem, context.CancellationToken).ConfigureAwait(false);
-
-                var createArgs = $"create secret tls {secretName} --cert=\"{certPath}\" --key=\"{keyPath}\" --namespace {@namespace}";
-                if (environment.KubeConfigPath is not null)
-                {
-                    createArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
-                }
-
-                var (createResult, createDisposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
-                {
-                    Arguments = createArgs,
-                    ThrowOnNonZeroReturnCode = false,
-                    InheritEnv = true,
-                    OnOutputData = line => context.Logger.LogDebug("{Line}", line),
-                    OnErrorData = line => context.Logger.LogDebug("{Line}", line)
-                });
-
-                await using (createDisposable.ConfigureAwait(false))
-                {
-                    var createExitResult = await createResult.WaitAsync(context.CancellationToken).ConfigureAwait(false);
-                    if (createExitResult.ExitCode != 0)
-                    {
-                        context.Logger.LogWarning("Failed to create bootstrap TLS secret '{SecretName}' (exit code {ExitCode}).", secretName, createExitResult.ExitCode);
-                    }
-                    else
-                    {
-                        context.Logger.LogInformation(
-                            "Bootstrap TLS secret '{SecretName}' created for '{Hostname}'. " +
-                            "cert-manager will replace this with a real certificate once the hostname is detected on the Gateway listener.",
-                            secretName, discoveredFqdn);
-                    }
-                }
-            }
-            finally
-            {
-                try { tempDir.Delete(recursive: true); } catch { }
-            }
+        }
+        finally
+        {
+            try { tempDir.Delete(recursive: true); } catch { }
         }
     }
 
