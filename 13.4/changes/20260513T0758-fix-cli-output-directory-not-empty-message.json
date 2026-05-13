@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a misleading error message in aspire new when the output directory is non-empty. In interactive mode the prompt now says Specify a different location rather than incorrectly suggesting the --output flag.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "💬",
+  "firstMergedAt": "2026-05-13T07:58:17Z",
+  "lastMergedAt": "2026-05-13T07:58:17Z",
+  "name": "Fix output directory not empty message in interactive mode",
+  "owner": "JamesNK",
+  "prs": [
+    16995
+  ]
+}

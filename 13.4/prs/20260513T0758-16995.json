@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Bug fix for misleading output directory error message in interactive aspire new",
+  "mergedAt": "2026-05-13T07:58:17Z",
+  "number": 16995,
+  "runDate": "2026-05-13T09:02:26Z",
+  "status": "included",
+  "title": "Fix CLI output directory not empty message for interactive mode"
+}

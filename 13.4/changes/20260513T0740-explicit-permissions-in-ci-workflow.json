@@ -1,0 +1,21 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [
+    "@arpitjain099"
+  ],
+  "description": "The top-level ci.yml workflow now declares an explicit contents: read permission block, ensuring the GITHUB_TOKEN follows the principle of least privilege rather than inheriting potentially broader default scopes.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔐",
+  "firstMergedAt": "2026-05-13T07:40:46Z",
+  "lastMergedAt": "2026-05-13T07:40:46Z",
+  "name": "Explicit permissions in CI workflow",
+  "owner": "radical",
+  "prs": [
+    17007
+  ]
+}

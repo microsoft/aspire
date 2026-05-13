@@ -1,0 +1,9 @@
+{
+  "author": "arpitjain099",
+  "comment": "Security improvement: adds explicit contents: read permission to ci.yml",
+  "mergedAt": "2026-05-13T07:40:46Z",
+  "number": 17007,
+  "runDate": "2026-05-13T09:02:26Z",
+  "status": "included",
+  "title": "ci: add contents: read to the top-level CI workflow"
+}
