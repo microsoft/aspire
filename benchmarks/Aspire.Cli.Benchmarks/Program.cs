@@ -9,7 +9,18 @@ internal static class Program
 {
     private static async Task<int> Main(string[] args)
     {
-        var (passthrough, options) = ParseArgs(args);
+        string[] passthrough;
+        RunOptions options;
+
+        try
+        {
+            (passthrough, options) = ParseArgs(args);
+        }
+        catch (ArgumentException ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            return 1;
+        }
 
         try
         {
@@ -43,6 +54,11 @@ internal static class Program
                     if (i + 1 >= args.Length)
                     {
                         throw new ArgumentException("--input requires a path argument.");
+                    }
+
+                    if (args[i + 1].StartsWith("--", StringComparison.Ordinal))
+                    {
+                        throw new ArgumentException($"--input requires a path argument, but got switch '{args[i + 1]}'.");
                     }
 
                     input = args[++i];

@@ -303,6 +303,34 @@ public class LlmsTxtParserTests
     }
 
     [Fact]
+    public async Task ParseAsync_DuplicateSlugs_SkipsOccupiedNumericSuffixSlug()
+    {
+        var content = """
+            # Service Discovery 2
+
+            First document body.
+
+            # Service Discovery
+
+            Second document body.
+
+            # Service Discovery
+
+            Third document body.
+            """;
+
+        var result = await LlmsTxtParser.ParseAsync(content).DefaultTimeout();
+
+        Assert.Equal(3, result.Count);
+        Assert.Equal("service-discovery-2", result[0].Slug);
+        Assert.Equal("service-discovery", result[1].Slug);
+        Assert.Equal("service-discovery-3", result[2].Slug);
+
+        var slugs = result.Select(d => d.Slug).ToHashSet(StringComparer.Ordinal);
+        Assert.Equal(3, slugs.Count);
+    }
+
+    [Fact]
     public async Task ParseAsync_H1WithoutSpace_NotRecognizedAsDocument()
     {
         // "#NoSpace" should not be recognized as H1

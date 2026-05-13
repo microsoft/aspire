@@ -172,6 +172,7 @@ public class DocsIndexServiceTests
             ## Sentinelheadingword Overview
 
             Content body containing sentinelcontentword for verification.
+            Inline code contains `sentinelcodespan`, and SentinelIdentifier is a PascalCase symbol.
             """;
 
         var fetcher = CreateMockFetcher(content);
@@ -184,6 +185,8 @@ public class DocsIndexServiceTests
             ("sentinelsummaryword", "summary"),
             ("sentinelheadingword", "section heading"),
             ("sentinelcontentword", "section content"),
+            ("sentinelcodespan", "code span"),
+            ("sentinelidentifier", "PascalCase identifier"),
         };
 
         foreach (var (token, field) in sentinels)

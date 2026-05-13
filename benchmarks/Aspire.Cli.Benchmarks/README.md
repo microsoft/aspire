@@ -11,8 +11,8 @@ The harness needs a copy of `llms-full.txt`. It looks for one in this order:
 1. `--input <path>`
 2. environment variable `LLMS_FULL_TXT`
 3. A fresh `aspire-bench-*` temp subdirectory (downloads `llms-full.txt` from
-   aspire.dev on every run — set `LLMS_FULL_TXT` or pass `--input` to reuse a
-   local copy).
+   aspire.dev on every run and cleans it up at process exit — set `LLMS_FULL_TXT`
+   or pass `--input` to reuse a local copy).
 
 ### Benchmarks (BDN)
 

@@ -22,13 +22,10 @@ internal static class CorpusLoader
         }
 
         // No persistent cache: create a fresh, securely-randomized temp subdirectory
-        // per process so every benchmark run gets an isolated download location. This
-        // matches the repo guidance in .github/instructions/temp-directory.instructions.md
-        // (prefer Directory.CreateTempSubdirectory() over composing fixed names under
-        // Path.GetTempPath()). The benchmark is invoked rarely, so re-downloading the
-        // ~5 MB corpus each run is acceptable; pass --input or set LLMS_FULL_TXT to
-        // point at a local copy when iterating.
+        // per process so every benchmark run gets an isolated download location. The
+        // directory is registered for best-effort cleanup when the harness exits.
         var tempDir = Directory.CreateTempSubdirectory("aspire-bench-");
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => DeleteTempDirectory(tempDir);
         return Path.Combine(tempDir.FullName, DefaultFileName);
     }
 
@@ -65,5 +62,25 @@ internal static class CorpusLoader
         var size = new FileInfo(path).Length;
         Console.Error.WriteLine($"Saved {size:N0} bytes to {path}");
         return path;
+    }
+
+    private static void DeleteTempDirectory(DirectoryInfo directory)
+    {
+        try
+        {
+            directory.Delete(recursive: true);
+        }
+        // Best-effort cleanup only: benchmark traces, antivirus, or a crashed child
+        // process can still hold files open at process exit. In that case the securely
+        // created temp directory can be left for the OS/user temp cleanup policy.
+        catch (DirectoryNotFoundException)
+        {
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
     }
 }

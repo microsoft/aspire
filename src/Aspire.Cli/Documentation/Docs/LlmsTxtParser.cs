@@ -858,8 +858,8 @@ internal static partial class LlmsTxtParser
 
     /// <summary>
     /// Generates a slug from <paramref name="title"/> and disambiguates it against
-    /// <paramref name="slugCounts"/>. If the base slug has already been issued, returns
-    /// <c>"&lt;slug&gt;-2"</c> for the second occurrence, <c>"&lt;slug&gt;-3"</c> for the third, and so on.
+    /// <paramref name="slugCounts"/>. If the base slug has already been issued, returns the
+    /// next available numeric suffix.
     /// </summary>
     /// <remarks>
     /// The live llms-full.txt corpus has slug collisions caused by titles that differ only in
@@ -878,8 +878,15 @@ internal static partial class LlmsTxtParser
         if (slugCounts.TryGetValue(baseSlug, out var count))
         {
             var next = count + 1;
+            while (slugCounts.ContainsKey($"{baseSlug}-{next}"))
+            {
+                next++;
+            }
+
             slugCounts[baseSlug] = next;
-            return $"{baseSlug}-{next}";
+            var disambiguated = $"{baseSlug}-{next}";
+            slugCounts[disambiguated] = 1;
+            return disambiguated;
         }
 
         slugCounts[baseSlug] = 1;
