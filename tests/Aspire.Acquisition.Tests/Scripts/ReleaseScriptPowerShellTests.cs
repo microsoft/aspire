@@ -217,4 +217,49 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains("dev", result.Output, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Theory]
+    [InlineData("dev")]
+    [InlineData("staging")]
+    [InlineData("release")]
+    public async Task WhatIf_DoesNotCreateGlobalAspireConfigJson(string quality)
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+
+        var result = await cmd.ExecuteAsync("-Quality", quality, "-WhatIf");
+
+        result.EnsureSuccessful();
+
+        var globalConfig = Path.Combine(env.MockHome, ".aspire", "aspire.config.json");
+        Assert.False(
+            File.Exists(globalConfig),
+            $"Release script must not write {globalConfig}; channel is baked into the CLI binary, not stored globally.");
+
+        // The script should not even plan a global-channel write in its what-if output.
+        Assert.DoesNotContain("aspire.config.json", result.Output, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Install_DryRun_DoesNotWriteGlobalChannelField()
+    {
+        // Install scripts must not write a global aspire.config.json — the channel
+        // is baked into the CLI binary at build time and read via
+        // IdentityChannelReader. A global channel field would shadow the baked value.
+        // Asserts both -WhatIf stdout shape and absence of the global config file
+        // under MockHome.
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+
+        var result = await cmd.ExecuteAsync("-Quality", "release", "-SkipPath", "-WhatIf");
+
+        result.EnsureSuccessful();
+        Assert.DoesNotContain("config set channel", result.Output, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("\"channel\"", result.Output);
+
+        var configPath = Path.Combine(env.MockHome, ".aspire", "aspire.config.json");
+        Assert.False(
+            File.Exists(configPath),
+            $"install.ps1 must not create global aspire.config.json; found at {configPath}.");
+    }
 }

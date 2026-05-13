@@ -12,6 +12,7 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.NuGet;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Scaffolding;
@@ -262,8 +263,9 @@ internal sealed class InitCommand : BaseCommand
         File.WriteAllText(appHostPath, appHostContent);
         InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, "Created apphost.cs");
 
-        // Ensure the workspace has a NuGet.config that exposes the configured channel's
-        // package sources. This is required so MSBuild can resolve
+        // Ensure the workspace has a NuGet.config that exposes the running CLI binary's
+        // identity-channel package sources (CliExecutionContext.IdentityChannel — stable,
+        // staging, daily, pr-<N>, or local). This is required so MSBuild can resolve
         // `#:sdk Aspire.AppHost.Sdk@<version>` from the apphost.cs SDK directive — both
         // for `aspire add` (`dotnet package add --file apphost.cs`) and for
         // `dotnet run --file apphost.cs`. Without it, any non-stable channel (PR/run
@@ -273,7 +275,7 @@ internal sealed class InitCommand : BaseCommand
         // creates a new file or merges missing sources into an existing one, so adding
         // hives later is handled the same way as for templates.
         var createdNuGetConfig = await _templateNuGetConfigService.CreateOrUpdateNuGetConfigWithoutPromptAsync(
-            channelName: null,
+            channelName: _executionContext.IdentityChannel,
             outputPath: workingDirectory.FullName,
             cancellationToken).ConfigureAwait(false);
         if (createdNuGetConfig)
@@ -323,20 +325,39 @@ internal sealed class InitCommand : BaseCommand
             return ExitCodeConstants.Success;
         }
 
-        // Resolve the channel-aware template package version + feed mapping. This makes init
-        // honor the global `channel` configuration (matching `aspire new`) and ensures the
-        // staging/daily/PR feed is queried for non-stable CLI builds. PR hives are intentionally
-        // excluded — init should produce the same template on every machine for a given CLI build.
+        // Resolve the channel-aware template package version + feed mapping. The running
+        // CLI binary's identity channel (CliExecutionContext.IdentityChannel — stable, staging,
+        // daily, pr-<N>, or local) drives the selection so a developer scaffolding with a
+        // pr-<N> CLI gets a project wired to the matching pr-<N> hive. PR hives are
+        // intentionally excluded — init should produce the same template on every machine
+        // for a given CLI build.
         TemplatePackageSelection selection;
         try
         {
             var query = new TemplatePackageQuery(
-                ChannelOverride: null,
+                RequestedChannel: _executionContext.IdentityChannel,
                 VersionOverride: null,
                 SourceOverride: null,
                 IncludePrHives: false);
 
             selection = await _templateNuGetConfigService.ResolveTemplatePackageAsync(query, cancellationToken);
+        }
+        catch (ChannelNotFoundException) when
+            (string.Equals(_executionContext.IdentityChannel, PackageChannelNames.Local, StringComparison.OrdinalIgnoreCase))
+        {
+            // Locally-built CLI (identity=local) on a machine where ~/.aspire/hives/local
+            // isn't installed. The PackagingService produces no "local" channel in that
+            // case, but init's contract is that identity-as-request is implicit — so fall
+            // back to the implicit channel (ambient NuGet) instead of failing. This branch
+            // lives here, NOT in the resolver, so that an explicit `aspire new --channel local`
+            // without the hive correctly errors instead of silently switching feeds.
+            var fallbackQuery = new TemplatePackageQuery(
+                RequestedChannel: null,
+                VersionOverride: null,
+                SourceOverride: null,
+                IncludePrHives: false);
+
+            selection = await _templateNuGetConfigService.ResolveTemplatePackageAsync(fallbackQuery, cancellationToken);
         }
         catch (ChannelNotFoundException ex)
         {

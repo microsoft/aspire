@@ -2269,7 +2269,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(ExitCodeConstants.FailedToCreateNewProject, exitCode);
         Assert.NotNull(testInteractionService);
-        var expectedError = string.Format(CultureInfo.CurrentCulture, NewCommandStrings.OutputDirectoryNotEmpty, existingDir.FullName);
+        var expectedError = string.Format(CultureInfo.CurrentCulture, NewCommandStrings.OutputDirectoryNotEmptyNonInteractive, existingDir.FullName);
         var e = Assert.Single(testInteractionService.DisplayedErrors);
         Assert.Equal(expectedError, e);
     }

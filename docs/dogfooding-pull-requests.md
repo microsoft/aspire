@@ -37,6 +37,20 @@ Notes:
 
 The scripts attempt to add `~/.aspire/bin` to your shell/profile PATH so you can invoke `aspire` directly in new terminals. If PATH isn't updated automatically, add it manually per the script's message.
 
+## Channel names
+
+Every Aspire CLI binary is built for a specific channel. The channel name controls which package feed (or local hive) is used by commands like `aspire new` and `aspire add`, and is the value you pass to `aspire update --self --channel`.
+
+| Channel | Description |
+|---------|-------------|
+| `stable` | Official release builds. Default for most users. |
+| `staging` | RC and preview builds. |
+| `daily` | Latest daily CI builds. |
+| `local` | Locally built from source. Uses `~/.aspire/hives/local/packages/` as the package feed. This is the default channel for developer builds with no explicit `/p:AspireCliChannel=` override. |
+| `pr-<N>` | A single PR's CI build (for example `pr-16820`). Uses `~/.aspire/hives/pr-<N>/packages/` as the package feed. |
+
+The PR dogfooding scripts install a `pr-<N>` CLI and populate the matching hive directory automatically — you do not need to set the channel manually.
+
 ## Quickstart
 
 > **⚠️ WARNING: Do not do this without first carefully reviewing the code of this PR to satisfy yourself it is safe.**

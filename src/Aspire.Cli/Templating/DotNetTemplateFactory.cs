@@ -459,7 +459,7 @@ internal class DotNetTemplateFactory(
             // release/13.3. Surfacing channel/version errors before prompting for extra args
             // avoids discarding answers the user just gave.
             var query = new TemplatePackageQuery(
-                ChannelOverride: inputs.Channel,
+                RequestedChannel: inputs.Channel,
                 VersionOverride: inputs.Version,
                 SourceOverride: inputs.Source,
                 IncludePrHives: true);
@@ -605,7 +605,7 @@ internal class DotNetTemplateFactory(
 
             // Re-validate the adjusted path for non-empty directory since appending the
             // project name may target a different directory than the one already validated.
-            var validationError = OutputPathHelper.ValidateResolvedOutputPath(outputPath);
+            var validationError = OutputPathHelper.ValidateOutputPath(outputPath, executionContext.WorkingDirectory.FullName, isExplicitOutput: inputs.Output is not null);
             if (validationError is not null)
             {
                 interactionService.DisplayError(validationError);

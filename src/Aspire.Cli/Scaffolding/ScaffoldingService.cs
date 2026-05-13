@@ -22,17 +22,20 @@ internal sealed class ScaffoldingService : IScaffoldingService
     private readonly IAppHostServerProjectFactory _appHostServerProjectFactory;
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly IInteractionService _interactionService;
+    private readonly CliExecutionContext _cliExecutionContext;
     private readonly ILogger<ScaffoldingService> _logger;
 
     public ScaffoldingService(
         IAppHostServerProjectFactory appHostServerProjectFactory,
         ILanguageDiscovery languageDiscovery,
         IInteractionService interactionService,
+        CliExecutionContext cliExecutionContext,
         ILogger<ScaffoldingService> logger)
     {
         _appHostServerProjectFactory = appHostServerProjectFactory;
         _languageDiscovery = languageDiscovery;
         _interactionService = interactionService;
+        _cliExecutionContext = cliExecutionContext;
         _logger = logger;
     }
 
@@ -61,14 +64,20 @@ internal sealed class ScaffoldingService : IScaffoldingService
         {
             config.SdkVersion = context.SdkVersion;
         }
-        if (!string.IsNullOrWhiteSpace(context.Channel))
+
+        // Seed the project channel: explicit user input wins; otherwise default to the channel
+        // baked into the running CLI (CliExecutionContext.IdentityChannel). Silent default — no prompt.
+        var seedChannel = string.IsNullOrWhiteSpace(context.Channel)
+            ? _cliExecutionContext.IdentityChannel
+            : context.Channel;
+        if (!string.IsNullOrEmpty(seedChannel))
         {
-            config.Channel = context.Channel;
+            config.Channel = seedChannel;
         }
 
         PreAddJavaScriptHostingForBrownfieldTypeScript(config, directory, language, sdkVersion);
         if (!string.IsNullOrWhiteSpace(context.SdkVersion) ||
-            !string.IsNullOrWhiteSpace(context.Channel))
+            !string.IsNullOrEmpty(seedChannel))
         {
             config.Save(directory.FullName);
         }
@@ -194,10 +203,6 @@ internal sealed class ScaffoldingService : IScaffoldingService
         }
 
         config.Profiles = profiles;
-        if (prepareResult.ChannelName is not null)
-        {
-            config.Channel = prepareResult.ChannelName;
-        }
         config.AppHost ??= new AspireConfigAppHost();
         config.AppHost.Path ??= language.AppHostFileName;
         config.AppHost.Language = language.LanguageId;

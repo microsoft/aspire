@@ -33,6 +33,21 @@ jobs:
     strategy:
       matrix:
         targets: ${{ fromJson(inputs.targets) }}
+    # Compute the Aspire CLI channel from the triggering GH Actions event,
+    # mirroring the algorithm in eng/pipelines/templates/build_sign_native.yml
+    # (computeCliChannel step):
+    #   pull_request          -> pr-<PR_NUMBER>
+    #   refs/heads/release/*  -> staging
+    #   refs/heads/internal/release/* -> staging
+    #   anything else (push to main, schedule, workflow_dispatch) -> daily
+    # The AzDO 'stable' branch (DotNetFinalVersionKind == 'release') is
+    # intentionally omitted: stable archives are produced only by the AzDO
+    # release pipeline, never by GH Actions.
+    # For PR builds we bake the resolved hive label directly (pr-<N>) so the
+    # CLI's IdentityChannelReader can return the channel verbatim, with no
+    # separate parse of the version suffix at runtime.
+    env:
+      ASPIRE_CLI_CHANNEL: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || (startsWith(github.ref, 'refs/heads/release/') || startsWith(github.ref, 'refs/heads/internal/release/')) && 'staging' || 'daily' }}
 
     steps:
       - name: Checkout code
@@ -56,6 +71,7 @@ jobs:
           /bl:${{ github.workspace }}/artifacts/log/${{ inputs.configuration }}/BuildBundleDeps.binlog
           /p:ContinuousIntegrationBuild=true
           /p:BuildBundleDepsOnly=true
+          /p:AspireCliChannel=${{ env.ASPIRE_CLI_CHANNEL }}
           ${{ inputs.versionOverrideArg }}
 
       - name: Build bundle payload archive
@@ -85,6 +101,7 @@ jobs:
           /p:SkipManagedBuild=true
           /p:TargetRids=${{ matrix.targets.rids }}
           /p:BundlePayloadPath=${{ github.workspace }}/artifacts/bundle/aspire-ci-bundlepayload-${{ matrix.targets.rids }}.tar.gz
+          /p:AspireCliChannel=${{ env.ASPIRE_CLI_CHANNEL }}
           ${{ inputs.versionOverrideArg }}
 
       - name: Verify CLI tool nupkg

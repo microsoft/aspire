@@ -118,6 +118,25 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
     }
 
     [Fact]
+    public async Task WorkflowRunIdOnly_NoHiveLabel_WhatIf_Rejected()
+    {
+        // Regression guard: -WorkflowRunId alone (without -PRNumber / -HiveLabel) must
+        // fail with actionable guidance. The installed CLI's channel is baked at build
+        // time (pr-<N>/staging/daily/local); 'run-<id>' is never a baked channel, so a
+        // hives/run-<id>/packages layout would be unreachable from the CLI.
+        using var env = new TestEnvironment();
+        using var cmd = await CreateCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync("-WorkflowRunId", "987654321", "-WhatIf", "-SkipPath", "-Verbose");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("Cannot determine hive label from -WorkflowRunId alone", result.Output);
+        Assert.Contains("-PRNumber", result.Output);
+        Assert.Contains("-HiveLabel", result.Output);
+        Assert.DoesNotContain("run-987654321", result.Output);
+    }
+
+    [Fact]
     public async Task LocalDir_WhatIf_UsesLocalDirectoryWithoutGh()
     {
         using var env = new TestEnvironment();
@@ -136,6 +155,33 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
         Assert.Contains("Installing from local directory", result.Output);
         Assert.Contains(localDir, result.Output);
         Assert.Contains("test-hive", result.Output);
+        Assert.DoesNotContain("Downloading CLI from GitHub", result.Output);
+    }
+
+    [Fact]
+    public async Task LocalDir_WhatIf_AutoDetectsRawBuildOutput()
+    {
+        // When -LocalDir points at a directory that contains only a raw 'aspire' executable
+        // (no aspire-cli-*.tar.gz/.zip archive), auto-detect must dispatch to the raw-build flow
+        // (Install-AspireCliFromLocalBinary) instead of erroring on a missing archive.
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+        var localDir = Path.Combine(env.TempDirectory, "raw-build");
+        Directory.CreateDirectory(localDir);
+        // Drop a fake 'aspire' executable — no archive, no nupkgs.
+        await File.WriteAllTextAsync(Path.Combine(localDir, "aspire"), "#!/bin/sh\necho fake\n");
+
+        var result = await cmd.ExecuteAsync(
+            "-LocalDir", localDir,
+            "-HiveLabel", "test-hive",
+            "-WhatIf",
+            "-SkipPath");
+
+        result.EnsureSuccessful();
+        Assert.Contains("Installing from local directory", result.Output);
+        // WhatIf preview from Install-AspireCliFromLocalBinary's ShouldProcess message
+        // (or the script's error if dispatch is wrong) — we expect the raw-binary path.
+        Assert.Contains("raw Aspire CLI binary tree", result.Output);
         Assert.DoesNotContain("Downloading CLI from GitHub", result.Output);
     }
 
@@ -317,5 +363,32 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
 
         result.EnsureSuccessful();
         Assert.Contains("Skipping CLI download", result.Output, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task LocalDir_WhatIf_WithGitHubRunIdEnvSet_UsesLocalHiveLabel()
+    {
+        // Regression guard: the GITHUB_RUN_ID env var must NOT influence the hive label
+        // when -LocalDir is used. Without this test, re-introducing a GITHUB_RUN_ID
+        // branch would produce "run-99999" silently instead of the expected "local"
+        // hive label.
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+        var localDir = Path.Combine(env.TempDirectory, "local-artifacts");
+        Directory.CreateDirectory(localDir);
+        // Non-PR-style version ensures auto-detect falls through to "local" label.
+        await FakeArchiveHelper.CreateFakeNupkgAsync(localDir, "Aspire.Cli", "13.3.0-dev.1");
+
+        // Inject GITHUB_RUN_ID only into the launched process — not the test process environment.
+        cmd.WithEnvironmentVariable("GITHUB_RUN_ID", "99999");
+
+        var result = await cmd.ExecuteAsync(
+            "-LocalDir", localDir,
+            "-HiveOnly",
+            "-WhatIf");
+
+        result.EnsureSuccessful();
+        Assert.Contains("Using hive label: local", result.Output, StringComparison.Ordinal);
+        Assert.DoesNotContain("run-99999", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 }
