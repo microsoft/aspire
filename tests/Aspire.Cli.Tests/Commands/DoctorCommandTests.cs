@@ -7,7 +7,9 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
+using Aspire.Cli.Utils.EnvironmentChecker;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.AspNetCore.InternalTesting;
 
 namespace Aspire.Cli.Tests.Commands;
@@ -39,7 +41,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
         {
             GetVersionStatusAsyncCallback = (_, _) => Task.FromResult(new CliVersionStatus("13.0.0", "13.1.0", "aspire update"))
         };
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        var services = CreateDoctorVersionServiceCollection(workspace, outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => interactionService;
             options.CliUpdateNotifierFactory = _ => updateNotifier;
@@ -77,7 +79,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
 
         var interactionService = new TestInteractionService();
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        var services = CreateDoctorVersionServiceCollection(workspace, outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => interactionService;
             options.CliUpdateNotifierFactory = _ => new TestCliUpdateNotifier();
@@ -127,7 +129,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
 
         var interactionService = new TestInteractionService();
         var runnerCalled = false;
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        var services = CreateDoctorVersionServiceCollection(workspace, outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => interactionService;
             options.CliUpdateNotifierFactory = _ => new TestCliUpdateNotifier();
@@ -178,7 +180,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
 
         var interactionService = new TestInteractionService();
         var versionLookupCalled = false;
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        var services = CreateDoctorVersionServiceCollection(workspace, outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => interactionService;
             options.CliUpdateNotifierFactory = _ => new TestCliUpdateNotifier();
@@ -216,7 +218,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
 
         var interactionService = new TestInteractionService();
         var versionLookupCalled = false;
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        var services = CreateDoctorVersionServiceCollection(workspace, outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => interactionService;
             options.CliUpdateNotifierFactory = _ => new TestCliUpdateNotifier();
@@ -254,7 +256,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
 
         var interactionService = new TestInteractionService();
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        var services = CreateDoctorVersionServiceCollection(workspace, outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => interactionService;
             options.CliUpdateNotifierFactory = _ => new TestCliUpdateNotifier();
@@ -288,6 +290,17 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
         var appHostVersionMetadata = appHostVersionCheck.GetProperty("metadata");
         Assert.Equal("13.2.0", appHostVersionMetadata.GetProperty("version").GetString());
         Assert.Equal("level0/level1/level2/level3/level4/level5/AppHost.csproj", appHostVersionMetadata.GetProperty("appHostPath").GetString());
+    }
+
+    private static IServiceCollection CreateDoctorVersionServiceCollection(
+        TemporaryWorkspace workspace,
+        ITestOutputHelper outputHelper,
+        Action<CliServiceCollectionTestOptions>? configure)
+    {
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, configure);
+        services.RemoveAll<IEnvironmentCheck>();
+        services.AddSingleton<IEnvironmentCheck, AspireVersionCheck>();
+        return services;
     }
 
     private static FileInfo CreateDeepAppHostFile(TemporaryWorkspace workspace, int depth)
