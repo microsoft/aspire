@@ -46,6 +46,19 @@ if (hasProxy)
 
 var app = builder.Build();
 
+// HSTS tells browsers to always use HTTPS for this host, preventing future HTTP requests.
+// Only enable in non-development to avoid interfering with dev certificates and localhost.
+// See https://aka.ms/aspnetcore-hsts
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
+}
+
+// Redirect browser navigations from HTTP to HTTPS so the WASM client always runs on
+// the HTTPS origin. This ensures fetch/OTLP requests use same-origin URLs (no CORS).
+// UseHttpsRedirection no-ops when there is no HTTPS endpoint configured.
+app.UseHttpsRedirection();
+
 app.MapDefaultEndpoints();
 
 if (hasProxy)
