@@ -458,7 +458,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         await ProcessGatewayResources(appModel, deploymentTargets, logger, context.CancellationToken).ConfigureAwait(false);
 
         // Process Custom resources.
-        await ProcessCustomResources(appModel).ConfigureAwait(false);
+        ProcessCustomResources(appModel);
     }
 
     private static IContainerRegistry? GetContainerRegistry(KubernetesEnvironmentResource environment, DistributedApplicationModel appModel)
@@ -512,44 +512,12 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         }
     }
 
-    private async Task ProcessCustomResources(DistributedApplicationModel model)
+    private static void ProcessCustomResources(DistributedApplicationModel model)
     {
-        var customResources = model.Resources
-            .OfType<IResourceWithParent>()
-            .Where(resource => resource.Parent == this && resource.IsCustomResource());
-
-        foreach (var resource in customResources)
+        foreach (var resource in model.Resources.OfType<IKubernetesCustomResourceResource>())
         {
-            var specType = resource.GetType().GetGenericArguments()[0];
-
-            var methodInfo = GetType().GetMethod(nameof(BuildCustomResource), 
-                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
-
-            var genericMethod = methodInfo!.MakeGenericMethod(specType);
-
-            var task = (Task<object>)genericMethod.Invoke(null, [resource])!;
-            await task.ConfigureAwait(false);
-
-            var property = resource.GetType().GetProperty(nameof(KubernetesCustomResourceResource<>.GeneratedResource));
-            property!.SetValue(resource, task);
+            resource.Build();
         }
-
-    }
-
-    private static async Task<object> BuildCustomResource<T>(
-        KubernetesCustomResourceResource<T> customResource)
-        where T : class, new()
-    {
-        var resource = new CustomResourceV1<T>(customResource.ApiVersion, customResource.Kind)
-        {
-            Metadata =
-            {
-                Name = customResource.Name.ToKubernetesResourceName(),
-            },
-            Spec = customResource.Spec
-        };
-
-        return resource;
     }
 
     private async Task ProcessIngressResources(DistributedApplicationModel model, Dictionary<IResource, KubernetesResource> deploymentTargets, ILogger logger, CancellationToken cancellationToken)

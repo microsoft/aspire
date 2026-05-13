@@ -2,7 +2,24 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes;
+using Aspire.Hosting.Kubernetes.Extensions;
 using Aspire.Hosting.Kubernetes.Resources;
+
+/// <summary>
+/// 
+/// </summary>
+public interface IKubernetesCustomResourceResource : IResourceWithParent<KubernetesEnvironmentResource>
+{
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <returns></returns>
+    object Build();
+    /// <summary>
+    /// 
+    /// </summary>
+    object GeneratedResource { get; set; }
+}
 
 /// <summary>
 /// Represents a Custom Resource for deployment along with the compute resources from the app model.
@@ -12,7 +29,7 @@ using Aspire.Hosting.Kubernetes.Resources;
 /// <param name="environment">The parent Kubernetes environment resource.</param>
 public sealed class KubernetesCustomResourceResource<TSpec>(
     string name,
-    KubernetesEnvironmentResource environment) : Resource(name), IResourceWithParent<KubernetesEnvironmentResource>
+    KubernetesEnvironmentResource environment) : Resource(name), IKubernetesCustomResourceResource
     where TSpec : class, new()
 {
     /// <summary>
@@ -29,5 +46,28 @@ public sealed class KubernetesCustomResourceResource<TSpec>(
     /// <inheritdoc /> 
     public TSpec? Spec { get; set; } = new();
     
-    internal CustomResourceV1<TSpec>? GeneratedResource { get; set; }
+    /// <summary>
+    /// 
+    /// </summary>
+    public object GeneratedResource { get; set; } = new();
+
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <returns></returns>
+    public object Build()
+    {
+        var builtResource = new CustomResourceV1<TSpec>(ApiVersion, Kind)
+        {
+            Metadata =
+            {
+                Name = Name.ToKubernetesResourceName(),
+            },
+            Spec = Spec
+        };
+
+        this.GeneratedResource = builtResource;
+
+        return builtResource;
+    }
 }

@@ -137,6 +137,14 @@ internal sealed class KubernetesPublishingContext(
             }
         }
 
+        foreach (var customResource in resources.OfType<IKubernetesCustomResourceResource>())
+        {
+            if (customResource.Parent == environment && customResource.GeneratedResource is { } generatedResource)
+            {
+                await WriteKubernetesTemplatesForResource(customResource, [(BaseKubernetesResource)generatedResource]).ConfigureAwait(false);
+            }
+        }
+
         var customResources = resources
         .OfType<IResourceWithParent>()
         .Where(resource => resource.IsCustomResource());
