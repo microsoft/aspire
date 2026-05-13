@@ -3,7 +3,6 @@
 
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Aspire.Cli.Tests.Utils;
-using Aspire.TestUtilities;
 using Hex1b.Automation;
 using Xunit;
 
@@ -16,18 +15,25 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// </summary>
 public sealed class JavaScriptPublishTests(ITestOutputHelper output)
 {
+    private const int NodeNpmPort = 3101;
+    private const int JavaScriptPnpmPort = 3102;
+    private const int ViteYarnPort = 3103;
+    private const int NextBunPort = 3104;
+
     private static readonly string s_fixturesDir = Path.Combine(
         CliE2ETestHelpers.GetRepoRoot(),
         "tests", "Aspire.Cli.EndToEnd.Tests", "Fixtures", "JsPublish");
 
     [Fact]
     [CaptureWorkspaceOnFailure]
-    [QuarantinedTest("https://github.com/microsoft/aspire/issues/16188")]
     public async Task AllPublishMethodsBuildDockerImages()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
         using var workspace = TemporaryWorkspace.Create(output);
+        var localChannel = CliE2ETestHelpers.PrepareLocalChannel(repoRoot, strategy,
+            ["Aspire.Hosting.CodeGeneration.TypeScript.", "Aspire.Hosting.JavaScript.", "Aspire.Hosting.Docker."]);
+        var channelArgument = localChannel is not null ? " --channel local" : string.Empty;
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
 
@@ -39,7 +45,7 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
         await auto.InstallAspireCliAsync(strategy, counter);
 
         // Create TS AppHost and add packages
-        await auto.TypeAsync("aspire init");
+        await auto.TypeAsync($"aspire init{channelArgument}");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Which language would you like to use?", timeout: TimeSpan.FromSeconds(30));
         await auto.DownAsync();
@@ -48,13 +54,18 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
         await auto.DeclineAgentInitPromptAsync(counter);
 
+        if (localChannel is not null)
+        {
+            CliE2ETestHelpers.WriteLocalChannelSettings(workspace.WorkspaceRoot.FullName, localChannel.SdkVersion);
+        }
+
         await auto.TypeAsync("aspire add Aspire.Hosting.JavaScript");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+        await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromSeconds(180));
 
         await auto.TypeAsync("aspire add Aspire.Hosting.Docker");
         await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+        await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromSeconds(180));
 
         // Copy checked-in fixture apps and write the apphost
         CopyFixtures(workspace);
@@ -86,6 +97,90 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
         await pendingRun;
     }
 
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public async Task JavaScriptHostingApisRunFromTypeScriptAppHost()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        using var workspace = TemporaryWorkspace.Create(output);
+        var localChannel = CliE2ETestHelpers.PrepareLocalChannel(repoRoot, strategy,
+            ["Aspire.Hosting.CodeGeneration.TypeScript.", "Aspire.Hosting.JavaScript."]);
+        var channelArgument = localChannel is not null ? " --channel local" : string.Empty;
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, variant: CliE2ETestHelpers.DockerfileVariant.Polyglot, workspace: workspace);
+
+        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+        var testBodyFailed = false;
+
+        try
+        {
+            await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+            await auto.InstallAspireCliAsync(strategy, counter);
+
+            await auto.RunCommandFailFastAsync($"aspire init --language typescript --non-interactive{channelArgument}", counter, TimeSpan.FromMinutes(2));
+
+            if (localChannel is not null)
+            {
+                CliE2ETestHelpers.WriteLocalChannelSettings(workspace.WorkspaceRoot.FullName, localChannel.SdkVersion);
+            }
+
+            await auto.TypeAsync("aspire add Aspire.Hosting.JavaScript");
+            await auto.EnterAsync();
+            await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromMinutes(2));
+
+            WriteRuntimeFixtures(workspace);
+            WriteRuntimeAppHost(workspace);
+            WriteRuntimeVerificationScript(workspace);
+
+            await auto.RunCommandFailFastAsync("unset ASPIRE_PLAYGROUND", counter);
+
+            await auto.RunCommandFailFastAsync("aspire run > aspire-run.log 2>&1 & echo $! > aspire-run.pid", counter);
+            await auto.RunCommandFailFastAsync("bash verify-runtime.sh", counter, TimeSpan.FromMinutes(2));
+        }
+        catch
+        {
+            testBodyFailed = true;
+            throw;
+        }
+        finally
+        {
+            try
+            {
+                await auto.RunCommandAsync("if [ -f aspire-run.pid ]; then kill \"$(cat aspire-run.pid)\" 2>/dev/null || true; wait \"$(cat aspire-run.pid)\" 2>/dev/null || true; fi", counter, TimeSpan.FromMinutes(1));
+            }
+            catch
+            {
+                // Best effort. A failure before aspire run writes its PID leaves no process to stop.
+            }
+
+            try
+            {
+                await auto.CaptureAspireDiagnosticsAsync(counter, workspace);
+            }
+            catch
+            {
+                // Best effort diagnostics capture.
+            }
+
+            try
+            {
+                await auto.TypeAsync("exit");
+                await auto.EnterAsync();
+                await pendingRun;
+            }
+            catch
+            {
+                if (!testBodyFailed)
+                {
+                    throw;
+                }
+            }
+        }
+    }
+
     private static void WriteAppHost(TemporaryWorkspace workspace)
     {
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
@@ -115,6 +210,106 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
                 .withExternalHttpEndpoints();
 
             await builder.build().run();
+            """);
+    }
+
+    private static void WriteRuntimeAppHost(TemporaryWorkspace workspace)
+    {
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
+        File.WriteAllText(appHostPath, $$"""
+            import { createBuilder } from './.modules/aspire.js';
+
+            const builder = await createBuilder();
+
+            const nodeNpm = await builder.addNodeApp('node-npm', './node-npm', 'server.js');
+            await nodeNpm.withNpm({ install: false });
+            await nodeNpm.withRunScript('start');
+            await nodeNpm.withHttpEndpoint({ name: 'http', port: {{NodeNpmPort}}, env: 'PORT' });
+
+            const javaScriptPnpm = await builder.addJavaScriptApp('javascript-pnpm', './javascript-pnpm', { runScriptName: 'dev' });
+            await javaScriptPnpm.withPnpm({ install: false });
+            await javaScriptPnpm.withHttpEndpoint({ name: 'http', port: {{JavaScriptPnpmPort}}, env: 'PORT' });
+
+            const viteYarn = await builder.addViteApp('vite-yarn', './vite-yarn', { runScriptName: 'dev' });
+            await viteYarn.withYarn({ install: false });
+            await viteYarn.withHttpEndpoint({ name: 'http', port: {{ViteYarnPort}}, env: 'PORT' });
+
+            const nextBun = await builder.addNextJsApp('next-bun', './next-bun', { runScriptName: 'dev' });
+            await nextBun.disableBuildValidation();
+            await nextBun.withBun({ install: false });
+            await nextBun.withHttpEndpoint({ name: 'http', port: {{NextBunPort}}, env: 'PORT' });
+
+            await builder.build().run();
+            """);
+    }
+
+    private static void WriteRuntimeFixtures(TemporaryWorkspace workspace)
+    {
+        WriteRuntimeApp(workspace, "node-npm", "start");
+        WriteRuntimeApp(workspace, "javascript-pnpm", "dev");
+        WriteRuntimeApp(workspace, "vite-yarn", "dev");
+        WriteRuntimeApp(workspace, "next-bun", "dev");
+    }
+
+    private static void WriteRuntimeApp(TemporaryWorkspace workspace, string appName, string scriptName)
+    {
+        var appDir = Path.Combine(workspace.WorkspaceRoot.FullName, appName);
+        Directory.CreateDirectory(appDir);
+
+        File.WriteAllText(Path.Combine(appDir, "package.json"), $$"""
+            {
+              "name": "{{appName}}",
+              "private": true,
+              "scripts": {
+                "{{scriptName}}": "node server.js"
+              }
+            }
+            """);
+
+        File.WriteAllText(Path.Combine(appDir, "server.js"), $$"""
+            const http = require('http');
+
+            const portArgumentIndex = process.argv.findIndex(arg => arg === '--port' || arg === '-p');
+            const port = process.env.PORT || (portArgumentIndex >= 0 ? process.argv[portArgumentIndex + 1] : undefined) || 3000;
+
+            http.createServer((req, res) => {
+              res.writeHead(200, { 'Content-Type': 'application/json' });
+              res.end(JSON.stringify({ app: '{{appName}}', ok: true }));
+            }).listen(port, '0.0.0.0', () => {
+              console.log('{{appName}} listening on ' + port);
+            });
+            """);
+    }
+
+    private static void WriteRuntimeVerificationScript(TemporaryWorkspace workspace)
+    {
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "verify-runtime.sh"), $$"""
+            #!/usr/bin/env bash
+            set -euo pipefail
+
+            check_endpoint() {
+                local name="$1"
+                local port="$2"
+
+                for i in $(seq 1 30); do
+                    if curl -sf --max-time 5 "http://localhost:${port}/" | grep -q "\"app\":\"${name}\""; then
+                        echo "${name}_OK"
+                        return 0
+                    fi
+
+                    sleep 1
+                done
+
+                echo "${name}_FAIL"
+                return 1
+            }
+
+            check_endpoint "node-npm" "{{NodeNpmPort}}"
+            check_endpoint "javascript-pnpm" "{{JavaScriptPnpmPort}}"
+            check_endpoint "vite-yarn" "{{ViteYarnPort}}"
+            check_endpoint "next-bun" "{{NextBunPort}}"
+
+            echo "RUNTIME_ALL_OK"
             """);
     }
 
