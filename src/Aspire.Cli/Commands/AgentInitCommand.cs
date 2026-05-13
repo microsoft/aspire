@@ -175,7 +175,8 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
 
         var applicators = await _interactionService.ShowStatusAsync(
             McpCommandStrings.InitCommand_DetectingAgentEnvironments,
-            async () => await _agentEnvironmentDetector.DetectAsync(context, cancellationToken));
+            async () => await _agentEnvironmentDetector.DetectAsync(context, cancellationToken),
+            emoji: KnownEmojis.Robot);
 
         // Detect the AppHost language to determine which skills to offer.
         // When no language is detected (e.g., standalone `aspire agent init`), language-restricted skills are excluded.
@@ -216,6 +217,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             preSelected: SkillLocation.All.Where(l => l.IsDefault),
             optional: true,
             binding: skillLocationsBinding,
+            echoSelected: false,
             cancellationToken: cancellationToken);
 
         // --- Phase 2: Skill and MCP server selection (only if locations were selected) ---
@@ -266,6 +268,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
                 preSelected: preSelectedItems,
                 optional: true,
                 binding: skillsBinding,
+                echoSelected: false,
                 cancellationToken: cancellationToken);
 
             selectedSkills = selectedItems.OfType<SkillDefinition>().ToList();

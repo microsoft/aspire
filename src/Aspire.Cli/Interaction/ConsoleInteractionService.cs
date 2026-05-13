@@ -212,7 +212,7 @@ internal class ConsoleInteractionService : IInteractionService
         return PromptForStringAsync(promptText, validator, isSecret: false, required, binding, cancellationToken);
     }
 
-    public async Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull
+    public async Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
     {
         ArgumentNullException.ThrowIfNull(promptText, nameof(promptText));
         ArgumentNullException.ThrowIfNull(choices, nameof(choices));
@@ -261,10 +261,18 @@ internal class ConsoleInteractionService : IInteractionService
 
         var result = await MessageConsole.PromptAsync(prompt, cancellationToken);
         MessageLogger.LogInformation("Selection result: {Result}", choiceFormatter(result));
+
+        // The SelectionPrompt clears its display after the user selects.
+        // Echo the prompt text and selected value so the user can see what was chosen.
+        if (echoSelected)
+        {
+            MessageConsole.MarkupLine($"{promptText} {choiceFormatter(result)}");
+        }
+
         return result;
     }
 
-    public async Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull
+    public async Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
     {
         ArgumentNullException.ThrowIfNull(promptText, nameof(promptText));
         ArgumentNullException.ThrowIfNull(choices, nameof(choices));
@@ -321,6 +329,25 @@ internal class ConsoleInteractionService : IInteractionService
 
         var result = await MessageConsole.PromptAsync(prompt, cancellationToken);
         MessageLogger.LogInformation("Selection results: {Results}", string.Join(", ", result.Select(choiceFormatter)));
+
+        // The MultiSelectionPrompt clears its display after the user selects.
+        // Echo the prompt text and selected values so the user can see what was chosen.
+        if (echoSelected)
+        {
+            if (result.Count == 0)
+            {
+                MessageConsole.MarkupLine($"{promptText} [dim](none)[/]");
+            }
+            else
+            {
+                MessageConsole.MarkupLine(promptText);
+                foreach (var item in result)
+                {
+                    MessageConsole.MarkupLine($"  - {choiceFormatter(item)}");
+                }
+            }
+        }
+
         return result;
     }
 

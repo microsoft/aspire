@@ -1958,10 +1958,10 @@ internal sealed class CancellationTrackingInteractionService : IInteractionServi
         => _innerService.PromptForFilePathAsync(promptText, validator, directory, required, binding, cancellationToken);
     public Task<bool> PromptConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default) 
         => _innerService.PromptConfirmAsync(promptText, binding, cancellationToken);
-    public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull 
-        => _innerService.PromptForSelectionAsync(promptText, choices, choiceFormatter, binding, cancellationToken);
-    public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull 
-        => _innerService.PromptForSelectionsAsync(promptText, choices, choiceFormatter, preSelected, optional, binding, cancellationToken);
+    public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull 
+        => _innerService.PromptForSelectionAsync(promptText, choices, choiceFormatter, binding, echoSelected, cancellationToken);
+    public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull 
+        => _innerService.PromptForSelectionsAsync(promptText, choices, choiceFormatter, preSelected, optional, binding, echoSelected, cancellationToken);
     public int DisplayIncompatibleVersionError(AppHostIncompatibleException ex, string appHostHostingVersion) 
         => _innerService.DisplayIncompatibleVersionError(ex, appHostHostingVersion);
     public void DisplayError(string errorMessage, bool allowMarkup = false) => _innerService.DisplayError(errorMessage, allowMarkup);

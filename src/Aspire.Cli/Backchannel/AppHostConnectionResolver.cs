@@ -247,11 +247,10 @@ internal sealed class AppHostConnectionResolver(
             selectPrompt,
             choices.Select(c => c.Display).ToArray(),
             c => c.EscapeMarkup(),
+            echoSelected: false,
             cancellationToken: cancellationToken);
 
         var selectedConnection = choices.FirstOrDefault(c => c.Display == selectedDisplay).Connection;
-
-        interactionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.UsingAppHost, selectedDisplay));
 
         return selectedConnection;
     }
