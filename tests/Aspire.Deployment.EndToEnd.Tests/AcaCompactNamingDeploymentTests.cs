@@ -100,7 +100,10 @@ builder.AddAzureContainerAppEnvironment("my-long-env-name")
 
 // Container with a volume triggers storage account creation
 // Use a versioned tag because the unversioned "aspnetapp" tag no longer publishes a
-// linux/amd64 manifest, which causes Azure Container Apps to reject the image.
+// linux/amd64 manifest, which causes Azure Container Apps to reject the image. The
+// "aspnetapp-10.0" tag has the same problem (Windows-only). Inspect the live manifest at:
+// https://mcr.microsoft.com/v2/dotnet/samples/manifests/aspnetapp
+// If/when the unversioned tag publishes a linux/amd64 child again, this pin can be removed.
 builder.AddContainer("worker", "mcr.microsoft.com/dotnet/samples", "aspnetapp-9.0")
        .WithVolume("data", "/app/data");
 
