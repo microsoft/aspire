@@ -26,9 +26,6 @@ internal static class GatewayConfigurationBuilder
         var httpClientEndpoint = httpGatewayEndpoint ?? (gatewayEndpoint.IsHttp ? gatewayEndpoint : null);
         var httpsClientEndpoint = gatewayEndpoint.IsHttps ? gatewayEndpoint : null;
 
-        // Capture OTLP headers so the WASM client can send them directly
-        env.TryGetValue("OTEL_EXPORTER_OTLP_HEADERS", out var otlpHeaders);
-
         foreach (var reg in apps)
         {
             var prefix = reg.PathPrefix;
@@ -44,7 +41,6 @@ internal static class GatewayConfigurationBuilder
                 reg.Resource.Name,
                 reg.ServiceNames,
                 reg.ProxyTelemetry,
-                otlpHeaders,
                 reg.ApiPrefix,
                 reg.OtlpPrefix);
 
@@ -76,9 +72,6 @@ internal static class GatewayConfigurationBuilder
         var httpClientEndpoint = httpHostEndpoint ?? (hostEndpoint.IsHttp ? hostEndpoint : null);
         var httpsClientEndpoint = hostEndpoint.IsHttps ? hostEndpoint : null;
 
-        // Capture OTLP headers so the WASM client can send them directly
-        env.TryGetValue("OTEL_EXPORTER_OTLP_HEADERS", out var otlpHeaders);
-
         env["Client__ConfigResponse"] = new ClientConfigValueProvider(
             hostEndpoint,
             httpClientEndpoint,
@@ -87,7 +80,6 @@ internal static class GatewayConfigurationBuilder
             resourceName,
             serviceNames,
             proxyTelemetry,
-            otlpHeaders,
             apiPrefix,
             otlpPrefix);
         env["Client__ConfigEndpointPath"] = "/_blazor/_configuration";
@@ -194,7 +186,6 @@ internal static class GatewayConfigurationBuilder
         string resourceName,
         string[] serviceNames,
         bool proxyTelemetry,
-        object? otlpHeaders,
         string apiPrefix = DefaultApiPrefix,
         string otlpPrefix = DefaultOtlpPrefix) : IValueProvider, IManifestExpressionProvider
     {
@@ -202,16 +193,14 @@ internal static class GatewayConfigurationBuilder
             BuildJson(
                 ((IManifestExpressionProvider)primaryEndpoint).ValueExpression,
                 ResolveEndpointExpression(httpEndpoint),
-                ResolveEndpointExpression(httpsEndpoint),
-                ResolveHeadersExpression());
+                ResolveEndpointExpression(httpsEndpoint));
 
         async ValueTask<string?> IValueProvider.GetValueAsync(CancellationToken cancellationToken)
         {
             var primaryUrl = await primaryEndpoint.GetValueAsync(cancellationToken).ConfigureAwait(false);
             var httpUrl = await ResolveEndpointAsync(httpEndpoint, cancellationToken).ConfigureAwait(false);
             var httpsUrl = await ResolveEndpointAsync(httpsEndpoint, cancellationToken).ConfigureAwait(false);
-            var headers = await ResolveHeadersAsync(cancellationToken).ConfigureAwait(false);
-            return BuildJson(primaryUrl, httpUrl, httpsUrl, headers);
+            return BuildJson(primaryUrl, httpUrl, httpsUrl);
         }
 
         async ValueTask<string?> IValueProvider.GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken)
@@ -219,26 +208,7 @@ internal static class GatewayConfigurationBuilder
             var primaryUrl = await primaryEndpoint.GetValueAsync(context, cancellationToken).ConfigureAwait(false);
             var httpUrl = await ResolveEndpointAsync(httpEndpoint, context, cancellationToken).ConfigureAwait(false);
             var httpsUrl = await ResolveEndpointAsync(httpsEndpoint, context, cancellationToken).ConfigureAwait(false);
-            var headers = await ResolveHeadersAsync(context, cancellationToken).ConfigureAwait(false);
-            return BuildJson(primaryUrl, httpUrl, httpsUrl, headers);
-        }
-
-        private async ValueTask<string?> ResolveHeadersAsync(CancellationToken cancellationToken)
-        {
-            if (otlpHeaders is IValueProvider vp)
-            {
-                return await vp.GetValueAsync(cancellationToken).ConfigureAwait(false);
-            }
-            return otlpHeaders as string;
-        }
-
-        private async ValueTask<string?> ResolveHeadersAsync(ValueProviderContext context, CancellationToken cancellationToken)
-        {
-            if (otlpHeaders is IValueProvider vp)
-            {
-                return await vp.GetValueAsync(context, cancellationToken).ConfigureAwait(false);
-            }
-            return otlpHeaders as string;
+            return BuildJson(primaryUrl, httpUrl, httpsUrl);
         }
 
         private static async ValueTask<string?> ResolveEndpointAsync(EndpointReference? endpoint, CancellationToken cancellationToken)
@@ -268,16 +238,7 @@ internal static class GatewayConfigurationBuilder
                 : null;
         }
 
-        private string? ResolveHeadersExpression()
-        {
-            if (otlpHeaders is IManifestExpressionProvider mep)
-            {
-                return mep.ValueExpression;
-            }
-            return otlpHeaders as string;
-        }
-
-        private string BuildJson(string? primaryBaseUrl, string? httpBaseUrl, string? httpsBaseUrl, string? resolvedHeaders)
+        private string BuildJson(string? primaryBaseUrl, string? httpBaseUrl, string? httpsBaseUrl)
         {
             var pathBase = prefix != null ? $"/{prefix}" : "";
             var environment = new Dictionary<string, string>();
@@ -316,10 +277,10 @@ internal static class GatewayConfigurationBuilder
                     environment["OTEL_EXPORTER_OTLP_LOGS_ENDPOINT"] = $"{otlpBase}/v1/logs";
                 }
 
-                if (!string.IsNullOrEmpty(resolvedHeaders))
-                {
-                    environment["OTEL_EXPORTER_OTLP_HEADERS"] = resolvedHeaders;
-                }
+                // NOTE: OTEL_EXPORTER_OTLP_HEADERS is intentionally NOT sent to the WASM client.
+                // The headers contain the dashboard OTLP API key, and this config is delivered
+                // to browser-visible JSON. The YARP proxy injects the headers server-side when
+                // forwarding telemetry to the dashboard.
             }
 
             return JsonSerializer.Serialize(
