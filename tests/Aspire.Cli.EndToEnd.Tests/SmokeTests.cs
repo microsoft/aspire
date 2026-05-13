@@ -136,13 +136,14 @@ public sealed class SmokeTests(ITestOutputHelper output)
         await auto.AspireNewTypeScriptEmptyAppHostAsync(projectName, counter, channel: "stable");
 
         var projectPath = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
-        var appHostPath = GetTypeScriptAppHostPath(projectPath);
+        var configPath = Path.Combine(projectPath, "aspire.config.json");
+        var appHostFileName = GetStableTypeScriptAppHostFileName(configPath);
+        var appHostPath = Path.Combine(projectPath, appHostFileName);
         if (!File.Exists(appHostPath))
         {
             throw new FileNotFoundException($"Expected TypeScript AppHost file to exist: {appHostPath}", appHostPath);
         }
 
-        AssertStableTypeScriptAppHostConfig(Path.Combine(projectPath, "aspire.config.json"), Path.GetFileName(appHostPath));
         output.WriteLine("Stable TypeScript AppHost config verified.");
 
         await auto.RunCommandFailFastAsync($"cd {projectName}", counter);
@@ -169,13 +170,7 @@ public sealed class SmokeTests(ITestOutputHelper output)
             : throw new InvalidOperationException($"Could not find Aspire.AppHost.Sdk directive in {appHostPath}.");
     }
 
-    private static string GetTypeScriptAppHostPath(string projectPath)
-    {
-        var appHostPath = Path.Combine(projectPath, "apphost.mts");
-        return File.Exists(appHostPath) ? appHostPath : Path.Combine(projectPath, "apphost.ts");
-    }
-
-    private static void AssertStableTypeScriptAppHostConfig(string configPath, string expectedAppHostPath)
+    private static string GetStableTypeScriptAppHostFileName(string configPath)
     {
         if (!File.Exists(configPath))
         {
@@ -196,8 +191,15 @@ public sealed class SmokeTests(ITestOutputHelper output)
         }
 
         var appHost = GetRequiredJsonObjectProperty(root, "appHost", configPath);
-        AssertJsonStringProperty(appHost, "path", expectedAppHostPath, configPath);
+        var appHostPath = GetRequiredJsonStringProperty(appHost, "path", configPath);
+        if (appHostPath is not ("apphost.mts" or "apphost.ts"))
+        {
+            throw new InvalidOperationException($"Expected JSON property 'path' in {configPath} to be 'apphost.mts' or 'apphost.ts', got '{appHostPath}'.");
+        }
+
         AssertJsonStringProperty(appHost, "language", "typescript/nodejs", configPath);
+
+        return appHostPath;
     }
 
     private static JsonElement GetRequiredJsonObjectProperty(JsonElement element, string propertyName, string configPath)
