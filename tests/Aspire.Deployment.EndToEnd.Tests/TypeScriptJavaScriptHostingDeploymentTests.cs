@@ -129,12 +129,12 @@ public sealed class TypeScriptJavaScriptHostingDeploymentTests(ITestOutputHelper
 
             await builder.addAzureContainerAppEnvironment('env');
 
-            const api = await builder.addNodeApp('api', './api', 'server.js')
-                .withHttpEndpoint({ name: 'http', env: 'PORT' });
+            const api = await builder.addNodeApp('api', './api', 'server.js');
+            await api.withHttpEndpoint({ name: 'http', env: 'PORT' });
 
-            await builder.addJavaScriptApp('staticsite', './staticsite')
-                .publishAsStaticWebsite({ apiPath: '/api', apiTarget: api })
-                .withExternalHttpEndpoints();
+            const staticsite = await builder.addJavaScriptApp('staticsite', './staticsite');
+            await staticsite.publishAsStaticWebsite({ apiPath: '/api', apiTarget: api });
+            await staticsite.withEndpoint({ name: 'http', scheme: 'http', targetPort: 5000, isExternal: true });
 
             await builder.build().run();
             """);
@@ -186,8 +186,8 @@ public sealed class TypeScriptJavaScriptHostingDeploymentTests(ITestOutputHelper
     private static string BuildEndpointVerificationCommand(string resourceGroupName)
     {
         return
-            $"static_host=$(az containerapp list -g \"{resourceGroupName}\" --query \"[?contains(name, 'staticsite')].properties.configuration.ingress.fqdn | [0]\" -o tsv) && " +
-            "if [ -z \"$static_host\" ]; then echo \"No staticsite endpoint found\"; exit 1; fi && " +
+            $"static_host=$(az containerapp list -g \"{resourceGroupName}\" --query \"[?contains(name, 'staticsite') && properties.configuration.ingress.external == `true`].properties.configuration.ingress.fqdn | [0]\" -o tsv) && " +
+            $"if [ -z \"$static_host\" ]; then echo \"No external staticsite endpoint found\"; az containerapp list -g \"{resourceGroupName}\" --query \"[].{{name:name,external:properties.configuration.ingress.external,fqdn:properties.configuration.ingress.fqdn}}\" -o table; exit 1; fi && " +
             "echo \"Checking https://$static_host\" && " +
             "ok=0 && " +
             "for i in $(seq 1 30); do " +

@@ -185,24 +185,24 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
             const builder = await createBuilder();
             await builder.addDockerComposeEnvironment('compose');
 
-            const api = await builder.addNodeApp('api', './api', 'server.js')
-                .withHttpEndpoint({ port: 3001, env: 'PORT' })
-                .withExternalHttpEndpoints();
+            const api = await builder.addNodeApp('api', './api', 'server.js');
+            await api.withHttpEndpoint({ port: 3001, env: 'PORT' });
+            await api.withExternalHttpEndpoints();
 
-            await builder.addViteApp('staticsite', './staticsite')
-                .publishAsStaticWebsite({ apiPath: '/api', apiTarget: api })
-                .withExternalHttpEndpoints();
+            const staticsite = await builder.addViteApp('staticsite', './staticsite');
+            await staticsite.publishAsStaticWebsite({ apiPath: '/api', apiTarget: api });
+            await staticsite.withEndpoint({ name: 'http', scheme: 'http', targetPort: 5000, isExternal: true });
 
-            await builder.addViteApp('nodeserver', './nodeserver')
-                .publishAsNodeServer('build/server.js', { outputPath: 'build' })
-                .withExternalHttpEndpoints();
+            const nodeserver = await builder.addViteApp('nodeserver', './nodeserver');
+            await nodeserver.publishAsNodeServer('build/server.js', { outputPath: 'build' });
+            await nodeserver.withExternalHttpEndpoints();
 
-            await builder.addViteApp('npmscript', './npmscript')
-                .publishAsNpmScript({ startScriptName: 'start' })
-                .withExternalHttpEndpoints();
+            const npmscript = await builder.addViteApp('npmscript', './npmscript');
+            await npmscript.publishAsNpmScript({ startScriptName: 'start' });
+            await npmscript.withExternalHttpEndpoints();
 
-            await builder.addNextJsApp('nextjs', './nextjs')
-                .withExternalHttpEndpoints();
+            const nextjs = await builder.addNextJsApp('nextjs', './nextjs');
+            await nextjs.withExternalHttpEndpoints();
 
             await builder.build().run();
             """);
