@@ -34,6 +34,11 @@ Aby uzyskać więcej informacji, zobacz https://aka.ms/dotnet/aspire/container-r
         <target state="translated">Nieoczekiwanie zakończony {0} z kodem zakończenia {1}</target>
         <note>{0} is a resource type, {1} is a number</note>
       </trans-unit>
+      <trans-unit id="StateColumnResourceFailedToStart">
+        <source>{0} failed to start</source>
+        <target state="new">{0} failed to start</target>
+        <note>{0} is a resource type</note>
+      </trans-unit>
       <trans-unit id="StateColumnResourceNotStarted">
         <source>Resource has not started because it's configured to not automatically start.</source>
         <target state="translated">Zasób nie został uruchomiony, ponieważ jest skonfigurowany tak, aby nie uruchamiał się automatycznie.</target>

@@ -306,9 +306,9 @@ internal sealed class DashboardRunCommand : BaseCommand
         };
     }
 
-    private void RenderDashboardSummary(DashboardInfo info, string logFilePath)
+    internal static void RenderDashboardSummary(IInteractionService interactionService, DashboardInfo info, string logFilePath)
     {
-        _interactionService.DisplayEmptyLine();
+        interactionService.DisplayEmptyLine();
         var grid = new Grid();
         grid.AddColumn();
         grid.AddColumn();
@@ -324,10 +324,9 @@ internal sealed class DashboardRunCommand : BaseCommand
         grid.Columns[0].Width = longestLabelLength;
 
         // Dashboard row
-        var escapedDashboardUrl = Markup.Escape(info.DashboardUrl);
         grid.AddRow(
             new Align(new Markup($"[bold green]{dashboardLabel}[/]:"), HorizontalAlignment.Right),
-            new Markup($"[link={escapedDashboardUrl}]{escapedDashboardUrl}[/]"));
+            new Markup(MarkupHelpers.SafeLink(interactionService, info.DashboardUrl)));
         grid.AddRow(Text.Empty, Text.Empty);
 
         // OTLP gRPC row
@@ -345,10 +344,10 @@ internal sealed class DashboardRunCommand : BaseCommand
         // Logs row
         grid.AddRow(
             new Align(new Markup($"[bold green]{logsLabel}[/]:"), HorizontalAlignment.Right),
-            new Text(logFilePath));
+            new Markup(MarkupHelpers.SafeFileLink(interactionService, logFilePath)));
 
         var padder = new Padder(grid, new Padding(3, 0));
-        _interactionService.DisplayRenderable(padder);
+        interactionService.DisplayRenderable(padder);
     }
 
     private async Task<int> ExecuteForegroundAsync(string managedPath, List<string> dashboardArgs, DashboardInfo dashboardInfo, IDictionary<string, string>? environmentVariables, CancellationToken cancellationToken)
@@ -447,7 +446,10 @@ internal sealed class DashboardRunCommand : BaseCommand
                 : DashboardCommandStrings.DashboardStartTimedOut;
 
             _interactionService.DisplayError(exitMessage);
-            _interactionService.DisplayMessage(KnownEmojis.PageFacingUp, string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, ExecutionContext.LogFilePath));
+            _interactionService.DisplayMessage(
+                KnownEmojis.PageFacingUp,
+                string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, MarkupHelpers.SafeFileLink(_interactionService, ExecutionContext.LogFilePath)),
+                allowMarkup: true);
 
             if (!process.HasExited)
             {
@@ -458,7 +460,7 @@ internal sealed class DashboardRunCommand : BaseCommand
         }
 
         // Dashboard is ready.
-        RenderDashboardSummary(dashboardInfo, ExecutionContext.LogFilePath);
+        RenderDashboardSummary(_interactionService, dashboardInfo, ExecutionContext.LogFilePath);
         _interactionService.DisplayEmptyLine();
 
         try

@@ -94,6 +94,14 @@ internal static class TelemetryCommandHelpers
     };
 
     /// <summary>
+    /// Full-text search option for filtering across all telemetry fields.
+    /// </summary>
+    internal static Option<string?> CreateSearchOption() => new("--search")
+    {
+        Description = TelemetryCommandStrings.SearchOptionDescription
+    };
+
+    /// <summary>
     /// Dashboard URL option for connecting directly to a standalone dashboard.
     /// </summary>
     internal static Option<string?> CreateDashboardUrlOption() => new("--dashboard-url")
@@ -324,7 +332,10 @@ internal static class TelemetryCommandHelpers
             interactionService.DisplayMessage(KnownEmojis.Information, hint);
         }
 
-        interactionService.DisplayMessage(KnownEmojis.PageFacingUp, string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, logFilePath));
+        interactionService.DisplayMessage(
+            KnownEmojis.PageFacingUp,
+            string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, MarkupHelpers.SafeFileLink(interactionService, logFilePath)),
+            allowMarkup: true);
     }
 
     /// <summary>
@@ -533,22 +544,26 @@ internal static class TelemetryCommandHelpers
     /// <summary>
     /// Creates a Spectre Console hyperlink markup for a trace detail in the Dashboard.
     /// </summary>
+    /// <param name="interactionService">The interaction service to determine link support.</param>
     /// <param name="dashboardUrl">The base dashboard URL.</param>
     /// <param name="traceId">The trace ID.</param>
     /// <param name="displayText">The text to display (defaults to shortened trace ID).</param>
     /// <param name="spanId">Optional span ID to highlight in the trace detail view.</param>
-    /// <returns>A Spectre markup string with hyperlink, or plain text if dashboardUrl is null.</returns>
-    public static string FormatTraceLink(string? dashboardUrl, string traceId, string? displayText = null, string? spanId = null)
+    /// <returns>
+    /// A Spectre markup string with hyperlink when the console supports links and dashboardUrl is non-null;
+    /// or just the display text if links are unsupported, dashboardUrl is null, or traceId is empty.
+    /// </returns>
+    public static string FormatTraceLink(IInteractionService interactionService, string? dashboardUrl, string traceId, string? displayText = null, string? spanId = null)
     {
         var text = displayText ?? OtlpHelpers.ToShortenedId(traceId);
         if (string.IsNullOrEmpty(dashboardUrl) || string.IsNullOrEmpty(traceId))
         {
-            return text;
+            return text.EscapeMarkup();
         }
 
         // Dashboard trace detail URL: /traces/detail/{traceId}
         var url = DashboardUrls.CombineUrl(dashboardUrl, DashboardUrls.TraceDetailUrl(traceId, spanId));
-        return $"[link={url}]{text}[/]";
+        return MarkupHelpers.SafeLink(interactionService, url, text);
     }
 
     /// <summary>

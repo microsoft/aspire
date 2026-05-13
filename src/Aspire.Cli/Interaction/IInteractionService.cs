@@ -15,10 +15,10 @@ internal interface IInteractionService
     Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default);
     Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default);
     public Task<bool> PromptConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default);
-    Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull;
-    Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull;
+    Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull;
+    Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull;
     int DisplayIncompatibleVersionError(AppHostIncompatibleException ex, string appHostHostingVersion);
-    void DisplayError(string errorMessage);
+    void DisplayError(string errorMessage, bool allowMarkup = false);
     void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false);
     void DisplayPlainText(string text);
     void DisplayRawText(string text, ConsoleOutput? consoleOverride = null);
@@ -38,6 +38,11 @@ internal interface IInteractionService
     /// so that structured output (e.g., JSON) on stdout remains parseable.
     /// </summary>
     ConsoleOutput Console { get; set; }
+
+    /// <summary>
+    /// Gets a value indicating whether the current console supports clickable hyperlinks.
+    /// </summary>
+    bool SupportsLinks { get; }
 
     void DisplayVersionUpdateNotification(string newerVersion, string? updateCommand = null);
     // The semantic type is stringly-typed because some values originate from backchannel payloads.

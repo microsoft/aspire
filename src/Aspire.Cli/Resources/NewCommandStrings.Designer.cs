@@ -151,9 +151,15 @@ namespace Aspire.Cli.Resources {
             }
         }
 
-        public static string OutputDirectoryNotEmpty {
+        public static string OutputDirectoryNotEmptyNonInteractive {
             get {
-                return ResourceManager.GetString("OutputDirectoryNotEmpty", resourceCulture);
+                return ResourceManager.GetString("OutputDirectoryNotEmptyNonInteractive", resourceCulture);
+            }
+        }
+
+        public static string OutputDirectoryNotEmptyInteractive {
+            get {
+                return ResourceManager.GetString("OutputDirectoryNotEmptyInteractive", resourceCulture);
             }
         }
 

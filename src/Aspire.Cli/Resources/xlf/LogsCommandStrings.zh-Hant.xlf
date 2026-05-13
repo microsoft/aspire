@@ -42,6 +42,11 @@
         <target state="translated">當未使用 --follow 時，必須指定資源名稱。使用 --follow 從所有資源串流記錄。</target>
         <note />
       </trans-unit>
+      <trans-unit id="SearchOptionDescription">
+        <source>Full-text search to filter log content</source>
+        <target state="new">Full-text search to filter log content</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SelectAppHostAction">
         <source>stream logs from</source>
         <target state="translated">串流來自以下位置的記錄</target>

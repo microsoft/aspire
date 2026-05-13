@@ -24,13 +24,15 @@ internal sealed class TestAuxiliaryBackchannelMonitor : IAuxiliaryBackchannelMon
     /// </summary>
     public int ScanCallCount { get; private set; }
 
+    public Func<CancellationToken, Task>? ScanAsyncCallback { get; set; }
+
     /// <summary>
     /// Triggers an immediate scan. In the test implementation, this just increments ScanCallCount.
     /// </summary>
     public Task ScanAsync(CancellationToken cancellationToken = default)
     {
         ScanCallCount++;
-        return Task.CompletedTask;
+        return ScanAsyncCallback?.Invoke(cancellationToken) ?? Task.CompletedTask;
     }
 
     public IAppHostAuxiliaryBackchannel? SelectedConnection

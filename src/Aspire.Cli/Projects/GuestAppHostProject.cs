@@ -12,6 +12,7 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Shared.UserSecrets;
@@ -37,10 +38,12 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     private readonly IConfiguration _configuration;
     private readonly IFeatures _features;
     private readonly ILanguageDiscovery _languageDiscovery;
+    private readonly CliExecutionContext _executionContext;
     private readonly ILogger<GuestAppHostProject> _logger;
     private readonly FileLoggerProvider _fileLoggerProvider;
     private readonly TimeProvider _timeProvider;
     private readonly RunningInstanceManager _runningInstanceManager;
+    private readonly ProfilingTelemetry _profilingTelemetry;
 
     // Language is always resolved via constructor
     private readonly LanguageInfo _resolvedLanguage;
@@ -57,8 +60,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         IConfiguration configuration,
         IFeatures features,
         ILanguageDiscovery languageDiscovery,
+        CliExecutionContext executionContext,
         ILogger<GuestAppHostProject> logger,
         FileLoggerProvider fileLoggerProvider,
+        ProfilingTelemetry profilingTelemetry,
         TimeProvider? timeProvider = null)
     {
         _resolvedLanguage = language;
@@ -71,8 +76,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         _configuration = configuration;
         _features = features;
         _languageDiscovery = languageDiscovery;
+        _executionContext = executionContext;
         _logger = logger;
         _fileLoggerProvider = fileLoggerProvider;
+        _profilingTelemetry = profilingTelemetry;
         _timeProvider = timeProvider ?? TimeProvider.System;
         _runningInstanceManager = new RunningInstanceManager(_logger, _interactionService, _timeProvider);
     }
@@ -237,7 +244,8 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             appHostServerProject,
             environmentVariables: null,
             debug: false,
-            _logger);
+            _logger,
+            _profilingTelemetry);
 
         // Step 3: Connect to server
         var rpcClient = await serverSession.GetRpcClientAsync(cancellationToken);
@@ -341,13 +349,6 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                     return (Success: true, Output: prepareOutput, Error: (string?)null, ChannelName: channelName, NeedsCodeGen: needsCodeGen);
                 }, emoji: KnownEmojis.Gear);
 
-            // Save the channel to settings if available (config already has SdkVersion)
-            if (buildResult.ChannelName is not null)
-            {
-                config.Channel = buildResult.ChannelName;
-                SaveConfiguration(config, directory);
-            }
-
             if (!buildResult.Success)
             {
                 // Set OutputCollector so RunCommand can display errors
@@ -393,7 +394,8 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 appHostServerProject,
                 launchSettingsEnvVars,
                 context.Debug,
-                _logger);
+                _logger,
+                _profilingTelemetry);
             var socketPath = serverSession.SocketPath;
             var appHostServerProcess = serverSession.ServerProcess;
             var appHostServerOutputCollector = serverSession.Output;
@@ -868,7 +870,8 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 appHostServerProject,
                 launchSettingsEnvVars,
                 context.Debug,
-                _logger);
+                _logger,
+                _profilingTelemetry);
             var jsonRpcSocketPath = serverSession.SocketPath;
             var appHostServerProcess = serverSession.ServerProcess;
             var appHostServerOutputCollector = serverSession.Output;
@@ -1205,7 +1208,14 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         {
             config.SdkVersion = newSdkVersion;
         }
-        // Update channel if it's an explicit channel (not the implicit/default one)
+        // Persist the channel only when the update resolved an explicit channel (--channel,
+        // per-project config, or prompt selection). When the resolved channel is Implicit
+        // — i.e. the user hasn't pinned a channel — leave the project's existing setting
+        // untouched rather than silently pinning the running CLI's identity, which would
+        // propagate dev/PR-build identities into the project file. The scaffolding /
+        // build-time paths intentionally do auto-pin identity (see GuestAppHostProject.cs:354
+        // and ScaffoldingService.cs:208) — but `aspire update` is a no-pin path: the user
+        // is updating, not initialising, and we should not change the channel pin state.
         if (context.Channel.Type == Packaging.PackageChannelType.Explicit)
         {
             config.Channel = context.Channel.Name;
@@ -1377,7 +1387,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 runtimeSpec = TypeScriptAppHostToolchainResolver.ApplyToRuntimeSpec(runtimeSpec, toolchain);
             }
 
-            _guestRuntime = new GuestRuntime(runtimeSpec, _logger, _fileLoggerProvider);
+            _guestRuntime = new GuestRuntime(runtimeSpec, _logger, _fileLoggerProvider, profilingTelemetry: _profilingTelemetry);
 
             _logger.LogDebug("Created GuestRuntime for {RuntimeDisplayName}: Execute={Command} {Args}",
                 runtimeSpec.DisplayName,

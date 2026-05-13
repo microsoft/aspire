@@ -100,6 +100,7 @@ internal static class CliTestHelper
         services.AddSingleton(sp => sp.GetRequiredService<ConsoleEnvironment>().Out);
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton(options.TelemetryFactory);
+        services.AddSingleton<ProfilingTelemetry>();
         services.AddSingleton(options.ProjectLocatorFactory);
         services.AddSingleton(options.SolutionLocatorFactory);
         services.AddSingleton(options.ExtensionRpcTargetFactory);
@@ -192,10 +193,14 @@ internal static class CliTestHelper
         services.AddTransient<StopCommand>();
         services.AddTransient<StartCommand>();
         services.AddTransient<ResourceCommand>();
+        services.AddTransient<LsCommand>();
         services.AddTransient<PsCommand>();
         services.AddTransient<DescribeCommand>();
         services.AddTransient<LogsCommand>();
-        services.AddTransient<ExecCommand>();
+        services.AddTransient<IntegrationPackageSearchService>();
+        services.AddTransient<IntegrationCommand>();
+        services.AddTransient<IntegrationListCommand>();
+        services.AddTransient<IntegrationSearchCommand>();
         services.AddTransient<AddCommand>();
         services.AddTransient<DeployCommand>();
         services.AddTransient<DestroyCommand>();
@@ -382,8 +387,12 @@ internal sealed class CliServiceCollectionTestOptions
         var projectFactory = serviceProvider.GetService<IAppHostProjectFactory>() ?? new TestAppHostProjectFactory();
         var languageDiscovery = serviceProvider.GetService<ILanguageDiscovery>() ?? new TestLanguageDiscovery();
         var sdkInstaller = serviceProvider.GetRequiredService<IDotNetSdkInstaller>();
+        var gitRepository = serviceProvider.GetRequiredService<IGitRepository>();
+        var profilingTelemetry = serviceProvider.GetRequiredService<ProfilingTelemetry>();
+        var appHostCandidateFinder = serviceProvider.GetService<IAppHostCandidateFinder>()
+            ?? new AppHostCandidateFinder(gitRepository, profilingTelemetry, NullLogger<AppHostCandidateFinder>.Instance);
         var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
-        return new ProjectLocator(logger, executionContext, interactionService, configurationService, projectFactory, languageDiscovery, sdkInstaller, telemetry);
+        return new ProjectLocator(logger, executionContext, interactionService, configurationService, projectFactory, languageDiscovery, sdkInstaller, appHostCandidateFinder, telemetry);
     }
 
     public ISolutionLocator CreateDefaultSolutionLocatorFactory(IServiceProvider serviceProvider)
@@ -445,8 +454,9 @@ internal sealed class CliServiceCollectionTestOptions
         var appHostServerProjectFactory = serviceProvider.GetRequiredService<IAppHostServerProjectFactory>();
         var languageDiscovery = serviceProvider.GetRequiredService<ILanguageDiscovery>();
         var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
+        var cliExecutionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
         var logger = serviceProvider.GetRequiredService<ILogger<ScaffoldingService>>();
-        return new ScaffoldingService(appHostServerProjectFactory, languageDiscovery, interactionService, logger);
+        return new ScaffoldingService(appHostServerProjectFactory, languageDiscovery, interactionService, cliExecutionContext, logger);
     };
 
     public Func<IServiceProvider, IProcessExecutionFactory> DotNetCliExecutionFactoryFactory { get; set; } = (IServiceProvider serviceProvider) =>
@@ -458,6 +468,7 @@ internal sealed class CliServiceCollectionTestOptions
     {
         var logger = serviceProvider.GetRequiredService<ILogger<DotNetCliRunner>>();
         var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
+        var profilingTelemetry = serviceProvider.GetRequiredService<ProfilingTelemetry>();
         var configuration = serviceProvider.GetRequiredService<IConfiguration>();
         var features = serviceProvider.GetRequiredService<IFeatures>();
         var diskCache = serviceProvider.GetRequiredService<IDiskCache>();
@@ -465,7 +476,7 @@ internal sealed class CliServiceCollectionTestOptions
         var executionFactory = serviceProvider.GetRequiredService<IProcessExecutionFactory>();
         var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
 
-        return new DotNetCliRunner(logger, serviceProvider, telemetry, configuration, diskCache, features, interactionService, executionContext, executionFactory);
+        return new DotNetCliRunner(logger, serviceProvider, telemetry, profilingTelemetry, configuration, diskCache, features, interactionService, executionContext, executionFactory);
     };
 
     public Func<IServiceProvider, IDotNetSdkInstaller> DotNetSdkInstallerFactory { get; set; } = (IServiceProvider serviceProvider) =>
@@ -486,7 +497,8 @@ internal sealed class CliServiceCollectionTestOptions
     {
         var logger = serviceProvider.GetRequiredService<ILogger<AppHostCliBackchannel>>();
         var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
-        return new AppHostCliBackchannel(logger, telemetry);
+        var profilingTelemetry = serviceProvider.GetRequiredService<ProfilingTelemetry>();
+        return new AppHostCliBackchannel(logger, telemetry, profilingTelemetry);
     };
 
     public Func<IServiceProvider, IExtensionRpcTarget> ExtensionRpcTargetFactory { get; set; } = (IServiceProvider serviceProvider) =>
@@ -566,7 +578,8 @@ internal sealed class CliServiceCollectionTestOptions
     {
         var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
         var logger = serviceProvider.GetRequiredService<ILogger<GitRepository>>();
-        return new GitRepository(executionContext, logger);
+        var profilingTelemetry = serviceProvider.GetRequiredService<ProfilingTelemetry>();
+        return new GitRepository(executionContext, logger, profilingTelemetry);
     };
 
     public Func<IServiceProvider, INpmRunner> NpmRunnerFactory { get; set; } = _ => new FakeNpmRunner();

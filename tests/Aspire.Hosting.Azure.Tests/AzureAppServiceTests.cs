@@ -411,6 +411,26 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task ValidateAzureAppService_DoesNotThrowInRunMode()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/16940.
+        // In run mode, AddAzureAppServiceEnvironment does not add the env resource to the model.
+        // If a compute resource still ends up with an AzureAppServiceWebsiteCustomizationAnnotation
+        // (e.g. via WithAnnotation), the validation step should not throw at 'aspire run' time —
+        // PublishAs* customizations are only meaningful at publish/deploy time.
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        builder.AddAzureAppServiceEnvironment("env");
+
+        builder.AddContainer("api", "myimage")
+            .WithAnnotation(new AzureAppServiceWebsiteCustomizationAnnotation((_, _) => { }));
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+    }
+
+    [Fact]
     [ActiveIssue("https://github.com/microsoft/aspire/issues/11818", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public async Task MultipleAzureAppServiceEnvironmentsSupported()
     {

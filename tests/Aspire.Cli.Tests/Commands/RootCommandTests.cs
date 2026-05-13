@@ -463,4 +463,16 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
             Assert.Contains(sub.Name, helpOutput);
         }
     }
+
+    [Fact]
+    public void RootCommand_DoesNotExposeRemovedExecSubcommand()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+
+        Assert.DoesNotContain(command.Subcommands, subcommand => subcommand.Name == "exec");
+    }
 }

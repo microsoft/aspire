@@ -260,7 +260,7 @@ internal sealed class AzureResourcePreparer(
         return result;
     }
 
-    private (AzureUserAssignedIdentityResource IdentityResource, List<AzureBicepResource> RoleAssignmentResources) CreateIdentityAndRoleAssignmentResources(
+    private (AzureUserAssignedIdentityResource IdentityResource, List<AzureRoleAssignmentResource> RoleAssignmentResources) CreateIdentityAndRoleAssignmentResources(
         IResource resource,
         Dictionary<AzureProvisioningResource, IEnumerable<RoleDefinition>> roleAssignments)
     {
@@ -290,16 +290,19 @@ internal sealed class AzureResourcePreparer(
         return (identityResource, roleAssignmentResources);
     }
 
-    private List<AzureBicepResource> CreateRoleAssignmentsResources(
+    private List<AzureRoleAssignmentResource> CreateRoleAssignmentsResources(
         IResource resource,
         Dictionary<AzureProvisioningResource, IEnumerable<RoleDefinition>> roleAssignments,
         AzureUserAssignedIdentityResource appIdentityResource)
     {
-        var roleAssignmentResources = new List<AzureBicepResource>();
+        var roleAssignmentResources = new List<AzureRoleAssignmentResource>();
         foreach (var (targetResource, roles) in roleAssignments)
         {
-            var roleAssignmentResource = new AzureProvisioningResource(
+            var roleAssignmentResource = new AzureRoleAssignmentResource(
                 $"{resource.Name}-roles-{targetResource.Name}",
+                targetResource,
+                resource,
+                appIdentityResource,
                 infra => AddRoleAssignmentsInfrastructure(infra, targetResource, roles, appIdentityResource))
             {
                 ProvisioningBuildOptions = options.Value.ProvisioningBuildOptions,
@@ -398,12 +401,15 @@ internal sealed class AzureResourcePreparer(
         }
     }
 
-    private AzureProvisioningResource CreateGlobalRoleAssignmentsResource(
+    private AzureRoleAssignmentResource CreateGlobalRoleAssignmentsResource(
         AzureProvisioningResource targetResource,
         IEnumerable<RoleDefinition> roles)
     {
-        var roleAssignmentResource = new AzureProvisioningResource(
+        var roleAssignmentResource = new AzureRoleAssignmentResource(
             $"{targetResource.Name}-roles",
+            targetResource,
+            ownerResource: null,
+            identityResource: null,
             infra => AddGlobalRoleAssignmentsInfrastructure(infra, targetResource, roles))
         {
             ProvisioningBuildOptions = options.Value.ProvisioningBuildOptions,

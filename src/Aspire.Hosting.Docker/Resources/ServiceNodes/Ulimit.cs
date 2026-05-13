@@ -12,6 +12,7 @@ namespace Aspire.Hosting.Docker.Resources.ServiceNodes;
 /// This class is typically used to specify soft and hard limits for resources
 /// such as file descriptors or process count for Docker containers.
 /// </remarks>
+[AspireExport(ExposeProperties = true)]
 [YamlSerializable]
 public sealed class Ulimit
 {

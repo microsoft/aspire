@@ -21,6 +21,7 @@ syntax: glob
 
 artifacts/
 artifacts_stage_1/
+BenchmarkDotNet.Artifacts/
 [Dd]ebug/
 [Rr]elease/
 x64/ !eng/common/cross/x64/
@@ -210,3 +211,5 @@ extension/package.nls.*.json
 # Azure Functions local settings (may contain encrypted secrets)
 local.settings.json
 diagnostics.log
+.squad/
+tags

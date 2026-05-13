@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	builder, err := aspire.CreateBuilder(nil)
+	builder, err := aspire.CreateBuilder()
 	if err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
@@ -25,7 +25,7 @@ func main() {
 
 	environment := builder.AddAzureContainerAppEnvironment("environment")
 	environment.WithAzureContainerRegistry(registry)
-	environment.WithRoleAssignments(registry, []aspire.AzureContainerRegistryRole{
+	environment.WithContainerRegistryRoleAssignments(registry, []aspire.AzureContainerRegistryRole{
 		aspire.AzureContainerRegistryRoleAcrPull,
 		aspire.AzureContainerRegistryRoleAcrPush,
 	})
@@ -47,7 +47,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Build: %v", err)
 	}
-	if err := app.Run(nil); err != nil {
+	if err := app.Run(); err != nil {
 		log.Fatalf("Run: %v", err)
 	}
 }

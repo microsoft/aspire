@@ -174,13 +174,13 @@ Step: provision-api-identity
 Step: provision-api-roles-cosmos
     Description: Provisions the Azure Bicep resource api-roles-cosmos using Azure infrastructure.
     Dependencies: ✓ create-provisioning-context, ✓ provision-api-identity, ✓ provision-cosmos
-    Resource: api-roles-cosmos (AzureProvisioningResource)
+    Resource: api-roles-cosmos (AzureRoleAssignmentResource)
     Tags: provision-infra
 
 Step: provision-api-roles-sql
     Description: Provisions the Azure Bicep resource api-roles-sql using Azure infrastructure.
     Dependencies: ✓ create-provisioning-context, ✓ provision-api-identity, ✓ provision-pe-subnet-files-pe, ✓ provision-pe-subnet-sql-pe, ✓ provision-sql, ✓ provision-sql-store, ✓ provision-vnet
-    Resource: api-roles-sql (AzureProvisioningResource)
+    Resource: api-roles-sql (AzureRoleAssignmentResource)
     Tags: provision-infra
 
 Step: provision-azure-bicep-resources
@@ -258,7 +258,7 @@ Step: provision-sql-admin-identity
 Step: provision-sql-admin-identity-roles-sql-store
     Description: Provisions the Azure Bicep resource sql-admin-identity-roles-sql-store using Azure infrastructure.
     Dependencies: ✓ create-provisioning-context, ✓ provision-sql-admin-identity, ✓ provision-sql-store
-    Resource: sql-admin-identity-roles-sql-store (AzureProvisioningResource)
+    Resource: sql-admin-identity-roles-sql-store (AzureRoleAssignmentResource)
     Tags: provision-infra
 
 Step: provision-sql-nsg

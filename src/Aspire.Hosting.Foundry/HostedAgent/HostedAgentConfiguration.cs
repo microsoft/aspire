@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Text.RegularExpressions;
 using Azure.AI.Projects.Agents;
 
 namespace Aspire.Hosting.Foundry;
@@ -15,7 +16,7 @@ namespace Aspire.Hosting.Foundry;
 /// ATS-compatible properties are exported; Azure SDK-specific members remain .NET-only.
 /// </remarks>
 [AspireExport(ExposeProperties = true)]
-public class HostedAgentConfiguration(string image)
+public partial class HostedAgentConfiguration(string image)
 {
     /// <summary>
     /// The description of the hosted agent.
@@ -48,7 +49,7 @@ public class HostedAgentConfiguration(string image)
     /// </summary>
     [AspireExportIgnore(Reason = "Azure SDK-specific type not usable from polyglot hosts.")]
     public IList<ProtocolVersionRecord> ContainerProtocolVersions { get; init; } = [
-        new ProtocolVersionRecord(ProjectsAgentProtocol.Responses, "v1")
+        new ProtocolVersionRecord(ProjectsAgentProtocol.Responses, "1.0.0")
     ];
 
     private decimal _cpu = 2.0m;
@@ -112,8 +113,10 @@ public class HostedAgentConfiguration(string image)
     /// <summary>
     /// Converts this configuration to an <see cref="ProjectsAgentVersionCreationOptions"/> instance.
     /// </summary>
-    public ProjectsAgentVersionCreationOptions ToProjectsAgentVersionCreationOptions()
+    internal ProjectsAgentVersionCreationOptions ToProjectsAgentVersionCreationOptions(string targetResourceName)
     {
+        ValidateEnvironmentVariableNames(EnvironmentVariables.Keys, targetResourceName);
+
         var def = new HostedAgentDefinition(
             ContainerProtocolVersions,
             cpu: CpuString,
@@ -143,4 +146,26 @@ public class HostedAgentConfiguration(string image)
         }
         return options;
     }
+
+    private static void ValidateEnvironmentVariableNames(IEnumerable<string> environmentVariableNames, string? targetResourceName)
+    {
+        var invalidNames = environmentVariableNames
+            .Where(static name => !EnvironmentVariableNameRegex().IsMatch(name))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+        if (invalidNames.Length == 0)
+        {
+            return;
+        }
+
+        throw new DistributedApplicationException(
+            $"Foundry hosted agent for target resource '{targetResourceName}' contains environment variable names that are not supported by Foundry Hosted Agents. " +
+            $"Environment variable names must contain only ASCII letters, digits, or underscores. " +
+            $"Invalid name(s): '{string.Join("', '", invalidNames)}'");
+    }
+
+    // hosted agent environment variables must contain only letters, digits, or underscores.
+    [GeneratedRegex("^[A-Za-z0-9_]+$")]
+    private static partial Regex EnvironmentVariableNameRegex();
 }

@@ -156,7 +156,7 @@ Step: provision-api-identity
 Step: provision-api-roles-kv
     Description: Provisions the Azure Bicep resource api-roles-kv using Azure infrastructure.
     Dependencies: ✓ create-provisioning-context, ✓ provision-api-identity, ✓ provision-kv
-    Resource: api-roles-kv (AzureProvisioningResource)
+    Resource: api-roles-kv (AzureRoleAssignmentResource)
     Tags: provision-infra
 
 Step: provision-api-website

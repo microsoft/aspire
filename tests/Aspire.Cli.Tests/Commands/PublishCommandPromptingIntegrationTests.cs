@@ -832,12 +832,6 @@ internal sealed class TestPromptBackchannel : IAppHostCliBackchannel
     public Task ConnectAsync(string socketPath, bool autoReconnect, int retryCount, CancellationToken cancellationToken) => Task.CompletedTask;
     public Task<string[]> GetCapabilitiesAsync(CancellationToken cancellationToken) => Task.FromResult(new[] { "baseline.v2" });
 
-    public async IAsyncEnumerable<CommandOutput> ExecAsync([EnumeratorCancellation] CancellationToken cancellationToken)
-    {
-        await Task.CompletedTask; // Suppress CS1998
-        yield break;
-    }
-
     public Task<GetPipelineStepsResponse> GetPipelineStepsAsync(string? step, CancellationToken cancellationToken) =>
         Task.FromResult(new GetPipelineStepsResponse { Steps = [] });
 }
@@ -855,6 +849,7 @@ internal sealed class TestConsoleInteractionServiceWithPromptTracking : IInterac
     private bool _shouldCancel;
 
     public ConsoleOutput Console { get; set; }
+    public bool SupportsLinks { get; set; }
     public List<StringPromptCall> StringPromptCalls { get; } = [];
     public List<object> SelectionPromptCalls { get; } = []; // Using object to handle generic types
     public List<BooleanPromptCall> BooleanPromptCalls { get; } = [];
@@ -893,7 +888,7 @@ internal sealed class TestConsoleInteractionServiceWithPromptTracking : IInterac
     public Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
         => PromptForStringAsync(promptText, validator, isSecret: false, required, binding, cancellationToken);
 
-    public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull
+    public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
     {
         if (_shouldCancel || cancellationToken.IsCancellationRequested)
         {
@@ -913,7 +908,7 @@ internal sealed class TestConsoleInteractionServiceWithPromptTracking : IInterac
         return Task.FromResult(choices.First());
     }
 
-    public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull
+    public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
     {
         if (_shouldCancel || cancellationToken.IsCancellationRequested)
         {
@@ -953,7 +948,7 @@ internal sealed class TestConsoleInteractionServiceWithPromptTracking : IInterac
     public Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action, KnownEmoji? emoji = null, bool allowMarkup = false) => action();
     public void ShowStatus(string statusText, Action action, KnownEmoji? emoji = null, bool allowMarkup = false) => action();
     public int DisplayIncompatibleVersionError(AppHostIncompatibleException ex, string appHostHostingVersion) => 0;
-    public void DisplayError(string errorMessage) => DisplayedErrors.Add(errorMessage);
+    public void DisplayError(string errorMessage, bool allowMarkup = false) => DisplayedErrors.Add(errorMessage);
     public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false) { }
     public void DisplaySuccess(string message, bool allowMarkup = false) { }
     public void DisplaySubtleMessage(string message, bool allowMarkup = false) { }

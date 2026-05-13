@@ -41,6 +41,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
     private static readonly Option<bool?> s_hasErrorOption = TelemetryCommandHelpers.CreateHasErrorOption();
     private static readonly Option<string?> s_dashboardUrlOption = TelemetryCommandHelpers.CreateDashboardUrlOption();
     private static readonly Option<string?> s_apiKeyOption = TelemetryCommandHelpers.CreateApiKeyOption();
+    private static readonly Option<string?> s_searchOption = TelemetryCommandHelpers.CreateSearchOption();
 
     public TelemetryTracesCommand(
         IInteractionService interactionService,
@@ -71,6 +72,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         Options.Add(s_hasErrorOption);
         Options.Add(s_dashboardUrlOption);
         Options.Add(s_apiKeyOption);
+        Options.Add(s_searchOption);
     }
 
     protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -85,6 +87,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         var hasError = parseResult.GetValue(s_hasErrorOption);
         var dashboardUrl = parseResult.GetValue(s_dashboardUrlOption);
         var apiKey = parseResult.GetValue(s_apiKeyOption);
+        var search = parseResult.GetValue(s_searchOption);
 
         // Validate --limit value
         if (limit.HasValue && limit.Value < 1)
@@ -109,7 +112,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
             }
             else
             {
-                return await FetchTracesAsync(dashboardApi.BaseUrl!, dashboardApi.ApiToken!, resourceName, hasError, limit, format, dashboardApi.DashboardUrl!, cancellationToken);
+                return await FetchTracesAsync(dashboardApi.BaseUrl!, dashboardApi.ApiToken!, resourceName, hasError, limit, format, dashboardApi.DashboardUrl!, search, cancellationToken);
             }
         }
         catch (HttpRequestException ex)
@@ -187,6 +190,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         int? limit,
         OutputFormat format,
         string dashboardUrl,
+        string? search,
         CancellationToken cancellationToken)
     {
         using var client = TelemetryCommandHelpers.CreateApiClient(_httpClientFactory, apiToken);
@@ -206,7 +210,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         // Pre-resolve colors so assignment is deterministic regardless of data order
         TelemetryCommandHelpers.ResolveResourceColors(_resourceColorMap, allOtlpResources);
 
-        var url = DashboardUrls.TelemetryTracesApiUrl(baseUrl, resolvedResources, hasError: hasError, limit: limit);
+        var url = DashboardUrls.TelemetryTracesApiUrl(baseUrl, resolvedResources, hasError: hasError, limit: limit, search: search);
 
         _logger.LogDebug("Fetching traces from {Url}", url);
 
@@ -295,8 +299,8 @@ internal sealed class TelemetryTracesCommand : BaseCommand
                 ? FormatHelpers.FormatConsoleTime(_timeProvider, OtlpHelpers.UnixNanoSecondsToDateTime(info.StartTimeNano.Value))
                 : "";
             var shortTraceId = OtlpHelpers.ToShortenedId(info.TraceId);
-            var traceLink = TelemetryCommandHelpers.FormatTraceLink(dashboardUrl, info.TraceId, $"[grey]{shortTraceId}[/]");
-            var nameColumn = $"[{resourceColor}]{info.Resource.EscapeMarkup()}[/]: {info.FirstSpanName.EscapeMarkup()} {traceLink}";
+            var traceLink = TelemetryCommandHelpers.FormatTraceLink(_interactionService, dashboardUrl, info.TraceId, shortTraceId);
+            var nameColumn = $"[{resourceColor}]{info.Resource.EscapeMarkup()}[/]: {info.FirstSpanName.EscapeMarkup()} [grey]{traceLink}[/]";
             table.AddRow(timestamp, nameColumn, info.SpanCount.ToString(CultureInfo.InvariantCulture), durationStr, statusText);
         }
 
@@ -333,7 +337,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         }
 
         var shortTraceId = OtlpHelpers.ToShortenedId(traceId);
-        var traceLink = TelemetryCommandHelpers.FormatTraceLink(dashboardUrl, traceId, shortTraceId);
+        var traceLink = TelemetryCommandHelpers.FormatTraceLink(_interactionService, dashboardUrl, traceId, shortTraceId);
 
         if (spans.Count == 0)
         {
@@ -409,7 +413,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         var statusText = span.HasError ? "ERR" : "OK";
         var durationStr = TelemetryCommandHelpers.FormatDuration(span.Duration).PadLeft(8);
         var shortenedSpanId = OtlpHelpers.ToShortenedId(span.SpanId);
-        var spanIdLink = TelemetryCommandHelpers.FormatTraceLink(dashboardUrl, traceId, $"[dim]{shortenedSpanId}[/]", spanId: span.SpanId);
+        var spanIdLink = TelemetryCommandHelpers.FormatTraceLink(_interactionService, dashboardUrl, traceId, shortenedSpanId, spanId: span.SpanId);
         var escapedName = span.Name.EscapeMarkup();
 
         // Truncate long names
@@ -418,7 +422,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
             ? escapedName[..(maxNameLength - 3)] + "..."
             : escapedName;
 
-        _interactionService.DisplayMarkupLine($"{indent}{connector} {spanIdLink} {displayName} [{statusColor}]{statusText}[/] [dim]{durationStr}[/]");
+        _interactionService.DisplayMarkupLine($"{indent}{connector} [dim]{spanIdLink}[/] {displayName} [{statusColor}]{statusText}[/] [dim]{durationStr}[/]");
 
         // Render children
         if (childrenByParent.TryGetValue(span.SpanId, out var children))

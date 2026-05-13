@@ -47,7 +47,7 @@ public static class EFResourceBuilderExtensions
     /// using runtime-discovered context types.
     /// </para>
     /// </remarks>
-    [AspireExport("addEFMigrationsWithContextType", MethodName = "addEFMigrations", Description = "Adds EF Core migration management for a specific DbContext type identified by name")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addEFMigrations dispatcher export.")]
     public static IResourceBuilder<EFMigrationResource> AddEFMigrations(
         this IResourceBuilder<ProjectResource> builder,
         [ResourceName] string name,
@@ -99,7 +99,7 @@ public static class EFResourceBuilderExtensions
     /// <param name="builder">The resource builder for the project.</param>
     /// <param name="name">The name of the migration resource.</param>
     /// <returns>An EF migration resource builder for chaining additional configuration.</returns>
-    [AspireExport]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addEFMigrations dispatcher export.")]
     public static IResourceBuilder<EFMigrationResource> AddEFMigrations(
         this IResourceBuilder<ProjectResource> builder,
         [ResourceName] string name)
@@ -108,6 +108,26 @@ public static class EFResourceBuilderExtensions
         ArgumentException.ThrowIfNullOrEmpty(name);
 
         return AddEFMigrationsCore(builder, name, dbContextTypeName: null, configureToolResource: null);
+    }
+
+    /// <summary>
+    /// Adds EF Core migration management for polyglot app hosts.
+    /// </summary>
+    [AspireExport("addEFMigrations", Description = "Adds EF Core migration management for auto-detected DbContext types or for a specific DbContext type identified by name")]
+    internal static IResourceBuilder<EFMigrationResource> AddEFMigrationsForPolyglot(
+        this IResourceBuilder<ProjectResource> builder,
+        [ResourceName] string name,
+        string? dbContextTypeName = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        if (dbContextTypeName is not null)
+        {
+            ArgumentException.ThrowIfNullOrEmpty(dbContextTypeName);
+        }
+
+        return AddEFMigrationsCore(builder, name, dbContextTypeName, configureToolResource: null);
     }
 
     /// <summary>

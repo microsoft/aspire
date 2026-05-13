@@ -2,6 +2,79 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="cs" original="../Dialogs.resx">
     <body>
+      <trans-unit id="AIAgentsDialogAppHostDescription">
+        <source>Build, debug, and profile apps using AI agents and Aspire 🚀
+
+The structured logs, distributed traces, and resource status in this dashboard are available to AI agents via the Aspire CLI. This gives agents deep observability into your app, to help them diagnose issues and verify fixes.
+
+Get started by running this command in your project:
+
+```bash
+aspire agent init
+```
+
+This configures skill files for your AI assistant. The skill files tell the agent how to use Aspire CLI commands such as [`aspire logs`](https://aspire.dev/reference/cli/commands/aspire-logs/) and [`aspire otel traces`](https://aspire.dev/reference/cli/commands/aspire-otel-traces/).
+
+Once connected, agents can start your app, check resource health, fetch logs and traces, and more.
+
+For more information about using AI agents with Aspire, such as setting up skills, see [AI coding agents]({0}).</source>
+        <target state="new">Build, debug, and profile apps using AI agents and Aspire 🚀
+
+The structured logs, distributed traces, and resource status in this dashboard are available to AI agents via the Aspire CLI. This gives agents deep observability into your app, to help them diagnose issues and verify fixes.
+
+Get started by running this command in your project:
+
+```bash
+aspire agent init
+```
+
+This configures skill files for your AI assistant. The skill files tell the agent how to use Aspire CLI commands such as [`aspire logs`](https://aspire.dev/reference/cli/commands/aspire-logs/) and [`aspire otel traces`](https://aspire.dev/reference/cli/commands/aspire-otel-traces/).
+
+Once connected, agents can start your app, check resource health, fetch logs and traces, and more.
+
+For more information about using AI agents with Aspire, such as setting up skills, see [AI coding agents]({0}).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AIAgentsDialogStandaloneDescription">
+        <source>Build, debug, and profile apps using AI agents and Aspire 🚀
+
+The structured logs and distributed traces in the dashboard are available to AI agents via the Aspire CLI. This gives agents deep observability into your app, to help them diagnose issues and verify fixes.
+
+Use Aspire CLI commands to get telemetry data in your terminal:
+
+```bash
+aspire otel logs --dashboard-url {0}
+```
+
+- [`aspire otel logs`](https://aspire.dev/reference/cli/commands/aspire-otel-logs/) — View structured logs
+- [`aspire otel traces`](https://aspire.dev/reference/cli/commands/aspire-otel-traces/) — View distributed traces
+- [`aspire otel spans`](https://aspire.dev/reference/cli/commands/aspire-otel-spans/) — View trace spans
+- [`aspire export`](https://aspire.dev/reference/cli/commands/aspire-export/) — Export telemetry and resource data to a zip file
+
+For more information about using AI agents with the dashboard, such as setting up skills, see [Standalone dashboard and AI coding agents]({1}).</source>
+        <target state="new">Build, debug, and profile apps using AI agents and Aspire 🚀
+
+The structured logs and distributed traces in the dashboard are available to AI agents via the Aspire CLI. This gives agents deep observability into your app, to help them diagnose issues and verify fixes.
+
+Use Aspire CLI commands to get telemetry data in your terminal:
+
+```bash
+aspire otel logs --dashboard-url {0}
+```
+
+- [`aspire otel logs`](https://aspire.dev/reference/cli/commands/aspire-otel-logs/) — View structured logs
+- [`aspire otel traces`](https://aspire.dev/reference/cli/commands/aspire-otel-traces/) — View distributed traces
+- [`aspire otel spans`](https://aspire.dev/reference/cli/commands/aspire-otel-spans/) — View trace spans
+- [`aspire export`](https://aspire.dev/reference/cli/commands/aspire-export/) — Export telemetry and resource data to a zip file
+
+For more information about using AI agents with the dashboard, such as setting up skills, see [Standalone dashboard and AI coding agents]({1}).</target>
+        <note>{0} is the dashboard URL, {1} is the learn more URL</note>
+      </trans-unit>
+      <trans-unit id="AIAgentsDialogTitle">
+        <source>AI agents</source>
+        <target state="new">AI agents</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DialogCloseButtonText">
         <source>Close</source>
         <target state="translated">Zavřít</target>
@@ -318,8 +391,8 @@
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGetHelpLinkText">
-        <source>Go to Microsoft Learn documentation</source>
-        <target state="translated">Přejít na dokumentaci Microsoft Learn</target>
+        <source>Go to aspire.dev documentation</source>
+        <target state="translated">Přejít na dokumentaci aspire.dev</target>
         <note />
       </trans-unit>
       <trans-unit id="HelpDialogGoToConsoleLogs">

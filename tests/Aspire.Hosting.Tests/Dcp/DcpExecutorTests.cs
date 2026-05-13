@@ -1013,6 +1013,131 @@ public class DcpExecutorTests
         // Verify the system logs are formatted with [sys] prefix and proper formatting
         Assert.Contains(watchLogsResults, l => l.Content.Contains("[sys] Starting process...: Cmd = bla, Args = []"));
         Assert.Contains(watchLogsResults, l => l.Content.Contains("[sys] Failed to start process: Cmd = bla, Args = [], Error = exec: \"bla\": executable file not found in $PATH"));
+        Assert.Contains(watchLogsResults, l => l.Content.Contains("2024-08-19T06:10:01.0000000Z [sys] Starting process...: Cmd = bla, Args = []"));
+        Assert.Contains(watchLogsResults, l => l.Content.Contains("2024-08-19T06:10:02.0000000Z [sys] Failed to start process: Cmd = bla, Args = [], Error = exec: \"bla\": executable file not found in $PATH"));
+    }
+
+    [Fact]
+    public async Task ResourceLogging_CarriageReturnProgressOutput_NormalizesOverwrittenLines()
+    {
+        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
+        });
+
+        builder.AddContainer("database", "image");
+
+        var kubernetesService = new TestKubernetesService(startStream: (obj, logStreamType) =>
+        {
+            switch (logStreamType)
+            {
+                case Logs.StreamTypeStdOut:
+                    var stdout =
+                        "2024-08-19T06:10:01.000Z   0%\r 50%\r100%" + Environment.NewLine +
+                        "2024-08-19T06:10:02.000Z Windows line" + "\r\n" +
+                        "2024-08-19T06:10:03.000Z Done" + Environment.NewLine;
+                    return new MemoryStream(Encoding.UTF8.GetBytes(stdout));
+                case Logs.StreamTypeStdErr:
+                case Logs.StreamTypeStartupStdOut:
+                case Logs.StreamTypeStartupStdErr:
+                case Logs.StreamTypeSystem:
+                    return new MemoryStream();
+                default:
+                    throw new InvalidOperationException("Unexpected type: " + logStreamType);
+            }
+        });
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var dcpOptions = new DcpOptions { DashboardPath = "./dashboard" };
+        var resourceLoggerService = new ResourceLoggerService();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions, resourceLoggerService: resourceLoggerService);
+        await appExecutor.RunApplicationAsync();
+
+        var exeResource = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+
+        var watchSubscribers = resourceLoggerService.WatchAnySubscribersAsync();
+        var watchSubscribersEnumerator = watchSubscribers.GetAsyncEnumerator();
+        var watchLogs = resourceLoggerService.WatchAsync(exeResource.Metadata.Name);
+        // Wait for all three stdout records plus the certificate authority message, which can arrive first in CI.
+        var watchLogsTask = ConsoleLoggingTestHelpers.WatchForLogsAsync(watchLogs, targetLogCount: 4);
+
+        await watchSubscribersEnumerator.MoveNextAsync();
+        Assert.Equal(exeResource.Metadata.Name, watchSubscribersEnumerator.Current.Name);
+        Assert.True(watchSubscribersEnumerator.Current.AnySubscribers);
+
+        exeResource.Status = new ContainerStatus { State = ContainerState.Running };
+        kubernetesService.PushResourceModified(exeResource);
+
+        var watchLogsResults = await watchLogsTask;
+
+        Assert.Contains(watchLogsResults, l => l.Content.Contains("2024-08-19T06:10:01.0000000Z 100%"));
+        Assert.Contains(watchLogsResults, l => l.Content.Contains("2024-08-19T06:10:02.0000000Z Windows line"));
+        Assert.Contains(watchLogsResults, l => l.Content.Contains("2024-08-19T06:10:03.0000000Z Done"));
+        Assert.DoesNotContain(watchLogsResults, l => l.Content.Contains("  0%"));
+        Assert.DoesNotContain(watchLogsResults, l => l.Content.Contains("50%"));
+    }
+
+    [Fact]
+    public async Task ResourceLogging_SystemStreamWithCarriageReturnInMessage_ParsesCorrectly()
+    {
+        // Regression test: NormalizeCarriageReturns must not be applied to the full DCP raw line
+        // before parsing; doing so would corrupt the tab-delimited structure and cause the parser
+        // to fail, dropping the [sys] prefix and timestamp.
+        var builder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions
+        {
+            AssemblyName = typeof(DistributedApplicationTests).Assembly.FullName
+        });
+
+        builder.AddContainer("database", "image");
+
+        var kubernetesService = new TestKubernetesService(startStream: (obj, logStreamType) =>
+        {
+            switch (logStreamType)
+            {
+                case Logs.StreamTypeStdOut:
+                case Logs.StreamTypeStdErr:
+                case Logs.StreamTypeStartupStdOut:
+                case Logs.StreamTypeStartupStdErr:
+                    return new MemoryStream();
+                case Logs.StreamTypeSystem:
+                    // A DCP log line whose message content contains \r (e.g. a progress-style
+                    // overwrite inside a system log message).  The tab-delimited header must
+                    // be parsed first so the \r normalization only applies to the message part.
+                    var systemLogs =
+                        "2024-08-19T06:10:01.000Z\tinfo\tdcp.ExecutableReconciler\tfirst\rsecond\rthird" + Environment.NewLine;
+                    return new MemoryStream(Encoding.UTF8.GetBytes(systemLogs));
+                default:
+                    throw new InvalidOperationException("Unexpected type: " + logStreamType);
+            }
+        });
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var dcpOptions = new DcpOptions { DashboardPath = "./dashboard" };
+        var resourceLoggerService = new ResourceLoggerService();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions, resourceLoggerService: resourceLoggerService);
+        await appExecutor.RunApplicationAsync();
+
+        var exeResource = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+
+        var watchSubscribers = resourceLoggerService.WatchAnySubscribersAsync();
+        var watchSubscribersEnumerator = watchSubscribers.GetAsyncEnumerator();
+        var watchLogs = resourceLoggerService.WatchAsync(exeResource.Metadata.Name);
+        var watchLogsTask = ConsoleLoggingTestHelpers.WatchForLogsAsync(watchLogs, targetLogCount: 2); // 1 DCP system log + 1 certificate authority message
+
+        await watchSubscribersEnumerator.MoveNextAsync();
+        Assert.Equal(exeResource.Metadata.Name, watchSubscribersEnumerator.Current.Name);
+        Assert.True(watchSubscribersEnumerator.Current.AnySubscribers);
+
+        exeResource.Status = new ContainerStatus { State = ContainerState.Running };
+        kubernetesService.PushResourceModified(exeResource);
+
+        var watchLogsResults = await watchLogsTask;
+
+        // The entry should be parsed as a DCP [sys] log (not plain stdout) with the
+        // last \r-overwritten segment ("third") preserved as the message content.
+        Assert.Contains(watchLogsResults, l => l.Content.Contains("[sys] third"));
+        Assert.DoesNotContain(watchLogsResults, l => l.Content.Contains("first"));
     }
 
     private sealed class LogStreamPipes
@@ -3187,6 +3312,145 @@ public class DcpExecutorTests
         var createdContainers = kubernetesService.CreatedResources.OfType<Container>().ToList();
         Assert.Single(createdContainers, c => c.AppModelResourceName == "tunnelDependent");
         Assert.Single(createdContainers, c => c.AppModelResourceName == "tunnelIndependent");
+    }
+
+    [Fact]
+    public async Task WaitingTunnelDependentContainersDoNotBlockTunnelCreation()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var executableA = builder.AddExecutable("executableA", "command", "")
+            .WithEndpoint(name: "http", targetPort: 1234, port: 5678, isProxied: true);
+
+        var executableB = builder.AddExecutable("executableB", "command", "")
+            .WithEndpoint(name: "http", targetPort: 1235, port: 5679, isProxied: true);
+
+        var container = builder.AddContainer("container", "image")
+            .WithEnvironment("EXEC_A_PORT", executableA.GetEndpoint("http").Property(EndpointProperty.Port));
+
+        var waiting = builder.AddContainer("waiting", "image")
+            .WaitFor(container);
+
+        var waitingConsumingEndpoint = builder.AddContainer("waitingConsumingEndpoint", "image")
+            .WithEnvironment("EXEC_B_PORT", executableB.GetEndpoint("http").Property(EndpointProperty.Port))
+            .WaitFor(container);
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceStartingContext>(async context =>
+        {
+            if (context.Resource == waiting.Resource || context.Resource == waitingConsumingEndpoint.Resource)
+            {
+                while (!kubernetesService.CreatedResources.OfType<Container>().Any(c => c.AppModelResourceName == container.Resource.Name))
+                {
+                    await Task.Delay(10, context.CancellationToken).ConfigureAwait(false);
+                }
+            }
+        });
+
+        var dcpOptions = new DcpOptions
+        {
+            EnableAspireContainerTunnel = true,
+        };
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions, events: events);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var createdContainers = kubernetesService.CreatedResources.OfType<Container>().ToList();
+        Assert.Single(createdContainers, c => c.AppModelResourceName == container.Resource.Name);
+        Assert.Single(createdContainers, c => c.AppModelResourceName == waiting.Resource.Name);
+        var waitingConsumingContainer = Assert.Single(createdContainers, c => c.AppModelResourceName == waitingConsumingEndpoint.Resource.Name);
+
+        var tunnelServices = kubernetesService.CreatedResources
+            .OfType<Service>()
+            .Where(s => s.Metadata.Annotations.ContainsKey(CustomResource.ContainerTunnelInstanceName))
+            .ToList();
+
+        Assert.Single(tunnelServices, s => s.AppModelResourceName == executableA.Resource.Name);
+        var executableBTunnelService = Assert.Single(tunnelServices, s => s.AppModelResourceName == executableB.Resource.Name);
+
+        Assert.NotNull(waitingConsumingContainer.Spec.Env);
+        var executableBPort = Assert.Single(waitingConsumingContainer.Spec.Env, e => e.Name == "EXEC_B_PORT").Value;
+        Assert.Equal(executableBTunnelService.AllocatedPort.ToString(), executableBPort);
+
+        var tunnelProxy = Assert.Single(kubernetesService.CreatedResources.OfType<ContainerNetworkTunnelProxy>());
+        Assert.Equal(2, tunnelProxy.Spec.Tunnels?.Count);
+    }
+
+    [Fact]
+    public async Task HostResourceCanWaitForTunnelDependentContainer()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        var upstreamExecutable = builder.AddExecutable("upstreamExecutable", "command", "")
+            .WithEndpoint(name: "http", targetPort: 1234, port: 5678, isProxied: true);
+
+        var tunnelDependentContainer = builder.AddContainer("tunnelDependentContainer", "image")
+            .WithEnvironment("UPSTREAM_PORT", upstreamExecutable.GetEndpoint("http").Property(EndpointProperty.Port))
+            .WaitFor(upstreamExecutable);
+
+        var downstreamExecutable = builder.AddExecutable("downstreamExecutable", "command", "")
+            .WithEndpoint(name: "http", targetPort: 1235, port: 5679, isProxied: true)
+            .WaitFor(tunnelDependentContainer);
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        events.Subscribe<OnResourceStartingContext>(async context =>
+        {
+            if (context.Resource == tunnelDependentContainer.Resource)
+            {
+                while (!kubernetesService.CreatedResources.OfType<Executable>().Any(e => e.AppModelResourceName == upstreamExecutable.Resource.Name))
+                {
+                    await Task.Delay(10, context.CancellationToken).ConfigureAwait(false);
+                }
+            }
+
+            if (context.Resource == downstreamExecutable.Resource)
+            {
+                while (!kubernetesService.CreatedResources.OfType<Container>().Any(c => c.AppModelResourceName == tunnelDependentContainer.Resource.Name))
+                {
+                    await Task.Delay(10, context.CancellationToken).ConfigureAwait(false);
+                }
+            }
+        });
+
+        var dcpOptions = new DcpOptions
+        {
+            EnableAspireContainerTunnel = true,
+        };
+
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, dcpOptions: dcpOptions, events: events);
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+
+        var createdResources = kubernetesService.CreatedResources.ToList();
+        var upstreamExecutableResource = Assert.Single(createdResources.OfType<Executable>(), e => e.AppModelResourceName == upstreamExecutable.Resource.Name);
+        var downstreamExecutableResource = Assert.Single(createdResources.OfType<Executable>(), e => e.AppModelResourceName == downstreamExecutable.Resource.Name);
+        var tunnelDependentDcpContainer = Assert.Single(createdResources.OfType<Container>(), c => c.AppModelResourceName == tunnelDependentContainer.Resource.Name);
+
+        Assert.True(
+            createdResources.IndexOf(tunnelDependentDcpContainer) < createdResources.IndexOf(downstreamExecutableResource),
+            "The downstream host resource should not be created until the tunnel-dependent container it waits for has been created.");
+
+        var tunnelServices = createdResources
+            .OfType<Service>()
+            .Where(s => s.Metadata.Annotations.ContainsKey(CustomResource.ContainerTunnelInstanceName))
+            .ToList();
+
+        var upstreamTunnelService = Assert.Single(tunnelServices, s => s.AppModelResourceName == upstreamExecutable.Resource.Name);
+
+        Assert.NotNull(tunnelDependentDcpContainer.Spec.Env);
+        var upstreamPort = Assert.Single(tunnelDependentDcpContainer.Spec.Env, e => e.Name == "UPSTREAM_PORT").Value;
+        Assert.Equal(upstreamTunnelService.AllocatedPort.ToString(), upstreamPort);
+
+        var tunnelProxy = Assert.Single(createdResources.OfType<ContainerNetworkTunnelProxy>());
+        Assert.Equal(1, tunnelProxy.Spec.Tunnels?.Count);
+        Assert.NotNull(upstreamExecutableResource);
     }
 
     [Fact]

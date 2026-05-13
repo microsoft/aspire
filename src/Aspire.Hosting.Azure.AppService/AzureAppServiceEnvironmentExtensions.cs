@@ -46,6 +46,11 @@ public static partial class AzureAppServiceEnvironmentExtensions
                 name: AppServicePipelineStepMarker.StepName,
                 action: ctx =>
                 {
+                    if (!ctx.ExecutionContext.IsPublishMode)
+                    {
+                        return Task.CompletedTask;
+                    }
+
                     if (!ctx.Model.Resources.OfType<AzureAppServiceEnvironmentResource>().Any())
                     {
                         foreach (var r in ctx.Model.GetComputeResources())

@@ -8,6 +8,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
+using Aspire.Cli.Acquisition;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.ClaudeCode;
 using Aspire.Cli.Agents.CopilotCli;
@@ -169,6 +170,11 @@ public class Program
                 var legacyJson = File.ReadAllText(legacyPath);
                 var legacyConfig = JsonSerializer.Deserialize(legacyJson, JsonSourceGenerationContext.Default.AspireJsonConfiguration);
                 var config = AspireConfigFile.FromLegacy(legacyConfig, profiles: null);
+                // Drop the legacy global identity-channel field — the CLI's channel is now
+                // baked into the binary (AspireCliChannel assembly metadata) and never read
+                // from global config. The per-project channel migration in AspireConfigFile.FromLegacy
+                // remains for project-local aspire.config.json files.
+                config.Channel = null;
                 config.Save(usersAspirePath);
             }
             catch (Exception ex)
@@ -323,9 +329,12 @@ public class Program
         builder.Services.AddSingleton(sp => new TelemetryManager(sp.GetRequiredService<IConfiguration>(), args));
 
         // Shared services.
+        builder.Services.AddSingleton<IIdentityChannelReader>(_ => new IdentityChannelReader(typeof(Program).Assembly));
         builder.Services.AddSingleton(sp =>
         {
-            return BuildCliExecutionContext(startupContext.LoggingOptions.DebugMode, startupContext.LoggingOptions.LogsDirectory, startupContext.LoggingOptions.LogFilePath);
+            var channelReader = sp.GetRequiredService<IIdentityChannelReader>();
+            var channel = channelReader.ReadChannel();
+            return BuildCliExecutionContext(startupContext.LoggingOptions.DebugMode, startupContext.LoggingOptions.LogsDirectory, startupContext.LoggingOptions.LogFilePath, channel);
         });
         builder.Services.AddSingleton(s => new ConsoleEnvironment(
             BuildAnsiConsole(s, Console.Out),
@@ -338,6 +347,7 @@ public class Program
         });
         builder.Services.AddSingleton(TimeProvider.System);
         AddInteractionServices(builder);
+        builder.Services.AddSingleton<IAppHostCandidateFinder, AppHostCandidateFinder>();
         builder.Services.AddSingleton<IProjectLocator, ProjectLocator>();
         builder.Services.AddSingleton<ISolutionLocator, SolutionLocator>();
         builder.Services.AddSingleton<ILanguageService, LanguageService>();
@@ -477,10 +487,15 @@ public class Program
         builder.Services.AddTransient<StopCommand>();
         builder.Services.AddTransient<StartCommand>();
         builder.Services.AddTransient<WaitCommand>();
+        builder.Services.AddTransient<LsCommand>();
         builder.Services.AddTransient<ResourceCommand>();
         builder.Services.AddTransient<PsCommand>();
         builder.Services.AddTransient<DescribeCommand>();
         builder.Services.AddTransient<LogsCommand>();
+        builder.Services.AddTransient<IntegrationPackageSearchService>();
+        builder.Services.AddTransient<IntegrationCommand>();
+        builder.Services.AddTransient<IntegrationListCommand>();
+        builder.Services.AddTransient<IntegrationSearchCommand>();
         builder.Services.AddTransient<AddCommand>();
         builder.Services.AddTransient<PublishCommand>();
         builder.Services.AddTransient<ConfigCommand>();
@@ -495,7 +510,6 @@ public class Program
         builder.Services.AddTransient<DeployCommand>();
         builder.Services.AddTransient<DestroyCommand>();
         builder.Services.AddTransient<DoCommand>();
-        builder.Services.AddTransient<ExecCommand>();
         builder.Services.AddTransient<McpCommand>();
         builder.Services.AddTransient<McpStartCommand>();
         builder.Services.AddTransient<McpInitCommand>();
@@ -553,14 +567,14 @@ public class Program
         return new DirectoryInfo(sdksPath);
     }
 
-    private static CliExecutionContext BuildCliExecutionContext(bool debugMode, string logsDirectory, string logFilePath)
+    private static CliExecutionContext BuildCliExecutionContext(bool debugMode, string logsDirectory, string logFilePath, string channel)
     {
         var workingDirectory = new DirectoryInfo(Environment.CurrentDirectory);
         var hivesDirectory = GetHivesDirectory();
         var cacheDirectory = GetCacheDirectory();
         var sdksDirectory = GetSdksDirectory();
         var packagesDirectory = GetPackagesDirectory();
-        return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, sdksDirectory, new DirectoryInfo(logsDirectory), logFilePath, debugMode, packagesDirectory: packagesDirectory);
+        return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, sdksDirectory, new DirectoryInfo(logsDirectory), logFilePath, debugMode, packagesDirectory: packagesDirectory, identityChannel: channel);
     }
 
     private static DirectoryInfo GetCacheDirectory()
@@ -638,11 +652,12 @@ public class Program
             {
                 // Write to stderr to avoid interfering with tools that parse stdout
                 var consoleEnvironment = serviceProvider.GetRequiredService<ConsoleEnvironment>();
+                var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
 
                 const string telemetryUrl = "https://aka.ms/aspire/cli-telemetry";
 
                 consoleEnvironment.Error.WriteLine();
-                consoleEnvironment.Error.MarkupLine(string.Format(CultureInfo.CurrentCulture, RootCommandStrings.FirstTimeUseTelemetryNotice, $"[link]{telemetryUrl}[/]"));
+                consoleEnvironment.Error.MarkupLine(string.Format(CultureInfo.CurrentCulture, RootCommandStrings.FirstTimeUseTelemetryNotice, MarkupHelpers.SafeLink(interactionService, telemetryUrl)));
                 consoleEnvironment.Error.WriteLine();
             }
 
@@ -763,7 +778,8 @@ public class Program
             EnableDefaultExceptionHandler = false
         };
 
-        using var mainActivity = telemetry.StartReportedActivity(name: TelemetryConstants.Activities.Main, kind: ActivityKind.Internal);
+        app.Services.GetRequiredService<CliExecutionContext>();
+        using var mainActivity = telemetry.StartReportedActivity(TelemetryConstants.Activities.Main, ActivityKind.Internal);
 
         if (mainActivity != null)
         {

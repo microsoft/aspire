@@ -1,4 +1,4 @@
-﻿// transport.ts - ATS transport layer: RPC, Handle, errors, callbacks
+// transport.ts - ATS transport layer: RPC, Handle, errors, callbacks
 import * as net from 'net';
 import * as rpc from 'vscode-jsonrpc/node.js';
 
@@ -685,6 +685,10 @@ async function marshalTransportValue(
     path: string = 'args',
     ancestors: Set<object> = new Set<object>()
 ): Promise<unknown> {
+    if (typeof value === 'function') {
+        return registerCallback(value as (...args: any[]) => unknown);
+    }
+
     if (value === null || value === undefined || typeof value !== 'object') {
         return value;
     }

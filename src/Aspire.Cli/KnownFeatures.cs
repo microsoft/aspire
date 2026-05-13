@@ -20,7 +20,6 @@ internal static class KnownFeatures
 {
     public static string FeaturePrefix => "features";
     public static string UpdateNotificationsEnabled => "updateNotificationsEnabled";
-    public static string ExecCommandEnabled => "execCommandEnabled";
     public static string ShowDeprecatedPackages => "showDeprecatedPackages";
     public static string StagingChannelEnabled => "stagingChannelEnabled";
     public static string DefaultWatchEnabled => "defaultWatchEnabled";
@@ -37,12 +36,7 @@ internal static class KnownFeatures
             UpdateNotificationsEnabled,
             "Check if update notifications are disabled and set version check environment variable",
             DefaultValue: true),
-        
-        [ExecCommandEnabled] = new(
-            ExecCommandEnabled,
-            "Enable or disable the 'aspire exec' command for executing commands inside running resources",
-            DefaultValue: false),
-        
+
         [ShowDeprecatedPackages] = new(
             ShowDeprecatedPackages,
             "Show or hide deprecated packages in 'aspire add' search results",
@@ -122,6 +116,18 @@ internal static class KnownFeatures
     /// <param name="features">The feature flags service.</param>
     /// <param name="configuration">The configuration to check for the channel setting.</param>
     /// <returns><c>true</c> if the staging channel should be available; otherwise, <c>false</c>.</returns>
+    /// <remarks>
+    /// Note that the channel check reads <c>configuration["channel"]</c> (the layered .NET
+    /// configuration — environment variables, command-line, global / per-project
+    /// <c>aspire.config.json#channel</c>), NOT
+    /// <see cref="CliExecutionContext.IdentityChannel"/>. The staging channel is an
+    /// opt-in feature: a CLI baked with <c>AspireCliChannel=staging</c> does NOT
+    /// auto-enable staging in the packaging service unless the user has also set the
+    /// configuration value (for example via <c>aspire config set channel staging</c> or
+    /// <c>--channel staging</c>). This is by design — the identity baked into the binary
+    /// is reserved for selecting the correct hive directory, while feature gating goes
+    /// through user-visible configuration.
+    /// </remarks>
     public static bool IsStagingChannelEnabled(IFeatures features, IConfiguration configuration)
     {
         return features.IsFeatureEnabled(StagingChannelEnabled, false)

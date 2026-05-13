@@ -7,6 +7,102 @@ namespace Aspire.Cli.Tests.Utils;
 public class PathLookupHelperTests
 {
     [Fact]
+    public void ResolveExecutablePath_SearchesPath_WhenExecutableIsCommandName()
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var binPath = Path.Combine(tempDirectory.Path, "bin");
+        Directory.CreateDirectory(binPath);
+
+        var executableName = OperatingSystem.IsWindows() ? "mycommand.exe" : "mycommand";
+        var executablePath = Path.Combine(binPath, executableName);
+        File.WriteAllText(executablePath, string.Empty);
+        MakeExecutableOnUnix(executablePath);
+
+        var result = PathLookupHelper.ResolveExecutablePath(
+            executableName,
+            new Dictionary<string, string> { ["PATH"] = binPath });
+
+        Assert.Equal(executablePath, result);
+    }
+
+    [Fact]
+    public void ResolveExecutablePath_Throws_WhenExecutableIsCommandNameAndNotFoundOnPath()
+    {
+        var exception = Assert.Throws<FileNotFoundException>(() => PathLookupHelper.ResolveExecutablePath(
+            "missing-command",
+            new Dictionary<string, string> { ["PATH"] = string.Empty }));
+
+        Assert.Equal("missing-command", exception.FileName);
+    }
+
+    [Fact]
+    public void ResolveExecutablePath_SkipsNonExecutableFilesOnUnix()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var tempDirectory = new TestTempDirectory();
+        var firstBinPath = Path.Combine(tempDirectory.Path, "first-bin");
+        var secondBinPath = Path.Combine(tempDirectory.Path, "second-bin");
+        Directory.CreateDirectory(firstBinPath);
+        Directory.CreateDirectory(secondBinPath);
+
+        var nonExecutablePath = Path.Combine(firstBinPath, "mycommand");
+        File.WriteAllText(nonExecutablePath, string.Empty);
+        File.SetUnixFileMode(nonExecutablePath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+
+        var executablePath = Path.Combine(secondBinPath, "mycommand");
+        File.WriteAllText(executablePath, string.Empty);
+        File.SetUnixFileMode(executablePath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+
+        var result = PathLookupHelper.ResolveExecutablePath(
+            "mycommand",
+            new Dictionary<string, string> { ["PATH"] = string.Join(Path.PathSeparator, firstBinPath, secondBinPath) });
+
+        Assert.Equal(executablePath, result);
+    }
+
+    [Theory]
+    [InlineData("relative/mycommand")]
+    [InlineData("./mycommand")]
+    [InlineData("../mycommand")]
+    public void ResolveExecutablePath_DoesNotSearchPath_WhenExecutablePathIsExplicit(string executablePath)
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var binPath = Path.Combine(tempDirectory.Path, "bin");
+        Directory.CreateDirectory(binPath);
+        File.WriteAllText(Path.Combine(binPath, "mycommand"), string.Empty);
+
+        var result = PathLookupHelper.ResolveExecutablePath(
+            executablePath,
+            new Dictionary<string, string> { ["PATH"] = binPath });
+
+        Assert.Equal(executablePath, result);
+    }
+
+    [Fact]
+    public void ResolveExecutablePath_DoesNotSearchPath_WhenWindowsExecutablePathIsDriveRelative()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var tempDirectory = new TestTempDirectory();
+        var binPath = Path.Combine(tempDirectory.Path, "bin");
+        Directory.CreateDirectory(binPath);
+        File.WriteAllText(Path.Combine(binPath, "mycommand.exe"), string.Empty);
+
+        var result = PathLookupHelper.ResolveExecutablePath(
+            "C:mycommand.exe",
+            new Dictionary<string, string> { ["PATH"] = binPath });
+
+        Assert.Equal("C:mycommand.exe", result);
+    }
+
+    [Fact]
     public void FindFullPathFromPath_WhenCommandExistsOnPath_ReturnsFullPath()
     {
         // Arrange
@@ -314,5 +410,13 @@ public class PathLookupHelperTests
 
         // Assert - dir1 exact match is found because no extension match exists in dir1
         Assert.Equal(dir1ExactPath, result);
+    }
+
+    private static void MakeExecutableOnUnix(string path)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(path, File.GetUnixFileMode(path) | UnixFileMode.UserExecute);
+        }
     }
 }

@@ -120,9 +120,6 @@
   <data name="Description" xml:space="preserve">
     <value>Destroy a previously deployed AppHost environment (Preview)</value>
   </data>
-  <data name="NonInteractiveRequiresYes" xml:space="preserve">
-    <value>The destroy command requires --yes when the --non-interactive option is specified.</value>
-  </data>
   <data name="OutputPathArgumentDescription" xml:space="preserve">
     <value>The output path containing the deployment artifacts to destroy</value>
   </data>

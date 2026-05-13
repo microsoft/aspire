@@ -42,6 +42,11 @@
         <target state="translated">Nazwa zasobu jest wymagana, jeśli nie używasz opcji --follow. Użyj opcji --follow, aby przesyłać strumieniowo dzienniki ze wszystkich zasobów.</target>
         <note />
       </trans-unit>
+      <trans-unit id="SearchOptionDescription">
+        <source>Full-text search to filter log content</source>
+        <target state="new">Full-text search to filter log content</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SelectAppHostAction">
         <source>stream logs from</source>
         <target state="translated">prześlij strumieniowo dzienniki z</target>
