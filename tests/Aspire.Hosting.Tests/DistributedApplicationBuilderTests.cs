@@ -56,7 +56,8 @@ public class DistributedApplicationBuilderTests
             eventingSubscribers,
             s => Assert.IsType<DashboardEventHandlers>(s),
             s => Assert.IsType<DevcontainerPortForwardingEventingSubscriber>(s),
-            s => Assert.IsType<RequiredCommandValidationEventingSubscriber>(s)
+            s => Assert.IsType<RequiredCommandValidationEventingSubscriber>(s),
+            s => Assert.IsType<TerminalHostEventingSubscriber>(s)
         );
 
         var options = app.Services.GetRequiredService<IOptions<PipelineOptions>>();

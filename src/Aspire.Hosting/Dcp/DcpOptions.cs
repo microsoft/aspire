@@ -35,6 +35,19 @@ internal sealed class DcpOptions
     public string? DashboardPath { get; set; }
 
     /// <summary>
+    /// Optional path to the Aspire Terminal Host binary.
+    /// </summary>
+    public string? TerminalHostPath { get; set; }
+
+    /// <summary>
+    /// Optional invocation args that must be prepended when launching <see cref="TerminalHostPath"/>.
+    /// In the CLI bundle case the path is the multi-mode <c>aspire-managed</c> exe and this is set
+    /// to <c>"terminalhost"</c> so the dispatcher routes to <c>TerminalHostApp.RunAsync</c>.
+    /// Empty for the standalone per-RID NuGet package and inner-loop cases.
+    /// </summary>
+    public string? TerminalHostInvocationArgs { get; set; }
+
+    /// <summary>
     /// Optional container runtime to override default runtime for DCP containers.
     /// </summary>
     /// <example>
@@ -139,6 +152,8 @@ internal class ConfigureDefaultDcpOptions(
     private const string DcpCliPathMetadataKey = "DcpCliPath";
     private const string DcpExtensionsPathMetadataKey = "DcpExtensionsPath";
     private const string DashboardPathMetadataKey = "aspiredashboardpath";
+    private const string TerminalHostPathMetadataKey = "aspireterminalhostpath";
+    private const string TerminalHostInvocationArgsMetadataKey = "aspireterminalhostinvocationargs";
 
     public static string DcpPublisher = nameof(DcpPublisher);
 
@@ -188,6 +203,57 @@ internal class ConfigureDefaultDcpOptions(
         {
             // Resolve via assembly metadata attributes (NuGet packages)
             options.DashboardPath = GetMetadataValue(assemblyMetadata, DashboardPathMetadataKey);
+        }
+
+        // Terminal Host path resolution (same pattern as Dashboard)
+        var configTerminalHostPath = configuration["ASPIRE_TERMINAL_HOST_PATH"];
+        if (!string.IsNullOrEmpty(configTerminalHostPath))
+        {
+            options.TerminalHostPath = configTerminalHostPath;
+        }
+        else if (!string.IsNullOrEmpty(dcpPublisherConfiguration[nameof(options.TerminalHostPath)]))
+        {
+            options.TerminalHostPath = dcpPublisherConfiguration[nameof(options.TerminalHostPath)];
+        }
+        else
+        {
+            options.TerminalHostPath = GetMetadataValue(assemblyMetadata, TerminalHostPathMetadataKey);
+        }
+
+        // Terminal Host invocation args (used when the binary is the multi-mode aspire-managed exe in the bundle).
+        var configTerminalHostInvocationArgs = configuration["ASPIRE_TERMINAL_HOST_INVOCATION_ARGS"];
+        if (!string.IsNullOrEmpty(configTerminalHostInvocationArgs))
+        {
+            options.TerminalHostInvocationArgs = configTerminalHostInvocationArgs;
+        }
+        else if (!string.IsNullOrEmpty(dcpPublisherConfiguration[nameof(options.TerminalHostInvocationArgs)]))
+        {
+            options.TerminalHostInvocationArgs = dcpPublisherConfiguration[nameof(options.TerminalHostInvocationArgs)];
+        }
+        else
+        {
+            options.TerminalHostInvocationArgs = GetMetadataValue(assemblyMetadata, TerminalHostInvocationArgsMetadataKey);
+        }
+
+        // Bundle fallback: when the AppHost is launched from the CLI bundle (TS AppHosts and any
+        // pre-built dotnet AppHost), the CLI sets ASPIRE_DASHBOARD_PATH to point at the multi-mode
+        // aspire-managed exe but does NOT set ASPIRE_TERMINAL_HOST_PATH (the bundle ships a single
+        // managed binary that dispatches to dashboard/terminalhost via a leading subcommand arg).
+        // If TerminalHostPath is still empty after the explicit lookup chain above and DashboardPath
+        // points at aspire-managed, reuse the same binary with "terminalhost" as the dispatcher arg
+        // so .WithTerminal() works in bundle scenarios without the CLI needing to know about every
+        // managed subcommand. Standalone per-RID NuGet packages keep their own dedicated terminal
+        // host binary via the assembly-metadata path above and never hit this fallback.
+        if (string.IsNullOrEmpty(options.TerminalHostPath) &&
+            !string.IsNullOrEmpty(options.DashboardPath) &&
+            BundleDiscovery.IsAspireManagedBinary(options.DashboardPath))
+        {
+            options.TerminalHostPath = options.DashboardPath;
+
+            if (string.IsNullOrEmpty(options.TerminalHostInvocationArgs))
+            {
+                options.TerminalHostInvocationArgs = "terminalhost";
+            }
         }
 
         if (!string.IsNullOrEmpty(dcpPublisherConfiguration[nameof(options.ContainerRuntime)]))

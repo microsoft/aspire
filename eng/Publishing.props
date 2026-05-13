@@ -20,12 +20,14 @@
     Pulling it in here will cause different issues as that file will conflict with Arcade's publishing logic, so as a workaround we define it here.
     If you are editing this property, make sure to also edit the one in Directory.Build.props. -->
     <DashboardPublishedArtifactsOutputDir>$([MSBuild]::NormalizeDirectory('$(ArtifactsDir)', 'DashboardArtifacts', '$(Configuration)'))</DashboardPublishedArtifactsOutputDir>
+    <TerminalHostPublishedArtifactsOutputDir>$([MSBuild]::NormalizeDirectory('$(ArtifactsDir)', 'TerminalHostArtifacts', '$(Configuration)'))</TerminalHostPublishedArtifactsOutputDir>
   </PropertyGroup>
 
   <ItemGroup>
     <_InstallersToPublish Include="$(ArtifactsDir)**\*.wixpack.zip" Condition="'$(PostBuildSign)' == 'true'" />
     <_InstallerManifestFilesToPublish Include="$(ArtifactsDir)VSSetup\$(Configuration)\Insertion\**\*.zip" />
     <_DashboardFilesToPublish Include="$(DashboardPublishedArtifactsOutputDir)\**\*.zip" />
+    <_TerminalHostFilesToPublish Include="$(TerminalHostPublishedArtifactsOutputDir)\**\*.zip" />
     <_CliInstallScriptsToPublish Include="$(RepoRoot)eng\scripts\get-aspire-cli.sh" />
     <_CliInstallScriptsToPublish Include="$(RepoRoot)eng\scripts\get-aspire-cli.ps1" />
   </ItemGroup>
@@ -164,6 +166,11 @@
         <RelativeBlobPath>$(_UploadPathRoot)/$(_PackageVersion)/%(Filename)%(Extension)</RelativeBlobPath>
       </ItemsToPushToBlobFeed>
       <ItemsToPushToBlobFeed Include="@(_DashboardFilesToPublish)">
+        <IsShipping>true</IsShipping>
+        <PublishFlatContainer>true</PublishFlatContainer>
+        <RelativeBlobPath>$(_UploadPathRoot)/$(_PackageVersion)/%(Filename)%(Extension)</RelativeBlobPath>
+      </ItemsToPushToBlobFeed>
+      <ItemsToPushToBlobFeed Include="@(_TerminalHostFilesToPublish)">
         <IsShipping>true</IsShipping>
         <PublishFlatContainer>true</PublishFlatContainer>
         <RelativeBlobPath>$(_UploadPathRoot)/$(_PackageVersion)/%(Filename)%(Extension)</RelativeBlobPath>

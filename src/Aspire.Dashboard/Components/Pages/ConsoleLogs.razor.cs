@@ -158,6 +158,10 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     private readonly object _updateLogsLock = new object();
     private AIContext? _aiContext;
     private LogViewer? _logViewerRef;
+    private Controls.TerminalView? _terminalViewRef;
+    private bool _selectedResourceHasTerminal;
+    private string? _terminalResourceName;
+    private int _terminalReplicaIndex;
 
     // UI
     private SelectViewModel<ResourceTypeDetails> _allResource = null!;
@@ -393,6 +397,28 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     {
         Logger.LogDebug("Subscription change needed. IsAllSelected: {IsAllSelected}, SelectedResource: {SelectedResource}", isAllSelected, selectedResourceName);
         _aiContext?.ContextHasChanged();
+
+        // Detect whether the selected resource has terminal support
+        _selectedResourceHasTerminal = false;
+        _terminalResourceName = null;
+        _terminalReplicaIndex = 0;
+
+        if (!isAllSelected && selectedResourceName is not null &&
+            _resourceByName.TryGetValue(selectedResourceName, out var selectedResource) &&
+            selectedResource.HasTerminal() &&
+            selectedResource.TryGetTerminalReplicaInfo(out var replicaIndex, out _))
+        {
+            _selectedResourceHasTerminal = true;
+            _terminalResourceName = selectedResource.DisplayName;
+            _terminalReplicaIndex = replicaIndex;
+            Logger.LogDebug("Resource '{ResourceName}' has terminal at replica {ReplicaIndex}", selectedResourceName, replicaIndex);
+
+            // Don't subscribe to console logs for terminal resources —
+            // the terminal view replaces the log viewer.
+            await CancelAllSubscriptionsAsync();
+            _isSubscribedToAll = false;
+            return;
+        }
 
         // Cancel all existing subscriptions
         await CancelAllSubscriptionsAsync();

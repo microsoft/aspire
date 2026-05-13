@@ -121,7 +121,7 @@ jobs:
             -Rid $rid `
             -ArchivePath $archive[0].FullName
 
-      # Upload DCP, Dashboard, and CLI tool NuGets so test/polyglot jobs can download them
+      # Upload DCP, Dashboard, TerminalHost, and CLI tool NuGets so test/polyglot jobs can download them
       - name: Upload RID-specific NuGets
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
@@ -129,6 +129,7 @@ jobs:
           path: |
             artifacts/packages/${{ inputs.configuration }}/Shipping/Aspire.Hosting.Orchestration.${{ matrix.targets.rids }}.*.nupkg
             artifacts/packages/${{ inputs.configuration }}/Shipping/Aspire.Dashboard.Sdk.${{ matrix.targets.rids }}.*.nupkg
+            artifacts/packages/${{ inputs.configuration }}/Shipping/Aspire.TerminalHost.Sdk.${{ matrix.targets.rids }}.*.nupkg
             artifacts/packages/${{ inputs.configuration }}/Shipping/Aspire.Cli.*.nupkg
           if-no-files-found: error
           retention-days: 15

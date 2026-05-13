@@ -30,6 +30,9 @@ public class BackchannelContractTests
         typeof(McpToolContentItem),
         typeof(StopAppHostRequest),
         typeof(StopAppHostResponse),
+        typeof(GetTerminalInfoRequest),
+        typeof(GetTerminalInfoResponse),
+        typeof(TerminalReplicaInfo),
         typeof(ResourceSnapshot),
         typeof(ResourceSnapshotUrl),
         typeof(ResourceSnapshotUrlDisplayProperties),
@@ -76,7 +79,8 @@ public class BackchannelContractTests
             // Rule 6: Naming convention (skip helper types)
             if (!type.Name.StartsWith("ResourceSnapshot") &&
                 type.Name != "McpToolContentItem" &&
-                type.Name != "ResourceLogLine")
+                type.Name != "ResourceLogLine" &&
+                type.Name != "TerminalReplicaInfo")
             {
                 if (!type.Name.EndsWith("Request") && !type.Name.EndsWith("Response"))
                 {

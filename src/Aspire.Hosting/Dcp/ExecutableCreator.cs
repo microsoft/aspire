@@ -7,6 +7,7 @@
 
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Model;
@@ -104,6 +105,46 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         er.DcpResource.SetAnnotationAsObjectList(CustomResource.ResourceAppArgsAnnotation, displayArgs.Select(a => new AppLaunchArgumentAnnotation(a.Value, isSensitive: a.IsSensitive, effectiveArgumentIndex: a.EffectiveArgumentIndex)));
 
         spec.Env = configuration.EnvironmentVariables.Select(kvp => new EnvVar { Name = kvp.Key, Value = kvp.Value }).ToList();
+
+        // Configure the per-replica terminal spec if the resource has a TerminalAnnotation.
+        // Each replica gets its own DCP UDS producer endpoint from the layout so the
+        // terminal host can multiplex viewers per (resource, replica).
+        //
+        // DCP currently implements PTY support for Executables on Windows only (ConPTY).
+        // On other platforms we leave Terminal unset, log a warning, and the resource runs
+        // without an attachable terminal session — the TerminalHostResource itself still
+        // starts but never receives any HMP v1 producer connection.
+        if (er.ModelResource.TryGetAnnotationsOfType<TerminalAnnotation>(out var terminalAnnotations))
+        {
+            var terminalAnnotation = terminalAnnotations.FirstOrDefault();
+            if (terminalAnnotation is not null)
+            {
+                if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    _logger.LogWarning(
+                        "WithTerminal() is currently only supported on Windows. Resource '{ResourceName}' will run without an attachable terminal in this Aspire version.",
+                        er.ModelResource.Name);
+                }
+                else if (TryGetReplicaIndex(exe, out var replicaIndex)
+                    && replicaIndex >= 0
+                    && replicaIndex < terminalAnnotation.TerminalHosts.Count)
+                {
+                    spec.Terminal = new TerminalSpec
+                    {
+                        Enabled = true,
+                        UdsPath = terminalAnnotation.TerminalHosts[replicaIndex].Layout.ProducerUdsPath,
+                        Cols = terminalAnnotation.Options.Columns,
+                        Rows = terminalAnnotation.Options.Rows
+                    };
+                }
+                else
+                {
+                    _logger.LogWarning(
+                        "Could not determine a producer UDS path for replica of resource '{ResourceName}'; terminal will not be attached for this replica.",
+                        er.ModelResource.Name);
+                }
+            }
+        }
 
         if (configuration.Exception is not null)
         {
@@ -271,6 +312,12 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             exe.Annotate(CustomResource.OtelServiceNameAnnotation, executable.Name);
             exe.Annotate(CustomResource.OtelServiceInstanceIdAnnotation, exeInstance.Suffix);
             exe.Annotate(CustomResource.ResourceNameAnnotation, executable.Name);
+            // Plain executables are always single-replica today, but the terminal wire-up
+            // (and any other replica-aware downstream logic) needs both annotations to be
+            // present. Without them WithTerminal() can't resolve the producer UDS for the
+            // replica and silently falls back to a no-op.
+            exe.Annotate(CustomResource.ResourceReplicaCount, "1");
+            exe.Annotate(CustomResource.ResourceReplicaIndex, "0");
 
             if (executable.SupportsDebugging(_configuration, out _))
             {
@@ -515,4 +562,20 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
     }
 
     private sealed record LaunchArgument(string Value, bool IsSensitive, bool Executable, bool Display, int? EffectiveArgumentIndex);
+
+    private static bool TryGetReplicaIndex(Executable exe, out int replicaIndex)
+    {
+        replicaIndex = -1;
+        if (exe.Metadata.Annotations is not { } annotations)
+        {
+            return false;
+        }
+
+        if (!annotations.TryGetValue(CustomResource.ResourceReplicaIndex, out var value))
+        {
+            return false;
+        }
+
+        return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out replicaIndex);
+    }
 }

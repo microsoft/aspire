@@ -38,6 +38,27 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
     [Output]
     public string? AspireDashboardPath { get; set; }
 
+    /// <summary>
+    /// The resolved TerminalHost directory.
+    /// </summary>
+    [Output]
+    public string? AspireTerminalHostDir { get; set; }
+
+    /// <summary>
+    /// The resolved TerminalHost executable path.
+    /// </summary>
+    [Output]
+    public string? AspireTerminalHostPath { get; set; }
+
+    /// <summary>
+    /// Invocation args that must be prepended when launching the TerminalHost binary.
+    /// In the CLI bundle case the binary is the multi-mode <c>aspire-managed</c> exe and
+    /// this is set to <c>"terminalhost"</c> so the dispatcher routes to <c>TerminalHostApp.RunAsync</c>.
+    /// Empty for the per-RID NuGet package case (the binary is a standalone TerminalHost exe).
+    /// </summary>
+    [Output]
+    public string? AspireTerminalHostInvocationArgs { get; set; }
+
     public override bool Execute()
     {
         if (!string.IsNullOrWhiteSpace(AspireCliBundlePath))
@@ -76,6 +97,9 @@ public sealed class ResolveAspireCliBundle : Microsoft.Build.Utilities.Task
         DcpDir = EnsureTrailingDirectorySeparator(resolution.DcpDir);
         AspireDashboardDir = EnsureTrailingDirectorySeparator(resolution.ManagedDir);
         AspireDashboardPath = resolution.ManagedPath;
+        AspireTerminalHostDir = EnsureTrailingDirectorySeparator(resolution.ManagedDir);
+        AspireTerminalHostPath = resolution.ManagedPath;
+        AspireTerminalHostInvocationArgs = "terminalhost";
     }
 
     private static bool TryResolveFromPath(out BundleResolution resolution)
