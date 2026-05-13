@@ -80,8 +80,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
         }
         catch (OperationCanceledException)
         {
-            InteractionService.DisplayCancellationMessage();
-            return CommandResult.Failure(ExitCodeConstants.FailedToSearchIntegrations);
+            return CommandResult.Cancelled();
         }
         catch (Exception ex)
         {

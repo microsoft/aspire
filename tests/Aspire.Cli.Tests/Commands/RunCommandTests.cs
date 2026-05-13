@@ -401,7 +401,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         cts.Cancel();
 
         var exitCode = await pendingRun.DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(ExitCodeConstants.Cancelled, exitCode);
     }
 
     [Fact]
@@ -456,7 +456,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         cts.Cancel();
 
         var exitCode = await pendingRun.DefaultTimeout(TestConstants.LongTimeoutDuration);
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(ExitCodeConstants.Cancelled, exitCode);
     }
 
     [Fact]
@@ -572,8 +572,8 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await pendingRun.DefaultTimeout(TestConstants.LongTimeoutDuration);
 
-        // The command should succeed even when the dashboard is unhealthy
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        // The command should handle cancellation gracefully
+        Assert.Equal(ExitCodeConstants.Cancelled, exitCode);
 
         // Verify a warning was displayed (not an error)
         var m = Assert.Single(testInteractionService.DisplayedMessages);
@@ -674,7 +674,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         cts.Cancel();
         var exitCode = await pendingRun.DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(ExitCodeConstants.Cancelled, exitCode);
         Assert.False(buildCalled, "Build should be skipped when extension DevKit capability is available.");
     }
 
@@ -744,7 +744,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         cts.Cancel();
         var exitCode = await pendingRun.DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(ExitCodeConstants.Cancelled, exitCode);
         Assert.False(buildCalled, "Build should be skipped when running in extension.");
     }
 
@@ -817,7 +817,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await pendingRun.DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(ExitCodeConstants.Cancelled, exitCode);
         Assert.True(buildCalled, "Build should be called when extension has build-dotnet-using-cli capability.");
     }
 
@@ -1652,7 +1652,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             cts.Cancel();
 
             var exitCode = await pendingRun.DefaultTimeout();
-            Assert.Equal(ExitCodeConstants.Success, exitCode);
+            Assert.Equal(ExitCodeConstants.Cancelled, exitCode);
 
             // Verify DcpPublisher__RandomizePorts is set to true for isolated mode
             Assert.True(capturedEnv.ContainsKey("DcpPublisher__RandomizePorts"), "DcpPublisher__RandomizePorts should be set in isolated mode");
@@ -1859,7 +1859,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await pendingRun.DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(ExitCodeConstants.Cancelled, exitCode);
         Assert.False(startDebugSessionCalled, "StartDebugSessionAsync should not be called in non-interactive mode.");
     }
 

@@ -536,8 +536,7 @@ internal class DotNetTemplateFactory(
         }
         catch (OperationCanceledException)
         {
-            interactionService.DisplayCancellationMessage();
-            return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+            return new TemplateResult(ExitCodeConstants.Cancelled);
         }
         catch (CertificateServiceException ex)
         {

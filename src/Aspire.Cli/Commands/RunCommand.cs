@@ -165,7 +165,7 @@ internal sealed class RunCommand : BaseCommand
         // Handle detached mode - spawn child process and exit
         if (detach)
         {
-            return CommandResult.FromExitCode(await ExecuteDetachedAsync(parseResult, passedAppHostProjectFile, isExtensionHost, cancellationToken));
+            return await ExecuteDetachedAsync(parseResult, passedAppHostProjectFile, isExtensionHost, cancellationToken);
         }
 
         // A user may run `aspire run` in an Aspire terminal in VS Code. In this case, intercept and prompt
@@ -431,8 +431,7 @@ internal sealed class RunCommand : BaseCommand
         catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken || ex is ExtensionOperationCanceledException)
         {
             runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "canceled");
-            InteractionService.DisplayCancellationMessage();
-            return CommandResult.Success();
+            return CommandResult.Cancelled();
         }
         catch (ProjectLocatorException ex)
         {
@@ -692,7 +691,7 @@ internal sealed class RunCommand : BaseCommand
     /// </list>
     /// <para>On any failure, the log file path is displayed so the user can investigate.</para>
     /// </remarks>
-    private Task<int> ExecuteDetachedAsync(ParseResult parseResult, FileInfo? passedAppHostProjectFile, bool isExtensionHost, CancellationToken cancellationToken)
+    private Task<CommandResult> ExecuteDetachedAsync(ParseResult parseResult, FileInfo? passedAppHostProjectFile, bool isExtensionHost, CancellationToken cancellationToken)
     {
         var format = parseResult.GetValue(AppHostLauncher.s_formatOption);
         var isolated = parseResult.GetValue(AppHostLauncher.s_isolatedOption);

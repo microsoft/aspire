@@ -59,7 +59,7 @@ internal sealed class StartCommand : BaseCommand
             additionalArgs.Add("--no-build");
         }
 
-        return CommandResult.FromExitCode(await _appHostLauncher.LaunchDetachedAsync(
+        return await _appHostLauncher.LaunchDetachedAsync(
             passedAppHostProjectFile,
             format,
             isolated,
@@ -67,6 +67,6 @@ internal sealed class StartCommand : BaseCommand
             waitForDebugger,
             globalArgs,
             additionalArgs,
-            cancellationToken));
+            cancellationToken);
     }
 }

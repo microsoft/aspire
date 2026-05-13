@@ -26,6 +26,12 @@ internal sealed class CommandResult
     public static CommandResult Failure(int exitCode, string? errorMessage = null) => new(exitCode, errorMessage);
 
     /// <summary>
+    /// Indicates the command was cancelled by the user (e.g. Ctrl+C).
+    /// <see cref="BaseCommand"/> displays the cancellation message centrally.
+    /// </summary>
+    public static CommandResult Cancelled() => new(ExitCodeConstants.Cancelled);
+
+    /// <summary>
     /// Indicates the command should display help and return an invalid-command exit code.
     /// </summary>
     public static CommandResult DisplayHelp() => new(ExitCodeConstants.InvalidCommand, shouldDisplayHelp: true);

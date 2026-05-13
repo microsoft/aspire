@@ -226,8 +226,7 @@ internal sealed class AddCommand : BaseCommand
         }
         catch (OperationCanceledException)
         {
-            InteractionService.DisplayCancellationMessage();
-            return CommandResult.Failure(ExitCodeConstants.FailedToAddPackage);
+            return CommandResult.Cancelled();
         }
         catch (EmptyChoicesException ex)
         {

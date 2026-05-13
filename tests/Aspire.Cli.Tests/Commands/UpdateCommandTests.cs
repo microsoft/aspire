@@ -1117,7 +1117,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
         // Assert
         Assert.True(cancellationMessageDisplayed, "Cancellation message should have been displayed");
-        Assert.Equal(ExitCodeConstants.FailedToUpgradeProject, exitCode);
+        Assert.Equal(ExitCodeConstants.Cancelled, exitCode);
     }
 
     [Fact]
@@ -1654,7 +1654,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
         // Assert
         Assert.True(cancellationMessageDisplayed, "Cancellation message should have been displayed");
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(ExitCodeConstants.Cancelled, exitCode);
     }
 
     [Fact]

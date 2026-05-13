@@ -173,8 +173,7 @@ internal sealed class RestoreCommand : BaseCommand
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            InteractionService.DisplayCancellationMessage();
-            return CommandResult.Success();
+            return CommandResult.Cancelled();
         }
         catch (ProjectLocatorException ex)
         {

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
+using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
@@ -105,7 +106,7 @@ internal sealed class AgentMcpCommand : BaseCommand
             if (!UrlHelper.IsHttpUrl(dashboardUrl))
             {
                 _logger.LogError("Invalid --dashboard-url: {DashboardUrl}", dashboardUrl);
-                return CommandResult.Failure(ExitCodeConstants.InvalidCommand);
+                return CommandResult.Failure(ExitCodeConstants.InvalidCommand, string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardUrlInvalid, dashboardUrl));
             }
 
             _dashboardOnlyMode = true;

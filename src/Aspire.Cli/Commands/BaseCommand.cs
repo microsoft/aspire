@@ -72,6 +72,12 @@ internal abstract class BaseCommand : Command
                 return result.ExitCode;
             }
 
+            if (result.ExitCode == ExitCodeConstants.Cancelled)
+            {
+                interactionService.DisplayCancellationMessage();
+                return result.ExitCode;
+            }
+
             // Display the CLI log file path on non-zero exit codes so the user knows
             // where to find diagnostic details. Suppress for user-input errors where
             // the log wouldn't contain useful context (e.g., missing required arguments).

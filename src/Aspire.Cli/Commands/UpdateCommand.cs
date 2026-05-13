@@ -134,12 +134,11 @@ internal sealed class UpdateCommand : BaseCommand
 
             try
             {
-                return CommandResult.FromExitCode(await ExecuteSelfUpdateAsync(parseResult, cancellationToken));
+                return await ExecuteSelfUpdateAsync(parseResult, cancellationToken);
             }
             catch (OperationCanceledException)
             {
-                InteractionService.DisplayCancellationMessage();
-                return CommandResult.Failure(ExitCodeConstants.InvalidCommand);
+                return CommandResult.Cancelled();
             }
         }
 
@@ -267,7 +266,7 @@ internal sealed class UpdateCommand : BaseCommand
                     }
 
                     // Use the same channel that was selected for the project update
-                    return CommandResult.FromExitCode(await ExecuteSelfUpdateAsync(parseResult, cancellationToken, channel.Name));
+                    return await ExecuteSelfUpdateAsync(parseResult, cancellationToken, channel.Name);
                 }
             }
         }
@@ -298,7 +297,7 @@ internal sealed class UpdateCommand : BaseCommand
 
                     if (shouldUpdateCli)
                     {
-                        return CommandResult.FromExitCode(await ExecuteSelfUpdateAsync(parseResult, cancellationToken));
+                        return await ExecuteSelfUpdateAsync(parseResult, cancellationToken);
                     }
                 }
             }
@@ -307,14 +306,13 @@ internal sealed class UpdateCommand : BaseCommand
         }
         catch (OperationCanceledException)
         {
-            InteractionService.DisplayCancellationMessage();
-            return CommandResult.Failure(ExitCodeConstants.FailedToUpgradeProject);
+            return CommandResult.Cancelled();
         }
 
         return CommandResult.FromExitCode(0);
     }
 
-    private async Task<int> ExecuteSelfUpdateAsync(ParseResult parseResult, CancellationToken cancellationToken, string? selectedChannel = null)
+    private async Task<CommandResult> ExecuteSelfUpdateAsync(ParseResult parseResult, CancellationToken cancellationToken, string? selectedChannel = null)
     {
         var channel = selectedChannel ?? parseResult.GetValue(_channelOption) ?? parseResult.GetValue(_qualityOption);
 
@@ -343,8 +341,7 @@ internal sealed class UpdateCommand : BaseCommand
             var currentExePath = Environment.ProcessPath;
             if (string.IsNullOrEmpty(currentExePath))
             {
-                InteractionService.DisplayError("Unable to determine the current executable path.");
-                return ExitCodeConstants.InvalidCommand;
+                return CommandResult.Failure(ExitCodeConstants.InvalidCommand, "Unable to determine the current executable path.");
             }
 
             InteractionService.DisplayMessage(KnownEmojis.Package, $"Current CLI location: {currentExePath}");
@@ -356,19 +353,17 @@ internal sealed class UpdateCommand : BaseCommand
             // Extract and update to $HOME/.aspire/bin
             await ExtractAndUpdateAsync(archivePath, cancellationToken);
 
-            return 0;
+            return CommandResult.Success();
         }
         catch (OperationCanceledException)
         {
-            InteractionService.DisplayCancellationMessage();
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Cancelled();
         }
         catch (Exception ex)
         {
             Telemetry.RecordError("Failed to update CLI", ex);
             var errorMessage = $"Failed to update CLI: {ex.Message}";
-            InteractionService.DisplayError(errorMessage);
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(ExitCodeConstants.InvalidCommand, errorMessage);
         }
     }
 
