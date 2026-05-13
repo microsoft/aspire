@@ -219,6 +219,46 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         return filteredPackages;
     }
 
+    public async Task<IReadOnlyDictionary<string, PackageLatestVersions>> GetLatestVersionsAsync(IEnumerable<string> packageIds, DirectoryInfo workingDirectory, CancellationToken cancellationToken)
+    {
+        // Used by `aspire update` to resolve every referenced Aspire.* package's latest version with
+        // a single batched cache lookup, instead of issuing one search per id × quality.
+        var ids = packageIds
+            .Where(static id => !string.IsNullOrEmpty(id))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (ids.Count == 0)
+        {
+            return new Dictionary<string, PackageLatestVersions>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        // For pinned/local-folder hive channels there is no remote feed to query — every package id
+        // resolves to PinnedVersion. This mirrors the early-return in GetIntegrationPackagesAsync.
+        if (PinnedVersion is not null)
+        {
+            var dict = new Dictionary<string, PackageLatestVersions>(StringComparer.OrdinalIgnoreCase);
+            foreach (var id in ids)
+            {
+                var package = new NuGetPackage { Id = id, Version = PinnedVersion, Source = SourceDetails };
+                dict[id] = new PackageLatestVersions
+                {
+                    LatestStable = package,
+                    LatestPrerelease = package
+                };
+            }
+            return dict;
+        }
+
+        using var tempNuGetConfig = Type is PackageChannelType.Explicit ? await TemporaryNuGetConfig.CreateAsync(Mappings!) : null;
+
+        return await nuGetPackageCache.GetLatestVersionsAsync(
+            ids,
+            workingDirectory,
+            tempNuGetConfig?.ConfigFile,
+            cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(string packageId, DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
         var tasks = new List<Task<IEnumerable<NuGetPackage>>>();

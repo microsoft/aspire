@@ -34,4 +34,10 @@ internal sealed class FakeNuGetPackageCache : INuGetPackageCache
     public Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(DirectoryInfo workingDirectory, string exactPackageId, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)
         => GetPackageVersionsAsyncCallback?.Invoke(workingDirectory, exactPackageId, prerelease, nugetConfigFile, useCache, cancellationToken)
            ?? Task.FromResult<IEnumerable<NuGetPackage>>([]);
+
+    public Func<IEnumerable<string>, DirectoryInfo, FileInfo?, CancellationToken, Task<IReadOnlyDictionary<string, PackageLatestVersions>>>? GetLatestVersionsAsyncCallback { get; set; }
+
+    public Task<IReadOnlyDictionary<string, PackageLatestVersions>> GetLatestVersionsAsync(IEnumerable<string> packageIds, DirectoryInfo workingDirectory, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
+        => GetLatestVersionsAsyncCallback?.Invoke(packageIds, workingDirectory, nugetConfigFile, cancellationToken)
+           ?? Task.FromResult<IReadOnlyDictionary<string, PackageLatestVersions>>(new Dictionary<string, PackageLatestVersions>(StringComparer.OrdinalIgnoreCase));
 }

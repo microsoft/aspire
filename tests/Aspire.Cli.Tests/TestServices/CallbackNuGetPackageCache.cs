@@ -25,4 +25,7 @@ internal sealed class CallbackNuGetPackageCache(
 
     public Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(DirectoryInfo workingDirectory, string exactPackageId, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)
         => Task.FromResult<IEnumerable<NuGetPackage>>([]);
+
+    public Task<IReadOnlyDictionary<string, PackageLatestVersions>> GetLatestVersionsAsync(IEnumerable<string> packageIds, DirectoryInfo workingDirectory, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyDictionary<string, PackageLatestVersions>>(new Dictionary<string, PackageLatestVersions>(StringComparer.OrdinalIgnoreCase));
 }

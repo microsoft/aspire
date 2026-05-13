@@ -252,6 +252,130 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
         }
     }
 
+    public async Task<IReadOnlyDictionary<string, PackageLatestVersions>> GetLatestVersionsAsync(
+        IEnumerable<string> packageIds,
+        DirectoryInfo workingDirectory,
+        FileInfo? nugetConfigFile,
+        CancellationToken cancellationToken)
+    {
+        var ids = packageIds
+            .Where(static id => !string.IsNullOrEmpty(id))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (ids.Count == 0)
+        {
+            return new Dictionary<string, PackageLatestVersions>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        // Bundle mode: collapse N×2 search subprocesses into a single `aspire-managed nuget versions`
+        // invocation that fans out FindPackageByIdResource calls in-process across every (id × source)
+        // pair. See VersionsCommand for the implementation.
+        var layout = await _bundleService.EnsureExtractedAndGetLayoutAsync(cancellationToken).ConfigureAwait(false);
+        if (layout is null)
+        {
+            throw new InvalidOperationException("Bundle layout not found. Cannot perform NuGet versions lookup in bundle mode.");
+        }
+
+        var managedPath = layout.GetManagedPath();
+        if (managedPath is null || !File.Exists(managedPath))
+        {
+            throw new InvalidOperationException("aspire-managed not found in layout.");
+        }
+
+        var args = new List<string>
+        {
+            "nuget",
+            "versions"
+        };
+
+        foreach (var id in ids)
+        {
+            args.Add("--id");
+            args.Add(id);
+        }
+
+        args.Add("--working-dir");
+        args.Add(workingDirectory.FullName);
+
+        if (nugetConfigFile is not null)
+        {
+            args.Add("--nuget-config");
+            args.Add(nugetConfigFile.FullName);
+        }
+
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            args.Add("--verbose");
+        }
+
+        _logger.LogDebug("Running NuGet versions via aspire-managed for {Count} package id(s)", ids.Count);
+
+        var (exitCode, output, error) = await _layoutProcessRunner.RunAsync(
+            managedPath,
+            args,
+            workingDirectory: workingDirectory.FullName,
+            ct: cancellationToken).ConfigureAwait(false);
+
+        if (!string.IsNullOrWhiteSpace(error))
+        {
+            _logger.LogDebug("NuGetHelper stderr: {Error}", error);
+        }
+
+        if (exitCode != 0)
+        {
+            _logger.LogError("NuGet versions failed with exit code {ExitCode}", exitCode);
+            _logger.LogError("NuGet versions stderr: {Error}", error);
+            _logger.LogError("NuGet versions stdout: {Output}", output);
+            throw new NuGetPackageCacheException($"Package versions lookup failed: {error}");
+        }
+
+        try
+        {
+            if (string.IsNullOrEmpty(output))
+            {
+                _logger.LogWarning("NuGet versions returned empty output");
+                return new Dictionary<string, PackageLatestVersions>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            var result = JsonSerializer.Deserialize(output, BundleVersionsJsonContext.Default.BundleVersionsResult);
+            var dict = new Dictionary<string, PackageLatestVersions>(StringComparer.OrdinalIgnoreCase);
+
+            if (result?.Packages is null)
+            {
+                return dict;
+            }
+
+            foreach (var info in result.Packages)
+            {
+                if (string.IsNullOrEmpty(info.Id))
+                {
+                    continue;
+                }
+
+                NuGetPackage? stable = info.LatestStableVersion is { Length: > 0 }
+                    ? new NuGetPackage { Id = info.Id, Version = info.LatestStableVersion, Source = info.LatestStableSource ?? string.Empty }
+                    : null;
+                NuGetPackage? prerelease = info.LatestPrereleaseVersion is { Length: > 0 }
+                    ? new NuGetPackage { Id = info.Id, Version = info.LatestPrereleaseVersion, Source = info.LatestPrereleaseSource ?? string.Empty }
+                    : null;
+
+                dict[info.Id] = new PackageLatestVersions
+                {
+                    LatestStable = stable,
+                    LatestPrerelease = prerelease
+                };
+            }
+
+            return dict;
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "Failed to parse versions results");
+            throw new NuGetPackageCacheException($"Failed to parse versions results: {ex.Message}");
+        }
+    }
+
     private IEnumerable<NuGetPackage> FilterPackages(IEnumerable<NuGetPackage> packages, Func<string, bool>? filter)
     {
         var showDeprecatedPackages = _features.IsFeatureEnabled(KnownFeatures.ShowDeprecatedPackages, defaultValue: false);
@@ -316,6 +440,27 @@ internal sealed class BundlePackageInfo
 [JsonSerializable(typeof(BundlePackageInfo))]
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 internal sealed partial class BundleSearchJsonContext : JsonSerializerContext
+{
+}
+
+internal sealed class BundleVersionsResult
+{
+    public List<BundleVersionsInfo>? Packages { get; set; }
+}
+
+internal sealed class BundleVersionsInfo
+{
+    public string Id { get; set; } = "";
+    public string? LatestStableVersion { get; set; }
+    public string? LatestStableSource { get; set; }
+    public string? LatestPrereleaseVersion { get; set; }
+    public string? LatestPrereleaseSource { get; set; }
+}
+
+[JsonSerializable(typeof(BundleVersionsResult))]
+[JsonSerializable(typeof(BundleVersionsInfo))]
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+internal sealed partial class BundleVersionsJsonContext : JsonSerializerContext
 {
 }
 

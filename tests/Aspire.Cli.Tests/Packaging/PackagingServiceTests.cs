@@ -1183,5 +1183,8 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
 
         public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetPackageVersionsAsync(DirectoryInfo workingDirectory, string exactPackageId, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)
             => GetTemplatePackagesAsync(workingDirectory, prerelease, nugetConfigFile, cancellationToken);
+
+        public Task<IReadOnlyDictionary<string, Aspire.Cli.NuGet.PackageLatestVersions>> GetLatestVersionsAsync(IEnumerable<string> packageIds, DirectoryInfo workingDirectory, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
+            => Task.FromResult<IReadOnlyDictionary<string, Aspire.Cli.NuGet.PackageLatestVersions>>(new Dictionary<string, Aspire.Cli.NuGet.PackageLatestVersions>(StringComparer.OrdinalIgnoreCase));
     }
 }

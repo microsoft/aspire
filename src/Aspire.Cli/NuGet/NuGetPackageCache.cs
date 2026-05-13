@@ -7,6 +7,7 @@ using System.Collections.Frozen;
 using System.Globalization;
 using Aspire.Cli.Telemetry;
 using Microsoft.Extensions.Caching.Memory;
+using Semver;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 using Aspire.Cli.Configuration;
 
@@ -19,6 +20,30 @@ internal interface INuGetPackageCache
     Task<IEnumerable<NuGetPackage>> GetCliPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken);
     Task<IEnumerable<NuGetPackage>> GetPackagesAsync(DirectoryInfo workingDirectory, string packageId, Func<string, bool>? filter, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken);
     Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(DirectoryInfo workingDirectory, string exactPackageId, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Resolves the latest stable and latest prerelease version for each id in <paramref name="packageIds"/>
+    /// using a single batched lookup against all configured NuGet sources.
+    /// Used by <c>aspire update</c> to avoid issuing one subprocess per package id × quality.
+    /// Returned dictionary is keyed case-insensitively by id; ids with no matches across any source are
+    /// represented by an entry whose <see cref="PackageLatestVersions.LatestStable"/> and
+    /// <see cref="PackageLatestVersions.LatestPrerelease"/> are both <c>null</c>, or are absent entirely.
+    /// </summary>
+    Task<IReadOnlyDictionary<string, PackageLatestVersions>> GetLatestVersionsAsync(
+        IEnumerable<string> packageIds,
+        DirectoryInfo workingDirectory,
+        FileInfo? nugetConfigFile,
+        CancellationToken cancellationToken);
+}
+
+/// <summary>
+/// Latest known stable and prerelease versions for a single package id across all configured sources.
+/// Either field may be <c>null</c> when no matching version exists on any configured source.
+/// </summary>
+internal sealed class PackageLatestVersions
+{
+    public NuGetPackage? LatestStable { get; init; }
+    public NuGetPackage? LatestPrerelease { get; init; }
 }
 
 /// <summary>
@@ -212,6 +237,72 @@ internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache
         };
 
         return collectedPackages.Where(effectiveFilter);
+    }
+
+    public async Task<IReadOnlyDictionary<string, PackageLatestVersions>> GetLatestVersionsAsync(
+        IEnumerable<string> packageIds,
+        DirectoryInfo workingDirectory,
+        FileInfo? nugetConfigFile,
+        CancellationToken cancellationToken)
+    {
+        // SDK transport (no bundle) cannot batch in a single subprocess because `dotnet package search`
+        // accepts only one query per invocation. Issue per-id × per-quality calls in parallel with a
+        // small concurrency cap so users still get a meaningful speedup over today's serial loop without
+        // accidentally fanning out to dozens of concurrent subprocesses on slow networks.
+        var ids = packageIds
+            .Where(static id => !string.IsNullOrEmpty(id))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        if (ids.Count == 0)
+        {
+            return new Dictionary<string, PackageLatestVersions>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        const int MaxParallelism = 4;
+        using var throttle = new SemaphoreSlim(MaxParallelism);
+
+        var results = new Dictionary<string, PackageLatestVersions>(StringComparer.OrdinalIgnoreCase);
+        var resultsLock = new object();
+
+        async Task ResolveAsync(string id)
+        {
+            await throttle.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                // Run the stable + prerelease searches concurrently for the same id.
+                var stableTask = GetPackagesAsync(workingDirectory, id, pid => string.Equals(pid, id, StringComparison.OrdinalIgnoreCase), prerelease: false, nugetConfigFile, useCache: true, cancellationToken);
+                var prereleaseTask = GetPackagesAsync(workingDirectory, id, pid => string.Equals(pid, id, StringComparison.OrdinalIgnoreCase), prerelease: true, nugetConfigFile, useCache: true, cancellationToken);
+                await Task.WhenAll(stableTask, prereleaseTask).ConfigureAwait(false);
+
+                var latestStable = PickLatest(stableTask.Result, requirePrerelease: false);
+                var latestPrerelease = PickLatest(prereleaseTask.Result, requirePrerelease: true);
+
+                lock (resultsLock)
+                {
+                    results[id] = new PackageLatestVersions
+                    {
+                        LatestStable = latestStable,
+                        LatestPrerelease = latestPrerelease
+                    };
+                }
+            }
+            finally
+            {
+                throttle.Release();
+            }
+        }
+
+        await Task.WhenAll(ids.Select(ResolveAsync)).ConfigureAwait(false);
+        return results;
+    }
+
+    private static NuGetPackage? PickLatest(IEnumerable<NuGetPackage> packages, bool requirePrerelease)
+    {
+        return packages
+            .Where(p => SemVersion.TryParse(p.Version, SemVersionStyles.Strict, out var sv) && (!requirePrerelease || sv.IsPrerelease))
+            .OrderByDescending(p => SemVersion.Parse(p.Version, SemVersionStyles.Strict), SemVersion.PrecedenceComparer)
+            .FirstOrDefault();
     }
 }
 

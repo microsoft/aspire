@@ -8,6 +8,7 @@ using System.Text.RegularExpressions;
 using System.Xml;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
 using Aspire.Shared;
@@ -163,6 +164,16 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
     {
         var context = new UpdateContext(projectFile, channel);
 
+        // Prefetch the latest version for every Aspire.* package referenced anywhere in the project
+        // graph in one batched lookup. Without this, the per-step AnalyzePackage* calls below would
+        // each issue their own `dotnet package search` (or `aspire-managed nuget search`) per id ×
+        // quality, serialized through the AnalyzeSteps queue — which is the root cause of the
+        // multi-minute `aspire update` runs reported in https://github.com/microsoft/aspire/issues/12054.
+        // Pre-population is best-effort: GetLatestVersionOfPackageAsync below still falls back to the
+        // per-package search path on cache miss so correctness is preserved when a feed doesn't return
+        // an id from the batch lookup (e.g. local hives, V2 sources, transient errors).
+        await PrefetchLatestPackageVersionsAsync(context, cancellationToken).ConfigureAwait(false);
+
         var appHostAnalyzeStep = new AnalyzeStep(UpdateCommandStrings.AnalyzeAppHost, () => AnalyzeAppHostAsync(context, cancellationToken));
         context.AnalyzeSteps.Enqueue(appHostAnalyzeStep);
 
@@ -172,6 +183,150 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         }
 
         return (context.UpdateSteps, context.FallbackParsing);
+    }
+
+    private async Task PrefetchLatestPackageVersionsAsync(UpdateContext context, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var ids = await CollectAspirePackageIdsAsync(context, cancellationToken).ConfigureAwait(false);
+            if (ids.Count == 0)
+            {
+                return;
+            }
+
+            var versions = await context.Channel.GetLatestVersionsAsync(ids, context.AppHostProjectFile.Directory!, cancellationToken).ConfigureAwait(false);
+            if (versions.Count == 0)
+            {
+                return;
+            }
+
+            // Mirror the quality semantics applied per-id by GetPackagesAsync: stable channels prefer
+            // a stable version and only fall back to prerelease when no stable exists; prerelease
+            // channels filter to prerelease only; "both" picks the highest precedence regardless.
+            foreach (var (id, latest) in versions)
+            {
+                var picked = SelectForChannelQuality(context.Channel.Quality, latest);
+                if (picked is null)
+                {
+                    // No suitable version known yet — leave the cache empty so the per-package
+                    // fallback in GetLatestVersionOfPackageAsync runs.
+                    continue;
+                }
+
+                var cacheKey = $"LatestPackage-{id}";
+                cache.Set(cacheKey, (NuGetPackageCli?)picked);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Prefetch is a pure performance optimization — never fail the update because of it.
+            logger.LogDebug(ex, "Prefetch of latest Aspire package versions failed; falling back to per-package lookups.");
+        }
+    }
+
+    private static NuGetPackageCli? SelectForChannelQuality(PackageChannelQuality quality, PackageLatestVersions latest)
+    {
+        return quality switch
+        {
+            PackageChannelQuality.Stable => latest.LatestStable ?? latest.LatestPrerelease,
+            PackageChannelQuality.Prerelease => latest.LatestPrerelease,
+            PackageChannelQuality.Both => PickHigherPrecedence(latest.LatestStable, latest.LatestPrerelease),
+            _ => null
+        };
+    }
+
+    private static NuGetPackageCli? PickHigherPrecedence(NuGetPackageCli? a, NuGetPackageCli? b)
+    {
+        if (a is null)
+        {
+            return b;
+        }
+        if (b is null)
+        {
+            return a;
+        }
+
+        if (!SemVersion.TryParse(a.Version, SemVersionStyles.Strict, out var sa))
+        {
+            return b;
+        }
+        if (!SemVersion.TryParse(b.Version, SemVersionStyles.Strict, out var sb))
+        {
+            return a;
+        }
+        return SemVersion.PrecedenceComparer.Compare(sa, sb) >= 0 ? a : b;
+    }
+
+    private async Task<List<string>> CollectAspirePackageIdsAsync(UpdateContext context, CancellationToken cancellationToken)
+    {
+        // Walk the same project graph that AnalyzeProjectAsync visits, but only collect package ids
+        // (no version lookups). The GetItemsAndProperties* methods are MemoryCache-backed, so the
+        // subsequent AnalyzeSteps loop reuses these documents without re-running MSBuild evaluation.
+        var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            // Always include the AppHost SDK because AnalyzeAppHostSdkAsync looks it up directly,
+            // even if it doesn't appear as a PackageReference anywhere in the graph.
+            "Aspire.AppHost.Sdk"
+        };
+
+        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var queue = new Queue<FileInfo>();
+        queue.Enqueue(context.AppHostProjectFile);
+
+        while (queue.TryDequeue(out var projectFile))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (!visited.Add(projectFile.FullName))
+            {
+                continue;
+            }
+
+            JsonDocument document;
+            try
+            {
+                document = IsAppHostProject(projectFile, context)
+                    ? await GetItemsAndPropertiesWithFallbackAsync(projectFile, context, cancellationToken).ConfigureAwait(false)
+                    : await GetItemsAndPropertiesAsync(projectFile, cancellationToken).ConfigureAwait(false);
+            }
+            catch (ProjectUpdaterException)
+            {
+                // Non-AppHost projects without fallback may throw; the AnalyzeSteps loop will surface
+                // the error properly. Just skip during prefetch.
+                continue;
+            }
+
+            if (!document.RootElement.TryGetProperty("Items", out var itemsElement))
+            {
+                continue;
+            }
+
+            if (itemsElement.TryGetProperty("ProjectReference", out var projectReferencesElement))
+            {
+                foreach (var projectReference in projectReferencesElement.EnumerateArray())
+                {
+                    if (projectReference.TryGetProperty("FullPath", out var fullPathElement) && fullPathElement.GetString() is { Length: > 0 } fullPath)
+                    {
+                        queue.Enqueue(new FileInfo(fullPath));
+                    }
+                }
+            }
+
+            if (itemsElement.TryGetProperty("PackageReference", out var packageReferencesElement))
+            {
+                foreach (var packageReference in packageReferencesElement.EnumerateArray())
+                {
+                    if (packageReference.TryGetProperty("Identity", out var identityElement) && identityElement.GetString() is { Length: > 0 } packageId
+                        && IsUpdatablePackage(packageId))
+                    {
+                        ids.Add(packageId);
+                    }
+                }
+            }
+        }
+
+        return ids.ToList();
     }
 
     private const string ItemsAndPropertiesCacheKeyPrefix = "ItemsAndProperties";
