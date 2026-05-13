@@ -9,58 +9,133 @@ using System.Globalization;
 using Aspire.Hosting.Browsers.Resources;
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
 
 internal sealed class BrowserLogsConfigurationManager(
     IConfiguration configuration,
-    IInteractionService interactionService,
     IUserSecretsManager userSecretsManager,
     DistributedApplicationModel applicationModel,
     BrowserLogsConfigurationStore configurationStore,
     ResourceNotificationService resourceNotificationService,
     ILogger<BrowserLogsConfigurationManager> logger)
 {
-    private const string ScopeInputName = "scope";
-    private const string BrowserInputName = "browser";
-    private const string UserDataModeInputName = "userDataMode";
-    private const string ProfileInputName = "profile";
-    private const string SaveToUserSecretsInputName = "saveToUserSecrets";
-    private const string ResourceScopeValue = "resource";
-    private const string GlobalScopeValue = "global";
-    private const string BrowserDefaultProfileValue = "__aspire_browser_default__";
+    internal const string ScopeInputName = "scope";
+    internal const string BrowserInputName = "browser";
+    internal const string UserDataModeInputName = "userDataMode";
+    internal const string ProfileInputName = "profile";
+    internal const string SaveToUserSecretsInputName = "saveToUserSecrets";
+    internal const string ResourceScopeValue = "resource";
+    internal const string GlobalScopeValue = "global";
+    internal const string BrowserDefaultProfileValue = "__aspire_browser_default__";
 
-    public async Task<ExecuteCommandResult> ConfigureAsync(BrowserLogsResource resource, CancellationToken cancellationToken)
+    /// <summary>
+    /// Creates the static argument definitions for the configure-tracked-browser command.
+    /// Called at command registration time (before services are available).
+    /// </summary>
+    internal static IReadOnlyList<InteractionInput> CreateArgumentDefinitions(string parentResourceName)
+    {
+        var scopeInput = new InteractionInput
+        {
+            Name = ScopeInputName,
+            Label = BrowserCommandStrings.ConfigureTrackedBrowserScopeLabel,
+            InputType = InputType.Choice,
+            Required = true,
+            Value = ResourceScopeValue,
+            Options =
+            [
+                new(ResourceScopeValue, string.Format(CultureInfo.CurrentCulture, BrowserCommandStrings.ConfigureTrackedBrowserResourceScopeOption, parentResourceName)),
+                new(GlobalScopeValue, BrowserCommandStrings.ConfigureTrackedBrowserGlobalScopeOption)
+            ]
+        };
+
+        var browserInput = new InteractionInput
+        {
+            Name = BrowserInputName,
+            Label = BrowserCommandStrings.ConfigureTrackedBrowserBrowserLabel,
+            Description = BrowserCommandStrings.ConfigureTrackedBrowserBrowserDescription,
+            InputType = InputType.Choice,
+            Required = true,
+            AllowCustomChoice = true,
+            // DynamicLoading populates the current browser value and the list of available browsers at prompt time.
+            DynamicLoading = new InputLoadOptions
+            {
+                AlwaysLoadOnStart = true,
+                LoadCallback = context =>
+                {
+                    LoadBrowserOptions(context);
+                    return Task.CompletedTask;
+                }
+            }
+        };
+
+        var userDataModeInput = new InteractionInput
+        {
+            Name = UserDataModeInputName,
+            Label = BrowserCommandStrings.ConfigureTrackedBrowserUserDataModeLabel,
+            InputType = InputType.Choice,
+            Required = true,
+            Value = BrowserUserDataMode.Shared.ToString(),
+            Options =
+            [
+                new(nameof(BrowserUserDataMode.Shared), nameof(BrowserUserDataMode.Shared)),
+                new(nameof(BrowserUserDataMode.Isolated), nameof(BrowserUserDataMode.Isolated))
+            ]
+        };
+
+        var profileInput = new InteractionInput
+        {
+            Name = ProfileInputName,
+            Label = BrowserCommandStrings.ConfigureTrackedBrowserProfileLabel,
+            Description = BrowserCommandStrings.ConfigureTrackedBrowserProfileDescription,
+            InputType = InputType.Choice,
+            Required = false,
+            AllowCustomChoice = true,
+            Value = BrowserDefaultProfileValue,
+            DynamicLoading = new InputLoadOptions
+            {
+                AlwaysLoadOnStart = true,
+                DependsOnInputs = [BrowserInputName, UserDataModeInputName],
+                LoadCallback = context =>
+                {
+                    var mgr = context.Services.GetRequiredService<BrowserLogsConfigurationManager>();
+                    mgr.LoadProfileOptions(context);
+                    return Task.CompletedTask;
+                }
+            }
+        };
+
+        var saveInput = new InteractionInput
+        {
+            Name = SaveToUserSecretsInputName,
+            Label = BrowserCommandStrings.ConfigureTrackedBrowserSaveToUserSecretsLabel,
+            Description = BrowserCommandStrings.ConfigureTrackedBrowserSaveToUserSecretsDescriptionConfigured,
+            EnableDescriptionMarkdown = true,
+            InputType = InputType.Boolean,
+            // Dynamic loading populates the default value and disabled state based on
+            // whether user secrets are available at prompt time.
+            DynamicLoading = new InputLoadOptions
+            {
+                AlwaysLoadOnStart = true,
+                LoadCallback = context =>
+                {
+                    var mgr = context.Services.GetRequiredService<BrowserLogsConfigurationManager>();
+                    mgr.LoadSaveToUserSecretsOptions(context);
+                    return Task.CompletedTask;
+                }
+            }
+        };
+
+        return [scopeInput, browserInput, userDataModeInput, profileInput, saveInput];
+    }
+
+    public async Task<ExecuteCommandResult> ConfigureAsync(BrowserLogsResource resource, InteractionInputCollection arguments, CancellationToken _)
     {
         ArgumentNullException.ThrowIfNull(resource);
 
-        if (!interactionService.IsAvailable)
-        {
-            return CommandResults.Failure(BrowserCommandStrings.ConfigureTrackedBrowserInteractionUnavailable);
-        }
-
-        var currentConfiguration = resource.ResolveCurrentConfiguration(configuration, configurationStore);
-        var inputs = CreateInputs(resource, currentConfiguration);
-        var result = await interactionService.PromptInputsAsync(
-            BrowserCommandStrings.ConfigureTrackedBrowserName,
-            BrowserCommandStrings.ConfigureTrackedBrowserPromptMessage,
-            inputs,
-            new InputsDialogInteractionOptions
-            {
-                PrimaryButtonText = BrowserCommandStrings.ConfigureTrackedBrowserSaveButton,
-                ShowDismiss = true,
-                EnableMessageMarkdown = true,
-                ValidationCallback = context => ValidateInputsAsync(resource, context)
-            },
-            cancellationToken).ConfigureAwait(false);
-
-        if (result.Canceled)
-        {
-            return CommandResults.Canceled();
-        }
-
-        var selected = BrowserLogsConfigurationSelection.FromInputs(result.Data);
+        var selected = BrowserLogsConfigurationSelection.FromInputs(arguments);
         var resolvedConfigurations = ResolveEffectiveConfigurations(resource, selected);
         Apply(resource, selected);
 
@@ -86,88 +161,16 @@ internal sealed class BrowserLogsConfigurationManager(
         };
     }
 
-    private List<InteractionInput> CreateInputs(BrowserLogsResource resource, BrowserConfiguration currentConfiguration)
+    private static void LoadBrowserOptions(LoadInputContext context)
     {
-        var scopeInput = new InteractionInput
-        {
-            Name = ScopeInputName,
-            Label = BrowserCommandStrings.ConfigureTrackedBrowserScopeLabel,
-            InputType = InputType.Choice,
-            Required = true,
-            Value = ResourceScopeValue,
-            Options =
-            [
-                new(ResourceScopeValue, string.Format(CultureInfo.CurrentCulture, BrowserCommandStrings.ConfigureTrackedBrowserResourceScopeOption, resource.ParentResource.Name)),
-                new(GlobalScopeValue, BrowserCommandStrings.ConfigureTrackedBrowserGlobalScopeOption)
-            ]
-        };
-
-        var browserInput = new InteractionInput
-        {
-            Name = BrowserInputName,
-            Label = BrowserCommandStrings.ConfigureTrackedBrowserBrowserLabel,
-            Description = BrowserCommandStrings.ConfigureTrackedBrowserBrowserDescription,
-            InputType = InputType.Choice,
-            Required = true,
-            AllowCustomChoice = true,
-            Value = currentConfiguration.Browser,
-            Options = GetBrowserOptions(currentConfiguration.Browser)
-        };
-
-        var userDataModeInput = new InteractionInput
-        {
-            Name = UserDataModeInputName,
-            Label = BrowserCommandStrings.ConfigureTrackedBrowserUserDataModeLabel,
-            InputType = InputType.Choice,
-            Required = true,
-            Value = currentConfiguration.UserDataMode.ToString(),
-            Options =
-            [
-                new(nameof(BrowserUserDataMode.Shared), nameof(BrowserUserDataMode.Shared)),
-                new(nameof(BrowserUserDataMode.Isolated), nameof(BrowserUserDataMode.Isolated))
-            ]
-        };
-
-        var profileInput = new InteractionInput
-        {
-            Name = ProfileInputName,
-            Label = BrowserCommandStrings.ConfigureTrackedBrowserProfileLabel,
-            Description = BrowserCommandStrings.ConfigureTrackedBrowserProfileDescription,
-            InputType = InputType.Choice,
-            Required = false,
-            AllowCustomChoice = true,
-            Value = currentConfiguration.Profile ?? BrowserDefaultProfileValue,
-            DynamicLoading = new InputLoadOptions
-            {
-                AlwaysLoadOnStart = true,
-                DependsOnInputs = [BrowserInputName, UserDataModeInputName],
-                LoadCallback = context =>
-                {
-                    LoadProfileOptions(context);
-                    return Task.CompletedTask;
-                }
-            }
-        };
-
-        var saveInput = CreateSaveToUserSecretsInput();
-
-        return [scopeInput, browserInput, userDataModeInput, profileInput, saveInput];
+        var options = GetBrowserOptions(context.Input.Value ?? string.Empty);
+        context.Input.Options = options;
     }
 
-    private InteractionInput CreateSaveToUserSecretsInput()
+    private void LoadSaveToUserSecretsOptions(LoadInputContext context)
     {
-        return new InteractionInput
-        {
-            Name = SaveToUserSecretsInputName,
-            Label = BrowserCommandStrings.ConfigureTrackedBrowserSaveToUserSecretsLabel,
-            InputType = InputType.Boolean,
-            Value = userSecretsManager.IsAvailable ? "true" : null,
-            Description = userSecretsManager.IsAvailable
-                ? BrowserCommandStrings.ConfigureTrackedBrowserSaveToUserSecretsDescriptionConfigured
-                : BrowserCommandStrings.ConfigureTrackedBrowserSaveToUserSecretsDescriptionNotConfigured,
-            EnableDescriptionMarkdown = true,
-            Disabled = !userSecretsManager.IsAvailable
-        };
+        context.Input.Value ??= userSecretsManager.IsAvailable ? "true" : null;
+        context.Input.Disabled = !userSecretsManager.IsAvailable;
     }
 
     private static IReadOnlyList<KeyValuePair<string, string>> GetBrowserOptions(string currentBrowser)
@@ -261,7 +264,7 @@ internal sealed class BrowserLogsConfigurationManager(
         return profile.DirectoryName;
     }
 
-    private Task ValidateInputsAsync(BrowserLogsResource resource, InputsDialogValidationContext context)
+    internal Task ValidateInputsAsync(BrowserLogsResource resource, InputsDialogValidationContext context)
     {
         var inputs = context.Inputs;
         var browser = inputs[BrowserInputName];

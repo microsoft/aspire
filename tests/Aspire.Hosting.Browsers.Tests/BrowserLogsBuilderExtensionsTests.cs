@@ -10,7 +10,6 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Tests;
 using Aspire.Hosting.Browsers.Resources;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
@@ -343,10 +342,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     public async Task WithBrowserLogs_ConfigureCommandSavesResourceScopedBrowserSettingsAndAppliesImmediately()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-        var interactionService = new TestInteractionService();
         var userSecretsManager = new RecordingUserSecretsManager();
         builder.Configuration[KnownConfigNames.VersionCheckDisabled] = "true";
-        builder.Services.AddSingleton<IInteractionService>(interactionService);
         builder.Services.AddSingleton<IUserSecretsManager>(userSecretsManager);
 
         var web = builder.AddResource(new TestHttpResource("web"))
@@ -365,32 +362,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         await app.StartAsync();
 
         var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
-        var commandTask = app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.ConfigureTrackedBrowserCommandName);
-        var interaction = await interactionService.Interactions.Reader.ReadAsync().DefaultTimeout();
-
-        Assert.Equal(BrowserCommandStrings.ConfigureTrackedBrowserName, interaction.Title);
-        Assert.Equal(BrowserCommandStrings.ConfigureTrackedBrowserPromptMessage, interaction.Message);
-        Assert.Equal(BrowserCommandStrings.ConfigureTrackedBrowserSaveButton, ((InputsDialogInteractionOptions)interaction.Options!).PrimaryButtonText);
-        Assert.Collection(interaction.Inputs,
-            input => Assert.Equal("scope", input.Name),
-            input => Assert.Equal("browser", input.Name),
-            input => Assert.Equal("userDataMode", input.Name),
-            input => Assert.Equal("profile", input.Name),
-            input =>
-            {
-                Assert.Equal("saveToUserSecrets", input.Name);
-                Assert.Equal("true", input.Value);
-                Assert.False(input.Disabled);
-                Assert.Equal(BrowserCommandStrings.ConfigureTrackedBrowserSaveToUserSecretsDescriptionConfigured, input.Description);
-            });
-
-        interaction.Inputs["scope"].Value = "resource";
-        interaction.Inputs["browser"].Value = "msedge";
-        interaction.Inputs["userDataMode"].Value = nameof(BrowserUserDataMode.Shared);
-        interaction.Inputs["profile"].Value = "Default";
-        interaction.CompletionTcs.SetResult(InteractionResult.Ok(interaction.Inputs));
-
-        var result = await commandTask.DefaultTimeout();
+        var arguments = CreateConfigureArguments("resource", "msedge", nameof(BrowserUserDataMode.Shared), "Default", saveToUserSecrets: "true");
+        var result = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.ConfigureTrackedBrowserCommandName, arguments);
 
         Assert.True(result.Success);
         Assert.Equal("msedge", userSecretsManager.Secrets[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:web:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}"]);
@@ -409,13 +382,11 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     public async Task WithBrowserLogs_ConfigureCommandAppliesRuntimeSettingsWhenUserSecretsAreUnavailable()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-        var interactionService = new TestInteractionService();
         var userSecretsManager = new RecordingUserSecretsManager
         {
             IsAvailable = false
         };
         builder.Configuration[KnownConfigNames.VersionCheckDisabled] = "true";
-        builder.Services.AddSingleton<IInteractionService>(interactionService);
         builder.Services.AddSingleton<IUserSecretsManager>(userSecretsManager);
 
         var web = builder.AddResource(new TestHttpResource("web"))
@@ -434,21 +405,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         await app.StartAsync();
 
         var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
-        var commandTask = app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.ConfigureTrackedBrowserCommandName);
-        var interaction = await interactionService.Interactions.Reader.ReadAsync().DefaultTimeout();
-
-        var saveToUserSecrets = interaction.Inputs["saveToUserSecrets"];
-        Assert.True(saveToUserSecrets.Disabled);
-        Assert.Null(saveToUserSecrets.Value);
-        Assert.Equal(BrowserCommandStrings.ConfigureTrackedBrowserSaveToUserSecretsDescriptionNotConfigured, saveToUserSecrets.Description);
-
-        interaction.Inputs["scope"].Value = "resource";
-        interaction.Inputs["browser"].Value = "msedge";
-        interaction.Inputs["userDataMode"].Value = nameof(BrowserUserDataMode.Shared);
-        interaction.Inputs["profile"].Value = "Default";
-        interaction.CompletionTcs.SetResult(InteractionResult.Ok(interaction.Inputs));
-
-        var result = await commandTask.DefaultTimeout();
+        var arguments = CreateConfigureArguments("resource", "msedge", nameof(BrowserUserDataMode.Shared), "Default");
+        var result = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.ConfigureTrackedBrowserCommandName, arguments);
 
         Assert.True(result.Success);
         Assert.Equal(string.Format(CultureInfo.CurrentCulture, BrowserCommandStrings.ConfigureTrackedBrowserApplied, "web"), result.Message);
@@ -467,10 +425,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     public async Task WithBrowserLogs_ConfigureCommandDoesNotOverrideExplicitBuilderSettings()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-        var interactionService = new TestInteractionService();
         var userSecretsManager = new RecordingUserSecretsManager();
         builder.Configuration[KnownConfigNames.VersionCheckDisabled] = "true";
-        builder.Services.AddSingleton<IInteractionService>(interactionService);
         builder.Services.AddSingleton<IUserSecretsManager>(userSecretsManager);
 
         var web = builder.AddResource(new TestHttpResource("web"))
@@ -489,16 +445,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         await app.StartAsync();
 
         var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
-        var commandTask = app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.ConfigureTrackedBrowserCommandName);
-        var interaction = await interactionService.Interactions.Reader.ReadAsync().DefaultTimeout();
-
-        interaction.Inputs["scope"].Value = "resource";
-        interaction.Inputs["browser"].Value = "msedge";
-        interaction.Inputs["userDataMode"].Value = nameof(BrowserUserDataMode.Shared);
-        interaction.Inputs["profile"].Value = "__aspire_browser_default__";
-        interaction.CompletionTcs.SetResult(InteractionResult.Ok(interaction.Inputs));
-
-        var result = await commandTask.DefaultTimeout();
+        var arguments = CreateConfigureArguments("resource", "msedge", nameof(BrowserUserDataMode.Shared), "__aspire_browser_default__", saveToUserSecrets: "true");
+        var result = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.ConfigureTrackedBrowserCommandName, arguments);
 
         Assert.True(result.Success);
         Assert.Equal("msedge", userSecretsManager.Secrets[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:web:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}"]);
@@ -515,10 +463,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     public async Task WithBrowserLogs_ConfigureCommandSavesGlobalSettingsAndClearsProfile()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-        var interactionService = new TestInteractionService();
         var userSecretsManager = new RecordingUserSecretsManager();
         builder.Configuration[KnownConfigNames.VersionCheckDisabled] = "true";
-        builder.Services.AddSingleton<IInteractionService>(interactionService);
         builder.Services.AddSingleton<IUserSecretsManager>(userSecretsManager);
         builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.ProfileConfigurationKey}"] = "Profile 1";
 
@@ -538,16 +484,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         await app.StartAsync();
 
         var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
-        var commandTask = app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.ConfigureTrackedBrowserCommandName);
-        var interaction = await interactionService.Interactions.Reader.ReadAsync().DefaultTimeout();
-
-        interaction.Inputs["scope"].Value = "global";
-        interaction.Inputs["browser"].Value = "chrome";
-        interaction.Inputs["userDataMode"].Value = nameof(BrowserUserDataMode.Isolated);
-        interaction.Inputs["profile"].Value = "__aspire_browser_default__";
-        interaction.CompletionTcs.SetResult(InteractionResult.Ok(interaction.Inputs));
-
-        var result = await commandTask.DefaultTimeout();
+        var arguments = CreateConfigureArguments("global", "chrome", nameof(BrowserUserDataMode.Isolated), "__aspire_browser_default__", saveToUserSecrets: "true");
+        var result = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.ConfigureTrackedBrowserCommandName, arguments);
 
         Assert.True(result.Success);
         Assert.Equal("chrome", userSecretsManager.Secrets[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}"]);
@@ -566,12 +504,10 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     public async Task WithBrowserLogs_ConfigureCommandDoesNotApplyRuntimeSettingsWhenUserSecretSaveFails()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-        var interactionService = new TestInteractionService();
         var userSecretsManager = new RecordingUserSecretsManager();
         builder.Configuration[KnownConfigNames.VersionCheckDisabled] = "true";
         builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.BrowserConfigurationKey}"] = "chrome";
         builder.Configuration[$"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}"] = nameof(BrowserUserDataMode.Shared);
-        builder.Services.AddSingleton<IInteractionService>(interactionService);
         builder.Services.AddSingleton<IUserSecretsManager>(userSecretsManager);
 
         var userDataModeKey = $"{BrowserLogsBuilderExtensions.BrowserLogsConfigurationSectionName}:web:{BrowserLogsBuilderExtensions.UserDataModeConfigurationKey}";
@@ -593,16 +529,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         await app.StartAsync();
 
         var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
-        var commandTask = app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.ConfigureTrackedBrowserCommandName);
-        var interaction = await interactionService.Interactions.Reader.ReadAsync().DefaultTimeout();
-
-        interaction.Inputs["scope"].Value = "resource";
-        interaction.Inputs["browser"].Value = "msedge";
-        interaction.Inputs["userDataMode"].Value = nameof(BrowserUserDataMode.Isolated);
-        interaction.Inputs["profile"].Value = "__aspire_browser_default__";
-        interaction.CompletionTcs.SetResult(InteractionResult.Ok(interaction.Inputs));
-
-        var result = await commandTask.DefaultTimeout();
+        var arguments = CreateConfigureArguments("resource", "msedge", nameof(BrowserUserDataMode.Isolated), "__aspire_browser_default__", saveToUserSecrets: "true");
+        var result = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.ConfigureTrackedBrowserCommandName, arguments);
 
         Assert.False(result.Success);
         Assert.Contains(userDataModeKey, result.Message, StringComparison.Ordinal);
@@ -621,10 +549,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     public async Task WithBrowserLogs_ConfigureCommandRefreshesAllBrowserLogsResourcesForGlobalSettings()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-        var interactionService = new TestInteractionService();
         var userSecretsManager = new RecordingUserSecretsManager();
         builder.Configuration[KnownConfigNames.VersionCheckDisabled] = "true";
-        builder.Services.AddSingleton<IInteractionService>(interactionService);
         builder.Services.AddSingleton<IUserSecretsManager>(userSecretsManager);
 
         var web = builder.AddResource(new TestHttpResource("web"))
@@ -656,16 +582,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         var browserLogsResources = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().ToArray();
         var webBrowserLogsResource = browserLogsResources.Single(resource => resource.ParentResource.Name == "web");
         var adminBrowserLogsResource = browserLogsResources.Single(resource => resource.ParentResource.Name == "admin");
-        var commandTask = app.ResourceCommands.ExecuteCommandAsync(webBrowserLogsResource, BrowserLogsBuilderExtensions.ConfigureTrackedBrowserCommandName);
-        var interaction = await interactionService.Interactions.Reader.ReadAsync().DefaultTimeout();
-
-        interaction.Inputs["scope"].Value = "global";
-        interaction.Inputs["browser"].Value = "chrome";
-        interaction.Inputs["userDataMode"].Value = nameof(BrowserUserDataMode.Isolated);
-        interaction.Inputs["profile"].Value = "__aspire_browser_default__";
-        interaction.CompletionTcs.SetResult(InteractionResult.Ok(interaction.Inputs));
-
-        var result = await commandTask.DefaultTimeout();
+        var arguments = CreateConfigureArguments("global", "chrome", nameof(BrowserUserDataMode.Isolated), "__aspire_browser_default__");
+        var result = await app.ResourceCommands.ExecuteCommandAsync(webBrowserLogsResource, BrowserLogsBuilderExtensions.ConfigureTrackedBrowserCommandName, arguments);
 
         Assert.True(result.Success);
 
@@ -681,10 +599,8 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     public async Task WithBrowserLogs_ConfigureCommandValidatesEffectiveConfigurationBeforeSaving()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
-        var interactionService = new TestInteractionService();
         var userSecretsManager = new RecordingUserSecretsManager();
         builder.Configuration[KnownConfigNames.VersionCheckDisabled] = "true";
-        builder.Services.AddSingleton<IInteractionService>(interactionService);
         builder.Services.AddSingleton<IUserSecretsManager>(userSecretsManager);
 
         var web = builder.AddResource(new TestHttpResource("web"))
@@ -703,19 +619,10 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
         await app.StartAsync();
 
         var browserLogsResource = app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>().Single();
-        var commandTask = app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.ConfigureTrackedBrowserCommandName);
-        var interaction = await interactionService.Interactions.Reader.ReadAsync().DefaultTimeout();
-
-        interaction.Inputs["scope"].Value = "resource";
-        interaction.Inputs["browser"].Value = "chrome";
-        interaction.Inputs["userDataMode"].Value = nameof(BrowserUserDataMode.Isolated);
-        interaction.Inputs["profile"].Value = "__aspire_browser_default__";
-        interaction.CompletionTcs.SetResult(InteractionResult.Ok(interaction.Inputs));
-
-        var result = await commandTask.DefaultTimeout();
+        var arguments = CreateConfigureArguments("resource", "chrome", nameof(BrowserUserDataMode.Isolated), "__aspire_browser_default__");
+        var result = await app.ResourceCommands.ExecuteCommandAsync(browserLogsResource, BrowserLogsBuilderExtensions.ConfigureTrackedBrowserCommandName, arguments);
 
         Assert.False(result.Success);
-        Assert.Contains("Profiles can only be selected", result.Message, StringComparison.Ordinal);
         Assert.Empty(userSecretsManager.Secrets);
         Assert.Empty(userSecretsManager.DeletedSecrets);
 
@@ -1704,6 +1611,20 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     }
 
     private sealed class TestHttpResource(string name) : Resource(name), IResourceWithEndpoints;
+
+#pragma warning disable ASPIREINTERACTION001
+    private static InteractionInputCollection CreateConfigureArguments(string scope, string browser, string userDataMode, string profile, string? saveToUserSecrets = null)
+    {
+        return new InteractionInputCollection(
+        [
+            new InteractionInput { Name = "scope", InputType = InputType.Choice, Value = scope },
+            new InteractionInput { Name = "browser", InputType = InputType.Choice, Value = browser },
+            new InteractionInput { Name = "userDataMode", InputType = InputType.Choice, Value = userDataMode },
+            new InteractionInput { Name = "profile", InputType = InputType.Choice, Value = profile },
+            new InteractionInput { Name = "saveToUserSecrets", InputType = InputType.Boolean, Value = saveToUserSecrets },
+        ]);
+    }
+#pragma warning restore ASPIREINTERACTION001
 
     private static bool HasProperty(CustomResourceSnapshot snapshot, string name, object expectedValue) =>
         snapshot.Properties.Any(property => property.Name == name && Equals(property.Value, expectedValue));

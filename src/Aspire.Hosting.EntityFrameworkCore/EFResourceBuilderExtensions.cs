@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREDOTNETTOOL
+#pragma warning disable ASPIREINTERACTION001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.EntityFrameworkCore;
@@ -639,7 +640,17 @@ public static class EFResourceBuilderExtensions
                 Description = "Create a new migration. Note: The target project will need to be recompiled after adding a migration.",
                 IconName = "Add",
                 IconVariant = IconVariant.Regular,
-                UpdateState = context => GetCommandState(context, migrationResource)
+                UpdateState = context => GetCommandState(context, migrationResource),
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "name",
+                        InputType = InputType.Text,
+                        Label = "Migration Name",
+                        Placeholder = "e.g. InitialCreate"
+                    }
+                ]
             });
 
         migrationBuilder.WithCommand(
@@ -795,27 +806,12 @@ public static class EFResourceBuilderExtensions
             waitForDependencies: false,
             async (executor, logger, interaction) =>
             {
-                string migrationName;
-                if (interaction == null || !interaction.IsAvailable)
+                // The migration name is provided via the command argument. When not specified
+                // (e.g. non-interactive mode), fall back to a timestamp-based name.
+                var migrationName = context.Arguments.GetString("name");
+                if (string.IsNullOrWhiteSpace(migrationName))
                 {
                     migrationName = $"Migration_{DateTime.UtcNow:yyyyMMddHHmmss}";
-                }
-                else
-                {
-                    var inputResult = await interaction.PromptInputAsync(
-                        title: "Add Migration",
-                        message: "Enter the name for the new migration.",
-                        inputLabel: "Migration Name",
-                        placeHolder: "e.g. InitialCreate",
-                        cancellationToken: context.CancellationToken).ConfigureAwait(false);
-
-                    if (inputResult.Canceled || string.IsNullOrWhiteSpace(inputResult.Data?.Value))
-                    {
-                        // Throwing OperationCanceledException lets the wrapper handle state update
-                        throw new OperationCanceledException();
-                    }
-
-                    migrationName = inputResult.Data.Value;
                 }
 
                 var result = await executor.AddMigrationAsync(
