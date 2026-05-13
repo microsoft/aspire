@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "General JavaScript framework docs improvement (adds code examples to existing JavaScript integration docs); no specific 13.4 changelog entry match",
+  "mergedAt": "2026-05-13T12:46:35Z",
+  "number": 932,
+  "runDate": "2026-05-13T15:02:10Z",
+  "status": "excluded",
+  "title": "Add JavaScript framework docs samples"
+}
