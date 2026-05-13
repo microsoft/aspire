@@ -69,10 +69,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
     {
         var directory = context.TargetDirectory;
         var language = context.Language;
-        var appHostFileName = language.AppHostFileName ?? throw new NotSupportedException($"AppHost file not defined for language: {language.LanguageId}");
         var scaffoldDirectory = GetScaffoldDirectory(directory, language);
-        var appHostRelativePath = PathNormalizer.NormalizePathForStorage(
-            Path.GetRelativePath(directory.FullName, Path.Combine(scaffoldDirectory.FullName, appHostFileName)));
 
         // Step 1: Resolve SDK and package strategy
         var sdkVersion = string.IsNullOrWhiteSpace(context.SdkVersion)
@@ -138,6 +135,7 @@ internal sealed class ScaffoldingService : IScaffoldingService
             scaffoldDirectory.FullName,
             context.ProjectName,
             cancellationToken);
+        var appHostRelativePath = GetScaffoldedAppHostRelativePath(directory, scaffoldDirectory, language, scaffoldFiles.Keys);
 
         var conflictingFiles = GetConflictingScaffoldFiles(scaffoldDirectory.FullName, scaffoldFiles.Keys);
         if (conflictingFiles.Count > 0)
@@ -303,6 +301,21 @@ internal sealed class ScaffoldingService : IScaffoldingService
         }
 
         return serializedPackageJson;
+    }
+
+    internal static string GetScaffoldedAppHostRelativePath(
+        DirectoryInfo rootDirectory,
+        DirectoryInfo scaffoldDirectory,
+        LanguageInfo language,
+        IEnumerable<string> scaffoldFileNames)
+    {
+        var appHostFileName = scaffoldFileNames.FirstOrDefault(fileName =>
+            language.MatchesFile(Path.GetFileName(fileName)));
+
+        appHostFileName ??= language.AppHostFileName ?? throw new NotSupportedException($"AppHost file not defined for language: {language.LanguageId}");
+
+        return PathNormalizer.NormalizePathForStorage(
+            Path.GetRelativePath(rootDirectory.FullName, Path.Combine(scaffoldDirectory.FullName, appHostFileName)));
     }
 
     private static JsonObject EnsureJsonObject(JsonObject parent, string propertyName)

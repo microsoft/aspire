@@ -113,6 +113,50 @@ public class ScaffoldingServiceTests
     }
 
     [Fact]
+    public void GetScaffoldedAppHostRelativePath_UsesActualScaffoldedFile_WhenDefaultFileNameDiffers()
+    {
+        var rootDirectory = Directory.CreateTempSubdirectory();
+
+        try
+        {
+            var relativePath = ScaffoldingService.GetScaffoldedAppHostRelativePath(
+                rootDirectory,
+                rootDirectory,
+                s_typeScriptLanguage,
+                ["apphost.ts"]);
+
+            Assert.Equal("apphost.ts", relativePath);
+        }
+        finally
+        {
+            rootDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void GetScaffoldedAppHostRelativePath_UsesNestedActualScaffoldedFile_ForBrownfieldTypeScript()
+    {
+        var rootDirectory = Directory.CreateTempSubdirectory();
+
+        try
+        {
+            var scaffoldDirectory = Directory.CreateDirectory(Path.Combine(rootDirectory.FullName, ScaffoldingService.BrownfieldTypeScriptAppHostDirectoryName));
+
+            var relativePath = ScaffoldingService.GetScaffoldedAppHostRelativePath(
+                rootDirectory,
+                scaffoldDirectory,
+                s_typeScriptLanguage,
+                ["apphost.ts"]);
+
+            Assert.Equal("aspire-apphost/apphost.ts", relativePath);
+        }
+        finally
+        {
+            rootDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public void GetConflictingScaffoldFiles_IgnoresMergeableFilesButReturnsOtherExistingFiles()
     {
         var rootDirectory = Directory.CreateTempSubdirectory();
