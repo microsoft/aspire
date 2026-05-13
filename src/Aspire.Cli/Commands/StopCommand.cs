@@ -221,7 +221,10 @@ internal sealed class StopCommand : BaseCommand
                     _logger.LogDebug("Stopping AppHost process tree via DCP (root CLI PID {Pid})", cliPid);
                     // CliStartedAt is recorded with second-level precision, so validate it locally with tolerance
                     // instead of passing it to DCP's millisecond-precision process-start-time option.
-                    await StopProcessTreeWithDcpAsync(cliPid, appHostInfo.CliStartedAt, includeStartTime: false, cancellationToken).ConfigureAwait(false);
+                    if (!await TryStopProcessTreeWithDcpAsync(cliPid, appHostInfo.CliStartedAt, includeStartTime: false, cancellationToken).ConfigureAwait(false))
+                    {
+                        ForceKillProcess(appHostInfo.ProcessId, appHostInfo.StartedAt);
+                    }
                 }
                 else
                 {
@@ -256,7 +259,10 @@ internal sealed class StopCommand : BaseCommand
                 {
                     if (OperatingSystem.IsWindows())
                     {
-                        await StopProcessTreeWithDcpAsync(appHostPid, appHostInfo.StartedAt, includeStartTime: true, cancellationToken).ConfigureAwait(false);
+                        if (!await TryStopProcessTreeWithDcpAsync(appHostPid, appHostInfo.StartedAt, includeStartTime: true, cancellationToken).ConfigureAwait(false))
+                        {
+                            ForceKillProcess(appHostPid, appHostInfo.StartedAt);
+                        }
                     }
                     else
                     {
@@ -383,24 +389,26 @@ internal sealed class StopCommand : BaseCommand
         ProcessSignaler.RequestGracefulShutdown(pid, startTime, _logger);
     }
 
-    private async Task StopProcessTreeWithDcpAsync(int pid, DateTimeOffset? startTime, bool includeStartTime, CancellationToken cancellationToken)
+    private async Task<bool> TryStopProcessTreeWithDcpAsync(int pid, DateTimeOffset? startTime, bool includeStartTime, CancellationToken cancellationToken)
     {
         using var process = ProcessSignaler.TryGetRunningProcess(pid, startTime, _logger);
         if (process is null)
         {
-            return;
+            return true;
         }
 
         var dcpDirectory = _layoutDiscovery.GetComponentPath(LayoutComponent.Dcp, ExecutionContext.WorkingDirectory.FullName);
         if (dcpDirectory is null)
         {
-            throw new InvalidOperationException("Could not find DCP in the Aspire layout.");
+            _logger.LogWarning("Could not find DCP in the Aspire layout.");
+            return false;
         }
 
         var dcpPath = BundleDiscovery.GetDcpExecutablePath(dcpDirectory);
         if (!File.Exists(dcpPath))
         {
-            throw new InvalidOperationException($"Could not find DCP executable at '{dcpPath}'.");
+            _logger.LogWarning("Could not find DCP executable at '{DcpPath}'.", dcpPath);
+            return false;
         }
 
         // Ensure we only stop the target process and not all children to allow DCP to avoid accidentally killing the child DCP instance
@@ -436,8 +444,11 @@ internal sealed class StopCommand : BaseCommand
 
         if (exitCode != 0)
         {
-            throw new InvalidOperationException($"DCP stop-process-tree exited with code {exitCode}.");
+            _logger.LogWarning("DCP stop-process-tree exited with code {ExitCode}.", exitCode);
+            return false;
         }
+
+        return true;
     }
 
     private static string FormatDcpProcessStartTime(DateTimeOffset startTime)
