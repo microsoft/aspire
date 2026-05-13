@@ -146,7 +146,7 @@ PARAMETERS:
     -InstallExtension           Install VS Code extension along with the CLI
     -UseInsiders                Install extension to VS Code Insiders instead of VS Code (requires -InstallExtension)
     -SkipPath                   Do not add the install path to PATH environment variable (useful for portable installs)
-    -Uninstall                  Remove the script-installed CLI, PATH entry, stale channel config, and PR hives
+    -Uninstall                  Remove the script-installed CLI, PATH entry, and PR hives
     -KeepArchive                Keep downloaded archive files and temporary directory after installation
     -Help                       Show this help message
 
@@ -950,21 +950,6 @@ function Remove-AspireCliScriptInstall {
 
     $resolvedInstallPath = Get-InstallPath -InstallPath $InstallPath
     $cliPath = Get-CliExecutablePath -DestinationPath $resolvedInstallPath -OS $targetOS
-
-    if (Test-Path $cliPath -PathType Leaf) {
-        if ($PSCmdlet.ShouldProcess("global Aspire configuration", "Delete channel setting")) {
-            $configDeleteOutput = (& $cliPath config delete channel -g 2>&1 | Out-String).Trim()
-            if ($LASTEXITCODE -eq 0) {
-                Write-Message "Removed global channel setting" -Level Success
-            }
-            elseif (-not [string]::IsNullOrWhiteSpace($configDeleteOutput)) {
-                Write-Message "Could not remove global channel setting: $configDeleteOutput" -Level Warning
-            }
-        }
-    }
-    else {
-        Write-Message "If a stale global channel remains, run 'aspire config delete -g channel' with another Aspire CLI install." -Level Info
-    }
 
     if ((Test-Path $cliPath -PathType Leaf) -and $PSCmdlet.ShouldProcess($cliPath, "Delete Aspire CLI executable")) {
         Remove-Item -Path $cliPath -Force -ErrorAction Stop

@@ -15,11 +15,11 @@ internal sealed class HivesCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.ToolsAndConfiguration;
 
-    public HivesCommand(IConfigurationService configurationService, IInteractionService interactionService, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, AspireCliTelemetry telemetry)
+    public HivesCommand(IInteractionService interactionService, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, AspireCliTelemetry telemetry)
         : base("hives", "Manage Aspire CLI package hives.", features, updateNotifier, executionContext, interactionService, telemetry)
     {
         Subcommands.Add(new ListCommand(interactionService, features, updateNotifier, executionContext, telemetry));
-        Subcommands.Add(new DeleteCommand(configurationService, interactionService, features, updateNotifier, executionContext, telemetry));
+        Subcommands.Add(new DeleteCommand(interactionService, features, updateNotifier, executionContext, telemetry));
     }
 
     protected override bool UpdateNotificationsEnabled => false;
@@ -75,12 +75,9 @@ internal sealed class HivesCommand : BaseCommand
             Description = "The hive name to delete."
         };
 
-        private readonly IConfigurationService _configurationService;
-
-        public DeleteCommand(IConfigurationService configurationService, IInteractionService interactionService, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, AspireCliTelemetry telemetry)
+        public DeleteCommand(IInteractionService interactionService, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, AspireCliTelemetry telemetry)
             : base("delete", "Delete an Aspire CLI package hive.", features, updateNotifier, executionContext, interactionService, telemetry)
         {
-            _configurationService = configurationService;
             Arguments.Add(s_nameArgument);
         }
 
@@ -95,43 +92,37 @@ internal sealed class HivesCommand : BaseCommand
                 return Task.FromResult(ExitCodeConstants.InvalidCommand);
             }
 
-            return ExecuteAsync(name, cancellationToken);
+            return ExecuteAsync(name);
         }
 
-        private async Task<int> ExecuteAsync(string name, CancellationToken cancellationToken)
+        private Task<int> ExecuteAsync(string name)
         {
             if (!IsValidHiveName(name))
             {
                 InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, "Invalid hive name '{0}'.", name));
-                return ExitCodeConstants.InvalidCommand;
+                return Task.FromResult(ExitCodeConstants.InvalidCommand);
             }
 
             var hiveDirectory = new DirectoryInfo(Path.Combine(ExecutionContext.HivesDirectory.FullName, name));
             if (!hiveDirectory.Exists)
             {
                 InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, "Hive '{0}' was not found.", name));
-                return ExitCodeConstants.ConfigNotFound;
+                return Task.FromResult(ExitCodeConstants.ConfigNotFound);
             }
 
             try
             {
                 hiveDirectory.Delete(recursive: true);
 
-                var configuredChannel = await _configurationService.GetConfigurationAsync("channel", cancellationToken);
-                if (string.Equals(configuredChannel, name, StringComparison.OrdinalIgnoreCase))
-                {
-                    await _configurationService.DeleteConfigurationAsync("channel", isGlobal: true, cancellationToken);
-                }
-
                 InteractionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, "Deleted Aspire CLI package hive '{0}'.", name));
-                return ExitCodeConstants.Success;
+                return Task.FromResult(ExitCodeConstants.Success);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
             {
                 var errorMessage = string.Format(CultureInfo.CurrentCulture, "Failed to delete Aspire CLI package hive '{0}': {1}", name, ex.Message);
                 Telemetry.RecordError(errorMessage, ex);
                 InteractionService.DisplayError(errorMessage);
-                return ExitCodeConstants.InvalidCommand;
+                return Task.FromResult(ExitCodeConstants.InvalidCommand);
             }
         }
 
