@@ -73,6 +73,16 @@ public static partial class KubernetesHelmChartExtensions
         var environment = builder.Resource;
         var resource = new KubernetesHelmChartResource(name, environment, chartReference, chartVersion);
 
+        // Helm chart installation is a publish/deploy-time concern only. In run mode the
+        // parent KubernetesEnvironmentResource isn't added to the model (see
+        // AddKubernetesEnvironment), so any helm-install step that depends on
+        // helm-deploy-{env.Name} would fail step validation with a missing-dependency error.
+        // Mirror AddIngress/AddGateway and skip model registration entirely in run mode.
+        if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
+        {
+            return builder.ApplicationBuilder.CreateResourceBuilder(resource);
+        }
+
         var chartBuilder = builder.ApplicationBuilder.AddResource(resource);
 
         chartBuilder.WithAnnotation(new PipelineStepAnnotation(_ =>
