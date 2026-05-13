@@ -222,7 +222,7 @@ internal sealed class AppHostConnectionResolver(
 
     /// <summary>
     /// Displays an informational message, prompts the user to select from available AppHost connections,
-    /// and displays the selected AppHost.
+    /// and displays the selected AppHost with a success indicator.
     /// </summary>
     private async Task<IAppHostAuxiliaryBackchannel?> PromptForAppHostSelectionAsync(
         List<IAppHostAuxiliaryBackchannel> candidateConnections,
@@ -251,6 +251,8 @@ internal sealed class AppHostConnectionResolver(
             cancellationToken: cancellationToken);
 
         var selectedConnection = choices.FirstOrDefault(c => c.Display == selectedDisplay).Connection;
+
+        interactionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.UsingAppHost, selectedDisplay));
 
         return selectedConnection;
     }
