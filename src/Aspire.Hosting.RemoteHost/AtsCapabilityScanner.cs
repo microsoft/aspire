@@ -3336,7 +3336,8 @@ public static class AtsCapabilityScanner
     /// <param name="memberName">The documentation member name (e.g., "T:Namespace.TypeName" or "P:Namespace.TypeName.Property").</param>
     public static string? GetXmlDocSummary(XDocument? xmlDoc, string memberName)
     {
-        return GetXmlDocumentation(xmlDoc, memberName)?.Summary;
+        var memberElement = FindXmlDocumentationMember(xmlDoc, memberName);
+        return FormatXmlDocumentationElement(memberElement?.Element("summary"));
     }
 
     private static AtsDocumentationInfo? GetXmlDocumentation(MemberInfo? member, string? fallbackSummary = null)

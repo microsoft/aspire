@@ -29,9 +29,7 @@ public class TestConfigDto
     /// </summary>
     public string? OptionalField { get; set; }
 
-    /// <summary>
-    /// The default test configuration.
-    /// </summary>
+    /// <ats-summary>The default test configuration.</ats-summary>
     [AspireValue("TestConfigs")]
     public static readonly TestConfigDto Default = new()
     {
