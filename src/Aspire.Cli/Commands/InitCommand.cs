@@ -134,10 +134,6 @@ internal sealed class InitCommand : BaseCommand
         if (dropResult != ExitCodeConstants.Success)
         {
             InteractionService.DisplayError(InteractionServiceStrings.ProjectCouldNotBeCreated);
-            InteractionService.DisplayMessage(
-                KnownEmojis.PageFacingUp,
-                string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, MarkupHelpers.SafeFileLink(InteractionService, ExecutionContext.LogFilePath)),
-                allowMarkup: true);
             return dropResult;
         }
 
@@ -392,7 +388,7 @@ internal sealed class InitCommand : BaseCommand
         if (installOutcome.ExitCode != 0)
         {
             InteractionService.DisplayLines(installOutcome.OutputLines);
-            InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.TemplateInstallationFailed, installOutcome.ExitCode, _executionContext.LogFilePath));
+            InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.TemplateInstallationFailed, installOutcome.ExitCode));
             return ExitCodeConstants.FailedToInstallTemplates;
         }
 

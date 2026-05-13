@@ -113,7 +113,7 @@ internal sealed class ExportCommand : BaseCommand
         }
 
         var dashboardApi = await TelemetryCommandHelpers.GetDashboardApiAsync(
-            _connectionResolver, _interactionService, _httpClientFactory, _logger, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: false, ExecutionContext.LogFilePath, cancellationToken);
+            _connectionResolver, _interactionService, _httpClientFactory, _logger, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: false, cancellationToken);
 
         if (!dashboardApi.Success)
         {
@@ -133,7 +133,7 @@ internal sealed class ExportCommand : BaseCommand
         {
             _logger.LogError(ex, "Failed to export telemetry data from dashboard");
             var errorInfo = await TelemetryCommandHelpers.FormatTelemetryErrorAsync(ex, dashboardApi.BaseUrl!, true, _httpClientFactory, _logger, cancellationToken);
-            TelemetryCommandHelpers.DisplayTelemetryError(_interactionService, errorInfo, ExecutionContext.LogFilePath);
+            TelemetryCommandHelpers.DisplayTelemetryError(_interactionService, errorInfo);
             return ExitCodeConstants.DashboardFailure;
         }
         catch (Exception ex)

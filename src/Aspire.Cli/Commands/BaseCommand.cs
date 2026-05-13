@@ -60,6 +60,17 @@ internal abstract class BaseCommand : Command
                 exitCode = ExitCodeConstants.MissingRequiredArgument;
             }
 
+            // Display the CLI log file path on non-zero exit codes so the user knows
+            // where to find diagnostic details. Suppress for user-input errors where
+            // the log wouldn't contain useful context (e.g., missing required arguments).
+            if (exitCode != ExitCodeConstants.Success && exitCode != ExitCodeConstants.MissingRequiredArgument)
+            {
+                interactionService.DisplayMessage(
+                    KnownEmojis.PageFacingUp,
+                    string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, MarkupHelpers.SafeFileLink(interactionService, executionContext.LogFilePath)),
+                    allowMarkup: true);
+            }
+
             if (UpdateNotificationsEnabled && features.IsFeatureEnabled(KnownFeatures.UpdateNotificationsEnabled, true))
             {
                 try

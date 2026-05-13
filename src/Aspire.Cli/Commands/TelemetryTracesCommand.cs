@@ -97,7 +97,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         }
 
         var dashboardApi = await TelemetryCommandHelpers.GetDashboardApiAsync(
-            _connectionResolver, _interactionService, _httpClientFactory, _logger, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: true, ExecutionContext.LogFilePath, cancellationToken);
+            _connectionResolver, _interactionService, _httpClientFactory, _logger, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: true, cancellationToken);
 
         if (!dashboardApi.Success)
         {
@@ -119,7 +119,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         {
             _logger.LogError(ex, "Failed to fetch traces from Dashboard API");
             var errorInfo = await TelemetryCommandHelpers.FormatTelemetryErrorAsync(ex, dashboardApi.BaseUrl!, dashboardUrl is not null, _httpClientFactory, _logger, cancellationToken);
-            TelemetryCommandHelpers.DisplayTelemetryError(_interactionService, errorInfo, ExecutionContext.LogFilePath);
+            TelemetryCommandHelpers.DisplayTelemetryError(_interactionService, errorInfo);
             return ExitCodeConstants.DashboardFailure;
         }
     }

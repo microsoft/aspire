@@ -372,10 +372,6 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         if (hasErrors)
         {
             _interactionService.DisplayMessage(KnownEmojis.Warning, AgentCommandStrings.ConfigurationCompletedWithErrors);
-            _interactionService.DisplayMessage(
-                KnownEmojis.PageFacingUp,
-                string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, MarkupHelpers.SafeFileLink(_interactionService, ExecutionContext.LogFilePath)),
-                allowMarkup: true);
         }
         else
         {

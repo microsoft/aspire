@@ -446,10 +446,6 @@ internal sealed class DashboardRunCommand : BaseCommand
                 : DashboardCommandStrings.DashboardStartTimedOut;
 
             _interactionService.DisplayError(exitMessage);
-            _interactionService.DisplayMessage(
-                KnownEmojis.PageFacingUp,
-                string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, MarkupHelpers.SafeFileLink(_interactionService, ExecutionContext.LogFilePath)),
-                allowMarkup: true);
 
             if (!process.HasExited)
             {

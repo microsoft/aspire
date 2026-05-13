@@ -291,10 +291,6 @@ internal sealed class RunCommand : BaseCommand
                     InteractionService.DisplayLines(outputCollector.GetLines());
                 }
                 InteractionService.DisplayError(InteractionServiceStrings.ProjectCouldNotBeBuilt);
-                InteractionService.DisplayMessage(
-                    KnownEmojis.PageFacingUp,
-                    string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, MarkupHelpers.SafeFileLink(InteractionService, ExecutionContext.LogFilePath)),
-                    allowMarkup: true);
                 return await pendingRun;
             }
 
@@ -467,11 +463,6 @@ internal sealed class RunCommand : BaseCommand
             var errorMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ErrorConnectingToAppHost, ex.Message);
             Telemetry.RecordError(errorMessage, ex);
             InteractionService.DisplayError(errorMessage);
-            // Don't display raw output - it's already in the log file
-            InteractionService.DisplayMessage(
-                KnownEmojis.PageFacingUp,
-                string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, MarkupHelpers.SafeFileLink(InteractionService, ExecutionContext.LogFilePath)),
-                allowMarkup: true);
             return ExitCodeConstants.FailedToDotnetRunAppHost;
         }
         catch (ConnectionLostException) when (isExtensionHost)
@@ -486,11 +477,6 @@ internal sealed class RunCommand : BaseCommand
             var errorMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.UnexpectedErrorOccurred, ex.Message);
             Telemetry.RecordError(errorMessage, ex);
             InteractionService.DisplayError(errorMessage);
-            // Don't display raw output - it's already in the log file
-            InteractionService.DisplayMessage(
-                KnownEmojis.PageFacingUp,
-                string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, MarkupHelpers.SafeFileLink(InteractionService, ExecutionContext.LogFilePath)),
-                allowMarkup: true);
             return ExitCodeConstants.FailedToDotnetRunAppHost;
         }
         finally
