@@ -99,7 +99,9 @@ builder.AddAzureContainerAppEnvironment("my-long-env-name")
        .WithCompactResourceNaming();
 
 // Container with a volume triggers storage account creation
-builder.AddContainer("worker", "mcr.microsoft.com/dotnet/samples", "aspnetapp")
+// Use a versioned tag because the unversioned "aspnetapp" tag no longer publishes a
+// linux/amd64 manifest, which causes Azure Container Apps to reject the image.
+builder.AddContainer("worker", "mcr.microsoft.com/dotnet/samples", "aspnetapp-9.0")
        .WithVolume("data", "/app/data");
 
 builder.Build().Run();
