@@ -44,8 +44,7 @@ var api = builder.AddProject<Projects.AksDemo_ApiService>("api")
 // by Aspire's tls-fqdn-discovery pipeline step once AGC assigns the gateway its
 // <random>.fz<n>.alb.azure.com FQDN. The cert-manager.io/cluster-issuer annotation
 // then triggers cert-manager to issue a real Let's Encrypt cert via HTTP-01 against
-// that FQDN — see playground/AksDemo/k8s/README.md for the one ClusterIssuer apply
-// step that's still needed by hand.
+// that FQDN. A `letsencrypt-prod` ClusterIssuer needs to exist in the cluster.
 aks.AddGateway("storefront-gw")
    .WithLoadBalancer(publicLb)
    .WithRoute("/api", api.GetEndpoint("http"))
@@ -68,8 +67,6 @@ aks.AddGateway("admin-gw")
 // fails the next upgrade with a conflict on .webhooks[*].namespaceSelector.
 // WithForceUpgrade adds --force-conflicts which tells SSA to take over the conflicting
 // field non-destructively (no resources recreated).
-//
-// See playground/AksDemo/k8s/README.md for the post-deploy ClusterIssuer step.
 aks.AddHelmChart("cert-manager", "oci://quay.io/jetstack/charts/cert-manager", "v1.18.2")
    .WithHelmValue("crds.enabled", "true")
    .WithHelmValue("config.apiVersion", "controller.config.cert-manager.io/v1alpha1")
