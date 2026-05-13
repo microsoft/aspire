@@ -288,6 +288,18 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         if (!string.IsNullOrEmpty(sdkVersion) && IsValidSemanticVersion(sdkVersion) && sdkVersion == latestSdkPackage?.Version)
         {
             logger.LogInformation("App Host SDK is up to date.");
+
+            // Even when the SDK version itself is current, the project may still
+            // carry a stale Aspire.Hosting.AppHost PackageReference (csproj) or
+            // PackageVersion (Directory.Packages.props). The new SDK implicitly
+            // defines that PackageReference with IsImplicitlyDefined="true", so
+            // an orphan PackageVersion entry causes NU1009 at restore time, and
+            // an explicit PackageReference is now redundant. The SDK-update path
+            // already cleans these up (in UpdateSdkVersionInProjectAppHostAsync);
+            // do the same when no SDK version bump is required so a re-run of
+            // `aspire update` can recover from a partial migration.
+            // See https://github.com/microsoft/aspire/issues/15476.
+            EnqueueLegacyAppHostCleanupStepIfNeeded(context);
             return;
         }
 
@@ -302,6 +314,108 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             latestSdkPackage?.Version ?? "unknown",
             context.AppHostProjectFile);
         context.UpdateSteps.Enqueue(sdkUpdateStep);
+    }
+
+    private void EnqueueLegacyAppHostCleanupStepIfNeeded(UpdateContext context)
+    {
+        var projectFile = context.AppHostProjectFile;
+
+        // Only project-style AppHosts (.csproj/.fsproj/.vbproj) can carry these
+        // legacy references. Single-file AppHosts (.cs with #:sdk directive)
+        // never have a csproj or Directory.Packages.props to worry about.
+        if (!ProjectFileExtensions.Supported.Contains(projectFile.Extension))
+        {
+            return;
+        }
+
+        var (hasPackageReference, hasOrphanPackageVersion) = DetectLegacyAppHostReferences(projectFile);
+        if (!hasPackageReference && !hasOrphanPackageVersion)
+        {
+            return;
+        }
+
+        var step = new PackageUpdateStep(
+            UpdateCommandStrings.RemovedObsoleteAppHostPackage,
+            () => RemoveLegacyAppHostPackageReferencesAsync(projectFile, interactionService, hasPackageReference, hasOrphanPackageVersion),
+            "Aspire.Hosting.AppHost",
+            // The new SDK adds Aspire.Hosting.AppHost implicitly, so there is no
+            // user-visible "current version" to display - report it as implicit.
+            "implicit",
+            "(removed)",
+            projectFile);
+        context.UpdateSteps.Enqueue(step);
+    }
+
+    private static (bool HasPackageReference, bool HasOrphanPackageVersion) DetectLegacyAppHostReferences(FileInfo projectFile)
+    {
+        var hasPackageReference = false;
+        var hasOrphanPackageVersion = false;
+
+        try
+        {
+            var projectDocument = new XmlDocument { PreserveWhitespace = true };
+            projectDocument.Load(projectFile.FullName);
+            var projectNode = projectDocument.SelectSingleNode("/Project");
+            if (projectNode is not null)
+            {
+                hasPackageReference = projectNode.SelectSingleNode(
+                    "//PackageReference[@Include='Aspire.Hosting.AppHost']") is not null;
+            }
+        }
+        catch
+        {
+            // If we cannot parse the csproj here, leave detection to the build.
+            // The SDK migration path is the primary cleanup; this is a defence
+            // for the already-current path.
+        }
+
+        var cpmInfo = DetectCentralPackageManagement(projectFile);
+        if (cpmInfo.UsesCentralPackageManagement && cpmInfo.DirectoryPackagesPropsFile is not null)
+        {
+            try
+            {
+                var propsDocument = new XmlDocument { PreserveWhitespace = true };
+                propsDocument.Load(cpmInfo.DirectoryPackagesPropsFile.FullName);
+                hasOrphanPackageVersion = propsDocument.SelectSingleNode(
+                    "/Project/ItemGroup/PackageVersion[@Include='Aspire.Hosting.AppHost']") is not null;
+            }
+            catch
+            {
+                // Same as above.
+            }
+        }
+
+        return (hasPackageReference, hasOrphanPackageVersion);
+    }
+
+    private static async Task RemoveLegacyAppHostPackageReferencesAsync(
+        FileInfo projectFile,
+        IInteractionService interactionService,
+        bool removePackageReference,
+        bool removePackageVersion)
+    {
+        if (removePackageReference)
+        {
+            var projectDocument = new XmlDocument { PreserveWhitespace = true };
+            projectDocument.Load(projectFile.FullName);
+            var projectNode = projectDocument.SelectSingleNode("/Project");
+            if (projectNode is not null)
+            {
+                RemovePackageReference(projectNode, "Aspire.Hosting.AppHost");
+                projectDocument.Save(projectFile.FullName);
+            }
+        }
+
+        if (removePackageVersion)
+        {
+            // Reuses the same NU1009-aware cleanup the SDK migration path uses.
+            // See UpdateSdkVersionInProjectAppHostAsync for the full rationale.
+            RemovePackageVersionFromDirectoryPackagesProps(projectFile, "Aspire.Hosting.AppHost");
+        }
+
+        interactionService.DisplaySubtleMessage(UpdateCommandStrings.RemovedObsoleteAppHostPackage);
+
+        await Task.CompletedTask;
     }
 
     private static SdkMigrationInfo DetectMigrationActions(FileInfo projectFile)
