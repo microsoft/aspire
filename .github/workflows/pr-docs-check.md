@@ -764,6 +764,29 @@ pre-agent-steps:
   # The same robustness rationale applies as for `target.json` above:
   # this decision needs to be reliable across model versions, so it lives
   # in a deterministic shell step instead of relying on prompt judgment.
+  # The catalog itself lives in a standalone Python script
+  # (`.github/workflows/pr-docs-check/compute_signals.py`) with a
+  # matching unittest suite (`test_compute_signals.py`), so it can be
+  # reviewed with syntax highlighting and exercised locally with
+  # `python3 -m unittest discover -s .github/workflows/pr-docs-check -v`.
+  - name: Check out signal-computation script
+    # The `checkout:` block above made microsoft/aspire.dev the current
+    # workspace because that's where the doc PR is authored. We need a
+    # sparse, side-by-side checkout of microsoft/aspire to bring the
+    # signal-computation script into the runner. A sparse checkout keeps
+    # this fast — only `.github/workflows/pr-docs-check` is fetched.
+    #
+    # Default `ref` resolves to the trigger ref (refs/pull/<N>/merge for
+    # pull_request: closed, or the dispatcher-selected branch for
+    # workflow_dispatch). That's the correct version of the script for
+    # the merged state being analyzed.
+    uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+    with:
+      repository: microsoft/aspire
+      path: _repos/aspire
+      sparse-checkout: |
+        .github/workflows/pr-docs-check
+      sparse-checkout-cone-mode: false
   - name: Compute user-facing signals
     env:
       GH_TOKEN: ${{ steps.resolve-target-app-token.outputs.token }}
@@ -793,7 +816,10 @@ pre-agent-steps:
       # at 300 files / 3000 lines total per the GitHub API; that's fine
       # for our purposes because signal detection only needs path patterns
       # and patch hunks, and any change large enough to overflow that cap
-      # is almost certainly user-facing on path patterns alone.
+      # is almost certainly user-facing on path patterns alone. The
+      # script also emits `diff_scan_skipped_due_to_missing_patch` when
+      # the API omits a `patch` for a file matched by a diff trigger,
+      # so very-large diffs gate conservatively.
       #
       # https://docs.github.com/en/rest/pulls/pulls#list-pull-requests-files
       PR_JSON="$(mktemp)"
@@ -805,423 +831,13 @@ pre-agent-steps:
       FILE_COUNT="$(jq 'length' "${FILES_JSON}")"
       echo "Files in PR  : ${FILE_COUNT}"
 
-      # --- 2. Run signal detection in Python ------------------------------
-      # Each signal is a boolean. `triggered_signals` is the list of true
-      # signal names, `signal_count` is its length, and `recommendation`
-      # is `docs_required` iff `signal_count >= 1`, else `docs_optional`.
-      #
-      # We deliberately use Python (preinstalled on ubuntu-latest) so the
-      # regex set lives in one readable block and so a malformed regex
-      # fails the step loudly instead of being silently absorbed by a
-      # shell pipeline.
-      python3 - "${PR_JSON}" "${FILES_JSON}" "${OUT}" <<'PY'
-      import json
-      import re
-      import sys
-
-      pr_json_path, files_json_path, out_path = sys.argv[1], sys.argv[2], sys.argv[3]
-
-      with open(pr_json_path, "r", encoding="utf-8") as f:
-          pr = json.load(f)
-      with open(files_json_path, "r", encoding="utf-8") as f:
-          files = json.load(f)
-
-      pr_body = pr.get("body") or ""
-      pr_labels = [(lab.get("name") or "") for lab in (pr.get("labels") or [])]
-
-      # The signal catalog below is intentionally broad. The worst case
-      # for a false positive is a drafted docs PR a human closes
-      # (drafted PRs never auto-merge), but a false negative ships an
-      # undocumented user-facing change. Favor recall.
-
-      # ============================================================
-      # Group A: Path-pattern triggers
-      # ============================================================
-      # Each entry: (signal_name, status_filter, path_regex)
-      # status_filter is one of:
-      #   "added" — file is brand new in this PR (status == "added")
-      #   "any"   — file was added, modified, or renamed
-      #
-      # Examples of paths these patterns must match:
-      #   src/Aspire.Cli/Commands/LogsCommand.cs                -> cli_command_*
-      #   src/Aspire.Cli/Mcp/Tools/ListConsoleLogsTool.cs       -> mcp_tool_*
-      #   src/Aspire.Hosting.Redis/Aspire.Hosting.Redis.csproj  -> new_hosting_integration_project
-      #   src/Components/Aspire.StackExchange.Redis/Aspire.StackExchange.Redis.csproj -> new_client_integration_project
-      #   src/Aspire.Hosting/api/Aspire.Hosting.cs              -> public_api_surface_file_changed
-      #   src/Aspire.Dashboard/Components/Pages/Resources.razor -> dashboard_user_facing_page_changed
-      #   src/Aspire.Hosting.Redis/README.md                    -> integration_readme_changed
-      #   src/Aspire.Hosting.Redis/RedisContainerImageTags.cs   -> container_image_tags_file_changed
-      #   src/Aspire.ProjectTemplates/templates/...             -> project_template_changed
-      #   src/Aspire.Hosting.Analyzers/AppHostAnalyzer.cs       -> analyzer_source_changed
-      #   docs/list-of-diagnostics.md                           -> diagnostic_documentation_changed
-      #   src/Aspire.Hosting/ApplicationModel/KnownDefaults.cs  -> defaults_or_constants_file_changed
-      PATH_TRIGGERS = [
-          # New CLI subcommand file.
-          ("cli_command_added", "added",
-           r"^src/Aspire\.Cli/Commands/(?!BaseCommand\.cs$)(?!.*CommandBase\.cs$).+Command\.cs$"),
-          # Any change to an existing CLI subcommand file (option set,
-          # behavior, output format, confirmation prompts).
-          ("cli_command_file_changed", "any",
-           r"^src/Aspire\.Cli/Commands/(?!BaseCommand\.cs$)(?!.*CommandBase\.cs$).+Command\.cs$"),
-          # Any change to a CLI resx. These hold help text, option
-          # descriptions, prompts, and error messages the CLI prints.
-          ("cli_resource_strings_changed", "any",
-           r"^src/Aspire\.Cli/Resources/.+\.resx$"),
-          # New MCP tool file.
-          ("mcp_tool_added", "added",
-           r"^src/Aspire\.Cli/Mcp/Tools/(?!CliMcpTool\.cs$).+Tool\.cs$"),
-          # Any change to an existing MCP tool file (input schema,
-          # output shape, semantics).
-          ("mcp_tool_file_changed", "any",
-           r"^src/Aspire\.Cli/Mcp/Tools/(?!CliMcpTool\.cs$).+\.cs$"),
-          # Any new csproj under src/ — a brand-new shipping NuGet
-          # package. Covers integrations, SDKs, analyzers, etc.
-          ("new_package_added", "added",
-           r"^src/.+/[^/]+\.csproj$"),
-          # Subsets of new_package_added kept around so the prompt can
-          # name the integration type directly in the audit summary.
-          ("new_hosting_integration_project", "added",
-           r"^src/Aspire\.Hosting\.[^/]+/[^/]+\.csproj$"),
-          ("new_client_integration_project", "added",
-           r"^src/Components/Aspire\.[^/]+/[^/]+\.csproj$"),
-          # Package READMEs ship to nuget.org and are linked from
-          # docs.aspire.dev integration pages.
-          ("integration_readme_changed", "any",
-           r"^src/(Aspire\.Hosting[^/]*|Components/Aspire\.[^/]+)/README\.md$"),
-          # api/*.cs is the shipped public-API baseline. AGENTS.md says
-          # these are regenerated only at release time, so any
-          # committed diff is an explicit shipping-API change. New
-          # entries = new APIs; removed entries = breaking removals
-          # (caught separately as breaking_api_removal below).
-          ("public_api_surface_file_changed", "any",
-           r"^src/[^/]+/api/.+\.cs$"),
-          # Any dashboard page (razor / razor.cs / .cs codebehind).
-          ("dashboard_user_facing_page_changed", "any",
-           r"^src/Aspire\.Dashboard/Components/Pages/.+\.(razor|razor\.cs|cs)$"),
-          # Aspire integrations follow a `<Name>ContainerImageTags.cs`
-          # convention for pinning container image name + tag. Any
-          # change here typically means the image version moved.
-          ("container_image_tags_file_changed", "any",
-           r"^src/.+ContainerImageTags\.cs$"),
-          # Aspire project templates ship via `dotnet new aspire-*` and
-          # via `aspire init`. Any change is user-facing.
-          ("project_template_changed", "any",
-           r"^src/Aspire\.ProjectTemplates/.+$"),
-          # The user-facing diagnostic catalog page.
-          ("diagnostic_documentation_changed", "any",
-           r"^docs/list-of-diagnostics\.md$"),
-          # Roslyn analyzers — users see new build warnings/errors.
-          ("analyzer_source_changed", "any",
-           r"^src/Aspire\.(Hosting|AppHost)\.Analyzers/.+\.cs$"),
-          # Files whose name ends in `Defaults.cs` or `Constants.cs`
-          # typically hold shipping default values (timeouts, retry
-          # counts, well-known property names, image tags, etc.).
-          ("defaults_or_constants_file_changed", "any",
-           r"^src/.+(Defaults|Constants)\.cs$"),
-      ]
-
-      # ============================================================
-      # Group B: Diff-content triggers
-      # ============================================================
-      # Each entry: (signal_name, path_regex, direction, line_regex)
-      # direction is one of:
-      #   "added"   — scan added lines (those starting with "+")
-      #   "removed" — scan removed lines (those starting with "-")
-      # Both directions skip the diff file headers "+++ b/..." and
-      # "--- a/...".
-      #
-      # Examples of lines these patterns must match:
-      #   `+    private static readonly Option<string?> s_searchOption = new("--search")`
-      #     -> cli_option_added (C# 9+ target-typed `new(...)`)
-      #   `+    [Obsolete("Use AddBar instead.")]`
-      #     -> obsolete_attribute_added
-      #   `+    [Experimental("ASPIREPREVIEW001")]`
-      #     -> experimental_attribute_added
-      #   `+public sealed class FooBuilder`
-      #     -> new_public_type
-      #   `-        public static IResourceBuilder<FooResource> AddFoo(...) { throw null; }`
-      #     (inside src/Aspire.Hosting.Foo/api/Aspire.Hosting.Foo.cs)
-      #     -> breaking_api_removal
-      #   `+    public const string Tag = "8.0";`  (inside *ContainerImageTags.cs)
-      #     -> container_image_version_changed
-      #   `+    <TargetFramework>net10.0</TargetFramework>`
-      #     -> target_framework_changed
-      DIFF_TRIGGERS = [
-          # New CLI option declaration. Covers:
-          #   1. Classic explicit         `new Option<T>(...)`
-          #   2. Target-typed             `Option<T> x = new(...)`
-          #   3. Expression-bodied        `Option<T> M() => new(...)`
-          # The second branch requires `\s+\w+` after `Option<...>` so
-          # generic nesting like `IEnumerable<Option<T>>` does not match.
-          ("cli_option_added",
-           r"^src/Aspire\.Cli/.+\.cs$", "added",
-           re.compile(
-               r"(?:\bnew\s+Option<[^>]+>\s*\("
-               r"|Option<[^>]+>\s+\w+(?:\s*=|\s*\([^)]*\)\s*=>)\s*new\s*\()"
-           )),
-          # Any non-blank added or removed line in dashboard API
-          # surface files. This ensures endpoint removals or route
-          # moves that appear only as deletions still gate docs.
-          ("dashboard_api_endpoint_changed",
-           r"^src/Aspire\.Dashboard/(Api/.+\.cs|DashboardEndpointsBuilder\.cs)$",
-           "added",
-           re.compile(r"\S")),
-          ("dashboard_api_endpoint_changed",
-           r"^src/Aspire\.Dashboard/(Api/.+\.cs|DashboardEndpointsBuilder\.cs)$",
-           "removed",
-           re.compile(r"\S")),
-          # [Obsolete(...)] addition anywhere in src/. Tolerates either
-          # the shorthand attribute name or the *Attribute form.
-          ("obsolete_attribute_added",
-           r"^src/.+\.cs$", "added",
-           re.compile(r"\[Obsolete(?:Attribute)?\s*[\(\]]")),
-          # [Experimental(...)] addition — marks new preview /
-          # experimental APIs that users opt into.
-          ("experimental_attribute_added",
-           r"^src/.+\.cs$", "added",
-           re.compile(r"\[Experimental(?:Attribute)?\s*[\(\]]")),
-          # New public type declaration in non-test source. Matches
-          # class / interface / struct / record / record class /
-          # record struct / enum / delegate. Excludes paths under
-          # *.Tests/, *.UnitTests/, *.IntegrationTests/ so internal
-          # test helpers don't trip the signal.
-          ("new_public_type",
-           r"^src/(?!.*\.Tests/)(?!.*\.UnitTests/)(?!.*\.IntegrationTests/).+\.cs$",
-           "added",
-           re.compile(
-               r"^\s*public\s+"
-               r"(?:static\s+|sealed\s+|abstract\s+|partial\s+|readonly\s+|ref\s+|unsafe\s+|new\s+)*"
-               r"(?:class|interface|struct|record(?:\s+(?:class|struct))?|enum|delegate)\s+\w+"
-           )),
-          # Removed declaration line in an api/*.cs file. Because
-          # api/*.cs is append-only between releases, a removed line
-          # that declares a public/protected member is a strong
-          # breaking-change indicator. A whitespace-only reformat can
-          # also trip this — acceptable false positive under the
-          # inverted default.
-          ("breaking_api_removal",
-           r"^src/[^/]+/api/.+\.cs$", "removed",
-           re.compile(r"^\s*(?:public|protected)\s+")),
-          # Tag / Image / Registry / Digest updates inside
-          # *ContainerImageTags.cs files. Scan both added and
-          # removed lines so pure deletions still count as changes.
-          ("container_image_version_changed",
-           r"^src/.+ContainerImageTags\.cs$", "added",
-           re.compile(r"\b(?:Tag|Image|Registry|Digest)\s*=\s*\"")),
-          ("container_image_version_changed",
-           r"^src/.+ContainerImageTags\.cs$", "removed",
-           re.compile(r"\b(?:Tag|Image|Registry|Digest)\s*=\s*\"")),
-          # [DefaultValue(...)] anywhere in src/. Captures defaults
-          # declared via attribute even when the file isn't named
-          # *Defaults.cs / *Constants.cs.
-          ("default_value_attribute_changed",
-           r"^src/.+\.cs$", "added",
-           re.compile(r"\[DefaultValue(?:Attribute)?\s*\(")),
-          # TargetFramework / TargetFrameworks change in a src/
-          # csproj. Moving an integration's TFM affects which
-          # consumers can install it. Check both added and removed
-          # lines so pure removals (including removing one TFM from
-          # a multi-target list) are not missed.
-          ("target_framework_changed",
-           r"^src/.+\.csproj$", "added",
-           re.compile(r"<TargetFrameworks?>")),
-          ("target_framework_changed",
-           r"^src/.+\.csproj$", "removed",
-           re.compile(r"<TargetFrameworks?>")),
-      ]
-
-      # ============================================================
-      # Group C: PR-body triggers
-      # ============================================================
-      # Author-supplied prose signals.
-      #
-      # Examples of bodies these match:
-      #   "## User-facing usage\n```bash\naspire logs --search ..."
-      #     -> pr_body_has_user_facing_section AND
-      #        pr_body_has_cli_flag_mention
-      #   "Breaking change: removes deprecated AddFoo overload."
-      #     -> pr_body_has_breaking_change_marker AND
-      #        pr_body_has_deprecation_marker
-      #   "Fixes CVE-2026-12345 in the dashboard API."
-      #     -> pr_body_has_security_marker
-      BODY_TRIGGERS = {
-          # Common headers in PR bodies that signal user-facing intent.
-          "pr_body_has_user_facing_section": re.compile(
-              r"(?im)^\s{0,3}#{1,6}\s*(user[-_ ]?facing|usage|how\s+to\s+use|breaking\s+change)\b"
-          ),
-          # Any long-form CLI flag mention (e.g. --search, --dashboard-url).
-          "pr_body_has_cli_flag_mention": re.compile(
-              r"(?<![A-Za-z0-9])--[a-z][a-z0-9-]+\b"
-          ),
-          # The literal phrase "breaking change" anywhere in the body.
-          "pr_body_has_breaking_change_marker": re.compile(
-              r"(?i)\bbreaking[\s\-]?change\b"
-          ),
-          # Security advisories: CVE-YYYY-N, GHSA-xxxx-xxxx-xxxx, or
-          # explicit "security fix" / "security advisory" /
-          # "vulnerability" phrasing.
-          "pr_body_has_security_marker": re.compile(
-              r"(?i)("
-              r"\bCVE-\d{4}-\d+\b"
-              r"|\bGHSA(?:-[a-z0-9]{4,}){3}\b"
-              r"|\bsecurity\s+(?:fix|advisory|patch|issue|update|vulnerab\w+)\b"
-              r"|\bvulnerab\w+"
-              r")"
-          ),
-          # Deprecation phrasing: `deprecat*`, `obsolet*`, or
-          # "<api> has been removed/sunset/retired" patterns.
-          "pr_body_has_deprecation_marker": re.compile(
-              r"(?i)("
-              r"\bdeprecat\w+"
-              r"|\bobsolet\w+"
-              r"|\b(?:api|method|class|property|option|flag|package|integration|attribute|extension)s?\s+(?:is|are|has\s+been|have\s+been|were|will\s+be|now)\s+(?:removed|sunset|retired)\b"
-              r")"
-          ),
-      }
-
-      # ============================================================
-      # Group D: PR-label triggers
-      # ============================================================
-      # Author/maintainer-curated labels are very signal-dense when set.
-      # Examples of label names these match:
-      #   "breaking-change" / "api: breaking" / "kind:breaking"
-      #     -> pr_label_breaking_change
-      #   "security" / "security/dashboard" / "kind: security"
-      #     -> pr_label_security
-      _security_label_re = re.compile(r"(?i)(^|[\s\-_/:])security(\b|[\s\-_/:])")
-      LABEL_TRIGGERS = {
-          "pr_label_breaking_change": lambda labs: any(
-              "breaking" in (lab or "").lower() for lab in labs
-          ),
-          "pr_label_security": lambda labs: any(
-              bool(_security_label_re.search(lab or "")) for lab in labs
-          ),
-      }
-
-      signals: dict[str, bool] = {}
-      evidence: dict[str, list[dict]] = {}
-
-      def record(signal_name: str, file_path: str, hint: str) -> None:
-          evidence.setdefault(signal_name, []).append({"file": file_path, "hint": hint})
-
-      def trim_hint(text: str, limit: int = 200) -> str:
-          text = text.strip()
-          if len(text) > limit:
-              text = text[: limit - 3] + "..."
-          return text
-
-      # ---- Group A: path triggers ----
-      for signal_name, status_filter, path_regex in PATH_TRIGGERS:
-          regex = re.compile(path_regex)
-          signals.setdefault(signal_name, False)
-          for f in files:
-              filename = f.get("filename") or ""
-              status = f.get("status") or ""
-              if status_filter == "added" and status != "added":
-                  continue
-              if regex.match(filename):
-                  signals[signal_name] = True
-                  record(signal_name, filename, f"path matched {path_regex}")
-
-      # ---- Group B: diff-content triggers ----
-      for signal_name, path_regex, direction, line_regex in DIFF_TRIGGERS:
-          path_re = re.compile(path_regex)
-          signals.setdefault(signal_name, False)
-          match_prefix = "+" if direction == "added" else "-"
-          for f in files:
-              filename = f.get("filename") or ""
-              if not path_re.match(filename):
-                  continue
-              patch = f.get("patch") or ""
-              # The patch field is omitted by GitHub for some large
-              # diffs. Because this block exists specifically to detect
-              # diff-content signals, silently skipping a matched file
-              # would create a false negative. Favor recall instead:
-              # treat "matched file but patch unavailable" as
-              # conservative evidence for this signal.
-              if not patch:
-                  signals[signal_name] = True
-                  record(
-                      signal_name,
-                      filename,
-                      "diff matched but GitHub omitted patch; conservatively gated",
-                  )
-                  break  # one match per file is enough for evidence
-              for line in patch.splitlines():
-                  # Always skip the diff file headers "+++ b/path" and
-                  # "--- a/path" — they would otherwise match many
-                  # regexes spuriously, especially the "any non-blank
-                  # line" patterns.
-                  if line.startswith("+++") or line.startswith("---"):
-                      continue
-                  if not line.startswith(match_prefix):
-                      continue
-                  content = line[1:]
-                  m = line_regex.search(content)
-                  if m:
-                      signals[signal_name] = True
-                      record(signal_name, filename, trim_hint(content))
-                      break  # one match per file is enough for evidence
-
-      # ---- Group C: PR-body triggers ----
-      for signal_name, regex in BODY_TRIGGERS.items():
-          m = regex.search(pr_body)
-          signals[signal_name] = bool(m)
-          if m:
-              # Capture a small surrounding window so the evidence helps
-              # a human auditor understand why the regex matched.
-              start = max(0, m.start() - 20)
-              end = min(len(pr_body), m.end() + 60)
-              hint = pr_body[start:end].replace("\n", " ").replace("\r", " ")
-              record(signal_name, "<pr-body>", trim_hint(hint))
-
-      # ---- Group D: PR-label triggers ----
-      for signal_name, predicate in LABEL_TRIGGERS.items():
-          matched = predicate(pr_labels)
-          signals[signal_name] = bool(matched)
-          if matched:
-              # Record the matching label names so the audit trail shows
-              # exactly which label fired the signal.
-              matched_labels = [lab for lab in pr_labels if predicate([lab])]
-              record(signal_name, "<pr-labels>", trim_hint(", ".join(matched_labels)))
-
-      # ---- Advisory: only_test_or_build_changes ----
-      # True iff EVERY changed file falls in test/build/CI/playground/
-      # docs/agent buckets. Used only by the prompt's Step 5 allowlist —
-      # it never forces docs_required and is deliberately excluded from
-      # `triggered_signals` below.
-      only_test_or_build_re = re.compile(
-          r"^(tests/|eng/|playground/|docs/|\.github/|\.agents/|"
-          r"\.editorconfig$|global\.json$|"
-          r"Directory\.(Build|Packages)\.props$|Directory\.Build\.targets$)"
-      )
-      if files:
-          signals["only_test_or_build_changes"] = all(
-              only_test_or_build_re.match((f.get("filename") or "")) for f in files
-          )
-      else:
-          signals["only_test_or_build_changes"] = False
-
-      # `only_test_or_build_changes` is advisory — exclude it from
-      # triggered_signals so it can't accidentally force docs_required.
-      gating_signals = [name for name, v in signals.items()
-                        if v and name != "only_test_or_build_changes"]
-
-      result = {
-          "source_pr_number": int(pr.get("number") or 0),
-          "triggered_signals": sorted(gating_signals),
-          "signal_count": len(gating_signals),
-          "recommendation": "docs_required" if gating_signals else "docs_optional",
-          "signals": signals,
-          # Evidence is only emitted for triggered signals to keep the
-          # file small and to avoid confusing the agent with empty arrays.
-          "evidence": {k: v for k, v in evidence.items() if signals.get(k)},
-      }
-
-      with open(out_path, "w", encoding="utf-8") as f:
-          json.dump(result, f, indent=2, sort_keys=True)
-          f.write("\n")
-      PY
+      # --- 2. Run signal detection ----------------------------------------
+      # The signal catalog lives in a standalone Python script (preinstalled
+      # on ubuntu-latest) so a malformed regex fails the step loudly instead
+      # of being silently absorbed by a shell pipeline, the catalog can be
+      # reviewed with syntax highlighting, and it has its own unittest suite.
+      python3 _repos/aspire/.github/workflows/pr-docs-check/compute_signals.py \
+        "${PR_JSON}" "${FILES_JSON}" "${OUT}"
 
       rm -f "${PR_JSON}" "${FILES_JSON}"
 
@@ -1481,6 +1097,12 @@ source of evidence.
 | Signal | Meaning |
 | --- | --- |
 | `only_test_or_build_changes` | *Advisory only* — `true` iff **every** changed file is under `tests/`, `eng/`, `playground/`, `docs/`, `.github/`, `.agents/`, or is a top-level build config (`.editorconfig`, `global.json`, `Directory.Build.props`, `Directory.Build.targets`, `Directory.Packages.props`). This signal **never** forces `docs_required` — it only narrows the allowlist in Step 5. |
+
+**Conservative-recall fallback (gating)**:
+
+| Signal | Meaning |
+| --- | --- |
+| `diff_scan_skipped_due_to_missing_patch` | A file matched a Group B path regex but the GitHub Pulls/Files API omitted its `patch` (typically because the diff exceeds the per-file 3000-line cap). Group B scanning is skipped for that file, so this signal fires to keep recall conservative — the agent must treat the change as docs-required by default. `evidence` lists each affected file and which Group B signal would have been scanned. |
 
 Before deciding in Step 5, **enumerate the triggered signals in your
 internal reasoning** like:
