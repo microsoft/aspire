@@ -137,6 +137,17 @@ internal sealed class KubernetesPublishingContext(
             }
         }
 
+        var customResources = resources
+        .OfType<IResourceWithParent>()
+        .Where(resource => resource.IsCustomResource());
+        foreach (var customResource in customResources)
+        {
+            if (customResource.Parent == environment)
+            {
+                await WriteKubernetesTemplatesForResource(customResource, []).ConfigureAwait(false);
+            }
+        }
+
         await WriteKubernetesHelmChartAsync(environment).ConfigureAwait(false);
         await WriteKubernetesHelmValuesAsync().ConfigureAwait(false);
     }
