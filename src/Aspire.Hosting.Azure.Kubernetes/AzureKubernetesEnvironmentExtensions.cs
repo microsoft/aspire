@@ -416,12 +416,24 @@ public static class AzureKubernetesEnvironmentExtensions
         builder.Resource.GatewayApiEnabled = true;
         builder.Resource.ApplicationLoadBalancerEnabled = true;
 
-        // Delegate the subnet to AGC. AKS itself uses non-delegated subnets for node
-        // pools, so this delegation lives only on user-supplied ALB subnets. Multiple
-        // load balancers may share a subnet, so we apply the annotation idempotently:
-        // AzureSubnetResource.AddAsync only reads the last-added delegation, but
-        // duplicating it would be wasteful.
-        if (!subnet.Resource.HasAnnotationOfType<AzureSubnetServiceDelegationAnnotation>())
+        // Delegate the subnet to AGC. AKS node-pool subnets are non-delegated, so this
+        // delegation only applies to user-supplied ALB subnets.
+        //
+        // AzureSubnetResource emits a single delegation in its provisioning entity and
+        // honors only the LAST AzureSubnetServiceDelegationAnnotation on the subnet
+        // (last write wins). A naive `HasAnnotationOfType<...>()` short-circuit would
+        // therefore silently swallow our AGC delegation if the caller had already
+        // delegated the subnet to something else (e.g. Microsoft.NetApp/volumes), and
+        // the deployment would later fail with an opaque AGC association error.
+        //
+        // Instead, only skip when the most recent delegation already targets
+        // trafficControllers (so multiple AddLoadBalancer calls sharing a subnet stay
+        // idempotent). Otherwise, append our annotation so it ends up last and AGC is
+        // the delegation actually emitted.
+        var existingDelegations = subnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>().ToList();
+        var lastDelegation = existingDelegations.Count > 0 ? existingDelegations[^1] : null;
+        if (lastDelegation is null
+            || !string.Equals(lastDelegation.ServiceName, "Microsoft.ServiceNetworking/trafficControllers", StringComparison.Ordinal))
         {
             subnet.WithAnnotation(new AzureSubnetServiceDelegationAnnotation(
                 "Microsoft.ServiceNetworking/trafficControllers",

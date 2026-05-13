@@ -150,6 +150,12 @@ builder.Build().Run();
 
             content = content.Replace(buildRunPattern, replacement);
 
+            // Fail loudly if the starter template ever drops the literal we patch on:
+            // without this guard, `Replace` silently returns the original string and the
+            // test would deploy a stock starter app and report "success" without
+            // exercising any of the AGC / Gateway / LoadBalancer code paths under test.
+            Assert.Contains(buildRunPattern, content);
+
             // Required pragmas for the new (still experimental) AGC + pipeline surface.
             const string pragmaBlock =
                 "#pragma warning disable ASPIREPIPELINES001\n" +

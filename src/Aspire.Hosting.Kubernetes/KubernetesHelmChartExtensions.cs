@@ -252,6 +252,11 @@ public static partial class KubernetesHelmChartExtensions
     /// also distinct from Helm's <c>--take-ownership</c>, which transfers ownership of an
     /// entire resource between Helm releases and does not address field-level conflicts.
     /// </para>
+    /// <para>
+    /// Requires Helm v3.18 or later (the version that introduced <c>--force-conflicts</c>
+    /// for <c>helm upgrade --install</c>). Older Helm versions fail with
+    /// <c>Error: unknown flag: --force-conflicts</c>.
+    /// </para>
     /// </remarks>
     /// <example>
     /// <code>

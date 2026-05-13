@@ -595,7 +595,6 @@ var aks = builder.AddAzureKubernetesService("aks")
 - ✅ AGC controller identity auto-granted `Network Contributor` on each ALB subnet
 - ✅ `AddHelmChart` / `AddLoadBalancer` skip model registration in run mode (matches `AddIngress` / `AddGateway`)
 - 🔲 Cluster-level no-arg `AddLoadBalancer()` (auto VNet + delegated subnet) — left as future work
-- 🔲 Application Gateway Ingress Controller (AGIC v1, the older Application Gateway-based controller) — superseded by AGC for new work
 
 ### Application Gateway for Containers (AGC) ingress ✅
 

@@ -353,14 +353,53 @@ public partial class AzureKubernetesEnvironmentResource
                     """;
 
                 var applyArgs = $"apply --kubeconfig \"{kubeConfigPath}\" -n \"{AzureKubernetesLoadBalancerResource.AlbNamespace}\" -f -";
+
+                // Buffer stderr (and the tail of stdout, since kubectl sometimes writes
+                // structured errors to stdout when --output is not requested) so we can
+                // surface the real failure cause in the thrown exception. Without this,
+                // the only signal a caller gets is the exit code, which makes RBAC,
+                // missing-CRD, and admission-webhook errors very hard to diagnose. Cap
+                // the buffer to keep a pathological controller from blowing up the
+                // exception message; 4 KB is plenty for the multi-line "the server
+                // could not find the requested resource" / "forbidden" / validation
+                // messages kubectl emits.
+                const int kubectlErrorCaptureBytes = 4 * 1024;
+                var errorCapture = new StringBuilder();
+
+                void CaptureLine(string line)
+                {
+                    if (string.IsNullOrEmpty(line) || errorCapture.Length >= kubectlErrorCaptureBytes)
+                    {
+                        return;
+                    }
+
+                    var remaining = kubectlErrorCaptureBytes - errorCapture.Length;
+                    if (line.Length + 1 > remaining)
+                    {
+                        errorCapture.Append(line, 0, Math.Max(0, remaining - 1));
+                    }
+                    else
+                    {
+                        errorCapture.AppendLine(line);
+                    }
+                }
+
                 var applySpec = new ProcessSpec("kubectl")
                 {
                     Arguments = applyArgs,
                     StandardInputContent = manifest,
                     InheritEnv = true,
                     ThrowOnNonZeroReturnCode = false,
-                    OnOutputData = line => context.Logger.LogDebug("kubectl: {Line}", line),
-                    OnErrorData = line => context.Logger.LogDebug("kubectl: {Line}", line)
+                    OnOutputData = line =>
+                    {
+                        context.Logger.LogDebug("kubectl: {Line}", line);
+                        CaptureLine(line);
+                    },
+                    OnErrorData = line =>
+                    {
+                        context.Logger.LogDebug("kubectl: {Line}", line);
+                        CaptureLine(line);
+                    }
                 };
 
                 var (applyResultTask, applyDisposable) = ProcessUtil.Run(applySpec);
@@ -373,8 +412,13 @@ public partial class AzureKubernetesEnvironmentResource
 
                 if (applyExitCode != 0)
                 {
+                    var capturedOutput = errorCapture.ToString().TrimEnd();
+                    var detail = string.IsNullOrEmpty(capturedOutput)
+                        ? "kubectl produced no diagnostic output; re-run the deploy with debug logging enabled to see kubectl's stderr."
+                        : capturedOutput;
+
                     throw new InvalidOperationException(
-                        $"kubectl apply for ApplicationLoadBalancer '{lb.AlbName}' failed (exit code {applyExitCode}).");
+                        $"kubectl apply for ApplicationLoadBalancer '{lb.AlbName}' failed (exit code {applyExitCode}).{Environment.NewLine}{detail}");
                 }
 
                 context.Logger.LogInformation(
@@ -421,6 +465,10 @@ public partial class AzureKubernetesEnvironmentResource
             cancellationToken.ThrowIfCancellationRequested();
 
             attempt++;
+            // Silent OnErrorData/OnOutputData is intentional for this poll loop:
+            // every probe before the GatewayClass lands prints a "NotFound" stderr line
+            // that would just be noise. The terminal failure mode (timeout) below
+            // emits an actionable error that points at the AKS preview feature flags.
             var (resultTask, disposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
             {
                 Arguments = $"get gatewayclass azure-alb-external --kubeconfig \"{kubeConfigPath}\" --no-headers",
