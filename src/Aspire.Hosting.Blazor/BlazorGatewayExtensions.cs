@@ -445,7 +445,9 @@ public static class BlazorGatewayExtensions
         var names = new HashSet<string>();
         foreach (var annotation in resource.Annotations)
         {
-            if (annotation is ResourceRelationshipAnnotation rel)
+            // Only consider Reference relationships, not WaitFor or Parent,
+            // so that .WaitFor(svc).WithClient(svc) still adds WithReference.
+            if (annotation is ResourceRelationshipAnnotation { Type: "Reference" } rel)
             {
                 names.Add(rel.Resource.Name);
             }

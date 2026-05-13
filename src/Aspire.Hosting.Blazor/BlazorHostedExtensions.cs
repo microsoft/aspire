@@ -31,8 +31,7 @@ public static class BlazorHostedExtensions
         string apiPrefix = GatewayConfigurationBuilder.DefaultApiPrefix)
     {
         var annotation = GetOrAddHostedClientAnnotation(host.Resource);
-        annotation.ServiceNames.Add(service.Resource.Name);
-        annotation.ApiPrefix = apiPrefix;
+        annotation.Services.Add(new HostedClientService(service.Resource.Name, apiPrefix));
 
         // Forward the service reference to the host so YARP can resolve it via service discovery.
         var existingRefs = GetReferencedResourceNames(host.Resource);
@@ -96,10 +95,9 @@ public static class BlazorHostedExtensions
                 hostEndpoint,
                 httpHostEndpoint,
                 $"{host.Resource.Name} (client)",
-                annotation.ServiceNames.ToArray(),
+                annotation.Services,
                 annotation.ProxyTelemetry,
                 httpOtlpEndpointUrl,
-                annotation.ApiPrefix,
                 annotation.OtlpPrefix);
         });
     }
@@ -124,7 +122,9 @@ public static class BlazorHostedExtensions
         var names = new HashSet<string>();
         foreach (var annotation in resource.Annotations)
         {
-            if (annotation is ResourceRelationshipAnnotation rel)
+            // Only consider Reference relationships, not WaitFor or Parent,
+            // so that .WaitFor(svc).ProxyService(svc) still adds WithReference.
+            if (annotation is ResourceRelationshipAnnotation { Type: "Reference" } rel)
             {
                 names.Add(rel.Resource.Name);
             }
@@ -144,9 +144,17 @@ public static class BlazorHostedExtensions
 /// </summary>
 internal class HostedClientAnnotation : IResourceAnnotation
 {
-    public List<string> ServiceNames { get; } = new();
+    public List<HostedClientService> Services { get; } = new();
     public bool ProxyTelemetry { get; set; }
     public bool IsInitialized { get; set; }
-    public string ApiPrefix { get; set; } = GatewayConfigurationBuilder.DefaultApiPrefix;
     public string OtlpPrefix { get; set; } = GatewayConfigurationBuilder.DefaultOtlpPrefix;
+}
+
+/// <summary>
+/// A service proxied from the hosted Blazor WebAssembly client through the host.
+/// </summary>
+internal readonly struct HostedClientService(string serviceName, string apiPrefix = GatewayConfigurationBuilder.DefaultApiPrefix)
+{
+    public string ServiceName { get; } = serviceName;
+    public string ApiPrefix { get; } = apiPrefix;
 }

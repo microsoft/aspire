@@ -10,7 +10,6 @@ namespace Aspire.Hosting;
 [JsonSerializable(typeof(DevelopmentManifest))]
 [JsonSerializable(typeof(MSBuildPropertiesOutput))]
 [JsonSourceGenerationOptions(
-    PropertyNamingPolicy = JsonKnownNamingPolicy.Unspecified,
     WriteIndented = true)]
 internal partial class ManifestJsonContext : JsonSerializerContext
 {

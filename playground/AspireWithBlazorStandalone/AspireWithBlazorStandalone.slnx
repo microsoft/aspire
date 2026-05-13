@@ -61,7 +61,6 @@
   <Folder Name="/playground/AspireWithBlazorStandalone/">
     <Project Path="AspireWithBlazorStandalone.AppHost/AspireWithBlazorStandalone.AppHost.csproj" />
     <Project Path="AspireWithBlazorStandalone/AspireWithBlazorStandalone.csproj" />
-    <Project Path="AspireWithBlazorStandalone.ServiceDefaults/AspireWithBlazorStandalone.ServiceDefaults.csproj" />
     <Project Path="AspireWithBlazorStandalone.ClientServiceDefaults/AspireWithBlazorStandalone.ClientServiceDefaults.csproj" />
     <Project Path="AspireWithBlazorStandalone.WeatherApi/AspireWithBlazorStandalone.WeatherApi.csproj" />
   </Folder>
