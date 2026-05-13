@@ -131,12 +131,40 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
     }
 
     [Fact]
+    public async Task LocalDir_DryRun_AutoDetectsRawBuildOutput()
+    {
+        // When --local-dir points at a directory that contains only a raw 'aspire' executable
+        // (no aspire-cli-*.tar.gz/.zip archive), auto-detect must dispatch to the raw-build flow
+        // (install_aspire_cli_from_binary) instead of erroring on a missing archive.
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+        var localDir = Path.Combine(env.TempDirectory, "raw-build");
+        Directory.CreateDirectory(localDir);
+        // Drop a fake 'aspire' executable — no archive, no nupkgs.
+        await File.WriteAllTextAsync(Path.Combine(localDir, "aspire"), "#!/bin/sh\necho fake\n");
+
+        var result = await cmd.ExecuteAsync(
+            "--local-dir", localDir,
+            "--hive-label", "test-hive",
+            "--dry-run",
+            "--skip-path");
+
+        result.EnsureSuccessful();
+        Assert.Contains("Installing from local directory", result.Output);
+        Assert.Contains("[DRY RUN] Would install raw CLI binary", result.Output);
+        Assert.DoesNotContain("Downloading CLI from GitHub", result.Output);
+    }
+
+    [Fact]
     public async Task RunIdAsFirstArg_DryRun_Succeeds()
     {
+        // Verifies --run-id is recognized as a first-positional flag. Pair with
+        // --hive-label because --run-id alone is rejected (the installed CLI's
+        // channel is baked at build time and never points at a 'run-<id>' hive).
         using var env = new TestEnvironment();
         using var cmd = await CreateCommandWithMockGhAsync(env);
 
-        var result = await cmd.ExecuteAsync("--run-id", "987654321", "--dry-run", "--skip-path");
+        var result = await cmd.ExecuteAsync("--run-id", "987654321", "--hive-label", "pr-12345", "--dry-run", "--skip-path");
 
         result.EnsureSuccessful();
         Assert.Contains("987654321", result.Output);
@@ -144,15 +172,22 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
     }
 
     [Fact]
-    public async Task RunIdAsFirstArg_DryRun_UsesRunHiveLabel()
+    public async Task RunIdOnly_NoHiveLabel_DryRun_Rejected()
     {
+        // Regression guard: --run-id alone (without --pr-number / --hive-label) must
+        // fail with actionable guidance. The installed CLI's channel is baked at build
+        // time (pr-<N>/staging/daily/local); 'run-<id>' is never a baked channel, so a
+        // hives/run-<id>/packages layout would be unreachable from the CLI.
         using var env = new TestEnvironment();
         using var cmd = await CreateCommandWithMockGhAsync(env);
 
         var result = await cmd.ExecuteAsync("--run-id", "987654321", "--dry-run", "--skip-path", "--verbose");
 
-        result.EnsureSuccessful();
-        Assert.Contains("run-987654321", result.Output);
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("Cannot determine hive label from --run-id alone", result.Output);
+        Assert.Contains("--pr-number", result.Output);
+        Assert.Contains("--hive-label", result.Output);
+        Assert.DoesNotContain("run-987654321", result.Output);
     }
 
     [Fact]
@@ -193,10 +228,12 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
     [Fact]
     public async Task ShortRunIdFlag_AsFirstArg_DryRun_Succeeds()
     {
+        // Verifies -r is recognized as a first-positional alias for --run-id. Pair
+        // with --hive-label because --run-id alone is rejected.
         using var env = new TestEnvironment();
         using var cmd = await CreateCommandWithMockGhAsync(env);
 
-        var result = await cmd.ExecuteAsync("-r", "987654321", "--dry-run", "--skip-path");
+        var result = await cmd.ExecuteAsync("-r", "987654321", "--hive-label", "pr-12345", "--dry-run", "--skip-path");
 
         result.EnsureSuccessful();
         Assert.Contains("987654321", result.Output);
@@ -416,5 +453,31 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
 
         result.EnsureSuccessful();
         Assert.Contains("Skipping CLI download", result.Output, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task LocalDir_DryRun_WithGitHubRunIdEnvSet_UsesLocalHiveLabel()
+    {
+        // Regression guard: the GITHUB_RUN_ID env var must NOT influence the hive label
+        // when --local-dir is used. Without this test, re-introducing a GITHUB_RUN_ID
+        // branch would produce "run-99999" silently instead of the expected "local"
+        // hive label.
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+        var localDir = Path.Combine(env.TempDirectory, "local-artifacts");
+        Directory.CreateDirectory(localDir);
+        await FakeArchiveHelper.CreateFakeNupkgAsync(localDir, "Aspire.Cli", "13.3.0-local.1");
+
+        // Inject GITHUB_RUN_ID only into the launched process — not the test process environment.
+        cmd.WithEnvironmentVariable("GITHUB_RUN_ID", "99999");
+
+        var result = await cmd.ExecuteAsync(
+            "--local-dir", localDir,
+            "--hive-only",
+            "--dry-run");
+
+        result.EnsureSuccessful();
+        Assert.Contains("Using hive label: local", result.Output, StringComparison.Ordinal);
+        Assert.DoesNotContain("run-99999", result.Output, StringComparison.OrdinalIgnoreCase);
     }
 }

@@ -299,7 +299,6 @@ internal sealed class RenderCommand : BaseCommand
             p => $"{p.Item1.EscapeMarkup()} [dim]v{p.Item2}[/] ({p.Item3})",
             cancellationToken: cancellationToken);
 
-        InteractionService.DisplayMessage(KnownEmojis.Package, $"Selected: {selected.Item1} v{selected.Item2}");
         return ExitCodeConstants.Success;
     }
 

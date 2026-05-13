@@ -958,6 +958,72 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task ExecuteCommandAsync_NonInteractive_IsAvailableReturnsFalse()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        bool? isAvailableDuringExecution = null;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: e =>
+                {
+                    var interactionService = e.ServiceProvider.GetRequiredService<IInteractionService>();
+                    isAvailableDuringExecution = interactionService.IsAvailable;
+                    return Task.FromResult(CommandResults.Success());
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(
+            "myResource",
+            "mycommand",
+            new ResourceCommandExecutionOptions { NonInteractive = true },
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.NotNull(isAvailableDuringExecution);
+        Assert.False(isAvailableDuringExecution.Value);
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_Interactive_IsAvailableNotAffectedByScope()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        bool? isAvailableDuringExecution = null;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: e =>
+                {
+                    var interactionService = e.ServiceProvider.GetRequiredService<IInteractionService>();
+                    isAvailableDuringExecution = interactionService.IsAvailable;
+                    return Task.FromResult(CommandResults.Success());
+                });
+
+        var app = builder.Build();
+
+        // Get the baseline IsAvailable value (may be false in test environments where dashboard is disabled)
+        var baselineIsAvailable = app.Services.GetRequiredService<IInteractionService>().IsAvailable;
+
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(
+            "myResource",
+            "mycommand",
+            new ResourceCommandExecutionOptions { NonInteractive = false },
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.NotNull(isAvailableDuringExecution);
+
+        // Interactive mode should not change the baseline IsAvailable value
+        Assert.Equal(baselineIsAvailable, isAvailableDuringExecution.Value);
+    }
+
+    [Fact]
     public async Task ExecuteCommandAsync_PartialArgumentCollection_ValidatesMissingDeclaredArguments()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);

@@ -1019,6 +1019,32 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ResourceCommand_FailsWhenCommandUsesInteractionService()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "web",
+                    CreateCommand("configure", "Configures the resource."))
+            ]
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel, interactionService);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("""resource web configure""");
+
+        await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(1, backchannel.ExecuteResourceCommandCallCount);
+        Assert.True(backchannel.ExecuteResourceCommandOptions?.NonInteractive == true);
+    }
+
+    [Fact]
     public async Task ResourceCommand_ForwardsCustomChoiceCommandOptionWhenAllowed()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

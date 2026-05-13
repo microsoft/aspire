@@ -5,6 +5,7 @@ using System.Xml.Linq;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Layout;
 using Aspire.Cli.NuGet;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.Mcp;
 using Aspire.Cli.Tests.TestServices;
@@ -165,7 +166,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new TestDotNetCliRunner(),
             new TestDotNetSdkInstaller(),
             Aspire.Cli.Tests.Mcp.MockPackagingServiceFactory.Create(),
-            new TestConfigurationService(),
+            Aspire.Cli.Tests.Mcp.TestExecutionContextFactory.CreateTestContext(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
 
         var workingDirectory = Assert.IsType<string>(
@@ -215,7 +216,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new TestDotNetCliRunner(),
             new TestDotNetSdkInstaller(),
             Aspire.Cli.Tests.Mcp.MockPackagingServiceFactory.Create(),
-            new TestConfigurationService(),
+            Aspire.Cli.Tests.Mcp.TestExecutionContextFactory.CreateTestContext(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
 
         var firstServer = CreateServer(firstAppHost.FullName);
@@ -246,8 +247,220 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         }
     }
 
+    // PSM-guard cross-product tests.
+    // Guard predicate: the resolved channel.Name == "local" — i.e. the *project requested* the
+    // local pseudo-channel. The local hive has no real mappings, so emitting PSM would just
+    // constrain restore to nothing. For every other channel PSM must emit so restore honours the
+    // channel's package source mappings — regardless of which CLI identity is running.
+
     [Fact]
-    public async Task ResolveChannelNameAsync_UsesProjectLocalAspireConfig_NotGlobalChannel()
+    public async Task TryCreateTemporaryNuGetConfig_LocalIdentity_LocalRequested_ReturnsNull()
+    {
+        // Locally-built CLI consuming its own local hive — only case the guard should fire.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var executionContext = CreateContextWithIdentityChannel("local");
+        var server = CreateServerWithExplicitChannel(workspace, "local", executionContext);
+
+        var result = await InvokeTryCreateTemporaryNuGetConfigAsync(server, "local");
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task TryCreateTemporaryNuGetConfig_LocalIdentity_PrRequested_EmitsConfig()
+    {
+        // Locally-built CLI on a project that requested pr-12345 — the project's request wins,
+        // PSM must emit (this is the scenario that regressed pre-fix).
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var executionContext = CreateContextWithIdentityChannel("local");
+        var server = CreateServerWithExplicitChannel(workspace, "pr-12345", executionContext);
+
+        using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(server, "pr-12345");
+
+        Assert.NotNull(result);
+    }
+
+    [Fact]
+    public async Task TryCreateTemporaryNuGetConfig_StableIdentity_StableRequested_EmitsConfig()
+    {
+        // Stable-channel CLI on a project that requested 'stable' — PSM emits the stable mappings.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var executionContext = CreateContextWithIdentityChannel("stable");
+        var server = CreateServerWithExplicitChannel(workspace, "stable", executionContext);
+
+        using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(server, "stable");
+
+        Assert.NotNull(result);
+    }
+
+    [Fact]
+    public async Task TryCreateTemporaryNuGetConfig_StableIdentity_LocalRequested_ReturnsNull()
+    {
+        // requested=local always returns null regardless of identity: the guard keys on the
+        // requested/resolved channel name, not on which CLI is running.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var executionContext = CreateContextWithIdentityChannel("stable");
+        var server = CreateServerWithExplicitChannel(workspace, "local", executionContext);
+
+        var result = await InvokeTryCreateTemporaryNuGetConfigAsync(server, "local");
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task TryCreateTemporaryNuGetConfig_DailyIdentity_DailyRequested_EmitsConfig()
+    {
+        // A 'daily' CLI consuming the 'daily' channel must still get a per-channel NuGet config —
+        // the guard only fires when the *requested* channel is 'local'.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var executionContext = CreateContextWithIdentityChannel("daily");
+        var server = CreateServerWithExplicitChannel(workspace, "daily", executionContext);
+
+        using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(server, "daily");
+
+        Assert.NotNull(result);
+    }
+
+    [Fact]
+    public async Task TryCreateTemporaryNuGetConfig_PrIdentity_DifferentPrRequested_EmitsConfig()
+    {
+        // PR-build CLI installing a different PR's hive — guard does not fire (requested != "local").
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var executionContext = CreateContextWithIdentityChannel("pr-67890");
+        var server = CreateServerWithExplicitChannel(workspace, "pr-12345", executionContext);
+
+        using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(server, "pr-12345");
+
+        Assert.NotNull(result);
+    }
+
+    [Fact]
+    public async Task TryCreateTemporaryNuGetConfig_LocalIdentity_StagingRequested_EmitsConfigWithGlobalPackagesFolder()
+    {
+        // Pins the rubber-duck finding: dropping the temp config also drops the staging-specific
+        // global packages folder. The emitted nuget.config must contain a <config> element with a
+        // globalPackagesFolder setting when the channel was built with configureGlobalPackagesFolder.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var executionContext = CreateContextWithIdentityChannel("local");
+        var mappings = new[]
+        {
+            new PackageMapping(PackageMapping.AllPackages, "https://pkgs.dev.azure.com/fake/v3/index.json")
+        };
+        var stagingChannel = PackageChannel.CreateExplicitChannel(
+            name: "staging",
+            quality: PackageChannelQuality.Both,
+            mappings: mappings,
+            nuGetPackageCache: new FakeNuGetPackageCache(),
+            configureGlobalPackagesFolder: true);
+        var server = CreateServerWithChannel(workspace, stagingChannel, executionContext);
+
+        using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(server, "staging");
+
+        Assert.NotNull(result);
+        var doc = XDocument.Load(result.ConfigFile.FullName);
+        var gpf = doc.Descendants("config")
+            .SelectMany(c => c.Elements("add"))
+            .FirstOrDefault(a => string.Equals(a.Attribute("key")?.Value, "globalPackagesFolder", StringComparison.OrdinalIgnoreCase));
+        Assert.NotNull(gpf);
+        Assert.False(string.IsNullOrEmpty(gpf.Attribute("value")?.Value));
+    }
+
+    [Theory]
+    [InlineData("local")]
+    [InlineData("stable")]
+    [InlineData("daily")]
+    [InlineData("pr-99")]
+    public async Task TryCreateTemporaryNuGetConfig_LocalRequested_ReturnsNull_RegardlessOfIdentity(string identity)
+    {
+        // Codifies "the local hive resolution skip is identity-independent". PackagingService
+        // enumerates HivesDirectory subdirs as explicit channels, so a project requesting "local"
+        // resolves to an explicit channel with mappings — but the new guard fires because
+        // channel.Name == "local".
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var executionContext = CreateContextWithIdentityChannel(identity);
+        var server = CreateServerWithExplicitChannel(workspace, "local", executionContext);
+
+        var result = await InvokeTryCreateTemporaryNuGetConfigAsync(server, "local");
+
+        Assert.Null(result);
+    }
+
+    private static CliExecutionContext CreateContextWithIdentityChannel(string identityChannel) =>
+        new(new DirectoryInfo(Path.GetTempPath()),
+            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "hives")),
+            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "cache")),
+            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "sdks")),
+            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "logs")),
+            "test.log",
+            identityChannel: identityChannel);
+
+    private static PrebuiltAppHostServer CreateServerWithExplicitChannel(
+        TemporaryWorkspace workspace,
+        string channelName,
+        CliExecutionContext executionContext)
+    {
+        // channelName is the name of the channel registered in the TestPackagingService — i.e. the
+        // channel a project's aspire.config.json would resolve to when it requests that name.
+        var mappings = new[]
+        {
+            new PackageMapping(PackageMapping.AllPackages, "https://pkgs.dev.azure.com/fake/v3/index.json")
+        };
+        var channel = PackageChannel.CreateExplicitChannel(
+            channelName, PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache());
+        return CreateServerWithChannel(workspace, channel, executionContext);
+    }
+
+    private static PrebuiltAppHostServer CreateServerWithChannel(
+        TemporaryWorkspace workspace,
+        PackageChannel channel,
+        CliExecutionContext executionContext)
+    {
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
+        };
+
+        var nugetService = new BundleNuGetService(
+            new NullLayoutDiscovery(),
+            new LayoutProcessRunner(new TestProcessExecutionFactory()),
+            new TestFeatures(),
+            executionContext,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
+
+        return new PrebuiltAppHostServer(
+            workspace.WorkspaceRoot.FullName,
+            "test.sock",
+            new LayoutConfiguration(),
+            nugetService,
+            new TestDotNetCliRunner(),
+            new TestDotNetSdkInstaller(),
+            packagingService,
+            executionContext,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+    }
+
+    private static async Task<TemporaryNuGetConfig?> InvokeTryCreateTemporaryNuGetConfigAsync(
+        PrebuiltAppHostServer server, string requestedChannel)
+    {
+        var method = typeof(PrebuiltAppHostServer).GetMethod(
+            "TryCreateTemporaryNuGetConfigAsync",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(method);
+
+        var task = (Task<TemporaryNuGetConfig?>)method.Invoke(server, [requestedChannel, CancellationToken.None])!;
+        return await task;
+    }
+
+    [Fact]
+    public async Task ResolveRequestedChannel_UsesProjectLocalAspireConfig()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
@@ -258,11 +471,6 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             }
             """);
 
-        var configurationService = new TestConfigurationService
-        {
-            OnGetConfiguration = key => key == "channel" ? "pr-old" : null
-        };
-
         var nugetService = new BundleNuGetService(new NullLayoutDiscovery(), new LayoutProcessRunner(new TestProcessExecutionFactory()), new TestFeatures(), TestExecutionContextFactory.CreateTestContext(), Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
         var server = new PrebuiltAppHostServer(
             workspace.WorkspaceRoot.FullName,
@@ -272,16 +480,11 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new TestDotNetCliRunner(),
             new TestDotNetSdkInstaller(),
             Aspire.Cli.Tests.Mcp.MockPackagingServiceFactory.Create(),
-            configurationService,
+            Aspire.Cli.Tests.Mcp.TestExecutionContextFactory.CreateTestContext(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
 
-        var method = typeof(PrebuiltAppHostServer).GetMethod("ResolveChannelNameAsync", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-        Assert.NotNull(method);
-
-        var channelTask = Assert.IsType<Task<string?>>(method.Invoke(server, [CancellationToken.None]));
-        var channel = await channelTask;
+        var channel = server.ResolveRequestedChannel();
 
         Assert.Equal("pr-new", channel);
     }
-
 }

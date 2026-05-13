@@ -722,6 +722,127 @@ pre-agent-steps:
 
       echo "--- ${OUT} ---"
       cat "${OUT}"
+  # Compute deterministic "is this PR user-facing?" signals from the PR
+  # diff and body before the agent starts. Historically the agent reasoned
+  # about this directly from the prompt's prose ("is this a significant
+  # user-facing change?"), and PRs like microsoft/aspire#16939 — which adds
+  # a new `--search` CLI option, a new MCP tool input parameter, a new
+  # dashboard API query parameter, and even an explicit "User-facing
+  # usage" section in the PR body — slipped past as "no docs needed".
+  #
+  # This step writes `.pr-docs-check/signals.json` with a broad catalog
+  # of boolean triggers derived from objective evidence: changed-file
+  # path patterns, diff hunk contents (added or removed lines), PR body
+  # regexes, and PR labels. Each signal targets a specific user-facing
+  # concern an end user would need to be told about:
+  #
+  #   - Public API surface (additions, deprecations, breaking removals)
+  #   - New shipping packages and new integrations
+  #   - CLI commands, options/switches, and user-facing CLI strings
+  #   - MCP tools and their input schema
+  #   - Dashboard pages and dashboard HTTP API endpoints
+  #   - Container image names / tags / digests (image version bumps
+  #     that alter user expectations)
+  #   - Project templates (`dotnet new aspire-*` / `aspire init`)
+  #   - Roslyn analyzers and the shipped diagnostic catalog
+  #   - Default values and shipping constants
+  #   - Preview / experimental API markers
+  #   - Target-framework changes
+  #   - Integration READMEs (which ship to nuget.org)
+  #   - Security advisories (CVE / GHSA / `security` label)
+  #   - Breaking-change markers (PR body or label)
+  #
+  # The agent reads the file verbatim (it must not re-derive the
+  # signals) and treats `recommendation == "docs_required"` as a hard
+  # "draft a docs PR" gate. The catalog deliberately favors high
+  # recall over precision: false positives fall into the Step 5
+  # allowlist and the worst case is a drafted docs PR that a human
+  # closes (drafted PRs never auto-merge), while a false negative
+  # ships an undocumented user-facing change — the failure mode this
+  # step exists to fix.
+  #
+  # The same robustness rationale applies as for `target.json` above:
+  # this decision needs to be reliable across model versions, so it lives
+  # in a deterministic shell step instead of relying on prompt judgment.
+  # The catalog itself lives in a standalone Python script
+  # (`.github/workflows/pr-docs-check/compute_signals.py`) with a
+  # matching unittest suite (`test_compute_signals.py`), so it can be
+  # reviewed with syntax highlighting and exercised locally with
+  # `python3 -m unittest discover -s .github/workflows/pr-docs-check -v`.
+  - name: Check out signal-computation script
+    # The `checkout:` block above made microsoft/aspire.dev the current
+    # workspace because that's where the doc PR is authored. We need a
+    # sparse, side-by-side checkout of microsoft/aspire to bring the
+    # signal-computation script into the runner. A sparse checkout keeps
+    # this fast — only `.github/workflows/pr-docs-check` is fetched.
+    #
+    # Default `ref` resolves to the trigger ref (refs/pull/<N>/merge for
+    # pull_request: closed, or the dispatcher-selected branch for
+    # workflow_dispatch). That's the correct version of the script for
+    # the merged state being analyzed.
+    uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+    with:
+      repository: microsoft/aspire
+      path: _repos/aspire
+      sparse-checkout: |
+        .github/workflows/pr-docs-check
+      sparse-checkout-cone-mode: false
+  - name: Compute user-facing signals
+    env:
+      GH_TOKEN: ${{ steps.resolve-target-app-token.outputs.token }}
+      PR_NUMBER: "${{ github.event.pull_request.number || github.event.inputs.pr_number }}"
+    run: |
+      set -euo pipefail
+
+      mkdir -p .pr-docs-check
+      OUT=.pr-docs-check/signals.json
+
+      if [ -z "${PR_NUMBER}" ]; then
+        echo "ERROR: PR_NUMBER is empty; cannot compute signals." >&2
+        exit 1
+      fi
+      # Same input validation as the target-branch resolver above — reject
+      # anything that isn't a positive integer so a bad `workflow_dispatch`
+      # input fails loudly here rather than producing an opaque gh api error.
+      if ! [[ "${PR_NUMBER}" =~ ^[1-9][0-9]*$ ]]; then
+        echo "ERROR: PR_NUMBER '${PR_NUMBER}' is not a positive integer." >&2
+        exit 1
+      fi
+
+      echo "Computing user-facing signals for microsoft/aspire#${PR_NUMBER}"
+
+      # --- 1. Fetch PR metadata (body) and changed files (paths + patches) -
+      # The files endpoint returns at most 30 files per page and is capped
+      # at 300 files / 3000 lines total per the GitHub API; that's fine
+      # for our purposes because signal detection only needs path patterns
+      # and patch hunks, and any change large enough to overflow that cap
+      # is almost certainly user-facing on path patterns alone. The
+      # script also emits `diff_scan_skipped_due_to_missing_patch` when
+      # the API omits a `patch` for a file matched by a diff trigger,
+      # so very-large diffs gate conservatively.
+      #
+      # https://docs.github.com/en/rest/pulls/pulls#list-pull-requests-files
+      PR_JSON="$(mktemp)"
+      FILES_JSON="$(mktemp)"
+      gh api "/repos/microsoft/aspire/pulls/${PR_NUMBER}" > "${PR_JSON}"
+      gh api --paginate "/repos/microsoft/aspire/pulls/${PR_NUMBER}/files?per_page=100" \
+        | jq -s 'add // []' > "${FILES_JSON}"
+
+      FILE_COUNT="$(jq 'length' "${FILES_JSON}")"
+      echo "Files in PR  : ${FILE_COUNT}"
+
+      # --- 2. Run signal detection ----------------------------------------
+      # The signal catalog lives in a standalone Python script (preinstalled
+      # on ubuntu-latest) so a malformed regex fails the step loudly instead
+      # of being silently absorbed by a shell pipeline, the catalog can be
+      # reviewed with syntax highlighting, and it has its own unittest suite.
+      python3 _repos/aspire/.github/workflows/pr-docs-check/compute_signals.py \
+        "${PR_JSON}" "${FILES_JSON}" "${OUT}"
+
+      rm -f "${PR_JSON}" "${FILES_JSON}"
+
+      echo "--- ${OUT} ---"
+      cat "${OUT}"
 
 timeout-minutes: 20
 ---
@@ -761,16 +882,44 @@ needed, create a draft PR with the actual documentation changes.
 Use the GitHub tools to read the pull request details from `microsoft/aspire` for the
 PR number above, including:
 
-- Title and description
+- Title and description (the full PR body)
 - Author username
 - Base branch (e.g., `main` or `release/X.Y`)
 - Milestone (if any)
+- Labels applied to the PR
 - Any issues linked via `Closes #N` / `Fixes #N` / `Resolves #N` in the PR body
-- The list of changed files
+- The list of changed files (filenames, status, additions/deletions)
+- **Issue conversation comments** on the source PR
+  (`GET /repos/microsoft/aspire/issues/{N}/comments`) — author intent,
+  reviewer questions and answers, follow-up clarifications, and any
+  "this is how a user will experience it" prose that doesn't appear in
+  the PR body
+- **Review comments** (inline comments tied to specific diff lines)
+  (`GET /repos/microsoft/aspire/pulls/{N}/comments`) — reviewer concerns
+  about wording, default values, error messages, and any decisions made
+  during code review that affect what users see
 
-Start with the PR metadata and changed-file list. Only inspect diff hunks for files that
-are likely to affect user-facing behavior, configuration, or public API surface, or when
-the significance is unclear from filenames alone.
+Start with the PR metadata, the changed-file list, and a pass over the PR
+body and comment threads. Only inspect diff hunks for files that are likely
+to affect user-facing behavior, configuration, or public API surface, or
+when the significance is unclear from filenames alone.
+
+**Treat the PR description, the changed files, and the PR/review comment
+threads together as the canonical context for this PR.** Steps 5, 8, 9,
+10, and 11 must all draw from this combined context — not from the
+filenames alone, and not from the PR body alone. In particular:
+
+- Step 5 (the docs-required decision) uses the signals in
+  `.pr-docs-check/signals.json` for gating, but the *narrative* in the PR
+  body and comments is what tells you what the change actually does for
+  an end user.
+- Step 9 (writing documentation) and Step 10 (drafting the docs PR
+  description) must paraphrase the explanation the source PR's author
+  and reviewers wrote, so the docs reflect the change as it was reviewed,
+  not as a model might re-imagine it from filenames.
+- Step 11 (notifying the source PR) must cite at least one piece of
+  evidence per triggered signal category, and the comment threads are
+  often where that evidence lives in human-readable form.
 
 If this was triggered via `workflow_dispatch`, use the `pr_number` input to look up
 the PR details.
@@ -866,60 +1015,201 @@ Do **not** create new branches or modify the resolution. The
 `create_pull_request` safe output's `base` field must be set to exactly
 `effective_target_branch`.
 
-## Step 4: Detect Significant Changes and Decide Whether a Docs PR Is Required
+## Step 4: Read the Pre-Computed User-Facing Signals
 
-Review the PR metadata and candidate diffs for **significant user-facing changes**.
+Whether a docs PR is required is gated by a fixed catalogue of objective
+signals computed by the `Compute user-facing signals` pre-agent step.
+The result is at `.pr-docs-check/signals.json` in the workspace. **Do
+not re-derive these signals from the diff or the PR body** — the file is
+the source of truth, and the goal of this design is to make the
+decision reproducible across model versions.
 
-A docs PR is required only when **both** of these are true:
+Read `.pr-docs-check/signals.json`. The fields you will use are:
 
-1. The PR introduces a significant user-facing change.
-2. The current `microsoft/aspire.dev` documentation does **not** already cover that
-   change well enough.
+| Field | Purpose |
+| --- | --- |
+| `recommendation` | `"docs_required"` if any gating signal fired, otherwise `"docs_optional"`. This is the primary gate for Step 5. |
+| `triggered_signals` | The names of the boolean signals that fired (advisory `only_test_or_build_changes` is excluded from this list and never forces `docs_required`). |
+| `signal_count` | `len(triggered_signals)`. |
+| `signals` | The full boolean map, including the advisory `only_test_or_build_changes`. |
+| `evidence` | Per-triggered-signal list of `{ file, hint }` entries showing the changed file and the matching diff fragment or PR-body snippet. Use these to write the PR description and the `notify_source_pr` summary. |
 
-For each candidate docs-worthy change, identify:
+The signal catalog is broad on purpose: it favors recall over
+precision, because a false positive at worst drafts a docs PR a human
+closes (drafted PRs never auto-merge), while a false negative ships an
+undocumented user-facing change. The signals are grouped by their
+source of evidence.
 
-- Evidence from the PR (changed files, APIs, commands, options, configuration, or
-  behavior)
-- Who is affected (app developers, AppHost authors, CLI users, dashboard users, etc.)
-- The likely docs surface area (`get-started`, integration guide, reference page,
-  command docs, migration guidance, and so on)
+**Group A — path-pattern signals** (which files exist / changed):
 
-**Changes that are usually significant enough to consider documentation:**
-- New public APIs: methods, classes, interfaces, or extension methods
-- New features or capabilities: hosting integrations, client integrations, CLI commands,
-  or dashboard features
-- Breaking changes: removed or renamed APIs, behavioral changes, migration needs
-- New configuration options: settings, environment variables, or parameters
-- New resource types: Aspire hosting resources or cloud service integrations
-- Significant behavioral changes: service discovery, health checks, telemetry, or deployment
+| Signal | Meaning |
+| --- | --- |
+| `cli_command_added` | A new file was added under `src/Aspire.Cli/Commands/*.cs` (excluding base classes). A new CLI command was introduced. |
+| `cli_command_file_changed` | An existing CLI command file under `src/Aspire.Cli/Commands/*.cs` was modified. Option set, behavior, output format, or prompts may have changed. |
+| `cli_resource_strings_changed` | A `.resx` under `src/Aspire.Cli/Resources/` changed. Holds help text, option descriptions, prompts, and error messages the CLI prints. |
+| `mcp_tool_added` | A new file was added under `src/Aspire.Cli/Mcp/Tools/*.cs` (excluding the abstract base). A new MCP tool was introduced. |
+| `mcp_tool_file_changed` | An existing MCP tool file changed. Input schema, output shape, or semantics may have moved. |
+| `new_package_added` | A new `.csproj` was added anywhere under `src/`. A new shipping NuGet package was introduced. |
+| `new_hosting_integration_project` | Subset of `new_package_added`: a new `.csproj` under `src/Aspire.Hosting.*/`. A new hosting integration was introduced. |
+| `new_client_integration_project` | Subset of `new_package_added`: a new `.csproj` under `src/Components/Aspire.*/`. A new client integration was introduced. |
+| `integration_readme_changed` | A `README.md` under a hosting or client integration changed. READMEs ship to nuget.org and are linked from `docs.aspire.dev`. |
+| `public_api_surface_file_changed` | A file under `src/*/api/*.cs` changed. These are shipped public-API baselines (per AGENTS.md they are normally only regenerated at release time), so a committed diff is an explicit shipping-API change. |
+| `dashboard_user_facing_page_changed` | A `.razor`, `.razor.cs`, or `.cs` codebehind under `src/Aspire.Dashboard/Components/Pages/` changed. |
+| `container_image_tags_file_changed` | A `*ContainerImageTags.cs` file changed. These pin the container image registry, name, and tag for an integration; any change may move the image version users get. |
+| `project_template_changed` | A file under `src/Aspire.ProjectTemplates/` changed. Affects `dotnet new aspire-*` and `aspire init` output. |
+| `diagnostic_documentation_changed` | `docs/list-of-diagnostics.md` changed. The user-facing diagnostic catalog. |
+| `analyzer_source_changed` | A Roslyn analyzer under `src/Aspire.(Hosting\|AppHost).Analyzers/` changed. Users see new build warnings or errors. |
+| `defaults_or_constants_file_changed` | A file whose name ends in `Defaults.cs` or `Constants.cs` changed. Typically holds shipping default values (timeouts, retry counts, well-known property names, image tags). |
 
-**Changes that usually do NOT require a docs PR:**
-- Internal refactoring with no public API surface changes
-- Test-only changes
-- Build/CI infrastructure changes
-- Bug fixes that don't change documented behavior
-- Dependency version bumps
-- Code style or formatting changes
+**Group B — diff-content signals** (what the patch added or removed):
 
-Do not create a docs PR for minor or already-understood changes just because they touch a
-docs-adjacent area. If the change is small, internal, or already covered by existing docs,
-treat it as **no docs PR required**.
+| Signal | Meaning |
+| --- | --- |
+| `cli_option_added` | A patch hunk under `src/Aspire.Cli/**/*.cs` added a line declaring a new `Option<...>(...)`. A new CLI option flag was introduced. |
+| `dashboard_api_endpoint_changed` | A patch hunk in `src/Aspire.Dashboard/DashboardEndpointsBuilder.cs` or `src/Aspire.Dashboard/Api/**/*.cs` added any non-blank line. The dashboard's HTTP API surface changed. |
+| `obsolete_attribute_added` | An `[Obsolete(...)]` attribute was added to a `.cs` file under `src/`. An API was deprecated. |
+| `experimental_attribute_added` | An `[Experimental(...)]` attribute was added under `src/`. A preview / experimental API surface was introduced or expanded. |
+| `new_public_type` | A `public class / interface / struct / record / enum / delegate` declaration was added in non-test source. A new public type was introduced. |
+| `breaking_api_removal` | A line declaring a `public` or `protected` member was removed from a `src/*/api/*.cs` file. Because `api/*.cs` is append-only between releases, this is a strong breaking-change indicator. (Whitespace-only reformats can also trip this.) |
+| `container_image_version_changed` | A `*ContainerImageTags.cs` patch added a line assigning `Tag`, `Image`, `Registry`, or `Digest` — the container image version users get has likely moved. |
+| `default_value_attribute_changed` | A `[DefaultValue(...)]` attribute was added under `src/`. A shipping default value changed. |
+| `target_framework_changed` | A `<TargetFramework>` or `<TargetFrameworks>` element was added/changed in a `src/*.csproj`. Affects which consumers can install the package. |
 
-## Step 5: If No Docs PR Is Required
+**Group C — PR-body signals** (author-supplied prose):
 
-If you determine that no docs PR is required because the change is not significant or the
-existing docs already cover it sufficiently:
+| Signal | Meaning |
+| --- | --- |
+| `pr_body_has_user_facing_section` | The PR body contains a heading like `## User-facing usage`, `## Usage`, `## How to use`, or `## Breaking change`. The author signaled the change is user-facing. |
+| `pr_body_has_cli_flag_mention` | The PR body mentions a long-form CLI flag (`--something`). The author is documenting a flag in the PR description. |
+| `pr_body_has_breaking_change_marker` | The PR body contains the literal phrase `breaking change`. |
+| `pr_body_has_security_marker` | The PR body cites a `CVE-YYYY-N`, a `GHSA-xxxx-xxxx-xxxx`, or phrases like `security fix`, `security advisory`, `vulnerability`. |
+| `pr_body_has_deprecation_marker` | The PR body contains `deprecat*` / `obsolet*` wording, or a phrase like `<surface> has been removed / sunset / retired`. |
 
-1. Emit a single `notify_source_pr` safe output with:
-   - `source_pr_number`: the source PR number from Step 1.
-   - `result`: `"skipped"`.
-   - `sme_login`: `SME_LOGIN` from Step 2 (or an empty string if none was found).
-   - `summary`: a short markdown rationale (1–3 sentences). For example:
-     `"Test/build changes only — existing docs already cover this behavior."`.
-2. **Stop here** — do not proceed to the remaining steps. Do **not** emit
-   `create_pull_request` or any other safe output for the no-docs path.
+**Group D — PR-label signals** (author/maintainer-curated):
 
-## Step 6: Read the doc-writer Skill
+| Signal | Meaning |
+| --- | --- |
+| `pr_label_breaking_change` | A label whose name contains `breaking` is applied to the PR. |
+| `pr_label_security` | A label whose name contains `security` (as a word, with optional separators like `-`, `_`, `/`, `:`) is applied to the PR. |
+
+**Advisory** (not gating):
+
+| Signal | Meaning |
+| --- | --- |
+| `only_test_or_build_changes` | *Advisory only* — `true` iff **every** changed file is under `tests/`, `eng/`, `playground/`, `docs/`, `.github/`, `.agents/`, or is a top-level build config (`.editorconfig`, `global.json`, `Directory.Build.props`, `Directory.Build.targets`, `Directory.Packages.props`). This signal **never** forces `docs_required` — it only narrows the allowlist in Step 5. |
+
+**Conservative-recall fallback (gating)**:
+
+| Signal | Meaning |
+| --- | --- |
+| `diff_scan_skipped_due_to_missing_patch` | A file matched a Group B path regex but the GitHub Pulls/Files API omitted its `patch` (typically because the diff exceeds the per-file 3000-line cap). Group B scanning is skipped for that file, so this signal fires to keep recall conservative — the agent must treat the change as docs-required by default. `evidence` lists each affected file and which Group B signal would have been scanned. |
+
+Before deciding in Step 5, **enumerate the triggered signals in your
+internal reasoning** like:
+
+> Triggered signals (5): `cli_command_added`, `cli_command_file_changed`, `cli_option_added`, `cli_resource_strings_changed`, `mcp_tool_file_changed`. Evidence: `LogsCommand.cs` is a new command file that adds `Option<string?>("--search")`; `LogsCommandStrings.resx` adds `SearchOptionDescription`; `ListConsoleLogsTool.cs` was modified to wire up the new search option.
+
+This enumeration is not optional. The PR description you write in
+Step 10 and the `summary` you emit in Step 11 must both cite at least
+one `evidence` entry per triggered signal category so a human auditor
+can verify the decision.
+
+## Step 5: Decide Whether a Docs PR Is Required
+
+The decision is driven by `recommendation` in `.pr-docs-check/signals.json`:
+
+### When `recommendation == "docs_required"`
+
+A documentation PR is **mandatory**. Proceed to Step 7 and beyond.
+
+There is exactly one allowed exception, and it has a hard evidentiary bar.
+You may switch to the `skipped` path **only** when every triggered signal
+is already documented by name in the existing `microsoft/aspire.dev`
+docs — that is, the docs already mention the specific new flag, option,
+API, tool, integration, page, endpoint, or behavior that the signal
+identifies. To use this exception you **must** do all of the following:
+
+1. For each triggered signal, search `src/frontend/src/content/docs/`
+   (the docs content tree) for the exact identifier from the signal's
+   `evidence` (for example, the flag name `--search`, the resx key
+   `SearchOptionDescription`, the JSON property name, the API symbol).
+2. Open the matching docs file and quote a sentence or code block that
+   mentions the identifier by name.
+3. In the `notify_source_pr` `summary` (Step 11), include — per
+   triggered signal — the docs file path **and** the quoted text. Plain
+   statements like *"the existing docs cover this area"* or *"this is
+   internal"* are not acceptable; the audit trail must show the
+   identifier appears in the docs verbatim.
+
+If you cannot meet this bar for **every** triggered signal, draft the
+docs PR. Partial coverage is not enough — if only some of the new
+surface is documented, the PR must cover the rest.
+
+### When `recommendation == "docs_optional"`
+
+No deterministic user-facing signal fired. A docs PR is still required
+when the change matches any of these positive triggers that the
+pre-step cannot detect mechanically:
+
+- A user-visible behavior change to an already-documented feature
+  (for example, default values, output formats, error messages, or
+  exit codes that ship to users and that the docs describe).
+- A new environment variable, configuration key, or connection-string
+  field exposed through existing public surface.
+- A new supported version, runtime target, or platform mentioned in a
+  docs `prerequisites` list.
+- A change to user-visible localization strings already referenced by
+  the docs site.
+
+Otherwise, the `skipped` path is allowed **only** when the change
+falls cleanly into one of these explicit allowlist categories. Pick
+the single best fit:
+
+| Allowlist category | Definition |
+| --- | --- |
+| `test_only` | Only files under `tests/` changed (matches `only_test_or_build_changes` *and* no source files changed). |
+| `build_or_ci_only` | Only files under `eng/`, `.github/`, `playground/`, or top-level build config (`.editorconfig`, `global.json`, `Directory.Build.props`, `Directory.Build.targets`, `Directory.Packages.props`) changed. |
+| `dependency_bump` | Only `Directory.Packages.props` (or equivalent package version files) changed and the change is purely a version bump with no behavior or surface change in this PR. |
+| `internal_refactor` | The change touches `src/` but introduces no new or changed public types, methods, options, or strings. The PR title and body confirm this is purely internal. |
+| `formatting_or_comment_only` | Pure typo fix, formatting, or code-comment-only change with no behavioral effect. |
+| `bug_fix_restores_documented_behavior` | A bug fix that brings the implementation back in line with already-documented behavior. The docs already describe the intended behavior — the bug was the discrepancy. |
+| `agent_or_skill_content` | Only files under `.agents/` or `.github/skills/` changed (agent / skill content does not ship to `microsoft/aspire.dev`). |
+
+If the change does not match exactly one of these categories, draft the
+docs PR.
+
+### Ambiguity rule
+
+When the evidence is mixed or you are unsure, **draft the PR**. A
+drafted docs PR that a human closes is far cheaper than a user-facing
+change shipping undocumented. The drafted PR is in `draft:` state; it
+does not merge until a human flips it out of draft.
+
+## Step 6: Emit the No-Docs Outcome (only when Step 5 allowed it)
+
+This step runs **only** when Step 5 produced an allowed `skipped`
+result. Emit a single `notify_source_pr` safe output with:
+
+- `source_pr_number`: the source PR number from Step 1.
+- `result`: `"skipped"`.
+- `sme_login`: `SME_LOGIN` from Step 2 (or an empty string if none was found).
+- `summary`: a structured markdown rationale that proves the decision.
+  It **must** include:
+  1. The Step 5 branch you took, named explicitly: either
+     `"docs_required → already documented by name"` *or*
+     `"docs_optional → <allowlist_category>"` (use the category name
+     from the table above).
+  2. The list of triggered signals from `.pr-docs-check/signals.json`
+     (or "no signals triggered" when `signal_count == 0`).
+  3. For the `already documented by name` branch: the per-signal docs
+     file path and quoted sentence/code block from Step 5.
+  4. For the allowlist branch: the changed-file globs that justify the
+     chosen category (for example, *"all 4 changed files match `tests/**`"*).
+
+Then **stop**. Do **not** emit `create_pull_request` or any other safe
+output on the no-docs path.
+
+## Step 7: Read the doc-writer Skill
 
 Read the file `.github/skills/doc-writer/SKILL.md` from the checked-out
 `microsoft/aspire.dev` workspace. This skill contains comprehensive guidelines for
@@ -932,17 +1222,17 @@ writing documentation on the Aspire docs site, including:
 
 **You must follow all guidelines in the doc-writer skill when writing documentation.**
 
-## Step 7: Browse Existing Documentation
+## Step 8: Browse Existing Documentation
 
 Explore the existing documentation in `src/frontend/src/content/docs/` to:
 
 - Identify pages that cover the affected feature area
-- Confirm the documentation gap you identified in Step 4
+- Confirm the documentation gap you identified in Step 5
 - Determine whether existing pages need updates or new pages should be created
 - Understand the current documentation structure, naming conventions, and patterns
 - Find related pages that should be cross-referenced
 
-## Step 8: Write Documentation Changes
+## Step 9: Write Documentation Changes
 
 Based on your analysis, make the actual file changes in the workspace:
 
@@ -950,17 +1240,39 @@ Based on your analysis, make the actual file changes in the workspace:
 - **For new pages**: Create new `.mdx` files in the appropriate directory following
   the doc-writer skill's conventions for frontmatter, imports, and structure
 
+**Ground the documentation in the context you gathered in Step 1.** Specifically:
+
+- Use the **source PR description** as the primary statement of what the
+  change does and why. If the description includes "User-facing usage",
+  "Breaking change", or example commands, those map directly to the
+  user-oriented sections you write in the docs.
+- Use the **list of changed files** (and their diff hunks for the
+  surface-area files identified in Step 4's signals) to confirm the
+  exact identifiers, flag names, option names, default values, and
+  package IDs you cite in the docs. Never re-invent names; copy them
+  verbatim from the diff.
+- Use the **PR conversation and review comments** to capture nuance
+  that doesn't appear in the PR body — reviewer-driven naming changes,
+  follow-up clarifications about defaults, edge cases the author
+  acknowledged, and any "we decided to do X for this reason" exchanges.
+  These often answer the *why* questions a docs reader will ask.
+
+If the PR description and comments contradict the diff (for example, the
+body claims a flag is called `--search` but the resx says `--query`),
+trust the diff for identifiers and ask the SME via the
+`notify_source_pr` summary to clarify before merging the docs PR.
+
 Keep the changes focused on the significant user-facing change that triggered this
 workflow. Prefer updating the smallest correct set of pages over broad speculative edits.
 
-Ensure all changes follow the doc-writer skill guidelines from Step 6. Include:
+Ensure all changes follow the doc-writer skill guidelines from Step 7. Include:
 - Proper frontmatter (`title`, `description`)
 - Required Starlight component imports
 - Code examples where appropriate
 - Cross-references to related documentation pages
 - Correct use of Aside, Steps, Tabs, and other components
 
-## Step 9: Create Draft PR
+## Step 10: Create Draft PR
 
 Create a draft pull request on `microsoft/aspire.dev` with:
 
@@ -1000,7 +1312,7 @@ Do **not** include `reviewers` in the `create_pull_request` emission. The SME
 identified in Step 2 is requested as a reviewer by the `notify_source_pr`
 safe-output job, not by `create_pull_request`.
 
-## Step 10: Notify Source PR
+## Step 11: Notify Source PR
 
 After emitting `create_pull_request`, emit a single `notify_source_pr` safe output
 with:

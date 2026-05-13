@@ -1305,7 +1305,7 @@ public class ConsoleInteractionServiceTests
         var binding = PromptBinding.Create(parseResult, option);
 
         var ex = await Assert.ThrowsAsync<NonInteractiveException>(() =>
-            interactionService.PromptForSelectionAsync("Select:", choices, x => x, binding, CancellationToken.None));
+            interactionService.PromptForSelectionAsync("Select:", choices, x => x, binding, cancellationToken: CancellationToken.None));
 
         var outputString = output.ToString();
         Assert.Contains("option1", outputString);
@@ -1348,7 +1348,7 @@ public class ConsoleInteractionServiceTests
         var parseResult = command.Parse("");
         var binding = PromptBinding.Create(parseResult, option, "option2");
 
-        var result = await interactionService.PromptForSelectionAsync("Select:", choices, x => x, binding, CancellationToken.None);
+        var result = await interactionService.PromptForSelectionAsync("Select:", choices, x => x, binding, cancellationToken: CancellationToken.None);
 
         Assert.Equal("option2", result);
     }
@@ -1366,7 +1366,7 @@ public class ConsoleInteractionServiceTests
         var parseResult = command.Parse("--choice option1");
         var binding = PromptBinding.Create(parseResult, option);
 
-        var result = await interactionService.PromptForSelectionAsync("Select:", choices, x => x, binding, CancellationToken.None);
+        var result = await interactionService.PromptForSelectionAsync("Select:", choices, x => x, binding, cancellationToken: CancellationToken.None);
 
         Assert.Equal("option1", result);
     }
@@ -1474,7 +1474,83 @@ public class ConsoleInteractionServiceTests
         var binding = PromptBinding.Create(parseResult, option);
 
         await Assert.ThrowsAsync<NonInteractiveException>(() =>
-            interactionService.PromptForSelectionAsync("Select:", choices, x => x, binding, CancellationToken.None));
+            interactionService.PromptForSelectionAsync("Select:", choices, x => x, binding, cancellationToken: CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task PromptForSelectionAsync_BindingProvided_DoesNotEchoSelection()
+    {
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, "");
+        var interactionService = CreateInteractionService(console);
+        var choices = new[] { "option1", "option2" };
+
+        var option = new System.CommandLine.Option<string?>("--choice");
+        var command = new System.CommandLine.RootCommand { option };
+        var parseResult = command.Parse("--choice option1");
+        var binding = PromptBinding.Create(parseResult, option);
+
+        var result = await interactionService.PromptForSelectionAsync("Select:", choices, x => x, binding, cancellationToken: CancellationToken.None);
+
+        Assert.Equal("option1", result);
+        Assert.Empty(output.ToString());
+    }
+
+    [Fact]
+    public async Task PromptForSelectionsAsync_BindingProvided_DoesNotEchoSelection()
+    {
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, "");
+        var interactionService = CreateInteractionService(console);
+        var choices = new[] { "alpha", "beta", "gamma" };
+
+        var option = new System.CommandLine.Option<string?>("--items");
+        var command = new System.CommandLine.RootCommand { option };
+        var parseResult = command.Parse("--items alpha,gamma");
+        var binding = PromptBinding.Create(parseResult, option);
+
+        var result = await interactionService.PromptForSelectionsAsync("Select:", choices, x => x, binding: binding, cancellationToken: CancellationToken.None);
+
+        Assert.Equal(2, result.Count);
+        Assert.Empty(output.ToString());
+    }
+
+    [Fact]
+    public async Task PromptForSelectionAsync_NonInteractiveDefault_DoesNotEchoSelection()
+    {
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, "");
+        var interactionService = CreateInteractionService(console, hostEnvironment: TestHelpers.CreateNonInteractiveHostEnvironment());
+        var choices = new[] { "option1", "option2" };
+
+        var option = new System.CommandLine.Option<string?>("--choice");
+        var command = new System.CommandLine.RootCommand { option };
+        var parseResult = command.Parse("");
+        var binding = PromptBinding.Create(parseResult, option, "option2");
+
+        var result = await interactionService.PromptForSelectionAsync("Select:", choices, x => x, binding, cancellationToken: CancellationToken.None);
+
+        Assert.Equal("option2", result);
+        Assert.Empty(output.ToString());
+    }
+
+    [Fact]
+    public async Task PromptForSelectionsAsync_NonInteractiveDefault_DoesNotEchoSelection()
+    {
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, "");
+        var interactionService = CreateInteractionService(console, hostEnvironment: TestHelpers.CreateNonInteractiveHostEnvironment());
+        var choices = new[] { "alpha", "beta", "gamma" };
+
+        var option = new System.CommandLine.Option<string?>("--items");
+        var command = new System.CommandLine.RootCommand { option };
+        var parseResult = command.Parse("");
+        var binding = PromptBinding.Create(parseResult, option, "alpha,beta");
+
+        var result = await interactionService.PromptForSelectionsAsync("Select:", choices, x => x, binding: binding, cancellationToken: CancellationToken.None);
+
+        Assert.Equal(2, result.Count);
+        Assert.Empty(output.ToString());
     }
 
     private sealed record TestItem(string Id, string Display)

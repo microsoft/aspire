@@ -25,7 +25,21 @@
     <DefineConstants>$(DefineConstants);CLI</DefineConstants>
     <EnableConfigurationBindingGenerator>true</EnableConfigurationBindingGenerator>
     <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+    <!-- AspireCliChannel identifies the acquisition channel the CLI binary was built for.
+         For non-PR builds the value is one of: stable | staging | daily | local. For PR
+         builds CI emits the per-PR hive label directly as `pr-<PR_NUMBER>` (no separate
+         PrNumber parse / join at runtime). Local devs and ./build.sh default to 'local'
+         so a locally-built CLI does not impersonate the real 'daily' channel (which would
+         cause PSM guards keyed on identity==channel to short-circuit silently). CI overrides
+         via /p:AspireCliChannel=$(aspireCliChannel). The value is baked into the assembly via
+         AssemblyMetadata below so the runtime IdentityChannelReader can read it without
+         reflection-unsafe lookups. -->
+    <AspireCliChannel Condition="'$(AspireCliChannel)' == ''">local</AspireCliChannel>
   </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="AspireCliChannel" Value="$(AspireCliChannel)" />
+  </ItemGroup>
 
   <!-- Set the nuget properties when building as a global tool. -->
   <PropertyGroup Condition="'$(IsCliToolProject)' == 'true'">
@@ -160,6 +174,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Aspire.Cli.Tests" />
+    <InternalsVisibleTo Include="Aspire.Cli.Benchmarks" />
   </ItemGroup>
 
   <ItemGroup>
