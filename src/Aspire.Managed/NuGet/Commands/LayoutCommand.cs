@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using NuGet.Frameworks;
 using NuGet.ProjectModel;
+using NuGet.RuntimeModel;
 
 namespace Aspire.Managed.NuGet.Commands;
 
@@ -15,6 +16,10 @@ namespace Aspire.Managed.NuGet.Commands;
 /// </summary>
 public static class LayoutCommand
 {
+    private const string RuntimeIdentifierGraphResourceName = "Aspire.Managed.RuntimeIdentifierGraph.json";
+    private const string RuntimeAssetType = "runtime";
+    private const string NativeAssetType = "native";
+
     /// <summary>
     /// Creates the layout command.
     /// </summary>
@@ -113,6 +118,8 @@ public static class LayoutCommand
             var skippedCount = 0;
 
             var packagesPath = GetPackagesPath(lockFile);
+            var runtimeGraph = ReadRuntimeGraph();
+            var runtimeIdentifierRanks = GetRuntimeIdentifierRanks(runtimeGraph, effectiveRuntimeIdentifier);
 
             if (verbose)
             {
@@ -129,6 +136,7 @@ public static class LayoutCommand
                     library,
                     packagesPath,
                     outputPath,
+                    runtimeIdentifierRanks,
                     verbose);
 
                 copiedCount += libraryCopiedCount;
@@ -180,6 +188,7 @@ public static class LayoutCommand
         LockFileTargetLibrary library,
         string packagesPath,
         string outputPath,
+        IReadOnlyDictionary<string, int> runtimeIdentifierRanks,
         bool verbose)
     {
         if (library.Type != "package")
@@ -203,7 +212,7 @@ public static class LayoutCommand
 
         var copiedCount = 0;
         copiedCount += CopyRuntimeAssemblies(library.RuntimeAssemblies, packagePath, outputPath, verbose);
-        copiedCount += CopyRuntimeTargets(library.RuntimeTargets, packagePath, outputPath, verbose);
+        copiedCount += CopyRuntimeTargets(library.RuntimeTargets, packagePath, outputPath, runtimeIdentifierRanks, verbose);
         copiedCount += CopyResourceAssemblies(library.ResourceAssemblies, packagePath, outputPath, verbose);
         copiedCount += CopyNativeLibraries(library.NativeLibraries, packagePath, outputPath, verbose);
 
@@ -281,9 +290,11 @@ public static class LayoutCommand
         IEnumerable<LockFileRuntimeTarget> runtimeTargets,
         string packagePath,
         string outputPath,
+        IReadOnlyDictionary<string, int> runtimeIdentifierRanks,
         bool verbose)
     {
         var copiedCount = 0;
+        var bestFlatTargets = new Dictionary<string, FlatRuntimeTargetCandidate>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var runtimeTarget in runtimeTargets)
         {
@@ -307,6 +318,31 @@ public static class LayoutCommand
                 {
                     Console.WriteLine($"  Copy ({runtimeTarget.AssetType} target): {sourcePath} -> {destPath}");
                 }
+            }
+
+            if (TryGetFlatRuntimeTargetRank(runtimeTarget, runtimeIdentifierRanks, out var rank))
+            {
+                // Some packages, including Microsoft.Data.SqlClient, put the real platform
+                // implementation in runtimeTargets while keeping an unsupported assembly in
+                // lib/. The apphost server probes a flat directory, so keep structured copies
+                // for diagnostics but flatten exactly the best RID-compatible asset.
+                var key = $"{runtimeTarget.AssetType}|{Path.GetFileName(sourcePath)}";
+                if (!bestFlatTargets.TryGetValue(key, out var existing) || rank < existing.Rank)
+                {
+                    bestFlatTargets[key] = new FlatRuntimeTargetCandidate(runtimeTarget, sourcePath, rank);
+                }
+            }
+        }
+
+        foreach (var candidate in bestFlatTargets.Values)
+        {
+            var destPath = Path.Combine(outputPath, Path.GetFileName(candidate.SourcePath));
+            CopyAlways(candidate.SourcePath, destPath, createDirectory: false);
+            copiedCount++;
+
+            if (verbose)
+            {
+                Console.WriteLine($"  Copy ({candidate.RuntimeTarget.AssetType} target flat): {candidate.SourcePath} -> {destPath}");
             }
         }
 
@@ -406,6 +442,49 @@ public static class LayoutCommand
         return copiedCount;
     }
 
+    private static RuntimeGraph ReadRuntimeGraph()
+    {
+        using var resourceStream = typeof(LayoutCommand).Assembly.GetManifestResourceStream(RuntimeIdentifierGraphResourceName)
+            ?? throw new InvalidOperationException($"Embedded runtime identifier graph resource '{RuntimeIdentifierGraphResourceName}' was not found.");
+
+        return JsonRuntimeFormat.ReadRuntimeGraph(resourceStream);
+    }
+
+    private static IReadOnlyDictionary<string, int> GetRuntimeIdentifierRanks(RuntimeGraph runtimeGraph, string runtimeIdentifier)
+    {
+        var ranks = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var rank = 0;
+
+        foreach (var candidateRuntimeIdentifier in runtimeGraph.ExpandRuntime(runtimeIdentifier))
+        {
+            ranks.TryAdd(candidateRuntimeIdentifier, rank++);
+        }
+
+        ranks.TryAdd(runtimeIdentifier, 0);
+
+        return ranks;
+    }
+
+    private static bool TryGetFlatRuntimeTargetRank(
+        LockFileRuntimeTarget runtimeTarget,
+        IReadOnlyDictionary<string, int> runtimeIdentifierRanks,
+        out int rank)
+    {
+        rank = 0;
+
+        if (!IsFlattenedRuntimeTargetAssetType(runtimeTarget.AssetType) ||
+            string.IsNullOrWhiteSpace(runtimeTarget.Runtime))
+        {
+            return false;
+        }
+
+        return runtimeIdentifierRanks.TryGetValue(runtimeTarget.Runtime, out rank);
+    }
+
+    private static bool IsFlattenedRuntimeTargetAssetType(string? assetType) =>
+        string.Equals(assetType, RuntimeAssetType, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(assetType, NativeAssetType, StringComparison.OrdinalIgnoreCase);
+
     private static bool CopyIfNewer(string sourcePath, string destPath, bool createDirectory)
     {
         if (File.Exists(destPath) &&
@@ -423,9 +502,20 @@ public static class LayoutCommand
         return true;
     }
 
+    private static void CopyAlways(string sourcePath, string destPath, bool createDirectory)
+    {
+        if (createDirectory)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(destPath)!);
+        }
+
+        File.Copy(sourcePath, destPath, overwrite: true);
+    }
+
     private static bool IsPlaceholderPath(string path)
     {
         return string.Equals(Path.GetFileName(path), "_._", StringComparison.OrdinalIgnoreCase);
     }
 
+    private sealed record FlatRuntimeTargetCandidate(LockFileRuntimeTarget RuntimeTarget, string SourcePath, int Rank);
 }

@@ -126,6 +126,16 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void GenerateIntegrationProjectFile_IncludesRuntimeIdentifierWhenProvided()
+    {
+        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile([], [], "/tmp/libs", runtimeIdentifier: "win-x64");
+        var doc = XDocument.Parse(xml);
+
+        var ns = doc.Root!.GetDefaultNamespace();
+        Assert.Equal("win-x64", doc.Descendants(ns + "RuntimeIdentifier").FirstOrDefault()?.Value);
+    }
+
+    [Fact]
     public void GenerateIntegrationProjectFile_WithAdditionalSources_SetsRestoreAdditionalProjectSources()
     {
         var sources = new[] { "/local/packages", "https://my-feed/v3/index.json" };

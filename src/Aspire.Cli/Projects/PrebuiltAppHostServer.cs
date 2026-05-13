@@ -220,7 +220,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             _logger.LogWarning(ex, "Failed to configure NuGet sources for integration project build");
         }
 
-        var projectContent = GenerateIntegrationProjectFile(packageRefs, projectRefs, outputDir, channelSources);
+        var projectContent = GenerateIntegrationProjectFile(packageRefs, projectRefs, outputDir, channelSources, RuntimeInformation.RuntimeIdentifier);
         var projectFilePath = Path.Combine(restoreDir, "IntegrationRestore.csproj");
         await File.WriteAllTextAsync(projectFilePath, projectContent, cancellationToken);
 
@@ -273,7 +273,8 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         List<IntegrationReference> packageRefs,
         List<IntegrationReference> projectRefs,
         string outputDir,
-        IEnumerable<string>? additionalSources = null)
+        IEnumerable<string>? additionalSources = null,
+        string? runtimeIdentifier = null)
     {
         var propertyGroup = new XElement("PropertyGroup",
             new XElement("TargetFramework", DotNetBasedAppHostServerProject.TargetFramework),
@@ -283,6 +284,11 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             new XElement("EnableNETAnalyzers", "false"),
             new XElement("GenerateDocumentationFile", "false"),
             new XElement("OutDir", outputDir));
+
+        if (!string.IsNullOrWhiteSpace(runtimeIdentifier))
+        {
+            propertyGroup.Add(new XElement("RuntimeIdentifier", runtimeIdentifier));
+        }
 
         // Add channel sources without replacing the user's nuget.config
         if (additionalSources is not null)

@@ -142,6 +142,66 @@ public class LayoutCommandTests
         }
     }
 
+    [Fact]
+    public async Task LayoutCommand_FlattensBestMatchingRuntimeTargets_WhenRidTargetIsMissing()
+    {
+        var workspaceRoot = Directory.CreateTempSubdirectory("aspire-layout-tests").FullName;
+
+        try
+        {
+            const string runtimeIdentifier = "win-x64";
+            const string nativeFileName = "TestNative.dll";
+
+            var packageRoot = Path.Combine(workspaceRoot, "packages", "test.package", "1.0.0");
+            Directory.CreateDirectory(Path.Combine(packageRoot, "lib", "net10.0"));
+            Directory.CreateDirectory(Path.Combine(packageRoot, "runtimes", "win", "lib", "net10.0"));
+            Directory.CreateDirectory(Path.Combine(packageRoot, "runtimes", "unix", "lib", "net10.0"));
+            Directory.CreateDirectory(Path.Combine(packageRoot, "runtimes", "win-x64", "native"));
+            Directory.CreateDirectory(Path.Combine(packageRoot, "runtimes", "linux-x64", "native"));
+
+            await File.WriteAllTextAsync(Path.Combine(packageRoot, "lib", "net10.0", "Test.Package.dll"), "base");
+            await File.WriteAllTextAsync(Path.Combine(packageRoot, "runtimes", "win", "lib", "net10.0", "Test.Package.dll"), "win");
+            await File.WriteAllTextAsync(Path.Combine(packageRoot, "runtimes", "unix", "lib", "net10.0", "Test.Package.dll"), "unix");
+            await File.WriteAllTextAsync(Path.Combine(packageRoot, "runtimes", "win-x64", "native", nativeFileName), "win-native");
+            await File.WriteAllTextAsync(Path.Combine(packageRoot, "runtimes", "linux-x64", "native", "libTestNative.so"), "linux-native");
+
+            var assetsPath = Path.Combine(workspaceRoot, "project.assets.json");
+            await File.WriteAllTextAsync(assetsPath, CreateAssetsJsonWithRuntimeTargetsOnly(workspaceRoot, nativeFileName));
+
+            var outputPath = Path.Combine(workspaceRoot, "out");
+            var command = LayoutCommand.Create();
+            var parseResult = command.Parse([
+                "--assets", assetsPath,
+                "--output", outputPath,
+                "--framework", "net10.0",
+                "--runtime-identifier", runtimeIdentifier
+            ]);
+
+            var exitCode = await parseResult.InvokeAsync();
+
+            Assert.Equal(0, exitCode);
+            Assert.Equal("win", await File.ReadAllTextAsync(Path.Combine(outputPath, "Test.Package.dll")));
+            Assert.Equal("win-native", await File.ReadAllTextAsync(Path.Combine(outputPath, nativeFileName)));
+            Assert.False(File.Exists(Path.Combine(outputPath, "libTestNative.so")));
+            Assert.Equal(
+                "win",
+                await File.ReadAllTextAsync(Path.Combine(outputPath, "runtimes", "win", "lib", "net10.0", "Test.Package.dll")));
+            Assert.Equal(
+                "unix",
+                await File.ReadAllTextAsync(Path.Combine(outputPath, "runtimes", "unix", "lib", "net10.0", "Test.Package.dll")));
+            Assert.Equal(
+                "linux-native",
+                await File.ReadAllTextAsync(Path.Combine(outputPath, "runtimes", "linux-x64", "native", "libTestNative.so")));
+        }
+        finally
+        {
+            if (Directory.Exists(workspaceRoot))
+            {
+                Directory.Delete(workspaceRoot, recursive: true);
+            }
+        }
+    }
+
     private static string CreateAssetsJsonWithResolvedRidTarget(string rootPath, string runtimeIdentifier, string nativeFileName)
     {
         var packagesPath = Path.Combine(rootPath, "packages") + Path.DirectorySeparatorChar;
@@ -325,6 +385,77 @@ public class LayoutCommandTests
                   "path": "test.package/1.0.0",
                   "files": [
                     "lib/net10.0/Test.Package.dll"
+                  ]
+                }
+              },
+              "packageFolders": {
+                "{{escapedPackagesPath}}": {}
+              },
+              "project": {
+                "version": "1.0.0",
+                "restore": {
+                  "projectUniqueName": "test",
+                  "projectName": "test",
+                  "projectPath": "test",
+                  "packagesPath": "{{escapedPackagesPath}}",
+                  "outputPath": "{{escapedOutputPath}}",
+                  "projectStyle": "PackageReference",
+                  "originalTargetFrameworks": [ "net10.0" ],
+                  "sources": {},
+                  "frameworks": {
+                    "net10.0": {
+                      "targetAlias": "net10.0",
+                      "projectReferences": {}
+                    }
+                  }
+                },
+                "frameworks": {
+                  "net10.0": {
+                    "targetAlias": "net10.0",
+                    "dependencies": {}
+                  }
+                }
+              }
+            }
+            """;
+    }
+
+    private static string CreateAssetsJsonWithRuntimeTargetsOnly(string rootPath, string nativeFileName)
+    {
+        var packagesPath = Path.Combine(rootPath, "packages") + Path.DirectorySeparatorChar;
+        var escapedPackagesPath = packagesPath.Replace("\\", "\\\\");
+        var outputPath = Path.Combine(rootPath, "obj") + Path.DirectorySeparatorChar;
+        var escapedOutputPath = outputPath.Replace("\\", "\\\\");
+
+        return $$"""
+            {
+              "version": 3,
+              "targets": {
+                "net10.0": {
+                  "Test.Package/1.0.0": {
+                    "type": "package",
+                    "runtime": {
+                      "lib/net10.0/Test.Package.dll": {}
+                    },
+                    "runtimeTargets": {
+                      "runtimes/win/lib/net10.0/Test.Package.dll": { "rid": "win", "assetType": "runtime" },
+                      "runtimes/unix/lib/net10.0/Test.Package.dll": { "rid": "unix", "assetType": "runtime" },
+                      "runtimes/win-x64/native/{{nativeFileName}}": { "rid": "win-x64", "assetType": "native" },
+                      "runtimes/linux-x64/native/libTestNative.so": { "rid": "linux-x64", "assetType": "native" }
+                    }
+                  }
+                }
+              },
+              "libraries": {
+                "Test.Package/1.0.0": {
+                  "type": "package",
+                  "path": "test.package/1.0.0",
+                  "files": [
+                    "lib/net10.0/Test.Package.dll",
+                    "runtimes/win/lib/net10.0/Test.Package.dll",
+                    "runtimes/unix/lib/net10.0/Test.Package.dll",
+                    "runtimes/win-x64/native/{{nativeFileName}}",
+                    "runtimes/linux-x64/native/libTestNative.so"
                   ]
                 }
               },
