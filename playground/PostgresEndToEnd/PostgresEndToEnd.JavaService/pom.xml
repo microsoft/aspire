@@ -30,7 +30,7 @@
             <dependency>
                 <groupId>io.netty</groupId>
                 <artifactId>netty-codec-http2</artifactId>
-                <version>4.1.124.Final</version>
+                <version>4.1.133.Final</version>
             </dependency>
             <dependency>
                 <groupId>com.nimbusds</groupId>
