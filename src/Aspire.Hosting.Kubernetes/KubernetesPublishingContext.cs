@@ -141,7 +141,7 @@ internal sealed class KubernetesPublishingContext(
         {
             if (customResource.Parent == environment && customResource.GeneratedResource is { } generatedResource)
             {
-                await WriteKubernetesTemplatesForResource(customResource, [(BaseKubernetesResource)generatedResource]).ConfigureAwait(false);
+                await WriteKubernetesTemplatesForResource(customResource, [generatedResource]).ConfigureAwait(false);
             }
         }
 

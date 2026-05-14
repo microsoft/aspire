@@ -4,7 +4,6 @@
 #pragma warning disable ASPIREPIPELINES001
 
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Kubernetes.Resources;
 
 namespace Aspire.Hosting.Kubernetes.Tests;
 
@@ -31,43 +30,43 @@ public class KubernetesCustomResourceResourceTests
     }
 
     [Fact]
-    public void ApiVersion_CanBeSet()
+    public async Task ApiVersion_CanBeSet()
     {
         var environment = new KubernetesEnvironmentResource("env");
         var resource = new KubernetesCustomResourceResource("my-resource", environment);
 
-        resource.ApiVersion = "apps/v1";
+        resource.ApiVersion = ReferenceExpression.Create($"apps/v1");
 
-        Assert.Equal("apps/v1", resource.ApiVersion);
+        Assert.Equal("apps/v1", await resource.ApiVersion.GetValueAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
-    public void ApiVersion_DefaultIsEmpty()
+    public async Task ApiVersion_DefaultIsNull()
     {
         var environment = new KubernetesEnvironmentResource("env");
         var resource = new KubernetesCustomResourceResource("my-resource", environment);
 
-        Assert.Equal("", resource.ApiVersion);
+        Assert.Null(await resource.ApiVersion.GetValueAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
-    public void Kind_CanBeSet()
+    public async Task Kind_CanBeSet()
     {
         var environment = new KubernetesEnvironmentResource("env");
         var resource = new KubernetesCustomResourceResource("my-resource", environment);
 
-        resource.Kind = "Deployment";
+        resource.Kind = ReferenceExpression.Create($"Deployment");
 
-        Assert.Equal("Deployment", resource.Kind);
+        Assert.Equal("Deployment", await resource.Kind.GetValueAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
-    public void Kind_DefaultIsEmpty()
+    public async Task Kind_DefaultIsNull()
     {
         var environment = new KubernetesEnvironmentResource("env");
         var resource = new KubernetesCustomResourceResource("my-resource", environment);
 
-        Assert.Equal("", resource.Kind);
+        Assert.Null(await resource.Kind.GetValueAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -101,114 +100,6 @@ public class KubernetesCustomResourceResourceTests
     }
 
     [Fact]
-    public void Build_ReturnsCustomResourceV1()
-    {
-        var environment = new KubernetesEnvironmentResource("env");
-        var resource = new KubernetesCustomResourceResource("my-resource", environment)
-        {
-            ApiVersion = "v1",
-            Kind = "ConfigMap"
-        };
-
-        var result = resource.Build();
-
-        Assert.NotNull(result);
-        Assert.IsType<CustomResourceV1>(result);
-    }
-
-    [Fact]
-    public void Build_SetsApiVersionAndKind()
-    {
-        var environment = new KubernetesEnvironmentResource("env");
-        var resource = new KubernetesCustomResourceResource("my-resource", environment)
-        {
-            ApiVersion = "apps/v1",
-            Kind = "Deployment"
-        };
-
-        var result = (CustomResourceV1)resource.Build();
-
-        Assert.Equal("apps/v1", result.ApiVersion);
-        Assert.Equal("Deployment", result.Kind);
-    }
-
-    [Fact]
-    public void Build_SetsMetadataName()
-    {
-        var environment = new KubernetesEnvironmentResource("env");
-        var resource = new KubernetesCustomResourceResource("my-resource", environment);
-
-        var result = (CustomResourceV1)resource.Build();
-
-        Assert.Equal("my-resource", result.Metadata.Name);
-    }
-
-    [Fact]
-    public void Build_ConvertsResourceNameToKubernetes()
-    {
-        var environment = new KubernetesEnvironmentResource("env");
-        var resource = new KubernetesCustomResourceResource("MyResource", environment);
-
-        var result = (CustomResourceV1)resource.Build();
-
-        // ToKubernetesResourceName converts to lowercase with hyphens
-        Assert.Equal("myresource", result.Metadata.Name);
-    }
-
-    [Fact]
-    public void Build_CopiesSpec()
-    {
-        var environment = new KubernetesEnvironmentResource("env");
-        var spec = new GenericObjectSpec(new { replicas = 5, image = "nginx:latest" });
-        var resource = new KubernetesCustomResourceResource("my-resource", environment)
-        {
-            Spec = spec
-        };
-
-        var result = (CustomResourceV1)resource.Build();
-
-        Assert.Same(spec, result.Spec);
-    }
-
-    [Fact]
-    public void Build_SetsGeneratedResourceProperty()
-    {
-        var environment = new KubernetesEnvironmentResource("env");
-        var resource = new KubernetesCustomResourceResource("my-resource", environment);
-
-        var result = resource.Build();
-
-        Assert.NotNull(resource.GeneratedResource);
-        Assert.Same(result, resource.GeneratedResource);
-    }
-
-    [Fact]
-    public void Build_CalledMultipleTimes_CreatesNewResourceEachTime()
-    {
-        var environment = new KubernetesEnvironmentResource("env");
-        var resource = new KubernetesCustomResourceResource("my-resource", environment)
-        {
-            ApiVersion = "v1",
-            Kind = "ConfigMap"
-        };
-
-        var result1 = resource.Build();
-        var result2 = resource.Build();
-
-        Assert.NotEqual(result1, result2);
-        Assert.Same(result2, resource.GeneratedResource);
-    }
-
-    [Fact]
-    public void ImplementsIKubernetesCustomResourceResource()
-    {
-        var environment = new KubernetesEnvironmentResource("env");
-        var resource = new KubernetesCustomResourceResource("my-resource", environment);
-
-        Assert.IsAssignableFrom<IKubernetesCustomResourceResource>(resource);
-    }
-
-    [Fact]
     public void ImplementsIResourceWithParent()
     {
         var environment = new KubernetesEnvironmentResource("env");
@@ -224,25 +115,5 @@ public class KubernetesCustomResourceResourceTests
         var resource = new KubernetesCustomResourceResource("my-resource", environment);
 
         Assert.IsAssignableFrom<Resource>(resource);
-    }
-
-    [Fact]
-    public void Build_WithMultipleSpecifications()
-    {
-        var environment = new KubernetesEnvironmentResource("env");
-        var spec = new SimpleCustomResourceSpec("test", 1, new NestedCustomResourceSpec("data"));
-        var resource = new KubernetesCustomResourceResource("my-resource", environment)
-        {
-            ApiVersion = "custom.io/v1",
-            Kind = "MyCustomResource",
-            Spec = spec
-        };
-
-        var result = (CustomResourceV1)resource.Build();
-
-        Assert.Equal("custom.io/v1", result.ApiVersion);
-        Assert.Equal("MyCustomResource", result.Kind);
-        Assert.Equal("my-resource", result.Metadata.Name);
-        Assert.Same(spec, result.Spec);
     }
 }

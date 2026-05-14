@@ -3,7 +3,6 @@
 
 #pragma warning disable ASPIREPIPELINES001
 
-using Aspire.Hosting.Kubernetes.Resources;
 using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Kubernetes.Tests;
@@ -177,45 +176,6 @@ public class KubernetesCustomResourcePublishingTests()
         Assert.Contains("spec:", yaml);
 
         
-    }
-
-    [Fact]
-    public async Task BuildMethod_CreatesCustomResourceV1()
-    {
-        var environment = new KubernetesEnvironmentResource("env");
-        var resource = new KubernetesCustomResourceResource("test-resource", environment)
-        {
-            ApiVersion = "v1",
-            Kind = "ConfigMap",
-            Spec = new ConfigMapDataSpec(new { key = "value" })
-        };
-
-        var built = resource.Build();
-
-        Assert.NotNull(built);
-        Assert.IsType<CustomResourceV1>(built);
-        var customResource = (CustomResourceV1)built;
-        Assert.Equal("v1", customResource.ApiVersion);
-        Assert.Equal("ConfigMap", customResource.Kind);
-        Assert.Equal("test-resource", customResource.Metadata.Name);
-    }
-
-    [Fact]
-    public async Task CustomResourceResource_GeneratedResourceIsSet()
-    {
-        var environment = new KubernetesEnvironmentResource("env");
-        var resource = new KubernetesCustomResourceResource("test-resource", environment)
-        {
-            ApiVersion = "v1",
-            Kind = "ConfigMap"
-        };
-
-        Assert.Null(resource.GeneratedResource);
-
-        var built = resource.Build();
-
-        Assert.NotNull(resource.GeneratedResource);
-        Assert.Same(built, resource.GeneratedResource);
     }
 
     [Fact]

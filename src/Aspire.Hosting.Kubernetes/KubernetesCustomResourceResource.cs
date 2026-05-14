@@ -2,27 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes;
-using Aspire.Hosting.Kubernetes.Extensions;
 using Aspire.Hosting.Kubernetes.Resources;
-
-/// <summary>
-/// Represents a Custom Resource for deployment. This will most commonly be a custom object that conforms to the schema
-/// of a CRD that already exists on the Kubernetes cluster.
-/// </summary>
-public interface IKubernetesCustomResourceResource : IResourceWithParent<KubernetesEnvironmentResource>
-{
-    /// <summary>
-    /// Builds a <see cref="CustomResourceV1"/> from the <see cref="IKubernetesCustomResourceResource"/> and
-    /// assigns the result to <see cref="GeneratedResource"/>.
-    /// </summary>
-    /// <returns>A fully configured <see cref="CustomResourceV1"/> ready for publishing.</returns>
-    CustomResourceV1 Build();
-
-    /// <summary>
-    /// Gets or sets the publisher-ready resource.
-    /// </summary>
-    CustomResourceV1? GeneratedResource { get; set; }
-}
 
 /// <summary>
 /// Represents a Custom Resource for deployment along with the compute resources from the app model.
@@ -31,7 +11,7 @@ public interface IKubernetesCustomResourceResource : IResourceWithParent<Kuberne
 /// <param name="environment">The parent Kubernetes environment resource.</param>
 public sealed class KubernetesCustomResourceResource(
     string name,
-    KubernetesEnvironmentResource environment) : Resource(name), IKubernetesCustomResourceResource
+    KubernetesEnvironmentResource environment) : Resource(name), IResourceWithParent<KubernetesEnvironmentResource>
 {
     /// <summary>
     /// Gets the parent Kubernetes environment resource.
@@ -39,31 +19,19 @@ public sealed class KubernetesCustomResourceResource(
     public KubernetesEnvironmentResource Parent { get; } = environment ?? throw new ArgumentNullException(nameof(environment));
 
     /// <inheritdoc /> 
-    public string ApiVersion { get; set; } = "";
+    public ReferenceExpression ApiVersion { get; set; } = ReferenceExpression.Empty;
 
     /// <inheritdoc /> 
-    public string Kind { get; set; } = "";
+    public ReferenceExpression Kind { get; set; } = ReferenceExpression.Empty;
+
+    /// <summary>
+    /// Gets or sets the metadata that will be applied at the top-level of the manifest.
+    /// </summary>
+    public ObjectMetaV1? Metadata { get; set; }
 
     /// <inheritdoc /> 
     public CustomResourceSpecV1? Spec { get; set; }
     
     /// <inheritdoc />
     public CustomResourceV1? GeneratedResource { get; set; }
-
-    /// <inheritdoc />
-    public CustomResourceV1 Build()
-    {
-        var builtResource = new CustomResourceV1(ApiVersion, Kind)
-        {
-            Metadata =
-            {
-                Name = Name.ToKubernetesResourceName(),
-            },
-            Spec = Spec
-        };
-
-        this.GeneratedResource = builtResource;
-
-        return builtResource;
-    }
 }

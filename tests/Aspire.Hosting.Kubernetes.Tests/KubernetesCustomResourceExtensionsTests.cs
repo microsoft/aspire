@@ -12,7 +12,7 @@ namespace Aspire.Hosting.Kubernetes.Tests;
 public class KubernetesCustomResourceExtensionsTests
 {
     [Fact]
-    public void AddCustomResource_WithValidParameters_CreatesResource()
+    public async Task AddCustomResource_WithValidParameters_CreatesResource()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var k8s = builder.AddKubernetesEnvironment("env");
@@ -21,8 +21,8 @@ public class KubernetesCustomResourceExtensionsTests
 
         Assert.NotNull(resource);
         Assert.Equal("my-resource", resource.Resource.Name);
-        Assert.Equal("v1", resource.Resource.ApiVersion);
-        Assert.Equal("ConfigMap", resource.Resource.Kind);
+        Assert.Equal("v1", await resource.Resource.ApiVersion.GetValueAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("ConfigMap", await resource.Resource.Kind.GetValueAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -171,15 +171,15 @@ public class KubernetesCustomResourceExtensionsTests
     }
 
     [Fact]
-    public void AddCustomResource_WithCustomApiVersion()
+    public async Task AddCustomResource_WithCustomApiVersion()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var k8s = builder.AddKubernetesEnvironment("env");
 
         var resource = k8s.AddCustomResource("my-cert", "cert-manager.io/v1", "Certificate");
 
-        Assert.Equal("cert-manager.io/v1", resource.Resource.ApiVersion);
-        Assert.Equal("Certificate", resource.Resource.Kind);
+        Assert.Equal("cert-manager.io/v1", await resource.Resource.ApiVersion.GetValueAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("Certificate", await resource.Resource.Kind.GetValueAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
