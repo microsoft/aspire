@@ -44,7 +44,7 @@ public sealed class TypeScriptJavaScriptHostingDeploymentTests(ITestOutputHelper
             Assert.Skip("Azure authentication not available. Run 'az login' to authenticate.");
         }
 
-        var workspace = TemporaryWorkspace.Create(output);
+        using var workspace = TemporaryWorkspace.Create(output);
         var startTime = DateTime.UtcNow;
         var resourceGroupName = DeploymentE2ETestHelpers.GenerateResourceGroupName("ts-js-hosting");
 
@@ -79,7 +79,7 @@ public sealed class TypeScriptJavaScriptHostingDeploymentTests(ITestOutputHelper
             await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(30));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
-            await auto.RunCommandFailFastAsync(BuildEndpointVerificationCommand(resourceGroupName), counter, TimeSpan.FromMinutes(5));
+            await auto.RunCommandFailFastAsync(BuildEndpointVerificationCommand(resourceGroupName), counter, TimeSpan.FromMinutes(10));
 
             await auto.TypeAsync("exit");
             await auto.EnterAsync();
@@ -109,7 +109,7 @@ public sealed class TypeScriptJavaScriptHostingDeploymentTests(ITestOutputHelper
         {
             output.WriteLine($"Triggering cleanup of resource group: {resourceGroupName}");
             TriggerCleanupResourceGroup(resourceGroupName, output);
-            DeploymentReporter.ReportCleanupStatus(resourceGroupName, success: true, "Cleanup triggered (fire-and-forget)");
+            DeploymentReporter.ReportCleanupStatus(resourceGroupName, success: true, errorMessage: "Cleanup triggered (fire-and-forget)");
         }
     }
 
@@ -192,25 +192,23 @@ public sealed class TypeScriptJavaScriptHostingDeploymentTests(ITestOutputHelper
             "echo \"Checking https://$static_host\" && " +
             "ok=0 && " +
             "for i in $(seq 1 30); do " +
-            "if curl -sf --max-time 10 \"https://$static_host/index.html\" | grep -q Weather && " +
-            "curl -sf --max-time 10 \"https://$static_host/api/weather\" | grep -q temperatureC; then " +
+            "if curl -sf --max-time 5 \"https://$static_host/index.html\" | grep -q Weather && " +
+            "curl -sf --max-time 5 \"https://$static_host/api/weather\" | grep -q temperatureC; then " +
             "ok=1; break; " +
             "fi; " +
-            "sleep 10; " +
+            "sleep 5; " +
             "done && " +
             "if [ \"$ok\" -ne 1 ]; then echo \"Endpoint verification failed\"; exit 1; fi";
     }
 
     private static void TriggerCleanupResourceGroup(string resourceGroupName, ITestOutputHelper output)
     {
-        var process = new System.Diagnostics.Process
+        using var process = new System.Diagnostics.Process
         {
             StartInfo = new System.Diagnostics.ProcessStartInfo
             {
                 FileName = "az",
                 Arguments = $"group delete --name {resourceGroupName} --yes --no-wait",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
             }
