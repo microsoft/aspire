@@ -540,18 +540,13 @@ public sealed class DcpHostNotificationTests
     [Fact]
     public void CreateDcpProcessSpec_DoesNotInheritExcludedEnvironmentVariables()
     {
-        // The CLI and host set environment variables that must not cascade through
-        // DCP into child project processes. Verify that exact-match entries and
-        // prefix entries (ASPIRE_APPHOST_) are all stripped, regardless of casing,
-        // while unrelated variables are still inherited.
         var excludedVars = new Dictionary<string, string>
         {
             ["aspnetcore_urls"] = "http://localhost:5000",
             ["DOTNET_LAUNCH_PROFILE"] = "MyProfile",
             ["ASPNETCORE_ENVIRONMENT"] = "Development",
             ["DOTNET_ENVIRONMENT"] = "Development",
-            ["ASPIRE_APPHOST_LOGLEVEL"] = "Debug",
-            ["aspire_apphost_custom"] = "value",
+            ["aspire_loglevel"] = "Debug",
         };
 
         var options = new RemoteInvokeOptions();
@@ -560,8 +555,9 @@ public sealed class DcpHostNotificationTests
             options.StartInfo.Environment[key] = value;
         }
 
-        // This variable should pass through because it doesn't match any exclusion rule.
         options.StartInfo.Environment["MY_CUSTOM_SETTING"] = "keep-me";
+        options.StartInfo.Environment["ASPNETCORE_URLS_FOO"] = "keep-me-too";
+        options.StartInfo.Environment["ASPIRE_LOGLEVEL_EXTRA"] = "keep-me-three";
 
         RemoteExecutor.Invoke(static () =>
         {
@@ -574,15 +570,13 @@ public sealed class DcpHostNotificationTests
 
             var processSpec = dcpHost.CreateDcpProcessSpec(locations);
 
-            // Every excluded variable must be absent from the DCP process.
             string[] expectedExcluded =
             [
                 "aspnetcore_urls",
                 "DOTNET_LAUNCH_PROFILE",
                 "ASPNETCORE_ENVIRONMENT",
                 "DOTNET_ENVIRONMENT",
-                "ASPIRE_APPHOST_LOGLEVEL",
-                "aspire_apphost_custom",
+                "aspire_loglevel",
             ];
 
             foreach (var key in expectedExcluded)
@@ -591,10 +585,11 @@ public sealed class DcpHostNotificationTests
                     $"DCP process should not inherit '{key}' from the app host.");
             }
 
-            // Unmatched variables must still be inherited.
             Assert.True(processSpec.EnvironmentVariables.ContainsKey("MY_CUSTOM_SETTING"),
                 "DCP process should inherit environment variables that are not in the exclusion list.");
             Assert.Equal("keep-me", processSpec.EnvironmentVariables["MY_CUSTOM_SETTING"]);
+            Assert.Equal("keep-me-too", processSpec.EnvironmentVariables["ASPNETCORE_URLS_FOO"]);
+            Assert.Equal("keep-me-three", processSpec.EnvironmentVariables["ASPIRE_LOGLEVEL_EXTRA"]);
         }, options).Dispose();
     }
 

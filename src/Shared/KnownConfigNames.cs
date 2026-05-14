@@ -35,7 +35,7 @@ internal static class KnownConfigNames
     public const string CliProcessStarted = "ASPIRE_CLI_STARTED";
     public const string CliRunDetached = "ASPIRE_CLI_RUN_DETACHED";
     public const string ForceRichConsole = "ASPIRE_FORCE_RICH_CONSOLE";
-    public const string AppHostLogLevel = "ASPIRE_APPHOST_LOGLEVEL";
+    public const string AspireLogLevel = "ASPIRE_LOGLEVEL";
     public const string TestingDisableHttpClient = "ASPIRE_TESTING_DISABLE_HTTP_CLIENT";
     public const string InteractivityEnabled = "ASPIRE_INTERACTIVITY_ENABLED";
     public const string EnableContainerTunnel = "ASPIRE_ENABLE_CONTAINER_TUNNEL";

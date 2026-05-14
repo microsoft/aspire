@@ -488,7 +488,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
 
         if (debug)
         {
-            startInfo.Environment[KnownConfigNames.AppHostLogLevel] = "Debug";
+            startInfo.Environment[KnownConfigNames.AspireLogLevel] = "Debug";
             _logger.LogDebug("Enabling debug logging for AppHostServer");
         }
 

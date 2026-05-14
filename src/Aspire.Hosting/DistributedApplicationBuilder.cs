@@ -229,15 +229,17 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         // Add the logging configuration again to allow the user to override the defaults
         _innerBuilder.Logging.AddConfiguration(_innerBuilder.Configuration.GetSection("Logging"));
 
-        // The CLI sets ASPIRE_APPHOST_LOGLEVEL to control the default log level for the app host
+        // The CLI sets ASPIRE_LOGLEVEL to control the default log level for Aspire processes
         // without polluting child processes (unlike Logging__LogLevel__Default which cascades
         // through DCP into project processes and overrides their appsettings.json configuration).
-        var appHostLogLevelValue = _innerBuilder.Configuration[KnownConfigNames.AppHostLogLevel];
-        if (appHostLogLevelValue is not null && Enum.TryParse<LogLevel>(appHostLogLevelValue, ignoreCase: true, out var appHostLogLevel))
+        var aspireLogLevelValue = _innerBuilder.Configuration[KnownConfigNames.AspireLogLevel];
+        if (aspireLogLevelValue is not null && Enum.TryParse<LogLevel>(aspireLogLevelValue, ignoreCase: true, out var aspireLogLevel))
         {
-            // Add a default filter rule after configuration binding so this setting has the
-            // same precedence as Logging__LogLevel__Default without being inherited by child processes.
-            _innerBuilder.Logging.AddFilter((_, logLevel) => logLevel >= appHostLogLevel);
+            _innerBuilder.Logging.SetMinimumLevel(aspireLogLevel);
+            _innerBuilder.Services.Configure<LoggerFilterOptions>(options =>
+            {
+                options.Rules.Add(new LoggerFilterRule(providerName: null, categoryName: null, logLevel: aspireLogLevel, filter: null));
+            });
         }
 
         AppHostDirectory = options.ProjectDirectory ?? _innerBuilder.Environment.ContentRootPath;
