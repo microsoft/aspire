@@ -423,7 +423,8 @@ internal sealed class LogsCommand : BaseCommand
             // Colorized output: assign a consistent color to each resource
             var color = _resourceColorMap.GetColor(displayName);
             var escapedContent = displayContent.EscapeMarkup();
-            _interactionService.DisplayMarkupLine($"{timestampPrefix.EscapeMarkup()}[{color}][[{displayName.EscapeMarkup()}]][/] {escapedContent}");
+            var dimTimestamp = timestampPrefix.Length > 0 ? $"[dim]{timestampPrefix.EscapeMarkup()}[/]" : string.Empty;
+            _interactionService.DisplayMarkupLine($"{dimTimestamp}[{color}][[{displayName.EscapeMarkup()}]][/] {escapedContent}");
         }
     }
 
