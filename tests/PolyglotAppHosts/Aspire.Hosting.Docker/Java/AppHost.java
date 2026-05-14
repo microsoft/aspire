@@ -5,6 +5,7 @@ void main() throws Exception {
         var compose = builder.addDockerComposeEnvironment("compose");
         var containerName = builder.addParameter("container-name");
         var api = builder.addContainer("api", "nginx:alpine");
+        api.withComputeEnvironment(compose);
         api.withBindMount("/host/path/data", "/container/data");
         api.withHttpEndpoint(new WithHttpEndpointOptions().name("http").targetPort(80.0));
         var apiEndpoint = api.getEndpoint("http");

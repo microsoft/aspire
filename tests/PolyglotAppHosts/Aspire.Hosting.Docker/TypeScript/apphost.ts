@@ -5,6 +5,7 @@ const builder = await createBuilder();
 const compose = await builder.addDockerComposeEnvironment("compose");
 const containerName = await builder.addParameter("container-name");
 const api = await builder.addContainer("api", "nginx:alpine");
+await api.withComputeEnvironment(compose);
 await api.withBindMount("/host/path/data", "/container/data");
 await api.withHttpEndpoint({ name: "http", targetPort: 80 });
 

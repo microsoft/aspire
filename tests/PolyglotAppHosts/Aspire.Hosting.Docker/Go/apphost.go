@@ -14,6 +14,7 @@ func main() {
 
 	compose := builder.AddDockerComposeEnvironment("compose")
 	api := builder.AddContainer("api", "nginx:alpine")
+	api.WithComputeEnvironment(compose)
 
 	compose.WithProperties(func(environment aspire.DockerComposeEnvironmentResource) {
 		environment.SetDefaultNetworkName("validation-network")
