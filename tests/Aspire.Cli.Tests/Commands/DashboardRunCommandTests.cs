@@ -340,7 +340,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         var readyTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var (services, _, executionFactory) = CreateServicesWithLayout(workspace, interactionService: testInteractionService);
         executionFactory.CreateExecutionCallback = (_, _, _, options) =>
-            new TestProcessExecution("fake", [], null, options, (_, _) => (0, null), () => 0)
+            new TestProcessExecution("fake", [], null, options, (_, _, _) => Task.FromResult((0, (string?)null)), () => 0)
             {
                 WaitForExitAsyncCallback = async (processOptions, cancellationToken) =>
                 {
