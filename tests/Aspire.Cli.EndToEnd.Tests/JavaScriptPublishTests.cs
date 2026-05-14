@@ -329,15 +329,15 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
                     sleep 1
                 done
 
-            echo "${name}_FAIL"
-            echo "===== aspire-run.log ====="
-            cat aspire-run.log || true
-            echo "===== end aspire-run.log ====="
-            echo "===== runtime fixture files ====="
-            find . -maxdepth 3 \( -name package.json -o -name yarn.lock -o -name ready-port \) -print -exec sh -c 'echo "--- $1"; cat "$1"' _ {} \; || true
-            echo "===== end runtime fixture files ====="
-            return 1
-        }
+                echo "${name}_FAIL"
+                echo "===== aspire-run.log ====="
+                cat aspire-run.log || true
+                echo "===== end aspire-run.log ====="
+                echo "===== runtime fixture files ====="
+                find . -maxdepth 3 \( -name package.json -o -name yarn.lock -o -name ready-port \) -print -exec sh -c 'echo "--- $1"; cat "$1"' _ {} \; || true
+                echo "===== end runtime fixture files ====="
+                return 1
+            }
 
             check_endpoint "node-npm"
             check_endpoint "javascript-pnpm"
