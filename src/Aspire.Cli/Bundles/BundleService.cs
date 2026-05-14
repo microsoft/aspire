@@ -6,6 +6,7 @@ using System.Formats.Tar;
 using System.IO.Compression;
 using System.IO.Hashing;
 using System.Text;
+using System.Text.Json;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Utils;
 using Aspire.Shared;
@@ -77,7 +78,7 @@ internal sealed class BundleService(IBundlePayloadProvider payloadProvider, ILay
         }
 
         var extractDir = GetDefaultExtractDir(processPath);
-        if (extractDir is null)
+        if (string.IsNullOrEmpty(extractDir))
         {
             logger.LogDebug("Could not determine extraction directory from {ProcessPath}, skipping.", processPath);
             return;
@@ -301,20 +302,85 @@ internal sealed class BundleService(IBundlePayloadProvider payloadProvider, ILay
         return true;
     }
 
+    /// <inheritdoc/>
+    public string? GetDefaultExtractDir(string processPath)
+        => ComputeDefaultExtractDir(processPath);
+
     /// <summary>
-    /// Determines the default extraction directory for the current CLI binary.
-    /// If CLI is at ~/.aspire/bin/aspire, returns ~/.aspire/ so layout discovery
-    /// finds components via the bin/ layout pattern.
+    /// Computes the bundle extract directory from the sidecar source value.
+    /// See <c>docs/specs/install-routes.md</c> for the contract.
     /// </summary>
-    internal static string? GetDefaultExtractDir(string processPath)
+    internal static string? ComputeDefaultExtractDir(string processPath)
     {
-        var cliDir = Path.GetDirectoryName(processPath);
-        if (string.IsNullOrEmpty(cliDir))
+        if (string.IsNullOrEmpty(processPath))
         {
             return null;
         }
 
-        return Path.GetDirectoryName(cliDir) ?? cliDir;
+        var realBinaryPath = ResolveSymlinks(processPath);
+        var binaryDir = Path.GetDirectoryName(realBinaryPath);
+        if (string.IsNullOrEmpty(binaryDir))
+        {
+            return null;
+        }
+
+        var sidecarPath = Path.Combine(binaryDir, SidecarFileName);
+        var source = ReadSidecarSource(sidecarPath);
+
+        return source switch
+        {
+            "winget" or "brew" or "dotnet-tool" => binaryDir,
+            "script" or "pr" => Path.GetDirectoryName(binaryDir) ?? binaryDir,
+            _ => Path.GetDirectoryName(binaryDir) ?? binaryDir,
+        };
+    }
+
+    private const string SidecarFileName = ".aspire-install.json";
+
+    private static string? ReadSidecarSource(string sidecarPath)
+    {
+        if (!File.Exists(sidecarPath))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var stream = File.OpenRead(sidecarPath);
+            using var doc = JsonDocument.Parse(stream);
+            if (doc.RootElement.ValueKind == JsonValueKind.Object &&
+                doc.RootElement.TryGetProperty("source", out var sourceElement) &&
+                sourceElement.ValueKind == JsonValueKind.String)
+            {
+                return sourceElement.GetString();
+            }
+        }
+        catch (IOException)
+        {
+            // File disappeared between File.Exists and File.OpenRead, or read failed.
+        }
+        catch (JsonException)
+        {
+            // Sidecar exists but contains invalid JSON.
+        }
+
+        return null;
+    }
+
+    private static string ResolveSymlinks(string path)
+    {
+        try
+        {
+            var resolved = File.ResolveLinkTarget(path, returnFinalTarget: true);
+            return resolved is null ? path : resolved.FullName;
+        }
+        catch (IOException)
+        {
+            // Path is not a link, does not exist, or cycle detected — fall back to
+            // the raw path. Sidecar discovery using the raw path is still valid in
+            // the non-link case.
+            return path;
+        }
     }
 
     /// <summary>
