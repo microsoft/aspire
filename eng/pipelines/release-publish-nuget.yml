@@ -180,24 +180,32 @@ extends:
                   displayName: 'Prepare Empty PackageArtifacts Placeholder'
 
               # Copy installer artifacts to expected locations for output.
-              # Each installer is gated independently so re-runs that skip WinGet or Homebrew
-              # publishing also skip downloading and SBOM-stamping the corresponding artifact.
-              - ${{ if eq(parameters.SkipWinGetPublish, false) }}:
-                - powershell: |
-                    $source = "$(Pipeline.Workspace)/aspire-build/winget-manifests-stable"
-                    $target = "$(Pipeline.Workspace)/installers/winget-manifests-stable"
+              # Entries whose source directory doesn't exist are silently skipped, which
+              # handles re-runs where SkipWinGetPublish/SkipHomebrewPublish caused the
+              # corresponding download step to be omitted.
+              - powershell: |
+                  $artifacts = @(
+                    @{ Name = 'winget-manifests-stable'; Source = '$(Pipeline.Workspace)/aspire-build/winget-manifests-stable'; Target = '$(Pipeline.Workspace)/installers/winget-manifests-stable' },
+                    @{ Name = 'homebrew-cask-stable'; Source = '$(Pipeline.Workspace)/aspire-build/homebrew-cask-stable'; Target = '$(Pipeline.Workspace)/installers/homebrew-cask-stable' }
+                  )
 
-                    Write-Host "Copying winget-manifests-stable from $source to $target"
-
-                    if (!(Test-Path $target)) {
-                      New-Item -ItemType Directory -Path $target -Force | Out-Null
+                  foreach ($artifact in $artifacts) {
+                    if (!(Test-Path $artifact.Source)) {
+                      Write-Host "Skipping $($artifact.Name): source path '$($artifact.Source)' not present (download was skipped)."
+                      continue
                     }
 
-                    $files = Get-ChildItem -Path $source -Recurse -File
+                    Write-Host "Copying $($artifact.Name) from $($artifact.Source) to $($artifact.Target)"
+
+                    if (!(Test-Path $artifact.Target)) {
+                      New-Item -ItemType Directory -Path $artifact.Target -Force | Out-Null
+                    }
+
+                    $files = Get-ChildItem -Path $artifact.Source -Recurse -File
                     Write-Host "  Found $($files.Count) files"
                     foreach ($file in $files) {
-                      $relativePath = $file.FullName.Substring($source.Length + 1)
-                      $destPath = Join-Path $target $relativePath
+                      $relativePath = $file.FullName.Substring($artifact.Source.Length + 1)
+                      $destPath = Join-Path $artifact.Target $relativePath
                       $destDir = Split-Path $destPath -Parent
                       if (!(Test-Path $destDir)) {
                         New-Item -ItemType Directory -Path $destDir -Force | Out-Null
@@ -205,36 +213,10 @@ extends:
                       Copy-Item $file.FullName -Destination $destPath -Force
                       Write-Host "    Copied: $relativePath"
                     }
+                  }
 
-                    Write-Host "✓ WinGet manifests prepared"
-                  displayName: 'Prepare WinGet Manifests'
-
-              - ${{ if eq(parameters.SkipHomebrewPublish, false) }}:
-                - powershell: |
-                    $source = "$(Pipeline.Workspace)/aspire-build/homebrew-cask-stable"
-                    $target = "$(Pipeline.Workspace)/installers/homebrew-cask-stable"
-
-                    Write-Host "Copying homebrew-cask-stable from $source to $target"
-
-                    if (!(Test-Path $target)) {
-                      New-Item -ItemType Directory -Path $target -Force | Out-Null
-                    }
-
-                    $files = Get-ChildItem -Path $source -Recurse -File
-                    Write-Host "  Found $($files.Count) files"
-                    foreach ($file in $files) {
-                      $relativePath = $file.FullName.Substring($source.Length + 1)
-                      $destPath = Join-Path $target $relativePath
-                      $destDir = Split-Path $destPath -Parent
-                      if (!(Test-Path $destDir)) {
-                        New-Item -ItemType Directory -Path $destDir -Force | Out-Null
-                      }
-                      Copy-Item $file.FullName -Destination $destPath -Force
-                      Write-Host "    Copied: $relativePath"
-                    }
-
-                    Write-Host "✓ Homebrew cask prepared"
-                  displayName: 'Prepare Homebrew Cask'
+                  Write-Host "✓ Installer artifacts prepared"
+                displayName: 'Prepare Installer Artifacts'
 
       # ===== STAGE 2: RELEASE =====
       # This releaseJob consumes the artifacts with SBOM and publishes to NuGet.org
