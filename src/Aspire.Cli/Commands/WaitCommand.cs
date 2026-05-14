@@ -65,7 +65,7 @@ internal sealed class WaitCommand : BaseCommand
         Options.Add(s_appHostOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
@@ -77,15 +77,13 @@ internal sealed class WaitCommand : BaseCommand
         // Validate status value
         if (!IsValidStatus(status))
         {
-            _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.InvalidStatusValue, status));
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(ExitCodeConstants.InvalidCommand, string.Format(CultureInfo.CurrentCulture, WaitCommandStrings.InvalidStatusValue, status));
         }
 
         // Validate timeout
         if (timeoutSeconds <= 0)
         {
-            _interactionService.DisplayError(WaitCommandStrings.TimeoutMustBePositive);
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(ExitCodeConstants.InvalidCommand, WaitCommandStrings.TimeoutMustBePositive);
         }
 
         // Resolve connection to a running AppHost
@@ -98,12 +96,12 @@ internal sealed class WaitCommand : BaseCommand
 
         if (!result.Success)
         {
-            return AppHostConnectionResultHandler.DisplayFailureAsError(result, _interactionService, ExitCodeConstants.FailedToFindProject);
+            return CommandResult.FromExitCode(AppHostConnectionResultHandler.DisplayFailureAsError(result, _interactionService, ExitCodeConstants.FailedToFindProject));
         }
 
         var connection = result.Connection!;
 
-        return await WaitForResourceAsync(connection, resourceName, status, timeoutSeconds, cancellationToken);
+        return CommandResult.FromExitCode(await WaitForResourceAsync(connection, resourceName, status, timeoutSeconds, cancellationToken));
     }
 
     private async Task<int> WaitForResourceAsync(

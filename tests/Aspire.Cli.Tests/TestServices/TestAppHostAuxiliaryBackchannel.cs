@@ -20,6 +20,7 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     public bool IsInScope { get; set; } = true;
     public DateTimeOffset ConnectedAt { get; set; } = DateTimeOffset.UtcNow;
     public bool SupportsV2 { get; set; } = true;
+    public bool SupportsV3 { get; set; }
 
     /// <summary>
     /// Gets or sets the resource snapshots to return from GetResourceSnapshotsAsync and WatchResourceSnapshotsAsync.
@@ -68,6 +69,18 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     /// If null, yields the LogLines list.
     /// </summary>
     public Func<string?, bool, CancellationToken, IAsyncEnumerable<ResourceLogLine>>? GetResourceLogsHandler { get; set; }
+
+    /// <summary>
+    /// Gets or sets the function to call when GetConsoleLogsAsync is invoked.
+    /// If null, falls back to GetResourceLogsAsync.
+    /// </summary>
+    public Func<GetConsoleLogsRequest, CancellationToken, IAsyncEnumerable<ResourceLogLine>>? GetConsoleLogsHandler { get; set; }
+
+    /// <summary>
+    /// Gets or sets the function to call when GetConsoleLogBatchesAsync is invoked.
+    /// If null, falls back to GetConsoleLogsAsync or GetResourceLogsAsync.
+    /// </summary>
+    public Func<GetConsoleLogsRequest, CancellationToken, IAsyncEnumerable<ResourceLogBatch>>? GetConsoleLogBatchesHandler { get; set; }
 
     public Task<DashboardUrlsState?> GetDashboardUrlsAsync(CancellationToken cancellationToken = default)
     {
@@ -158,6 +171,60 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
             yield return line;
         }
         await Task.CompletedTask;
+    }
+
+    public async IAsyncEnumerable<ResourceLogLine> GetConsoleLogsAsync(
+        GetConsoleLogsRequest request,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var logLines = SupportsV2 && GetConsoleLogsHandler is not null
+            ? GetConsoleLogsHandler(request, cancellationToken)
+            : GetResourceLogsAsync(request.ResourceName, request.Follow, cancellationToken);
+
+        await foreach (var line in logLines.WithCancellation(cancellationToken).ConfigureAwait(false))
+        {
+            yield return line;
+        }
+    }
+
+    public async IAsyncEnumerable<ResourceLogBatch> GetConsoleLogBatchesAsync(
+        GetConsoleLogsRequest request,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (SupportsV3 && GetConsoleLogBatchesHandler is not null)
+        {
+            await foreach (var batch in GetConsoleLogBatchesHandler(request, cancellationToken).WithCancellation(cancellationToken).ConfigureAwait(false))
+            {
+                yield return batch;
+            }
+            yield break;
+        }
+
+        var logLines = request.ResourceName is null && !SupportsV3
+            ? GetResourceLogsAsync(resourceName: null, follow: request.Follow, cancellationToken)
+            : GetConsoleLogsAsync(request, cancellationToken);
+
+        var maxBatchSize = request.Follow ? 1 : 256;
+        var lines = new List<ResourceLogLine>(maxBatchSize);
+        await foreach (var line in logLines.WithCancellation(cancellationToken).ConfigureAwait(false))
+        {
+            lines.Add(line);
+
+            if (lines.Count == maxBatchSize)
+            {
+                yield return new ResourceLogBatch { Lines = lines.ToArray() };
+                lines.Clear();
+            }
+        }
+
+        if (lines.Count > 0)
+        {
+            yield return new ResourceLogBatch { Lines = lines.ToArray() };
+        }
     }
 
     public Task<bool> StopAppHostAsync(CancellationToken cancellationToken = default)

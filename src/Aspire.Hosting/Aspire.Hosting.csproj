@@ -46,6 +46,7 @@
     <Compile Include="$(SharedDir)ConsoleLogs\LogEntry.cs" Link="Utils\ConsoleLogs\LogEntry.cs" />
     <Compile Include="$(SharedDir)ConsoleLogs\LogPauseViewModel.cs" Link="Utils\ConsoleLogs\LogPauseViewModel.cs" />
     <Compile Include="$(SharedDir)ConsoleLogs\TimestampParser.cs" Link="Utils\ConsoleLogs\TimestampParser.cs" />
+    <Compile Include="$(SharedDir)ConsoleLogs\AnsiParser.cs" Link="Utils\ConsoleLogs\AnsiParser.cs" />
     <Compile Include="$(SharedDir)CommandLineArgsParser.cs" Link="Utils\CommandLineArgsParser.cs" />
     <Compile Include="$(SharedDir)LaunchProfiles\*.cs" />
     <Compile Include="$(SharedDir)OverloadResolutionPriorityAttribute.cs" Link="Utils\OverloadResolutionPriorityAttribute.cs" />

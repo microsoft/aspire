@@ -375,7 +375,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             });
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(this.Name);
 
@@ -387,13 +387,13 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         var template = await GetProjectTemplateAsync(availableTemplates, parseResult, cancellationToken);
         if (template is null)
         {
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(ExitCodeConstants.InvalidCommand);
         }
 
         var (languageResolutionSuccess, selectedLanguageId) = await ResolveSelectedLanguageAsync(template, parseResult, cancellationToken);
         if (!languageResolutionSuccess)
         {
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(ExitCodeConstants.InvalidCommand);
         }
 
         var version = parseResult.GetValue(s_versionOption);
@@ -404,13 +404,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             var resolveResult = await ResolveCliTemplateVersionAsync(parseResult, cancellationToken);
             if (!resolveResult.Success)
             {
-                InteractionService.DisplayError(resolveResult.ErrorMessage);
-                InteractionService.DisplayError(InteractionServiceStrings.ProjectCouldNotBeCreated);
-                InteractionService.DisplayMessage(
-                    KnownEmojis.PageFacingUp,
-                    string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, MarkupHelpers.SafeFileLink(InteractionService, ExecutionContext.LogFilePath)),
-                    allowMarkup: true);
-                return ExitCodeConstants.InvalidCommand;
+                return CommandResult.Failure(ExitCodeConstants.InvalidCommand, resolveResult.ErrorMessage);
             }
 
             version = resolveResult.Version;
@@ -437,7 +431,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             extensionInteractionService.OpenEditor(templateResult.OutputPath);
         }
 
-        return agentInitResult.ExitCode;
+        return CommandResult.FromExitCode(agentInitResult.ExitCode);
     }
 
     private static bool ShouldResolveCliTemplateVersion(ITemplate template)

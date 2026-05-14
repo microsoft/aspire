@@ -59,7 +59,7 @@ internal sealed class SdkGenerateCommand : BaseCommand
         Options.Add(s_outputOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var integrationProject = parseResult.GetValue(s_integrationArgument)!;
         var language = parseResult.GetValue(s_languageOption)!;
@@ -68,22 +68,19 @@ internal sealed class SdkGenerateCommand : BaseCommand
         // Validate the integration project exists
         if (!integrationProject.Exists)
         {
-            InteractionService.DisplayError($"Integration project not found: {integrationProject.FullName}");
-            return ExitCodeConstants.FailedToFindProject;
+            return CommandResult.Failure(ExitCodeConstants.FailedToFindProject, $"Integration project not found: {integrationProject.FullName}");
         }
 
         if (!integrationProject.Extension.Equals(".csproj", StringComparison.OrdinalIgnoreCase))
         {
-            InteractionService.DisplayError($"Expected a .csproj file, got: {integrationProject.Extension}");
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(ExitCodeConstants.InvalidCommand, $"Expected a .csproj file, got: {integrationProject.Extension}");
         }
 
         // Resolve the language info
         var languageInfo = await GetLanguageInfoAsync(language, cancellationToken);
         if (languageInfo is null)
         {
-            InteractionService.DisplayError($"Unsupported language: {language}");
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(ExitCodeConstants.InvalidCommand, $"Unsupported language: {language}");
         }
 
         // Create output directory if it doesn't exist
@@ -92,10 +89,10 @@ internal sealed class SdkGenerateCommand : BaseCommand
             outputDir.Create();
         }
 
-        return await InteractionService.ShowStatusAsync(
+        return CommandResult.FromExitCode(await InteractionService.ShowStatusAsync(
             $"Generating {languageInfo.DisplayName} SDK from {integrationProject.Name}...",
             async () => await GenerateSdkAsync(integrationProject, languageInfo, outputDir, cancellationToken),
-            emoji: KnownEmojis.Hammer);
+            emoji: KnownEmojis.Hammer));
     }
 
     private async Task<LanguageInfo?> GetLanguageInfoAsync(string language, CancellationToken cancellationToken)

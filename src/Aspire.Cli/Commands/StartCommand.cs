@@ -39,7 +39,7 @@ internal sealed class StartCommand : BaseCommand
         TreatUnmatchedTokensAsErrors = false;
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var passedAppHostProjectFile = parseResult.GetValue(AppHostLauncher.s_appHostOption);
         var format = parseResult.GetValue(AppHostLauncher.s_formatOption);

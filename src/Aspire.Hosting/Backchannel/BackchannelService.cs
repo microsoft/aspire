@@ -65,7 +65,11 @@ internal sealed class BackchannelService(
 
             var clientSocket = await serverSocket.AcceptAsync(stoppingToken).ConfigureAwait(false);
             var stream = new NetworkStream(clientSocket, true);
-            var rpc = JsonRpc.Attach(stream, appHostRpcTarget);
+            var rpc = new JsonRpc(new HeaderDelimitedMessageHandler(stream, stream), appHostRpcTarget)
+            {
+                ActivityTracingStrategy = new ActivityTracingStrategy()
+            };
+            rpc.StartListening();
             _rpc = rpc;
 
             // NOTE: The PipelineExecutor will await this TCS

@@ -46,7 +46,7 @@ internal sealed class DocsListCommand : BaseCommand
 
     protected override bool UpdateNotificationsEnabled => false;
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
@@ -61,8 +61,7 @@ internal sealed class DocsListCommand : BaseCommand
 
         if (docs.Count is 0)
         {
-            InteractionService.DisplayError(DocsCommandStrings.NoDocumentationAvailable);
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(ExitCodeConstants.InvalidCommand, DocsCommandStrings.NoDocumentationAvailable);
         }
 
         if (format is OutputFormat.Json)
@@ -91,6 +90,6 @@ internal sealed class DocsListCommand : BaseCommand
             InteractionService.DisplayRenderable(table);
         }
 
-        return ExitCodeConstants.Success;
+        return CommandResult.Success();
     }
 }

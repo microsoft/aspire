@@ -122,8 +122,8 @@ public class GitRepositoryTests(ITestOutputHelper outputHelper)
         Activity? startedActivity = null;
         using var listener = CreateProfilingActivityListener(activity => startedActivity = activity);
         using var profilingTelemetry = CreateProfilingTelemetry(
-            (ProfilingTelemetry.EnabledEnvironmentVariable, "true"),
-            (ProfilingTelemetry.SessionIdEnvironmentVariable, "session-1"));
+            (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
+            (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1"));
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var repo = new GitRepository(executionContext, NullLogger<GitRepository>.Instance, profilingTelemetry);
 

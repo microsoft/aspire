@@ -480,7 +480,7 @@ internal class DotNetTemplateFactory(
             if (installOutcome.ExitCode != 0)
             {
                 interactionService.DisplayLines(installOutcome.OutputLines);
-                interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.TemplateInstallationFailed, installOutcome.ExitCode, executionContext.LogFilePath));
+                interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.TemplateInstallationFailed, installOutcome.ExitCode));
                 return new TemplateResult(ExitCodeConstants.FailedToInstallTemplates);
             }
 
@@ -519,7 +519,7 @@ internal class DotNetTemplateFactory(
                 }
 
                 interactionService.DisplayLines(newProjectCollector.GetLines());
-                interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.ProjectCreationFailed, newProjectExitCode, executionContext.LogFilePath));
+                interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.ProjectCreationFailed, newProjectExitCode));
                 return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
             }
 
@@ -536,8 +536,7 @@ internal class DotNetTemplateFactory(
         }
         catch (OperationCanceledException)
         {
-            interactionService.DisplayCancellationMessage();
-            return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+            return new TemplateResult(ExitCodeConstants.Cancelled);
         }
         catch (CertificateServiceException ex)
         {

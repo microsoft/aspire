@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Xml.Linq;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
@@ -25,6 +26,15 @@ namespace Aspire.Cli.Projects;
 /// </summary>
 internal sealed class PrebuiltAppHostServer : IAppHostServerProject
 {
+    internal const string ClosureMetadataFileName = "closure-metadata.txt";
+    internal const string ClosureSourcesFileName = "closure-sources.txt";
+    internal const string ClosureTargetsFileName = "closure-targets.txt";
+    internal const string ClosureManifestFileName = "closure-manifest.txt";
+    internal const string IntegrationProjectFileName = "IntegrationRestore.csproj";
+    internal const string ProjectRefAssemblyNamesFileName = "project-ref-assemblies.txt";
+
+    private const string ProjectAssetsFileName = "project.assets.json";
+
     private readonly string _appDirectoryPath;
     private readonly string _socketPath;
     private readonly LayoutConfiguration _layout;
@@ -35,9 +45,13 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
     private readonly CliExecutionContext _executionContext;
     private readonly ILogger _logger;
     private readonly string _workingDirectory;
+    private readonly string _projectReferencePrepareLockPath;
+    private readonly AppHostServerProjectLayoutStore _projectLayoutStore;
 
-    // Path to restored integration libraries (set during PrepareAsync)
+    private string? _contentRootPath;
     private string? _integrationLibsPath;
+    private string? _integrationProbeManifestPath;
+    private AppHostServerProjectLayout? _selectedProjectLayout;
 
     /// <summary>
     /// Initializes a new instance of the PrebuiltAppHostServer class.
@@ -75,13 +89,21 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         // Create a working directory for this app host session
         var pathHash = SHA256.HashData(Encoding.UTF8.GetBytes(_appDirectoryPath));
         var pathDir = Convert.ToHexString(pathHash)[..12].ToLowerInvariant();
-        var workspaceAspireDirectory = ConfigurationHelper.GetWorkspaceAspireDirectory(new DirectoryInfo(_appDirectoryPath));
-        _workingDirectory = Path.Combine(workspaceAspireDirectory.FullName, "bundle-hosts", pathDir);
+        var integrationCacheDirectory = ConfigurationHelper.GetIntegrationCacheDirectory(new DirectoryInfo(_appDirectoryPath));
+        _workingDirectory = Path.Combine(integrationCacheDirectory.FullName, "apphosts", pathDir);
         Directory.CreateDirectory(_workingDirectory);
+        _projectReferencePrepareLockPath = Path.Combine(_workingDirectory, "project-layouts", "prepare.lock");
+        _projectLayoutStore = new AppHostServerProjectLayoutStore(_workingDirectory, _logger);
     }
 
     /// <inheritdoc />
     public string AppDirectoryPath => _appDirectoryPath;
+
+    internal string? SelectedProjectLayoutFingerprint => _selectedProjectLayout?.Fingerprint;
+
+    internal string? SelectedProjectLayoutPath => _selectedProjectLayout?.LayoutPath;
+
+    internal string? IntegrationProbeManifestPath => _integrationProbeManifestPath;
 
     /// <summary>
     /// Gets the path to the aspire-managed executable (used as the server).
@@ -106,13 +128,19 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         var integrationList = integrations.ToList();
         var packageRefs = integrationList.Where(r => r.IsPackageReference).ToList();
         var projectRefs = integrationList.Where(r => r.IsProjectReference).ToList();
+        string? requestedChannel = null;
 
         try
         {
+            _selectedProjectLayout = null;
+            _contentRootPath = _workingDirectory;
+            _integrationLibsPath = null;
+            _integrationProbeManifestPath = null;
+
             // Resolve the channel the project requests for restore (aspire.config.json#channel,
             // with a legacy .aspire/settings.json#channel fallback). This is independent of the
             // running CLI's identity hive (CliExecutionContext.IdentityChannel).
-            var requestedChannel = ResolveRequestedChannel();
+            requestedChannel = ResolveRequestedChannel();
 
             if (projectRefs.Count > 0)
             {
@@ -125,29 +153,59 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
                         "Install the .NET SDK from https://dotnet.microsoft.com/download or use NuGet package versions instead.");
                 }
 
-                // Build a synthetic project with all package and project references
-                _integrationLibsPath = await BuildIntegrationProjectAsync(
-                    packageRefs, projectRefs, requestedChannel, cancellationToken);
-            }
-            else if (packageRefs.Count > 0)
-            {
-                // NuGet-only — use the bundled NuGet service (no SDK required)
-                _integrationLibsPath = await RestoreNuGetPackagesAsync(
-                    packageRefs, requestedChannel, cancellationToken);
-            }
+                using var fileLock = await FileLock.AcquireAsync(_projectReferencePrepareLockPath, cancellationToken).ConfigureAwait(false);
+                _projectLayoutStore.CleanupStagingDirectories();
 
-            // Generate appsettings.json after build/restore so we can use actual assembly names
-            // from the build output (project references may have custom <AssemblyName>)
-            var projectRefAssemblyNames = _integrationLibsPath is not null
-                ? await ReadProjectRefAssemblyNamesAsync(_integrationLibsPath, cancellationToken)
-                : [];
-            await GenerateAppSettingsAsync(packageRefs, projectRefAssemblyNames, cancellationToken);
+                var closureManifest = await BuildIntegrationClosureManifestAsync(
+                    packageRefs,
+                    projectRefs,
+                    requestedChannel,
+                    cancellationToken).ConfigureAwait(false);
+
+                if (closureManifest.Entries.Any(static entry => entry.IsPackageBacked))
+                {
+                    _integrationProbeManifestPath = Path.Combine(_workingDirectory, IntegrationPackageProbeManifest.FileName);
+                    await IntegrationPackageProbeManifest.WriteAsync(
+                        _integrationProbeManifestPath,
+                        closureManifest.CreatePackageProbeManifest(),
+                        cancellationToken).ConfigureAwait(false);
+                }
+
+                _selectedProjectLayout = await _projectLayoutStore.GetOrCreateAsync(closureManifest, cancellationToken).ConfigureAwait(false);
+                if (_selectedProjectLayout is not null)
+                {
+                    _integrationLibsPath = _selectedProjectLayout.IntegrationLibsPath;
+                }
+
+                await WriteAppSettingsAsync(_workingDirectory, closureManifest.AppSettingsContent, cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                if (packageRefs.Count > 0)
+                {
+                    // NuGet-only — use the bundled NuGet service (no SDK required)
+                    _integrationProbeManifestPath = await RestoreNuGetPackagesAsync(
+                        packageRefs, requestedChannel, cancellationToken);
+                }
+
+                var appSettingsContent = CreateAppSettingsContent(packageRefs, []);
+                await WriteAppSettingsAsync(_workingDirectory, appSettingsContent, cancellationToken).ConfigureAwait(false);
+            }
 
             return new AppHostServerPrepareResult(
                 Success: true,
                 Output: null,
                 ChannelName: requestedChannel,
                 NeedsCodeGeneration: true);
+        }
+        catch (AppHostServerPrepareFailedException ex)
+        {
+            _logger.LogError(ex, "Failed to prepare prebuilt AppHost server");
+            return new AppHostServerPrepareResult(
+                Success: false,
+                Output: ex.Output,
+                ChannelName: requestedChannel,
+                NeedsCodeGeneration: false);
         }
         catch (Exception ex)
         {
@@ -157,7 +215,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             return new AppHostServerPrepareResult(
                 Success: false,
                 Output: output,
-                ChannelName: null,
+                ChannelName: requestedChannel,
                 NeedsCodeGeneration: false);
         }
     }
@@ -183,7 +241,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             runtimeIdentifier: RuntimeInformation.RuntimeIdentifier,
             sources: sources,
             nugetConfigPath: temporaryNuGetConfig?.ConfigFile.FullName,
-            ct: cancellationToken);
+            ct: cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -191,7 +249,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
     /// then builds it to get the full transitive DLL closure via CopyLocalLockFileAssemblies.
     /// Requires .NET SDK.
     /// </summary>
-    private async Task<string> BuildIntegrationProjectAsync(
+    private async Task<AppHostServerClosureManifest> BuildIntegrationClosureManifestAsync(
         List<IntegrationReference> packageRefs,
         List<IntegrationReference> projectRefs,
         string? requestedChannel,
@@ -200,28 +258,9 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         var restoreDir = Path.Combine(_workingDirectory, "integration-restore");
         Directory.CreateDirectory(restoreDir);
 
-        var outputDir = Path.Combine(restoreDir, "libs");
-        // Clean stale DLLs from previous builds to prevent leftover assemblies
-        // from removed integrations being picked up by the assembly resolver
-        if (Directory.Exists(outputDir))
-        {
-            Directory.Delete(outputDir, recursive: true);
-        }
-        Directory.CreateDirectory(outputDir);
-
-        // Resolve channel sources to add via RestoreAdditionalProjectSources
-        IEnumerable<string>? channelSources = null;
-        try
-        {
-            channelSources = await GetNuGetSourcesAsync(requestedChannel, cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to configure NuGet sources for integration project build");
-        }
-
-        var projectContent = GenerateIntegrationProjectFile(packageRefs, projectRefs, outputDir, channelSources);
-        var projectFilePath = Path.Combine(restoreDir, "IntegrationRestore.csproj");
+        var channelSources = await GetNuGetSourcesAsync(requestedChannel, cancellationToken);
+        var projectContent = GenerateIntegrationProjectFile(packageRefs, projectRefs, restoreDir, channelSources);
+        var projectFilePath = Path.Combine(restoreDir, IntegrationProjectFileName);
         await File.WriteAllTextAsync(projectFilePath, projectContent, cancellationToken);
 
         // Write a Directory.Packages.props to opt out of Central Package Management
@@ -259,10 +298,52 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         {
             var outputLines = string.Join(Environment.NewLine, buildOutput.GetLines().Select(l => l.Line));
             _logger.LogError("Integration project build failed. Output:\n{BuildOutput}", outputLines);
-            throw new InvalidOperationException($"Failed to build integration project. Exit code: {exitCode}");
+            throw new AppHostServerPrepareFailedException("Failed to build integration project.", buildOutput);
         }
 
-        return outputDir;
+        var closureSourcesPath = Path.Combine(restoreDir, ClosureSourcesFileName);
+        var closureMetadataPath = Path.Combine(restoreDir, ClosureMetadataFileName);
+        var closureTargetsPath = Path.Combine(restoreDir, ClosureTargetsFileName);
+
+        var sourcePaths = await ReadManifestFileAsync(closureSourcesPath, cancellationToken).ConfigureAwait(false);
+        var metadataLines = await ReadManifestFileAsync(closureMetadataPath, cancellationToken).ConfigureAwait(false);
+        var targetPaths = await ReadManifestFileAsync(closureTargetsPath, cancellationToken).ConfigureAwait(false);
+        if (sourcePaths.Count != metadataLines.Count || sourcePaths.Count != targetPaths.Count)
+        {
+            throw new InvalidOperationException(
+                $"Integration closure manifest is inconsistent. Sources: {sourcePaths.Count}, metadata: {metadataLines.Count}, targets: {targetPaths.Count}.");
+        }
+
+        var projectRefAssemblyNames = await ReadProjectRefAssemblyNamesAsync(
+            Path.Combine(restoreDir, ProjectRefAssemblyNamesFileName),
+            cancellationToken).ConfigureAwait(false);
+        var appSettingsContent = CreateAppSettingsContent(packageRefs, projectRefAssemblyNames);
+        var packageFingerprints = await ReadPackageFingerprintsAsync(
+            Path.Combine(restoreDir, "obj", ProjectAssetsFileName),
+            cancellationToken).ConfigureAwait(false);
+
+        var closureEntries = new List<AppHostServerClosureSource>(sourcePaths.Count);
+        for (var i = 0; i < sourcePaths.Count; i++)
+        {
+            var metadata = ParseClosureMetadata(metadataLines[i]);
+            var packageSha512 = TryGetPackageFingerprint(packageFingerprints, metadata);
+
+            closureEntries.Add(new AppHostServerClosureSource(
+                sourcePaths[i],
+                targetPaths[i],
+                metadata.NuGetPackageId,
+                metadata.NuGetPackageVersion,
+                metadata.PathInPackage,
+                packageSha512,
+                metadata.AssetType));
+        }
+
+        var closureManifest = AppHostServerClosureManifest.Create(closureEntries, appSettingsContent, cancellationToken);
+        await File.WriteAllLinesAsync(
+            Path.Combine(restoreDir, ClosureManifestFileName),
+            closureManifest.GetManifestLines(),
+            cancellationToken).ConfigureAwait(false);
+        return closureManifest;
     }
 
     /// <summary>
@@ -272,7 +353,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
     internal static string GenerateIntegrationProjectFile(
         List<IntegrationReference> packageRefs,
         List<IntegrationReference> projectRefs,
-        string outputDir,
+        string restoreDir,
         IEnumerable<string>? additionalSources = null)
     {
         var propertyGroup = new XElement("PropertyGroup",
@@ -282,7 +363,10 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             new XElement("ProduceReferenceAssembly", "false"),
             new XElement("EnableNETAnalyzers", "false"),
             new XElement("GenerateDocumentationFile", "false"),
-            new XElement("OutDir", outputDir));
+            new XElement("AspireClosureMetadataFile", Path.Combine(restoreDir, ClosureMetadataFileName)),
+            new XElement("AspireClosureSourcesFile", Path.Combine(restoreDir, ClosureSourcesFileName)),
+            new XElement("AspireClosureTargetsFile", Path.Combine(restoreDir, ClosureTargetsFileName)),
+            new XElement("AspireProjectRefAssemblyNamesFile", Path.Combine(restoreDir, ProjectRefAssemblyNamesFileName)));
 
         // Add channel sources without replacing the user's nuget.config
         if (additionalSources is not null)
@@ -319,19 +403,38 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             doc.Root!.Add(new XElement("ItemGroup",
                 projectRefs.Select(p => new XElement("ProjectReference",
                     new XAttribute("Include", p.ProjectPath!)))));
-
-            // Add a target that writes the resolved project reference assembly names to a file.
-            // This lets us discover the actual assembly names after build (which may differ from
-            // the settings.json key or csproj filename if <AssemblyName> is overridden).
-            doc.Root!.Add(
-                new XElement("Target",
-                    new XAttribute("Name", "_WriteProjectRefAssemblyNames"),
-                    new XAttribute("AfterTargets", "Build"),
-                    new XElement("WriteLinesToFile",
-                        new XAttribute("File", Path.Combine(outputDir, "_project-ref-assemblies.txt")),
-                        new XAttribute("Lines", "@(_ResolvedProjectReferencePaths->'%(Filename)')"),
-                        new XAttribute("Overwrite", "true"))));
         }
+
+        doc.Root!.Add(
+            new XElement("Target",
+                new XAttribute("Name", "_WriteAspireProjectRefAssemblyNames"),
+                new XAttribute("AfterTargets", "Build"),
+                new XElement("WriteLinesToFile",
+                    new XAttribute("File", "$(AspireProjectRefAssemblyNamesFile)"),
+                    new XAttribute("Lines", "@(_ResolvedProjectReferencePaths->'%(Filename)')"),
+                    new XAttribute("Overwrite", "true"),
+                    new XAttribute("WriteOnlyWhenDifferent", "true"))));
+
+        doc.Root!.Add(
+            new XElement("Target",
+                new XAttribute("Name", "_WriteAspireClosureManifest"),
+                new XAttribute("AfterTargets", "Build"),
+                new XAttribute("DependsOnTargets", "ResolveLockFileCopyLocalFiles"),
+                new XElement("WriteLinesToFile",
+                    new XAttribute("File", "$(AspireClosureSourcesFile)"),
+                    new XAttribute("Lines", "@(ReferenceCopyLocalPaths->'%(FullPath)')"),
+                    new XAttribute("Overwrite", "true"),
+                    new XAttribute("WriteOnlyWhenDifferent", "true")),
+                new XElement("WriteLinesToFile",
+                    new XAttribute("File", "$(AspireClosureMetadataFile)"),
+                    new XAttribute("Lines", "@(ReferenceCopyLocalPaths->'%(NuGetPackageId)|%(NuGetPackageVersion)|%(PathInPackage)|%(AssetType)')"),
+                    new XAttribute("Overwrite", "true"),
+                    new XAttribute("WriteOnlyWhenDifferent", "true")),
+                new XElement("WriteLinesToFile",
+                    new XAttribute("File", "$(AspireClosureTargetsFile)"),
+                    new XAttribute("Lines", "@(ReferenceCopyLocalPaths->'%(DestinationSubDirectory)%(Filename)%(Extension)')"),
+                    new XAttribute("Overwrite", "true"),
+                    new XAttribute("WriteOnlyWhenDifferent", "true"))));
 
         return doc.ToString();
     }
@@ -445,77 +548,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         string[]? additionalArgs = null,
         bool debug = false)
     {
-        var serverPath = GetServerPath();
-
-        // aspire-managed is self-contained - run directly
-        var startInfo = new ProcessStartInfo(serverPath)
-        {
-            WorkingDirectory = _workingDirectory,
-            WindowStyle = ProcessWindowStyle.Minimized,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        // Insert "server" subcommand, then remaining args
-        startInfo.ArgumentList.Add("server");
-        startInfo.ArgumentList.Add("--contentRoot");
-        startInfo.ArgumentList.Add(_workingDirectory);
-
-        // Add any additional arguments
-        if (additionalArgs is { Length: > 0 })
-        {
-            foreach (var arg in additionalArgs)
-            {
-                startInfo.ArgumentList.Add(arg);
-            }
-        }
-
-        // Configure environment
-        startInfo.Environment["REMOTE_APP_HOST_SOCKET_PATH"] = _socketPath;
-        startInfo.Environment["REMOTE_APP_HOST_PID"] = hostPid.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        startInfo.Environment[KnownConfigNames.CliProcessId] = hostPid.ToString(System.Globalization.CultureInfo.InvariantCulture);
-
-        // Pass the integration libs path so the server can resolve assemblies via AssemblyLoader
-        if (_integrationLibsPath is not null)
-        {
-            _logger.LogDebug("Setting ASPIRE_INTEGRATION_LIBS_PATH to {Path}", _integrationLibsPath);
-            startInfo.Environment["ASPIRE_INTEGRATION_LIBS_PATH"] = _integrationLibsPath;
-        }
-        else
-        {
-            _logger.LogWarning("Integration libs path is null - assemblies may not resolve correctly");
-        }
-
-        // Set DCP and Dashboard paths from the layout
-        var dcpPath = _layout.GetDcpPath();
-        if (dcpPath is not null)
-        {
-            startInfo.Environment[BundleDiscovery.DcpPathEnvVar] = dcpPath;
-        }
-
-        // Set the dashboard path so the AppHost can locate and launch the dashboard binary
-        var managedPath = _layout.GetManagedPath();
-        if (managedPath is not null)
-        {
-            startInfo.Environment[BundleDiscovery.DashboardPathEnvVar] = managedPath;
-        }
-
-        // Apply environment variables from apphost.run.json
-        if (environmentVariables is not null)
-        {
-            foreach (var (key, value) in environmentVariables)
-            {
-                startInfo.Environment[key] = value;
-            }
-        }
-
-        if (debug)
-        {
-            startInfo.Environment["Logging__LogLevel__Default"] = "Debug";
-        }
-
-        startInfo.RedirectStandardOutput = true;
-        startInfo.RedirectStandardError = true;
+        var startInfo = CreateStartInfo(hostPid, environmentVariables, additionalArgs, debug);
 
         var process = Process.Start(startInfo)!;
 
@@ -543,15 +576,107 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         return (_socketPath, process, outputCollector);
     }
 
+    internal ProcessStartInfo CreateStartInfo(
+        int hostPid,
+        IReadOnlyDictionary<string, string>? environmentVariables = null,
+        string[]? additionalArgs = null,
+        bool debug = false)
+    {
+        var serverPath = GetServerPath();
+        var contentRootPath = _contentRootPath ?? _workingDirectory;
+
+        var startInfo = new ProcessStartInfo(serverPath)
+        {
+            WorkingDirectory = contentRootPath,
+            WindowStyle = ProcessWindowStyle.Minimized,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        // Insert "server" subcommand, then remaining args
+        startInfo.ArgumentList.Add("server");
+        startInfo.ArgumentList.Add("--contentRoot");
+        startInfo.ArgumentList.Add(contentRootPath);
+
+        // Add any additional arguments
+        if (additionalArgs is { Length: > 0 })
+        {
+            foreach (var arg in additionalArgs)
+            {
+                startInfo.ArgumentList.Add(arg);
+            }
+        }
+
+        // Configure environment
+        startInfo.Environment["REMOTE_APP_HOST_SOCKET_PATH"] = _socketPath;
+        startInfo.Environment["REMOTE_APP_HOST_PID"] = hostPid.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        startInfo.Environment[KnownConfigNames.CliProcessId] = hostPid.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        if (_integrationLibsPath is not null)
+        {
+            _logger.LogDebug("Setting {EnvironmentVariable} to {Path}", KnownConfigNames.IntegrationLibsPath, _integrationLibsPath);
+            startInfo.Environment[KnownConfigNames.IntegrationLibsPath] = _integrationLibsPath;
+        }
+        else
+        {
+            startInfo.Environment.Remove(KnownConfigNames.IntegrationLibsPath);
+        }
+
+        if (_integrationProbeManifestPath is not null)
+        {
+            _logger.LogDebug(
+                "Setting {EnvironmentVariable} to {Path}",
+                KnownConfigNames.IntegrationProbeManifestPath,
+                _integrationProbeManifestPath);
+            startInfo.Environment[KnownConfigNames.IntegrationProbeManifestPath] = _integrationProbeManifestPath;
+        }
+        else
+        {
+            startInfo.Environment.Remove(KnownConfigNames.IntegrationProbeManifestPath);
+        }
+
+        // Set DCP and Dashboard paths from the layout
+        var dcpPath = _layout.GetDcpPath();
+        if (dcpPath is not null)
+        {
+            startInfo.Environment[BundleDiscovery.DcpPathEnvVar] = dcpPath;
+        }
+
+        // Set the dashboard path so the AppHost can locate and launch the dashboard binary
+        var managedPath = _layout.GetManagedPath();
+        if (managedPath is not null)
+        {
+            startInfo.Environment[BundleDiscovery.DashboardPathEnvVar] = managedPath;
+        }
+
+        // Apply environment variables from apphost.run.json
+        if (environmentVariables is not null)
+        {
+            foreach (var (key, value) in environmentVariables)
+            {
+                startInfo.Environment[key] = value;
+            }
+        }
+
+        if (debug)
+        {
+            startInfo.Environment[KnownConfigNames.AspireLogLevel] = "Debug";
+        }
+
+        startInfo.RedirectStandardOutput = true;
+        startInfo.RedirectStandardError = true;
+
+        return startInfo;
+    }
+
     /// <inheritdoc />
     public string GetInstanceIdentifier() => _appDirectoryPath;
 
     /// <summary>
     /// Reads the project reference assembly names written by the MSBuild target during build.
     /// </summary>
-    private async Task<List<string>> ReadProjectRefAssemblyNamesAsync(string libsPath, CancellationToken cancellationToken)
+    private async Task<List<string>> ReadProjectRefAssemblyNamesAsync(string filePath, CancellationToken cancellationToken)
     {
-        var filePath = Path.Combine(libsPath, "_project-ref-assemblies.txt");
         if (!File.Exists(filePath))
         {
             _logger.LogWarning("Project reference assembly names file not found at {Path}", filePath);
@@ -562,10 +687,118 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         return lines.Where(l => !string.IsNullOrWhiteSpace(l)).Select(l => l.Trim()).ToList();
     }
 
-    private async Task GenerateAppSettingsAsync(
+    private static async Task<List<string>> ReadManifestFileAsync(string filePath, CancellationToken cancellationToken)
+    {
+        if (!File.Exists(filePath))
+        {
+            throw new InvalidOperationException($"Integration closure manifest file '{filePath}' was not found after build.");
+        }
+
+        var lines = await File.ReadAllLinesAsync(filePath, cancellationToken).ConfigureAwait(false);
+        return lines.Where(static line => !string.IsNullOrWhiteSpace(line)).Select(static line => line.Trim()).ToList();
+    }
+
+    private static ClosureMetadata ParseClosureMetadata(string line)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+
+        var parts = line.Split('|', 4);
+        if (parts.Length != 4)
+        {
+            throw new InvalidOperationException($"Integration closure metadata line '{line}' is invalid.");
+        }
+
+        return new ClosureMetadata(
+            NormalizeClosureMetadataValue(parts[0]),
+            NormalizeClosureMetadataValue(parts[1]),
+            NormalizeClosureMetadataValue(parts[2]),
+            NormalizeClosureMetadataValue(parts[3]));
+    }
+
+    private static string? NormalizeClosureMetadataValue(string value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static async Task<Dictionary<string, string>> ReadPackageFingerprintsAsync(string assetsFilePath, CancellationToken cancellationToken)
+    {
+        if (!File.Exists(assetsFilePath))
+        {
+            throw new InvalidOperationException($"Integration assets file '{assetsFilePath}' was not found after build.");
+        }
+
+        await using var stream = File.OpenRead(assetsFilePath);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        var packageFingerprints = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (!document.RootElement.TryGetProperty("libraries", out var libraries))
+        {
+            return packageFingerprints;
+        }
+
+        foreach (var library in libraries.EnumerateObject())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (!library.Value.TryGetProperty("type", out var typeElement) ||
+                !string.Equals(typeElement.GetString(), "package", StringComparison.OrdinalIgnoreCase) ||
+                !library.Value.TryGetProperty("sha512", out var sha512Element))
+            {
+                continue;
+            }
+
+            var sha512 = sha512Element.GetString();
+            if (string.IsNullOrWhiteSpace(sha512) ||
+                TryParsePackageFingerprintKey(library.Name) is not { } packageKey)
+            {
+                continue;
+            }
+
+            packageFingerprints[CreatePackageFingerprintKey(packageKey.PackageId, packageKey.PackageVersion)] = sha512;
+        }
+
+        return packageFingerprints;
+    }
+
+    private static string? TryGetPackageFingerprint(
+        IReadOnlyDictionary<string, string> packageFingerprints,
+        ClosureMetadata metadata)
+    {
+        if (metadata.NuGetPackageId is null ||
+            metadata.NuGetPackageVersion is null ||
+            metadata.PathInPackage is null)
+        {
+            return null;
+        }
+
+        return packageFingerprints.TryGetValue(
+            CreatePackageFingerprintKey(metadata.NuGetPackageId, metadata.NuGetPackageVersion),
+            out var packageFingerprint)
+            ? packageFingerprint
+            : null;
+    }
+
+    private static string CreatePackageFingerprintKey(string packageId, string packageVersion)
+    {
+        return $"{packageId}/{packageVersion}";
+    }
+
+    private static PackageFingerprintKey? TryParsePackageFingerprintKey(string libraryName)
+    {
+        var separatorIndex = libraryName.IndexOf('/');
+        if (separatorIndex <= 0 || separatorIndex == libraryName.Length - 1)
+        {
+            return null;
+        }
+
+        return new PackageFingerprintKey(
+            libraryName[..separatorIndex],
+            libraryName[(separatorIndex + 1)..]);
+    }
+
+    private static string CreateAppSettingsContent(
         List<IntegrationReference> packageRefs,
-        List<string> projectRefAssemblyNames,
-        CancellationToken cancellationToken)
+        List<string> projectRefAssemblyNames)
     {
         var atsAssemblies = new List<string> { "Aspire.Hosting" };
 
@@ -592,7 +825,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         }
 
         var assembliesJson = string.Join(",\n      ", atsAssemblies.Select(a => $"\"{a}\""));
-        var appSettingsJson = $$"""
+        return $$"""
             {
               "Logging": {
                 "LogLevel": {
@@ -606,10 +839,32 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
               ]
             }
             """;
+    }
 
+    private static async Task WriteAppSettingsAsync(string contentRootPath, string appSettingsContent, CancellationToken cancellationToken)
+    {
+        Directory.CreateDirectory(contentRootPath);
         await File.WriteAllTextAsync(
-            Path.Combine(_workingDirectory, "appsettings.json"),
-            appSettingsJson,
-            cancellationToken);
+            Path.Combine(contentRootPath, "appsettings.json"),
+            appSettingsContent,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Represents a prebuilt AppHost preparation failure with captured build output.
+    /// </summary>
+    private readonly record struct ClosureMetadata(
+        string? NuGetPackageId,
+        string? NuGetPackageVersion,
+        string? PathInPackage,
+        string? AssetType);
+
+    private readonly record struct PackageFingerprintKey(
+        string PackageId,
+        string PackageVersion);
+
+    private sealed class AppHostServerPrepareFailedException(string message, OutputCollector output) : Exception(message)
+    {
+        public OutputCollector Output { get; } = output;
     }
 }

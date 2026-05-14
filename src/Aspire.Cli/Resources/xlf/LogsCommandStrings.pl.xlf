@@ -22,6 +22,11 @@
         <target state="needs-review-translation">Dzienniki wyjściowe w formacie JSON (NDJSON).</target>
         <note />
       </trans-unit>
+      <trans-unit id="NoLogsFound">
+        <source>No logs found.</source>
+        <target state="new">No logs found.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NoResourcesFound">
         <source>No resources found.</source>
         <target state="translated">Nie znaleziono żadnych zasobów.</target>

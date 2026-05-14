@@ -8,6 +8,7 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Utils;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.Telemetry;
@@ -1144,6 +1145,9 @@ builder.Build().Run();");
 
             public Task<AppHostValidationResult> ValidateAppHostAsync(FileInfo appHostFile, CancellationToken cancellationToken)
                 => Task.FromResult(new AppHostValidationResult(IsValid: appHostFile.Name.Equals(supportedFileName, StringComparison.OrdinalIgnoreCase)));
+
+            public Task<string?> GetAspireHostingVersionAsync(FileInfo appHostFile, CancellationToken cancellationToken)
+                => Task.FromResult<string?>(VersionHelper.GetDefaultTemplateVersion());
 
             public Task<bool> AddPackageAsync(AddPackageContext context, CancellationToken cancellationToken)
                 => throw new NotImplementedException();

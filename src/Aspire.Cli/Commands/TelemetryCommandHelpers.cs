@@ -184,7 +184,6 @@ internal static class TelemetryCommandHelpers
     /// When <c>true</c>, a missing Dashboard API is a hard error.
     /// When <c>false</c>, a missing Dashboard API is non-fatal and the method returns success with <c>null</c> base URL and token.
     /// </param>
-    /// <param name="logFilePath">The path to the current session's log file, displayed alongside errors.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A <see cref="DashboardApiResult"/> with the resolved connection and dashboard API info.</returns>
     public static async Task<DashboardApiResult> GetDashboardApiAsync(
@@ -196,7 +195,6 @@ internal static class TelemetryCommandHelpers
         string? dashboardUrl,
         string? apiKey,
         bool requireDashboard,
-        string logFilePath,
         CancellationToken cancellationToken)
     {
         // Validate mutual exclusivity of --apphost and --dashboard-url
@@ -221,8 +219,7 @@ internal static class TelemetryCommandHelpers
                     interactionService,
                     new TelemetryErrorInfo(
                         string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardUrlInvalid, dashboardUrl),
-                        TelemetryCommandStrings.DashboardUrlInvalidHint),
-                    logFilePath);
+                        TelemetryCommandStrings.DashboardUrlInvalidHint));
                 return DashboardApiResult.Failure(ExitCodeConstants.InvalidCommand);
             }
 
@@ -247,7 +244,7 @@ internal static class TelemetryCommandHelpers
                             TelemetryCommandStrings.DashboardLoginTokenFailedHint,
                             TelemetryCommandStrings.DashboardLoginTokenFailedAnonymousHint),
                     };
-                    DisplayTelemetryError(interactionService, errorInfo, logFilePath);
+                    DisplayTelemetryError(interactionService, errorInfo);
                     return DashboardApiResult.Failure(ExitCodeConstants.DashboardFailure);
                 }
 
@@ -281,8 +278,7 @@ internal static class TelemetryCommandHelpers
                     interactionService,
                     new TelemetryErrorInfo(
                         TelemetryCommandStrings.DashboardNotAvailable,
-                        TelemetryCommandStrings.DashboardNotAvailableHint),
-                    logFilePath);
+                        TelemetryCommandStrings.DashboardNotAvailableHint));
                 return DashboardApiResult.Failure(ExitCodeConstants.DashboardFailure);
             }
 
@@ -318,12 +314,12 @@ internal static class TelemetryCommandHelpers
     }
 
     /// <summary>
-    /// Displays a telemetry error with a structured format: error message, optional hint, and log file path.
+    /// Displays a telemetry error with a structured format: error message and optional hints.
+    /// The CLI log file path is displayed centrally by BaseCommand on non-zero exit.
     /// </summary>
     public static void DisplayTelemetryError(
         IInteractionService interactionService,
-        TelemetryErrorInfo errorInfo,
-        string logFilePath)
+        TelemetryErrorInfo errorInfo)
     {
         interactionService.DisplayError(errorInfo.Error);
 
@@ -331,11 +327,6 @@ internal static class TelemetryCommandHelpers
         {
             interactionService.DisplayMessage(KnownEmojis.Information, hint);
         }
-
-        interactionService.DisplayMessage(
-            KnownEmojis.PageFacingUp,
-            string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, MarkupHelpers.SafeFileLink(interactionService, logFilePath)),
-            allowMarkup: true);
     }
 
     /// <summary>

@@ -161,8 +161,9 @@ internal static class CliTestHelper
         {
             return language => ActivatorUtilities.CreateInstance<GuestAppHostProject>(sp, language);
         });
-        services.AddSingleton<IAppHostProjectFactory, AppHostProjectFactory>();
+        services.AddSingleton(options.AppHostProjectFactory);
 
+        services.AddSingleton<IEnvironmentCheck, AspireVersionCheck>();
         services.AddSingleton<IEnvironmentCheck, WslEnvironmentCheck>();
         services.AddSingleton<IEnvironmentCheck, DotNetSdkCheck>();
         services.AddSingleton<IEnvironmentCheck, TypeScriptAppHostToolingCheck>();
@@ -375,6 +376,7 @@ internal sealed class CliServiceCollectionTestOptions
     public Func<IServiceProvider, IProjectLocator> ProjectLocatorFactory { get; set; }
     public Func<IServiceProvider, ISolutionLocator> SolutionLocatorFactory { get; set; }
     public Func<IServiceProvider, CliExecutionContext> CliExecutionContextFactory { get; set; }
+    public Func<IServiceProvider, IAppHostProjectFactory> AppHostProjectFactory { get; set; } = serviceProvider => ActivatorUtilities.CreateInstance<AppHostProjectFactory>(serviceProvider);
     public Func<IServiceProvider, IFirstTimeUseNoticeSentinel> FirstTimeUseNoticeSentinelFactory { get; set; } = _ => new TestFirstTimeUseNoticeSentinel();
     public Func<IServiceProvider, IBannerService> BannerServiceFactory { get; set; } = _ => new TestBannerService();
 
