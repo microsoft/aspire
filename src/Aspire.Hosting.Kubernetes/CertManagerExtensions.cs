@@ -361,7 +361,7 @@ public static class CertManagerExtensions
 
         var environment = certManager.Parent;
 
-        var manifest = await BuildClusterIssuerManifestAsync(context.Model, certManager, issuer, context.CancellationToken)
+        var manifest = await BuildClusterIssuerManifestAsync(context.Model, certManager, issuer, context.Logger, context.CancellationToken)
             .ConfigureAwait(false);
 
         context.Logger.LogInformation(
@@ -412,7 +412,9 @@ public static class CertManagerExtensions
         }
         finally
         {
-            try { tempDir.Delete(recursive: true); } catch { }
+            try { tempDir.Delete(recursive: true); }
+            catch (IOException) { /* best-effort cleanup */ }
+            catch (UnauthorizedAccessException) { /* best-effort cleanup */ }
         }
     }
 
@@ -420,6 +422,7 @@ public static class CertManagerExtensions
         ApplicationModel.DistributedApplicationModel model,
         CertManagerResource certManager,
         CertManagerIssuerResource issuer,
+        ILogger logger,
         CancellationToken cancellationToken)
     {
         var sb = new StringBuilder();
@@ -443,7 +446,7 @@ public static class CertManagerExtensions
                     sb.AppendLine("    solvers:");
                     foreach (var solver in issuer.Solvers)
                     {
-                        AppendSolver(sb, solver, model, certManager, issuer);
+                        AppendSolver(sb, solver, model, certManager, issuer, logger);
                     }
                     break;
                 }
@@ -460,7 +463,8 @@ public static class CertManagerExtensions
         CertManagerSolverConfig solver,
         ApplicationModel.DistributedApplicationModel model,
         CertManagerResource certManager,
-        CertManagerIssuerResource issuer)
+        CertManagerIssuerResource issuer,
+        ILogger logger)
     {
         switch (solver)
         {
@@ -473,19 +477,28 @@ public static class CertManagerExtensions
                     // attach to the Gateway being validated. Without parentRefs, the route is
                     // orphaned and the ACME challenge URL is unreachable.
                     // See https://cert-manager.io/docs/configuration/acme/http01/#configuring-the-http01-gateway-api-solver
+                    var nameComparer = new ResourceNameComparer();
                     var parentGateways = model.Resources
                         .OfType<KubernetesGatewayResource>()
-                        .Where(g => g.Parent == certManager.Parent
+                        .Where(g => nameComparer.Equals(g.Parent, certManager.Parent)
                                     && g.GatewayAnnotations.TryGetValue(ClusterIssuerAnnotationKey, out var v)
                                     && string.Equals(v.Format, issuer.Name, StringComparison.Ordinal))
                         .ToList();
 
                     if (parentGateways.Count == 0)
                     {
-                        // No annotated gateway found yet — emit the solver with no parentRefs.
-                        // cert-manager will reject the challenge until at least one Gateway
-                        // adopts the issuer, but the apply itself succeeds and a redeploy
-                        // after wiring up WithTls(issuer) will fix it.
+                        // No annotated gateway found. cert-manager will accept this manifest but
+                        // the HTTP-01 challenge can never be satisfied because there's no parent
+                        // Gateway for the solver's HTTPRoute to attach to. Emit a warning so the
+                        // misconfiguration is visible at deploy time instead of leaving the user
+                        // to discover it via Certificates stuck in 'Pending' indefinitely.
+                        logger.LogWarning(
+                            "ClusterIssuer '{IssuerName}' has an HTTP-01 solver but no Gateway in environment '{EnvironmentName}' is annotated with " +
+                            ClusterIssuerAnnotationKey + "={IssuerName}. cert-manager will not be able to satisfy ACME challenges until at least " +
+                            "one Gateway adopts this issuer (e.g. via WithTls(issuer)).",
+                            issuer.Name,
+                            certManager.Parent.Name,
+                            issuer.Name);
                         return;
                     }
 

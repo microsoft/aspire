@@ -16,9 +16,9 @@ namespace Aspire.Hosting.Kubernetes;
 /// pattern for Aspire applications.
 /// </para>
 /// <para>
-/// Issuers are namespace-scoped <c>Issuer</c> resources are intentionally not modeled in the
-/// initial release. <see cref="CertManagerExtensions.AddIssuer"/> always produces a
-/// cluster-scoped <c>ClusterIssuer</c>.
+/// Namespace-scoped <c>Issuer</c> resources are intentionally not modeled in the initial
+/// release. <see cref="CertManagerExtensions.AddIssuer"/> always produces a cluster-scoped
+/// <c>ClusterIssuer</c>.
 /// </para>
 /// </remarks>
 [AspireExport]
