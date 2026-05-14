@@ -13,6 +13,7 @@
 FROM ubuntu:24.04
 
 ARG NODE_VERSION=22
+ENV DEBIAN_FRONTEND=noninteractive
 
 # Install the requested Node.js runtime plus system dependencies.
 # Start from a neutral base so every matrix leg uses the same NodeSource-installed
@@ -25,6 +26,7 @@ RUN case "$NODE_VERSION" in 22|24|26) ;; *) echo "Unsupported NODE_VERSION: $NOD
     wget \
     docker.io \
     jq \
+    libicu-dev \
     && rm -rf /var/lib/apt/lists/* && \
     curl -fsSL "https://deb.nodesource.com/setup_${NODE_VERSION}.x" | bash - && \
     apt-get install -y --no-install-recommends \
