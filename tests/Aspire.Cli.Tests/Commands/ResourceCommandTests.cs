@@ -364,29 +364,61 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(ExitCodeConstants.Success, exitCode);
     }
 
-    [Fact]
-    public async Task ResourceCommand_AcceptsWellKnownCommandNames()
+    [Theory]
+    [InlineData("start")]
+    [InlineData("stop")]
+    [InlineData("restart")]
+    [InlineData("rebuild")]
+    [InlineData("set-parameter")]
+    [InlineData("delete-parameter")]
+    public async Task ResourceCommand_AcceptsWellKnownCommandNames(string commandName)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"resource myresource {commandName} --help");
 
-        // Test with start
-        var startResult = command.Parse("resource myresource start --help");
-        var startExitCode = await startResult.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, startExitCode);
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        // Test with stop
-        var stopResult = command.Parse("resource myresource stop --help");
-        var stopExitCode = await stopResult.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, stopExitCode);
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+    }
 
-        // Test with restart
-        var restartResult = command.Parse("resource myresource restart --help");
-        var restartExitCode = await restartResult.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, restartExitCode);
+    [Theory]
+    [InlineData("start", "Starting resource 'myresource'...", "Resource 'myresource' started successfully.")]
+    [InlineData("stop", "Stopping resource 'myresource'...", "Resource 'myresource' stopped successfully.")]
+    [InlineData("restart", "Restarting resource 'myresource'...", "Resource 'myresource' restarted successfully.")]
+    [InlineData("rebuild", "Rebuilding resource 'myresource'...", "Resource 'myresource' rebuilt successfully.")]
+    [InlineData("set-parameter", "Setting parameter for resource 'myresource'...", "Resource 'myresource' set successfully.")]
+    [InlineData("delete-parameter", "Deleting parameter for resource 'myresource'...", "Resource 'myresource' deleted successfully.")]
+    public async Task ResourceCommand_UsesWellKnownCommandDisplayMetadata(string commandName, string statusMessage, string successMessage)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var statuses = new List<string>();
+        var interactionService = new TestInteractionService
+        {
+            ShowStatusCallback = statuses.Add
+        };
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true }
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel, interactionService);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"resource myresource {commandName}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(1, backchannel.ExecuteResourceCommandCallCount);
+        Assert.Collection(
+            statuses,
+            status => Assert.Equal("Scanning for running AppHosts...", status),
+            status => Assert.Equal(statusMessage, status));
+        Assert.Equal(successMessage, Assert.Single(interactionService.DisplayedSuccess));
     }
 
     [Fact]

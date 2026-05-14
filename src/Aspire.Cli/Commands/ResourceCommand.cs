@@ -51,13 +51,16 @@ internal sealed class ResourceCommand : BaseCommand
 
     /// <summary>
     /// Well-known commands with their display metadata.
-    /// The command name is used directly (no mapping needed since the user-facing names match the actual command names).
+    /// The command names are passed through unchanged; entries only customize progress, success, and error text.
     /// </summary>
     private static readonly Dictionary<string, (string ProgressVerb, string BaseVerb, string PastTenseVerb)> s_wellKnownCommands = new(StringComparers.CommandName)
     {
         ["start"] = ("Starting", "start", "started"),
         ["stop"] = ("Stopping", "stop", "stopped"),
         ["restart"] = ("Restarting", "restart", "restarted"),
+        ["rebuild"] = ("Rebuilding", "rebuild", "rebuilt"),
+        ["set-parameter"] = ("Setting parameter for", "set parameter for", "set"),
+        ["delete-parameter"] = ("Deleting parameter for", "delete parameter for", "deleted"),
     };
 
     public ResourceCommand(
@@ -131,7 +134,7 @@ internal sealed class ResourceCommand : BaseCommand
 
         var commandArguments = commandArgumentsResult.Arguments;
 
-        // Map well-known friendly names (start/stop/restart) to their display metadata
+        // Use display metadata for well-known command names.
         if (s_wellKnownCommands.TryGetValue(commandName, out var knownCommand))
         {
             return CommandResult.FromExitCode(await ResourceCommandHelper.ExecuteResourceCommandAsync(

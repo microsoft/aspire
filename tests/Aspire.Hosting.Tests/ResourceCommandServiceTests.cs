@@ -412,6 +412,26 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         Assert.True(result.Success);
     }
 
+    [Theory]
+    [InlineData("set-parameter", "parameter-set")]
+    [InlineData("delete-parameter", "parameter-delete")]
+    public async Task ExecuteCommandAsync_LegacyParameterCommandName_FallsBackToCurrentName(string currentCommandName, string legacyCommandName)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: currentCommandName,
+                displayName: "Parameter command",
+                executeCommand: _ => Task.FromResult(new ExecuteCommandResult { Success = true }));
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(custom.Resource, legacyCommandName);
+
+        Assert.True(result.Success);
+    }
+
     [Fact]
     public async Task ExecuteCommandAsync_SuccessWithResult_ReturnsResultData()
     {
