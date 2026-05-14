@@ -531,6 +531,8 @@ extends:
                   Write-Host "║ GitHub Tasks:   ${{ parameters.SkipGitHubTasks }}" -NoNewline
                   if ("${{ parameters.SkipGitHubTasks }}" -eq "true") {
                     Write-Host " (SKIPPED)"
+                  } elseif ("${{ parameters.DryRun }}" -eq "true") {
+                    Write-Host " (dispatched after Release stage; dry_run=true forwarded)"
                   } else {
                     Write-Host " (dispatched after Release stage)"
                   }
@@ -602,6 +604,13 @@ extends:
       #
       # Skipped entirely when SkipGitHubTasks=true so partial-failure re-runs
       # can avoid re-dispatching the workflow.
+      #
+      # DryRun behavior: this stage still runs when DryRun=true (it does NOT
+      # gate on DryRun). The DryRun value is propagated to the GH workflow as
+      # dry_run=true, which keeps the workflow from actually creating tags,
+      # releases or PRs. This is intentional — it lets a release manager
+      # validate the AzDO → GitHub dispatch path end-to-end without performing
+      # a real release.
       - stage: GitHubTasks
         displayName: 'Dispatch GitHub Release Tasks'
         dependsOn: Release
