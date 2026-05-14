@@ -22,7 +22,7 @@ jobs:
 
       - name: Build CLI and compatibility tool
         run: |
-          ./dotnet.sh build src/Aspire.Cli/Aspire.Cli.csproj --configuration Release /p:SkipNativeBuild=true
+          ./dotnet.sh build src/Aspire.Cli/Aspire.Cli.csproj --configuration Release
           ./dotnet.sh build tools/TypeScriptApiCompat/TypeScriptApiCompat.csproj --configuration Release
 
       - name: Extract base ATS baseline
@@ -48,6 +48,8 @@ jobs:
 
       - name: Generate current ATS surface
         shell: bash
+        env:
+          ASPIRE_REPO_ROOT: ${{ github.workspace }}
         run: |
           set -euo pipefail
 
