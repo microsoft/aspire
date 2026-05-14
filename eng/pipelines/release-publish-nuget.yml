@@ -105,14 +105,16 @@ extends:
                   displayName: 'Publish PackageArtifacts with SBOM'
                   targetPath: '$(Pipeline.Workspace)/packages/PackageArtifacts'
                   artifactName: 'PackageArtifacts'
-                - output: pipelineArtifact
-                  displayName: 'Publish WinGet Manifests'
-                  targetPath: '$(Pipeline.Workspace)/installers/winget-manifests-stable'
-                  artifactName: 'winget-manifests-stable'
-                - output: pipelineArtifact
-                  displayName: 'Publish Homebrew Cask'
-                  targetPath: '$(Pipeline.Workspace)/installers/homebrew-cask-stable'
-                  artifactName: 'homebrew-cask-stable'
+                - ${{ if eq(parameters.SkipWinGetPublish, false) }}:
+                  - output: pipelineArtifact
+                    displayName: 'Publish WinGet Manifests'
+                    targetPath: '$(Pipeline.Workspace)/installers/winget-manifests-stable'
+                    artifactName: 'winget-manifests-stable'
+                - ${{ if eq(parameters.SkipHomebrewPublish, false) }}:
+                  - output: pipelineArtifact
+                    displayName: 'Publish Homebrew Cask'
+                    targetPath: '$(Pipeline.Workspace)/installers/homebrew-cask-stable'
+                    artifactName: 'homebrew-cask-stable'
             steps:
               - checkout: none
 
@@ -132,13 +134,15 @@ extends:
                   artifact: PackageArtifacts
                   patterns: '**/*.nupkg'
 
-              - download: aspire-build
-                displayName: 'Download WinGet Manifests from Source Build'
-                artifact: winget-manifests-stable
+              - ${{ if eq(parameters.SkipWinGetPublish, false) }}:
+                - download: aspire-build
+                  displayName: 'Download WinGet Manifests from Source Build'
+                  artifact: winget-manifests-stable
 
-              - download: aspire-build
-                displayName: 'Download Homebrew Cask from Source Build'
-                artifact: homebrew-cask-stable
+              - ${{ if eq(parameters.SkipHomebrewPublish, false) }}:
+                - download: aspire-build
+                  displayName: 'Download Homebrew Cask from Source Build'
+                  artifact: homebrew-cask-stable
 
               # Move artifacts to expected location for output
               - ${{ if not(and(eq(parameters.SkipNuGetPublish, true), eq(parameters.SkipChannelPromotion, true))) }}:
@@ -175,25 +179,25 @@ extends:
                     Write-Host "Installer-only run detected; created empty PackageArtifacts placeholder."
                   displayName: 'Prepare Empty PackageArtifacts Placeholder'
 
-              # Copy installer artifacts to expected locations for output
-              - powershell: |
-                  $artifacts = @(
-                    @{ Name = 'winget-manifests-stable'; Source = '$(Pipeline.Workspace)/aspire-build/winget-manifests-stable'; Target = '$(Pipeline.Workspace)/installers/winget-manifests-stable' },
-                    @{ Name = 'homebrew-cask-stable'; Source = '$(Pipeline.Workspace)/aspire-build/homebrew-cask-stable'; Target = '$(Pipeline.Workspace)/installers/homebrew-cask-stable' }
-                  )
+              # Copy installer artifacts to expected locations for output.
+              # Each installer is gated independently so re-runs that skip WinGet or Homebrew
+              # publishing also skip downloading and SBOM-stamping the corresponding artifact.
+              - ${{ if eq(parameters.SkipWinGetPublish, false) }}:
+                - powershell: |
+                    $source = "$(Pipeline.Workspace)/aspire-build/winget-manifests-stable"
+                    $target = "$(Pipeline.Workspace)/installers/winget-manifests-stable"
 
-                  foreach ($artifact in $artifacts) {
-                    Write-Host "Copying $($artifact.Name) from $($artifact.Source) to $($artifact.Target)"
+                    Write-Host "Copying winget-manifests-stable from $source to $target"
 
-                    if (!(Test-Path $artifact.Target)) {
-                      New-Item -ItemType Directory -Path $artifact.Target -Force | Out-Null
+                    if (!(Test-Path $target)) {
+                      New-Item -ItemType Directory -Path $target -Force | Out-Null
                     }
 
-                    $files = Get-ChildItem -Path $artifact.Source -Recurse -File
+                    $files = Get-ChildItem -Path $source -Recurse -File
                     Write-Host "  Found $($files.Count) files"
                     foreach ($file in $files) {
-                      $relativePath = $file.FullName.Substring($artifact.Source.Length + 1)
-                      $destPath = Join-Path $artifact.Target $relativePath
+                      $relativePath = $file.FullName.Substring($source.Length + 1)
+                      $destPath = Join-Path $target $relativePath
                       $destDir = Split-Path $destPath -Parent
                       if (!(Test-Path $destDir)) {
                         New-Item -ItemType Directory -Path $destDir -Force | Out-Null
@@ -201,10 +205,36 @@ extends:
                       Copy-Item $file.FullName -Destination $destPath -Force
                       Write-Host "    Copied: $relativePath"
                     }
-                  }
 
-                  Write-Host "✓ Installer artifacts prepared"
-                displayName: 'Prepare Installer Artifacts'
+                    Write-Host "✓ WinGet manifests prepared"
+                  displayName: 'Prepare WinGet Manifests'
+
+              - ${{ if eq(parameters.SkipHomebrewPublish, false) }}:
+                - powershell: |
+                    $source = "$(Pipeline.Workspace)/aspire-build/homebrew-cask-stable"
+                    $target = "$(Pipeline.Workspace)/installers/homebrew-cask-stable"
+
+                    Write-Host "Copying homebrew-cask-stable from $source to $target"
+
+                    if (!(Test-Path $target)) {
+                      New-Item -ItemType Directory -Path $target -Force | Out-Null
+                    }
+
+                    $files = Get-ChildItem -Path $source -Recurse -File
+                    Write-Host "  Found $($files.Count) files"
+                    foreach ($file in $files) {
+                      $relativePath = $file.FullName.Substring($source.Length + 1)
+                      $destPath = Join-Path $target $relativePath
+                      $destDir = Split-Path $destPath -Parent
+                      if (!(Test-Path $destDir)) {
+                        New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+                      }
+                      Copy-Item $file.FullName -Destination $destPath -Force
+                      Write-Host "    Copied: $relativePath"
+                    }
+
+                    Write-Host "✓ Homebrew cask prepared"
+                  displayName: 'Prepare Homebrew Cask'
 
       # ===== STAGE 2: RELEASE =====
       # This releaseJob consumes the artifacts with SBOM and publishes to NuGet.org
