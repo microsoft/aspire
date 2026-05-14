@@ -22,11 +22,12 @@ The CLI binary identifies its install route by reading a single
 | `dotnet-tool`  | `dotnet tool install -g Aspire.Cli`                    |
 | `script`       | `get-aspire-cli.{sh,ps1}`                              |
 | `pr`           | `get-aspire-cli-pr.{sh,ps1}`                           |
+| `localhive`    | `localhive.{sh,ps1}` (locally-built dev install)       |
 
 `BundleService.ComputeDefaultExtractDir` maps `source` to extract-dir shape:
 
 - `winget` / `brew` / `dotnet-tool` → `binaryDir` (flat: bundle extracts beside the binary).
-- `script` / `pr` → `Path.GetDirectoryName(binaryDir)` (bin layout: bundle extracts as a sibling of `bin/`).
+- `script` / `pr` / `localhive` → `Path.GetDirectoryName(binaryDir)` (bin layout: bundle extracts as a sibling of `bin/`).
 - missing or unknown sidecar → parent-of-binary, matching the legacy heuristic for pre-sidecar installs.
 
 ## Per-route authorship
@@ -40,6 +41,7 @@ The CLI binary identifies its install route by reading a single
 | script      | shared per-RID archive                 | `eng/scripts/get-aspire-cli.{sh,ps1}` (post-extraction)             |
 | PR script   | shared per-RID archive                 | `eng/scripts/get-aspire-cli-pr.{sh,ps1}` (post-extraction)          |
 | dotnet-tool | route-exclusive nupkg                  | payload-embedded (staged by `Aspire.Cli.csproj` `_PreparePreBuiltCliBinaryForPackTool`) |
+| localhive   | local-only (no shared archive)         | `localhive.{sh,ps1}` writes the sidecar after copying the CLI binary into `<prefix>/bin/`. When `--output PATH` is used, the sidecar is written inside the output dir, which is appropriate because localhive archives are route-exclusive (only consumed as localhive installs). |
 
 The dotnet-tool nupkg is the one exception that payload-embeds the sidecar: the nupkg is route-exclusive (only `dotnet tool install` consumes it), so the embedded sidecar cannot leak into another route's prefix.
 

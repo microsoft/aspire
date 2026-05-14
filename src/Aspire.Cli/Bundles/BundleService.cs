@@ -354,7 +354,8 @@ internal sealed class BundleService(
                 or InstallSourceExtensions.BrewWire
                 or InstallSourceExtensions.DotnetToolWire => binaryDir,
             InstallSourceExtensions.ScriptWire
-                or InstallSourceExtensions.PrWire => Path.GetDirectoryName(binaryDir) ?? binaryDir,
+                or InstallSourceExtensions.PrWire
+                or InstallSourceExtensions.LocalHiveWire => Path.GetDirectoryName(binaryDir) ?? binaryDir,
             _ => Path.GetDirectoryName(binaryDir) ?? binaryDir,
         };
     }

@@ -266,6 +266,40 @@ public class InstallationUninstallerTests(ITestOutputHelper outputHelper)
         await Assert.ThrowsAsync<InvalidOperationException>(() => uninstaller.ExecuteAsync(plan, TestContext.Current.CancellationToken));
     }
 
+    [Fact]
+    public void Plan_LocalHiveRoute_UsesSurgicalScriptRouteRemoval()
+    {
+        // localhive shares the script-route shared-prefix layout. The
+        // uninstaller must therefore use the same surgical removal logic
+        // as script — only the Aspire-owned files inside the shared
+        // prefix get removed, sibling subtrees survive.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var prefix = workspace.WorkspaceRoot.FullName;
+
+        var binDir = Path.Combine(prefix, "bin");
+        Directory.CreateDirectory(binDir);
+        File.WriteAllText(Path.Combine(binDir, BinaryName()), "fake aspire binary");
+        File.WriteAllText(
+            Path.Combine(binDir, InstallSidecarReader.SidecarFileName),
+            "{\"source\":\"localhive\"}");
+        // Sibling subtree that must survive a localhive uninstall.
+        var siblingHive = Path.Combine(prefix, "hives", "local");
+        Directory.CreateDirectory(siblingHive);
+        File.WriteAllText(Path.Combine(siblingHive, "marker"), "sibling hive");
+
+        var uninstaller = NewUninstaller();
+        var plan = uninstaller.Plan(prefix);
+
+        Assert.Equal(UninstallOutcome.Proceed, plan.Outcome);
+        Assert.Equal(InstallSource.LocalHive, plan.Route);
+        // Removals must touch only files inside <prefix>/bin/, not the
+        // sibling hive tree.
+        Assert.DoesNotContain(plan.Removals, p => p.Contains(siblingHive, StringComparison.Ordinal));
+        Assert.DoesNotContain(plan.Removals, p => string.Equals(p.TrimEnd(Path.DirectorySeparatorChar), prefix.TrimEnd(Path.DirectorySeparatorChar), StringComparison.Ordinal));
+        // The Aspire binary IS removed.
+        Assert.Contains(plan.Removals, p => p.EndsWith(BinaryName(), StringComparison.Ordinal));
+    }
+
     private static InstallationUninstaller NewUninstaller()
     {
         var sidecarReader = new InstallSidecarReader();

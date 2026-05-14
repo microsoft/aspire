@@ -31,6 +31,9 @@ internal enum InstallSource
 
     /// <summary>.NET global tool (<c>dotnet tool install -g Aspire.Cli</c>).</summary>
     DotnetTool,
+
+    /// <summary>Locally-built install from <c>localhive.sh</c> / <c>localhive.ps1</c>.</summary>
+    LocalHive,
 }
 
 /// <summary>
@@ -47,6 +50,7 @@ internal static class InstallSourceExtensions
     internal const string WingetWire = "winget";
     internal const string BrewWire = "brew";
     internal const string DotnetToolWire = "dotnet-tool";
+    internal const string LocalHiveWire = "localhive";
 
     /// <summary>
     /// Parses a sidecar <c>source</c> string into the strongly-typed enum.
@@ -63,6 +67,7 @@ internal static class InstallSourceExtensions
             WingetWire => InstallSource.Winget,
             BrewWire => InstallSource.Brew,
             DotnetToolWire => InstallSource.DotnetTool,
+            LocalHiveWire => InstallSource.LocalHive,
             _ => InstallSource.Unknown,
         };
     }
@@ -81,6 +86,7 @@ internal static class InstallSourceExtensions
             InstallSource.Winget => WingetWire,
             InstallSource.Brew => BrewWire,
             InstallSource.DotnetTool => DotnetToolWire,
+            InstallSource.LocalHive => LocalHiveWire,
             _ => null,
         };
     }

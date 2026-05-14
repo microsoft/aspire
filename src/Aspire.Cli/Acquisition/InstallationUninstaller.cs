@@ -100,7 +100,11 @@ internal sealed class InstallationUninstaller : IInstallationUninstaller
         return sidecar.Source switch
         {
             InstallSource.Pr => PlanPrRouteRemoval(fullPrefix),
-            InstallSource.Script => PlanScriptRouteRemoval(fullPrefix, binDir),
+            // LocalHive shares the same on-disk layout as Script (shared
+            // prefix with sibling routes), so the surgical-removal logic
+            // is identical: only Aspire-owned files inside the prefix get
+            // removed, never the sibling subtrees.
+            InstallSource.Script or InstallSource.LocalHive => PlanScriptRouteRemoval(fullPrefix, binDir, sidecar.Source),
             InstallSource.Winget => PlanPackagerRefusal(fullPrefix, sidecar.Source, "winget uninstall Microsoft.Aspire"),
             InstallSource.Brew => PlanPackagerRefusal(fullPrefix, sidecar.Source, "brew uninstall --cask aspire"),
             InstallSource.DotnetTool => PlanPackagerRefusal(fullPrefix, sidecar.Source, "dotnet tool uninstall -g Aspire.Cli"),
@@ -186,15 +190,16 @@ internal sealed class InstallationUninstaller : IInstallationUninstaller
     }
 
     /// <summary>
-    /// Script-route plan: the prefix is shared with sibling routes
-    /// (<c>dogfood/</c>, <c>hives/</c>, etc.) so the removal must be
-    /// surgical. Only Aspire-owned files inside <c>&lt;prefix&gt;/bin/</c>
-    /// and the single <c>versions/&lt;id&gt;/</c> directory matching the
-    /// bundle marker are removed. If the bundle marker is missing or
-    /// unreadable we refuse to touch <c>versions/</c> rather than guessing
-    /// which directory belongs to this install.
+    /// Script-route plan (also used for the localhive route, which shares
+    /// the same shared-prefix layout): the prefix is shared with sibling
+    /// routes (<c>dogfood/</c>, <c>hives/</c>, etc.) so the removal must
+    /// be surgical. Only Aspire-owned files inside
+    /// <c>&lt;prefix&gt;/bin/</c> and the single <c>versions/&lt;id&gt;/</c>
+    /// directory matching the bundle marker are removed. If the bundle
+    /// marker is missing or unreadable we refuse to touch <c>versions/</c>
+    /// rather than guessing which directory belongs to this install.
     /// </summary>
-    private static UninstallPlan PlanScriptRouteRemoval(string fullPrefix, string binDir)
+    private static UninstallPlan PlanScriptRouteRemoval(string fullPrefix, string binDir, InstallSource route)
     {
         var removals = new List<string>();
         var manualSteps = new List<string>();
@@ -250,7 +255,7 @@ internal sealed class InstallationUninstaller : IInstallationUninstaller
         {
             return new UninstallPlan(
                 fullPrefix,
-                InstallSource.Script,
+                route,
                 UninstallOutcome.NothingToDo,
                 Removals: [],
                 ManualSteps: manualSteps,
@@ -259,7 +264,7 @@ internal sealed class InstallationUninstaller : IInstallationUninstaller
 
         return new UninstallPlan(
             fullPrefix,
-            InstallSource.Script,
+            route,
             UninstallOutcome.Proceed,
             removals,
             manualSteps,

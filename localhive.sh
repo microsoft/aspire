@@ -371,18 +371,19 @@ if [[ $SKIP_CLI -eq 0 ]]; then
       exit 1
     fi
   else
-    # Framework-dependent CLI with embedded bundle payload
+    # NativeAOT CLI (Aspire.Cli.csproj sets PublishAot=true) with embedded bundle payload.
+    # Publish output is RID-specific even without an explicit -r, so the path includes $BUNDLE_RID.
     CLI_PROJ="$REPO_ROOT/src/Aspire.Cli/Aspire.Cli.Tool.csproj"
-    CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net10.0/publish"
+    CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net10.0/$BUNDLE_RID/publish"
     if [[ -n "$BUNDLE_PAYLOAD_ARCHIVE" ]]; then
-      log "Publishing Aspire CLI (dotnet tool) with embedded bundle payload..."
-      dotnet publish "$CLI_PROJ" -c "$EFFECTIVE_CONFIG" "/p:VersionSuffix=$VERSION_SUFFIX" "/p:BundlePayloadPath=$BUNDLE_PAYLOAD_ARCHIVE"
+      log "Publishing Aspire CLI (dotnet tool, native AOT) with embedded bundle payload..."
+      dotnet publish "$CLI_PROJ" -c "$EFFECTIVE_CONFIG" -r "$BUNDLE_RID" "/p:VersionSuffix=$VERSION_SUFFIX" "/p:BundlePayloadPath=$BUNDLE_PAYLOAD_ARCHIVE"
       if [[ $? -ne 0 ]]; then
         error "CLI publish with embedded bundle failed."
         exit 1
       fi
     elif [[ ! -d "$CLI_PUBLISH_DIR" ]]; then
-      CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net10.0"
+      CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net10.0/$BUNDLE_RID"
     fi
   fi
 
@@ -401,6 +402,13 @@ if [[ $SKIP_CLI -eq 0 ]]; then
 
     # Ensure the CLI is executable
     chmod +x "$CLI_BIN_DIR/aspire"
+
+    # Stamp the install-route sidecar so `aspire info` / `aspire uninstall`
+    # can identify this binary as a locally-built (`localhive`) install.
+    # The format matches docs/specs/install-routes.md exactly; localhive
+    # shares the script-route layout (binary under <prefix>/bin/, bundle
+    # extracted at parent-of-bin).
+    printf '%s' '{"source":"localhive"}' > "$CLI_BIN_DIR/.aspire-install.json"
 
     log "Aspire CLI installed to: $CLI_BIN_DIR/aspire"
 

@@ -20,6 +20,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
     [InlineData("winget", "Winget")]
     [InlineData("brew", "Brew")]
     [InlineData("dotnet-tool", "DotnetTool")]
+    [InlineData("localhive", "LocalHive")]
     public void TryRead_ParsesEachKnownSource(string wireValue, string expectedEnumName)
     {
         var expected = Enum.Parse<InstallSource>(expectedEnumName);
@@ -139,6 +140,7 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
     [InlineData("Winget", "winget")]
     [InlineData("Brew", "brew")]
     [InlineData("DotnetTool", "dotnet-tool")]
+    [InlineData("LocalHive", "localhive")]
     public void ToWireString_RoundTripsWithParseInstallSource(string enumName, string expectedWire)
     {
         var source = Enum.Parse<InstallSource>(enumName);

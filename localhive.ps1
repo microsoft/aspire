@@ -365,18 +365,19 @@ if (-not $SkipCli) {
       exit 1
     }
   } else {
-    # Framework-dependent CLI with embedded bundle payload
+    # NativeAOT CLI (Aspire.Cli.csproj sets PublishAot=true) with embedded bundle payload.
+    # Publish output is RID-specific even without an explicit -r, so the path includes $bundleRid.
     $cliProj = Join-Path $RepoRoot "src" "Aspire.Cli" "Aspire.Cli.Tool.csproj"
-    $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli.Tool" $effectiveConfig "net10.0" "publish"
+    $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli.Tool" $effectiveConfig "net10.0" $bundleRid "publish"
     if ($bundlePayloadArchive) {
-      Write-Log "Publishing Aspire CLI (dotnet tool) with embedded bundle payload..."
-      & dotnet publish $cliProj -c $effectiveConfig "/p:VersionSuffix=$VersionSuffix" "/p:BundlePayloadPath=$($bundlePayloadArchive.FullName)"
+      Write-Log "Publishing Aspire CLI (dotnet tool, native AOT) with embedded bundle payload..."
+      & dotnet publish $cliProj -c $effectiveConfig -r $bundleRid "/p:VersionSuffix=$VersionSuffix" "/p:BundlePayloadPath=$($bundlePayloadArchive.FullName)"
       if ($LASTEXITCODE -ne 0) {
         Write-Err "CLI publish with embedded bundle failed."
         exit 1
       }
     } elseif (-not (Test-Path -LiteralPath $cliPublishDir)) {
-      $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli.Tool" $effectiveConfig "net10.0"
+      $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli.Tool" $effectiveConfig "net10.0" $bundleRid
     }
   }
 
@@ -432,6 +433,15 @@ if (-not $SkipCli) {
     }
 
     $installedCliPath = Join-Path $cliBinDir $cliExeName
+
+    # Stamp the install-route sidecar so `aspire info` / `aspire uninstall`
+    # can identify this binary as a locally-built (`localhive`) install.
+    # The format matches docs/specs/install-routes.md exactly; localhive
+    # shares the script-route layout (binary under <prefix>/bin/, bundle
+    # extracted at parent-of-bin).
+    $sidecarPath = Join-Path $cliBinDir ".aspire-install.json"
+    Set-Content -LiteralPath $sidecarPath -Value '{"source":"localhive"}' -Encoding UTF8 -NoNewline
+
     Write-Log "Aspire CLI installed to: $installedCliPath"
 
     if (-not $Output) {

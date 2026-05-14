@@ -170,6 +170,28 @@ public class BundleServiceComputeDefaultExtractDirTests
     }
 
     [Fact]
+    public void ComputeDefaultExtractDir_LocalHiveSource_ReturnsParentOfBinaryDir()
+    {
+        // localhive.{sh,ps1} installs the locally-built CLI to
+        // <prefix>/bin/aspire with a sidecar source=localhive. localhive
+        // shares the script-route shared-prefix layout, so the bundle
+        // must extract to <prefix>/ — same as script — so versions/
+        // sits next to bin/ and not inside it.
+        using var temp = new TestTempDirectory();
+        var prefixDir = Path.Combine(temp.Path, "aspire");
+        var binDir = Path.Combine(prefixDir, "bin");
+        Directory.CreateDirectory(binDir);
+
+        var binaryPath = Path.Combine(binDir, ExeName("aspire"));
+        File.WriteAllText(binaryPath, string.Empty);
+        File.WriteAllText(Path.Combine(binDir, SidecarFileName), "{\"source\":\"localhive\"}");
+
+        var result = BundleService.ComputeDefaultExtractDir(binaryPath);
+
+        Assert.Equal(prefixDir, result);
+    }
+
+    [Fact]
     public void ComputeDefaultExtractDir_EmptyProcessPath_ReturnsNull()
     {
         var result = BundleService.ComputeDefaultExtractDir(string.Empty);
