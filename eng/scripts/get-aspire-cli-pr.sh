@@ -663,7 +663,7 @@ get_pr_head_sha() {
 # Function to extract version suffix from downloaded NuGet packages
 extract_version_suffix_from_packages() {
     local download_dir="$1"
-    
+
     if [[ "$DRY_RUN" == true ]]; then
         # Return a non-PR-shaped sentinel so the --local-dir auto-detect regex at the
         # call site (^pr\.([0-9]+)\.[0-9a-g]+$) does NOT match and the caller falls
@@ -673,35 +673,35 @@ extract_version_suffix_from_packages() {
         printf "local"
         return 0
     fi
-    
+
     # Look for any .nupkg file and extract version from its name
     local nupkg_file
     nupkg_file=$(find "$download_dir" -name "*.nupkg" | head -1)
-    
+
     if [[ -z "$nupkg_file" ]]; then
         say_verbose "No .nupkg files found to extract version from"
         return 1
     fi
-    
+
     local filename
     filename=$(basename "$nupkg_file")
     say_verbose "Extracting version from package: $filename"
-    
+
     # Extract version from package name using a more robust two-step approach
     # First remove the .nupkg extension, then extract the version part
     local base_name="${filename%.nupkg}"
     local version
-    
+
     # Look for semantic version pattern with PR suffix (more specific and robust)
     version=$(echo "$base_name" | sed -En 's/.*\.([0-9]+\.[0-9]+\.[0-9]+-pr\.[0-9]+\.[a-g0-9]+)/\1/p')
-    
+
     if [[ -z "$version" ]]; then
         say_verbose "Could not extract version from package name: $filename"
         return 1
     fi
-    
+
     say_verbose "Extracted full version: $version"
-    
+
     # Extract just the PR suffix part using bash regex for better compatibility
     if [[ "$version" =~ (pr\.[0-9]+\.[a-g0-9]+) ]]; then
         local version_suffix="${BASH_REMATCH[1]}"
@@ -1022,6 +1022,43 @@ install_aspire_cli_from_binary() {
     return 0
 }
 
+# Computes the CLI install directory. PR installs are isolated under
+# <prefix>/dogfood/pr-<N>/bin; without PR_NUMBER, falls back to the shared
+# script-route bin dir.
+compute_cli_install_dir() {
+    if [[ -n "$PR_NUMBER" ]]; then
+        printf '%s' "$INSTALL_PREFIX/dogfood/pr-$PR_NUMBER/bin"
+    else
+        printf '%s' "$INSTALL_PREFIX/bin"
+    fi
+}
+
+# Writes the PR-source sidecar (.aspire-install.json) next to the binary at
+# <install_prefix>/dogfood/pr-<N>/bin/.aspire-install.json. The sidecar marks
+# the install as PR-sourced so downstream consumers (e.g. 'aspire update')
+# know not to assume the stable script source. Per-RID archives produced
+# by eng/clipack are shared across routes and ship without a baked sidecar;
+# this write is the PR-route's authoritative author. If a future or
+# external archive ever smuggles a sidecar at the same path, this write
+# overwrites it by design. Under --dry-run the script is describe-but-do-
+# not-do: print the path it would write to and skip the filesystem mutation
+# so a real user's sidecar is never overwritten.
+write_pr_route_sidecar() {
+    local install_prefix="$1"
+    local pr_number="$2"
+
+    local sidecar_dir="$install_prefix/dogfood/pr-$pr_number/bin"
+    local sidecar_path="$sidecar_dir/.aspire-install.json"
+    local sidecar_content='{"source":"pr"}'
+
+    if [[ "$DRY_RUN" == true ]]; then
+        printf 'DRYRUN: would write route sidecar to: %s\n' "$sidecar_path"
+    else
+        mkdir -p "$sidecar_dir"
+        printf '%s\n' "$sidecar_content" > "$sidecar_path"
+    fi
+}
+
 # Function to install downloaded CLI
 install_aspire_cli() {
     local cli_archive_path="$1"
@@ -1029,6 +1066,10 @@ install_aspire_cli() {
 
     if [[ "$DRY_RUN" == true ]]; then
         say_info "[DRY RUN] Would install CLI archive to: $cli_install_dir"
+        # Emit the install path as an informational message that tests can parse,
+        # instead of touching the filesystem.
+        local binary_path="$cli_install_dir/aspire"
+        printf 'DRYRUN: would install Aspire CLI binary to: %s\n' "$binary_path"
         return 0
     fi
 
@@ -1060,8 +1101,11 @@ install_from_local_dir() {
 
     say_info "Installing from local directory: $local_dir"
 
-    # Set installation paths
-    local cli_install_dir="$INSTALL_PREFIX/bin"
+    # PR-route installs are isolated under <prefix>/dogfood/pr-<N>/bin so they
+    # don't collide with the script-route prefix or with other PR installs.
+    # Hives remain shared under <prefix>/hives/<label>/packages.
+    local cli_install_dir
+    cli_install_dir="$(compute_cli_install_dir)"
     local hive_label
     if [[ -n "$HIVE_LABEL" ]]; then
         hive_label="$HIVE_LABEL"
@@ -1140,6 +1184,15 @@ install_from_local_dir() {
     else
         say_warn "Could not extract version suffix from local packages"
     fi
+
+    # PR-route sidecar: only --pr-number installs get one. --local-dir installs
+    # without a PR number skip the write — the source artifacts are gone after
+    # extraction, so no managed self-update path exists for downstream consumers
+    # (e.g. 'aspire update') to honor.
+    if [[ "$HIVE_ONLY" != true && -n "$PR_NUMBER" ]]; then
+        write_pr_route_sidecar "$INSTALL_PREFIX" "$PR_NUMBER"
+    fi
+
 }
 
 # Main function to download and install from PR or workflow run ID
@@ -1178,8 +1231,11 @@ download_and_install_from_pr() {
 
     say_info "Using workflow run https://github.com/${REPO}/actions/runs/$workflow_run_id"
 
-    # Set installation paths
-    local cli_install_dir="$INSTALL_PREFIX/bin"
+    # PR-route installs are isolated under <prefix>/dogfood/pr-<N>/bin so they
+    # don't collide with the script-route prefix or with other PR installs.
+    # Hives remain shared under <prefix>/hives/<label>/packages.
+    local cli_install_dir
+    cli_install_dir="$(compute_cli_install_dir)"
     local hive_label
     if [[ -n "$HIVE_LABEL" ]]; then
         hive_label="$HIVE_LABEL"
@@ -1261,6 +1317,13 @@ download_and_install_from_pr() {
             install_aspire_extension "$extension_download_dir"
         fi
     fi
+
+    # Write the PR-route sidecar so 'aspire update' has a self-update path.
+    # Only when a PR number is present — bare --run-id installs error out above,
+    # so reaching here without PR_NUMBER would only happen via future code paths.
+    if [[ "$HIVE_ONLY" != true && -n "$PR_NUMBER" ]]; then
+        write_pr_route_sidecar "$INSTALL_PREFIX" "$PR_NUMBER"
+    fi
 }
 
 # Main entry point — wraps everything after function definitions.
@@ -1303,9 +1366,16 @@ main() {
         INSTALL_PREFIX_UNEXPANDED="$INSTALL_PREFIX"
     fi
 
-    # Set paths based on install prefix
-    cli_install_dir="$INSTALL_PREFIX/bin"
-    INSTALL_PATH_UNEXPANDED="$INSTALL_PREFIX_UNEXPANDED/bin"
+    # Set paths based on install prefix.
+    # PR-route installs go under $INSTALL_PREFIX/dogfood/pr-<N>/bin to isolate them from
+    # the script-route prefix and from other PR installs.
+    if [[ -n "$PR_NUMBER" ]]; then
+        cli_install_dir="$INSTALL_PREFIX/dogfood/pr-$PR_NUMBER/bin"
+        INSTALL_PATH_UNEXPANDED="$INSTALL_PREFIX_UNEXPANDED/dogfood/pr-$PR_NUMBER/bin"
+    else
+        cli_install_dir="$INSTALL_PREFIX/bin"
+        INSTALL_PATH_UNEXPANDED="$INSTALL_PREFIX_UNEXPANDED/bin"
+    fi
 
     # Create a temporary directory for downloads
     if [[ "$DRY_RUN" == true ]]; then
@@ -1348,6 +1418,13 @@ main() {
                 fi
             fi
         fi
+    fi
+
+    # Print PATH activation hint for PR installs.
+    # Goes to stdout (not stderr) so it's visible in normal install output and tests can grep it.
+    # Printed in success path (after install completes) and also under --dry-run.
+    if [[ "$HIVE_ONLY" != true && -n "$PR_NUMBER" ]]; then
+        echo "Add to your shell profile: export PATH=\"$INSTALL_PATH_UNEXPANDED:\$PATH\""
     fi
 }
 

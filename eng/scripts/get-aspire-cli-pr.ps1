@@ -421,11 +421,11 @@ function Backup-ExistingCliExecutable {
         [Parameter(Mandatory = $true)]
         [string]$TargetExePath
     )
-    
+
     if (Test-Path $TargetExePath) {
         $unixTimestamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
         $backupPath = "$TargetExePath.old.$unixTimestamp"
-        
+
         if ($PSCmdlet.ShouldProcess($TargetExePath, "Backup to $backupPath")) {
             Write-Message "Backing up existing CLI: $TargetExePath -> $backupPath" -Level Verbose
 
@@ -441,7 +441,7 @@ function Backup-ExistingCliExecutable {
             return $backupPath
         }
     }
-    
+
     return $null
 }
 
@@ -451,18 +451,18 @@ function Restore-CliExecutableFromBackup {
     param(
         [Parameter(Mandatory = $true)]
         [string]$BackupPath,
-        
+
         [Parameter(Mandatory = $true)]
         [string]$TargetExePath
     )
-    
+
     if ($PSCmdlet.ShouldProcess($BackupPath, "Restore to $TargetExePath")) {
         Write-Message "Restoring CLI from backup: $BackupPath -> $TargetExePath" -Level Warning
-        
+
         if (Test-Path $TargetExePath) {
             Remove-Item -Path $TargetExePath -Force -ErrorAction SilentlyContinue
         }
-        
+
         Move-Item -Path $BackupPath -Destination $TargetExePath -Force -ErrorAction Stop
     }
 }
@@ -474,15 +474,15 @@ function Remove-OldCliBackupFiles {
         [Parameter(Mandatory = $true)]
         [string]$TargetExePath
     )
-    
+
     $directory = Split-Path -Parent $TargetExePath
     if ([string]::IsNullOrEmpty($directory)) {
         return
     }
-    
+
     $exeName = Split-Path -Leaf $TargetExePath
     $searchPattern = "$exeName.old.*"
-    
+
     $oldBackupFiles = Get-ChildItem -Path $directory -Filter $searchPattern -ErrorAction SilentlyContinue
     foreach ($backupFile in $oldBackupFiles) {
         if ($PSCmdlet.ShouldProcess($backupFile.FullName, "Delete old backup")) {
@@ -915,7 +915,7 @@ function Get-VersionSuffixFromPackages {
         [Parameter(Mandatory = $true)]
         [string]$DownloadDir
     )
-    
+
     if ($PSCmdlet.ShouldProcess("packages", "Extract version suffix from packages") -and $WhatIfPreference) {
         # Return a non-PR-shaped sentinel so the -LocalDir auto-detect regex at the
         # call site (^pr\.(\d+)\.[0-9a-g]+$) does NOT match and the caller falls
@@ -924,27 +924,27 @@ function Get-VersionSuffixFromPackages {
         # what is actually in -LocalDir.
         return "local"
     }
-    
+
     # Look for any .nupkg file and extract version from its name
     $nupkgFiles = Get-ChildItem -Path $DownloadDir -Filter "*.nupkg" -Recurse | Select-Object -First 1
-    
+
     if (-not $nupkgFiles) {
         Write-Message "No .nupkg files found to extract version from" -Level Verbose
         throw "No NuGet packages found to extract version information from"
     }
-    
+
     $filename = $nupkgFiles.Name
     Write-Message "Extracting version from package: $filename" -Level Verbose
-    
+
     # Extract version from package name using a more robust approach
     # Remove .nupkg extension first, then look for the specific version pattern
     $baseName = $filename -replace '\.nupkg$', ''
-    
+
     # Look for semantic version pattern with PR suffix (more specific and robust)
     if ($baseName -match '.*\.(\d+\.\d+\.\d+-pr\.\d+\.[0-9a-g]+)$') {
         $version = $Matches[1]
         Write-Message "Extracted version: $version" -Level Verbose
-        
+
         # Extract just the PR suffix part using more specific regex
         if ($version -match '(pr\.[0-9]+\.[0-9a-g]+)') {
             $versionSuffix = $Matches[1]
@@ -1173,9 +1173,37 @@ function Get-AspireCliFromArtifact {
     $cliArchiveName = "$($Script:CliArchiveArtifactNamePrefix)-$RID"
     $downloadDir = Join-Path $TempDir "cli"
     Write-Message "Downloading CLI from GitHub - $cliArchiveName ..." -Level Info
+
     Invoke-ArtifactDownload -RunId $RunId -ArtifactName $cliArchiveName -DownloadDirectory $downloadDir
 
     return $downloadDir
+}
+
+# Writes the PR-route install-source sidecar (.aspire-install.json) next to
+# the installed binary. Under -WhatIf, prints the target path and skips the
+# write so a real user's sidecar is never overwritten by a describe pass.
+# Authorship contract: docs/specs/install-routes.md.
+function Write-PRRouteSidecar {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$InstallPrefix,
+
+        [Parameter(Mandatory = $true)]
+        [int]$PRNumber
+    )
+
+    $sidecarDir = Join-Path (Join-Path (Join-Path $InstallPrefix "dogfood") "pr-$PRNumber") "bin"
+    $sidecarPath = Join-Path $sidecarDir '.aspire-install.json'
+    $sidecarContent = "{""source"":""pr""}`n"
+
+    if ($PSCmdlet.ShouldProcess($sidecarPath, "Write route sidecar")) {
+        [System.IO.Directory]::CreateDirectory($sidecarDir) | Out-Null
+        [System.IO.File]::WriteAllText($sidecarPath, $sidecarContent)
+    }
+    else {
+        Write-Host "What if: Route sidecar would be written to: $sidecarPath"
+    }
 }
 
 # Function to install downloaded Aspire CLI
@@ -1190,6 +1218,12 @@ function Install-AspireCliFromDownload {
     )
 
     if (!$PSCmdlet.ShouldProcess($CliBinDir, "Installing Aspire CLI to $CliBinDir")) {
+        # Honor the -WhatIf / dry-run contract: describe-but-do-not-do. Emit the
+        # install path as an informational message that tests can parse, instead of
+        # touching the filesystem.
+        $binaryName = if ($Script:HostOS -eq 'win') { 'aspire.exe' } else { 'aspire' }
+        $binaryPath = Join-Path $CliBinDir $binaryName
+        Write-Host "What if: Aspire CLI binary would be installed to: $binaryPath"
         return
     }
 
@@ -1306,8 +1340,15 @@ function Start-InstallFromLocalDir {
 
     Write-Message "Installing from local directory: $LocalDirPath" -Level Info
 
-    # Set installation paths
-    $cliBinDir = Join-Path $resolvedInstallPrefix "bin"
+    # Set installation paths.
+    # PR-route installs are isolated under <prefix>/dogfood/pr-<N>/bin so they don't
+    # collide with the script-route prefix or with other PR installs. Hives remain shared
+    # under <prefix>/hives/<label>/packages.
+    $cliBinDir = if ($PRNumber -gt 0) {
+        Join-Path (Join-Path (Join-Path $resolvedInstallPrefix "dogfood") "pr-$PRNumber") "bin"
+    } else {
+        Join-Path $resolvedInstallPrefix "bin"
+    }
     $resolvedHiveLabel = if ($HiveLabel) {
         $HiveLabel
     } else {
@@ -1374,6 +1415,13 @@ function Start-InstallFromLocalDir {
         Write-Message "Could not extract version suffix from local packages: $($_.Exception.Message)" -Level Warning
     }
 
+    # PR-source installs get a sidecar; --local-dir installs are unmanaged
+    # (no sidecar).
+    if (-not $HiveOnly -and $PRNumber -gt 0) {
+        Write-PRRouteSidecar -InstallPrefix $resolvedInstallPrefix -PRNumber $PRNumber
+    }
+
+
     # Update PATH environment variables
     if (-not $HiveOnly) {
         if ($SkipPath) {
@@ -1414,8 +1462,15 @@ function Start-DownloadAndInstall {
 
     Write-Message "Using workflow run https://github.com/$Script:Repository/actions/runs/$runId" -Level Info
 
-    # Set installation paths
-    $cliBinDir = Join-Path $resolvedInstallPrefix "bin"
+    # Set installation paths.
+    # PR-route installs are isolated under <prefix>/dogfood/pr-<N>/bin so they don't
+    # collide with the script-route prefix or with other PR installs. Hives remain shared
+    # under <prefix>/hives/<label>/packages.
+    $cliBinDir = if ($PRNumber -gt 0) {
+        Join-Path (Join-Path (Join-Path $resolvedInstallPrefix "dogfood") "pr-$PRNumber") "bin"
+    } else {
+        Join-Path $resolvedInstallPrefix "bin"
+    }
     $resolvedHiveLabel = if ($HiveLabel) {
         $HiveLabel
     } elseif ($PRNumber -gt 0) {
@@ -1473,6 +1528,11 @@ function Start-DownloadAndInstall {
         }
     }
 
+    if (-not $HiveOnly -and $PRNumber -gt 0) {
+        Write-PRRouteSidecar -InstallPrefix $resolvedInstallPrefix -PRNumber $PRNumber
+    }
+
+
     # Update PATH environment variables
     if (-not $HiveOnly) {
         if ($SkipPath) {
@@ -1480,6 +1540,18 @@ function Start-DownloadAndInstall {
         } else {
             Update-PathEnvironment -CliBinDir $cliBinDir
         }
+    }
+
+    # Print PATH activation hint for PR installs.
+    # Uses Write-Host so the hint is visible on the host stream (not stderr) in normal output.
+    # Printed in success path (after install completes) and also under -WhatIf.
+    # The OS path separator is used so the line is valid on both Windows (;) and Unix (:).
+    # The new-PATH expression is emitted with double quotes so PowerShell expands `$env:PATH`
+    # when the user pastes the line into their profile — single quotes would assign the literal
+    # text "$env:PATH" and clobber the existing PATH.
+    if (-not $HiveOnly -and $PRNumber -gt 0) {
+        $pathSep = [System.IO.Path]::PathSeparator
+        Write-Host "Add to your shell profile: `$env:PATH = `"$cliBinDir$pathSep`$env:PATH`";"
     }
 }
 

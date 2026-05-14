@@ -262,4 +262,45 @@ public class ReleaseScriptPowerShellTests(ITestOutputHelper testOutput)
             File.Exists(configPath),
             $"install.ps1 must not create global aspire.config.json; found at {configPath}.");
     }
+
+    // Under -WhatIf the release-route script must NOT write the script-route
+    // sidecar at <prefix>/.aspire-install.json. The describe-but-do-not-do
+    // contract requires the script to print a "What if:" message naming the path
+    // it would write, then return without touching the filesystem. A previous
+    // implementation bypassed -WhatIf for the sidecar write (raw .NET I/O), which
+    // can leave a stale source=script marker visible to BundleService when
+    // the install was never actually performed.
+    [Fact]
+    public async Task WhatIf_DoesNotWriteScriptRouteSidecar_AndAnnouncesPath()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+        var result = await cmd.ExecuteAsync("-Quality", "release", "-SkipPath", "-WhatIf");
+
+        result.EnsureSuccessful();
+
+        var sidecarPath = Path.Combine(env.MockHome, ".aspire", "bin", ".aspire-install.json");
+        Assert.Contains($"What if: Route sidecar would be written to: {sidecarPath}", result.Output);
+        Assert.False(
+            File.Exists(sidecarPath),
+            $"Expected no sidecar to be written under -WhatIf, but found one at {sidecarPath}");
+    }
+
+    // The release-route script must not mutate route sidecars under -WhatIf,
+    // regardless of the configured quality.
+    [Fact]
+    public async Task WhatIf_DevQuality_DoesNotWriteScriptRouteSidecar()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+        var result = await cmd.ExecuteAsync("-Quality", "dev", "-SkipPath", "-WhatIf");
+
+        result.EnsureSuccessful();
+
+        var sidecarPath = Path.Combine(env.MockHome, ".aspire", "bin", ".aspire-install.json");
+        Assert.Contains($"What if: Route sidecar would be written to: {sidecarPath}", result.Output);
+        Assert.False(
+            File.Exists(sidecarPath),
+            $"Expected no sidecar to be written under -WhatIf, but found one at {sidecarPath}");
+    }
 }
