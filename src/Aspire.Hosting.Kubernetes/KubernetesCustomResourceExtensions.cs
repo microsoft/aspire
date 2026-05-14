@@ -3,6 +3,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes;
+using YamlDotNet.Serialization;
 
 namespace Aspire.Hosting;
 
@@ -15,23 +16,22 @@ public static class KubernetesCustomResourceExtensions
     /// Adds a custom Kubernetes resource to the application model as a child of the specified Kubernetes environment.
     /// This will generate a single yaml file in the Helm charts at publish time.
     /// </summary>
-    /// <typeparam name="TSpec">The shape and structure of the custom resource's <c>spec</c> block.</typeparam>
     /// <param name="builder">The Kubernetes environment resource builder.</param>
     /// <param name="name">The name of the custom resource.</param>
     /// <param name="apiVersion">The API version the CRD uses.</param>
     /// <param name="kind">The kind or label of the CRD.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesCustomResourceResouce}"/> for chaining.</returns>
     [AspireExport(Description = "Adds a custom resource to the Kubernetes manifest.")]
-    public static IResourceBuilder<KubernetesCustomResourceResource<TSpec>> AddCustomResource<TSpec>(
+    public static IResourceBuilder<KubernetesCustomResourceResource> AddCustomResource(
         this IResourceBuilder<KubernetesEnvironmentResource> builder,
-        [ResourceName] string name, string apiVersion, string kind) where TSpec : class, new()
+        [ResourceName] string name, string apiVersion, string kind)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentException.ThrowIfNullOrEmpty(apiVersion);
         ArgumentException.ThrowIfNullOrEmpty(kind);
 
-        var crd = new KubernetesCustomResourceResource<TSpec>(name, builder.Resource)
+        var crd = new KubernetesCustomResourceResource(name, builder.Resource)
         {
             ApiVersion = apiVersion,
             Kind = kind
@@ -49,36 +49,38 @@ public static class KubernetesCustomResourceExtensions
     /// <summary>
     /// Sets the spec to use on the custom resource.
     /// </summary>
-    /// <typeparam name="TSpec">The shape and structure of the custom resource's spec.</typeparam>
     /// <param name="builder">The custom resource builder.</param>
     /// <param name="spec">The spec to publish with the manifests.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesCustomResourceResource}"/> for chaining.</returns>
-    [AspireExportIgnore(Reason = "The method requires a custom-typed spec defintion, which is not supported by the exporter.")]
-    public static IResourceBuilder<KubernetesCustomResourceResource<TSpec>> WithSpec<TSpec>(
-        this IResourceBuilder<KubernetesCustomResourceResource<TSpec>> builder, 
-        TSpec spec)
-    where TSpec : class, new()
+    /// <remarks>
+    /// In order to ensure proper serialization, the TSpec class must be annotated with <see cref="YamlSerializableAttribute"/>,
+    /// and members must be annotated with the <see cref="YamlMemberAttribute"/>. Refer to the example below.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// [YamlSerializable]
+    /// public class MyCustomResourceSpec 
+    /// {
+    ///     [YamlMember(Alias = "myMember")]
+    ///     public string MyMember { get; set; }
+    ///     
+    ///     [YamlMember(Alias = "myArray")]
+    ///     public string[] MyArray { get; set; }
+    /// 
+    ///     [YamlMember(Alias = "myNestedObject")]
+    ///     public MyObjectV1 MyNestedObject { get; set; }
+    /// }
+    /// </code>
+    /// </example>
+    [AspireExport(Description = "Adds a spec file to a CRD resource.")]
+    public static IResourceBuilder<KubernetesCustomResourceResource> WithSpec(
+        this IResourceBuilder<KubernetesCustomResourceResource> builder, 
+        object spec)
     {
         ArgumentNullException.ThrowIfNull(builder);
 
         builder.Resource.Spec = spec;
 
         return builder;
-    }
-
-    internal static bool IsCustomResource(this IResource resource)
-    {
-        var type = resource.GetType();
-        while (type != null)
-        {
-            if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(KubernetesCustomResourceResource<>))
-            {
-                return true;
-            }
-
-            type = type.BaseType;
-        }
-
-        return false;
     }
 }

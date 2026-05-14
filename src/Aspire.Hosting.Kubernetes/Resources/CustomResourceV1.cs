@@ -8,20 +8,14 @@ namespace Aspire.Hosting.Kubernetes.Resources;
 /// <summary>
 /// Represents a CustomResource that can be published with the Kubernetes manifest.
 /// </summary>
-/// <typeparam name="TSpec">The type of the Spec block.</typeparam>
 /// <param name="apiVersion">The API Version the CRD uses.</param>
 /// <param name="kind">The kind of CRD being applied.</param>
 [YamlSerializable]
-public sealed class CustomResourceV1<TSpec>(string apiVersion, string kind) : BaseKubernetesResource(apiVersion, kind)
-where TSpec : class, new()
+public sealed class CustomResourceV1(string apiVersion, string kind) : BaseKubernetesResource(apiVersion, kind)
 {
     /// <summary>
     /// Gets or sets the spec for a Kubernetes resource.
     /// </summary>
-    /// <remarks>
-    /// The exact shape and structure of spec block is defined by the CRD. To apply a custom resource to 
-    /// your Kubernetes manifests, you must first define the shape of the spec block using a <typeparamref name="TSpec"/>.
-    /// </remarks>
     [YamlMember(Alias = "spec")]
-    public TSpec? Spec { get; set; } = new();
+    public object Spec { get; set; } = new();
 }
