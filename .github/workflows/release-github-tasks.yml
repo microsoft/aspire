@@ -262,39 +262,19 @@ jobs:
         if: steps.check-release.outputs.release_exists != 'true'
         id: release-notes
         run: |
-          VERSION="${{ inputs.release_version }}"
-          TAG_NAME="v$VERSION"
-          IS_PRERELEASE="${{ inputs.is_prerelease }}"
-
-          # Create release notes
+          # Write a short placeholder. The real release notes are generated
+          # asynchronously by the release-notes-generate agentic workflow,
+          # which fires on the `release: [released]` event once `gh release
+          # create` below publishes the release, and edits this body in
+          # place.
           cat << EOF > release_notes.md
-          ## What's New in Aspire $VERSION
-
-          See the full changelog and documentation at:
-          - 📖 [Documentation](https://aspire.dev/docs)
-          - 🐛 [Known Issues](https://github.com/microsoft/aspire/issues?q=is%3Aissue+is%3Aopen+label%3A%22known-issue%22)
-
-          ### Installation
-
-          \`\`\`bash
-          dotnet new install Aspire.ProjectTemplates::$VERSION
-          \`\`\`
-
-          Or update your existing projects:
-
-          \`\`\`bash
-          dotnet workload update
-          \`\`\`
-
-          ### Package Downloads
-
-          All packages are available on [NuGet.org](https://www.nuget.org/packages?q=owner%3Adotnet+aspire).
+          *Release notes are being generated automatically and will be added to this release shortly. If they haven't appeared within a few hours, ping the Aspire team.*
 
           ---
           *Full commit: [${{ inputs.commit_sha }}](https://github.com/${{ github.repository }}/commit/${{ inputs.commit_sha }})*
           EOF
 
-          echo "Release notes generated"
+          echo "Placeholder release notes generated"
 
       - name: Create GitHub Release
         if: steps.check-release.outputs.release_exists != 'true'
