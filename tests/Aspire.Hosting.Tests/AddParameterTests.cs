@@ -440,6 +440,22 @@ public class AddParameterTests
     }
 
     [Fact]
+    public void ParameterCreateInput_WithDynamicLoading_SetsDynamicLoading()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var parameter = appBuilder.AddParameter("test");
+        var dynamicLoading = new InputLoadOptions
+        {
+            AlwaysLoadOnStart = true,
+            LoadCallback = _ => Task.CompletedTask
+        };
+
+        var input = parameter.Resource.CreateInput(dynamicLoading: dynamicLoading);
+
+        Assert.Same(dynamicLoading, input.DynamicLoading);
+    }
+
+    [Fact]
     public void ParameterCreateInput_ForSecretParameter_ReturnsSecretTextInput()
     {
         // Arrange
@@ -512,6 +528,28 @@ public class AddParameterTests
         Assert.Equal("Custom description", input.Description);
         Assert.Equal("Enter number", input.Placeholder);
         Assert.Equal("5", input.Value);
+    }
+
+    [Fact]
+    public void ParameterCreateInput_WithCustomGeneratorAndDynamicLoading_UsesDynamicLoading()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var parameter = appBuilder.AddParameter("test")
+            .WithCustomInput(_ => new InteractionInput
+            {
+                Name = "CustomInput",
+                InputType = InputType.Number,
+                Label = "Custom Label"
+            });
+        var dynamicLoading = new InputLoadOptions
+        {
+            AlwaysLoadOnStart = true,
+            LoadCallback = _ => Task.CompletedTask
+        };
+
+        var input = parameter.Resource.CreateInput(dynamicLoading: dynamicLoading);
+
+        Assert.Same(dynamicLoading, input.DynamicLoading);
     }
 
     [Fact]

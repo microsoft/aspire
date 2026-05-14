@@ -263,6 +263,7 @@ public sealed class InteractionInput
 {
     private string _name = null!;
     private bool _required;
+    private InputLoadOptions? _dynamicLoading;
 
     internal string EffectiveLabel => string.IsNullOrWhiteSpace(Label) ? Name : Label;
     internal InputLoadingState? DynamicLoadingState { get; set; }
@@ -274,6 +275,8 @@ public sealed class InteractionInput
     }
 
     internal void SetRequired(bool required) => _required = required;
+
+    internal void SetDynamicLoading(InputLoadOptions? dynamicLoading) => _dynamicLoading = dynamicLoading;
 
     /// <summary>
     /// Gets or sets the name for the input. Used for accessing inputs by name from a keyed collection.
@@ -324,7 +327,11 @@ public sealed class InteractionInput
     /// Dynamic loading is used to load data and update inputs after a prompt has started.
     /// It can also be used to reload data and update inputs after a dependant input has changed.
     /// </summary>
-    public InputLoadOptions? DynamicLoading { get; init; }
+    public InputLoadOptions? DynamicLoading
+    {
+        get => _dynamicLoading;
+        init => _dynamicLoading = value;
+    }
 
     /// <summary>
     /// Gets or sets the value of the input.
