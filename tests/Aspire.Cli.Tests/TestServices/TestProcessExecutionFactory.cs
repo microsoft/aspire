@@ -140,7 +140,7 @@ internal sealed class TestProcessExecution : IProcessExecution
 
         if (WaitForExitAsyncCallback is not null)
         {
-            return WaitForExitAsyncCallback(_options, cancellationToken);
+            return await WaitForExitAsyncCallback(_options, cancellationToken).ConfigureAwait(false);
         }
 
         var attempt = _attemptCounter();
