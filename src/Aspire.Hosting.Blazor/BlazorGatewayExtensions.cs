@@ -224,7 +224,12 @@ public static class BlazorGatewayExtensions
                 await EndpointsManifestTransformer.MergeRuntimeManifestsAsync(manifests, mergedRuntimePath, context.Logger, context.CancellationToken).ConfigureAwait(false);
                 context.EnvironmentVariables["staticWebAssets"] = mergedRuntimePath;
 
-                GatewayConfigurationBuilder.EmitProxyConfiguration(context.EnvironmentVariables, registeredApps, gatewayEndpoint, httpGatewayEndpoint);
+                // Resolve the HTTP OTLP endpoint for WASM client proxying.
+                // WASM clients use HTTP/protobuf (not gRPC), so we need the HTTP endpoint.
+                var httpOtlpEndpointUrl = gateway.ApplicationBuilder.Configuration["ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"]
+                    ?? gateway.ApplicationBuilder.Configuration["DOTNET_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"];
+
+                GatewayConfigurationBuilder.EmitProxyConfiguration(context.EnvironmentVariables, registeredApps, gatewayEndpoint, httpGatewayEndpoint, httpOtlpEndpointUrl);
             });
         }
 

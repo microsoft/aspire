@@ -20,7 +20,8 @@ internal static class GatewayConfigurationBuilder
         IDictionary<string, object> env,
         List<GatewayAppRegistration> apps,
         EndpointReference gatewayEndpoint,
-        EndpointReference? httpGatewayEndpoint = null)
+        EndpointReference? httpGatewayEndpoint = null,
+        string? httpOtlpEndpointUrl = null)
     {
         var addedClusters = new HashSet<string>();
         var httpClientEndpoint = httpGatewayEndpoint ?? (gatewayEndpoint.IsHttp ? gatewayEndpoint : null);
@@ -55,7 +56,7 @@ internal static class GatewayConfigurationBuilder
 
         if (apps.Any(app => app.ProxyTelemetry))
         {
-            EmitOtlpCluster(env);
+            EmitOtlpCluster(env, httpOtlpEndpointUrl);
         }
     }
 
@@ -286,7 +287,7 @@ internal static class GatewayConfigurationBuilder
                 {
                     WebAssembly = new WebAssemblyConfiguration { Environment = environment }
                 },
-                ManifestJsonContext.Default.ClientConfiguration);
+                ManifestJsonContext.Relaxed.ClientConfiguration);
         }
 
         private static string? NormalizeUrl(string? url)
