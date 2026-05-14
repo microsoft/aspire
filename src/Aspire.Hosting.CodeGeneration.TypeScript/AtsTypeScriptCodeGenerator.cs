@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using System.Reflection;
+using System.Text;
 using System.Text.Json.Nodes;
 using Aspire.Shared.Json;
 using Aspire.TypeSystem;
@@ -555,7 +556,63 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             .ToList();
     }
 
-    private static string EscapeJSDocText(string text) => text.Replace("*/", "* /", StringComparison.Ordinal);
+    private static string EscapeJSDocText(string text) =>
+        ConvertAtsReferencesToJsDocLinks(text).Replace("*/", "* /", StringComparison.Ordinal);
+
+    private static string ConvertAtsReferencesToJsDocLinks(string text)
+    {
+        const string markerStart = "{@ats-ref ";
+
+        var startIndex = text.IndexOf(markerStart, StringComparison.Ordinal);
+        if (startIndex < 0)
+        {
+            return text;
+        }
+
+        var builder = new StringBuilder(text.Length);
+        var currentIndex = 0;
+
+        while (startIndex >= 0)
+        {
+            builder.Append(text, currentIndex, startIndex - currentIndex);
+
+            var markerBodyStartIndex = startIndex + markerStart.Length;
+            var markerEndIndex = text.IndexOf('}', markerBodyStartIndex);
+            if (markerEndIndex < 0)
+            {
+                builder.Append(text, startIndex, text.Length - startIndex);
+                return builder.ToString();
+            }
+
+            var markerBody = text[markerBodyStartIndex..markerEndIndex];
+            var labelSeparatorIndex = markerBody.IndexOf('|', StringComparison.Ordinal);
+            var reference = labelSeparatorIndex < 0 ? markerBody : markerBody[..labelSeparatorIndex];
+            var label = labelSeparatorIndex < 0 ? null : markerBody[(labelSeparatorIndex + 1)..];
+            var targetSeparatorIndex = reference.IndexOf(':', StringComparison.Ordinal);
+
+            if (targetSeparatorIndex < 0 || targetSeparatorIndex == reference.Length - 1)
+            {
+                builder.Append(text, startIndex, markerEndIndex - startIndex + 1);
+            }
+            else
+            {
+                var target = reference[(targetSeparatorIndex + 1)..];
+                builder.Append("{@link ").Append(target);
+                if (!string.IsNullOrWhiteSpace(label))
+                {
+                    builder.Append('|').Append(label);
+                }
+
+                builder.Append('}');
+            }
+
+            currentIndex = markerEndIndex + 1;
+            startIndex = text.IndexOf(markerStart, currentIndex, StringComparison.Ordinal);
+        }
+
+        builder.Append(text, currentIndex, text.Length - currentIndex);
+        return builder.ToString();
+    }
 
     private string? TryMapInterfaceInputTypeToTypeScript(AtsTypeRef typeRef)
     {

@@ -227,6 +227,27 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
+    public void GenerateDistributedApplication_WithAtsReference_RendersJsDocLink()
+    {
+        var context = CreateContextFromTestAssembly();
+        var capability = CreateDistributedApplicationBuilderCapability(
+            context,
+            methodName: "withAtsReference",
+            description: null,
+            documentation: new AtsDocumentationInfo
+            {
+                Summary = "Configures {@ats-ref type:TestRedisResource} from ATS documentation."
+            });
+        context = WithAdditionalCapabilities(context, capability);
+
+        var files = _generator.GenerateDistributedApplication(context);
+        var aspireTs = files["aspire.ts"];
+
+        Assert.Contains("Configures {@link TestRedisResource} from ATS documentation.", aspireTs);
+        Assert.DoesNotContain("{@ats-ref", aspireTs);
+    }
+
+    [Fact]
     public void GenerateDistributedApplication_WithContextType_GeneratesPropertyCapabilities()
     {
         // Arrange

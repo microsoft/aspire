@@ -3533,6 +3533,11 @@ public static class AtsCapabilityScanner
                 AppendSeeDocumentationElement(builder, element);
                 break;
 
+            case "ats-see":
+            case "ats-seealso":
+                AppendAtsReferenceDocumentationElement(builder, element);
+                break;
+
             case "list":
                 AppendListDocumentationElement(builder, element);
                 break;
@@ -3541,6 +3546,85 @@ public static class AtsCapabilityScanner
                 AppendXmlDocumentationNodes(builder, element.Nodes());
                 break;
         }
+    }
+
+    private static void AppendAtsReferenceDocumentationElement(StringBuilder builder, XElement element)
+    {
+        var cref = element.Attribute("cref")?.Value;
+        if (string.IsNullOrWhiteSpace(cref))
+        {
+            AppendXmlDocumentationNodes(builder, element.Nodes());
+            return;
+        }
+
+        if (!TryParseAtsDocumentationReference(cref, out var kind, out var target))
+        {
+            var fallbackText = NormalizeDocumentationText(element.Value);
+            builder.Append(string.IsNullOrWhiteSpace(fallbackText) ? cref : fallbackText);
+            return;
+        }
+
+        var explicitText = NormalizeDocumentationText(element.Value);
+        builder.Append("{@ats-ref ").Append(kind).Append(':').Append(target);
+        if (!string.IsNullOrWhiteSpace(explicitText))
+        {
+            builder.Append('|').Append(explicitText);
+        }
+
+        builder.Append('}');
+    }
+
+    private static bool TryParseAtsDocumentationReference(string value, out string kind, out string target)
+    {
+        var separatorIndex = value.IndexOf(':', StringComparison.Ordinal);
+        if (separatorIndex < 1 || separatorIndex == value.Length - 1)
+        {
+            kind = string.Empty;
+            target = string.Empty;
+            return false;
+        }
+
+        kind = value[..separatorIndex];
+        target = value[(separatorIndex + 1)..];
+
+        return kind is "type" or "method" or "field" && IsValidAtsDocumentationReferenceTarget(target);
+    }
+
+    private static bool IsValidAtsDocumentationReferenceTarget(string target)
+    {
+        var segmentStart = true;
+
+        foreach (var c in target)
+        {
+            if (c == '.')
+            {
+                if (segmentStart)
+                {
+                    return false;
+                }
+
+                segmentStart = true;
+                continue;
+            }
+
+            if (segmentStart)
+            {
+                if (!(char.IsAsciiLetter(c) || c == '_'))
+                {
+                    return false;
+                }
+
+                segmentStart = false;
+                continue;
+            }
+
+            if (!(char.IsAsciiLetterOrDigit(c) || c == '_'))
+            {
+                return false;
+            }
+        }
+
+        return !segmentStart;
     }
 
     private static void AppendSeeDocumentationElement(StringBuilder builder, XElement element)
