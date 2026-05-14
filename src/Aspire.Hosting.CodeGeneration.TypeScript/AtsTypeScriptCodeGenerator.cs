@@ -434,11 +434,12 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         WriteDocumentationComment(
             indent,
             capability.Documentation,
-            capability.Description,
+            capability.Documentation is null ? capability.Description : null,
             parameterDocs,
             capability.ReturnType.TypeId == AtsConstants.Void ? null : capability.Documentation?.Returns,
-            capability.IsObsolete,
-            capability.ObsoleteMessage);
+            suppressReturns: capability.ReturnType.TypeId == AtsConstants.Void,
+            isObsolete: capability.IsObsolete,
+            obsoleteMessage: capability.ObsoleteMessage);
     }
 
     private void WritePropertyDocComment(string indent, AtsCapabilityInfo? getter, AtsCapabilityInfo? setter)
@@ -459,6 +460,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         string? fallbackSummary = null,
         IReadOnlyList<(string Name, string? Summary)>? parameters = null,
         string? returns = null,
+        bool suppressReturns = false,
         bool isObsolete = false,
         string? obsoleteMessage = null)
     {
@@ -471,7 +473,10 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             AddTaggedDocumentationLines(lines, $"@param {parameter.Name}", parameter.Summary);
         }
 
-        AddTaggedDocumentationLines(lines, "@returns", returns ?? documentation?.Returns);
+        if (!suppressReturns)
+        {
+            AddTaggedDocumentationLines(lines, "@returns", returns ?? documentation?.Returns);
+        }
 
         if (isObsolete)
         {

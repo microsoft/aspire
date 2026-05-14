@@ -187,6 +187,46 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
+    public void GenerateDistributedApplication_WithSuppressedSummary_DoesNotUseDescriptionFallback()
+    {
+        var context = CreateContextFromTestAssembly();
+        var capability = CreateDistributedApplicationBuilderCapability(
+            context,
+            methodName: "withSuppressedSummary",
+            description: "Description fallback should not be emitted.",
+            documentation: new AtsDocumentationInfo());
+        context = WithAdditionalCapabilities(context, capability);
+
+        var files = _generator.GenerateDistributedApplication(context);
+        var aspireTs = files["aspire.ts"];
+
+        Assert.Contains("withSuppressedSummary()", aspireTs);
+        Assert.DoesNotContain("Description fallback should not be emitted.", aspireTs);
+    }
+
+    [Fact]
+    public void GenerateDistributedApplication_WithVoidReturn_DoesNotEmitReturnsDocumentation()
+    {
+        var context = CreateContextFromTestAssembly();
+        var capability = CreateDistributedApplicationBuilderCapability(
+            context,
+            methodName: "withVoidReturnDocumentation",
+            description: null,
+            documentation: new AtsDocumentationInfo
+            {
+                Summary = "Runs a void capability.",
+                Returns = "Void return documentation should not be emitted."
+            });
+        context = WithAdditionalCapabilities(context, capability);
+
+        var files = _generator.GenerateDistributedApplication(context);
+        var aspireTs = files["aspire.ts"];
+
+        Assert.Contains("Runs a void capability.", aspireTs);
+        Assert.DoesNotContain("Void return documentation should not be emitted.", aspireTs);
+    }
+
+    [Fact]
     public void GenerateDistributedApplication_WithContextType_GeneratesPropertyCapabilities()
     {
         // Arrange
@@ -964,6 +1004,47 @@ public class AtsTypeScriptCodeGeneratorTests
         // Scan capabilities from the test assembly
         var result = AtsCapabilityScanner.ScanAssembly(testAssembly);
         return result.ToAtsContext();
+    }
+
+    private static AtsContext WithAdditionalCapabilities(AtsContext context, params AtsCapabilityInfo[] capabilities)
+    {
+        return new AtsContext
+        {
+            Capabilities = [.. context.Capabilities, .. capabilities],
+            HandleTypes = context.HandleTypes,
+            DtoTypes = context.DtoTypes,
+            EnumTypes = context.EnumTypes,
+            ExportedValues = context.ExportedValues,
+            Diagnostics = context.Diagnostics
+        };
+    }
+
+    private static AtsCapabilityInfo CreateDistributedApplicationBuilderCapability(
+        AtsContext context,
+        string methodName,
+        string? description,
+        AtsDocumentationInfo documentation)
+    {
+        var addTestRedis = context.Capabilities.First(c => c.CapabilityId == "Aspire.Hosting.CodeGeneration.TypeScript.Tests/addTestRedis");
+
+        return new AtsCapabilityInfo
+        {
+            CapabilityId = $"Aspire.Hosting.CodeGeneration.TypeScript.Tests/{methodName}",
+            MethodName = methodName,
+            Description = description,
+            Documentation = documentation,
+            Parameters = [],
+            ReturnType = new AtsTypeRef
+            {
+                TypeId = AtsConstants.Void,
+                Category = AtsTypeCategory.Primitive
+            },
+            TargetTypeId = addTestRedis.TargetTypeId,
+            TargetType = addTestRedis.TargetType,
+            TargetParameterName = addTestRedis.TargetParameterName,
+            ExpandedTargetTypes = addTestRedis.ExpandedTargetTypes,
+            CapabilityKind = AtsCapabilityKind.Method
+        };
     }
 
     private static Assembly LoadTestAssembly()

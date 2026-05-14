@@ -2063,7 +2063,6 @@ export interface DistributedApplication {
      * container. For more information on determining the mode that the app host is running
      * in refer to `DistributedApplicationExecutionContext`.
      * @param options Additional options.
-     * @returns The `Task` that represents the asynchronous operation.
      */
     run(options?: RunOptions): DistributedApplicationPromise;
 }
@@ -2081,7 +2080,6 @@ export interface DistributedApplicationPromise extends PromiseLike<DistributedAp
      * container. For more information on determining the mode that the app host is running
      * in refer to `DistributedApplicationExecutionContext`.
      * @param options Additional options.
-     * @returns The `Task` that represents the asynchronous operation.
      */
     run(options?: RunOptions): DistributedApplicationPromise;
 }
@@ -2144,7 +2142,6 @@ class DistributedApplicationImpl implements DistributedApplication {
      * container. For more information on determining the mode that the app host is running
      * in refer to `DistributedApplicationExecutionContext`.
      * @param options Additional options.
-     * @returns The `Task` that represents the asynchronous operation.
      */
     run(options?: RunOptions): DistributedApplicationPromise {
         const cancellationToken = options?.cancellationToken;
@@ -9774,7 +9771,6 @@ export interface UserSecretsManager {
      * Saves state to user secrets from a JSON string.
      * @param json The JSON object payload to persist.
      * @param options Additional options.
-     * @returns A task that completes when the state is saved.
      */
     saveStateJson(json: string, options?: SaveStateJsonOptions): UserSecretsManagerPromise;
     /**
@@ -9814,7 +9810,6 @@ export interface UserSecretsManagerPromise extends PromiseLike<UserSecretsManage
      * Saves state to user secrets from a JSON string.
      * @param json The JSON object payload to persist.
      * @param options Additional options.
-     * @returns A task that completes when the state is saved.
      */
     saveStateJson(json: string, options?: SaveStateJsonOptions): UserSecretsManagerPromise;
     /**
@@ -9895,7 +9890,6 @@ class UserSecretsManagerImpl implements UserSecretsManager {
      * Saves state to user secrets from a JSON string.
      * @param json The JSON object payload to persist.
      * @param options Additional options.
-     * @returns A task that completes when the state is saved.
      */
     saveStateJson(json: string, options?: SaveStateJsonOptions): UserSecretsManagerPromise {
         const cancellationToken = options?.cancellationToken;
