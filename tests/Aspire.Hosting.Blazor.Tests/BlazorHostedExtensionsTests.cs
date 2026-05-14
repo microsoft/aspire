@@ -183,6 +183,29 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public void ProxyService_WaitForDoesNotPreventReference()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var weatherApi = builder.AddProject<TestProjectMetadata>("weatherapi")
+            .WithHttpEndpoint();
+
+        // Host already has WaitFor(weatherApi) but not WithReference(weatherApi).
+        // ProxyService should still add the reference so YARP gets service discovery env vars.
+        var host = builder.AddProject<TestProjectMetadata>("blazorapp")
+            .WithHttpsEndpoint()
+            .WaitFor(weatherApi)
+            .ProxyService(weatherApi);
+
+        var refs = host.Resource.Annotations
+            .OfType<ResourceRelationshipAnnotation>()
+            .Where(r => r.Resource.Name == "weatherapi" && r.Type == "Reference")
+            .ToList();
+
+        Assert.Single(refs);
+    }
+
+    [Fact]
     public async Task ProxyService_DifferentApiPrefixPerService()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
