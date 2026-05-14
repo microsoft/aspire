@@ -27,17 +27,44 @@ public static class KubernetesCustomResourceExtensions
         this IResourceBuilder<KubernetesEnvironmentResource> builder,
         [ResourceName] string name, string apiVersion, string kind)
     {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentException.ThrowIfNullOrEmpty(name);
         ArgumentException.ThrowIfNullOrEmpty(apiVersion);
         ArgumentException.ThrowIfNullOrEmpty(kind);
+
+        return AddCustomResource(builder, name, ReferenceExpression.Create($"{apiVersion}"), ReferenceExpression.Create($"{kind}"));
+    }
+
+    /// <summary>
+    /// Adds a custom Kubernetes resource to the application model as a child of the specified Kubernetes environment.
+    /// This will generate a single yaml file in the Helm charts at publish time.
+    /// </summary>
+    /// <param name="builder">The Kubernetes environment resource builder.</param>
+    /// <param name="name">The name of the custom resource.</param>
+    /// <param name="apiVersion">The API version the CRD uses.</param>
+    /// <param name="kind">The kind or label of the CRD.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesCustomResourceResouce}"/> for chaining.</returns>
+    [AspireExport("addCustomResourceParam", Description = "Adds a custom resource to the Kubernetes manifest using parameters.")]
+    public static IResourceBuilder<KubernetesCustomResourceResource> AddCustomResource(
+        this IResourceBuilder<KubernetesEnvironmentResource> builder,
+        [ResourceName] string name, IResourceBuilder<ParameterResource> apiVersion, IResourceBuilder<ParameterResource> kind)
+    {
+        return AddCustomResource(builder, name, ReferenceExpression.Create($"{apiVersion}"), ReferenceExpression.Create($"{kind}"));
+    }
+
+    private static IResourceBuilder<KubernetesCustomResourceResource> AddCustomResource(
+        this IResourceBuilder<KubernetesEnvironmentResource> builder,
+        [ResourceName] string name, ReferenceExpression apiVersion, ReferenceExpression kind)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentNullException.ThrowIfNull(apiVersion);
+        ArgumentNullException.ThrowIfNull(kind);
 
         var crd = new KubernetesCustomResourceResource(name, builder.Resource)
         {
             ApiVersion = apiVersion,
             Kind = kind
         };
-        
+
         if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
         {
             return builder.ApplicationBuilder.CreateResourceBuilder(crd);
@@ -54,7 +81,7 @@ public static class KubernetesCustomResourceExtensions
     /// <param name="spec">The spec to publish with the manifests.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesCustomResourceResource}"/> for chaining.</returns>
     /// <remarks>
-    /// In order to ensure proper serialization, the TSpec class must be annotated with <see cref="YamlSerializableAttribute"/>,
+    /// In order to ensure proper serialization, the class must be annotated with <see cref="YamlSerializableAttribute"/>,
     /// and members must be annotated with the <see cref="YamlMemberAttribute"/>. Refer to the example below.
     /// </remarks>
     /// <example>
@@ -75,12 +102,28 @@ public static class KubernetesCustomResourceExtensions
     /// </example>
     [AspireExport(Description = "Adds a spec file to a CRD resource.")]
     public static IResourceBuilder<KubernetesCustomResourceResource> WithSpec(
-        this IResourceBuilder<KubernetesCustomResourceResource> builder, 
+        this IResourceBuilder<KubernetesCustomResourceResource> builder,
         CustomResourceSpecV1 spec)
     {
         ArgumentNullException.ThrowIfNull(builder);
 
         builder.Resource.Spec = spec;
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Configure properties on the top-level metadata object of the Kubernetes manifest.
+    /// </summary>
+    /// <param name="builder">The custom resource builder.</param>
+    /// <param name="configure">The configuration method for the metadata.</param>
+    /// <returns>The custom resource builder for chaining.</returns>
+    [AspireExport]
+    public static IResourceBuilder<KubernetesCustomResourceResource> WithMetadata(
+        this IResourceBuilder<KubernetesCustomResourceResource> builder,
+        Action<ObjectMetaV1> configure)
+    {
+        builder.WithAnnotation(new MetadataAnnotation(configure));
 
         return builder;
     }

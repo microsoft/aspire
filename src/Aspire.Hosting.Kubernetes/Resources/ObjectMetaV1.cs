@@ -19,6 +19,7 @@ namespace Aspire.Hosting.Kubernetes.Resources;
 /// It is a core component for properly managing Kubernetes resources and ensuring compliance with Kubernetes object standards.
 /// </remarks>
 [YamlSerializable]
+[AspireExport]
 public sealed class ObjectMetaV1
 {
     /// <summary>
