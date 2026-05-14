@@ -187,6 +187,28 @@ The scripts auto-detect your OS and architecture and locate the latest `ci.yml` 
 - Remove PR-specific packages:
   - Delete `~/.aspire/hives/pr-<PR_NUMBER>/packages`
 
+### Brew uninstall caveats
+
+The Homebrew cask (`eng/homebrew/aspire.rb.template`) installs Aspire entirely
+inside the Caskroom version directory — `brew uninstall aspire` removes
+the binary and the route sidecar end-to-end. The cask intentionally carries
+no `zap` stanza, because `~/.aspire/` is a shared prefix with the script-route
+and PR-route installers and a brew-driven recursive delete would clobber state
+those installers still own.
+
+If you installed via the Homebrew cask before this change, you may have a
+stale dogfood state directory under `~/.aspire/installs/brew-stable/`. The
+new cask never touches that path, and `brew uninstall` will not remove it.
+Clean it up manually once after upgrading the cask:
+
+```bash
+rm -rf ~/.aspire/installs/brew-stable
+```
+
+NuGet hives under `~/.aspire/hives/` and any script-route or PR-route
+binaries under `~/.aspire/bin/` and `~/.aspire/dogfood/` are not touched by
+the cask in either direction; manage those with the steps above.
+
 ## Safety note
 
 Remote one-liners execute scripts fetched from the repository. Review the script source before running if needed:

@@ -329,6 +329,15 @@ public class Program
 
         // Shared services.
         builder.Services.AddSingleton<IIdentityChannelReader>(_ => new IdentityChannelReader(typeof(Program).Assembly));
+        if (OperatingSystem.IsWindows())
+        {
+            builder.Services.AddSingleton<IWindowsRegistryReader, WindowsRegistryReader>();
+        }
+        else
+        {
+            builder.Services.AddSingleton<IWindowsRegistryReader, NullWindowsRegistryReader>();
+        }
+        builder.Services.AddSingleton<WingetFirstRunProbe>();
         builder.Services.AddSingleton(sp =>
         {
             var channelReader = sp.GetRequiredService<IIdentityChannelReader>();

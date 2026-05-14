@@ -149,7 +149,11 @@ public sealed class TestEnvironment : IDisposable
                 :do_dl
                 if defined DLDIR (
                     if not exist "%DLDIR%" mkdir "%DLDIR%"
-                    echo fake-archive> "%DLDIR%\fake-archive.tar.gz"
+                    if defined MOCK_GH_DOWNLOAD_ARCHIVE_SOURCE (
+                        copy /Y "%MOCK_GH_DOWNLOAD_ARCHIVE_SOURCE%" "%DLDIR%\" >nul
+                    ) else (
+                        echo fake-archive> "%DLDIR%\fake-archive.tar.gz"
+                    )
                 )
                 exit 0
 
@@ -193,8 +197,11 @@ public sealed class TestEnvironment : IDisposable
                         done
                         if [ -n "$download_dir" ]; then
                             mkdir -p "$download_dir"
-                            # Create files listed in MOCK_GH_DOWNLOAD_FILES (newline-separated)
-                            if [ -n "${MOCK_GH_DOWNLOAD_FILES:-}" ]; then
+                            if [ -n "${MOCK_GH_DOWNLOAD_ARCHIVE_SOURCE:-}" ]; then
+                                # Copy a real archive into the download dir so the
+                                # script's extract/install path can run end-to-end.
+                                cp "$MOCK_GH_DOWNLOAD_ARCHIVE_SOURCE" "$download_dir/"
+                            elif [ -n "${MOCK_GH_DOWNLOAD_FILES:-}" ]; then
                                 echo "$MOCK_GH_DOWNLOAD_FILES" | while IFS= read -r fname; do
                                     [ -n "$fname" ] && echo "fake-archive" > "$download_dir/$fname"
                                 done

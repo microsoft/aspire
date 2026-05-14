@@ -672,6 +672,8 @@ internal sealed class NullBundleService : IBundleService
 
     public Task<Layout.LayoutConfiguration?> EnsureExtractedAndGetLayoutAsync(CancellationToken cancellationToken = default)
         => Task.FromResult<Layout.LayoutConfiguration?>(null);
+
+    public string? GetDefaultExtractDir(string processPath) => null;
 }
 
 /// <summary>
@@ -700,6 +702,8 @@ internal sealed class TestBundleService(bool isBundle) : IBundleService
 
     public Task<Layout.LayoutConfiguration?> EnsureExtractedAndGetLayoutAsync(CancellationToken cancellationToken = default)
         => Task.FromResult(Layout);
+
+    public string? GetDefaultExtractDir(string processPath) => null;
 }
 
 internal sealed class TestOutputTextWriter : TextWriter
