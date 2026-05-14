@@ -7,6 +7,7 @@ using System.IO.Compression;
 using System.IO.Hashing;
 using System.Text;
 using System.Text.Json;
+using Aspire.Cli.Acquisition;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Utils;
 using Aspire.Shared;
@@ -17,7 +18,11 @@ namespace Aspire.Cli.Bundles;
 /// <summary>
 /// Manages extraction of the embedded bundle payload from self-extracting CLI binaries.
 /// </summary>
-internal sealed class BundleService(IBundlePayloadProvider payloadProvider, ILayoutDiscovery layoutDiscovery, ILogger<BundleService> logger) : IBundleService
+internal sealed class BundleService(
+    IBundlePayloadProvider payloadProvider,
+    ILayoutDiscovery layoutDiscovery,
+    ILogger<BundleService> logger,
+    WingetFirstRunProbe? wingetFirstRunProbe = null) : IBundleService
 {
     /// <summary>
     /// Name of the marker file written after successful extraction.
@@ -75,6 +80,19 @@ internal sealed class BundleService(IBundlePayloadProvider payloadProvider, ILay
         {
             logger.LogDebug("ProcessPath is null or empty, skipping bundle extraction.");
             return;
+        }
+
+        // The winget portable installer has no post-install hook, so the CLI
+        // self-stamps the install-route sidecar on first run. No-op on
+        // non-Windows and once the sidecar already exists.
+        if (wingetFirstRunProbe is not null && OperatingSystem.IsWindows())
+        {
+            var realBinaryPath = ResolveSymlinks(processPath);
+            var binaryDir = Path.GetDirectoryName(realBinaryPath);
+            if (!string.IsNullOrEmpty(binaryDir))
+            {
+                wingetFirstRunProbe.Run(binaryDir);
+            }
         }
 
         var extractDir = GetDefaultExtractDir(processPath);
