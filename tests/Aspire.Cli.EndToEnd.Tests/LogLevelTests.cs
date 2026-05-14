@@ -36,7 +36,7 @@ public sealed class LogLevelTests(ITestOutputHelper output)
             await auto.InstallAspireCliAsync(strategy, counter);
 
             // Create a new empty AppHost project
-            await auto.AspireNewCSharpEmptyAppHostAsync("LogLevelApp", counter);
+            await auto.AspireNewAsync("LogLevelApp", counter, template: AspireTemplate.EmptyAppHost);
 
             // Navigate to the AppHost directory
             await auto.TypeAsync("cd LogLevelApp");
