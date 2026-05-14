@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a bug where specifying --log-level on the CLI caused the log level to cascade into all child project resources via Logging__LogLevel__Default, producing excessive log output. A new ASPIRE_APPHOST_LOGLEVEL environment variable is now used, scoped only to the AppHost and CLI.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔕",
+  "firstMergedAt": "2026-05-14T07:29:06Z",
+  "lastMergedAt": "2026-05-14T07:29:06Z",
+  "name": "Fix log level cascading to child resources",
+  "owner": "JamesNK",
+  "prs": [
+    17071
+  ]
+}

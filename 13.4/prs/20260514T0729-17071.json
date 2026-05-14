@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Fixes log level cascading to child resources: introduces ASPIRE_APPHOST_LOGLEVEL env var scoped to AppHost/CLI only, preventing noisy debug/trace logs in child processes.",
+  "mergedAt": "2026-05-14T07:29:06Z",
+  "number": 17071,
+  "runDate": "2026-05-14T08:56:49Z",
+  "status": "included",
+  "title": "Use ASPIRE_APPHOST_LOGLEVEL instead of cascading Logging__LogLevel__Default"
+}

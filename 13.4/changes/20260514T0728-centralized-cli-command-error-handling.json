@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "CLI commands now use a structured CommandResult type instead of raw integer exit codes, centralizing error message display and cancellation handling in BaseCommand. The log file path and update notifications are no longer shown when a command is cancelled or displays help.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧹",
+  "firstMergedAt": "2026-05-14T07:28:38Z",
+  "lastMergedAt": "2026-05-14T07:28:38Z",
+  "name": "Centralized CLI command error and cancellation handling",
+  "owner": "JamesNK",
+  "prs": [
+    17005
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Refactors CLI commands to return CommandResult type; centralizes error and cancellation handling in BaseCommand. Minor UX improvement: log path and update notifications no longer shown on cancel/help.",
+  "mergedAt": "2026-05-14T07:28:38Z",
+  "number": 17005,
+  "runDate": "2026-05-14T08:56:49Z",
+  "status": "included",
+  "title": "Refactor CLI commands to return CommandResult and centralize cancellation handling"
+}
