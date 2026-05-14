@@ -545,25 +545,19 @@ public class GuestAppHostProjectTests : IDisposable
     }
 
     /// <summary>
-    /// Regression test for wf3: <c>aspire update</c> on a project with an Implicit channel
-    /// (i.e. the user has not pinned a channel via <c>--channel</c>, per-project
-    /// <c>aspire.config.json#channel</c>, or a prompt selection) must NOT silently pin the
-    /// running CLI's identity channel into <c>aspire.config.json#channel</c>.
+    /// Regression test for issue #17077: <c>aspire update</c> must not leave
+    /// <c>aspire.config.json</c> advanced to newer package versions when guest SDK
+    /// regeneration fails.
     /// </summary>
     /// <remarks>
     /// The test drives <see cref="GuestAppHostProject.UpdatePackagesAsync"/> through the
-    /// code path that detects updates and saves the config to disk, then expects the call
-    /// to throw from <c>BuildAndGenerateSdkAsync</c> (because
-    /// <see cref="TestAppHostServerProjectFactory.CreateAsync"/> throws). The channel save
-    /// happens before that throw, so we can inspect the on-disk
-    /// <c>aspire.config.json#channel</c> to assert it was NOT changed.
+    /// code path that detects updates, then expects the call to throw from
+    /// <c>BuildAndGenerateSdkAsync</c> because <see cref="TestAppHostServerProjectFactory.CreateAsync"/>
+    /// throws. The on-disk config should still contain the original versions.
     /// </remarks>
     [Fact]
-    public async Task UpdatePackagesAsync_ImplicitChannel_DoesNotPinIdentityIntoConfig()
+    public async Task UpdatePackagesAsync_WhenRegenerationFails_DoesNotMutateConfig()
     {
-        // Seed aspire.config.json with no channel pinned, an SDK version that is behind,
-        // and a single package entry. The fake nuget cache will return a newer version so
-        // the early "nothing to update" return is not taken.
         var configPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
         await File.WriteAllTextAsync(configPath, """
             {
@@ -588,7 +582,6 @@ public class GuestAppHostProjectTests : IDisposable
 
         var interactionService = new TestInteractionService
         {
-            // Confirm the "Perform updates?" prompt so the channel-write code path runs.
             ConfirmCallback = (_, _) => true
         };
 
@@ -604,16 +597,14 @@ public class GuestAppHostProjectTests : IDisposable
             NuGetConfigDirBinding = PromptBinding.CreateDefault<string?>(null),
         };
 
-        // BuildAndGenerateSdkAsync calls IAppHostServerProjectFactory.CreateAsync, which the
-        // test factory throws from. The channel save happens BEFORE that, so the on-disk
-        // assertion below is still meaningful.
         await Assert.ThrowsAnyAsync<Exception>(
             () => project.UpdatePackagesAsync(context, CancellationToken.None));
 
         var reloaded = AspireConfigFile.Load(_workspace.WorkspaceRoot.FullName);
         Assert.NotNull(reloaded);
-        // Pre-fix, this would have been "pr-99999" (the identity channel). Post-fix, the
-        // implicit-channel update path leaves the channel untouched.
+        Assert.Equal("1.0.0", reloaded.SdkVersion);
+        Assert.NotNull(reloaded.Packages);
+        Assert.Equal("1.0.0", reloaded.Packages["Aspire.Hosting"]);
         Assert.Null(reloaded.Channel);
     }
 
@@ -741,7 +732,8 @@ public class GuestAppHostProjectTests : IDisposable
         public Task<AppHostServerPrepareResult> PrepareAsync(
             string sdkVersion,
             IEnumerable<IntegrationReference> integrations,
-            CancellationToken cancellationToken = default) =>
+            CancellationToken cancellationToken = default,
+            string? requestedChannel = null) =>
             Task.FromResult(new AppHostServerPrepareResult(Success: false, Output: null));
 
         public (string SocketPath, System.Diagnostics.Process Process, OutputCollector OutputCollector) Run(

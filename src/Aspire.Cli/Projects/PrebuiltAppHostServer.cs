@@ -123,12 +123,12 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
     public async Task<AppHostServerPrepareResult> PrepareAsync(
         string sdkVersion,
         IEnumerable<IntegrationReference> integrations,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? requestedChannel = null)
     {
         var integrationList = integrations.ToList();
         var packageRefs = integrationList.Where(r => r.IsPackageReference).ToList();
         var projectRefs = integrationList.Where(r => r.IsProjectReference).ToList();
-        string? requestedChannel = null;
 
         try
         {
@@ -140,7 +140,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             // Resolve the channel the project requests for restore (aspire.config.json#channel,
             // with a legacy .aspire/settings.json#channel fallback). This is independent of the
             // running CLI's identity hive (CliExecutionContext.IdentityChannel).
-            requestedChannel = ResolveRequestedChannel();
+            requestedChannel ??= ResolveRequestedChannel();
 
             if (projectRefs.Count > 0)
             {

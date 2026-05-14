@@ -254,7 +254,8 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     /// </summary>
     public async Task<(string ProjectPath, string? ChannelName)> CreateProjectFilesAsync(
         IEnumerable<IntegrationReference> integrations,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? requestedChannel = null)
     {
         // Clean obj folder to ensure fresh NuGet restore
         var objPath = Path.Combine(_projectModelPath, "obj");
@@ -321,7 +322,8 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         }
 
         var channels = await _packagingService.GetChannelsAsync(cancellationToken);
-        var configuredChannelName = AspireConfigFile.Load(_appPath)?.Channel
+        var configuredChannelName = requestedChannel
+            ?? AspireConfigFile.Load(_appPath)?.Channel
             ?? AspireJsonConfiguration.Load(_appPath)?.Channel;
 
         // Resolve channel sources and add them via RestoreAdditionalProjectSources
@@ -417,9 +419,10 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     public async Task<AppHostServerPrepareResult> PrepareAsync(
         string sdkVersion,
         IEnumerable<IntegrationReference> integrations,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? requestedChannel = null)
     {
-        var (_, channelName) = await CreateProjectFilesAsync(integrations, cancellationToken);
+        var (_, channelName) = await CreateProjectFilesAsync(integrations, cancellationToken, requestedChannel);
         var (buildSuccess, buildOutput) = await BuildAsync(cancellationToken);
 
         if (!buildSuccess)
