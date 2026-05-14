@@ -1550,7 +1550,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             channelSeenByProject = config?.Channel;
             sdkVersionSeenByProject = config?.SdkVersion;
 
-            var modulesDir = Directory.CreateDirectory(Path.Combine(directory.FullName, "modules"));
+            var modulesDir = Directory.CreateDirectory(Path.Combine(directory.FullName, LanguageInfo.GeneratedFolderName));
             File.WriteAllText(Path.Combine(modulesDir.FullName, "aspire.mts"), "// generated sdk");
 
             return Task.FromResult(true);
@@ -1566,7 +1566,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.True(buildAndGenerateCalled);
         Assert.Equal("daily", channelSeenByProject);
         Assert.Equal("9.2.0", sdkVersionSeenByProject);
-        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "modules", "aspire.mts")));
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", LanguageInfo.GeneratedFolderName, "aspire.mts")));
     }
 
     [Fact]
