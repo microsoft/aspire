@@ -542,7 +542,7 @@ public sealed class DcpHostNotificationTests
     {
         // The CLI and host set environment variables that must not cascade through
         // DCP into child project processes. Verify that exact-match entries and
-        // prefix entries (Logging__) are all stripped, regardless of casing,
+        // prefix entries (ASPIRE_APPHOST_) are all stripped, regardless of casing,
         // while unrelated variables are still inherited.
         var excludedVars = new Dictionary<string, string>
         {
@@ -550,8 +550,8 @@ public sealed class DcpHostNotificationTests
             ["DOTNET_LAUNCH_PROFILE"] = "MyProfile",
             ["ASPNETCORE_ENVIRONMENT"] = "Development",
             ["DOTNET_ENVIRONMENT"] = "Development",
-            ["Logging__LogLevel__Default"] = "Debug",
-            ["LOGGING__LOGLEVEL__ASPIRE"] = "Trace",
+            ["ASPIRE_APPHOST_LOGLEVEL"] = "Debug",
+            ["aspire_apphost_custom"] = "value",
         };
 
         var options = new RemoteInvokeOptions();
@@ -581,8 +581,8 @@ public sealed class DcpHostNotificationTests
                 "DOTNET_LAUNCH_PROFILE",
                 "ASPNETCORE_ENVIRONMENT",
                 "DOTNET_ENVIRONMENT",
-                "Logging__LogLevel__Default",
-                "LOGGING__LOGLEVEL__ASPIRE",
+                "ASPIRE_APPHOST_LOGLEVEL",
+                "aspire_apphost_custom",
             ];
 
             foreach (var key in expectedExcluded)

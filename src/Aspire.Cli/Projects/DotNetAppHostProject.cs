@@ -235,7 +235,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         // captured in the CLI log file for diagnostics. Defaults to Debug but
         // can be overridden via --log-level.
         var appHostLogLevel = _loggingOptions.ConsoleLogLevel ?? LogLevel.Debug;
-        env["Logging__LogLevel__Default"] = appHostLogLevel.ToString();
+        env[KnownConfigNames.AppHostLogLevel] = appHostLogLevel.ToString();
 
         if (context.WaitForDebugger)
         {

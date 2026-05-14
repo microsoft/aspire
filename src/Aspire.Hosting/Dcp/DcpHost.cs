@@ -41,18 +41,15 @@ internal sealed class DcpHost
 
     // These environment variables (or prefixes) should never be inherited by DCP
     // from the app host. Entries are matched case-insensitively using StartsWith so
-    // that both exact names (e.g. "ASPNETCORE_URLS") and prefixes (e.g. "Logging__")
-    // are handled uniformly. The Aspire CLI injects Logging__ variables such as
-    // Logging__LogLevel__Default=Debug to increase diagnostic output; these must not
-    // cascade through DCP into child project processes where they would override the
-    // application's appsettings.json log-level configuration.
+    // that both exact names (e.g. "ASPNETCORE_URLS") and prefixes
+    // (e.g. "ASPIRE_APPHOST_") are handled uniformly.
     private static readonly string[] s_doNotInheritEnvironmentVars =
     [
         "ASPNETCORE_URLS",
         "DOTNET_LAUNCH_PROFILE",
         "ASPNETCORE_ENVIRONMENT",
         "DOTNET_ENVIRONMENT",
-        //"LOGGING__"
+        "ASPIRE_APPHOST_"
     ];
 
     public DcpHost(
