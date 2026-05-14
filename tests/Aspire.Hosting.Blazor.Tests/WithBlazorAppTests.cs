@@ -144,6 +144,34 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public void WithClient_WaitForDoesNotPreventReference()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var weatherApi = builder.AddProject<TestProjectMetadata>("weatherapi")
+            .WithHttpEndpoint();
+
+        // Gateway already has WaitFor(weatherApi) but not WithReference(weatherApi).
+        // WithClient should still forward the reference so YARP gets service discovery env vars.
+        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+            .WithHttpEndpoint()
+            .WithHttpsEndpoint()
+            .WaitFor(weatherApi);
+
+        var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj")
+            .WithReference(weatherApi);
+
+        gateway.WithClient(wasmApp);
+
+        var refs = gateway.Resource.Annotations
+            .OfType<ResourceRelationshipAnnotation>()
+            .Where(r => r.Resource.Name == "weatherapi" && r.Type == "Reference")
+            .ToList();
+
+        Assert.Single(refs);
+    }
+
+    [Fact]
     public void WithClient_UsesResourceName_AsPathPrefix()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
