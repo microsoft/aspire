@@ -80,6 +80,60 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     }
 
     [Fact]
+    public async Task WithBrowserLogs_ConfigureCommandInputsDefaultToCurrentConfiguration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var web = builder.AddResource(new TestHttpResource("web"))
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithEndpoint("http", endpoint => endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 8080))
+            .WithInitialState(new CustomResourceSnapshot
+            {
+                ResourceType = "TestHttp",
+                State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success),
+                Properties = []
+            });
+
+        web.WithBrowserLogs(browser: "custom-browser", profile: "Profile 1", userDataMode: BrowserUserDataMode.Shared);
+
+        using var app = builder.Build();
+        var browserLogsResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>());
+        var configureCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.ConfigureTrackedBrowserCommandName);
+        var arguments = configureCommand.Arguments;
+        var browserInput = arguments.Single(input => input.Name == BrowserLogsConfigurationManager.BrowserInputName);
+        var userDataModeInput = arguments.Single(input => input.Name == BrowserLogsConfigurationManager.UserDataModeInputName);
+        var profileInput = arguments.Single(input => input.Name == BrowserLogsConfigurationManager.ProfileInputName);
+
+        await browserInput.DynamicLoading!.LoadCallback(new LoadInputContext
+        {
+            Input = browserInput,
+            AllInputs = new InteractionInputCollection(arguments),
+            Services = app.Services,
+            CancellationToken = CancellationToken.None
+        });
+        await userDataModeInput.DynamicLoading!.LoadCallback(new LoadInputContext
+        {
+            Input = userDataModeInput,
+            AllInputs = new InteractionInputCollection(arguments),
+            Services = app.Services,
+            CancellationToken = CancellationToken.None
+        });
+        await profileInput.DynamicLoading!.LoadCallback(new LoadInputContext
+        {
+            Input = profileInput,
+            AllInputs = new InteractionInputCollection(arguments),
+            Services = app.Services,
+            CancellationToken = CancellationToken.None
+        });
+
+        Assert.Equal("custom-browser", browserInput.Value);
+        Assert.Equal(nameof(BrowserUserDataMode.Shared), userDataModeInput.Value);
+        Assert.Equal("Profile 1", profileInput.Value);
+        Assert.Contains(browserInput.Options!, option => option.Key == "custom-browser" && option.Value == "custom-browser");
+        Assert.Contains(profileInput.Options!, option => option.Key == "Profile 1" && option.Value == "Profile 1");
+    }
+
+    [Fact]
     public void WithBrowserLogs_UsesResourceSpecificConfigurationWhenArgumentsAreOmitted()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);

@@ -35,8 +35,9 @@ internal sealed class BrowserLogsConfigurationManager(
     /// Creates the static argument definitions for the configure-tracked-browser command.
     /// Called at command registration time (before services are available).
     /// </summary>
-    internal static IReadOnlyList<InteractionInput> CreateArgumentDefinitions(string parentResourceName)
+    internal static IReadOnlyList<InteractionInput> CreateArgumentDefinitions(BrowserLogsResource resource)
     {
+        var parentResourceName = resource.ParentResource.Name;
         var scopeInput = new InteractionInput
         {
             Name = ScopeInputName,
@@ -65,7 +66,8 @@ internal sealed class BrowserLogsConfigurationManager(
                 AlwaysLoadOnStart = true,
                 LoadCallback = context =>
                 {
-                    LoadBrowserOptions(context);
+                    var configurationManager = context.Services.GetRequiredService<BrowserLogsConfigurationManager>();
+                    configurationManager.LoadBrowserOptions(resource, context);
                     return Task.CompletedTask;
                 }
             }
@@ -77,12 +79,21 @@ internal sealed class BrowserLogsConfigurationManager(
             Label = BrowserCommandStrings.ConfigureTrackedBrowserUserDataModeLabel,
             InputType = InputType.Choice,
             Required = true,
-            Value = BrowserUserDataMode.Shared.ToString(),
             Options =
             [
                 new(nameof(BrowserUserDataMode.Shared), nameof(BrowserUserDataMode.Shared)),
                 new(nameof(BrowserUserDataMode.Isolated), nameof(BrowserUserDataMode.Isolated))
-            ]
+            ],
+            DynamicLoading = new InputLoadOptions
+            {
+                AlwaysLoadOnStart = true,
+                LoadCallback = context =>
+                {
+                    var configurationManager = context.Services.GetRequiredService<BrowserLogsConfigurationManager>();
+                    configurationManager.LoadUserDataModeOptions(resource, context);
+                    return Task.CompletedTask;
+                }
+            }
         };
 
         var profileInput = new InteractionInput
@@ -93,15 +104,14 @@ internal sealed class BrowserLogsConfigurationManager(
             InputType = InputType.Choice,
             Required = false,
             AllowCustomChoice = true,
-            Value = BrowserDefaultProfileValue,
             DynamicLoading = new InputLoadOptions
             {
                 AlwaysLoadOnStart = true,
                 DependsOnInputs = [BrowserInputName, UserDataModeInputName],
                 LoadCallback = context =>
                 {
-                    var mgr = context.Services.GetRequiredService<BrowserLogsConfigurationManager>();
-                    mgr.LoadProfileOptions(context);
+                    var configurationManager = context.Services.GetRequiredService<BrowserLogsConfigurationManager>();
+                    configurationManager.LoadProfileOptions(resource, context);
                     return Task.CompletedTask;
                 }
             }
@@ -121,8 +131,8 @@ internal sealed class BrowserLogsConfigurationManager(
                 AlwaysLoadOnStart = true,
                 LoadCallback = context =>
                 {
-                    var mgr = context.Services.GetRequiredService<BrowserLogsConfigurationManager>();
-                    mgr.LoadSaveToUserSecretsOptions(context);
+                    var configurationManager = context.Services.GetRequiredService<BrowserLogsConfigurationManager>();
+                    configurationManager.LoadSaveToUserSecretsOptions(context);
                     return Task.CompletedTask;
                 }
             }
@@ -161,31 +171,26 @@ internal sealed class BrowserLogsConfigurationManager(
         };
     }
 
-    private static void LoadBrowserOptions(LoadInputContext context)
+    private void LoadBrowserOptions(BrowserLogsResource resource, LoadInputContext context)
     {
-        var options = GetBrowserOptions(context.Input.Value ?? string.Empty);
-        context.Input.Options = options;
-    }
+        if (context.Input.Value is null)
+        {
+            var currentConfiguration = resource.ResolveCurrentConfiguration(configuration, configurationStore);
+            context.Input.Value = currentConfiguration.Browser;
+        }
 
-    private void LoadSaveToUserSecretsOptions(LoadInputContext context)
-    {
-        context.Input.Value ??= userSecretsManager.IsAvailable ? "true" : null;
-        context.Input.Disabled = !userSecretsManager.IsAvailable;
-    }
-
-    private static IReadOnlyList<KeyValuePair<string, string>> GetBrowserOptions(string currentBrowser)
-    {
+        var currentBrowser = context.Input.Value;
         var options = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         AddKnownBrowser("msedge", BrowserCommandStrings.ConfigureTrackedBrowserEdgeOption);
         AddKnownBrowser("chrome", BrowserCommandStrings.ConfigureTrackedBrowserChromeOption);
         AddKnownBrowser("chromium", BrowserCommandStrings.ConfigureTrackedBrowserChromiumOption);
 
-        if (!options.ContainsKey(currentBrowser))
+        if (!string.IsNullOrEmpty(currentBrowser) && !options.ContainsKey(currentBrowser))
         {
             options[currentBrowser] = currentBrowser;
         }
 
-        return [.. options.Select(static pair => new KeyValuePair<string, string>(pair.Key, pair.Value))];
+        context.Input.Options = [.. options.Select(static pair => new KeyValuePair<string, string>(pair.Key, pair.Value))];
 
         void AddKnownBrowser(string browser, string displayName)
         {
@@ -196,8 +201,29 @@ internal sealed class BrowserLogsConfigurationManager(
         }
     }
 
-    private void LoadProfileOptions(LoadInputContext context)
+    private void LoadUserDataModeOptions(BrowserLogsResource resource, LoadInputContext context)
     {
+        if (context.Input.Value is null)
+        {
+            var currentConfiguration = resource.ResolveCurrentConfiguration(configuration, configurationStore);
+            context.Input.Value = currentConfiguration.UserDataMode.ToString();
+        }
+    }
+
+    private void LoadSaveToUserSecretsOptions(LoadInputContext context)
+    {
+        context.Input.Value ??= userSecretsManager.IsAvailable ? "true" : null;
+        context.Input.Disabled = !userSecretsManager.IsAvailable;
+    }
+
+    private void LoadProfileOptions(BrowserLogsResource resource, LoadInputContext context)
+    {
+        if (context.Input.Value is null)
+        {
+            var currentConfiguration = resource.ResolveCurrentConfiguration(configuration, configurationStore);
+            context.Input.Value = currentConfiguration.Profile ?? BrowserDefaultProfileValue;
+        }
+
         var browser = context.AllInputs[BrowserInputName].Value;
         var profile = context.Input.Value;
 
