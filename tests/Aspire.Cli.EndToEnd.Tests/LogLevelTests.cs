@@ -62,18 +62,16 @@ public sealed class LogLevelTests(ITestOutputHelper output)
             await auto.WaitForSuccessPromptAsync(counter);
 
             // Check for trace-level AppHost log entry (format: [TRCE] [AppHost/...])
-            await auto.TypeAsync(
-                "grep -q '\\[TRCE\\] \\[AppHost/' \"$DETACH_LOG\" && echo 'APPHOST_TRACE_PRESENT' || echo 'APPHOST_TRACE_MISSING'");
-            await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("APPHOST_TRACE_PRESENT", timeout: TimeSpan.FromSeconds(10));
-            await auto.WaitForAnyPromptAsync(counter);
+            await auto.RunCommandFailFastAsync(
+                "test -n \"$DETACH_LOG\" && grep -q '\\[TRCE\\] \\[AppHost/' \"$DETACH_LOG\"",
+                counter,
+                TimeSpan.FromSeconds(10));
 
             // Check for trace-level CLI log entry from the Features category
-            await auto.TypeAsync(
-                "grep -q '\\[TRCE\\] \\[Features\\]' \"$DETACH_LOG\" && echo 'CLI_TRACE_PRESENT' || echo 'CLI_TRACE_MISSING'");
-            await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("CLI_TRACE_PRESENT", timeout: TimeSpan.FromSeconds(10));
-            await auto.WaitForAnyPromptAsync(counter);
+            await auto.RunCommandFailFastAsync(
+                "test -n \"$DETACH_LOG\" && grep -q '\\[TRCE\\] \\[Features\\]' \"$DETACH_LOG\"",
+                counter,
+                TimeSpan.FromSeconds(10));
         }
         catch
         {
