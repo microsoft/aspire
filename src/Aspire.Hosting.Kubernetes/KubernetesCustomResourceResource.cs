@@ -12,10 +12,10 @@ using Aspire.Hosting.Kubernetes.Resources;
 public interface IKubernetesCustomResourceResource : IResourceWithParent<KubernetesEnvironmentResource>
 {
     /// <summary>
-    /// Builds a <see cref="CustomResourceV1{TSpec}"/> from the <see cref="IKubernetesCustomResourceResource"/> and
+    /// Builds a <see cref="CustomResourceV1"/> from the <see cref="IKubernetesCustomResourceResource"/> and
     /// assigns the result to <see cref="GeneratedResource"/>.
     /// </summary>
-    /// <returns>A fully configured <see cref="CustomResourceV1{TSpec}"/> ready for publishing.</returns>
+    /// <returns>A fully configured <see cref="CustomResourceV1"/> ready for publishing.</returns>
     object Build();
 
     /// <summary>
@@ -27,13 +27,11 @@ public interface IKubernetesCustomResourceResource : IResourceWithParent<Kuberne
 /// <summary>
 /// Represents a Custom Resource for deployment along with the compute resources from the app model.
 /// </summary>
-/// <typeparam name="TSpec">The shape and structure of the custom resource's spec block</typeparam>
 /// <param name="name">The name of the resource.</param>
 /// <param name="environment">The parent Kubernetes environment resource.</param>
-public sealed class KubernetesCustomResourceResource<TSpec>(
+public sealed class KubernetesCustomResourceResource(
     string name,
     KubernetesEnvironmentResource environment) : Resource(name), IKubernetesCustomResourceResource
-    where TSpec : class, new()
 {
     /// <summary>
     /// Gets the parent Kubernetes environment resource.
@@ -47,7 +45,7 @@ public sealed class KubernetesCustomResourceResource<TSpec>(
     public string Kind { get; set; } = "";
 
     /// <inheritdoc /> 
-    public TSpec? Spec { get; set; } = new();
+    public object Spec { get; set; } = new();
     
     /// <inheritdoc />
     public object? GeneratedResource { get; set; }
@@ -55,7 +53,7 @@ public sealed class KubernetesCustomResourceResource<TSpec>(
     /// <inheritdoc />
     public object Build()
     {
-        var builtResource = new CustomResourceV1<TSpec>(ApiVersion, Kind)
+        var builtResource = new CustomResourceV1(ApiVersion, Kind)
         {
             Metadata =
             {

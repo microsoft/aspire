@@ -514,7 +514,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
     private static void ProcessCustomResources(DistributedApplicationModel model)
     {
-        foreach (var resource in model.Resources.OfType<IKubernetesCustomResourceResource>())
+        foreach (var resource in model.Resources.OfType<KubernetesCustomResourceResource>())
         {
             resource.Build();
         }
