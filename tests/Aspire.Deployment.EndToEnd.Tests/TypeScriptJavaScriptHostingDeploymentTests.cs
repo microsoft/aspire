@@ -187,7 +187,7 @@ public sealed class TypeScriptJavaScriptHostingDeploymentTests(ITestOutputHelper
     private static string BuildEndpointVerificationCommand(string resourceGroupName)
     {
         return
-            $"static_host=$(az containerapp list -g \"{resourceGroupName}\" --query \"[?contains(name, 'staticsite') && properties.configuration.ingress.external == `true`].properties.configuration.ingress.fqdn | [0]\" -o tsv) && " +
+            $"static_host=$(az containerapp list -g \"{resourceGroupName}\" --query \"[?contains(name, 'staticsite') && properties.configuration.ingress.external == \\`true\\`].properties.configuration.ingress.fqdn | [0]\" -o tsv) && " +
             $"if [ -z \"$static_host\" ]; then echo \"No external staticsite endpoint found\"; az containerapp list -g \"{resourceGroupName}\" --query \"[].{{name:name,external:properties.configuration.ingress.external,fqdn:properties.configuration.ingress.fqdn}}\" -o table; exit 1; fi && " +
             "echo \"Checking https://$static_host\" && " +
             "ok=0 && " +
