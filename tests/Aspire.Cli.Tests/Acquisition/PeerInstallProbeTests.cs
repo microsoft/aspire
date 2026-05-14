@@ -56,8 +56,11 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ProbeAsync_PeerExitsNonZero_ReturnsFailed()
+    public async Task ProbeAsync_PeerExitsNonZero_ReturnsFailedWhenVersionAlsoFails()
     {
+        // info path scripted to exit 7; --version not supported by this
+        // script (the default EmitExit body) → fallback path also fails
+        // and the user sees the failure.
         var fakePeer = FakePeerScript.Build(outputHelper, stdout: "{}", exitCode: 7);
 
         var probe = new PeerInstallProbe(NullLogger<PeerInstallProbe>.Instance);
@@ -68,27 +71,85 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ProbeAsync_PeerEmitsInvalidJson_ReturnsFailed()
+    public async Task ProbeAsync_PeerExitsNonZero_FallsBackToVersionAndReturnsPartialOk()
     {
-        var fakePeer = FakePeerScript.Build(outputHelper, stdout: "not json at all", exitCode: 0);
+        // Older peers (predating the `info` command) exit non-zero for
+        // `info` but support `--version`. The probe must fall back so we
+        // still surface a version string for those installs.
+        var fakePeer = FakePeerScript.BuildInfoOrVersion(
+            outputHelper,
+            infoStdout: string.Empty,
+            infoExitCode: 1,
+            versionStdout: "13.4.0-pr.16817.g790d6fa3\n",
+            versionExitCode: 0);
 
         var probe = new PeerInstallProbe(NullLogger<PeerInstallProbe>.Instance);
         var result = await probe.ProbeAsync(fakePeer.Path, TestContext.Current.CancellationToken);
 
-        var failed = Assert.IsType<PeerProbeResult.Failed>(result);
-        Assert.Contains("malformed", failed.Reason, StringComparison.OrdinalIgnoreCase);
+        var ok = Assert.IsType<PeerProbeResult.Ok>(result);
+        Assert.Equal("13.4.0-pr.16817.g790d6fa3", ok.Info.Version);
+        // Fallback can't read route or channel from the older peer; the
+        // discovery layer overlays the route from the local sidecar.
+        Assert.Null(ok.Info.Channel);
     }
 
     [Fact]
-    public async Task ProbeAsync_PeerEmitsEmptyArray_ReturnsFailed()
+    public async Task ProbeAsync_BothInfoAndVersionFail_ReturnsFailed()
     {
-        var fakePeer = FakePeerScript.Build(outputHelper, stdout: "[]", exitCode: 0);
+        // When both attempts fail, the primary failure reason is what the
+        // user sees (with a (and --version fallback) suffix so they know
+        // we tried).
+        var fakePeer = FakePeerScript.BuildInfoOrVersion(
+            outputHelper,
+            infoStdout: string.Empty,
+            infoExitCode: 1,
+            versionStdout: string.Empty,
+            versionExitCode: 1);
 
         var probe = new PeerInstallProbe(NullLogger<PeerInstallProbe>.Instance);
         var result = await probe.ProbeAsync(fakePeer.Path, TestContext.Current.CancellationToken);
 
         var failed = Assert.IsType<PeerProbeResult.Failed>(result);
-        Assert.Contains("non-empty array", failed.Reason);
+        Assert.Contains("--version fallback", failed.Reason, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ProbeAsync_PeerEmitsEmptyArray_FallsBackToVersion()
+    {
+        // Empty array is treated as "info didn't tell us anything useful"
+        // and triggers the --version fallback. With no version response
+        // scripted either, the overall probe fails.
+        var fakePeer = FakePeerScript.BuildInfoOrVersion(
+            outputHelper,
+            infoStdout: "[]",
+            infoExitCode: 0,
+            versionStdout: string.Empty,
+            versionExitCode: 1);
+
+        var probe = new PeerInstallProbe(NullLogger<PeerInstallProbe>.Instance);
+        var result = await probe.ProbeAsync(fakePeer.Path, TestContext.Current.CancellationToken);
+
+        Assert.IsType<PeerProbeResult.Failed>(result);
+    }
+
+    [Fact]
+    public async Task ProbeAsync_PeerEmitsInvalidJson_FallsBackToVersion()
+    {
+        // Invalid JSON on the info path is treated as the older peer's
+        // common failure mode (output before the `info` command existed
+        // was a help / error string), and triggers the --version fallback.
+        var fakePeer = FakePeerScript.BuildInfoOrVersion(
+            outputHelper,
+            infoStdout: "not json at all",
+            infoExitCode: 0,
+            versionStdout: "9.0.0\n",
+            versionExitCode: 0);
+
+        var probe = new PeerInstallProbe(NullLogger<PeerInstallProbe>.Instance);
+        var result = await probe.ProbeAsync(fakePeer.Path, TestContext.Current.CancellationToken);
+
+        var ok = Assert.IsType<PeerProbeResult.Ok>(result);
+        Assert.Equal("9.0.0", ok.Info.Version);
     }
 
     [Fact]
@@ -128,6 +189,22 @@ internal static class FakePeerScript
     internal static FakeScriptResult Build(ITestOutputHelper outputHelper, string stdout, int exitCode)
     {
         return BuildInternal(outputHelper, body: ScriptBody.EmitAndExit(stdout, exitCode));
+    }
+
+    /// <summary>
+    /// Builds a script that responds differently to <c>info</c> vs
+    /// <c>--version</c> arguments so PeerInstallProbeTests can exercise
+    /// the info → version fallback path.
+    /// </summary>
+    internal static FakeScriptResult BuildInfoOrVersion(
+        ITestOutputHelper outputHelper,
+        string infoStdout,
+        int infoExitCode,
+        string versionStdout,
+        int versionExitCode)
+    {
+        return BuildInternal(outputHelper, body: ScriptBody.InfoOrVersion(
+            infoStdout, infoExitCode, versionStdout, versionExitCode));
     }
 
     internal static FakeScriptResult BuildSleeper(ITestOutputHelper outputHelper, int sleepSeconds)
@@ -171,14 +248,24 @@ internal abstract record ScriptBody
 
     public static ScriptBody EmitAndExit(string stdout, int exitCode) => new EmitExit(stdout, exitCode);
     public static ScriptBody Sleep(int seconds) => new SleepScript(seconds);
+    public static ScriptBody InfoOrVersion(string infoStdout, int infoExitCode, string versionStdout, int versionExitCode)
+        => new InfoOrVersionScript(infoStdout, infoExitCode, versionStdout, versionExitCode);
 
     private sealed record EmitExit(string Stdout, int ExitCode) : ScriptBody
     {
         public override string RenderShell()
         {
-            // Heredoc preserves the exact bytes (incl. newlines) we want.
+            // The script behaves differently based on its first arg:
+            // - "info" → emit the scripted stdout and exit with the scripted code
+            // - anything else (e.g. "--version") → emit nothing and exit 127
+            // This lets PeerInstallProbeTests isolate the "info path failed"
+            // case without the fallback `--version` accidentally succeeding
+            // by virtue of the script ignoring its args.
             return $"""
                     #!/bin/sh
+                    if [ "$1" != "info" ]; then
+                      exit 127
+                    fi
                     cat <<'__ASPIRE_PEER_EOF__'
                     {Stdout}
                     __ASPIRE_PEER_EOF__
@@ -188,13 +275,10 @@ internal abstract record ScriptBody
 
         public override string RenderBatch()
         {
-            // Echo each line verbatim. cmd.exe doesn't have a heredoc, so
-            // we split-and-echo. Special characters (^ & | < >) would need
-            // escaping; the JSON shapes used by these tests don't contain
-            // any. Tests that need richer payloads should add escaping.
             var lines = Stdout.Split('\n');
             var sb = new System.Text.StringBuilder();
             sb.AppendLine("@echo off");
+            sb.AppendLine("if not \"%~1\" == \"info\" exit /b 127");
             foreach (var line in lines)
             {
                 sb.Append("echo ").AppendLine(line.TrimEnd('\r'));
@@ -219,5 +303,50 @@ internal abstract record ScriptBody
              @echo off
              ping -n {Seconds + 1} 127.0.0.1 > nul
              """;
+    }
+
+    private sealed record InfoOrVersionScript(string InfoStdout, int InfoExitCode, string VersionStdout, int VersionExitCode) : ScriptBody
+    {
+        public override string RenderShell()
+        {
+            return $"""
+                    #!/bin/sh
+                    if [ "$1" = "info" ]; then
+                      cat <<'__ASPIRE_INFO_EOF__'
+                    {InfoStdout}
+                    __ASPIRE_INFO_EOF__
+                      exit {InfoExitCode}
+                    fi
+                    if [ "$1" = "--version" ]; then
+                      cat <<'__ASPIRE_VERSION_EOF__'
+                    {VersionStdout}
+                    __ASPIRE_VERSION_EOF__
+                      exit {VersionExitCode}
+                    fi
+                    exit 127
+                    """;
+        }
+
+        public override string RenderBatch()
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine("@echo off");
+            sb.AppendLine("if \"%~1\" == \"info\" goto :info");
+            sb.AppendLine("if \"%~1\" == \"--version\" goto :version");
+            sb.AppendLine("exit /b 127");
+            sb.AppendLine(":info");
+            foreach (var line in InfoStdout.Split('\n'))
+            {
+                sb.Append("echo ").AppendLine(line.TrimEnd('\r'));
+            }
+            sb.AppendLine($"exit /b {InfoExitCode}");
+            sb.AppendLine(":version");
+            foreach (var line in VersionStdout.Split('\n'))
+            {
+                sb.Append("echo ").AppendLine(line.TrimEnd('\r'));
+            }
+            sb.AppendLine($"exit /b {VersionExitCode}");
+            return sb.ToString();
+        }
     }
 }

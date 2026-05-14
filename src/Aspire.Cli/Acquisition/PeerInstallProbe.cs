@@ -62,6 +62,92 @@ internal sealed class PeerInstallProbe : IPeerInstallProbe
             return new PeerProbeResult.Failed("Binary not found.");
         }
 
+        // Primary path: ask the peer to self-describe via `info --format json`.
+        // Older peers (predating the info command) will exit non-zero here;
+        // we fall back to `--version` so they at least surface the version
+        // — the rest of the row is filled in from the local sidecar by the
+        // caller.
+        var primary = await SpawnAndCaptureAsync(binaryPath, ["info", "--format", "json"], cancellationToken).ConfigureAwait(false);
+        if (primary.Cancelled)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+
+        if (primary.Failure is { } primaryFailure)
+        {
+            return new PeerProbeResult.Failed(primaryFailure);
+        }
+
+        if (primary.ExitCode == 0 && !string.IsNullOrWhiteSpace(primary.Stdout))
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(primary.Stdout);
+                if (doc.RootElement.ValueKind == JsonValueKind.Array && doc.RootElement.GetArrayLength() > 0)
+                {
+                    return new PeerProbeResult.Ok(ParseInstallationInfo(doc.RootElement[0]));
+                }
+                // Wrong shape — fall through to the --version fallback so an
+                // older peer that happens to emit non-array stdout for some
+                // other reason still gets best-effort treatment.
+                _logger.LogDebug("Peer probe at {BinaryPath} returned non-array JSON; trying --version fallback.", binaryPath);
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogDebug(ex, "Peer probe at {BinaryPath} returned invalid JSON; trying --version fallback.", binaryPath);
+            }
+        }
+
+        // Fallback path. We reach here for:
+        //   - peer exited non-zero (common: predates the info command),
+        //   - peer emitted blank/whitespace-only stdout,
+        //   - peer emitted JSON we couldn't parse as the expected array shape.
+        var fallback = await SpawnAndCaptureAsync(binaryPath, ["--version"], cancellationToken).ConfigureAwait(false);
+        if (fallback.Cancelled)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+        }
+
+        if (fallback.Failure is not null)
+        {
+            // Surface the *primary* failure reason because it tells the user
+            // why the rich probe didn't work; the version fallback failing
+            // on top is a secondary symptom.
+            return new PeerProbeResult.Failed(DescribePrimaryFailure(primary, alsoTriedVersion: true));
+        }
+
+        if (fallback.ExitCode != 0)
+        {
+            return new PeerProbeResult.Failed(DescribePrimaryFailure(primary, alsoTriedVersion: true));
+        }
+
+        var versionLine = ExtractVersionLine(fallback.Stdout);
+        if (string.IsNullOrEmpty(versionLine))
+        {
+            return new PeerProbeResult.Failed(DescribePrimaryFailure(primary, alsoTriedVersion: true));
+        }
+
+        // Partial info: version only. Route is overlaid by InstallationDiscovery
+        // from the locally-readable sidecar (the trust gate already required
+        // it). Channel intentionally null — we can't read assembly metadata
+        // from outside an AOT binary, and the older peer has no surface that
+        // exposes its channel.
+        return new PeerProbeResult.Ok(new InstallationInfo
+        {
+            Path = binaryPath,
+            Version = versionLine,
+            Status = InstallationInfoStatus.Ok,
+        });
+    }
+
+    /// <summary>
+    /// Spawns the peer with the given arguments and captures stdout under
+    /// the timeout / kill-on-timeout / stdout-cap contract. Returns a
+    /// structured result describing exit code, captured output, and any
+    /// transport-level failure (process couldn't start, etc.).
+    /// </summary>
+    private async Task<SpawnResult> SpawnAndCaptureAsync(string binaryPath, string[] arguments, CancellationToken cancellationToken)
+    {
         var startInfo = new ProcessStartInfo
         {
             FileName = binaryPath,
@@ -70,9 +156,10 @@ internal sealed class PeerInstallProbe : IPeerInstallProbe
             UseShellExecute = false,
             CreateNoWindow = true,
         };
-        startInfo.ArgumentList.Add("info");
-        startInfo.ArgumentList.Add("--format");
-        startInfo.ArgumentList.Add("json");
+        foreach (var arg in arguments)
+        {
+            startInfo.ArgumentList.Add(arg);
+        }
 
         Process process;
         try
@@ -80,14 +167,14 @@ internal sealed class PeerInstallProbe : IPeerInstallProbe
             var started = Process.Start(startInfo);
             if (started is null)
             {
-                return new PeerProbeResult.Failed("Process.Start returned null.");
+                return new SpawnResult(ExitCode: -1, Stdout: string.Empty, Failure: "Process.Start returned null.", Cancelled: false);
             }
             process = started;
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
         {
             _logger.LogDebug(ex, "Could not start peer probe for {BinaryPath}.", binaryPath);
-            return new PeerProbeResult.Failed($"Could not start peer process: {ex.Message}");
+            return new SpawnResult(ExitCode: -1, Stdout: string.Empty, Failure: $"Could not start peer process: {ex.Message}", Cancelled: false);
         }
 
         // Combined timeout + cancellation so the user pressing Ctrl-C
@@ -116,17 +203,15 @@ internal sealed class PeerInstallProbe : IPeerInstallProbe
             TryKillProcessTree(process);
             await SwallowAsync(readStdoutTask).ConfigureAwait(false);
             using (process) { /* dispose */ }
-            return new PeerProbeResult.Failed($"Peer probe timed out after {_timeout.TotalSeconds:F1}s.");
+            return new SpawnResult(ExitCode: -1, Stdout: stdoutBuffer.ToString(), Failure: $"Peer probe timed out after {_timeout.TotalSeconds:F1}s.", Cancelled: false);
         }
 
-        // Caller cancellation: propagate, but still tear down the peer so
-        // it doesn't outlive us.
         if (cancellationToken.IsCancellationRequested)
         {
             TryKillProcessTree(process);
             await SwallowAsync(readStdoutTask).ConfigureAwait(false);
             using (process) { /* dispose */ }
-            cancellationToken.ThrowIfCancellationRequested();
+            return new SpawnResult(ExitCode: -1, Stdout: stdoutBuffer.ToString(), Failure: null, Cancelled: true);
         }
 
         try
@@ -148,38 +233,49 @@ internal sealed class PeerInstallProbe : IPeerInstallProbe
             process.Dispose();
         }
 
-        if (exitCode != 0)
-        {
-            return new PeerProbeResult.Failed($"Peer exited with code {exitCode}.");
-        }
-
-        // The peer is contracted to emit `aspire info --format json` as a
-        // top-level JSON array of InstallationInfo objects. We pick the
-        // first element (peer's own self-describe row).
-        var stdout = stdoutBuffer.ToString();
-        if (string.IsNullOrWhiteSpace(stdout))
-        {
-            return new PeerProbeResult.Failed("Peer produced no JSON output.");
-        }
-
-        try
-        {
-            using var doc = JsonDocument.Parse(stdout);
-            if (doc.RootElement.ValueKind != JsonValueKind.Array || doc.RootElement.GetArrayLength() == 0)
-            {
-                return new PeerProbeResult.Failed("Peer JSON shape was not a non-empty array.");
-            }
-
-            var first = doc.RootElement[0];
-            var info = ParseInstallationInfo(first);
-            return new PeerProbeResult.Ok(info);
-        }
-        catch (JsonException ex)
-        {
-            _logger.LogDebug(ex, "Peer probe returned invalid JSON for {BinaryPath}.", binaryPath);
-            return new PeerProbeResult.Failed($"Peer JSON was malformed: {ex.Message}");
-        }
+        return new SpawnResult(ExitCode: exitCode, Stdout: stdoutBuffer.ToString(), Failure: null, Cancelled: false);
     }
+
+    /// <summary>
+    /// Composes a user-facing reason for a probe failure. When the
+    /// <c>--version</c> fallback was also attempted, prefix the message so
+    /// users see both attempts in one row.
+    /// </summary>
+    private static string DescribePrimaryFailure(SpawnResult primary, bool alsoTriedVersion)
+    {
+        var suffix = alsoTriedVersion ? " (and --version fallback)" : string.Empty;
+        if (primary.Failure is { } reason)
+        {
+            return reason + suffix;
+        }
+        if (primary.ExitCode != 0)
+        {
+            return $"Peer exited with code {primary.ExitCode}{suffix}.";
+        }
+        return $"Peer produced no usable output{suffix}.";
+    }
+
+    /// <summary>
+    /// Pulls the first non-blank line out of <c>aspire --version</c>
+    /// output. Older Aspire CLI versions emit just the bare version
+    /// string; newer versions may add a banner, in which case the first
+    /// non-blank line still holds the version.
+    /// </summary>
+    private static string? ExtractVersionLine(string stdout)
+    {
+        foreach (var raw in stdout.Split('\n'))
+        {
+            var trimmed = raw.Trim();
+            if (trimmed.Length == 0)
+            {
+                continue;
+            }
+            return trimmed;
+        }
+        return null;
+    }
+
+    private readonly record struct SpawnResult(int ExitCode, string Stdout, string? Failure, bool Cancelled);
 
     /// <summary>
     /// Reads stdout into <paramref name="buffer"/> until EOF or

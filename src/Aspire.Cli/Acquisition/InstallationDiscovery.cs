@@ -133,12 +133,16 @@ internal sealed class InstallationDiscovery : IInstallationDiscovery
             switch (probe)
             {
                 case PeerProbeResult.Ok ok:
-                    // Preserve the original discovered path for display
-                    // while keeping the canonical path for identity.
+                    // Preserve the original discovered path for display and
+                    // canonical path for identity. Overlay the route from
+                    // the LOCAL sidecar so older peers using the
+                    // --version fallback (which can't report route) still
+                    // surface the install route we already know about.
                     results.Add(ok.Info with
                     {
                         Path = candidate.BinaryPath,
                         CanonicalPath = canonical,
+                        Route = ok.Info.Route ?? sidecar.Source.ToWireString(),
                         IsOnPath = canonical.Equals(pathHit?.CanonicalPath, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal),
                     });
                     break;
