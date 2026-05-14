@@ -648,6 +648,7 @@ public static class EFResourceBuilderExtensions
                         Name = "name",
                         InputType = InputType.Text,
                         Label = "Migration Name",
+                        Required = true,
                         Placeholder = "e.g. InitialCreate"
                     }
                 ]
@@ -806,13 +807,7 @@ public static class EFResourceBuilderExtensions
             waitForDependencies: false,
             async (executor, logger, interaction) =>
             {
-                // The migration name is provided via the command argument. When not specified
-                // (e.g. non-interactive mode), fall back to a timestamp-based name.
-                var migrationName = context.Arguments.GetString("name");
-                if (string.IsNullOrWhiteSpace(migrationName))
-                {
-                    migrationName = $"Migration_{DateTime.UtcNow:yyyyMMddHHmmss}";
-                }
+                var migrationName = context.Arguments.GetString("name")!;
 
                 var result = await executor.AddMigrationAsync(
                     migrationName,
