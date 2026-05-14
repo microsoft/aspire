@@ -110,6 +110,10 @@
   <data name="CliVersionUpdateCheckFailedMessage" xml:space="preserve">
     <value>Could not check for Aspire CLI updates</value>
   </data>
+  <data name="ChannelSuffixFormat" xml:space="preserve">
+    <value> (channel: {0})</value>
+    <comment>{0} is the Aspire channel name (e.g., "stable", "staging", "daily", "local", "pr-1234"). Appended to CLI / AppHost version messages.</comment>
+  </data>
   <data name="AppHostVersionMessageFormat" xml:space="preserve">
     <value>AppHost version {0} ({1})</value>
     <comment>{0} is the AppHost Aspire.Hosting version. {1} is the AppHost project path.</comment>

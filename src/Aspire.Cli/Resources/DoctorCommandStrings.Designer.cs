@@ -204,6 +204,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to  (channel: {0}).
+        /// </summary>
+        public static string ChannelSuffixFormat {
+            get {
+                return ResourceManager.GetString("ChannelSuffixFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to AppHost version {0} ({1}).
         /// </summary>
         public static string AppHostVersionMessageFormat {

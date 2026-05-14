@@ -27,6 +27,11 @@
         <target state="new">Aspire</target>
         <note />
       </trans-unit>
+      <trans-unit id="ChannelSuffixFormat">
+        <source> (channel: {0})</source>
+        <target state="new"> (channel: {0})</target>
+        <note>{0} is the Aspire channel name (e.g., "stable", "staging", "daily", "local", "pr-1234"). Appended to CLI / AppHost version messages.</note>
+      </trans-unit>
       <trans-unit id="CheckingPrerequisites">
         <source>Checking Aspire environment...</source>
         <target state="translated">Sprawdzanie środowiska Aspire...</target>

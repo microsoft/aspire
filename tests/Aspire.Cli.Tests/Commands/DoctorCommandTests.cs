@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using Aspire.Cli.Acquisition;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.TestServices;
@@ -453,6 +454,159 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(
             Path.Combine("level0", "level1", "level2", "level3", "level4", "level5", "AppHost.csproj"),
             appHostVersionMetadata.GetProperty("appHostPath").GetString());
+    }
+
+    [Fact]
+    public async Task DoctorCommand_Json_CliVersion_IncludesIdentityChannelFromReader()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+        var services = CreateDoctorVersionServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.CliUpdateNotifierFactory = _ => new TestCliUpdateNotifier
+            {
+                GetVersionStatusAsyncCallback = (_, _) => Task.FromResult(new CliVersionStatus("13.0.0", LatestVersion: null, UpdateCommand: null))
+            };
+        });
+        // Override the channel reader registered by CliTestHelper with a fake
+        // returning a deterministic value, so the assertion is not coupled to
+        // whichever channel the test host's Aspire.Cli assembly happens to bake in.
+        services.RemoveAll<IIdentityChannelReader>();
+        services.AddSingleton<IIdentityChannelReader>(_ => new FakeIdentityChannelReader("staging"));
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+        var result = command.Parse("doctor --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var (json, _) = Assert.Single(interactionService.DisplayedRawText);
+        using var document = JsonDocument.Parse(json);
+        var cliVersionCheck = document.RootElement.GetProperty("checks").EnumerateArray()
+            .Single(check => check.GetProperty("name").GetString() == "cli-version");
+
+        var metadata = cliVersionCheck.GetProperty("metadata");
+        Assert.Equal("staging", metadata.GetProperty("identityChannel").GetString());
+        Assert.Contains("channel: staging", cliVersionCheck.GetProperty("message").GetString()!);
+    }
+
+    [Fact]
+    public async Task DoctorCommand_Json_CliVersion_OmitsIdentityChannelWhenReaderThrows()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+        var services = CreateDoctorVersionServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.CliUpdateNotifierFactory = _ => new TestCliUpdateNotifier
+            {
+                GetVersionStatusAsyncCallback = (_, _) => Task.FromResult(new CliVersionStatus("13.0.0", LatestVersion: null, UpdateCommand: null))
+            };
+        });
+        services.RemoveAll<IIdentityChannelReader>();
+        // Throws to simulate a misconfigured dev build with no AspireCliChannel metadata.
+        services.AddSingleton<IIdentityChannelReader>(_ => new FakeIdentityChannelReader(throwOnRead: true));
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+        var result = command.Parse("doctor --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        // The channel lookup failing is informational; the rest of doctor should still complete.
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var (json, _) = Assert.Single(interactionService.DisplayedRawText);
+        using var document = JsonDocument.Parse(json);
+        var cliVersionCheck = document.RootElement.GetProperty("checks").EnumerateArray()
+            .Single(check => check.GetProperty("name").GetString() == "cli-version");
+
+        var metadata = cliVersionCheck.GetProperty("metadata");
+        Assert.False(metadata.TryGetProperty("identityChannel", out _));
+        Assert.DoesNotContain("channel:", cliVersionCheck.GetProperty("message").GetString()!);
+    }
+
+    [Fact]
+    public async Task DoctorCommand_Json_AppHostVersion_IncludesPinnedChannelFromAspireConfig()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        await File.WriteAllTextAsync(
+            Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json"),
+            """
+            {
+              "channel": "daily"
+            }
+            """);
+
+        var interactionService = new TestInteractionService();
+        var services = CreateDoctorVersionServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.CliUpdateNotifierFactory = _ => new TestCliUpdateNotifier();
+            options.AppHostProjectFactory = _ => new TestAppHostProjectFactory
+            {
+                GetAspireHostingVersionAsyncCallback = (_, _) => Task.FromResult<string?>("13.0.0")
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+        var result = command.Parse("doctor --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var (json, _) = Assert.Single(interactionService.DisplayedRawText);
+        using var document = JsonDocument.Parse(json);
+        var appHostVersionCheck = document.RootElement.GetProperty("checks").EnumerateArray()
+            .Single(check => check.GetProperty("name").GetString() == "apphost-version");
+
+        var metadata = appHostVersionCheck.GetProperty("metadata");
+        Assert.Equal("daily", metadata.GetProperty("pinnedChannel").GetString());
+        Assert.Contains("channel: daily", appHostVersionCheck.GetProperty("message").GetString()!);
+    }
+
+    [Fact]
+    public async Task DoctorCommand_Json_AppHostVersion_OmitsPinnedChannelWhenAspireConfigAbsent()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        // Intentionally no aspire.config.json — verifies the lookup degrades silently.
+
+        var interactionService = new TestInteractionService();
+        var services = CreateDoctorVersionServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.CliUpdateNotifierFactory = _ => new TestCliUpdateNotifier();
+            options.AppHostProjectFactory = _ => new TestAppHostProjectFactory
+            {
+                GetAspireHostingVersionAsyncCallback = (_, _) => Task.FromResult<string?>("13.0.0")
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+        var result = command.Parse("doctor --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var (json, _) = Assert.Single(interactionService.DisplayedRawText);
+        using var document = JsonDocument.Parse(json);
+        var appHostVersionCheck = document.RootElement.GetProperty("checks").EnumerateArray()
+            .Single(check => check.GetProperty("name").GetString() == "apphost-version");
+
+        var metadata = appHostVersionCheck.GetProperty("metadata");
+        Assert.False(metadata.TryGetProperty("pinnedChannel", out _));
+        Assert.DoesNotContain("channel:", appHostVersionCheck.GetProperty("message").GetString()!);
     }
 
     private static IServiceCollection CreateDoctorVersionServiceCollection(
