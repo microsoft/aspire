@@ -37,6 +37,11 @@
         <target state="translated">Applicazione degli aggiornamenti in corso...</target>
         <note />
       </trans-unit>
+      <trans-unit id="BrewSelfUpdateMessage">
+        <source>This Aspire CLI was installed via Homebrew. To update it, run:</source>
+        <target state="new">This Aspire CLI was installed via Homebrew. To update it, run:</target>
+        <note />
+      </trans-unit>
       <trans-unit id="CentralPackageManagementNotSupported">
         <source>Central package management is currently not supported by 'aspire update'.</source>
         <target state="translated">La gestione centralizzata dei pacchetti non è attualmente supportata da "aspire update".</target>
@@ -117,6 +122,11 @@
         <target state="needs-review-translation">Nota: il piano di aggiornamento è stato generato usando l'analisi di fallback perché AppHost SDK non è risolvibile. L'analisi delle dipendenze potrebbe risultare meno accurata.</target>
         <note />
       </trans-unit>
+      <trans-unit id="LocalHiveSelfUpdateMessage">
+        <source>This Aspire CLI is a local development build. To update it, rebuild from your Aspire checkout:</source>
+        <target state="new">This Aspire CLI is a local development build. To update it, rebuild from your Aspire checkout:</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MappingAddedFormat">
         <source>   Mapping: {0} (added)</source>
         <target state="translated">   Mapping: {0} (aggiunto)</target>
@@ -182,6 +192,11 @@
         <target state="translated">Eseguire gli aggiornamenti?</target>
         <note />
       </trans-unit>
+      <trans-unit id="PrSelfUpdateMessage">
+        <source>This Aspire CLI is a PR / dogfood build. It is pinned to a specific pull request; `--self` cannot update it. To re-install or update to a different PR, run:</source>
+        <target state="new">This Aspire CLI is a PR / dogfood build. It is pinned to a specific pull request; `--self` cannot update it. To re-install or update to a different PR, run:</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
         <source>The path to the Aspire AppHost project file or a directory to search</source>
         <target state="needs-review-translation">Percorso del file di un progetto AppHost di Aspire.</target>
@@ -242,6 +257,11 @@
         <target state="new">Update the Aspire CLI itself to the latest version</target>
         <note />
       </trans-unit>
+      <trans-unit id="SelfUpdateUnknownSourceMessage">
+        <source>Cannot determine how this Aspire CLI was installed (no install-route sidecar found). Refusing to perform an in-process self-update to avoid corrupting the binary. Re-run your original install command to update.</source>
+        <target state="new">Cannot determine how this Aspire CLI was installed (no install-route sidecar found). Refusing to perform an in-process self-update to avoid corrupting the binary. Re-run your original install command to update.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="UnxpectedCodePath">
         <source>Unexpected code path.</source>
         <target state="translated">Percorso del codice imprevisto.</target>
@@ -265,6 +285,11 @@
       <trans-unit id="WhichDirectoryNuGetConfigPrompt">
         <source>Which directory for NuGet.config file?</source>
         <target state="translated">Quale directory per il file NuGet.config?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WingetSelfUpdateMessage">
+        <source>This Aspire CLI was installed via WinGet. To update it, run:</source>
+        <target state="new">This Aspire CLI was installed via WinGet. To update it, run:</target>
         <note />
       </trans-unit>
       <trans-unit id="YesOptionDescription">

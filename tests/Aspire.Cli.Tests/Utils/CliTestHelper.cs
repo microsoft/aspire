@@ -159,6 +159,7 @@ internal static class CliTestHelper
         services.AddSingleton<IPeerInstallProbe, PeerInstallProbe>();
         services.AddSingleton<IInstallationDiscovery, InstallationDiscovery>();
         services.AddSingleton<IInstallationUninstaller, InstallationUninstaller>();
+        services.AddSingleton<IUpgradeInstructionProvider, UpgradeInstructionProvider>();
         services.AddSingleton<WingetFirstRunProbe>();
         if (OperatingSystem.IsWindows())
         {

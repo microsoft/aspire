@@ -138,6 +138,21 @@
   <data name="DotNetToolSelfUpdateMessage" xml:space="preserve">
     <value>To update the Aspire CLI when installed as a .NET tool, run:</value>
   </data>
+  <data name="WingetSelfUpdateMessage" xml:space="preserve">
+    <value>This Aspire CLI was installed via WinGet. To update it, run:</value>
+  </data>
+  <data name="BrewSelfUpdateMessage" xml:space="preserve">
+    <value>This Aspire CLI was installed via Homebrew. To update it, run:</value>
+  </data>
+  <data name="PrSelfUpdateMessage" xml:space="preserve">
+    <value>This Aspire CLI is a PR / dogfood build. It is pinned to a specific pull request; `--self` cannot update it. To re-install or update to a different PR, run:</value>
+  </data>
+  <data name="LocalHiveSelfUpdateMessage" xml:space="preserve">
+    <value>This Aspire CLI is a local development build. To update it, rebuild from your Aspire checkout:</value>
+  </data>
+  <data name="SelfUpdateUnknownSourceMessage" xml:space="preserve">
+    <value>Cannot determine how this Aspire CLI was installed (no install-route sidecar found). Refusing to perform an in-process self-update to avoid corrupting the binary. Re-run your original install command to update.</value>
+  </data>
   <data name="MigratedToNewSdkFormat" xml:space="preserve">
     <value>Migrated to new project format: &lt;Project Sdk="Aspire.AppHost.Sdk/{0}"&gt;</value>
   </data>

@@ -5,6 +5,7 @@ using System.CommandLine;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using Aspire.Cli.Acquisition;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
@@ -32,6 +33,8 @@ internal sealed class UpdateCommand : BaseCommand
     private readonly IFeatures _features;
     private readonly IConfigurationService _configurationService;
     private readonly IConfiguration _configuration;
+    private readonly IInstallationDiscovery _installationDiscovery;
+    private readonly IUpgradeInstructionProvider _upgradeInstructionProvider;
 
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", UpdateCommandStrings.ProjectArgumentDescription);
     private static readonly Option<bool> s_selfOption = new("--self")
@@ -62,7 +65,9 @@ internal sealed class UpdateCommand : BaseCommand
         CliExecutionContext executionContext,
         IConfigurationService configurationService,
         AspireCliTelemetry telemetry,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IInstallationDiscovery installationDiscovery,
+        IUpgradeInstructionProvider upgradeInstructionProvider)
         : base("update", UpdateCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _projectLocator = projectLocator;
@@ -74,6 +79,8 @@ internal sealed class UpdateCommand : BaseCommand
         _features = features;
         _configurationService = configurationService;
         _configuration = configuration;
+        _installationDiscovery = installationDiscovery;
+        _upgradeInstructionProvider = upgradeInstructionProvider;
 
         Options.Add(s_appHostOption);
         Options.Add(s_selfOption);
@@ -106,11 +113,6 @@ internal sealed class UpdateCommand : BaseCommand
 
     protected override bool UpdateNotificationsEnabled => false;
 
-    private static string? GetDotNetToolUpdateCommand()
-    {
-        return DotNetToolDetection.GetDotNetToolUpdateCommand();
-    }
-
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var isSelfUpdate = parseResult.GetValue(s_selfOption);
@@ -118,28 +120,7 @@ internal sealed class UpdateCommand : BaseCommand
         // If --self is specified, handle CLI self-update
         if (isSelfUpdate)
         {
-            // When running as a dotnet tool, print the update command instead of executing
-            var dotNetToolUpdateCommand = GetDotNetToolUpdateCommand();
-            if (dotNetToolUpdateCommand is not null)
-            {
-                InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.DotNetToolSelfUpdateMessage);
-                InteractionService.DisplayPlainText($"  {dotNetToolUpdateCommand}");
-                return CommandResult.FromExitCode(0);
-            }
-
-            if (_cliDownloader is null)
-            {
-                return CommandResult.Failure(ExitCodeConstants.InvalidCommand, "CLI self-update is not available in this environment.");
-            }
-
-            try
-            {
-                return await ExecuteSelfUpdateAsync(parseResult, cancellationToken);
-            }
-            catch (OperationCanceledException)
-            {
-                return CommandResult.Cancelled();
-            }
+            return await HandleSelfUpdateAsync(parseResult, cancellationToken);
         }
 
         // Otherwise, handle project update
@@ -257,12 +238,10 @@ internal sealed class UpdateCommand : BaseCommand
 
                 if (shouldUpdateCli)
                 {
-                    var dotNetToolUpdateCommand = GetDotNetToolUpdateCommand();
-                    if (dotNetToolUpdateCommand is not null)
+                    var (source, canonicalPath) = ResolveRunningInstall();
+                    if (SelfUpdateRouter.GetAction(source) == SelfUpdateAction.Delegate)
                     {
-                        InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.DotNetToolSelfUpdateMessage);
-                        InteractionService.DisplayPlainText($"  {dotNetToolUpdateCommand}");
-                        return CommandResult.Success();
+                        return DisplaySelfUpdateRefusal(source, canonicalPath);
                     }
 
                     // Use the same channel that was selected for the project update
@@ -288,7 +267,7 @@ internal sealed class UpdateCommand : BaseCommand
             if (string.Equals(ex.Message, ErrorStrings.NoProjectFileFound, StringComparisons.CliInputOrOutput))
             {
                 // Only prompt for self-update if not running as dotnet tool and downloader is available
-                if (GetDotNetToolUpdateCommand() is null && _cliDownloader is not null)
+                if (!DotNetToolDetection.IsRunningAsDotNetTool() && _cliDownloader is not null)
                 {
                     var shouldUpdateCli = await InteractionService.PromptConfirmAsync(
                         UpdateCommandStrings.NoAppHostFoundUpdateCliPrompt,
@@ -297,6 +276,12 @@ internal sealed class UpdateCommand : BaseCommand
 
                     if (shouldUpdateCli)
                     {
+                        var (source, canonicalPath) = ResolveRunningInstall();
+                        if (SelfUpdateRouter.GetAction(source) == SelfUpdateAction.Delegate)
+                        {
+                            return DisplaySelfUpdateRefusal(source, canonicalPath);
+                        }
+
                         return await ExecuteSelfUpdateAsync(parseResult, cancellationToken);
                     }
                 }
@@ -311,6 +296,103 @@ internal sealed class UpdateCommand : BaseCommand
 
         return CommandResult.FromExitCode(0);
     }
+
+    /// <summary>
+    /// Routes <c>aspire update --self</c> based on the running CLI's install source.
+    /// Script installs perform the existing in-process binary swap; every other
+    /// route is refused with an installer-appropriate command from
+    /// <see cref="IUpgradeInstructionProvider"/> so we don't corrupt the
+    /// package-manager-owned binary or silently demote a PR-pinned install to
+    /// stable. Unknown / missing sidecars are refused defensively.
+    /// </summary>
+    private async Task<CommandResult> HandleSelfUpdateAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    {
+        var (source, canonicalPath) = ResolveRunningInstall();
+        var action = SelfUpdateRouter.GetAction(source);
+
+        if (action == SelfUpdateAction.Delegate)
+        {
+            return DisplaySelfUpdateRefusal(source, canonicalPath);
+        }
+
+        // Script route: existing in-process flow.
+        if (_cliDownloader is null)
+        {
+            return CommandResult.Failure(ExitCodeConstants.InvalidCommand, "CLI self-update is not available in this environment.");
+        }
+
+        try
+        {
+            return await ExecuteSelfUpdateAsync(parseResult, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            return CommandResult.Cancelled();
+        }
+    }
+
+    /// <summary>
+    /// Resolves the install source and canonical binary path for the running CLI
+    /// via <see cref="IInstallationDiscovery.DescribeSelf"/> (the single source of
+    /// truth for "what is the running binary?"). Falls back to
+    /// <see cref="DotNetToolDetection"/> path-shape detection when no sidecar is
+    /// present, so legacy dotnet-tool installs created before the sidecar
+    /// contract shipped still get classified as <see cref="InstallSource.DotnetTool"/>
+    /// rather than <see cref="InstallSource.Unknown"/>.
+    /// </summary>
+    private (InstallSource Source, string? CanonicalPath) ResolveRunningInstall()
+    {
+        var info = _installationDiscovery.DescribeSelf();
+        var source = InstallSourceExtensions.ParseInstallSource(info.Route);
+        var canonicalPath = info.CanonicalPath ?? info.Path;
+
+        // No-arg DotNetToolDetection.IsRunningAsDotNetTool honors the
+        // s_processPathOverride AsyncLocal used by tests, so this fallback
+        // recognizes legacy dotnet-tool installs (no sidecar baked) AND
+        // remains testable via UseProcessPathForTesting.
+        if (source == InstallSource.Unknown && DotNetToolDetection.IsRunningAsDotNetTool())
+        {
+            source = InstallSource.DotnetTool;
+        }
+
+        return (source, canonicalPath);
+    }
+
+    /// <summary>
+    /// Prints the installer-appropriate update command. Returns exit code 0
+    /// matching the existing dotnet-tool refusal contract — the CLI performed
+    /// its responsibility by telling the user what to run. Users who rely on
+    /// exit-code-based detection of "did this update?" should switch to checking
+    /// the version after the run, since the command may also succeed without
+    /// changing the binary if the user is already on the latest version.
+    /// </summary>
+    private CommandResult DisplaySelfUpdateRefusal(InstallSource source, string? canonicalPath)
+    {
+        var command = _upgradeInstructionProvider.GetUpdateCommand(
+            source,
+            canonicalPath,
+            ExecutionContext.IdentityChannel);
+
+        if (command is not null)
+        {
+            InteractionService.DisplayMessage(KnownEmojis.Information, GetSelfUpdateRefusalMessage(source));
+            InteractionService.DisplayPlainText($"  {command}");
+            return CommandResult.FromExitCode(0);
+        }
+
+        InteractionService.DisplayMessage(KnownEmojis.Warning, UpdateCommandStrings.SelfUpdateUnknownSourceMessage);
+        return CommandResult.Failure(ExitCodeConstants.InvalidCommand, "Cannot determine install source for self-update.");
+    }
+
+    private static string GetSelfUpdateRefusalMessage(InstallSource source) => source switch
+    {
+        InstallSource.DotnetTool => UpdateCommandStrings.DotNetToolSelfUpdateMessage,
+        InstallSource.Winget => UpdateCommandStrings.WingetSelfUpdateMessage,
+        InstallSource.Brew => UpdateCommandStrings.BrewSelfUpdateMessage,
+        InstallSource.Pr => UpdateCommandStrings.PrSelfUpdateMessage,
+        InstallSource.LocalHive => UpdateCommandStrings.LocalHiveSelfUpdateMessage,
+        _ => UpdateCommandStrings.SelfUpdateUnknownSourceMessage,
+    };
 
     private async Task<CommandResult> ExecuteSelfUpdateAsync(ParseResult parseResult, CancellationToken cancellationToken, string? selectedChannel = null)
     {
