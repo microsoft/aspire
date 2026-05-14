@@ -55,6 +55,33 @@ function Set-ExecutablePermission([string]$Path) {
     }
 }
 
+function Test-ArchiveSidecar {
+    # Per-RID CLI archives must ship sidecar-free; each install route writes
+    # its own .aspire-install.json. See docs/specs/install-routes.md.
+    param(
+        [Parameter(Mandatory = $true)][string]$ExtractDir,
+        [Parameter(Mandatory = $true)][string]$ArchiveFileName
+    )
+
+    $ridFamily = switch -Wildcard ($ArchiveFileName) {
+        '*win-*'   { 'win';   break }
+        '*osx-*'   { 'osx';   break }
+        '*linux-*' { 'linux'; break }
+        default    { $null }
+    }
+
+    if ($null -eq $ridFamily) {
+        throw "Archive RID family not recognized in filename '$ArchiveFileName'. Expected the filename to contain 'win-', 'osx-', or 'linux-'."
+    }
+
+    $strays = Get-ChildItem -Path $ExtractDir -Recurse -File -Filter '.aspire-install.json' -Force -ErrorAction SilentlyContinue
+    if ($strays) {
+        $strayPaths = $strays | ForEach-Object { $_.FullName.Substring($ExtractDir.Length + 1).Replace('\', '/') }
+        throw "$ridFamily-* archive '$ArchiveFileName' must not contain '.aspire-install.json' (per-RID archives are shared across install routes; each route authors its own sidecar after extraction). Found: $($strayPaths -join ', ')"
+    }
+    Write-Step "$ridFamily-* archive correctly omits the install-route sidecar."
+}
+
 $userHome = Get-UserHome
 $verifyTmpDir = $null
 $aspireBackup = $null
@@ -140,6 +167,11 @@ try {
         }
     }
     Write-Ok "Extracted CLI binary: $aspireBin"
+
+    # Assert the source sidecar matches the archive's RID family before mutating the
+    # extracted shape. After Copy-Item moves the binary out, the archive layout is
+    # no longer observable.
+    Test-ArchiveSidecar -ExtractDir $extractDir -ArchiveFileName ([System.IO.Path]::GetFileName($ArchivePath))
 
     # Install to ~/.aspire/bin so self-extraction works correctly
     Write-Step "Installing CLI to ~/.aspire/bin..."
