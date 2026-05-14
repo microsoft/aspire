@@ -3,6 +3,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes;
+using Aspire.Hosting.Kubernetes.Resources;
 using YamlDotNet.Serialization;
 
 namespace Aspire.Hosting;
@@ -75,7 +76,7 @@ public static class KubernetesCustomResourceExtensions
     [AspireExport(Description = "Adds a spec file to a CRD resource.")]
     public static IResourceBuilder<KubernetesCustomResourceResource> WithSpec(
         this IResourceBuilder<KubernetesCustomResourceResource> builder, 
-        object spec)
+        CustomResourceSpecV1 spec)
     {
         ArgumentNullException.ThrowIfNull(builder);
 

@@ -58,19 +58,18 @@ public class CustomResourceV1Tests
     }
 
     [Fact]
-    public void Spec_DefaultIsEmptyObject()
+    public void Spec_DefaultIsNull()
     {
         var resource = new CustomResourceV1("v1", "ConfigMap");
 
-        Assert.NotNull(resource.Spec);
-        Assert.IsType<object>(resource.Spec);
+        Assert.Null(resource.Spec);
     }
 
     [Fact]
     public void Spec_CanBeSetToCustomObject()
     {
         var resource = new CustomResourceV1("v1", "ConfigMap");
-        var spec = new { data = new { key = "value" } };
+        var spec = new GenericObjectSpec(new { data = new { key = "value" } });
 
         resource.Spec = spec;
 
@@ -78,19 +77,19 @@ public class CustomResourceV1Tests
     }
 
     [Fact]
-    public void Spec_CanBeSetToPrimitiveType()
+    public void Spec_CanBeSetToCustomStringSpec()
     {
         var resource = new CustomResourceV1("v1", "ConfigMap");
-        resource.Spec = "string value";
+        resource.Spec = new StringValueSpec("string value");
 
-        Assert.Equal("string value", resource.Spec);
+        Assert.Equal("string value", ((StringValueSpec)resource.Spec!).Value);
     }
 
     [Fact]
-    public void Spec_CanBeSetToCollectionType()
+    public void Spec_CanBeSetToCustomArraySpec()
     {
         var resource = new CustomResourceV1("v1", "List");
-        var spec = new[] { 1, 2, 3 };
+        var spec = new ArrayValueSpec(new[] { "item1", "item2", "item3" });
 
         resource.Spec = spec;
 
@@ -120,7 +119,7 @@ public class CustomResourceV1Tests
         var resource = new CustomResourceV1("v1", "ConfigMap")
         {
             Metadata = new ObjectMetaV1 { Name = "my-config" },
-            Spec = new { data = new { key = "value" } }
+            Spec = new GenericObjectSpec(new { data = new { key = "value" } })
         };
 
         var serializer = new SerializerBuilder().Build();
@@ -145,23 +144,17 @@ public class CustomResourceV1Tests
     [Fact]
     public void WithComplexSpec_SerializesCorrectly()
     {
-        var spec = new
-        {
-            replicas = 3,
-            template = new
-            {
-                metadata = new { labels = new { app = "nginx" } },
-                spec = new
-                {
-                    containers = new[] { new { name = "nginx", image = "nginx:latest" } }
-                }
-            }
-        };
-
         var resource = new CustomResourceV1("apps/v1", "Deployment")
         {
             Metadata = new ObjectMetaV1 { Name = "nginx-deployment" },
-            Spec = spec
+            Spec = new KubernetesCustomResourceDeploymentSpec(
+                replicas: 3,
+                selector: new(matchLabels: new() { ["app"] = "nginx"}),
+                template: new(
+                    metadata: new(new() { ["app"] = "nginx" }),
+                    spec: new(containers: [new KubernetesCustomResourceContainerSpec("nginx", "nginx:latest")])
+                )
+            )
         };
 
         var serializer = new SerializerBuilder().Build();
