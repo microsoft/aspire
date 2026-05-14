@@ -28,7 +28,7 @@ namespace Aspire.Cli.Acquisition;
 /// treat null fields as "unknown for this row", not as errors.
 /// </para>
 /// </remarks>
-internal sealed class InstallationInfo
+internal sealed record InstallationInfo
 {
     /// <summary>
     /// Absolute path of the CLI binary as discovered (i.e., the path that

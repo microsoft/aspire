@@ -156,6 +156,7 @@ internal static class CliTestHelper
         services.AddSingleton(options.BundleServiceFactory);
         services.AddSingleton<BundleNuGetService>();
         services.AddSingleton<IInstallSidecarReader, InstallSidecarReader>();
+        services.AddSingleton<IPeerInstallProbe, PeerInstallProbe>();
         services.AddSingleton<IInstallationDiscovery, InstallationDiscovery>();
         services.AddSingleton<IInstallationUninstaller, InstallationUninstaller>();
         services.AddSingleton<WingetFirstRunProbe>();
