@@ -242,12 +242,16 @@ public sealed class CentralPackageManagementTests(ITestOutputHelper output)
             """);
 
         // Second update: SDK is already current, so AnalyzeAppHostSdkAsync will
-        // skip the SDK update step. We expect the updater to still detect and
-        // remove the orphan PackageVersion. The update plan may be empty (in which
-        // case the CLI should report nothing to do) or may include the cleanup step;
-        // either way the orphan must be gone afterwards.
+        // skip the SDK update step. The updater must still detect and remove the
+        // orphan PackageVersion - that cleanup is itself an update step, so the
+        // run will prompt for confirmation just like the first update did. The
+        // NuGet.config prompts only appear when no NuGet.config is present yet,
+        // and the first run already wrote one, so they are not expected here.
         await auto.TypeAsync($"aspire update --project \"{containerAppHostCsprojPath}\" --channel stable");
         await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Perform updates?", timeout: TimeSpan.FromSeconds(60));
+        await auto.EnterAsync();
+        await auto.WaitUntilTextAsync("Update successful!", timeout: TimeSpan.FromSeconds(60));
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(120));
 
         // Verify the orphan PackageVersion was removed from Directory.Packages.props.

@@ -316,7 +316,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         context.UpdateSteps.Enqueue(sdkUpdateStep);
     }
 
-    private void EnqueueLegacyAppHostCleanupStepIfNeeded(UpdateContext context)
+    private static void EnqueueLegacyAppHostCleanupStepIfNeeded(UpdateContext context)
     {
         var projectFile = context.AppHostProjectFile;
 
@@ -336,7 +336,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
 
         var step = new PackageUpdateStep(
             UpdateCommandStrings.RemovedObsoleteAppHostPackage,
-            () => RemoveLegacyAppHostPackageReferencesAsync(projectFile, interactionService, hasPackageReference, hasOrphanPackageVersion),
+            () => RemoveLegacyAppHostPackageReferencesAsync(projectFile, hasPackageReference, hasOrphanPackageVersion),
             "Aspire.Hosting.AppHost",
             // The new SDK adds Aspire.Hosting.AppHost implicitly, so there is no
             // user-visible "current version" to display - report it as implicit.
@@ -390,7 +390,6 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
 
     private static async Task RemoveLegacyAppHostPackageReferencesAsync(
         FileInfo projectFile,
-        IInteractionService interactionService,
         bool removePackageReference,
         bool removePackageVersion)
     {
@@ -413,8 +412,13 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             RemovePackageVersionFromDirectoryPackagesProps(projectFile, "Aspire.Hosting.AppHost");
         }
 
-        interactionService.DisplaySubtleMessage(UpdateCommandStrings.RemovedObsoleteAppHostPackage);
-
+        // The runner already displays the step's Description (which is
+        // RemovedObsoleteAppHostPackage) via ExecutingUpdateStepFormat before
+        // invoking this callback, so we deliberately do not emit the same
+        // message a second time. The migration path in
+        // UpdateSdkVersionInProjectAppHostAsync uses a different step
+        // description (the SDK update format), which is why it can still emit
+        // RemovedObsoleteAppHostPackage as a follow-up message there.
         await Task.CompletedTask;
     }
 
