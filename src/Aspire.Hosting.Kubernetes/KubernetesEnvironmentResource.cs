@@ -1060,7 +1060,16 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                     var patchFilePath = Path.Combine(patchTempDir.FullName, "patch.json");
                     await File.WriteAllTextAsync(patchFilePath, patchJson, context.CancellationToken).ConfigureAwait(false);
 
-                    var patchArgs = $"patch gateway {gatewayName} --namespace {@namespace} --type=json --patch-file \"{patchFilePath}\"";
+                    // Use --field-manager=helm so Helm becomes the registered owner of the
+                    // listener hostname field. Without this, kubectl defaults the field manager
+                    // to "kubectl-patch", and a subsequent `helm upgrade` (which uses server-side
+                    // apply with field manager "helm") fails on the next deploy with:
+                    //   conflict with "kubectl-patch" using gateway.networking.k8s.io/v1:
+                    //   .spec.listeners[name="https"].hostname
+                    // Server-side apply Apply operations conflict with foreign Update operations
+                    // recorded in managedFields, but matching manager names do not conflict.
+                    // See https://kubernetes.io/docs/reference/using-api/server-side-apply/#conflicts
+                    var patchArgs = $"patch gateway {gatewayName} --namespace {@namespace} --type=json --field-manager=helm --patch-file \"{patchFilePath}\"";
                     if (environment.KubeConfigPath is not null)
                     {
                         patchArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
