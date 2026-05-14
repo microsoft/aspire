@@ -6,19 +6,22 @@ using Aspire.Hosting.Kubernetes.Extensions;
 using Aspire.Hosting.Kubernetes.Resources;
 
 /// <summary>
-/// 
+/// Represents a Custom Resource for deployment. This will most commonly be a custom object that conforms to the schema
+/// of a CRD that already exists on the Kubernetes cluster.
 /// </summary>
 public interface IKubernetesCustomResourceResource : IResourceWithParent<KubernetesEnvironmentResource>
 {
     /// <summary>
-    /// 
+    /// Builds a <see cref="CustomResourceV1{TSpec}"/> from the <see cref="IKubernetesCustomResourceResource"/> and
+    /// assigns the result to <see cref="GeneratedResource"/>.
     /// </summary>
-    /// <returns></returns>
+    /// <returns>A fully configured <see cref="CustomResourceV1{TSpec}"/> ready for publishing.</returns>
     object Build();
+
     /// <summary>
-    /// 
+    /// Gets or sets the publisher-ready resource.
     /// </summary>
-    object GeneratedResource { get; set; }
+    object? GeneratedResource { get; set; }
 }
 
 /// <summary>
@@ -46,15 +49,10 @@ public sealed class KubernetesCustomResourceResource<TSpec>(
     /// <inheritdoc /> 
     public TSpec? Spec { get; set; } = new();
     
-    /// <summary>
-    /// 
-    /// </summary>
-    public object GeneratedResource { get; set; } = new();
+    /// <inheritdoc />
+    public object? GeneratedResource { get; set; }
 
-    /// <summary>
-    /// 
-    /// </summary>
-    /// <returns></returns>
+    /// <inheritdoc />
     public object Build()
     {
         var builtResource = new CustomResourceV1<TSpec>(ApiVersion, Kind)
