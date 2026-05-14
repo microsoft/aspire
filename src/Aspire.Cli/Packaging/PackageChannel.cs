@@ -14,6 +14,8 @@ namespace Aspire.Cli.Packaging;
 
 internal class PackageChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, ILogger? logger = null)
 {
+    private const string GuestAppHostSdkPackageId = "Aspire.Hosting";
+
     public string Name { get; } = name;
     public PackageChannelQuality Quality { get; } = quality;
     public PackageMapping[]? Mappings { get; } = mappings;
@@ -217,6 +219,31 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         });
 
         return filteredPackages;
+    }
+
+    public async Task<NuGetPackage?> GetLatestGuestAppHostSdkPackageAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
+    {
+        // Guest AppHost sdk.version resolves to the base Aspire.Hosting package because
+        // the managed server restores that package to evaluate and generate the AppHost.
+        var packages = await GetPackagesAsync(GuestAppHostSdkPackageId, workingDirectory, cancellationToken);
+
+        NuGetPackage? latestPackage = null;
+        SemVersion? latestVersion = null;
+        foreach (var package in packages)
+        {
+            if (!SemVersion.TryParse(package.Version, SemVersionStyles.Strict, out var version))
+            {
+                continue;
+            }
+
+            if (latestVersion is null || SemVersion.PrecedenceComparer.Compare(version, latestVersion) > 0)
+            {
+                latestPackage = package;
+                latestVersion = version;
+            }
+        }
+
+        return latestPackage;
     }
 
     public async Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(string packageId, DirectoryInfo workingDirectory, CancellationToken cancellationToken)

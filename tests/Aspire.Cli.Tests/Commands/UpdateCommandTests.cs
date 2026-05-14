@@ -348,8 +348,10 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(ExitCodeConstants.Success, exitCode);
         Assert.False(updateProjectInvoked);
         Assert.NotNull(confirmPrompt);
-        Assert.Contains("An update is available for the Aspire CLI", confirmPrompt);
+        Assert.Contains("newer than this Aspire CLI", confirmPrompt);
+        Assert.Contains("re-run `aspire update`", confirmPrompt);
         Assert.Contains(interactionService.DisplayedPlainText, text => text.Contains("dotnet tool update -g Aspire.Cli", StringComparison.Ordinal));
+        Assert.Contains(interactionService.DisplayedMessages, message => message.Message.Contains("Project update skipped", StringComparison.Ordinal));
     }
 
     [Fact]

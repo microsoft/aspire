@@ -1156,11 +1156,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 // Check for SDK version update (silently - it's an implementation detail)
                 try
                 {
-                    var sdkPackages = await context.Channel.GetPackagesAsync("Aspire.Hosting", directory, cancellationToken);
-                    var latestSdkPackage = sdkPackages
-                        .Where(p => SemVersion.TryParse(p.Version, SemVersionStyles.Strict, out _))
-                        .OrderByDescending(p => SemVersion.Parse(p.Version, SemVersionStyles.Strict), SemVersion.PrecedenceComparer)
-                        .FirstOrDefault();
+                    var latestSdkPackage = await context.Channel.GetLatestGuestAppHostSdkPackageAsync(directory, cancellationToken);
 
                     if (latestSdkPackage is not null && latestSdkPackage.Version != config.SdkVersion)
                     {

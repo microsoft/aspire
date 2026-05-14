@@ -344,7 +344,7 @@ internal sealed class UpdateCommand : BaseCommand
         }
 
         var shouldUpdateCli = await InteractionService.PromptConfirmAsync(
-            UpdateCommandStrings.UpdateCliAfterProjectUpdatePrompt,
+            UpdateCommandStrings.UpdateCliBeforeGuestProjectUpdatePrompt,
             binding: confirmBinding,
             cancellationToken: cancellationToken);
 
@@ -358,22 +358,27 @@ internal sealed class UpdateCommand : BaseCommand
         {
             InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.DotNetToolSelfUpdateMessage);
             InteractionService.DisplayPlainText($"  {dotNetToolUpdateCommand}");
+            InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.ProjectUpdateSkippedAfterCliUpdateMessage);
             return CommandResult.Success();
         }
 
-        return await ExecuteSelfUpdateAsync(parseResult, cancellationToken, channel.Name);
+        var selfUpdateResult = await ExecuteSelfUpdateAsync(parseResult, cancellationToken, channel.Name);
+        if (selfUpdateResult.ExitCode == ExitCodeConstants.Success)
+        {
+            InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.ProjectUpdateSkippedAfterCliUpdateMessage);
+        }
+
+        return selfUpdateResult;
     }
 
     private async Task<SemVersion?> GetLatestGuestSdkVersionAsync(PackageChannel channel, DirectoryInfo projectDirectory, CancellationToken cancellationToken)
     {
         try
         {
-            var sdkPackages = await channel.GetPackagesAsync("Aspire.Hosting", projectDirectory, cancellationToken);
-            return sdkPackages
-                .Select(static p => SemVersion.TryParse(p.Version, SemVersionStyles.Strict, out var version) ? version : null)
-                .OfType<SemVersion>()
-                .OrderByDescending(static version => version, SemVersion.PrecedenceComparer)
-                .FirstOrDefault();
+            var sdkPackage = await channel.GetLatestGuestAppHostSdkPackageAsync(projectDirectory, cancellationToken);
+            return sdkPackage is not null && SemVersion.TryParse(sdkPackage.Version, SemVersionStyles.Strict, out var version)
+                ? version
+                : null;
         }
         catch (OperationCanceledException)
         {
