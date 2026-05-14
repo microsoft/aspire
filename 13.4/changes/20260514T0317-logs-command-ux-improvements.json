@@ -1,0 +1,20 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The aspire logs command now renders timestamps with dimmed styling for visual clarity, and displays an informational 'No logs found.' message when no log entries are available — keeping JSON output unchanged for programmatic consumers.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🪵",
+  "firstMergedAt": "2026-05-14T03:17:06Z",
+  "lastMergedAt": "2026-05-14T05:02:08Z",
+  "name": "Logs command UX improvements",
+  "owner": "JamesNK",
+  "prs": [
+    17066,
+    17067
+  ]
+}

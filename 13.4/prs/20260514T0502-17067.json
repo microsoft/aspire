@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "CLI improvement: show 'No logs found.' message in LogsCommand when no logs available",
+  "mergedAt": "2026-05-14T05:02:08Z",
+  "number": 17067,
+  "runDate": "2026-05-14T05:18:59Z",
+  "status": "included",
+  "title": "Display 'No logs found' message in LogsCommand when no logs are available"
+}

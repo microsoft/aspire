@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "CLI improvement: dim timestamp styling in LogsCommand",
+  "mergedAt": "2026-05-14T03:17:06Z",
+  "number": 17066,
+  "runDate": "2026-05-14T05:18:59Z",
+  "status": "included",
+  "title": "Format LogsCommand timestamps with [dim] markup"
+}

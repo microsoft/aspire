@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "aspire update no longer leaves behind orphan Aspire.Hosting.AppHost package references when the AppHost SDK is already current. Previously, projects already on the new Sdk attribute format could accumulate stale PackageVersion or PackageReference entries that caused NU1009 restore failures on subsequent runs.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔧",
+  "firstMergedAt": "2026-05-14T04:43:00Z",
+  "lastMergedAt": "2026-05-14T04:43:00Z",
+  "name": "Fix orphan AppHost package references after aspire update",
+  "owner": "mitchdenny",
+  "prs": [
+    17016
+  ]
+}
