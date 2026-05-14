@@ -229,6 +229,15 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         // Add the logging configuration again to allow the user to override the defaults
         _innerBuilder.Logging.AddConfiguration(_innerBuilder.Configuration.GetSection("Logging"));
 
+        // The CLI sets ASPIRE_APPHOST_LOGLEVEL to control the default log level for the app host
+        // without polluting child processes (unlike Logging__LogLevel__Default which cascades
+        // through DCP into project processes and overrides their appsettings.json configuration).
+        var appHostLogLevelValue = _innerBuilder.Configuration[KnownConfigNames.AppHostLogLevel];
+        if (appHostLogLevelValue is not null && Enum.TryParse<LogLevel>(appHostLogLevelValue, ignoreCase: true, out var appHostLogLevel))
+        {
+            _innerBuilder.Logging.SetMinimumLevel(appHostLogLevel);
+        }
+
         AppHostDirectory = options.ProjectDirectory ?? _innerBuilder.Environment.ContentRootPath;
         var appHostName = options.ProjectName ?? _innerBuilder.Environment.ApplicationName;
         var appHostPath = Path.Join(AppHostDirectory, appHostName);
