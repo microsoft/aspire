@@ -157,14 +157,14 @@ public class DistributedApplicationBuilderTests
     }
 
     [Fact]
-    public void AppHostLogLevelOverridesConfiguredDefaultLogLevel()
+    public void AspireLogLevelOverridesConfiguredDefaultLogLevel()
     {
-        var appBuilder = DistributedApplication.CreateBuilder(args: [$"{KnownConfigNames.AppHostLogLevel}=Trace"]);
+        var appBuilder = DistributedApplication.CreateBuilder(args: [$"{KnownConfigNames.AspireLogLevel}=Trace"]);
         appBuilder.Configuration["Logging:LogLevel:Default"] = "Information";
 
         using var app = appBuilder.Build();
 
-        var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("AppHostLogLevelTest");
+        var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("AspireLogLevelTest");
         Assert.True(logger.IsEnabled(LogLevel.Trace));
     }
 

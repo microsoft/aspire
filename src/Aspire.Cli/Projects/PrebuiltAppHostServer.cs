@@ -473,7 +473,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
 
         if (debug)
         {
-            startInfo.Environment[KnownConfigNames.AppHostLogLevel] = "Debug";
+            startInfo.Environment[KnownConfigNames.AspireLogLevel] = "Debug";
         }
 
         startInfo.RedirectStandardOutput = true;

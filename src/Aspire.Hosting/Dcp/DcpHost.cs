@@ -39,17 +39,14 @@ internal sealed class DcpHost
     private string? _dcpTlsCertThumbprint;
     private Task? _logProcessorTask;
 
-    // These environment variables (or prefixes) should never be inherited by DCP
-    // from the app host. Entries are matched case-insensitively using StartsWith so
-    // that both exact names (e.g. "ASPNETCORE_URLS") and prefixes
-    // (e.g. "ASPIRE_APPHOST_") are handled uniformly.
+    // These environment variables should never be inherited by DCP from the app host.
     private static readonly string[] s_doNotInheritEnvironmentVars =
     [
         "ASPNETCORE_URLS",
         "DOTNET_LAUNCH_PROFILE",
         "ASPNETCORE_ENVIRONMENT",
         "DOTNET_ENVIRONMENT",
-        "ASPIRE_APPHOST_"
+        KnownConfigNames.AspireLogLevel,
     ];
 
     public DcpHost(
@@ -370,7 +367,7 @@ internal sealed class DcpHost
     {
         foreach (var entry in s_doNotInheritEnvironmentVars)
         {
-            if (key.StartsWith(entry, StringComparisons.EnvironmentVariableName))
+            if (string.Equals(key, entry, StringComparisons.EnvironmentVariableName))
             {
                 return true;
             }
