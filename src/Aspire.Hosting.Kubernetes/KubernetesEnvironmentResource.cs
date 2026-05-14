@@ -282,6 +282,29 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                 steps.Add(fqdnDiscoveryStep);
             }
 
+            // Pre-helm cleanup step — strip any stale non-helm Update entries from the
+            // managedFields of Gateways with TLS. Older Aspire builds patched the listener
+            // hostname with kubectl's default field manager ("kubectl-patch"); that Update
+            // entry persists in managedFields after later builds switched to
+            // --field-manager=helm, and helm's server-side apply still conflicts with the
+            // foreign Update ownership of .spec.listeners[name="https"].hostname. Removing
+            // the stale entry up front lets helm upgrade succeed without --force-conflicts.
+            // No-op on first deploy (the Gateway doesn't exist yet) and on clusters that
+            // were only ever managed by current code (no foreign managers found).
+            var gatewaysWithTls = CollectGatewaysWithTls(model, environment);
+            if (gatewaysWithTls.Count > 0)
+            {
+                var cleanupStep = new PipelineStep
+                {
+                    Name = $"gateway-field-cleanup-{environment.Name}",
+                    Description = "Removes stale foreign field-manager entries from existing Gateways so helm upgrade can re-apply",
+                    Action = ctx => CleanupGatewayFieldOwnershipAsync(ctx, environment, gatewaysWithTls)
+                };
+                cleanupStep.RequiredBy($"helm-deploy-{environment.Name}");
+                cleanupStep.DependsOn($"prepare-{environment.Name}");
+                steps.Add(cleanupStep);
+            }
+
             // Expand deployment target steps for compute resources (including dashboard if enabled)
             var resources = environment.DashboardEnabled && environment.Dashboard?.Resource is KubernetesAspireDashboardResource dashboard
                 ? [.. model.GetComputeResources(), dashboard]
@@ -970,6 +993,28 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     }
 
     /// <summary>
+    /// Collects Gateway resources that have any TLS configuration, regardless of whether
+    /// hostnames are explicitly set. Used by the pre-deploy cleanup step that strips
+    /// stale foreign field-manager ownership.
+    /// </summary>
+    private static List<KubernetesGatewayResource> CollectGatewaysWithTls(
+        DistributedApplicationModel model,
+        KubernetesEnvironmentResource environment)
+    {
+        var results = new List<KubernetesGatewayResource>();
+
+        foreach (var gateway in model.Resources.OfType<KubernetesGatewayResource>().Where(g => g.Parent == environment))
+        {
+            if (gateway.TlsConfigs.Count > 0)
+            {
+                results.Add(gateway);
+            }
+        }
+
+        return results;
+    }
+
+    /// <summary>
     /// Discovers the assigned FQDN from the Gateway's status, patches the HTTPS listener
     /// to include the hostname, and creates a bootstrap TLS secret so cert-manager can
     /// issue a real certificate.
@@ -1394,6 +1439,201 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             {
                 // Fall back to assuming index 1
                 indices.Add(1);
+            }
+        }
+
+        return indices;
+    }
+
+    /// <summary>
+    /// Pre-helm-deploy step: removes any non-helm Update entries from the
+    /// <c>managedFields</c> of existing Gateways with TLS configuration. Older Aspire
+    /// builds patched the listener hostname with kubectl's default field manager
+    /// (<c>kubectl-patch</c>), and that Update entry persists in the resource's
+    /// <c>managedFields</c> after later builds switched to <c>--field-manager=helm</c>.
+    /// Server-side Apply by helm conflicts with the foreign Update ownership of
+    /// <c>.spec.listeners[name="https"].hostname</c> until the foreign entry is removed,
+    /// so we strip it preemptively. No-op when the Gateway doesn't yet exist (first
+    /// deploy), when the cluster is unreachable, or when only helm-owned managedFields
+    /// entries are present.
+    /// See https://kubernetes.io/docs/reference/using-api/server-side-apply/#clearing-managedfields
+    /// </summary>
+    private static async Task CleanupGatewayFieldOwnershipAsync(
+        PipelineStepContext context,
+        KubernetesEnvironmentResource environment,
+        List<KubernetesGatewayResource> gateways)
+    {
+        var @namespace = "default";
+        if (environment.TryGetLastAnnotation<KubernetesNamespaceAnnotation>(out var nsAnnotation))
+        {
+            var resolvedNs = await nsAnnotation.Namespace.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
+            if (!string.IsNullOrEmpty(resolvedNs))
+            {
+                @namespace = resolvedNs;
+            }
+        }
+
+        foreach (var gateway in gateways)
+        {
+            var gatewayName = gateway.Name.ToKubernetesResourceName();
+
+            var getArgs = $"get gateway {gatewayName} --namespace {@namespace} --show-managed-fields -o json --ignore-not-found";
+            if (environment.KubeConfigPath is not null)
+            {
+                getArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
+            }
+
+            var stdout = new List<string>();
+            var (getResult, getDisposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
+            {
+                Arguments = getArgs,
+                ThrowOnNonZeroReturnCode = false,
+                InheritEnv = true,
+                OnOutputData = stdout.Add,
+                OnErrorData = line => context.Logger.LogDebug("{Line}", line)
+            });
+
+            int getExit;
+            await using (getDisposable.ConfigureAwait(false))
+            {
+                getExit = (await getResult.WaitAsync(context.CancellationToken).ConfigureAwait(false)).ExitCode;
+            }
+
+            if (getExit != 0 || stdout.Count == 0)
+            {
+                // Gateway doesn't exist yet (first deploy) or kubectl error — nothing to do.
+                context.Logger.LogDebug("Gateway '{GatewayName}' not found or unreadable; skipping field-ownership cleanup.", gatewayName);
+                continue;
+            }
+
+            // Identify managedFields entries to remove: any Update operation by a manager
+            // other than "helm" that owns fields under .spec.listeners. We descend in
+            // reverse index order so JSON patch path indices remain stable.
+            List<int> indicesToRemove;
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(string.Join("", stdout));
+                indicesToRemove = FindForeignListenerOwnershipIndices(doc.RootElement);
+            }
+            catch (System.Text.Json.JsonException ex)
+            {
+                context.Logger.LogDebug(ex, "Could not parse Gateway '{GatewayName}' JSON for field-ownership cleanup.", gatewayName);
+                continue;
+            }
+
+            if (indicesToRemove.Count == 0)
+            {
+                continue;
+            }
+
+            // Build a JSON Patch removing each stale entry. Process highest index first so
+            // earlier removals don't shift the indices of pending operations.
+            var ops = indicesToRemove
+                .OrderByDescending(i => i)
+                .Select(i => new
+                {
+                    op = "remove",
+                    path = $"/metadata/managedFields/{i}"
+                });
+            var patchJson = System.Text.Json.JsonSerializer.Serialize(ops);
+
+            var patchTempDir = Directory.CreateTempSubdirectory(".aspire-gateway-fields");
+            try
+            {
+                var patchFilePath = Path.Combine(patchTempDir.FullName, "patch.json");
+                await File.WriteAllTextAsync(patchFilePath, patchJson, context.CancellationToken).ConfigureAwait(false);
+
+                var patchArgs = $"patch gateway {gatewayName} --namespace {@namespace} --type=json --patch-file \"{patchFilePath}\"";
+                if (environment.KubeConfigPath is not null)
+                {
+                    patchArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
+                }
+
+                var (patchResult, patchDisposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
+                {
+                    Arguments = patchArgs,
+                    ThrowOnNonZeroReturnCode = false,
+                    InheritEnv = true,
+                    OnOutputData = line => context.Logger.LogDebug("{Line}", line),
+                    OnErrorData = line => context.Logger.LogDebug("{Line}", line)
+                });
+
+                await using (patchDisposable.ConfigureAwait(false))
+                {
+                    var patchExit = (await patchResult.WaitAsync(context.CancellationToken).ConfigureAwait(false)).ExitCode;
+                    if (patchExit == 0)
+                    {
+                        context.Logger.LogInformation(
+                            "Removed {Count} stale field-manager entr{Suffix} from Gateway '{GatewayName}' to allow helm upgrade.",
+                            indicesToRemove.Count,
+                            indicesToRemove.Count == 1 ? "y" : "ies",
+                            gatewayName);
+                    }
+                    else
+                    {
+                        // Best-effort cleanup: if it fails, helm upgrade may still succeed
+                        // (the user may have an explicit hostname matching the existing one)
+                        // and if it doesn't, the failure surfaces clearly via helm.
+                        context.Logger.LogDebug(
+                            "Field-ownership cleanup on Gateway '{GatewayName}' returned exit code {ExitCode}; continuing.",
+                            gatewayName, patchExit);
+                    }
+                }
+            }
+            finally
+            {
+                DeleteTempDirSafely(patchTempDir, context.Logger);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Returns the indices of <c>managedFields</c> entries that represent foreign
+    /// (non-helm) Update operations owning fields under <c>.spec.listeners</c>. These
+    /// entries are remnants of older builds that patched the Gateway with kubectl's
+    /// default field manager and conflict with helm's server-side apply on subsequent
+    /// upgrades.
+    /// </summary>
+    private static List<int> FindForeignListenerOwnershipIndices(System.Text.Json.JsonElement root)
+    {
+        var indices = new List<int>();
+
+        if (!root.TryGetProperty("metadata", out var metadata) ||
+            !metadata.TryGetProperty("managedFields", out var managedFields) ||
+            managedFields.ValueKind != System.Text.Json.JsonValueKind.Array)
+        {
+            return indices;
+        }
+
+        for (var i = 0; i < managedFields.GetArrayLength(); i++)
+        {
+            var entry = managedFields[i];
+
+            // Only target Update entries — Apply entries are part of normal SSA ownership
+            // and removing them would be destructive.
+            if (!entry.TryGetProperty("operation", out var op) ||
+                !string.Equals(op.GetString(), "Update", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            // Helm's own entries are safe — both Apply and any incidental Update use the
+            // same manager name and therefore don't conflict with helm's next Apply.
+            if (entry.TryGetProperty("manager", out var mgr) &&
+                string.Equals(mgr.GetString(), "helm", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            // Only remove entries that own a listener field — preserves status managers
+            // like alb-controller which legitimately update .status. The fieldsV1 path
+            // for a Gateway listener is shaped:
+            //   {"f:spec":{"f:listeners":{"k:{\"name\":\"https\"}":{"f:hostname":{}}}}}
+            if (entry.TryGetProperty("fieldsV1", out var fieldsV1) &&
+                fieldsV1.TryGetProperty("f:spec", out var fSpec) &&
+                fSpec.TryGetProperty("f:listeners", out _))
+            {
+                indices.Add(i);
             }
         }
 
