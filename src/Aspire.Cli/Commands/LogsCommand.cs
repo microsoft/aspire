@@ -285,10 +285,12 @@ internal sealed class LogsCommand : BaseCommand
             {
                 _interactionService.DisplayMessage(KnownEmojis.Information, LogsCommandStrings.NoLogsFound);
             }
-
-            foreach (var entry in entries)
+            else
             {
-                OutputLogLine(entry, format, timestamps);
+                foreach (var entry in entries)
+                {
+                    OutputLogLine(entry, format, timestamps);
+                }
             }
         }
 
