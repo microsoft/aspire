@@ -288,14 +288,24 @@ internal static class AtsCompatibilityComparer
             .Select(static p => p.Name)
             .Where(baselineByName.ContainsKey)
             .ToArray();
+        var currentParameterOrder = currentCapability.Parameters
+            .Select(static p => p.Name)
+            .ToArray();
+        var hasInsertedParameterBeforeExistingParameter = currentCapability.Parameters
+            .Select((parameter, index) => (parameter, index))
+            .Any(parameterWithIndex =>
+                !baselineByName.ContainsKey(parameterWithIndex.parameter.Name) &&
+                currentCapability.Parameters
+                    .Skip(parameterWithIndex.index + 1)
+                    .Any(parameter => baselineByName.ContainsKey(parameter.Name)));
 
-        if (!baselineSharedOrder.SequenceEqual(currentSharedOrder, StringComparer.Ordinal))
+        if (!baselineSharedOrder.SequenceEqual(currentSharedOrder, StringComparer.Ordinal) || hasInsertedParameterBeforeExistingParameter)
         {
             diagnostics.Add(new ApiCompatDiagnostic(
                 "capability-parameter-order-changed",
                 packageName,
                 baselineCapability.CapabilityId,
-                $"Capability '{baselineCapability.CapabilityId}' parameter order changed from '{string.Join(", ", baselineSharedOrder)}' to '{string.Join(", ", currentSharedOrder)}'."));
+                $"Capability '{baselineCapability.CapabilityId}' parameter order changed from '{string.Join(", ", baselineSharedOrder)}' to '{string.Join(", ", currentParameterOrder)}'."));
         }
     }
 
