@@ -133,11 +133,9 @@ public sealed class TypeScriptJavaScriptHostingDeploymentTests(ITestOutputHelper
             await api.withHttpEndpoint({ name: 'http', env: 'PORT' });
 
             const staticsite = await builder.addJavaScriptApp('staticsite', './staticsite');
+            await staticsite.withHttpEndpoint({ name: 'http', targetPort: 5000 });
             await staticsite.publishAsStaticWebsite({ apiPath: '/api', apiTarget: api });
-            await staticsite.withHttpEndpointCallback(async (endpoint) => {
-                await endpoint.targetPort.set(5000);
-                await endpoint.isExternal.set(true);
-            }, { name: 'http' });
+            await staticsite.withExternalHttpEndpoints();
 
             await builder.build().run();
             """);
