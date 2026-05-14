@@ -431,7 +431,10 @@ internal sealed class RunCommand : BaseCommand
         catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken || ex is ExtensionOperationCanceledException)
         {
             runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "canceled");
-            return CommandResult.Cancelled();
+
+            // Command is designed to be cancellable by the user (e.g. Ctrl+C) at any time.
+            // Treat cancellation as a successful exit since the user intentionally stopped the AppHost.
+            return CommandResult.Cancelled(ExitCodeConstants.Success);
         }
         catch (ProjectLocatorException ex)
         {

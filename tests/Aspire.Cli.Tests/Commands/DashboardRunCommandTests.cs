@@ -325,6 +325,42 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(expectedMessage, errorMessage);
     }
 
+    [Fact]
+    public async Task DashboardRunCommand_WhenCancelled_DisplaysCancellationMessageAndReturnsSuccess()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var testInteractionService = new TestInteractionService();
+        var readyTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (services, _, executionFactory) = CreateServicesWithLayout(workspace, interactionService: testInteractionService);
+        executionFactory.CreateExecutionCallback = (_, _, _, options) =>
+            new TestProcessExecution("fake", [], null, options, (_, _) => (0, null), () => 0)
+            {
+                WaitForExitAsyncCallback = async (processOptions, cancellationToken) =>
+                {
+                    processOptions.StandardOutputCallback?.Invoke("Now listening on: http://localhost:18888");
+                    readyTcs.TrySetResult();
+                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+                    return 0;
+                }
+            };
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("dashboard run");
+
+        using var cts = new CancellationTokenSource();
+        var pendingRun = result.InvokeAsync(cancellationToken: cts.Token);
+
+        await readyTcs.Task.DefaultTimeout();
+        await cts.CancelAsync();
+
+        var exitCode = await pendingRun.DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(1, testInteractionService.DisplayCancellationMessageCount);
+    }
+
     [Theory]
     [InlineData("", "http://localhost:18888")]
     [InlineData(";;;", "http://localhost:18888")]

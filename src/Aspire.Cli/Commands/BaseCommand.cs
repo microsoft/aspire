@@ -72,10 +72,9 @@ internal abstract class BaseCommand : Command
                 return result.ExitCode;
             }
 
-            if (result.ExitCode == ExitCodeConstants.Cancelled)
+            if (result.ShouldDisplayCancellationMessage)
             {
                 interactionService.DisplayCancellationMessage();
-                return result.ExitCode;
             }
 
             // Display the CLI log file path on non-zero exit codes so the user knows

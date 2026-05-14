@@ -108,6 +108,8 @@ internal sealed class TestProcessExecution : IProcessExecution
 
     public bool StartReturnValue { get; init; } = true;
 
+    public Func<ProcessInvocationOptions, CancellationToken, Task<int>>? WaitForExitAsyncCallback { get; init; }
+
     public bool Start()
     {
         if (!StartReturnValue)
@@ -124,6 +126,11 @@ internal sealed class TestProcessExecution : IProcessExecution
         if (!_started)
         {
             throw new InvalidOperationException("Process has not been started.");
+        }
+
+        if (WaitForExitAsyncCallback is not null)
+        {
+            return WaitForExitAsyncCallback(_options, cancellationToken);
         }
 
         var attempt = _attemptCounter();

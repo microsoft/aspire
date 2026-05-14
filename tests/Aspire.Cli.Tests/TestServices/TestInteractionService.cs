@@ -49,6 +49,7 @@ internal sealed class TestInteractionService : IInteractionService
     public List<(string Text, ConsoleOutput? ConsoleOverride)> DisplayedRawText { get; } = [];
     public List<string> DisplayedSuccess { get; } = [];
     public int DisplayEmptyLineCount { get; private set; }
+    public int DisplayCancellationMessageCount { get; private set; }
 
     // Response queue setup methods
     public void SetupStringPromptResponse(string response) => _responses.Enqueue((response, ResponseType.String));
@@ -208,6 +209,7 @@ internal sealed class TestInteractionService : IInteractionService
 
     public void DisplayCancellationMessage()
     {
+        DisplayCancellationMessageCount++;
     }
 
     public Task<bool> PromptConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default)
