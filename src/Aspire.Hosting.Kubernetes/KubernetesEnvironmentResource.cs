@@ -1066,11 +1066,18 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
             if (string.IsNullOrEmpty(discoveredFqdn))
             {
-                context.Logger.LogWarning(
-                    "Gateway '{GatewayName}' was not assigned a hostname address after waiting. " +
-                    "TLS hostname discovery skipped. You may need to redeploy with an explicit hostname via WithHostname().",
-                    gatewayName);
-                continue;
+                // Hard failure rather than a logged warning: when the user has TLS configured
+                // without an explicit hostname, the deployment is only meaningful once the
+                // listener hostname is patched (cert-manager's gateway shim issues no
+                // certificate for a hostname-less HTTPS listener). Silently continuing
+                // produces an apparently-successful deploy that never serves valid TLS, which
+                // is far worse than failing visibly here. The user can fix this by either
+                // waiting for their controller to assign an address sooner or by passing an
+                // explicit hostname via WithHostname() / WithTls(hostname: ...).
+                throw new InvalidOperationException(
+                    $"Gateway '{gatewayName}' was not assigned a hostname address within the discovery timeout. " +
+                    "TLS hostname discovery cannot complete. Either retry the deploy (the controller may still be " +
+                    "provisioning the address) or set an explicit hostname via WithHostname().");
             }
 
             context.Logger.LogInformation(
@@ -1282,10 +1289,15 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         KubernetesEnvironmentResource environment,
         PipelineStepContext context)
     {
+        // AGC and other Gateway controllers can take several minutes to assign an address
+        // after the Gateway is created (AGC has been observed taking 5-10 minutes when AGC
+        // and the cluster are freshly provisioned in the same deploy). Allow up to ~15
+        // minutes (180 attempts × 5s) before giving up, matching the wait budget our E2E
+        // tests use for the same condition.
         var pipeline = new ResiliencePipelineBuilder<string?>()
             .AddRetry(new RetryStrategyOptions<string?>
             {
-                MaxRetryAttempts = 59,
+                MaxRetryAttempts = 179,
                 Delay = TimeSpan.FromSeconds(5),
                 BackoffType = DelayBackoffType.Constant,
                 ShouldHandle = new PredicateBuilder<string?>().HandleResult(r => r is null),
