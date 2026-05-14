@@ -870,6 +870,32 @@ public class ParameterProcessorTests
     }
 
     [Fact]
+    public async Task ProcessParameterAsync_WithInteractionServiceAvailable_AddsSetParameterValueArgument()
+    {
+        // Arrange
+        var testInteractionService = new TestInteractionService { IsAvailable = true };
+        var parameterProcessor = CreateParameterProcessor(interactionService: testInteractionService);
+        var parameter = CreateParameterResource("testParam", "testValue");
+
+        // Act
+        await parameterProcessor.InitializeParametersAsync([parameter]).DefaultTimeout();
+
+        // Assert
+        var setValueCommand = parameter.Annotations.OfType<ResourceCommandAnnotation>()
+            .Single(a => a.Name == KnownResourceCommands.SetParameterCommand);
+
+        Assert.Collection(
+            setValueCommand.Arguments,
+            valueInput =>
+            {
+                Assert.Equal(ParameterProcessor.SetParameterValueName, valueInput.Name);
+                Assert.Equal("testParam", valueInput.Label);
+                Assert.Equal("testValue", valueInput.Value);
+            },
+            saveInput => Assert.Equal(ParameterProcessor.SaveToUserSecretsName, saveInput.Name));
+    }
+
+    [Fact]
     public async Task ProcessParameterAsync_WithInteractionServiceNotAvailable_DoesNotAddSetParameterCommand()
     {
         // Arrange

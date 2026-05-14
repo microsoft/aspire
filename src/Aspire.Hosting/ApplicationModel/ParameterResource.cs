@@ -128,17 +128,17 @@ public class ParameterResource : Resource, IExpressionValue
     public bool EnableDescriptionMarkdown { get; set; }
 
 #pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-    internal InteractionInput CreateInput()
+    internal InteractionInput CreateInput(string? name = null)
     {
         if (this.TryGetLastAnnotation<InputGeneratorAnnotation>(out var annotation))
         {
-            // If the annotation is present, use it to create the input.
-            return annotation.InputGenerator(this);
+            var generatedInput = annotation.InputGenerator(this);
+            return name is null ? generatedInput : RenameInput(generatedInput, name);
         }
 
         var input = new InteractionInput
         {
-            Name = Name,
+            Name = name ?? Name,
             InputType = Secret ? InputType.SecretText : InputType.Text,
             Label = Name,
             Description = Description,
@@ -146,6 +146,31 @@ public class ParameterResource : Resource, IExpressionValue
             Placeholder = string.Format(CultureInfo.CurrentCulture, InteractionStrings.ParametersInputsParameterPlaceholder, Name)
         };
         return input;
+    }
+
+    private static InteractionInput RenameInput(InteractionInput input, string name)
+    {
+        var renamedInput = new InteractionInput
+        {
+            Name = name,
+            InputType = input.InputType,
+            Label = input.Label ?? input.Name,
+            Description = input.Description,
+            EnableDescriptionMarkdown = input.EnableDescriptionMarkdown,
+            Required = input.Required,
+            Options = input.Options,
+            DynamicLoading = input.DynamicLoading,
+            Value = input.Value,
+            Placeholder = input.Placeholder,
+            AllowCustomChoice = input.AllowCustomChoice,
+            Disabled = input.Disabled,
+            MaxLength = input.MaxLength
+        };
+
+        renamedInput.DynamicLoadingState = input.DynamicLoadingState;
+        renamedInput.ValidationErrors.AddRange(input.ValidationErrors);
+
+        return renamedInput;
     }
 #pragma warning restore ASPIREINTERACTION001
 }

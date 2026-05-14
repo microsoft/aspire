@@ -29,6 +29,7 @@ public sealed class ParameterProcessor(
 {
     internal const string SaveToUserSecretsName = "SaveToUserSecrets";
     internal const string DeleteFromUserSecretsName = "DeleteFromUserSecrets";
+    internal const string SetParameterValueName = "Value";
 
     private readonly List<ParameterResource> _unresolvedParameters = [];
     private readonly object _resolutionTaskLock = new();
@@ -194,7 +195,7 @@ public sealed class ParameterProcessor(
 
     private void AddSetParameterCommand(ParameterResource parameterResource)
     {
-        var valueInput = parameterResource.CreateInput();
+        var valueInput = parameterResource.CreateInput(SetParameterValueName);
 
         // Pre-populate input with existing value if the parameter has one
         try
@@ -227,7 +228,7 @@ public sealed class ParameterProcessor(
             displayName: CommandStrings.SetParameterName,
             executeCommand: async context =>
             {
-                var value = context.Arguments.GetString(valueInput.Name);
+                var value = context.Arguments.GetString(SetParameterValueName);
                 if (string.IsNullOrEmpty(value))
                 {
                     return CommandResults.Success();
