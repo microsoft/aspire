@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Bug fix: endpoints set on HostResourceWithEndpoints were not being materialized",
+  "mergedAt": "2026-05-14T21:17:50Z",
+  "number": 17091,
+  "runDate": "2026-05-14T22:37:15Z",
+  "status": "included",
+  "title": "Materialize Endpoints set in HostResourceWithEndpoints"
+}

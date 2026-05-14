@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "CLI improvement: co-locate bundle with binary for packager-managed installs (winget/brew/dotnet-tool)",
+  "mergedAt": "2026-05-14T22:12:03Z",
+  "number": 16817,
+  "runDate": "2026-05-14T22:37:15Z",
+  "status": "included",
+  "title": "feat(cli): co-locate bundle with CLI binary for packager-managed installs"
+}

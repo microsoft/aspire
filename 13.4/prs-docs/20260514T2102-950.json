@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "Documents Go hosting support - matches go-apphost-support change entry",
+  "mergedAt": "2026-05-14T21:02:35Z",
+  "number": 950,
+  "runDate": "2026-05-14T22:37:15Z",
+  "status": "included",
+  "title": "Add first-class Go hosting docs"
+}

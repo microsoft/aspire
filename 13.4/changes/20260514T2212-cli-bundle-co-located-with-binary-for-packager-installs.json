@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The Aspire CLI bundle is now stored alongside the CLI binary for packager-managed installs (winget, Homebrew, dotnet tool), ensuring bundle files are fully cleaned up during package removal or upgrade. Script-based installs retain the existing layout unchanged.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📦",
+  "firstMergedAt": "2026-05-14T22:12:03Z",
+  "lastMergedAt": "2026-05-14T22:12:03Z",
+  "name": "CLI bundle co-located with binary for packager-managed installs",
+  "owner": "radical",
+  "prs": [
+    16817
+  ]
+}

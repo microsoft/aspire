@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a bug where endpoints set directly on HostResourceWithEndpoints were not being materialized, which could cause missing endpoint configuration for container resources.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📍",
+  "firstMergedAt": "2026-05-14T21:17:50Z",
+  "lastMergedAt": "2026-05-14T21:17:50Z",
+  "name": "Fix endpoint materialization for host resources",
+  "owner": "karolz-ms",
+  "prs": [
+    17091
+  ]
+}
