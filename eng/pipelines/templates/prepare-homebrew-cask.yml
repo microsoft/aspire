@@ -2,6 +2,8 @@ parameters:
   - name: version
     type: string
     default: ''
+  - name: channel
+    type: string
   - name: artifactVersion
     type: string
     default: ''
@@ -18,6 +20,7 @@ steps:
   - bash: |
       set -euo pipefail
       version='${{ parameters.version }}'
+      channel='${{ parameters.channel }}'
       artifactVersion='${{ parameters.artifactVersion }}'
 
       if [ -z "$version" ]; then
@@ -25,11 +28,27 @@ steps:
         exit 1
       fi
 
+      if [ -z "$channel" ]; then
+        echo "##[error]Channel parameter is required (stable or prerelease)"
+        exit 1
+      fi
+
+      # Casks are generated for every channel. The artifact is a CI-only build
+      # output consumed by dogfooders via 'brew install --cask <local-path>'.
+      # Public Homebrew publishing is gated separately by publish-homebrew.yml in
+      # the release-publish pipeline, which downloads 'homebrew-cask-stable' by
+      # name — so prerelease artifacts can never reach the public tap.
+      artifactName="homebrew-cask-$channel"
+
       echo "Version: $version"
+      echo "Channel: $channel"
       echo "Artifact version: ${artifactVersion:-$version}"
+      echo "Artifact name: $artifactName"
 
       echo "##vso[task.setvariable variable=CliVersion]$version"
       echo "##vso[task.setvariable variable=CliArtifactVersion]${artifactVersion:-$version}"
+      echo "##vso[task.setvariable variable=HomebrewChannel]$channel"
+      echo "##vso[task.setvariable variable=HomebrewArtifactName]$artifactName"
     displayName: 🟣Set version ${{ parameters.version }}
 
   - bash: |
@@ -219,11 +238,16 @@ steps:
   - bash: |
       set -euo pipefail
       outputPath="$(Build.StagingDirectory)/homebrew-cask/validation-summary.json"
+      if [ "$(HomebrewChannel)" = "stable" ]; then
+        isStableRelease=true
+      else
+        isStableRelease=false
+      fi
       cat > "$outputPath" <<EOF
       {
         "schemaVersion": 1,
         "validatedByPreparePipeline": true,
-        "isStableRelease": true,
+        "isStableRelease": $isStableRelease,
         "isNewCask": $(HomebrewIsNewCask),
         "checks": {
           "rubySyntax": {
@@ -266,4 +290,4 @@ steps:
     condition: always()
     inputs:
       PathtoPublish: '$(Build.StagingDirectory)/homebrew-cask'
-      ArtifactName: homebrew-cask-stable
+      ArtifactName: $(HomebrewArtifactName)
