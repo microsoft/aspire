@@ -24,4 +24,15 @@ public class CliDownloaderTests
         Assert.DoesNotContain("ga/", descriptor, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("rc/", descriptor, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Theory]
+    [InlineData("abcdef\n", "abcdef")]
+    [InlineData("ABCDEF", "abcdef")]
+    [InlineData("  ABCDEF  \n", "abcdef")]
+    [InlineData("abcdef  aspire-cli-osx-arm64.tar.gz\n", "abcdef")]
+    [InlineData("ABCDEF\taspire-cli-linux-x64.tar.gz", "abcdef")]
+    public void NormalizeChecksum_StripsCompanionFilename_AndLowercases(string raw, string expected)
+    {
+        Assert.Equal(expected, CliDownloader.NormalizeChecksum(raw));
+    }
 }

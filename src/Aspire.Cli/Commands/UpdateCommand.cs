@@ -5,6 +5,7 @@ using System.CommandLine;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
@@ -47,6 +48,11 @@ internal sealed class UpdateCommand : BaseCommand
     {
         Description = UpdateCommandStrings.NuGetConfigDirOptionDescription
     };
+    private static readonly Option<bool> s_forceOption = new("--force")
+    {
+        Description = UpdateCommandStrings.ForceOptionDescription,
+        Aliases = { "-f" }
+    };
     private readonly Option<string?> _channelOption;
     private readonly Option<string?> _qualityOption;
 
@@ -79,6 +85,7 @@ internal sealed class UpdateCommand : BaseCommand
         Options.Add(s_selfOption);
         Options.Add(s_yesOption);
         Options.Add(s_nugetConfigDirOption);
+        Options.Add(s_forceOption);
 
         AddNonInteractiveRequiresYesValidator(this, s_yesOption);
 
@@ -315,6 +322,7 @@ internal sealed class UpdateCommand : BaseCommand
     private async Task<CommandResult> ExecuteSelfUpdateAsync(ParseResult parseResult, CancellationToken cancellationToken, string? selectedChannel = null)
     {
         var channel = selectedChannel ?? parseResult.GetValue(_channelOption) ?? parseResult.GetValue(_qualityOption);
+        var force = parseResult.GetValue(s_forceOption);
 
         // If channel is not specified, prompt the user to select one. The choice
         // applies only to this self-update invocation; subsequent 'aspire new'
@@ -338,7 +346,7 @@ internal sealed class UpdateCommand : BaseCommand
         try
         {
             // Get current executable path for display purposes only
-            var currentExePath = Environment.ProcessPath;
+            var currentExePath = DotNetToolDetection.GetEffectiveProcessPath();
             if (string.IsNullOrEmpty(currentExePath))
             {
                 return CommandResult.Failure(ExitCodeConstants.InvalidCommand, "Unable to determine the current executable path.");
@@ -347,11 +355,55 @@ internal sealed class UpdateCommand : BaseCommand
             InteractionService.DisplayMessage(KnownEmojis.Package, $"Current CLI location: {currentExePath}");
             InteractionService.DisplayMessage(KnownEmojis.UpButton, $"Updating to channel: {channel}");
 
+            // Probe the published checksum so we can short-circuit when the installed
+            // binary already matches the latest published build for the channel. The
+            // marker file lives next to the installed binary and records the SHA-512
+            // of the archive that was extracted to produce it. See issue #16730.
+            string? remoteChecksum = null;
+            if (!force)
+            {
+                var markerPath = TryGetChecksumMarkerPath(currentExePath);
+                if (markerPath is not null && File.Exists(markerPath))
+                {
+                    try
+                    {
+                        remoteChecksum = await _cliDownloader!.GetLatestChecksumAsync(channel, cancellationToken);
+                        var localChecksum = NormalizeChecksumValue(await File.ReadAllTextAsync(markerPath, cancellationToken));
+
+                        if (string.Equals(remoteChecksum, localChecksum, StringComparison.Ordinal))
+                        {
+                            var version = VersionHelper.GetDefaultSdkVersion();
+                            var message = string.Format(CultureInfo.CurrentCulture, UpdateCommandStrings.AlreadyUpToDateMessageFormat, version);
+                            InteractionService.DisplaySuccess(message);
+                            return ExitCodeConstants.Success;
+                        }
+
+                        _logger.LogDebug(
+                            "Installed CLI checksum {LocalChecksum} differs from latest published checksum {RemoteChecksum}; proceeding with update.",
+                            localChecksum,
+                            remoteChecksum);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        // If the probe fails for any reason (network error, malformed
+                        // marker, etc.) fall through to the normal download path. We
+                        // never want a probe failure to block an explicit update.
+                        _logger.LogDebug(ex, "Failed to probe published checksum; falling back to full download.");
+                        remoteChecksum = null;
+                    }
+                }
+            }
+
             // Download the latest CLI
             var archivePath = await _cliDownloader!.DownloadLatestCliAsync(channel, cancellationToken);
 
-            // Extract and update to $HOME/.aspire/bin
-            await ExtractAndUpdateAsync(archivePath, cancellationToken);
+            // Capture the checksum we already fetched (if any) so we can write the
+            // marker after a successful install without recomputing it.
+            await ExtractAndUpdateAsync(archivePath, remoteChecksum, cancellationToken);
 
             return CommandResult.Success();
         }
@@ -367,10 +419,40 @@ internal sealed class UpdateCommand : BaseCommand
         }
     }
 
-    private async Task ExtractAndUpdateAsync(string archivePath, CancellationToken cancellationToken)
+    internal const string ChecksumMarkerFileName = "aspire.sha512";
+
+    private static string? TryGetChecksumMarkerPath(string currentExePath)
+    {
+        var installDir = Path.GetDirectoryName(currentExePath);
+        return string.IsNullOrEmpty(installDir) ? null : Path.Combine(installDir, ChecksumMarkerFileName);
+    }
+
+    private static string NormalizeChecksumValue(string raw)
+    {
+        // Mirror CliDownloader.NormalizeChecksum: trim, take leading hex token,
+        // lowercase. Kept private to avoid coupling UpdateCommand to the
+        // downloader's internal helper.
+        var trimmed = raw.Trim();
+        var firstWhitespace = -1;
+        for (var i = 0; i < trimmed.Length; i++)
+        {
+            if (char.IsWhiteSpace(trimmed[i]))
+            {
+                firstWhitespace = i;
+                break;
+            }
+        }
+        if (firstWhitespace > 0)
+        {
+            trimmed = trimmed.Substring(0, firstWhitespace);
+        }
+        return trimmed.ToLowerInvariant();
+    }
+
+    private async Task ExtractAndUpdateAsync(string archivePath, string? archiveChecksum, CancellationToken cancellationToken)
     {
         // Install to the same directory as the current CLI executable
-        var currentExePath = Environment.ProcessPath;
+        var currentExePath = DotNetToolDetection.GetEffectiveProcessPath();
         if (string.IsNullOrEmpty(currentExePath))
         {
             throw new InvalidOperationException("Unable to determine current CLI location.");
@@ -445,6 +527,26 @@ internal sealed class UpdateCommand : BaseCommand
 
                 // If we get here, the update was successful, clean up old backups
                 FileDeleteHelper.TryCleanupOldItems(exeDir, exeName);
+
+                // Persist the archive checksum next to the installed binary so a
+                // subsequent `aspire update --self` can short-circuit when the
+                // published archive matches what we just installed (issue #16730).
+                // Written only after version verification succeeds, so a failed
+                // install can never leave behind a marker that misrepresents the
+                // installed binary. If we don't have a checksum (e.g. the probe
+                // failed before download), compute one from the archive on disk
+                // so future runs can still benefit from the no-op short-circuit.
+                try
+                {
+                    var checksumToPersist = archiveChecksum
+                        ?? await ComputeArchiveChecksumAsync(archivePath, cancellationToken);
+                    var markerPath = Path.Combine(installDir, ChecksumMarkerFileName);
+                    await WriteMarkerAtomicallyAsync(markerPath, checksumToPersist, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to write CLI checksum marker; future updates will re-download.");
+                }
 
                 // The new binary will extract its embedded bundle on first run via EnsureExtractedAsync.
                 // No proactive extraction needed — the payload is inside the new binary's embedded resources,
@@ -569,5 +671,26 @@ internal sealed class UpdateCommand : BaseCommand
         {
             _logger.LogWarning(ex, "Failed to clean up directory {Directory}", directory);
         }
+    }
+
+    private static async Task<string> ComputeArchiveChecksumAsync(string archivePath, CancellationToken cancellationToken)
+    {
+        // Mirrors CliDownloader.ValidateChecksumAsync: the published .sha512
+        // companion files use SHA-512 over the archive bytes, so the marker
+        // we persist must use the same algorithm to compare cleanly.
+        using var sha512 = SHA512.Create();
+        await using var fileStream = new FileStream(archivePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var hashBytes = await sha512.ComputeHashAsync(fileStream, cancellationToken);
+        return Convert.ToHexString(hashBytes).ToLowerInvariant();
+    }
+
+    private static async Task WriteMarkerAtomicallyAsync(string markerPath, string checksum, CancellationToken cancellationToken)
+    {
+        // Write to a sibling temp file then atomically swap into place so a
+        // crash mid-write can't leave a half-written marker that would cause
+        // false "already up to date" results on the next run.
+        var tempPath = $"{markerPath}.tmp.{Guid.NewGuid():N}";
+        await File.WriteAllTextAsync(tempPath, checksum, cancellationToken);
+        File.Move(tempPath, markerPath, overwrite: true);
     }
 }

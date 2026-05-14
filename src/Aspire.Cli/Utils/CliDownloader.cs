@@ -16,6 +16,15 @@ namespace Aspire.Cli.Utils;
 internal interface ICliDownloader
 {
     Task<string> DownloadLatestCliAsync(string channelName, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Fetches the published SHA-512 checksum for the latest CLI archive on
+    /// the given channel without downloading the archive itself. The checksum
+    /// is returned as a lowercase hex string with surrounding whitespace
+    /// trimmed. Used to short-circuit a full download when the installed
+    /// binary already matches the latest published build.
+    /// </summary>
+    Task<string> GetLatestChecksumAsync(string channelName, CancellationToken cancellationToken);
 }
 
 internal class CliDownloader(
@@ -28,48 +37,42 @@ internal class CliDownloader(
     
     private static readonly HttpClient s_httpClient = new();
 
+    public async Task<string> GetLatestChecksumAsync(string channelName, CancellationToken cancellationToken)
+    {
+        var info = await BuildChannelDownloadInfoAsync(channelName, cancellationToken);
+
+        logger.LogDebug("Fetching checksum from {Url}", info.ChecksumUrl);
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(TimeSpan.FromSeconds(ChecksumDownloadTimeoutSeconds));
+
+        using var response = await s_httpClient.GetAsync(info.ChecksumUrl, cts.Token);
+        response.EnsureSuccessStatusCode();
+
+        var raw = await response.Content.ReadAsStringAsync(cts.Token);
+        return NormalizeChecksum(raw);
+    }
+
     public async Task<string> DownloadLatestCliAsync(string channelName, CancellationToken cancellationToken)
     {
-        // Get the channel information from PackagingService
-        var channels = await packagingService.GetChannelsAsync(cancellationToken);
-        var channel = channels.FirstOrDefault(c => c.Name.Equals(channelName, StringComparison.OrdinalIgnoreCase));
-        
-        if (channel is null)
-        {
-            throw new ArgumentException($"Unsupported channel '{channelName}'. Available channels: {string.Join(", ", channels.Select(c => c.Name))}");
-        }
-
-        if (string.IsNullOrEmpty(channel.CliDownloadBaseUrl))
-        {
-            throw new InvalidOperationException($"Channel '{channelName}' does not support CLI downloads.");
-        }
-
-        var baseUrl = channel.CliDownloadBaseUrl.TrimEnd('/');
-
-        var (os, arch) = DetectPlatform();
-        var runtimeIdentifier = $"{os}-{arch}";
-        var extension = os == "win" ? "zip" : "tar.gz";
-        var archiveFilename = $"aspire-cli-{runtimeIdentifier}.{extension}";
-        var checksumFilename = $"{archiveFilename}.sha512";
-        var archiveUrl = $"{baseUrl}/{archiveFilename}";
-        var checksumUrl = $"{baseUrl}/{checksumFilename}";
+        var info = await BuildChannelDownloadInfoAsync(channelName, cancellationToken);
 
         // Create temp directory for download
         var tempDir = Directory.CreateTempSubdirectory("aspire-cli-download").FullName;
 
         try
         {
-            var archivePath = Path.Combine(tempDir, archiveFilename);
-            var checksumPath = Path.Combine(tempDir, checksumFilename);
-            var archiveDescriptor = GetDownloadDescriptor(archiveUrl, $"the {channel.Name} channel");
+            var archivePath = Path.Combine(tempDir, info.ArchiveFilename);
+            var checksumPath = Path.Combine(tempDir, info.ChecksumFilename);
+            var archiveDescriptor = GetDownloadDescriptor(info.ArchiveUrl, $"the {info.ChannelName} channel");
 
             _ = await interactionService.ShowStatusAsync($"Downloading {archiveDescriptor}", async () =>
             {
-                logger.LogDebug("Downloading archive from {Url} to {Path}", archiveUrl, archivePath);
-                await DownloadFileAsync(archiveUrl, archivePath, ArchiveDownloadTimeoutSeconds, cancellationToken);
+                logger.LogDebug("Downloading archive from {Url} to {Path}", info.ArchiveUrl, archivePath);
+                await DownloadFileAsync(info.ArchiveUrl, archivePath, ArchiveDownloadTimeoutSeconds, cancellationToken);
 
-                logger.LogDebug("Downloading checksum from {Url} to {Path}", checksumUrl, checksumPath);
-                await DownloadFileAsync(checksumUrl, checksumPath, ChecksumDownloadTimeoutSeconds, cancellationToken);
+                logger.LogDebug("Downloading checksum from {Url} to {Path}", info.ChecksumUrl, checksumPath);
+                await DownloadFileAsync(info.ChecksumUrl, checksumPath, ChecksumDownloadTimeoutSeconds, cancellationToken);
                 
                 return 0; // Return dummy value for ShowStatusAsync
             });
@@ -98,6 +101,71 @@ internal class CliDownloader(
             throw;
         }
     }
+
+    private async Task<ChannelDownloadInfo> BuildChannelDownloadInfoAsync(string channelName, CancellationToken cancellationToken)
+    {
+        var channels = await packagingService.GetChannelsAsync(cancellationToken);
+        var channel = channels.FirstOrDefault(c => c.Name.Equals(channelName, StringComparison.OrdinalIgnoreCase));
+
+        if (channel is null)
+        {
+            throw new ArgumentException($"Unsupported channel '{channelName}'. Available channels: {string.Join(", ", channels.Select(c => c.Name))}");
+        }
+
+        if (string.IsNullOrEmpty(channel.CliDownloadBaseUrl))
+        {
+            throw new InvalidOperationException($"Channel '{channelName}' does not support CLI downloads.");
+        }
+
+        var baseUrl = channel.CliDownloadBaseUrl.TrimEnd('/');
+        var (os, arch) = DetectPlatform();
+        var runtimeIdentifier = $"{os}-{arch}";
+        var extension = os == "win" ? "zip" : "tar.gz";
+        var archiveFilename = $"aspire-cli-{runtimeIdentifier}.{extension}";
+        var checksumFilename = $"{archiveFilename}.sha512";
+
+        return new ChannelDownloadInfo(
+            channel.Name,
+            archiveFilename,
+            checksumFilename,
+            $"{baseUrl}/{archiveFilename}",
+            $"{baseUrl}/{checksumFilename}");
+    }
+
+    internal static string NormalizeChecksum(string raw)
+    {
+        // The published .sha512 file format mirrors `sha512sum` output. Two shapes
+        // are observed across our publishing infrastructure:
+        //   1. "<hex>\n"                                     (just the digest)
+        //   2. "<hex>  aspire-cli-<rid>.tar.gz\n"            (digest + filename)
+        // Take the leading hex token only and lowercase so comparisons are stable.
+        var trimmed = raw.Trim();
+        var firstWhitespace = IndexOfWhitespace(trimmed);
+        if (firstWhitespace > 0)
+        {
+            trimmed = trimmed.Substring(0, firstWhitespace);
+        }
+        return trimmed.ToLowerInvariant();
+    }
+
+    private static int IndexOfWhitespace(string value)
+    {
+        for (var i = 0; i < value.Length; i++)
+        {
+            if (char.IsWhiteSpace(value[i]))
+            {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private readonly record struct ChannelDownloadInfo(
+        string ChannelName,
+        string ArchiveFilename,
+        string ChecksumFilename,
+        string ArchiveUrl,
+        string ChecksumUrl);
 
     internal static string GetDownloadDescriptor(string url, string? source = null)
     {
@@ -204,7 +272,7 @@ internal class CliDownloader(
 
     private static async Task ValidateChecksumAsync(string archivePath, string checksumPath, CancellationToken cancellationToken)
     {
-        var expectedChecksum = (await File.ReadAllTextAsync(checksumPath, cancellationToken)).Trim().ToLowerInvariant();
+        var expectedChecksum = NormalizeChecksum(await File.ReadAllTextAsync(checksumPath, cancellationToken));
 
         using var sha512 = SHA512.Create();
         await using var fileStream = new FileStream(archivePath, FileMode.Open, FileAccess.Read, FileShare.Read);

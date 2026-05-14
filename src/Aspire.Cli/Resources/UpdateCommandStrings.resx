@@ -174,4 +174,13 @@
   <data name="NuGetConfigDirOptionDescription" xml:space="preserve">
     <value>Directory to create or update the NuGet.config file in</value>
   </data>
+  <data name="ForceOptionDescription" xml:space="preserve">
+    <value>Force the self-update to download and install even if the installed CLI already matches the latest published build</value>
+  </data>
+  <data name="AlreadyUpToDateMessage" xml:space="preserve">
+    <value>Aspire CLI is already up to date.</value>
+  </data>
+  <data name="AlreadyUpToDateMessageFormat" xml:space="preserve">
+    <value>Aspire CLI is already up to date (version {0}).</value>
+  </data>
 </root>

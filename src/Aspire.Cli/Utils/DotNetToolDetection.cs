@@ -291,6 +291,17 @@ internal static class DotNetToolDetection
         return new ProcessPathOverrideScope(previousValue);
     }
 
+    /// <summary>
+    /// Returns the current process path, honoring any test override applied via
+    /// <see cref="UseProcessPathForTesting"/>. Use this instead of
+    /// <see cref="Environment.ProcessPath"/> directly when a code path needs to
+    /// reason about the installed CLI's location and must remain testable.
+    /// </summary>
+    internal static string? GetEffectiveProcessPath()
+    {
+        return s_processPathOverride.Value ?? Environment.ProcessPath;
+    }
+
     private static bool IsAspireExecutable(string executable)
     {
         return string.Equals(executable, "aspire", StringComparison.OrdinalIgnoreCase)

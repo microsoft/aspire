@@ -19,6 +19,8 @@ internal sealed class TestCliDownloader : ICliDownloader
 
     public Func<string, CancellationToken, Task<string>>? DownloadLatestCliAsyncCallback { get; set; }
 
+    public Func<string, CancellationToken, Task<string>>? GetLatestChecksumAsyncCallback { get; set; }
+
     public Task<string> DownloadLatestCliAsync(string quality, CancellationToken cancellationToken)
     {
         if (DownloadLatestCliAsyncCallback is not null)
@@ -37,5 +39,18 @@ internal sealed class TestCliDownloader : ICliDownloader
         var path = Path.Combine(_tempDirectory.FullName, filename);
         
         return Task.FromResult(path);
+    }
+
+    public Task<string> GetLatestChecksumAsync(string channelName, CancellationToken cancellationToken)
+    {
+        if (GetLatestChecksumAsyncCallback is not null)
+        {
+            return GetLatestChecksumAsyncCallback(channelName, cancellationToken);
+        }
+
+        // Default to a unique value per call so the no-op short-circuit in
+        // UpdateCommand never triggers unless a test opts in by configuring
+        // the callback.
+        return Task.FromResult(Guid.NewGuid().ToString("N"));
     }
 }

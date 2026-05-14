@@ -1928,6 +1928,190 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     // to roll back any prior write. That rollback path is covered by the stable row of
     // UpdateCommand_SelfUpdate_DoesNotWriteChannelToGlobalConfiguration above (asserts both
     // DoesNotContain set + DoesNotContain delete) — no standalone test required here.
+
+    // Issue #16730: `aspire update --self` should be a no-op when the installed binary's
+    // recorded archive checksum matches the latest published checksum. The marker file
+    // (aspire.sha512) is written next to the installed binary after a successful install.
+
+    [Fact]
+    public async Task UpdateCommand_SelfUpdate_WhenChecksumMatchesMarker_SkipsDownload()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var tempDirectory = new TestTempDirectory();
+
+        // Pretend the running CLI lives in a temp dir so we can drop a marker file
+        // that the command will read. Use a non-tool layout so the dotnet-tool
+        // detection short-circuit does not fire first.
+        var installDir = Path.Combine(tempDirectory.Path, "aspire-bin");
+        Directory.CreateDirectory(installDir);
+        var processPath = Path.Combine(installDir, GetAspireExecutableName());
+        File.WriteAllText(processPath, string.Empty);
+        using var processPathScope = DotNetToolDetection.UseProcessPathForTesting(processPath);
+
+        const string sharedChecksum = "abc123def456";
+        File.WriteAllText(Path.Combine(installDir, UpdateCommand.ChecksumMarkerFileName), sharedChecksum + "\n");
+
+        var downloadInvoked = false;
+        var checksumProbeInvoked = false;
+        var interactionService = new TestInteractionService();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.CliDownloaderFactory = _ => new TestCliDownloader(workspace.WorkspaceRoot)
+            {
+                GetLatestChecksumAsyncCallback = (_, _) =>
+                {
+                    checksumProbeInvoked = true;
+                    return Task.FromResult(sharedChecksum);
+                },
+                DownloadLatestCliAsyncCallback = (_, _) =>
+                {
+                    downloadInvoked = true;
+                    return Task.FromResult(string.Empty);
+                }
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --self --channel daily");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.True(checksumProbeInvoked, "Checksum probe should be invoked to compare against the marker.");
+        Assert.False(downloadInvoked, "Archive download should be skipped when the checksum already matches.");
+    }
+
+    [Fact]
+    public async Task UpdateCommand_SelfUpdate_WhenChecksumMismatchesMarker_PerformsUpdateAndRewritesMarker()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var tempDirectory = new TestTempDirectory();
+        var installDir = Path.Combine(tempDirectory.Path, "aspire-bin");
+        Directory.CreateDirectory(installDir);
+        var processPath = Path.Combine(installDir, GetAspireExecutableName());
+        File.WriteAllText(processPath, string.Empty);
+        using var processPathScope = DotNetToolDetection.UseProcessPathForTesting(processPath);
+
+        var markerPath = Path.Combine(installDir, UpdateCommand.ChecksumMarkerFileName);
+        File.WriteAllText(markerPath, "stale-marker-checksum\n");
+
+        var downloadInvoked = false;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliDownloaderFactory = _ => new TestCliDownloader(workspace.WorkspaceRoot)
+            {
+                GetLatestChecksumAsyncCallback = (_, _) => Task.FromResult("fresh-remote-checksum"),
+                DownloadLatestCliAsyncCallback = (_, _) =>
+                {
+                    downloadInvoked = true;
+                    var archivePath = Path.Combine(workspace.WorkspaceRoot.FullName, "test-cli.tar.gz");
+                    File.WriteAllText(archivePath, "fake archive");
+                    return Task.FromResult(archivePath);
+                }
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --self --channel daily");
+
+        // Extraction will fail (fake archive), but the download must have been attempted
+        // because the marker checksum did not match the remote checksum.
+        await result.InvokeAsync().DefaultTimeout();
+
+        Assert.True(downloadInvoked, "Archive download should run when the marker checksum does not match.");
+    }
+
+    [Fact]
+    public async Task UpdateCommand_SelfUpdate_WhenNoMarkerExists_PerformsUpdate()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var tempDirectory = new TestTempDirectory();
+        var installDir = Path.Combine(tempDirectory.Path, "aspire-bin");
+        Directory.CreateDirectory(installDir);
+        var processPath = Path.Combine(installDir, GetAspireExecutableName());
+        File.WriteAllText(processPath, string.Empty);
+        using var processPathScope = DotNetToolDetection.UseProcessPathForTesting(processPath);
+        // No marker file is created.
+
+        var checksumProbeInvoked = false;
+        var downloadInvoked = false;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliDownloaderFactory = _ => new TestCliDownloader(workspace.WorkspaceRoot)
+            {
+                GetLatestChecksumAsyncCallback = (_, _) =>
+                {
+                    checksumProbeInvoked = true;
+                    return Task.FromResult("any-checksum");
+                },
+                DownloadLatestCliAsyncCallback = (_, _) =>
+                {
+                    downloadInvoked = true;
+                    var archivePath = Path.Combine(workspace.WorkspaceRoot.FullName, "test-cli.tar.gz");
+                    File.WriteAllText(archivePath, "fake archive");
+                    return Task.FromResult(archivePath);
+                }
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --self --channel daily");
+
+        await result.InvokeAsync().DefaultTimeout();
+
+        Assert.False(checksumProbeInvoked, "Checksum probe should be skipped when no marker file exists.");
+        Assert.True(downloadInvoked, "Archive download should run when no marker exists.");
+    }
+
+    [Fact]
+    public async Task UpdateCommand_SelfUpdate_WithForce_AlwaysDownloads()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var tempDirectory = new TestTempDirectory();
+        var installDir = Path.Combine(tempDirectory.Path, "aspire-bin");
+        Directory.CreateDirectory(installDir);
+        var processPath = Path.Combine(installDir, GetAspireExecutableName());
+        File.WriteAllText(processPath, string.Empty);
+        using var processPathScope = DotNetToolDetection.UseProcessPathForTesting(processPath);
+
+        const string sharedChecksum = "matching-checksum";
+        File.WriteAllText(Path.Combine(installDir, UpdateCommand.ChecksumMarkerFileName), sharedChecksum);
+
+        var checksumProbeInvoked = false;
+        var downloadInvoked = false;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliDownloaderFactory = _ => new TestCliDownloader(workspace.WorkspaceRoot)
+            {
+                GetLatestChecksumAsyncCallback = (_, _) =>
+                {
+                    checksumProbeInvoked = true;
+                    return Task.FromResult(sharedChecksum);
+                },
+                DownloadLatestCliAsyncCallback = (_, _) =>
+                {
+                    downloadInvoked = true;
+                    var archivePath = Path.Combine(workspace.WorkspaceRoot.FullName, "test-cli.tar.gz");
+                    File.WriteAllText(archivePath, "fake archive");
+                    return Task.FromResult(archivePath);
+                }
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --self --channel daily --force");
+
+        await result.InvokeAsync().DefaultTimeout();
+
+        Assert.False(checksumProbeInvoked, "--force should bypass the checksum probe entirely.");
+        Assert.True(downloadInvoked, "--force must always trigger an archive download.");
+    }
 }
 
 // Helper class to track DisplayCancellationMessage calls

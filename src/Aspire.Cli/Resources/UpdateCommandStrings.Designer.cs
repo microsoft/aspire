@@ -119,5 +119,8 @@ namespace Aspire.Cli.Resources {
     internal static string SelfOptionDescription => ResourceManager.GetString("SelfOptionDescription", resourceCulture);
     internal static string YesOptionDescription => ResourceManager.GetString("YesOptionDescription", resourceCulture);
     internal static string NuGetConfigDirOptionDescription => ResourceManager.GetString("NuGetConfigDirOptionDescription", resourceCulture);
+    internal static string ForceOptionDescription => ResourceManager.GetString("ForceOptionDescription", resourceCulture);
+    internal static string AlreadyUpToDateMessage => ResourceManager.GetString("AlreadyUpToDateMessage", resourceCulture);
+    internal static string AlreadyUpToDateMessageFormat => ResourceManager.GetString("AlreadyUpToDateMessageFormat", resourceCulture);
     }
 }

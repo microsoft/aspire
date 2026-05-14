@@ -7,6 +7,16 @@
         <target state="translated">Adicionado: {0}</target>
         <note />
       </trans-unit>
+      <trans-unit id="AlreadyUpToDateMessage">
+        <source>Aspire CLI is already up to date.</source>
+        <target state="new">Aspire CLI is already up to date.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AlreadyUpToDateMessageFormat">
+        <source>Aspire CLI is already up to date (version {0}).</source>
+        <target state="new">Aspire CLI is already up to date (version {0}).</target>
+        <note />
+      </trans-unit>
       <trans-unit id="AnalyzeAppHost">
         <source>Analyze AppHost</source>
         <target state="needs-review-translation">Analisar o Host de Aplicativo</target>
@@ -115,6 +125,11 @@
       <trans-unit id="FallbackParsingWarning">
         <source>Note: Update plan generated using fallback parsing due to unresolvable AppHost SDK. Dependency analysis may have reduced accuracy.</source>
         <target state="needs-review-translation">Observação: o plano de atualização gerado usando a análise de fallback devido ao SDK do AppHost não resolvido. A análise de dependência pode ter uma precisão reduzida.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ForceOptionDescription">
+        <source>Force the self-update to download and install even if the installed CLI already matches the latest published build</source>
+        <target state="new">Force the self-update to download and install even if the installed CLI already matches the latest published build</target>
         <note />
       </trans-unit>
       <trans-unit id="MappingAddedFormat">
