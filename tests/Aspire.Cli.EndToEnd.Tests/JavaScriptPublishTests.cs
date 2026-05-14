@@ -264,7 +264,13 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
             const fs = require('fs');
 
             const portArgumentIndex = process.argv.findIndex(arg => arg === '--port' || arg === '-p');
-            const port = process.env.PORT || (portArgumentIndex >= 0 ? process.argv[portArgumentIndex + 1] : undefined) || 3000;
+            const fallbackPorts = {
+              'node-npm': 3001,
+              'javascript-pnpm': 3002,
+              'vite-yarn': 3003,
+              'next-bun': 3004,
+            };
+            const port = process.env.PORT || (portArgumentIndex >= 0 ? process.argv[portArgumentIndex + 1] : undefined) || fallbackPorts['{{appName}}'];
 
             http.createServer((req, res) => {
               res.writeHead(200, { 'Content-Type': 'application/json' });
