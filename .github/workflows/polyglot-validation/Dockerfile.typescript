@@ -10,16 +10,26 @@
 #
 # Note: Expects self-extracting binary and NuGet artifacts to be pre-downloaded to /workspace/artifacts/
 #
-FROM mcr.microsoft.com/devcontainers/typescript-node:22
+FROM ubuntu:24.04
 
-# Ensure Yarn APT repository signing key is available (base image includes Yarn repo)
-RUN curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | gpg --dearmor | sudo tee /etc/apt/keyrings/yarn-archive-keyring.gpg > /dev/null
+ARG NODE_VERSION=22
 
-# Install system dependencies (wget, docker CLI, jq for JSON manipulation)
-RUN apt-get update && apt-get install -y \
+# Install the requested Node.js runtime plus system dependencies.
+# Start from a neutral base so every matrix leg uses the same NodeSource-installed
+# runtime rather than inheriting a specific Node version.
+RUN case "$NODE_VERSION" in 22|24|26) ;; *) echo "Unsupported NODE_VERSION: $NODE_VERSION" >&2; exit 1 ;; esac && \
+    apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    curl \
+    gpg \
     wget \
     docker.io \
     jq \
+    && rm -rf /var/lib/apt/lists/* && \
+    curl -fsSL "https://deb.nodesource.com/setup_${NODE_VERSION}.x" | bash - && \
+    apt-get install -y --no-install-recommends \
+    nodejs \
+    && node --version | grep -E "^v${NODE_VERSION}\\." \
     && rm -rf /var/lib/apt/lists/*
 
 # Pre-configure Aspire CLI path
