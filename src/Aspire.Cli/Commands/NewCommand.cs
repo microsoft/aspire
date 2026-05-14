@@ -344,34 +344,41 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
                     return new ResolveTemplateVersionResult { ErrorMessage = errorMessage };
                 }
 
-                var packages = (await selectedChannel.GetTemplatePackagesAsync(ExecutionContext.WorkingDirectory, cancellationToken))
-                    .Where(p => Semver.SemVersion.TryParse(p.Version, Semver.SemVersionStyles.Strict, out _))
-                    .ToArray();
-                var hasPrHives = ExecutionContext.GetHiveCount() > 0;
-
-                NuGetPackage? package = VersionHelper.TryGetCurrentCliVersionMatch(
-                    packages,
-                    p => p.Version,
-                    out var cliVersionPackage,
-                    channelName: selectedChannel.Name,
-                    hasPrHives: hasPrHives)
-                    ? cliVersionPackage
-                    : null;
-
-                package ??= packages
-                    .OrderByDescending(p => Semver.SemVersion.Parse(p.Version, Semver.SemVersionStyles.Strict), Semver.SemVersion.PrecedenceComparer)
-                    .FirstOrDefault();
-
-                if (package is null)
+                try
                 {
-                    return new ResolveTemplateVersionResult { ErrorMessage = $"No template versions found in channel '{selectedChannel.Name}'." };
+                    var packages = (await selectedChannel.GetTemplatePackagesAsync(ExecutionContext.WorkingDirectory, cancellationToken))
+                        .Where(p => Semver.SemVersion.TryParse(p.Version, Semver.SemVersionStyles.Strict, out _))
+                        .ToArray();
+                    var hasPrHives = ExecutionContext.GetHiveCount() > 0;
+
+                    NuGetPackage? package = VersionHelper.TryGetCurrentCliVersionMatch(
+                        packages,
+                        p => p.Version,
+                        out var cliVersionPackage,
+                        channelName: selectedChannel.Name,
+                        hasPrHives: hasPrHives)
+                        ? cliVersionPackage
+                        : null;
+
+                    package ??= packages
+                        .OrderByDescending(p => Semver.SemVersion.Parse(p.Version, Semver.SemVersionStyles.Strict), Semver.SemVersion.PrecedenceComparer)
+                        .FirstOrDefault();
+
+                    if (package is null)
+                    {
+                        return new ResolveTemplateVersionResult { ErrorMessage = $"No template versions found in channel '{selectedChannel.Name}'." };
+                    }
+
+                    // Only persist explicit channel names (e.g. local, daily) — implicit channels
+                    // (stable/nuget.org) should not be written so aspire add uses its default behavior.
+                    var channelName = selectedChannel.Type is PackageChannelType.Explicit ? selectedChannel.Name : null;
+
+                    return new ResolveTemplateVersionResult { Version = package.Version, ChannelName = channelName };
                 }
-
-                // Only persist explicit channel names (e.g. local, daily) — implicit channels
-                // (stable/nuget.org) should not be written so aspire add uses its default behavior.
-                var channelName = selectedChannel.Type is PackageChannelType.Explicit ? selectedChannel.Name : null;
-
-                return new ResolveTemplateVersionResult { Version = package.Version, ChannelName = channelName };
+                catch (NuGetPackageCacheException ex)
+                {
+                    return new ResolveTemplateVersionResult { ErrorMessage = ex.Message };
+                }
             });
     }
 

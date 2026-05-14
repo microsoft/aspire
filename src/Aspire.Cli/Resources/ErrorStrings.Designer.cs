@@ -157,6 +157,14 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string FailedToParsePackageSearchResults
+        {
+            get
+            {
+                return ResourceManager.GetString("FailedToParsePackageSearchResults", resourceCulture);
+            }
+        }
+
         public static string AppHostWasSpecifiedButDoesntExist
         {
             get
