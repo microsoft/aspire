@@ -40,7 +40,7 @@ internal static class EndpointsManifestTransformer
                 if (!hasContentEncoding)
                 {
                     // Deep-clone via round-trip serialization, then patch route and cache header
-                    var fallbackJson = JsonSerializer.Serialize(ep, ManifestJsonContext.Default.EndpointEntry);
+                    var fallbackJson = JsonSerializer.Serialize(ep, ManifestJsonContext.Relaxed.EndpointEntry);
                     var fallback = JsonSerializer.Deserialize(fallbackJson, ManifestJsonContext.Default.EndpointEntry)!;
                     fallback.Route = "{**path:nonfile}";
                     if (fallback.ResponseHeaders is not null)
@@ -60,7 +60,7 @@ internal static class EndpointsManifestTransformer
 
         manifest.Endpoints = [.. manifest.Endpoints, .. fallbackEndpoints];
 
-        return JsonSerializer.Serialize(manifest, ManifestJsonContext.Default.EndpointsManifest);
+        return JsonSerializer.Serialize(manifest, ManifestJsonContext.Relaxed.EndpointsManifest);
     }
 
     /// <summary>
@@ -121,7 +121,7 @@ internal static class EndpointsManifestTransformer
 
         await File.WriteAllTextAsync(
             outputPath,
-            JsonSerializer.Serialize(merged, ManifestJsonContext.Default.DevelopmentManifest),
+            JsonSerializer.Serialize(merged, ManifestJsonContext.Relaxed.DevelopmentManifest),
             ct).ConfigureAwait(false);
         BlazorGatewayLog.WroteMergedManifest(logger, outputPath);
     }

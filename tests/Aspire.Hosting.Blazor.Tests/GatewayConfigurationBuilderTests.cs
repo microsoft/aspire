@@ -161,13 +161,10 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
 
         var registration = new GatewayAppRegistration(wasmApp, "store", []);
         var apps = new List<GatewayAppRegistration> { registration };
-        var env = new Dictionary<string, object>
-        {
-            ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "http://localhost:4317"
-        };
+        var env = new Dictionary<string, object>();
         var gatewayEndpoint = gateway.GetEndpoint("https");
 
-        GatewayConfigurationBuilder.EmitProxyConfiguration(env, apps, gatewayEndpoint);
+        GatewayConfigurationBuilder.EmitProxyConfiguration(env, apps, gatewayEndpoint, httpOtlpEndpointUrl: "http://localhost:4317");
 
         Assert.Equal("http://localhost:4317", env["ReverseProxy__Clusters__cluster-otlp-dashboard__Destinations__d1__Address"]);
     }
@@ -314,12 +311,9 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
             new(storeApp, "store", ["weatherapi", "catalogapi"]),
             new(adminApp, "admin", ["weatherapi", "usersapi"])
         };
-        var env = new Dictionary<string, object>
-        {
-            ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "http://localhost:18890"
-        };
+        var env = new Dictionary<string, object>();
 
-        GatewayConfigurationBuilder.EmitProxyConfiguration(env, apps, gateway.GetEndpoint("https"), gateway.GetEndpoint("http"));
+        GatewayConfigurationBuilder.EmitProxyConfiguration(env, apps, gateway.GetEndpoint("https"), gateway.GetEndpoint("http"), httpOtlpEndpointUrl: "http://localhost:18890");
 
         // Each app gets its own routes — no collision between store and admin for the same service
         Assert.Equal("/store/_api/weatherapi/{**catch-all}", env["ReverseProxy__Routes__route-store-weatherapi__Match__Path"]);

@@ -54,10 +54,18 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-// Redirect browser navigations from HTTP to HTTPS so the WASM client always runs on
-// the HTTPS origin. This ensures fetch/OTLP requests use same-origin URLs (no CORS).
-// UseHttpsRedirection no-ops when there is no HTTPS endpoint configured.
-app.UseHttpsRedirection();
+// Only redirect document navigations (browser URL bar / top-level navigation) from HTTP
+// to HTTPS. The Sec-Fetch-Dest header distinguishes navigations from subresource loads
+// and API fetches. This ensures the WASM client loads on HTTPS when available, making
+// OTLP and service fetch requests same-origin, without redirecting programmatic requests
+// that might legitimately target the HTTP endpoint.
+// See https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Sec-Fetch-Dest
+app.UseWhen(
+    context => string.Equals(
+        context.Request.Headers["Sec-Fetch-Dest"].ToString(),
+        "document",
+        StringComparison.OrdinalIgnoreCase),
+    branch => branch.UseHttpsRedirection());
 
 app.MapDefaultEndpoints();
 
