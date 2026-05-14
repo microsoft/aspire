@@ -646,16 +646,16 @@ export interface TestConfigDto {
 
 /** DTO interface for TestDeeplyNestedDto */
 export interface TestDeeplyNestedDto {
-    nestedData?: AspireDict<string, AspireList<TestConfigDto>>;
-    metadataArray?: AspireDict<string, string>[];
+    nestedData?: Record<string, TestConfigDto[]>;
+    metadataArray?: Record<string, string>[];
 }
 
 /** DTO interface for TestNestedDto */
 export interface TestNestedDto {
     id?: string;
     config?: TestConfigDto;
-    tags?: AspireList<string>;
-    counts?: AspireDict<string, number>;
+    tags?: string[];
+    counts?: Record<string, number>;
 }
 
 // ============================================================================

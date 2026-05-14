@@ -1313,6 +1313,8 @@ public class AtsTypeScriptCodeGeneratorTests
 
         // TestNestedDto should generate an interface with nested types
         Assert.Contains("interface TestNestedDto", code);
+        Assert.Contains("tags?: string[];", code);
+        Assert.Contains("counts?: Record<string, number>;", code);
     }
 
     [Fact]

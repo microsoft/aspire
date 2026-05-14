@@ -68,8 +68,8 @@ func (d *TestConfigDto) ToMap() map[string]any {
 type TestNestedDto struct {
 	Id string `json:"Id,omitempty"`
 	Config *TestConfigDto `json:"Config,omitempty"`
-	Tags *List[string] `json:"Tags,omitempty"`
-	Counts *Dict[string, float64] `json:"Counts,omitempty"`
+	Tags []string `json:"Tags,omitempty"`
+	Counts map[string]float64 `json:"Counts,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
@@ -84,8 +84,8 @@ func (d *TestNestedDto) ToMap() map[string]any {
 
 // TestDeeplyNestedDto represents TestDeeplyNestedDto.
 type TestDeeplyNestedDto struct {
-	NestedData *Dict[string, *List[*TestConfigDto]] `json:"NestedData,omitempty"`
-	MetadataArray []*Dict[string, string] `json:"MetadataArray,omitempty"`
+	NestedData map[string][]*TestConfigDto `json:"NestedData,omitempty"`
+	MetadataArray []map[string]string `json:"MetadataArray,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
