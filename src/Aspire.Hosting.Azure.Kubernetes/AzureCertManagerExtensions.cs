@@ -18,7 +18,7 @@ public static class AzureCertManagerExtensions
     /// returns a typed <see cref="CertManagerResource"/> that can host issuer resources.
     /// </summary>
     /// <param name="builder">The AKS environment resource builder.</param>
-    /// <param name="name">The Aspire resource name for the cert-manager installation. Defaults to <c>"cert-manager"</c>.</param>
+    /// <param name="name">The Aspire resource name for the cert-manager installation.</param>
     /// <param name="chartVersion">The cert-manager Helm chart version to install.
     /// Defaults to a pinned version validated against this Aspire build.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{CertManagerResource}"/> for chaining.</returns>
@@ -30,7 +30,7 @@ public static class AzureCertManagerExtensions
     [AspireExport(Description = "Installs cert-manager into an AKS environment")]
     public static IResourceBuilder<CertManagerResource> AddCertManager(
         this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
-        [ResourceName] string name = "cert-manager",
+        [ResourceName] string name,
         string? chartVersion = null)
     {
         ArgumentNullException.ThrowIfNull(builder);

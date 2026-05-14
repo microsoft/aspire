@@ -8,6 +8,7 @@ using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Kubernetes;
+using Aspire.Hosting.Kubernetes.Extensions;
 using Aspire.Hosting.Pipelines;
 using Microsoft.Extensions.Logging;
 
@@ -35,12 +36,20 @@ public static class CertManagerExtensions
     // https://cert-manager.io/docs/usage/ingress/.
     internal const string ClusterIssuerAnnotationKey = "cert-manager.io/cluster-issuer";
 
+    // Aspire resource names cap at 64 chars. The helm chart we register beside the wrapper
+    // is "{name}-chart" (6 extra chars), so the user-facing name has to stay under this
+    // bound or AddHelmChart will reject it with a confusing downstream error.
+    private const int MaxResourceNameLength = 64;
+    private const string ChartNameSuffix = "-chart";
+
     /// <summary>
     /// Installs cert-manager into the Kubernetes environment and returns a typed
     /// <see cref="CertManagerResource"/> that can host issuer resources.
     /// </summary>
     /// <param name="builder">The Kubernetes environment resource builder.</param>
-    /// <param name="name">The Aspire resource name for the cert-manager installation. Defaults to <c>"cert-manager"</c>.</param>
+    /// <param name="name">The Aspire resource name for the cert-manager installation. Each call
+    /// adds a uniquely-named resource to the application model, so multiple Kubernetes environments
+    /// must each pass distinct names.</param>
     /// <param name="chartVersion">The cert-manager Helm chart version to install.
     /// Defaults to a pinned version validated against this Aspire build.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{CertManagerResource}"/> for chaining.</returns>
@@ -54,8 +63,13 @@ public static class CertManagerExtensions
     ///   <item><c>crds.enabled = true</c> — installs the cert-manager CRDs (<c>ClusterIssuer</c>, <c>Certificate</c>, ...) so issuer manifests can be applied immediately afterwards.</item>
     ///   <item><c>config.enableGatewayAPI = true</c> — lets cert-manager watch Gateway API <c>Gateway</c>/<c>HTTPRoute</c> resources for the cluster-issuer annotation.</item>
     ///   <item><c>WithForceConflicts()</c> — works around the AKS Azure Policy add-on mutating cert-manager's <c>ValidatingWebhookConfiguration</c> after install.</item>
-    ///   <item><c>WithDestroy()</c> — cleans up the Helm release on <c>aspire destroy</c>.</item>
+    ///   <item><c>WithDestroy()</c> — uninstalls the Helm release on <c>aspire destroy</c>.</item>
     /// </list>
+    /// <para>
+    /// Issuer manifests are applied directly via <c>kubectl apply</c> at deploy time (not as
+    /// part of the Helm release), and are deleted via <c>kubectl delete</c> on
+    /// <c>aspire destroy</c> before the cert-manager Helm release itself is uninstalled.
+    /// </para>
     /// <para>
     /// To customise additional Helm values, access the underlying chart via
     /// <see cref="CertManagerResource.HelmChart"/>.
@@ -64,11 +78,22 @@ public static class CertManagerExtensions
     [AspireExport(Description = "Installs cert-manager into a Kubernetes environment")]
     public static IResourceBuilder<CertManagerResource> AddCertManager(
         this IResourceBuilder<KubernetesEnvironmentResource> builder,
-        [ResourceName] string name = "cert-manager",
+        [ResourceName] string name,
         string? chartVersion = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
+
+        // Keep room for the "-chart" suffix we append for the underlying helm chart resource.
+        // Without this guard, an otherwise-valid 64-char name would build successfully here
+        // and then explode inside AddHelmChart with a less-clear "name too long" message.
+        if (name.Length > MaxResourceNameLength - ChartNameSuffix.Length)
+        {
+            throw new ArgumentException(
+                $"cert-manager resource name '{name}' is too long. The maximum length is {MaxResourceNameLength - ChartNameSuffix.Length} characters because " +
+                $"a companion Helm chart resource is registered as '{{name}}{ChartNameSuffix}' which must itself fit within the {MaxResourceNameLength}-character Aspire resource name limit.",
+                nameof(name));
+        }
 
         var version = chartVersion ?? DefaultChartVersion;
 
@@ -76,7 +101,7 @@ public static class CertManagerExtensions
         // CertManagerResource can keep the natural "{name}" identifier without colliding.
         // Both show up in the dashboard / generated artifacts: the chart is what actually
         // installs cert-manager, and the wrapper is what hosts the typed issuer children.
-        var chartName = $"{name}-chart";
+        var chartName = $"{name}{ChartNameSuffix}";
 
         var chartBuilder = builder
             .AddHelmChart(chartName, DefaultChartReference, version)
@@ -99,13 +124,18 @@ public static class CertManagerExtensions
 
         var resourceBuilder = builder.ApplicationBuilder.AddResource(resource).ExcludeFromManifest();
 
-        // Emit one kubectl-apply step per ClusterIssuer at deploy time. The annotation factory
-        // closure captures the CertManagerResource and reads .Issuers when the pipeline is
-        // assembled, so issuers added via AddIssuer(...) after this call are still picked up.
-        // Each step depends on helm-install-{chartName} so cert-manager (and its admission
-        // webhook) is up before we apply CRD instances.
+        // Emit one kubectl-apply step per ClusterIssuer at deploy time, plus one kubectl-delete
+        // step per ClusterIssuer at destroy time. The annotation factory closures capture the
+        // CertManagerResource and read .Issuers when the pipeline is assembled, so issuers added
+        // via AddIssuer(...) after this call are still picked up.
+        // Apply steps depend on helm-install-{chartName} so cert-manager (and its admission
+        // webhook) is up before we apply CRD instances. Delete steps run before
+        // helm-uninstall-{chartName} so we delete the ClusterIssuers (and let cert-manager
+        // clean up its account secrets) while the controller is still alive.
         resourceBuilder.WithAnnotation(new PipelineStepAnnotation(_ =>
             BuildIssuerApplySteps(resource, chartName)));
+        resourceBuilder.WithAnnotation(new PipelineStepAnnotation(_ =>
+            BuildIssuerDeleteSteps(resource, chartName)));
 
         return resourceBuilder;
     }
@@ -160,7 +190,7 @@ public static class CertManagerExtensions
     /// contact email supplied via a parameter resolved at deploy time.
     /// </summary>
     /// <param name="builder">The issuer resource builder.</param>
-    /// <param name="email">A parameter resource builder whose value is the contact email.</param>
+    /// <param name="email">A parameter resource builder whose value is the contact email registered with the ACME account.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{CertManagerIssuerResource}"/> for chaining.</returns>
     [AspireExport("withLetsEncryptProductionParam", Description = "Configures the issuer for Let's Encrypt production with a parameterized email")]
     public static IResourceBuilder<CertManagerIssuerResource> WithLetsEncryptProduction(
@@ -184,8 +214,11 @@ public static class CertManagerExtensions
 
     /// <summary>
     /// Configures the issuer to use the Let's Encrypt staging ACME endpoint, with the
-    /// contact email supplied via a parameter.
+    /// contact email supplied via a parameter resolved at deploy time.
     /// </summary>
+    /// <param name="builder">The issuer resource builder.</param>
+    /// <param name="email">A parameter resource builder whose value is the contact email registered with the ACME account.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{CertManagerIssuerResource}"/> for chaining.</returns>
     [AspireExport("withLetsEncryptStagingParam", Description = "Configures the issuer for Let's Encrypt staging with a parameterized email")]
     public static IResourceBuilder<CertManagerIssuerResource> WithLetsEncryptStaging(
         this IResourceBuilder<CertManagerIssuerResource> builder,
@@ -220,6 +253,10 @@ public static class CertManagerExtensions
     /// <summary>
     /// Configures the issuer to use a custom ACME directory endpoint with a parameterized email.
     /// </summary>
+    /// <param name="builder">The issuer resource builder.</param>
+    /// <param name="serverUrl">The ACME directory URL (e.g., <c>https://acme.example.com/directory</c>).</param>
+    /// <param name="email">A parameter resource builder whose value is the contact email registered with the ACME account.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{CertManagerIssuerResource}"/> for chaining.</returns>
     [AspireExport("withAcmeServerParam", Description = "Configures the issuer to use a custom ACME directory with a parameterized email")]
     public static IResourceBuilder<CertManagerIssuerResource> WithAcmeServer(
         this IResourceBuilder<CertManagerIssuerResource> builder,
@@ -272,7 +309,10 @@ public static class CertManagerExtensions
     /// <remarks>
     /// Equivalent to calling <c>WithTls()</c> followed by
     /// <c>WithGatewayAnnotation("cert-manager.io/cluster-issuer", issuer.Resource.Name)</c>,
-    /// but type-safe and refactor-friendly.
+    /// but type-safe and refactor-friendly. Throws if the gateway and the issuer's
+    /// cert-manager installation are not part of the same Kubernetes environment, since
+    /// cert-manager is per-cluster and would otherwise silently produce an unsatisfiable
+    /// TLS configuration.
     /// </remarks>
     [AspireExport("withGatewayTlsIssuer", Description = "Configures TLS on a Kubernetes Gateway using a cert-manager ClusterIssuer")]
     public static IResourceBuilder<KubernetesGatewayResource> WithTls(
@@ -282,31 +322,21 @@ public static class CertManagerExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(issuer);
 
+        var gatewayEnvironment = builder.Resource.Parent;
+        var issuerEnvironment = issuer.Resource.Parent.Parent;
+        var nameComparer = new ResourceNameComparer();
+        if (!nameComparer.Equals(gatewayEnvironment, issuerEnvironment))
+        {
+            throw new InvalidOperationException(
+                $"Gateway '{builder.Resource.Name}' is in Kubernetes environment '{gatewayEnvironment.Name}' but issuer " +
+                $"'{issuer.Resource.Name}' belongs to cert-manager installation '{issuer.Resource.Parent.Name}' in environment " +
+                $"'{issuerEnvironment.Name}'. cert-manager is per-cluster, so an issuer can only be used by gateways in the " +
+                "same Kubernetes environment.");
+        }
+
         return builder
             .WithTls()
             .WithGatewayAnnotation(ClusterIssuerAnnotationKey, issuer.Resource.Name);
-    }
-
-    /// <summary>
-    /// Adds TLS configuration to the ingress and wires it to the supplied cert-manager
-    /// <c>ClusterIssuer</c>. This adds the <c>cert-manager.io/cluster-issuer</c> annotation
-    /// to the generated Ingress resource, causing cert-manager to provision and renew a
-    /// certificate for each ingress host.
-    /// </summary>
-    /// <param name="builder">The ingress resource builder.</param>
-    /// <param name="issuer">The cert-manager <c>ClusterIssuer</c> to issue certificates from.</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
-    [AspireExport("withIngressTlsIssuer", Description = "Configures TLS on a Kubernetes Ingress using a cert-manager ClusterIssuer")]
-    public static IResourceBuilder<KubernetesIngressResource> WithTls(
-        this IResourceBuilder<KubernetesIngressResource> builder,
-        IResourceBuilder<CertManagerIssuerResource> issuer)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(issuer);
-
-        return builder
-            .WithTls()
-            .WithIngressAnnotation(ClusterIssuerAnnotationKey, issuer.Resource.Name);
     }
 
     private static Task<IEnumerable<PipelineStep>> BuildIssuerApplySteps(
@@ -334,6 +364,38 @@ public static class CertManagerExtensions
             // 'failed calling webhook "webhook.cert-manager.io": no endpoints available'.
             step.DependsOn($"helm-install-{chartName}");
             step.RequiredBy(WellKnownPipelineSteps.Deploy);
+            steps.Add(step);
+        }
+
+        return Task.FromResult<IEnumerable<PipelineStep>>(steps);
+    }
+
+    private static Task<IEnumerable<PipelineStep>> BuildIssuerDeleteSteps(
+        CertManagerResource certManager,
+        string chartName)
+    {
+        var steps = new List<PipelineStep>();
+
+        foreach (var issuer in certManager.Issuers)
+        {
+            var captured = issuer;
+
+            var step = new PipelineStep
+            {
+                Name = $"cm-issuer-delete-{captured.Name}",
+                Description = $"Deletes cert-manager ClusterIssuer '{captured.Name}'",
+                Action = ctx => DeleteClusterIssuerAsync(ctx, certManager, captured),
+                DependsOnSteps = [WellKnownPipelineSteps.DestroyPrereq]
+            };
+
+            // Run before the cert-manager helm chart is uninstalled. Once the chart goes,
+            // the cert-manager.io CRDs are removed and the API server forgets ClusterIssuer
+            // exists, so a delete attempted afterwards either silently no-ops (object kind
+            // not found) or fails. Deleting while cert-manager is still alive also lets the
+            // controller clean up the ACME account secret it created in the cert-manager
+            // namespace.
+            step.RequiredBy($"helm-uninstall-{chartName}");
+            step.RequiredBy(WellKnownPipelineSteps.Destroy);
             steps.Add(step);
         }
 
@@ -418,7 +480,63 @@ public static class CertManagerExtensions
         }
     }
 
-    private static async Task<string> BuildClusterIssuerManifestAsync(
+    private static async Task DeleteClusterIssuerAsync(
+        PipelineStepContext context,
+        CertManagerResource certManager,
+        CertManagerIssuerResource issuer)
+    {
+        var environment = certManager.Parent;
+        // Match the lowercase normalization used at apply time so we target the same object.
+        var k8sIssuerName = issuer.Name.ToKubernetesResourceName();
+
+        context.Logger.LogInformation(
+            "Deleting cert-manager ClusterIssuer '{IssuerName}'.", issuer.Name);
+
+        var args = new StringBuilder();
+        // --ignore-not-found makes destroy idempotent: re-running aspire destroy after a
+        // partially-completed prior destroy (or after the issuer was deleted manually) is a
+        // no-op rather than a failure.
+        args.Append(CultureInfo.InvariantCulture, $"delete clusterissuer {k8sIssuerName} --ignore-not-found");
+        if (environment.KubeConfigPath is not null)
+        {
+            args.Append(CultureInfo.InvariantCulture, $" --kubeconfig \"{environment.KubeConfigPath}\"");
+        }
+
+        var stderr = new StringBuilder();
+        var (resultTask, disposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
+        {
+            Arguments = args.ToString(),
+            ThrowOnNonZeroReturnCode = false,
+            InheritEnv = true,
+            OnOutputData = line => context.Logger.LogDebug("kubectl: {Line}", line),
+            OnErrorData = line =>
+            {
+                stderr.AppendLine(line);
+                context.Logger.LogDebug("kubectl: {Line}", line);
+            }
+        });
+
+        await using (disposable.ConfigureAwait(false))
+        {
+            var result = await resultTask.WaitAsync(context.CancellationToken).ConfigureAwait(false);
+            if (result.ExitCode != 0)
+            {
+                // Don't fail destroy if delete encountered an error — log and continue so the
+                // rest of the destroy pipeline (helm-uninstall, infra teardown) can still run.
+                // The cluster is most likely about to be torn down anyway.
+                context.Logger.LogWarning(
+                    "kubectl delete for ClusterIssuer '{IssuerName}' returned exit code {ExitCode}: {StdErr}",
+                    issuer.Name,
+                    result.ExitCode,
+                    stderr.ToString().Trim());
+                return;
+            }
+        }
+
+        context.Logger.LogInformation("ClusterIssuer '{IssuerName}' deleted.", issuer.Name);
+    }
+
+    internal static async Task<string> BuildClusterIssuerManifestAsync(
         ApplicationModel.DistributedApplicationModel model,
         CertManagerResource certManager,
         CertManagerIssuerResource issuer,
@@ -429,7 +547,11 @@ public static class CertManagerExtensions
         sb.AppendLine("apiVersion: cert-manager.io/v1");
         sb.AppendLine("kind: ClusterIssuer");
         sb.AppendLine("metadata:");
-        sb.Append("  name: ").AppendLine(issuer.Name);
+        // Kubernetes object metadata.name must be a valid DNS-1123 subdomain (lowercase).
+        // Aspire resource names allow uppercase, so normalise here to match the same rule the
+        // rest of the Kubernetes integration uses for generated object names.
+        var k8sIssuerName = issuer.Name.ToKubernetesResourceName();
+        sb.Append("  name: ").AppendLine(k8sIssuerName);
         sb.AppendLine("spec:");
 
         switch (issuer.Spec)
@@ -442,7 +564,7 @@ public static class CertManagerExtensions
                     sb.Append("    server: ").AppendLine(server);
                     sb.Append("    email: ").AppendLine(email);
                     sb.AppendLine("    privateKeySecretRef:");
-                    sb.Append("      name: ").Append(issuer.Name).AppendLine("-account-key");
+                    sb.Append("      name: ").Append(k8sIssuerName).AppendLine("-account-key");
                     sb.AppendLine("    solvers:");
                     foreach (var solver in issuer.Solvers)
                     {
@@ -507,7 +629,9 @@ public static class CertManagerExtensions
                     {
                         sb.AppendLine("            - group: gateway.networking.k8s.io");
                         sb.AppendLine("              kind: Gateway");
-                        sb.Append("              name: ").AppendLine(gateway.Name);
+                        // Match the metadata.name normalization used by BuildGatewayObjects so
+                        // the parentRef resolves to the actual Gateway in the cluster.
+                        sb.Append("              name: ").AppendLine(gateway.Name.ToKubernetesResourceName());
                     }
                     break;
                 }

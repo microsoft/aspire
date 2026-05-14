@@ -10,7 +10,7 @@ namespace Aspire.Deployment.EndToEnd.Tests;
 
 /// <summary>
 /// End-to-end test for the typed cert-manager API on top of <c>AddAzureKubernetesEnvironment</c>:
-/// <c>aks.AddCertManager()</c> + <c>AddIssuer().WithLetsEncryptStaging(email).WithHttp01Solver()</c>
+/// <c>aks.AddCertManager("cert-manager")</c> + <c>AddIssuer().WithLetsEncryptStaging(email).WithHttp01Solver()</c>
 /// combined with <c>gateway.WithTls(issuer)</c>. The Aspire deploy pipeline provisions the AKS
 /// cluster, ACR, VNet, AGC, installs the cert-manager Helm chart, applies the <c>ClusterIssuer</c>
 /// manifest, pre-creates the bootstrap TLS secret, and patches the discovered AGC FQDN onto
@@ -139,7 +139,7 @@ var acmeEmail = builder.AddParameter("acmeemail");
 // Install cert-manager via the typed API and declare a Let's Encrypt STAGING ClusterIssuer.
 // Staging is intentional — production rate limits would block repeat E2E runs. The
 // staging endpoint exercises the same HTTP-01 + Gateway API solver flow end-to-end.
-var certManager = aks.AddCertManager();
+var certManager = aks.AddCertManager("cert-manager");
 var letsEncrypt = certManager.AddIssuer("letsencrypt-staging")
     .WithLetsEncryptStaging(acmeEmail)
     .WithHttp01Solver();
@@ -235,9 +235,10 @@ builder.Build().Run();
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
-            // Wait for AGC to assign the gateway an FQDN. The Bug 2 fix pre-creates the
-            // bootstrap TLS secret so AGC will program the gateway even before cert-manager
-            // has issued a real cert; without that fix this would deadlock.
+            // Wait for AGC to assign the gateway an FQDN. The hosting integration pre-creates
+            // a self-signed bootstrap TLS secret so AGC will program the gateway listener even
+            // before cert-manager has issued the real certificate; without it the listener
+            // would deadlock waiting for a secret that doesn't exist yet.
             output.WriteLine("Step 14: Waiting for AGC to assign gateway FQDN (up to 15 min)...");
             await auto.TypeAsync(
                 "OK=0; for i in $(seq 1 90); do " +

@@ -32,7 +32,7 @@ var acmeEmail = builder.AddParameter("acme-email");
 // Install cert-manager via the typed API. This is the only difference from AksDemo:
 // AksDemo wires the chart in by hand and pairs it with a manual cluster-issuer annotation,
 // whereas here cert-manager and its ClusterIssuer are first-class resources in the model.
-var certManager = aks.AddCertManager();
+var certManager = aks.AddCertManager("cert-manager");
 
 // A single Let's Encrypt production ClusterIssuer with an HTTP-01 solver. cert-manager
 // satisfies the challenge by serving a token at /.well-known/acme-challenge/{token} on

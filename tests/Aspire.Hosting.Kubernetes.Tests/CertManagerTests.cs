@@ -4,6 +4,7 @@
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Kubernetes.Tests;
 
@@ -15,7 +16,7 @@ public class CertManagerTests
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var k8s = builder.AddKubernetesEnvironment("env");
 
-        var certManager = k8s.AddCertManager();
+        var certManager = k8s.AddCertManager("cert-manager");
 
         Assert.Equal("cert-manager", certManager.Resource.Name);
         Assert.Same(k8s.Resource, certManager.Resource.Parent);
@@ -42,7 +43,7 @@ public class CertManagerTests
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var k8s = builder.AddKubernetesEnvironment("env");
-        var certManager = k8s.AddCertManager();
+        var certManager = k8s.AddCertManager("cert-manager");
 
         var issuer = certManager.AddIssuer("letsencrypt-prod")
             .WithLetsEncryptProduction("ops@contoso.com")
@@ -64,7 +65,7 @@ public class CertManagerTests
     public void WithLetsEncryptStaging_UsesStagingDirectoryUrl()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var certManager = builder.AddKubernetesEnvironment("env").AddCertManager();
+        var certManager = builder.AddKubernetesEnvironment("env").AddCertManager("cert-manager");
 
         var issuer = certManager.AddIssuer("le-staging")
             .WithLetsEncryptStaging("ops@contoso.com");
@@ -77,7 +78,7 @@ public class CertManagerTests
     public void WithAcmeServer_AllowsCustomDirectoryUrl()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        var certManager = builder.AddKubernetesEnvironment("env").AddCertManager();
+        var certManager = builder.AddKubernetesEnvironment("env").AddCertManager("cert-manager");
 
         var issuer = certManager.AddIssuer("custom-acme")
             .WithAcmeServer("https://acme.example.com/directory", "ops@contoso.com");
@@ -91,7 +92,7 @@ public class CertManagerTests
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var k8s = builder.AddKubernetesEnvironment("env");
-        var issuer = k8s.AddCertManager()
+        var issuer = k8s.AddCertManager("cert-manager")
             .AddIssuer("letsencrypt-prod")
             .WithLetsEncryptProduction("ops@contoso.com")
             .WithHttp01Solver();
@@ -109,23 +110,65 @@ public class CertManagerTests
     }
 
     [Fact]
-    public void Ingress_WithTls_Issuer_AddsClusterIssuerAnnotation()
+    public async Task BuildClusterIssuerManifest_EmitsExpectedYamlForLetsEncryptHttp01()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var k8s = builder.AddKubernetesEnvironment("env");
-        var issuer = k8s.AddCertManager()
-            .AddIssuer("letsencrypt-prod")
+        var issuer = k8s.AddCertManager("cert-manager")
+            .AddIssuer("LetsEncrypt-Prod") // intentionally mixed-case to verify DNS-1123 normalization
             .WithLetsEncryptProduction("ops@contoso.com")
             .WithHttp01Solver();
 
-        var ingress = k8s.AddIngress("public")
-            .WithIngressClass("nginx")
+        // A gateway that adopts this issuer must end up referenced as a parentRef on the
+        // generated solver, so cert-manager's HTTP-01 HTTPRoute can attach to it.
+        k8s.AddGateway("PUBLIC-GW")
+            .WithGatewayClass("nginx")
             .WithTls(issuer);
 
-        Assert.Single(ingress.Resource.TlsConfigs);
-        Assert.True(ingress.Resource.IngressAnnotations.TryGetValue(
-            CertManagerExtensions.ClusterIssuerAnnotationKey, out var value));
-        Assert.Equal("letsencrypt-prod", value!.Format);
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var certManagerResource = model.Resources.OfType<CertManagerResource>().Single();
+        var issuerResource = certManagerResource.Issuers.Single();
+
+        var yaml = await CertManagerExtensions.BuildClusterIssuerManifestAsync(
+            model,
+            certManagerResource,
+            issuerResource,
+            NullLogger.Instance,
+            TestContext.Current.CancellationToken);
+
+        // Object names go through ToKubernetesResourceName() (lowercasing) so they're valid
+        // DNS-1123 subdomains regardless of the casing the user picked for the Aspire name.
+        Assert.Contains("apiVersion: cert-manager.io/v1", yaml);
+        Assert.Contains("kind: ClusterIssuer", yaml);
+        Assert.Contains("name: letsencrypt-prod", yaml);
+        Assert.Contains("server: https://acme-v02.api.letsencrypt.org/directory", yaml);
+        Assert.Contains("email: ops@contoso.com", yaml);
+        Assert.Contains("name: letsencrypt-prod-account-key", yaml);
+        Assert.Contains("- http01:", yaml);
+        Assert.Contains("gatewayHTTPRoute:", yaml);
+        // Gateway parentRef must also be lowercase to match the actual emitted Gateway name.
+        Assert.Contains("name: public-gw", yaml);
+    }
+
+    [Fact]
+    public void Gateway_WithTls_Issuer_FromDifferentEnvironment_Throws()
+    {
+        // cert-manager is per-cluster, so an issuer can only TLS-protect gateways inside the
+        // same Kubernetes environment. Cross-env wiring is a configuration bug we want to
+        // catch at app-host build time, not at deploy time when nothing comes up.
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var envA = builder.AddKubernetesEnvironment("env-a");
+        var envB = builder.AddKubernetesEnvironment("env-b");
+
+        var issuerInA = envA.AddCertManager("cert-manager")
+            .AddIssuer("le-prod")
+            .WithLetsEncryptProduction("ops@contoso.com")
+            .WithHttp01Solver();
+
+        var gatewayInB = envB.AddGateway("public").WithGatewayClass("nginx");
+
+        Assert.Throws<InvalidOperationException>(() => gatewayInB.WithTls(issuerInA));
     }
 
     [Fact]
@@ -137,7 +180,7 @@ public class CertManagerTests
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
         var k8s = builder.AddKubernetesEnvironment("env");
 
-        var certManager = k8s.AddCertManager();
+        var certManager = k8s.AddCertManager("cert-manager");
         Assert.NotNull(certManager.Resource);
 
         var app = builder.Build();

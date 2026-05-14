@@ -10,10 +10,16 @@ namespace Aspire.Hosting.Kubernetes;
 /// </summary>
 /// <remarks>
 /// <para>
-/// At publish time, an issuer emits a <c>cert-manager.io/v1 ClusterIssuer</c> manifest into
-/// the generated Helm chart output. Cluster-scoped issuers can be referenced by gateways and
-/// ingresses across all namespaces, which matches the typical multi-namespace deployment
-/// pattern for Aspire applications.
+/// At deploy time, an issuer is rendered to a <c>cert-manager.io/v1 ClusterIssuer</c>
+/// YAML document and applied to the cluster with <c>kubectl apply</c> after the
+/// cert-manager Helm chart is installed and its admission webhook is reachable. The
+/// manifest is not baked into the helm chart output; it is applied directly so the
+/// chart and its issuers can be managed and torn down independently.
+/// </para>
+/// <para>
+/// Cluster-scoped issuers can be referenced by gateways and ingresses across all
+/// namespaces, which matches the typical multi-namespace deployment pattern for
+/// Aspire applications.
 /// </para>
 /// <para>
 /// Namespace-scoped <c>Issuer</c> resources are intentionally not modeled in the initial

@@ -29,7 +29,7 @@ namespace Aspire.Hosting.Kubernetes;
 /// <example>
 /// <code>
 /// var aks = builder.AddAzureKubernetesEnvironment("aks");
-/// var certManager = aks.AddCertManager();
+/// var certManager = aks.AddCertManager("cert-manager");
 ///
 /// var letsencrypt = certManager.AddIssuer("letsencrypt-prod")
 ///     .WithLetsEncryptProduction("ops@contoso.com")
@@ -68,7 +68,9 @@ public sealed class CertManagerResource : Resource, IResourceWithParent<Kubernet
 
     /// <summary>
     /// Gets the underlying Helm chart resource used to install cert-manager.
-    /// Use this to apply additional Helm values, change the chart version, etc.
+    /// Use this to layer additional Helm values via <c>WithHelmChartValues</c> or to
+    /// inspect chart metadata. The chart name and version are fixed at construction
+    /// time and cannot be changed through this property.
     /// </summary>
     public KubernetesHelmChartResource HelmChart { get; }
 
