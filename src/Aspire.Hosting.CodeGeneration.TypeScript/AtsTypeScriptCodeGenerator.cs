@@ -224,7 +224,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
 
     private string MapDtoPropertyTypeToTypeScript(AtsTypeRef? typeRef)
     {
-        if (typeRef == null)
+        if (typeRef is null)
         {
             return "unknown";
         }

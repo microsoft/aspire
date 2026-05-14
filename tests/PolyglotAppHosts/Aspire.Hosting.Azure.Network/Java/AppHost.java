@@ -18,7 +18,7 @@ void main() throws Exception {
     var accessRule = new AzureNspAccessRule();
     accessRule.setName("allow-corp-network");
     accessRule.setDirection(NetworkSecurityPerimeterAccessRuleDirection.INBOUND);
-    accessRule.setAddressPrefixes(List.of("203.0.113.0/24"));
+    accessRule.setAddressPrefixes(java.util.List.of("203.0.113.0/24"));
     perimeter.withAccessRule(accessRule);
 
     builder.build().run();

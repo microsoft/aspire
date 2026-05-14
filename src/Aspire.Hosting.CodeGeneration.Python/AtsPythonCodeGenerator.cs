@@ -509,7 +509,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
 
     private string MapDtoPropertyTypeToPython(AtsTypeRef? typeRef)
     {
-        if (typeRef == null)
+        if (typeRef is null)
         {
             return "typing.Any";
         }
@@ -525,7 +525,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
 
     private string MapDtoUnionTypeToPython(AtsTypeRef typeRef)
     {
-        if (typeRef.UnionTypes == null || typeRef.UnionTypes.Count == 0)
+        if (typeRef.UnionTypes is null || typeRef.UnionTypes.Count == 0)
         {
             return "typing.Any";
         }
