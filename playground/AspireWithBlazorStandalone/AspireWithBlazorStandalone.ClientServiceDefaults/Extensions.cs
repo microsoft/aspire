@@ -34,7 +34,14 @@ public static class BlazorClientExtensions
 
     private static WebAssemblyHostBuilder ConfigureBlazorClientOpenTelemetry(this WebAssemblyHostBuilder builder)
     {
-        var serviceName = builder.Configuration["OTEL_SERVICE_NAME"] ?? "blazor-client";
+        // Without an OTLP path base, there's nowhere to export telemetry in WASM.
+        var otlpPathBase = builder.Configuration["ASPIRE_OTLP_PATH_BASE"];
+        if (string.IsNullOrEmpty(otlpPathBase))
+        {
+            return builder;
+        }
+
+        var serviceName = builder.Configuration["OTEL_SERVICE_NAME"]!;
 
         // Build a resilience pipeline matching OTLP retry spec behavior:
         //   - Initial backoff: 1s (OTLP default), max 5s
@@ -53,6 +60,11 @@ public static class BlazorClientExtensions
             })
             .Build();
 
+        // Resolve the OTLP path against the page's origin so telemetry goes through
+        // the same origin the user navigated to, avoiding cross-origin issues.
+        var baseAddress = new Uri(builder.HostEnvironment.BaseAddress);
+        var otlpEndpoint = new Uri(baseAddress, $"{otlpPathBase}/");
+
         // Wire HttpClientFactory for all OTLP exporter instances via IPostConfigureOptions.
         // This runs during options resolution for all 3 signals (traces, metrics, logging),
         // and has access to the DI container to resolve ILoggerFactory.
@@ -70,7 +82,7 @@ public static class BlazorClientExtensions
             logging.IncludeFormattedMessage = true;
             logging.IncludeScopes = true;
             logging.SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(serviceName));
-            logging.AddOtlpExporter();
+            logging.AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint, "v1/logs"));
         });
 
         builder.Services.AddOpenTelemetry()
@@ -80,13 +92,13 @@ public static class BlazorClientExtensions
                 metrics.AddMeter("Microsoft.AspNetCore.Components");
                 metrics.AddMeter("Microsoft.AspNetCore.Components.Lifecycle");
                 metrics.AddHttpClientInstrumentation();
-                metrics.AddOtlpExporter();
+                metrics.AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint, "v1/metrics"));
             })
             .WithTracing(tracing =>
             {
                 tracing.AddSource("Microsoft.AspNetCore.Components")
                     .AddHttpClientInstrumentation();
-                tracing.AddOtlpExporter();
+                tracing.AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint, "v1/traces"));
             });
 
         return builder;

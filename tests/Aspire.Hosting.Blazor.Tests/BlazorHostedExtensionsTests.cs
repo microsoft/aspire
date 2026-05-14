@@ -83,8 +83,8 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         var configJson = ResolveManifestExpression(env["Client__ConfigResponse"]);
         Assert.Contains("OTEL_SERVICE_NAME", configJson);
         Assert.Contains("blazorapp", configJson);
-        Assert.Contains("OTEL_EXPORTER_OTLP_ENDPOINT", configJson);
-        Assert.Contains("/_otlp/", configJson);
+        Assert.Contains("ASPIRE_OTLP_PATH_BASE", configJson);
+        Assert.Contains("/_otlp", configJson);
     }
 
     [Fact]
@@ -111,7 +111,7 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         // Config response includes both service URLs and OTLP
         var configJson = ResolveManifestExpression(env["Client__ConfigResponse"]);
         Assert.Contains("services__weatherapi__https__0", configJson);
-        Assert.Contains("OTEL_EXPORTER_OTLP_ENDPOINT", configJson);
+        Assert.Contains("ASPIRE_OTLP_PATH_BASE", configJson);
         Assert.Contains("OTEL_SERVICE_NAME", configJson);
     }
 
@@ -179,7 +179,7 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         Assert.False(env.ContainsKey("ReverseProxy__Routes__route-otlp__ClusterId"));
 
         var configJson = ResolveManifestExpression(env["Client__ConfigResponse"]);
-        Assert.DoesNotContain("OTEL_EXPORTER_OTLP_ENDPOINT", configJson);
+        Assert.DoesNotContain("ASPIRE_OTLP_PATH_BASE", configJson);
     }
 
     [Fact]

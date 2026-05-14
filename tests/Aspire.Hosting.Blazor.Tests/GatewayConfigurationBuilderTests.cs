@@ -147,6 +147,14 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
 
         Assert.Equal("x-otlp-api-key", env["ReverseProxy__Routes__route-otlp-store__Transforms__1__RequestHeader"]);
         Assert.Equal("abc123", env["ReverseProxy__Routes__route-otlp-store__Transforms__1__Set"]);
+
+        // Client config should NOT contain the OTLP headers (they contain the API key).
+        // The YARP proxy injects headers server-side when forwarding to the dashboard.
+        var configResponse = (IManifestExpressionProvider)env["ClientApps__store__ConfigResponse"];
+        var configJson = configResponse.ValueExpression;
+        Assert.DoesNotContain("OTEL_EXPORTER_OTLP_HEADERS", configJson);
+        Assert.DoesNotContain("x-otlp-api-key", configJson);
+        Assert.DoesNotContain("abc123", configJson);
     }
 
     [Fact]
@@ -240,7 +248,7 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
 
         var configResponse = (IManifestExpressionProvider)env["ClientApps__store__ConfigResponse"];
         var manifestExpression = configResponse.ValueExpression;
-        Assert.DoesNotContain("OTEL_EXPORTER_OTLP_ENDPOINT", manifestExpression);
+        Assert.DoesNotContain("ASPIRE_OTLP_PATH_BASE", manifestExpression);
     }
 
     [Fact]
@@ -355,6 +363,103 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
         Assert.Contains("services__weatherapi__https__0", adminConfig.ValueExpression);
         Assert.Contains("services__usersapi__https__0", adminConfig.ValueExpression);
         Assert.DoesNotContain("catalogapi", adminConfig.ValueExpression);
+    }
+
+    [Fact]
+    public void EmitProxyConfiguration_OtlpEndpoint_PrefersHttpsBaseUrl()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+            .WithHttpEndpoint()
+            .WithHttpsEndpoint();
+
+        var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
+
+        var registration = new GatewayAppRegistration(wasmApp, "store", ["weatherapi"]);
+        var apps = new List<GatewayAppRegistration> { registration };
+        var env = new Dictionary<string, object>();
+
+        GatewayConfigurationBuilder.EmitProxyConfiguration(env, apps, gateway.GetEndpoint("https"), gateway.GetEndpoint("http"));
+
+        var configResponse = (IManifestExpressionProvider)env["ClientApps__store__ConfigResponse"];
+        var configJson = configResponse.ValueExpression;
+
+        // OTLP path base is emitted so the WASM client can resolve it against
+        // the page's origin, avoiding cross-origin issues.
+        Assert.Contains("ASPIRE_OTLP_PATH_BASE", configJson);
+        Assert.Contains("/_otlp", configJson);
+
+        // Service discovery emits both schemes so the client can pick the right one.
+        Assert.Contains("services__weatherapi__https__0", configJson);
+        Assert.Contains("services__weatherapi__http__0", configJson);
+    }
+
+    [Fact]
+    public void EmitProxyConfiguration_NoOtlpCluster_WhenEndpointUrlIsNull()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var gateway = builder.AddProject<TestProjectMetadata>("gateway")
+            .WithHttpsEndpoint();
+
+        var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
+
+        var registration = new GatewayAppRegistration(wasmApp, "store", []);
+        var apps = new List<GatewayAppRegistration> { registration };
+        var env = new Dictionary<string, object>();
+        var gatewayEndpoint = gateway.GetEndpoint("https");
+
+        // Pass null for httpOtlpEndpointUrl — should NOT fall back to a gRPC endpoint.
+        GatewayConfigurationBuilder.EmitProxyConfiguration(env, apps, gatewayEndpoint, httpOtlpEndpointUrl: null);
+
+        Assert.False(env.ContainsKey("ReverseProxy__Clusters__cluster-otlp-dashboard__Destinations__d1__Address"));
+    }
+
+    [Fact]
+    public void EmitProxyConfiguration_ClientConfig_UsesRelaxedJsonEncoding()
+    {
+        // Directly serialize a ClientConfiguration with HTML-sensitive characters
+        // to verify ManifestJsonContext.Relaxed uses UnsafeRelaxedJsonEscaping.
+        var config = new ClientConfiguration
+        {
+            WebAssembly = new WebAssemblyConfiguration
+            {
+                Environment = new Dictionary<string, string>
+                {
+                    ["TEST_VALUE"] = "value&with<special>chars"
+                }
+            }
+        };
+
+        var json = System.Text.Json.JsonSerializer.Serialize(config, ManifestJsonContext.Relaxed.ClientConfiguration);
+
+        // With relaxed encoding, HTML-sensitive characters appear as-is.
+        // Default encoding would escape them to \u0026, \u003C, \u003E.
+        Assert.Contains("value&with<special>chars", json);
+        Assert.DoesNotContain("\\u0026", json);
+        Assert.DoesNotContain("\\u003C", json);
+        Assert.DoesNotContain("\\u003E", json);
+    }
+
+    [Fact]
+    public void EmitHostedProxyConfiguration_ForwardsOtlpEndpoint_AsOtlpCluster()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var host = builder.AddProject<TestProjectMetadata>("blazorapp")
+            .WithHttpsEndpoint();
+
+        var services = new List<HostedClientService> { new("weatherapi", GatewayConfigurationBuilder.DefaultApiPrefix) };
+        var env = new Dictionary<string, object>();
+        var hostEndpoint = host.GetEndpoint("https");
+
+        GatewayConfigurationBuilder.EmitHostedProxyConfiguration(
+            env, hostEndpoint, httpHostEndpoint: null, "blazorapp",
+            services, proxyTelemetry: true, httpOtlpEndpointUrl: "http://localhost:18889");
+
+        Assert.Equal("http://localhost:18889",
+            env["ReverseProxy__Clusters__cluster-otlp-dashboard__Destinations__d1__Address"]);
     }
 
     private sealed class TestProjectMetadata : IProjectMetadata
