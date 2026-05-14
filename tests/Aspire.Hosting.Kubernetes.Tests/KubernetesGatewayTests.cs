@@ -269,4 +269,44 @@ public class KubernetesGatewayTests
         var httpsSection = lines.Skip(httpsIndex).Take((nextListenerOrEnd > httpsIndex ? nextListenerOrEnd : lines.Count) - httpsIndex);
         Assert.DoesNotContain(httpsSection, l => l.StartsWith("hostname:") || l.StartsWith("hostname "));
     }
+
+    [Fact]
+    public async Task AddGateway_WithTls_BeforeWithHostname_HostnameStillAppliedToHttpsListener()
+    {
+        // Regression test: WithTls() must not snapshot the hostname list at call time.
+        // The hostname is registered AFTER WithTls() here; the generated HTTPS listener
+        // must still pick it up, otherwise cert-manager will issue a cert for the wrong
+        // hostname (or fall back to the gateway's auto-assigned FQDN).
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("azure-alb-external");
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        gateway
+            .WithRoute("/", api.GetEndpoint("http"))
+            .WithTls("my-tls-secret")
+            .WithHostname("api.example.com");
+
+        var app = builder.Build();
+        app.Run();
+
+        var gatewayFile = Path.Combine(tempDir.Path, "templates", "public", "public.yaml");
+        var content = await File.ReadAllTextAsync(gatewayFile);
+
+        Assert.Contains("HTTPS", content);
+        Assert.Contains("my-tls-secret", content);
+        Assert.Contains("api.example.com", content);
+
+        var lines = content.Split('\n').Select(l => l.Trim()).ToList();
+        var httpsIndex = lines.FindIndex(l => l.Contains("protocol:") && l.Contains("HTTPS"));
+        Assert.True(httpsIndex >= 0, "HTTPS listener not found in:\n" + content);
+
+        var nextListenerOrEnd = lines.FindIndex(httpsIndex + 1, l => l.StartsWith("- name:") || l == "");
+        var httpsSection = lines.Skip(httpsIndex).Take((nextListenerOrEnd > httpsIndex ? nextListenerOrEnd : lines.Count) - httpsIndex).ToList();
+        Assert.Contains(httpsSection, l => l.Contains("hostname:") && l.Contains("api.example.com"));
+    }
 }

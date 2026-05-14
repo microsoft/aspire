@@ -109,10 +109,18 @@ public static class KeycloakResourceBuilderExtensions
         {
             keycloak.SubscribeHttpsEndpointsUpdate(ctx =>
             {
-                // If a TLS certificate is configured, ensure the keycloak resource has an HTTPS endpoint and
-                // configure the environment variables to use it.
+                // If a TLS certificate is configured, switch the primary endpoint to HTTPS and
+                // tell Keycloak to run its HTTPS listener on the existing endpoint target port.
                 keycloak
-                    .WithHttpsEndpoint(targetPort: DefaultHttpsPort, env: "KC_HTTPS_PORT")
+                    .WithEnvironment(context =>
+                    {
+                        context.EnvironmentVariables["KC_HTTPS_PORT"] = keycloak.GetEndpoint(KeycloakResource.PrimaryEndpointName).Property(EndpointProperty.TargetPort);
+                    })
+                    .WithEndpoint(KeycloakResource.PrimaryEndpointName, ep =>
+                    {
+                        ep.UriScheme = "https";
+                        ep.TargetPort = DefaultHttpsPort;
+                    })
                     .WithEndpoint(ManagementEndpointName, ep => ep.UriScheme = "https");
             });
         }

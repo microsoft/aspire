@@ -65,7 +65,7 @@ internal sealed class StopCommand : BaseCommand
         Options.Add(s_allOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
         var stopAll = parseResult.GetValue(s_allOption);
@@ -74,23 +74,22 @@ internal sealed class StopCommand : BaseCommand
         // Validate mutual exclusivity of --all and --project
         if (stopAll && passedAppHostProjectFile is not null)
         {
-            _interactionService.DisplayError(string.Format(CultureInfo.InvariantCulture, StopCommandStrings.AllAndProjectMutuallyExclusive, s_allOption.Name, s_appHostOption.Name));
-            return CompleteStopActivity(activity, ExitCodeConstants.FailedToFindProject);
+            return CommandResult.Failure(CompleteStopActivity(activity, ExitCodeConstants.FailedToFindProject), string.Format(CultureInfo.InvariantCulture, StopCommandStrings.AllAndProjectMutuallyExclusive, s_allOption.Name, s_appHostOption.Name));
         }
 
         // Handle --all: stop all running AppHosts
         if (stopAll)
         {
-            return CompleteStopActivity(activity, await StopAllAppHostsAsync(cancellationToken));
+            return CommandResult.FromExitCode(CompleteStopActivity(activity, await StopAllAppHostsAsync(cancellationToken)));
         }
 
         // In non-interactive mode, try to auto-resolve without prompting
         if (!_hostEnvironment.SupportsInteractiveInput)
         {
-            return CompleteStopActivity(activity, await ExecuteNonInteractiveAsync(passedAppHostProjectFile, cancellationToken));
+            return CommandResult.FromExitCode(CompleteStopActivity(activity, await ExecuteNonInteractiveAsync(passedAppHostProjectFile, cancellationToken)));
         }
 
-        return CompleteStopActivity(activity, await ExecuteInteractiveAsync(passedAppHostProjectFile, cancellationToken));
+        return CommandResult.FromExitCode(CompleteStopActivity(activity, await ExecuteInteractiveAsync(passedAppHostProjectFile, cancellationToken)));
     }
 
     /// <summary>

@@ -44,7 +44,7 @@ internal sealed class SetupCommand : BaseCommand
         Options.Add(s_forceOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var installPath = parseResult.GetValue(s_installPathOption);
         var force = parseResult.GetValue(s_forceOption);
@@ -52,8 +52,7 @@ internal sealed class SetupCommand : BaseCommand
         var processPath = Environment.ProcessPath;
         if (string.IsNullOrEmpty(processPath))
         {
-            InteractionService.DisplayError("Could not determine the CLI executable path.");
-            return ExitCodeConstants.FailedToBuildArtifacts;
+            return CommandResult.Failure(ExitCodeConstants.FailedToBuildArtifacts, "Could not determine the CLI executable path.");
         }
 
         // Determine extraction directory
@@ -64,8 +63,7 @@ internal sealed class SetupCommand : BaseCommand
 
         if (string.IsNullOrEmpty(installPath))
         {
-            InteractionService.DisplayError("Could not determine the installation path.");
-            return ExitCodeConstants.FailedToBuildArtifacts;
+            return CommandResult.Failure(ExitCodeConstants.FailedToBuildArtifacts, "Could not determine the installation path.");
         }
 
         // Extract with spinner
@@ -75,7 +73,7 @@ internal sealed class SetupCommand : BaseCommand
             async () =>
             {
                 result = await _bundleService.ExtractAsync(installPath, force, cancellationToken);
-                return ExitCodeConstants.Success;
+                return CommandResult.Success();
             }, emoji: KnownEmojis.Package);
 
         switch (result)
@@ -93,8 +91,7 @@ internal sealed class SetupCommand : BaseCommand
                 break;
 
             case BundleExtractResult.ExtractionFailed:
-                InteractionService.DisplayError($"Bundle was extracted to {installPath} but layout validation failed.");
-                return ExitCodeConstants.FailedToBuildArtifacts;
+                return CommandResult.Failure(ExitCodeConstants.FailedToBuildArtifacts, $"Bundle was extracted to {installPath} but layout validation failed.");
         }
 
         return exitCode;

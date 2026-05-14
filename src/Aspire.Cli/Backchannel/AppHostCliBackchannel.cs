@@ -61,7 +61,9 @@ internal sealed class AppHostCliBackchannel(
 
         logger.LogDebug("Requesting stop");
 
-        await rpc.InvokeWithCancellationAsync(
+        await rpc.InvokeWithProfilingAsync(
+            profilingTelemetry,
+            "apphost",
             "RequestStopAsync",
             [],
             cancellationToken);
@@ -77,7 +79,9 @@ internal sealed class AppHostCliBackchannel(
         logger.LogDebug("Requesting dashboard URL");
 
         activity.AddBackchannelGetDashboardUrlsInvokeEvent();
-        var state = await rpc.InvokeWithCancellationAsync<DashboardUrlsState>(
+        var state = await rpc.InvokeWithProfilingAsync<DashboardUrlsState>(
+            profilingTelemetry,
+            "apphost",
             "GetDashboardUrlsAsync",
             [],
             cancellationToken);
@@ -98,10 +102,12 @@ internal sealed class AppHostCliBackchannel(
 
                 logger.LogDebug("Requesting AppHost log entries");
 
-                logEntries = await rpc.InvokeWithCancellationAsync<IAsyncEnumerable<BackchannelLogEntry>>(
+                logEntries = await rpc.InvokeStreamingWithProfilingAsync<BackchannelLogEntry>(
+                    profilingTelemetry,
+                    "apphost",
                     "GetAppHostLogEntriesAsync",
                     [],
-                    cancellationToken);
+                    cancellationToken).ConfigureAwait(false);
 
                 logger.LogDebug("Received AppHost log entries async enumerable");
             }
@@ -134,10 +140,12 @@ internal sealed class AppHostCliBackchannel(
 
                 logger.LogDebug("Requesting resource states");
 
-                resourceStates = await rpc.InvokeWithCancellationAsync<IAsyncEnumerable<RpcResourceState>>(
+                resourceStates = await rpc.InvokeStreamingWithProfilingAsync<RpcResourceState>(
+                    profilingTelemetry,
+                    "apphost",
                     "GetResourceStatesAsync",
                     [],
-                    cancellationToken);
+                    cancellationToken).ConfigureAwait(false);
 
                 logger.LogDebug("Received resource states async enumerable");
             }
@@ -287,12 +295,17 @@ internal sealed class AppHostCliBackchannel(
             JsonRpc? rpc = null;
             try
             {
-                rpc = new JsonRpc(new HeaderDelimitedMessageHandler(stream, stream, BackchannelJsonSerializerContext.CreateRpcMessageFormatter()));
+                rpc = new JsonRpc(new HeaderDelimitedMessageHandler(stream, stream, BackchannelJsonSerializerContext.CreateRpcMessageFormatter()))
+                {
+                    ActivityTracingStrategy = new ActivityTracingStrategy()
+                };
                 rpc.StartListening();
                 activity.AddBackchannelRpcListeningEvent();
 
                 activity.AddBackchannelGetCapabilitiesStartEvent();
-                var capabilities = await rpc.InvokeWithCancellationAsync<string[]>(
+                var capabilities = await rpc.InvokeWithProfilingAsync<string[]>(
+                    profilingTelemetry,
+                    "apphost",
                     "GetCapabilitiesAsync",
                     [],
                     cancellationToken);
@@ -422,12 +435,19 @@ internal sealed class AppHostCliBackchannel(
 
         logger.LogDebug("Requesting publishing activities.");
 
-        var publishingActivities = await rpc.InvokeWithCancellationAsync<IAsyncEnumerable<PublishingActivity>>(
+        var publishingActivities = await rpc.InvokeStreamingWithProfilingAsync<PublishingActivity>(
+            profilingTelemetry,
+            "apphost",
             "GetPublishingActivitiesAsync",
             [],
-            cancellationToken);
+            cancellationToken).ConfigureAwait(false);
 
         logger.LogDebug("Received publishing activities.");
+
+        if (publishingActivities is null)
+        {
+            yield break;
+        }
 
         await foreach (var state in publishingActivities.WithCancellation(cancellationToken))
         {
@@ -442,7 +462,9 @@ internal sealed class AppHostCliBackchannel(
 
         logger.LogDebug("Requesting capabilities");
 
-        var capabilities = await rpc.InvokeWithCancellationAsync<string[]>(
+        var capabilities = await rpc.InvokeWithProfilingAsync<string[]>(
+            profilingTelemetry,
+            "apphost",
             "GetCapabilitiesAsync",
             [],
             cancellationToken).ConfigureAwait(false);
@@ -457,7 +479,9 @@ internal sealed class AppHostCliBackchannel(
 
         logger.LogDebug("Providing prompt responses for prompt ID {PromptId}", promptId);
 
-        await rpc.InvokeWithCancellationAsync(
+        await rpc.InvokeWithProfilingAsync(
+            profilingTelemetry,
+            "apphost",
             "CompletePromptResponseAsync",
             [promptId, answers],
             cancellationToken).ConfigureAwait(false);
@@ -470,7 +494,9 @@ internal sealed class AppHostCliBackchannel(
 
         logger.LogDebug("Providing prompt responses for prompt ID {PromptId}", promptId);
 
-        await rpc.InvokeWithCancellationAsync(
+        await rpc.InvokeWithProfilingAsync(
+            profilingTelemetry,
+            "apphost",
             "UpdatePromptResponseAsync",
             [promptId, answers],
             cancellationToken).ConfigureAwait(false);
@@ -483,7 +509,9 @@ internal sealed class AppHostCliBackchannel(
 
         logger.LogDebug("Requesting pipeline steps.");
 
-        var response = await rpc.InvokeWithCancellationAsync<GetPipelineStepsResponse>(
+        var response = await rpc.InvokeWithProfilingAsync<GetPipelineStepsResponse>(
+            profilingTelemetry,
+            "apphost",
             "GetPipelineStepsAsync",
             [new GetPipelineStepsRequest { Step = step }],
             cancellationToken).ConfigureAwait(false);

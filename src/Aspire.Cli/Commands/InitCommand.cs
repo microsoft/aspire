@@ -105,7 +105,7 @@ internal sealed class InitCommand : BaseCommand
         Options.Add(NewCommand.s_suppressAgentInitOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(this.Name);
 
@@ -133,12 +133,7 @@ internal sealed class InitCommand : BaseCommand
 
         if (dropResult != ExitCodeConstants.Success)
         {
-            InteractionService.DisplayError(InteractionServiceStrings.ProjectCouldNotBeCreated);
-            InteractionService.DisplayMessage(
-                KnownEmojis.PageFacingUp,
-                string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, MarkupHelpers.SafeFileLink(InteractionService, ExecutionContext.LogFilePath)),
-                allowMarkup: true);
-            return dropResult;
+            return CommandResult.Failure(dropResult, InteractionServiceStrings.ProjectCouldNotBeCreated);
         }
 
         // Persist the prompted language selection now that the skeleton drop succeeded.
@@ -191,7 +186,7 @@ internal sealed class InitCommand : BaseCommand
             }
         }
 
-        return agentInitResult.ExitCode;
+        return CommandResult.FromExitCode(agentInitResult.ExitCode);
     }
 
     private void DisplayDeprecatedOptionWarnings(ParseResult parseResult)
@@ -392,7 +387,7 @@ internal sealed class InitCommand : BaseCommand
         if (installOutcome.ExitCode != 0)
         {
             InteractionService.DisplayLines(installOutcome.OutputLines);
-            InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.TemplateInstallationFailed, installOutcome.ExitCode, _executionContext.LogFilePath));
+            InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.TemplateInstallationFailed, installOutcome.ExitCode));
             return ExitCodeConstants.FailedToInstallTemplates;
         }
 

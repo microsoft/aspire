@@ -8,6 +8,7 @@ using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Resources;
 using Aspire.Hosting.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.DotNet.RemoteExecutor;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -534,6 +535,62 @@ public sealed class DcpHostNotificationTests
 
         // Assert
         Assert.Contains("--container-runtime \"podman\"", processSpec.Arguments);
+    }
+
+    [Fact]
+    public void CreateDcpProcessSpec_DoesNotInheritExcludedEnvironmentVariables()
+    {
+        var excludedVars = new Dictionary<string, string>
+        {
+            ["aspnetcore_urls"] = "http://localhost:5000",
+            ["DOTNET_LAUNCH_PROFILE"] = "MyProfile",
+            ["ASPNETCORE_ENVIRONMENT"] = "Development",
+            ["DOTNET_ENVIRONMENT"] = "Development",
+            ["aspire_loglevel"] = "Debug",
+        };
+
+        var options = new RemoteInvokeOptions();
+        foreach (var (key, value) in excludedVars)
+        {
+            options.StartInfo.Environment[key] = value;
+        }
+
+        options.StartInfo.Environment["MY_CUSTOM_SETTING"] = "keep-me";
+        options.StartInfo.Environment["ASPNETCORE_URLS_FOO"] = "keep-me-too";
+        options.StartInfo.Environment["ASPIRE_LOGLEVEL_EXTRA"] = "keep-me-three";
+
+        RemoteExecutor.Invoke(static () =>
+        {
+            // Use the test assembly as a dummy CliPath since CreateDcpProcessSpec
+            // validates the file exists.
+            var dummyPath = typeof(DcpHostNotificationTests).Assembly.Location;
+            var dcpOptions = new DcpOptions { CliPath = dummyPath, DashboardPath = "/dummy/dashboard" };
+            var dcpHost = CreateDcpHostForProcessSpecTests(dcpOptions: dcpOptions);
+            var locations = CreateTestLocations();
+
+            var processSpec = dcpHost.CreateDcpProcessSpec(locations);
+
+            string[] expectedExcluded =
+            [
+                "aspnetcore_urls",
+                "DOTNET_LAUNCH_PROFILE",
+                "ASPNETCORE_ENVIRONMENT",
+                "DOTNET_ENVIRONMENT",
+                "aspire_loglevel",
+            ];
+
+            foreach (var key in expectedExcluded)
+            {
+                Assert.False(processSpec.EnvironmentVariables.ContainsKey(key),
+                    $"DCP process should not inherit '{key}' from the app host.");
+            }
+
+            Assert.True(processSpec.EnvironmentVariables.ContainsKey("MY_CUSTOM_SETTING"),
+                "DCP process should inherit environment variables that are not in the exclusion list.");
+            Assert.Equal("keep-me", processSpec.EnvironmentVariables["MY_CUSTOM_SETTING"]);
+            Assert.Equal("keep-me-too", processSpec.EnvironmentVariables["ASPNETCORE_URLS_FOO"]);
+            Assert.Equal("keep-me-three", processSpec.EnvironmentVariables["ASPIRE_LOGLEVEL_EXTRA"]);
+        }, options).Dispose();
     }
 
     private static DcpHost CreateDcpHostForProcessSpecTests(

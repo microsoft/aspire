@@ -3,6 +3,7 @@
 
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,6 +16,7 @@ internal class AppHostRpcTarget(
     ILogger<AppHostRpcTarget> logger,
     ResourceNotificationService resourceNotificationService,
     IServiceProvider serviceProvider,
+    ProfilingTelemetry profilingTelemetry,
     PipelineActivityReporter activityReporter,
     IHostApplicationLifetime lifetime,
     DistributedApplicationOptions options)
@@ -202,6 +204,7 @@ internal class AppHostRpcTarget(
 
     public async Task<GetPipelineStepsResponse> GetPipelineStepsAsync(GetPipelineStepsRequest? request = null, CancellationToken cancellationToken = default)
     {
+        using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(GetPipelineStepsAsync), streaming: false, request?.TraceContext);
         logger.LogDebug("Resolving pipeline steps for list-steps request.");
 
 #pragma warning disable ASPIREPIPELINES001

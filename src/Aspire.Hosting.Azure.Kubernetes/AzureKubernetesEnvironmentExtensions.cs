@@ -16,6 +16,7 @@ using Azure.Provisioning.Authorization;
 using Azure.Provisioning.ContainerRegistry;
 using Azure.Provisioning.ContainerService;
 using Azure.Provisioning.Expressions;
+using Azure.Provisioning.Network;
 using Azure.Provisioning.Resources;
 using Azure.Provisioning.Roles;
 using Microsoft.Extensions.DependencyInjection;
@@ -350,6 +351,134 @@ public static class AzureKubernetesEnvironmentExtensions
     }
 
     /// <summary>
+    /// Adds an Azure Application Gateway for Containers (AGC) <c>ApplicationLoadBalancer</c>
+    /// to this AKS environment, bound to the supplied delegated subnet. Returns a resource
+    /// builder that can be passed to <c>gateway.WithLoadBalancer(lb)</c> /
+    /// <c>ingress.WithLoadBalancer(lb)</c> to route traffic through this load balancer.
+    /// </summary>
+    /// <param name="builder">The AKS environment resource builder.</param>
+    /// <param name="name">The name of the load balancer resource. Used to derive the in-cluster
+    /// <c>ApplicationLoadBalancer</c> name (<c>alb-{name}</c>) referenced by gateway/ingress annotations.</param>
+    /// <param name="subnet">A subnet that will be associated with the AGC ALB. The subnet is
+    /// automatically delegated to <c>Microsoft.ServiceNetworking/trafficControllers</c>; this is
+    /// required by AGC and is idempotent across multiple <see cref="AddLoadBalancer"/> calls
+    /// against the same subnet.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{AzureKubernetesLoadBalancerResource}"/>.</returns>
+    /// <remarks>
+    /// <para>
+    /// Each AGC <c>ApplicationLoadBalancer</c> caps at 5 frontends, so applications that need
+    /// more should call <c>AddLoadBalancer</c> multiple times (each call may use the same or a
+    /// different subnet) and pin gateways/ingresses to specific load balancers via
+    /// <see cref="AzureKubernetesIngressExtensions.WithLoadBalancer(IResourceBuilder{global::Aspire.Hosting.Kubernetes.KubernetesGatewayResource}, IResourceBuilder{AzureKubernetesLoadBalancerResource})"/>.
+    /// </para>
+    /// <para>
+    /// Calling this method opts the AKS cluster into the managed Gateway API installation
+    /// (<c>ingressProfile.gatewayAPI.installation = 'Standard'</c>) and the AGC ALB controller
+    /// add-on (<c>ingressProfile.applicationLoadBalancer.enabled = true</c>). Both properties
+    /// only exist in preview AKS Bicep API versions (oldest covering both: <c>2025-09-02-preview</c>),
+    /// so this implicitly bumps the cluster's emitted API version. Subscriptions/regions where
+    /// the AKS preview features <c>Microsoft.ContainerService/AKSGatewayAPIPreview</c> and
+    /// <c>Microsoft.ContainerService/AKSAppGatewayContainersPreview</c> are not registered will
+    /// see deployment failures.
+    /// </para>
+    /// <para>
+    /// After provisioning, a per-LB pipeline step (<c>apply-alb-crd-{name}</c>) waits for the
+    /// <c>azure-alb-external</c> GatewayClass to appear in the cluster and then
+    /// <c>kubectl apply</c>s the <c>ApplicationLoadBalancer</c> custom resource pointing at the
+    /// supplied subnet.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
+    /// var aksSubnet = vnet.AddSubnet("aks", "10.0.0.0/22");
+    /// var albSubnet = vnet.AddSubnet("alb", "10.0.4.0/24");
+    ///
+    /// var aks = builder.AddAzureKubernetesEnvironment("aks").WithSubnet(aksSubnet);
+    /// var lb = aks.AddLoadBalancer("lb", albSubnet);
+    ///
+    /// aks.AddGateway("public").WithLoadBalancer(lb);
+    /// </code>
+    /// </example>
+    [AspireExport(Description = "Adds an Azure Application Gateway for Containers ApplicationLoadBalancer to the AKS environment")]
+    public static IResourceBuilder<AzureKubernetesLoadBalancerResource> AddLoadBalancer(
+        this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
+        [ResourceName] string name,
+        IResourceBuilder<AzureSubnetResource> subnet)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        ArgumentNullException.ThrowIfNull(subnet);
+
+        // AGC requires the Gateway API CRDs, so both ingressProfile properties are
+        // enabled together. These flags drive the preview API version + property
+        // injection in ConfigureAksInfrastructure.
+        builder.Resource.GatewayApiEnabled = true;
+        builder.Resource.ApplicationLoadBalancerEnabled = true;
+
+        // Delegate the subnet to AGC. AKS node-pool subnets are non-delegated, so this
+        // delegation only applies to user-supplied ALB subnets.
+        //
+        // AzureSubnetResource emits a single delegation in its provisioning entity and
+        // honors only the LAST AzureSubnetServiceDelegationAnnotation on the subnet
+        // (last write wins). A naive `HasAnnotationOfType<...>()` short-circuit would
+        // therefore silently swallow our AGC delegation if the caller had already
+        // delegated the subnet to something else (e.g. Microsoft.NetApp/volumes), and
+        // the deployment would later fail with an opaque AGC association error.
+        //
+        // Instead, only skip when the most recent delegation already targets
+        // trafficControllers (so multiple AddLoadBalancer calls sharing a subnet stay
+        // idempotent). Otherwise, append our annotation so it ends up last and AGC is
+        // the delegation actually emitted.
+        var existingDelegations = subnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>().ToList();
+        var lastDelegation = existingDelegations.Count > 0 ? existingDelegations[^1] : null;
+        string? displacedDelegationServiceName = null;
+        if (lastDelegation is null
+            || !string.Equals(lastDelegation.ServiceName, "Microsoft.ServiceNetworking/trafficControllers", StringComparison.Ordinal))
+        {
+            // Capture the displaced delegation (if any) so the LB pipeline step can warn
+            // the user at deploy time that their explicit delegation was silently overridden.
+            // We can't log here because no ILogger is available during model construction;
+            // the resource's apply-alb-crd pipeline step has access to context.Logger.
+            if (lastDelegation is not null)
+            {
+                displacedDelegationServiceName = lastDelegation.ServiceName;
+            }
+
+            subnet.WithAnnotation(new AzureSubnetServiceDelegationAnnotation(
+                "Microsoft.ServiceNetworking/trafficControllers",
+                "Microsoft.ServiceNetworking/trafficControllers"));
+        }
+
+        var lb = new AzureKubernetesLoadBalancerResource(
+            name,
+            builder.Resource,
+            subnet.Resource.Id,
+            subnet.Resource,
+            displacedDelegationServiceName);
+
+        // Track the LB on the env so ConfigureAksInfrastructure can emit a role
+        // assignment binding the AKS-auto-created AGC controller identity to the
+        // user-supplied subnet. Done in both run and publish modes so any future
+        // run-mode introspection sees a consistent set of LBs; the subsequent
+        // run-mode early-return below skips the model registration only.
+        builder.Resource.LoadBalancers.Add(lb);
+
+        // In run mode the AKS environment is not added to the model (see
+        // AddAzureKubernetesEnvironment), so its aks-get-credentials-{name}
+        // pipeline step is never registered. Mirror that pattern here so the
+        // LB's apply-alb-crd-{name} step (which depends on aks-get-credentials)
+        // is also not registered, avoiding pipeline validation failures.
+        if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
+        {
+            return builder.ApplicationBuilder.CreateResourceBuilder(lb);
+        }
+
+        return builder.ApplicationBuilder.AddResource(lb)
+            .ExcludeFromManifest();
+    }
+
+    /// <summary>
     /// Enables or disables workload identity on the AKS environment, allowing pods to authenticate
     /// to Azure services using federated credentials.
     /// </summary>
@@ -516,6 +645,21 @@ public static class AzureKubernetesEnvironmentExtensions
 
         infrastructure.Add(aks);
 
+        // Surface the preview-only ingress profile properties for AGC / managed Gateway API.
+        // We bump to the oldest preview API version that has both gatewayAPI and
+        // applicationLoadBalancer; the injection itself is reflection-based because the
+        // Azure.Provisioning.ContainerService types that own these properties are internal.
+        // The xmldoc on AksPreviewIngressProfileInjector documents the public DefineProperty /
+        // DefineModelProperty alternatives that were tried and empirically ruled out.
+        if (aksResource.RequiresPreviewIngressApi)
+        {
+            aks.ResourceVersion = "2025-09-02-preview";
+            AksPreviewIngressProfileInjector.Inject(
+                aks,
+                gatewayApi: aksResource.GatewayApiEnabled,
+                applicationLoadBalancer: aksResource.ApplicationLoadBalancerEnabled);
+        }
+
         // ACR pull role assignment for kubelet identity
         if (aksResource.DefaultContainerRegistry is not null || aksResource.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out _))
         {
@@ -551,6 +695,85 @@ public static class AzureKubernetesEnvironmentExtensions
                 PrincipalType = RoleManagementPrincipalType.ServicePrincipal
             };
             infrastructure.Add(roleAssignment);
+        }
+
+        // AGC ALB controller subnet role assignments. AKS auto-creates a managed identity
+        // for the AGC ALB add-on (`applicationloadbalancer-{cluster-name}` in the MC_*
+        // resource group) when `ingressProfile.applicationLoadBalancer.enabled` is set,
+        // but only auto-grants it permissions on resources inside MC_*. When the user
+        // supplies an ALB subnet that lives outside MC_* (e.g. in the cluster's parent
+        // RG), the controller fails with `LinkedAuthorizationFailed` on
+        // `Microsoft.Network/virtualNetworks/subnets/join/action`. We close that gap by
+        // emitting a `Network Contributor` role assignment per LB subnet, scoped to the
+        // subnet, with the principalId read back from the cluster's
+        // `properties.ingressProfile.applicationLoadBalancer.identity.objectId` output.
+        // The schema marks that identity property `readOnly`, so AKS owns the lifecycle
+        // and we just consume it after the cluster is provisioned.
+        // See https://learn.microsoft.com/en-us/azure/application-gateway/for-containers/quickstart-deploy-application-gateway-for-containers-alb-controller-addon
+        // for the documented role bindings the addon needs.
+        if (aksResource.LoadBalancers.Count > 0)
+        {
+            // Network Contributor role: 4d97b98b-1d4f-4787-a291-c67834d212e7. Picked
+            // because it includes `Microsoft.Network/virtualNetworks/subnets/join/action`,
+            // matching the BYO-deployment guidance for AGC associations.
+            var networkContributorRoleId = BicepFunction.GetSubscriptionResourceId(
+                "Microsoft.Authorization/roleDefinitions",
+                "4d97b98b-1d4f-4787-a291-c67834d212e7");
+
+            var albAddonPrincipalId = new MemberExpression(
+                new MemberExpression(
+                    new MemberExpression(
+                        new MemberExpression(
+                            new MemberExpression(
+                                new IdentifierExpression(aks.BicepIdentifier),
+                                "properties"),
+                            "ingressProfile"),
+                        "applicationLoadBalancer"),
+                    "identity"),
+                "objectId");
+
+            // Dedupe (vnet, subnet) pairs so multiple LBs sharing a subnet only emit a
+            // single existing-resource declaration and a single role assignment.
+            var subnetExistingByKey = new Dictionary<string, SubnetResource>(StringComparer.Ordinal);
+            var assignedSubnets = new HashSet<string>(StringComparer.Ordinal);
+
+            foreach (var lb in aksResource.LoadBalancers)
+            {
+                var subnet = lb.SubnetResource
+                    ?? throw new InvalidOperationException($"AzureKubernetesLoadBalancerResource '{lb.Name}' is missing its subnet binding.");
+                var vnet = subnet.Parent;
+
+                // Reuse the canonical existing-VNet handle so emitted Bicep references
+                // match the rest of the module and we don't double-declare the resource.
+                var existingVnet = (VirtualNetwork)vnet.AddAsExistingResource(infrastructure);
+
+                var subnetIdentifier = $"{existingVnet.BicepIdentifier}_{Infrastructure.NormalizeBicepIdentifier(subnet.Name)}_existing";
+                if (!subnetExistingByKey.TryGetValue(subnetIdentifier, out var existingSubnet))
+                {
+                    existingSubnet = SubnetResource.FromExisting(subnetIdentifier);
+                    existingSubnet.Parent = existingVnet;
+                    existingSubnet.Name = subnet.SubnetName;
+                    infrastructure.Add(existingSubnet);
+                    subnetExistingByKey[subnetIdentifier] = existingSubnet;
+                }
+
+                if (!assignedSubnets.Add(subnetIdentifier))
+                {
+                    continue;
+                }
+
+                var albSubnetRole = new RoleAssignment($"albSubnetJoin_{Infrastructure.NormalizeBicepIdentifier(lb.Name)}")
+                {
+                    // GUID name keyed off subnet + cluster + role so reruns are idempotent
+                    // and parallel LBs targeting different subnets don't collide.
+                    Name = BicepFunction.CreateGuid(existingSubnet.Id, aks.Id, networkContributorRoleId),
+                    Scope = new IdentifierExpression(existingSubnet.BicepIdentifier),
+                    RoleDefinitionId = networkContributorRoleId,
+                    PrincipalId = albAddonPrincipalId,
+                    PrincipalType = RoleManagementPrincipalType.ServicePrincipal
+                };
+                infrastructure.Add(albSubnetRole);
+            }
         }
 
         // Outputs

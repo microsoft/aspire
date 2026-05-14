@@ -82,20 +82,18 @@ internal sealed class DashboardRunCommand : BaseCommand
         TreatUnmatchedTokensAsErrors = false;
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var layout = await _bundleService.EnsureExtractedAndGetLayoutAsync(cancellationToken).ConfigureAwait(false);
         if (layout is null)
         {
-            _interactionService.DisplayError(DashboardCommandStrings.BundleLayoutNotFound);
-            return ExitCodeConstants.DashboardFailure;
+            return CommandResult.Failure(ExitCodeConstants.DashboardFailure, DashboardCommandStrings.BundleLayoutNotFound);
         }
 
         var managedPath = layout.GetManagedPath();
         if (managedPath is null || !File.Exists(managedPath))
         {
-            _interactionService.DisplayError(DashboardCommandStrings.ManagedBinaryNotFound);
-            return ExitCodeConstants.DashboardFailure;
+            return CommandResult.Failure(ExitCodeConstants.DashboardFailure, DashboardCommandStrings.ManagedBinaryNotFound);
         }
 
         var dashboardArgs = new List<string> { "dashboard" };
@@ -350,7 +348,7 @@ internal sealed class DashboardRunCommand : BaseCommand
         interactionService.DisplayRenderable(padder);
     }
 
-    private async Task<int> ExecuteForegroundAsync(string managedPath, List<string> dashboardArgs, DashboardInfo dashboardInfo, IDictionary<string, string>? environmentVariables, CancellationToken cancellationToken)
+    private async Task<CommandResult> ExecuteForegroundAsync(string managedPath, List<string> dashboardArgs, DashboardInfo dashboardInfo, IDictionary<string, string>? environmentVariables, CancellationToken cancellationToken)
     {
         _logger.LogDebug("Starting dashboard in foreground: {ManagedPath}", managedPath);
 
@@ -386,7 +384,7 @@ internal sealed class DashboardRunCommand : BaseCommand
         {
             _logger.LogError(ex, "Failed to start dashboard process: {ManagedPath}", managedPath);
             _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, DashboardCommandStrings.DashboardFailedToStart, ex.Message));
-            return ExitCodeConstants.DashboardFailure;
+            return CommandResult.Failure(ExitCodeConstants.DashboardFailure);
         }
 
         using var _ = process;
@@ -422,7 +420,9 @@ internal sealed class DashboardRunCommand : BaseCommand
                 process.Kill(entireProcessTree: true);
             }
 
-            return ExitCodeConstants.Success;
+            // Command is designed to be cancellable by the user (e.g. Ctrl+C) at any time.
+            // Treat cancellation as a successful exit since the user intentionally stopped the dashboard.
+            return CommandResult.Cancelled(ExitCodeConstants.Success);
         }
 
         if (completedTask != readyTcs.Task)
@@ -446,17 +446,13 @@ internal sealed class DashboardRunCommand : BaseCommand
                 : DashboardCommandStrings.DashboardStartTimedOut;
 
             _interactionService.DisplayError(exitMessage);
-            _interactionService.DisplayMessage(
-                KnownEmojis.PageFacingUp,
-                string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, MarkupHelpers.SafeFileLink(_interactionService, ExecutionContext.LogFilePath)),
-                allowMarkup: true);
 
             if (!process.HasExited)
             {
                 process.Kill(entireProcessTree: true);
             }
 
-            return ExitCodeConstants.DashboardFailure;
+            return CommandResult.Failure(ExitCodeConstants.DashboardFailure);
         }
 
         // Dashboard is ready.
@@ -476,7 +472,7 @@ internal sealed class DashboardRunCommand : BaseCommand
                 process.Kill(entireProcessTree: true);
             }
 
-            return ExitCodeConstants.Success;
+            return CommandResult.Cancelled(ExitCodeConstants.Success);
         }
 
         if (process.ExitCode != 0)
@@ -484,6 +480,6 @@ internal sealed class DashboardRunCommand : BaseCommand
             _interactionService.DisplayError(GetExitCodeMessage(process.ExitCode));
         }
 
-        return process.ExitCode == 0 ? ExitCodeConstants.Success : ExitCodeConstants.DashboardFailure;
+        return process.ExitCode == 0 ? CommandResult.Success() : CommandResult.Failure(ExitCodeConstants.DashboardFailure);
     }
 }

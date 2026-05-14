@@ -282,6 +282,29 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                 steps.Add(fqdnDiscoveryStep);
             }
 
+            // Pre-helm cleanup step — strip any stale non-helm Update entries from the
+            // managedFields of Gateways with TLS. Older Aspire builds patched the listener
+            // hostname with kubectl's default field manager ("kubectl-patch"); that Update
+            // entry persists in managedFields after later builds switched to
+            // --field-manager=helm, and helm's server-side apply still conflicts with the
+            // foreign Update ownership of .spec.listeners[name="https"].hostname. Removing
+            // the stale entry up front lets helm upgrade succeed without --force-conflicts.
+            // No-op on first deploy (the Gateway doesn't exist yet) and on clusters that
+            // were only ever managed by current code (no foreign managers found).
+            var gatewaysWithTls = CollectGatewaysWithTls(model, environment);
+            if (gatewaysWithTls.Count > 0)
+            {
+                var cleanupStep = new PipelineStep
+                {
+                    Name = $"gateway-field-cleanup-{environment.Name}",
+                    Description = "Removes stale foreign field-manager entries from existing Gateways so helm upgrade can re-apply",
+                    Action = ctx => CleanupGatewayFieldOwnershipAsync(ctx, environment, gatewaysWithTls)
+                };
+                cleanupStep.RequiredBy($"helm-deploy-{environment.Name}");
+                cleanupStep.DependsOn($"prepare-{environment.Name}");
+                steps.Add(cleanupStep);
+            }
+
             // Expand deployment target steps for compute resources (including dashboard if enabled)
             var resources = environment.DashboardEnabled && environment.Dashboard?.Resource is KubernetesAspireDashboardResource dashboard
                 ? [.. model.GetComputeResources(), dashboard]
@@ -603,7 +626,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                 SecretName = await ResolveExpressionAsync(tls.SecretName, cancellationToken).ConfigureAwait(false),
             };
 
-            foreach (var host in tls.Hosts)
+            foreach (var host in ingressResource.Hostnames)
             {
                 tlsEntry.Hosts.Add(await ResolveExpressionAsync(host, cancellationToken).ConfigureAwait(false));
             }
@@ -622,7 +645,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
             foreach (var tls in ingressResource.TlsConfigs)
             {
-                foreach (var host in tls.Hosts)
+                foreach (var host in ingressResource.Hostnames)
                 {
                     var resolvedHost = await ResolveExpressionAsync(host, cancellationToken).ConfigureAwait(false);
                     if (!hostsWithRules.Contains(resolvedHost))
@@ -767,7 +790,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         {
             var resolvedSecretName = await ResolveExpressionAsync(tls.SecretName, cancellationToken).ConfigureAwait(false);
 
-            if (tls.Hosts.Count == 0)
+            if (gatewayResource.Hostnames.Count == 0)
             {
                 // No hostnames specified — create an HTTPS listener without a hostname restriction.
                 // The hostname will be discovered from the Gateway's assigned address after deployment
@@ -793,7 +816,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             }
             else
             {
-                foreach (var host in tls.Hosts)
+                foreach (var host in gatewayResource.Hostnames)
                 {
                     var listenerName = tlsListenerIndex == 0 ? "https" : $"https-{tlsListenerIndex}";
                     tlsListenerIndex++;
@@ -924,7 +947,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         {
             foreach (var tls in gateway.TlsConfigs)
             {
-                foreach (var host in tls.Hosts)
+                foreach (var host in gateway.Hostnames)
                 {
                     tlsSecrets.Add((tls.SecretName, host));
                 }
@@ -935,7 +958,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         {
             foreach (var tls in ingress.TlsConfigs)
             {
-                foreach (var host in tls.Hosts)
+                foreach (var host in ingress.Hostnames)
                 {
                     tlsSecrets.Add((tls.SecretName, host));
                 }
@@ -959,10 +982,32 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         {
             foreach (var tls in gateway.TlsConfigs)
             {
-                if (tls.Hosts.Count == 0)
+                if (gateway.Hostnames.Count == 0)
                 {
                     results.Add((gateway, tls.SecretName));
                 }
+            }
+        }
+
+        return results;
+    }
+
+    /// <summary>
+    /// Collects Gateway resources that have any TLS configuration, regardless of whether
+    /// hostnames are explicitly set. Used by the pre-deploy cleanup step that strips
+    /// stale foreign field-manager ownership.
+    /// </summary>
+    private static List<KubernetesGatewayResource> CollectGatewaysWithTls(
+        DistributedApplicationModel model,
+        KubernetesEnvironmentResource environment)
+    {
+        var results = new List<KubernetesGatewayResource>();
+
+        foreach (var gateway in model.Resources.OfType<KubernetesGatewayResource>().Where(g => g.Parent == environment))
+        {
+            if (gateway.TlsConfigs.Count > 0)
+            {
+                results.Add(gateway);
             }
         }
 
@@ -994,6 +1039,22 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             var gatewayName = gateway.Name.ToKubernetesResourceName();
             var secretName = await ResolveExpressionAsync(secretNameExpr, context.CancellationToken).ConfigureAwait(false);
 
+            // Pre-create a placeholder bootstrap TLS secret BEFORE waiting for the Gateway
+            // address. Some controllers (notably Azure Application Gateway for Containers)
+            // refuse to program a Gateway whose HTTPS listener references a non-existent
+            // Secret — they log "Secret 'X' not found" and stop reconciling. That creates a
+            // deadlock with the FQDN discovery flow, which itself waits for the Gateway to
+            // be programmed. Uploading a self-signed placeholder up front breaks the
+            // chicken-and-egg: the Gateway can program with the placeholder cert, get an
+            // address, and we then patch the listener hostname so cert-manager can replace
+            // the placeholder with a real certificate.
+            await EnsureBootstrapTlsSecretAsync(
+                secretName,
+                hostname: "bootstrap.invalid",
+                @namespace,
+                environment,
+                context).ConfigureAwait(false);
+
             // Poll for the Gateway's assigned hostname address.
             // We use -o json and parse the full status to select Hostname-type addresses,
             // since some controllers return IP addresses which are not valid for TLS hostnames.
@@ -1005,11 +1066,18 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
             if (string.IsNullOrEmpty(discoveredFqdn))
             {
-                context.Logger.LogWarning(
-                    "Gateway '{GatewayName}' was not assigned a hostname address after waiting. " +
-                    "TLS hostname discovery skipped. You may need to redeploy with an explicit hostname via WithHostname().",
-                    gatewayName);
-                continue;
+                // Hard failure rather than a logged warning: when the user has TLS configured
+                // without an explicit hostname, the deployment is only meaningful once the
+                // listener hostname is patched (cert-manager's gateway shim issues no
+                // certificate for a hostname-less HTTPS listener). Silently continuing
+                // produces an apparently-successful deploy that never serves valid TLS, which
+                // is far worse than failing visibly here. The user can fix this by either
+                // waiting for their controller to assign an address sooner or by passing an
+                // explicit hostname via WithHostname() / WithTls(hostname: ...).
+                throw new InvalidOperationException(
+                    $"Gateway '{gatewayName}' was not assigned a hostname address within the discovery timeout. " +
+                    "TLS hostname discovery cannot complete. Either retry the deploy (the controller may still be " +
+                    "provisioning the address) or set an explicit hostname via WithHostname().");
             }
 
             context.Logger.LogInformation(
@@ -1044,7 +1112,16 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                     var patchFilePath = Path.Combine(patchTempDir.FullName, "patch.json");
                     await File.WriteAllTextAsync(patchFilePath, patchJson, context.CancellationToken).ConfigureAwait(false);
 
-                    var patchArgs = $"patch gateway {gatewayName} --namespace {@namespace} --type=json --patch-file \"{patchFilePath}\"";
+                    // Use --field-manager=helm so Helm becomes the registered owner of the
+                    // listener hostname field. Without this, kubectl defaults the field manager
+                    // to "kubectl-patch", and a subsequent `helm upgrade` (which uses server-side
+                    // apply with field manager "helm") fails on the next deploy with:
+                    //   conflict with "kubectl-patch" using gateway.networking.k8s.io/v1:
+                    //   .spec.listeners[name="https"].hostname
+                    // Server-side apply Apply operations conflict with foreign Update operations
+                    // recorded in managedFields, but matching manager names do not conflict.
+                    // See https://kubernetes.io/docs/reference/using-api/server-side-apply/#conflicts
+                    var patchArgs = $"patch gateway {gatewayName} --namespace {@namespace} --type=json --field-manager=helm --patch-file \"{patchFilePath}\"";
                     if (environment.KubeConfigPath is not null)
                     {
                         patchArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
@@ -1085,88 +1162,120 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                     gatewayName, @namespace, environment, context).ConfigureAwait(false);
             }
 
-            // Check if bootstrap TLS secret already exists
-            var checkArgs = $"get secret {secretName} --namespace {@namespace}";
+            // Bootstrap TLS secret was already pre-created above. Nothing further to do
+            // here — cert-manager will replace it with a real certificate once the
+            // listener hostname is detected on the Gateway.
+        }
+    }
+
+    /// <summary>
+    /// Creates a self-signed bootstrap TLS secret with the given hostname as the CN/SAN
+    /// if it doesn't already exist. Used by the FQDN discovery flow to break the
+    /// chicken-and-egg between Gateway controllers (which need the secret to program the
+    /// Gateway) and FQDN discovery (which needs the Gateway to be programmed).
+    /// </summary>
+    private static async Task EnsureBootstrapTlsSecretAsync(
+        string secretName,
+        string hostname,
+        string @namespace,
+        KubernetesEnvironmentResource environment,
+        PipelineStepContext context)
+    {
+        var checkArgs = $"get secret {secretName} --namespace {@namespace}";
+        if (environment.KubeConfigPath is not null)
+        {
+            checkArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
+        }
+
+        var (checkResult, checkDisposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
+        {
+            Arguments = checkArgs,
+            ThrowOnNonZeroReturnCode = false,
+            InheritEnv = true,
+            OnOutputData = _ => { },
+            OnErrorData = _ => { }
+        });
+
+        await using (checkDisposable.ConfigureAwait(false))
+        {
+            var result = await checkResult.WaitAsync(context.CancellationToken).ConfigureAwait(false);
+            if (result.ExitCode == 0)
+            {
+                context.Logger.LogInformation("TLS secret '{SecretName}' already exists, skipping bootstrap.", secretName);
+                return;
+            }
+        }
+
+        context.Logger.LogInformation("Creating bootstrap TLS secret '{SecretName}' for '{Hostname}'.", secretName, hostname);
+
+        using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
+        var certRequest = new CertificateRequest($"CN={hostname}", ecdsa, HashAlgorithmName.SHA256);
+        var sanBuilder = new SubjectAlternativeNameBuilder();
+        sanBuilder.AddDnsName(hostname);
+        certRequest.CertificateExtensions.Add(sanBuilder.Build());
+        using var cert = certRequest.CreateSelfSigned(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddDays(1));
+
+        var certPem = cert.ExportCertificatePem();
+        var keyPem = ecdsa.ExportECPrivateKeyPem();
+
+        var tempDir = Directory.CreateTempSubdirectory(".aspire-tls-discovery");
+        try
+        {
+            var certPath = Path.Combine(tempDir.FullName, "tls.crt");
+            var keyPath = Path.Combine(tempDir.FullName, "tls.key");
+            await File.WriteAllTextAsync(certPath, certPem, context.CancellationToken).ConfigureAwait(false);
+            await File.WriteAllTextAsync(keyPath, keyPem, context.CancellationToken).ConfigureAwait(false);
+
+            var createArgs = $"create secret tls {secretName} --cert=\"{certPath}\" --key=\"{keyPath}\" --namespace {@namespace}";
             if (environment.KubeConfigPath is not null)
             {
-                checkArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
+                createArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
             }
 
-            var (checkResult, checkDisposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
+            var (createResult, createDisposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
             {
-                Arguments = checkArgs,
+                Arguments = createArgs,
                 ThrowOnNonZeroReturnCode = false,
                 InheritEnv = true,
-                OnOutputData = _ => { },
-                OnErrorData = _ => { }
+                OnOutputData = line => context.Logger.LogDebug("{Line}", line),
+                OnErrorData = line => context.Logger.LogDebug("{Line}", line)
             });
 
-            await using (checkDisposable.ConfigureAwait(false))
+            await using (createDisposable.ConfigureAwait(false))
             {
-                var result = await checkResult.WaitAsync(context.CancellationToken).ConfigureAwait(false);
-                if (result.ExitCode == 0)
+                var createExitResult = await createResult.WaitAsync(context.CancellationToken).ConfigureAwait(false);
+                if (createExitResult.ExitCode != 0)
                 {
-                    context.Logger.LogInformation("TLS secret '{SecretName}' already exists, skipping bootstrap.", secretName);
-                    continue;
+                    context.Logger.LogWarning("Failed to create bootstrap TLS secret '{SecretName}' (exit code {ExitCode}).", secretName, createExitResult.ExitCode);
+                }
+                else
+                {
+                    context.Logger.LogInformation(
+                        "Bootstrap TLS secret '{SecretName}' created for '{Hostname}'. " +
+                        "cert-manager will replace this with a real certificate once the hostname is detected on the Gateway listener.",
+                        secretName, hostname);
                 }
             }
+        }
+        finally
+        {
+            DeleteTempDirSafely(tempDir, context.Logger);
+        }
+    }
 
-            // Create a bootstrap self-signed cert with the discovered FQDN
-            context.Logger.LogInformation("Creating bootstrap TLS secret '{SecretName}' for '{Hostname}'.", secretName, discoveredFqdn);
-
-            using var ecdsa = ECDsa.Create(ECCurve.NamedCurves.nistP256);
-            var certRequest = new CertificateRequest($"CN={discoveredFqdn}", ecdsa, HashAlgorithmName.SHA256);
-            var sanBuilder = new SubjectAlternativeNameBuilder();
-            sanBuilder.AddDnsName(discoveredFqdn);
-            certRequest.CertificateExtensions.Add(sanBuilder.Build());
-            using var cert = certRequest.CreateSelfSigned(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddDays(1));
-
-            var certPem = cert.ExportCertificatePem();
-            var keyPem = ecdsa.ExportECPrivateKeyPem();
-
-            var tempDir = Directory.CreateTempSubdirectory(".aspire-tls-discovery");
-            try
-            {
-                var certPath = Path.Combine(tempDir.FullName, "tls.crt");
-                var keyPath = Path.Combine(tempDir.FullName, "tls.key");
-                await File.WriteAllTextAsync(certPath, certPem, context.CancellationToken).ConfigureAwait(false);
-                await File.WriteAllTextAsync(keyPath, keyPem, context.CancellationToken).ConfigureAwait(false);
-
-                var createArgs = $"create secret tls {secretName} --cert=\"{certPath}\" --key=\"{keyPath}\" --namespace {@namespace}";
-                if (environment.KubeConfigPath is not null)
-                {
-                    createArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
-                }
-
-                var (createResult, createDisposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
-                {
-                    Arguments = createArgs,
-                    ThrowOnNonZeroReturnCode = false,
-                    InheritEnv = true,
-                    OnOutputData = line => context.Logger.LogDebug("{Line}", line),
-                    OnErrorData = line => context.Logger.LogDebug("{Line}", line)
-                });
-
-                await using (createDisposable.ConfigureAwait(false))
-                {
-                    var createExitResult = await createResult.WaitAsync(context.CancellationToken).ConfigureAwait(false);
-                    if (createExitResult.ExitCode != 0)
-                    {
-                        context.Logger.LogWarning("Failed to create bootstrap TLS secret '{SecretName}' (exit code {ExitCode}).", secretName, createExitResult.ExitCode);
-                    }
-                    else
-                    {
-                        context.Logger.LogInformation(
-                            "Bootstrap TLS secret '{SecretName}' created for '{Hostname}'. " +
-                            "cert-manager will replace this with a real certificate once the hostname is detected on the Gateway listener.",
-                            secretName, discoveredFqdn);
-                    }
-                }
-            }
-            finally
-            {
-                try { tempDir.Delete(recursive: true); } catch { }
-            }
+    // Best-effort cleanup for kubectl/cert temp directories. Swallowing OperationCanceledException
+    // here would mask shutdown signals; instead narrow to file-system failures (a transient
+    // antivirus lock or permission issue) and surface them at debug level so the next deploy
+    // attempt - or `aspire run` with verbose logging - can diagnose if leakage occurs.
+    private static void DeleteTempDirSafely(DirectoryInfo tempDir, ILogger logger)
+    {
+        try
+        {
+            tempDir.Delete(recursive: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            logger.LogDebug(ex, "Failed to delete temporary directory '{TempDir}'.", tempDir.FullName);
         }
     }
 
@@ -1180,10 +1289,15 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
         KubernetesEnvironmentResource environment,
         PipelineStepContext context)
     {
+        // AGC and other Gateway controllers can take several minutes to assign an address
+        // after the Gateway is created (AGC has been observed taking 5-10 minutes when AGC
+        // and the cluster are freshly provisioned in the same deploy). Allow up to ~15
+        // minutes (180 attempts × 5s) before giving up, matching the wait budget our E2E
+        // tests use for the same condition.
         var pipeline = new ResiliencePipelineBuilder<string?>()
             .AddRetry(new RetryStrategyOptions<string?>
             {
-                MaxRetryAttempts = 59,
+                MaxRetryAttempts = 179,
                 Delay = TimeSpan.FromSeconds(5),
                 BackoffType = DelayBackoffType.Constant,
                 ShouldHandle = new PredicateBuilder<string?>().HandleResult(r => r is null),
@@ -1344,6 +1458,201 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
     }
 
     /// <summary>
+    /// Pre-helm-deploy step: removes any non-helm Update entries from the
+    /// <c>managedFields</c> of existing Gateways with TLS configuration. Older Aspire
+    /// builds patched the listener hostname with kubectl's default field manager
+    /// (<c>kubectl-patch</c>), and that Update entry persists in the resource's
+    /// <c>managedFields</c> after later builds switched to <c>--field-manager=helm</c>.
+    /// Server-side Apply by helm conflicts with the foreign Update ownership of
+    /// <c>.spec.listeners[name="https"].hostname</c> until the foreign entry is removed,
+    /// so we strip it preemptively. No-op when the Gateway doesn't yet exist (first
+    /// deploy), when the cluster is unreachable, or when only helm-owned managedFields
+    /// entries are present.
+    /// See https://kubernetes.io/docs/reference/using-api/server-side-apply/#clearing-managedfields
+    /// </summary>
+    private static async Task CleanupGatewayFieldOwnershipAsync(
+        PipelineStepContext context,
+        KubernetesEnvironmentResource environment,
+        List<KubernetesGatewayResource> gateways)
+    {
+        var @namespace = "default";
+        if (environment.TryGetLastAnnotation<KubernetesNamespaceAnnotation>(out var nsAnnotation))
+        {
+            var resolvedNs = await nsAnnotation.Namespace.GetValueAsync(context.CancellationToken).ConfigureAwait(false);
+            if (!string.IsNullOrEmpty(resolvedNs))
+            {
+                @namespace = resolvedNs;
+            }
+        }
+
+        foreach (var gateway in gateways)
+        {
+            var gatewayName = gateway.Name.ToKubernetesResourceName();
+
+            var getArgs = $"get gateway {gatewayName} --namespace {@namespace} --show-managed-fields -o json --ignore-not-found";
+            if (environment.KubeConfigPath is not null)
+            {
+                getArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
+            }
+
+            var stdout = new List<string>();
+            var (getResult, getDisposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
+            {
+                Arguments = getArgs,
+                ThrowOnNonZeroReturnCode = false,
+                InheritEnv = true,
+                OnOutputData = stdout.Add,
+                OnErrorData = line => context.Logger.LogDebug("{Line}", line)
+            });
+
+            int getExit;
+            await using (getDisposable.ConfigureAwait(false))
+            {
+                getExit = (await getResult.WaitAsync(context.CancellationToken).ConfigureAwait(false)).ExitCode;
+            }
+
+            if (getExit != 0 || stdout.Count == 0)
+            {
+                // Gateway doesn't exist yet (first deploy) or kubectl error — nothing to do.
+                context.Logger.LogDebug("Gateway '{GatewayName}' not found or unreadable; skipping field-ownership cleanup.", gatewayName);
+                continue;
+            }
+
+            // Identify managedFields entries to remove: any Update operation by a manager
+            // other than "helm" that owns fields under .spec.listeners. We descend in
+            // reverse index order so JSON patch path indices remain stable.
+            List<int> indicesToRemove;
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(string.Join("", stdout));
+                indicesToRemove = FindForeignListenerOwnershipIndices(doc.RootElement);
+            }
+            catch (System.Text.Json.JsonException ex)
+            {
+                context.Logger.LogDebug(ex, "Could not parse Gateway '{GatewayName}' JSON for field-ownership cleanup.", gatewayName);
+                continue;
+            }
+
+            if (indicesToRemove.Count == 0)
+            {
+                continue;
+            }
+
+            // Build a JSON Patch removing each stale entry. Process highest index first so
+            // earlier removals don't shift the indices of pending operations.
+            var ops = indicesToRemove
+                .OrderByDescending(i => i)
+                .Select(i => new
+                {
+                    op = "remove",
+                    path = $"/metadata/managedFields/{i}"
+                });
+            var patchJson = System.Text.Json.JsonSerializer.Serialize(ops);
+
+            var patchTempDir = Directory.CreateTempSubdirectory(".aspire-gateway-fields");
+            try
+            {
+                var patchFilePath = Path.Combine(patchTempDir.FullName, "patch.json");
+                await File.WriteAllTextAsync(patchFilePath, patchJson, context.CancellationToken).ConfigureAwait(false);
+
+                var patchArgs = $"patch gateway {gatewayName} --namespace {@namespace} --type=json --patch-file \"{patchFilePath}\"";
+                if (environment.KubeConfigPath is not null)
+                {
+                    patchArgs += $" --kubeconfig \"{environment.KubeConfigPath}\"";
+                }
+
+                var (patchResult, patchDisposable) = ProcessUtil.Run(new ProcessSpec("kubectl")
+                {
+                    Arguments = patchArgs,
+                    ThrowOnNonZeroReturnCode = false,
+                    InheritEnv = true,
+                    OnOutputData = line => context.Logger.LogDebug("{Line}", line),
+                    OnErrorData = line => context.Logger.LogDebug("{Line}", line)
+                });
+
+                await using (patchDisposable.ConfigureAwait(false))
+                {
+                    var patchExit = (await patchResult.WaitAsync(context.CancellationToken).ConfigureAwait(false)).ExitCode;
+                    if (patchExit == 0)
+                    {
+                        context.Logger.LogInformation(
+                            "Removed {Count} stale field-manager entr{Suffix} from Gateway '{GatewayName}' to allow helm upgrade.",
+                            indicesToRemove.Count,
+                            indicesToRemove.Count == 1 ? "y" : "ies",
+                            gatewayName);
+                    }
+                    else
+                    {
+                        // Best-effort cleanup: if it fails, helm upgrade may still succeed
+                        // (the user may have an explicit hostname matching the existing one)
+                        // and if it doesn't, the failure surfaces clearly via helm.
+                        context.Logger.LogDebug(
+                            "Field-ownership cleanup on Gateway '{GatewayName}' returned exit code {ExitCode}; continuing.",
+                            gatewayName, patchExit);
+                    }
+                }
+            }
+            finally
+            {
+                DeleteTempDirSafely(patchTempDir, context.Logger);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Returns the indices of <c>managedFields</c> entries that represent foreign
+    /// (non-helm) Update operations owning fields under <c>.spec.listeners</c>. These
+    /// entries are remnants of older builds that patched the Gateway with kubectl's
+    /// default field manager and conflict with helm's server-side apply on subsequent
+    /// upgrades.
+    /// </summary>
+    private static List<int> FindForeignListenerOwnershipIndices(System.Text.Json.JsonElement root)
+    {
+        var indices = new List<int>();
+
+        if (!root.TryGetProperty("metadata", out var metadata) ||
+            !metadata.TryGetProperty("managedFields", out var managedFields) ||
+            managedFields.ValueKind != System.Text.Json.JsonValueKind.Array)
+        {
+            return indices;
+        }
+
+        for (var i = 0; i < managedFields.GetArrayLength(); i++)
+        {
+            var entry = managedFields[i];
+
+            // Only target Update entries — Apply entries are part of normal SSA ownership
+            // and removing them would be destructive.
+            if (!entry.TryGetProperty("operation", out var op) ||
+                !string.Equals(op.GetString(), "Update", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            // Helm's own entries are safe — both Apply and any incidental Update use the
+            // same manager name and therefore don't conflict with helm's next Apply.
+            if (entry.TryGetProperty("manager", out var mgr) &&
+                string.Equals(mgr.GetString(), "helm", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            // Only remove entries that own a listener field — preserves status managers
+            // like alb-controller which legitimately update .status. The fieldsV1 path
+            // for a Gateway listener is shaped:
+            //   {"f:spec":{"f:listeners":{"k:{\"name\":\"https\"}":{"f:hostname":{}}}}}
+            if (entry.TryGetProperty("fieldsV1", out var fieldsV1) &&
+                fieldsV1.TryGetProperty("f:spec", out var fSpec) &&
+                fSpec.TryGetProperty("f:listeners", out _))
+            {
+                indices.Add(i);
+            }
+        }
+
+        return indices;
+    }
+
+    /// <summary>
     /// Transfers field ownership of the Gateway's patched hostname to Helm using server-side apply
     /// with a minimal Gateway manifest, avoiding server-populated fields like status and resourceVersion.
     /// </summary>
@@ -1456,7 +1765,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             }
             finally
             {
-                try { tempDir.Delete(recursive: true); } catch { }
+                DeleteTempDirSafely(tempDir, context.Logger);
             }
         }
         catch (System.Text.Json.JsonException ex)
@@ -1560,7 +1869,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             }
             finally
             {
-                try { tempDir.Delete(recursive: true); } catch { }
+                DeleteTempDirSafely(tempDir, context.Logger);
             }
         }
     }

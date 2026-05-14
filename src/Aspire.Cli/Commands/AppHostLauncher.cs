@@ -77,8 +77,8 @@ internal sealed class AppHostLauncher(
     /// <param name="globalArgs">Global CLI args to forward to child process.</param>
     /// <param name="additionalArgs">Additional unmatched args to forward.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>Exit code indicating success or failure.</returns>
-    public async Task<int> LaunchDetachedAsync(
+    /// <returns>A <see cref="CommandResult"/> indicating success or failure.</returns>
+    public async Task<CommandResult> LaunchDetachedAsync(
         FileInfo? passedAppHostProjectFile,
         OutputFormat? format,
         bool isolated,
@@ -112,7 +112,7 @@ internal sealed class AppHostLauncher(
 
         if (effectiveAppHostFile is null)
         {
-            return ExitCodeConstants.FailedToFindProject;
+            return CommandResult.Failure(ExitCodeConstants.FailedToFindProject);
         }
 
         logger.LogDebug("Starting AppHost in background: {AppHostPath}", effectiveAppHostFile.FullName);
@@ -155,13 +155,13 @@ internal sealed class AppHostLauncher(
         // Handle failure cases
         if (launchResult.Backchannel is null || launchResult.ChildProcess is null)
         {
-            return HandleLaunchFailure(launchResult, childLogFile);
+            return CommandResult.FromExitCode(HandleLaunchFailure(launchResult, childLogFile));
         }
 
         // Display results
         DisplayLaunchResult(launchResult, effectiveAppHostFile, childLogFile, format, isExtensionHost);
 
-        return ExitCodeConstants.Success;
+        return CommandResult.Success();
     }
 
     private async Task StopExistingInstancesAsync(FileInfo effectiveAppHostFile, CancellationToken cancellationToken)

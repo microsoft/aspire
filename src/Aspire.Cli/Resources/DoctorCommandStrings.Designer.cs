@@ -85,6 +85,24 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("EnvironmentCheckHeader", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire.
+        /// </summary>
+        public static string AspireCategoryHeader {
+            get {
+                return ResourceManager.GetString("AspireCategoryHeader", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to AppHost.
+        /// </summary>
+        public static string AppHostCategoryHeader {
+            get {
+                return ResourceManager.GetString("AppHostCategoryHeader", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to .NET SDK.
@@ -139,7 +157,79 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CheckingPrerequisites", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to unknown.
+        /// </summary>
+        public static string VersionUnknown {
+            get {
+                return ResourceManager.GetString("VersionUnknown", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire CLI version {0}.
+        /// </summary>
+        public static string CliVersionMessageFormat {
+            get {
+                return ResourceManager.GetString("CliVersionMessageFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire CLI version {0} is out of date. Latest version is {1}.
+        /// </summary>
+        public static string CliVersionOutOfDateMessageFormat {
+            get {
+                return ResourceManager.GetString("CliVersionOutOfDateMessageFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Run &apos;{0}&apos; to update Aspire CLI..
+        /// </summary>
+        public static string CliVersionOutOfDateFixFormat {
+            get {
+                return ResourceManager.GetString("CliVersionOutOfDateFixFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Could not check for Aspire CLI updates.
+        /// </summary>
+        public static string CliVersionUpdateCheckFailedMessage {
+            get {
+                return ResourceManager.GetString("CliVersionUpdateCheckFailedMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to AppHost version {0} ({1}).
+        /// </summary>
+        public static string AppHostVersionMessageFormat {
+            get {
+                return ResourceManager.GetString("AppHostVersionMessageFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Could not determine AppHost version ({0}).
+        /// </summary>
+        public static string AppHostVersionUnknownMessageFormat {
+            get {
+                return ResourceManager.GetString("AppHostVersionUnknownMessageFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Could not determine AppHost version.
+        /// </summary>
+        public static string AppHostVersionCheckFailedMessage {
+            get {
+                return ResourceManager.GetString("AppHostVersionCheckFailedMessage", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to No HTTPS development certificate found.
         /// </summary>

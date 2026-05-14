@@ -136,7 +136,7 @@ internal abstract class PipelineCommandBase : BaseCommand
     /// </summary>
     protected virtual string[] GetCommandArgs(ParseResult parseResult) => [];
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         // If running in the extension context (Aspire terminal) without a debug session,
         // intercept and tell VS Code to start a proper debug session for this command.
@@ -153,7 +153,7 @@ internal abstract class PipelineCommandBase : BaseCommand
 
                 if (passedAppHostProjectFile is null)
                 {
-                    return ExitCodeConstants.FailedToFindProject;
+                    return CommandResult.Failure(ExitCodeConstants.FailedToFindProject);
                 }
             }
 
@@ -161,7 +161,7 @@ internal abstract class PipelineCommandBase : BaseCommand
 
             extensionInteractionService.DisplayConsolePlainText($"Detected aspire {Name} inside the Aspire extension, starting a debug session in VS Code...");
             await extensionInteractionService.StartDebugSessionAsync(ExecutionContext.WorkingDirectory.FullName, passedAppHostProjectFile?.FullName, debug: true, new DebugSessionOptions { Command = Name, Args = commandArgs.Length > 0 ? commandArgs : null });
-            return ExitCodeConstants.Success;
+            return CommandResult.Success();
         }
 
         var debugMode = parseResult.GetValue(RootCommand.DebugOption);
@@ -186,7 +186,7 @@ internal abstract class PipelineCommandBase : BaseCommand
             {
                 // Send terminal progress bar stop sequence
                 StopTerminalProgressBar();
-                return ExitCodeConstants.FailedToFindProject;
+                return CommandResult.Failure(ExitCodeConstants.FailedToFindProject);
             }
 
             var project = _projectFactory.GetProject(effectiveAppHostFile);
@@ -285,7 +285,7 @@ internal abstract class PipelineCommandBase : BaseCommand
 
                 await backchannel.RequestStopAsync(cancellationToken).ConfigureAwait(false);
                 await pendingRun;
-                return ExitCodeConstants.Success;
+                return CommandResult.Success();
             }
 
             var publishingActivities = backchannel.GetPublishingActivitiesAsync(cancellationToken);
@@ -315,18 +315,18 @@ internal abstract class PipelineCommandBase : BaseCommand
                 {
                     InteractionService.DisplayLines(outputCollector.GetLines());
                 }
-                return exitCode;
+                return CommandResult.FromExitCode(exitCode);
             }
 
             // If the apphost exited successfully (0) but reported failures via backchannel,
             // return a failure exit code.
             if (!noFailuresReported)
             {
-                return ExitCodeConstants.FailedToBuildArtifacts;
+                return CommandResult.Failure(ExitCodeConstants.FailedToBuildArtifacts);
             }
 
             // Both apphost exit code and backchannel indicate success
-            return ExitCodeConstants.Success;
+            return CommandResult.Success();
         }
         catch (OperationCanceledException ex)
         {
@@ -335,8 +335,7 @@ internal abstract class PipelineCommandBase : BaseCommand
             _logger.LogDebug(ex, "Operation was cancelled.");
             var canceledMessage = GetCanceledMessage();
             Telemetry.RecordError(canceledMessage, ex);
-            InteractionService.DisplayError(canceledMessage);
-            return ExitCodeConstants.FailedToBuildArtifacts;
+            return CommandResult.Failure(ExitCodeConstants.FailedToBuildArtifacts, canceledMessage);
         }
         catch (ProjectLocatorException ex)
         {
@@ -348,15 +347,14 @@ internal abstract class PipelineCommandBase : BaseCommand
         {
             // SDK not installed - message already displayed by EnsureSdkInstalledAsync
             StopTerminalProgressBar();
-            return ExitCodeConstants.SdkNotInstalled;
+            return CommandResult.Failure(ExitCodeConstants.SdkNotInstalled);
         }
         catch (AppHostIncompatibleException ex)
         {
             // Send terminal progress bar stop sequence on exception
             StopTerminalProgressBar();
             Telemetry.RecordError($"AppHost is incompatible. Required capability: {ex.RequiredCapability}", ex);
-            InteractionService.DisplayError(ex.Message);
-            return ExitCodeConstants.AppHostIncompatible;
+            return CommandResult.Failure(ExitCodeConstants.AppHostIncompatible, ex.Message);
         }
         catch (FailedToConnectBackchannelConnection ex)
         {
@@ -369,7 +367,7 @@ internal abstract class PipelineCommandBase : BaseCommand
             {
                 InteractionService.DisplayLines(outputCollector.GetLines());
             }
-            return ExitCodeConstants.FailedToBuildArtifacts;
+            return CommandResult.Failure(ExitCodeConstants.FailedToBuildArtifacts);
         }
         catch (ConnectionLostException ex)
         {
@@ -382,7 +380,7 @@ internal abstract class PipelineCommandBase : BaseCommand
             {
                 InteractionService.DisplayLines(outputCollector.GetLines());
             }
-            return pendingRun is { } && debugMode ? await pendingRun : ExitCodeConstants.FailedToBuildArtifacts;
+            return CommandResult.FromExitCode(pendingRun is { } && debugMode ? await pendingRun : ExitCodeConstants.FailedToBuildArtifacts);
         }
         catch (Exception ex)
         {
@@ -395,7 +393,7 @@ internal abstract class PipelineCommandBase : BaseCommand
             {
                 InteractionService.DisplayLines(outputCollector.GetLines());
             }
-            return ExitCodeConstants.FailedToBuildArtifacts;
+            return CommandResult.Failure(ExitCodeConstants.FailedToBuildArtifacts);
         }
     }
 

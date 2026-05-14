@@ -188,7 +188,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
         if (information.ExitCode == 0 && information.IsAspireHost)
         {
-            return new AppHostValidationResult(IsValid: true);
+            return new AppHostValidationResult(IsValid: true, AspireHostingVersion: information.AspireHostingVersion);
         }
 
         // Check if it's possibly an unbuildable AppHost (has the right name pattern but couldn't be validated)
@@ -197,6 +197,18 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         return new AppHostValidationResult(
             IsValid: false,
             IsPossiblyUnbuildable: isPossiblyUnbuildable);
+    }
+
+    /// <inheritdoc />
+    public async Task<string?> GetAspireHostingVersionAsync(FileInfo appHostFile, CancellationToken cancellationToken)
+    {
+        // Use the same MSBuild-based inspection as validation so version resolution
+        // follows the project model that run/publish already rely on, including
+        // SDK-style projects, package references, and Central Package Management.
+        var information = await _runner.GetAppHostInformationAsync(appHostFile, new ProcessInvocationOptions(), cancellationToken);
+        return information.ExitCode == 0 && information.IsAspireHost
+            ? information.AspireHostingVersion
+            : null;
     }
 
     private static bool IsPossiblyUnbuildableAppHost(FileInfo projectFile)
@@ -250,8 +262,8 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         // Enable debug logging in the app host so that debug-level output is
         // captured in the CLI log file for diagnostics. Defaults to Debug but
         // can be overridden via --log-level.
-        var appHostLogLevel = _loggingOptions.ConsoleLogLevel ?? LogLevel.Debug;
-        env["Logging__LogLevel__Default"] = appHostLogLevel.ToString();
+        var aspireLogLevel = _loggingOptions.ConsoleLogLevel ?? LogLevel.Debug;
+        env[KnownConfigNames.AspireLogLevel] = aspireLogLevel.ToString();
 
         if (context.WaitForDebugger)
         {

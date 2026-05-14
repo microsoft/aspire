@@ -105,14 +105,16 @@ extends:
                   displayName: 'Publish PackageArtifacts with SBOM'
                   targetPath: '$(Pipeline.Workspace)/packages/PackageArtifacts'
                   artifactName: 'PackageArtifacts'
-                - output: pipelineArtifact
-                  displayName: 'Publish WinGet Manifests'
-                  targetPath: '$(Pipeline.Workspace)/installers/winget-manifests-stable'
-                  artifactName: 'winget-manifests-stable'
-                - output: pipelineArtifact
-                  displayName: 'Publish Homebrew Cask'
-                  targetPath: '$(Pipeline.Workspace)/installers/homebrew-cask-stable'
-                  artifactName: 'homebrew-cask-stable'
+                - ${{ if eq(parameters.SkipWinGetPublish, false) }}:
+                  - output: pipelineArtifact
+                    displayName: 'Publish WinGet Manifests'
+                    targetPath: '$(Pipeline.Workspace)/installers/winget-manifests-stable'
+                    artifactName: 'winget-manifests-stable'
+                - ${{ if eq(parameters.SkipHomebrewPublish, false) }}:
+                  - output: pipelineArtifact
+                    displayName: 'Publish Homebrew Cask'
+                    targetPath: '$(Pipeline.Workspace)/installers/homebrew-cask-stable'
+                    artifactName: 'homebrew-cask-stable'
             steps:
               - checkout: none
 
@@ -132,13 +134,15 @@ extends:
                   artifact: PackageArtifacts
                   patterns: '**/*.nupkg'
 
-              - download: aspire-build
-                displayName: 'Download WinGet Manifests from Source Build'
-                artifact: winget-manifests-stable
+              - ${{ if eq(parameters.SkipWinGetPublish, false) }}:
+                - download: aspire-build
+                  displayName: 'Download WinGet Manifests from Source Build'
+                  artifact: winget-manifests-stable
 
-              - download: aspire-build
-                displayName: 'Download Homebrew Cask from Source Build'
-                artifact: homebrew-cask-stable
+              - ${{ if eq(parameters.SkipHomebrewPublish, false) }}:
+                - download: aspire-build
+                  displayName: 'Download Homebrew Cask from Source Build'
+                  artifact: homebrew-cask-stable
 
               # Move artifacts to expected location for output
               - ${{ if not(and(eq(parameters.SkipNuGetPublish, true), eq(parameters.SkipChannelPromotion, true))) }}:
@@ -175,7 +179,10 @@ extends:
                     Write-Host "Installer-only run detected; created empty PackageArtifacts placeholder."
                   displayName: 'Prepare Empty PackageArtifacts Placeholder'
 
-              # Copy installer artifacts to expected locations for output
+              # Copy installer artifacts to expected locations for output.
+              # Entries whose source directory doesn't exist are silently skipped, which
+              # handles re-runs where SkipWinGetPublish/SkipHomebrewPublish caused the
+              # corresponding download step to be omitted.
               - powershell: |
                   $artifacts = @(
                     @{ Name = 'winget-manifests-stable'; Source = '$(Pipeline.Workspace)/aspire-build/winget-manifests-stable'; Target = '$(Pipeline.Workspace)/installers/winget-manifests-stable' },
@@ -183,6 +190,11 @@ extends:
                   )
 
                   foreach ($artifact in $artifacts) {
+                    if (!(Test-Path $artifact.Source)) {
+                      Write-Host "Skipping $($artifact.Name): source path '$($artifact.Source)' not present (download was skipped)."
+                      continue
+                    }
+
                     Write-Host "Copying $($artifact.Name) from $($artifact.Source) to $($artifact.Target)"
 
                     if (!(Test-Path $artifact.Target)) {

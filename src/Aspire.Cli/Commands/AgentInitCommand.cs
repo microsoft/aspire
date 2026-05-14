@@ -91,7 +91,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
     /// Public entry point for executing the init command.
     /// This allows McpInitCommand to delegate to this implementation.
     /// </summary>
-    internal Task<int> ExecuteCommandAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    internal Task<CommandResult> ExecuteCommandAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         return ExecuteAsync(parseResult, cancellationToken);
     }
@@ -128,11 +128,11 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         return new(ExitCodeConstants.Success, [], []);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var workspaceRoot = await PromptForWorkspaceRootAsync(parseResult, cancellationToken);
         var result = await ExecuteAgentInitAsync(workspaceRoot, parseResult, cancellationToken);
-        return result.ExitCode;
+        return CommandResult.FromExitCode(result.ExitCode);
     }
 
     private async Task<DirectoryInfo> PromptForWorkspaceRootAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -375,10 +375,6 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         if (hasErrors)
         {
             _interactionService.DisplayMessage(KnownEmojis.Warning, AgentCommandStrings.ConfigurationCompletedWithErrors);
-            _interactionService.DisplayMessage(
-                KnownEmojis.PageFacingUp,
-                string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, MarkupHelpers.SafeFileLink(_interactionService, ExecutionContext.LogFilePath)),
-                allowMarkup: true);
         }
         else
         {

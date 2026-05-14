@@ -68,7 +68,7 @@ internal sealed class SdkDumpCommand : BaseCommand
         Options.Add(s_formatOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var integrationArgs = parseResult.GetValue(s_integrationArgument) ?? [];
         var outputFile = parseResult.GetValue(s_outputOption);
@@ -84,8 +84,7 @@ internal sealed class SdkDumpCommand : BaseCommand
                 var projectFile = new FileInfo(arg);
                 if (!projectFile.Exists)
                 {
-                    InteractionService.DisplayError($"Integration project not found: {projectFile.FullName}");
-                    return ExitCodeConstants.FailedToFindProject;
+                    return CommandResult.Failure(ExitCodeConstants.FailedToFindProject, $"Integration project not found: {projectFile.FullName}");
                 }
 
                 integrations.Add(IntegrationReference.FromProject(
@@ -100,14 +99,12 @@ internal sealed class SdkDumpCommand : BaseCommand
 
                 if (string.IsNullOrWhiteSpace(packageName) || string.IsNullOrWhiteSpace(packageVersion) || packageName.Contains('@'))
                 {
-                    InteractionService.DisplayError($"Invalid package format '{arg}'. Expected PackageName@Version (e.g. Aspire.Hosting.Redis@9.2.0).");
-                    return ExitCodeConstants.InvalidCommand;
+                    return CommandResult.Failure(ExitCodeConstants.InvalidCommand, $"Invalid package format '{arg}'. Expected PackageName@Version (e.g. Aspire.Hosting.Redis@9.2.0).");
                 }
 
                 if (!SemVersion.TryParse(packageVersion, SemVersionStyles.Any, out _))
                 {
-                    InteractionService.DisplayError($"Invalid version '{packageVersion}' in '{arg}'. Expected a valid NuGet version (e.g. 9.2.0).");
-                    return ExitCodeConstants.InvalidCommand;
+                    return CommandResult.Failure(ExitCodeConstants.InvalidCommand, $"Invalid version '{packageVersion}' in '{arg}'. Expected a valid NuGet version (e.g. 9.2.0).");
                 }
 
                 _logger.LogDebug("Parsed package reference {PackageName} version {Version}", packageName, packageVersion);
@@ -115,21 +112,20 @@ internal sealed class SdkDumpCommand : BaseCommand
             }
             else
             {
-                InteractionService.DisplayError($"Invalid integration argument '{arg}'. Expected a .csproj path or PackageName@Version format.");
-                return ExitCodeConstants.InvalidCommand;
+                return CommandResult.Failure(ExitCodeConstants.InvalidCommand, $"Invalid integration argument '{arg}'. Expected a .csproj path or PackageName@Version format.");
             }
         }
 
         // For file output, skip the interactive spinner
         if (outputFile is not null)
         {
-            return await DumpCapabilitiesAsync(integrations, outputFile, format, cancellationToken);
+            return CommandResult.FromExitCode(await DumpCapabilitiesAsync(integrations, outputFile, format, cancellationToken));
         }
 
-        return await InteractionService.ShowStatusAsync(
+        return CommandResult.FromExitCode(await InteractionService.ShowStatusAsync(
             "Scanning capabilities...",
             async () => await DumpCapabilitiesAsync(integrations, outputFile, format, cancellationToken),
-            emoji: KnownEmojis.MagnifyingGlassTiltedLeft);
+            emoji: KnownEmojis.MagnifyingGlassTiltedLeft));
     }
 
     private async Task<int> DumpCapabilitiesAsync(
