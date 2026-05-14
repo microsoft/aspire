@@ -30,7 +30,7 @@ public class InfoCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task InfoCommand_Json_ReturnsSingleElementArrayByDefault()
+    public async Task InfoCommand_Json_Self_ReturnsSingleElementArrayWithSelfRow()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var interactionService = new TestInteractionService();
@@ -55,7 +55,9 @@ public class InfoCommandTests(ITestOutputHelper outputHelper)
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
-        var result = command.Parse("info --format json");
+        // --self opts into the cheap, single-row path; without it, info
+        // performs full discovery (covered separately).
+        var result = command.Parse("info --self --format json");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(ExitCodeConstants.Success, exitCode);
@@ -74,6 +76,52 @@ public class InfoCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("script", row.GetProperty("route").GetString());
         Assert.True(row.GetProperty("isOnPath").GetBoolean());
         Assert.Equal(InstallationInfoStatus.Ok, row.GetProperty("status").GetString());
+    }
+
+    [Fact]
+    public async Task InfoCommand_Json_Default_PerformsFullDiscovery()
+    {
+        // Without --self, `aspire info` runs the full discovery walk so the
+        // user sees every Aspire install on the machine — that's the
+        // user-expected default. The single-row path is opt-in via --self.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+        });
+        services.RemoveAll<IInstallationDiscovery>();
+        services.AddSingleton<IInstallationDiscovery>(_ => new FakeInstallationDiscovery(
+            self: new InstallationInfo
+            {
+                Path = "/usr/local/bin/aspire",
+                Version = "13.0.0",
+                Channel = "stable",
+                Route = "script",
+                Status = InstallationInfoStatus.Ok,
+            },
+            others:
+            [
+                new InstallationInfo
+                {
+                    Path = "/peer/aspire",
+                    Version = "12.5.0",
+                    Status = InstallationInfoStatus.Ok,
+                },
+            ]));
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+        // No flag: default is full discovery.
+        var result = command.Parse("info --format json");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var (json, _) = Assert.Single(interactionService.DisplayedRawText);
+        using var doc = JsonDocument.Parse(json);
+        Assert.Equal(JsonValueKind.Array, doc.RootElement.ValueKind);
+        // Two rows: self + the one peer the fake produces.
+        Assert.Equal(2, doc.RootElement.GetArrayLength());
     }
 
     [Fact]

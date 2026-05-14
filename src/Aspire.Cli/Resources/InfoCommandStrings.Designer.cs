@@ -62,6 +62,8 @@ namespace Aspire.Cli.Resources {
 
         internal static string Description => ResourceManager.GetString("Description", resourceCulture);
 
+        internal static string SelfOptionDescription => ResourceManager.GetString("SelfOptionDescription", resourceCulture);
+
         internal static string AllOptionDescription => ResourceManager.GetString("AllOptionDescription", resourceCulture);
 
         internal static string FormatOptionDescription => ResourceManager.GetString("FormatOptionDescription", resourceCulture);

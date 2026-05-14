@@ -3,8 +3,8 @@
   <file datatype="xml" source-language="en" target-language="pt-BR" original="../InfoCommandStrings.resx">
     <body>
       <trans-unit id="AllOptionDescription">
-        <source>Discover and describe all Aspire CLI installations on this machine (default: only the currently running CLI)</source>
-        <target state="new">Discover and describe all Aspire CLI installations on this machine (default: only the currently running CLI)</target>
+        <source>Discover and describe all Aspire CLI installations on this machine (now the default; flag retained for back-compat)</source>
+        <target state="new">Discover and describe all Aspire CLI installations on this machine (now the default; flag retained for back-compat)</target>
         <note />
       </trans-unit>
       <trans-unit id="ColumnChannel">
@@ -45,6 +45,11 @@
       <trans-unit id="HeaderInstallations">
         <source>Aspire CLI Installations</source>
         <target state="new">Aspire CLI Installations</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SelfOptionDescription">
+        <source>Describe only the currently running CLI (skip discovering other installs)</source>
+        <target state="new">Describe only the currently running CLI (skip discovering other installs)</target>
         <note />
       </trans-unit>
       <trans-unit id="ValueCurrentMarker">

@@ -23,9 +23,18 @@ internal sealed class InfoCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.ToolsAndConfiguration;
 
+    private static readonly Option<bool> s_selfOption = new("--self")
+    {
+        Description = InfoCommandStrings.SelfOptionDescription,
+    };
+
+    // `--all` is kept as an explicit-opt-in alias for back-compat with
+    // earlier docs and scripts. Discovery is now the default behavior, so
+    // this option is a no-op when present and is hidden from help.
     private static readonly Option<bool> s_allOption = new("--all")
     {
         Description = InfoCommandStrings.AllOptionDescription,
+        Hidden = true,
     };
 
     private static readonly Option<OutputFormat> s_formatOption = new("--format")
@@ -52,13 +61,14 @@ internal sealed class InfoCommand : BaseCommand
         _wingetFirstRunProbe = wingetFirstRunProbe;
         _ansiConsole = ansiConsole;
 
+        Options.Add(s_selfOption);
         Options.Add(s_allOption);
         Options.Add(s_formatOption);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
-        var all = parseResult.GetValue(s_allOption);
+        var selfOnly = parseResult.GetValue(s_selfOption);
         var format = parseResult.GetValue(s_formatOption);
 
         // Give a never-run winget install a chance to stamp its sidecar
@@ -75,9 +85,13 @@ internal sealed class InfoCommand : BaseCommand
             }
         }
 
-        var installs = all
-            ? await _discovery.DiscoverAllAsync(cancellationToken)
-            : (IReadOnlyList<InstallationInfo>)[_discovery.DescribeSelf()];
+        // Default is full discovery so `aspire info` shows the
+        // user-expected complete picture (running CLI plus every other
+        // Aspire install on the system). `--self` opts into the cheap,
+        // single-row path for scripts / programmatic consumers.
+        var installs = selfOnly
+            ? (IReadOnlyList<InstallationInfo>)[_discovery.DescribeSelf()]
+            : await _discovery.DiscoverAllAsync(cancellationToken);
 
         if (format == OutputFormat.Json)
         {

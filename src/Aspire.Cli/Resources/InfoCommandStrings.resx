@@ -61,8 +61,11 @@
   <data name="Description" xml:space="preserve">
     <value>Show information about Aspire CLI installations</value>
   </data>
+  <data name="SelfOptionDescription" xml:space="preserve">
+    <value>Describe only the currently running CLI (skip discovering other installs)</value>
+  </data>
   <data name="AllOptionDescription" xml:space="preserve">
-    <value>Discover and describe all Aspire CLI installations on this machine (default: only the currently running CLI)</value>
+    <value>Discover and describe all Aspire CLI installations on this machine (now the default; flag retained for back-compat)</value>
   </data>
   <data name="FormatOptionDescription" xml:space="preserve">
     <value>Output format (Table or Json)</value>
