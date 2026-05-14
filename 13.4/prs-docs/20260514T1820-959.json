@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Playwright sharding CI optimization for aspire.dev, not documenting an Aspire product feature",
+  "mergedAt": "2026-05-14T18:20:13Z",
+  "number": 959,
+  "runDate": "2026-05-14T18:43:42Z",
+  "status": "excluded",
+  "title": "ci: Phase 2B — Shard Playwright across viewport projects"
+}

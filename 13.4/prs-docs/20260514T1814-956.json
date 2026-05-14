@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Per-page Open Graph/Twitter metadata enhancement for aspire.dev website, not documenting a specific Aspire product feature",
+  "mergedAt": "2026-05-14T18:14:34Z",
+  "number": 956,
+  "runDate": "2026-05-14T18:43:42Z",
+  "status": "excluded",
+  "title": "feat(meta): page-specific Open Graph + Twitter metadata"
+}

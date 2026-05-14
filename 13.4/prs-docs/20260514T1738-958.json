@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "NuGet caching CI improvement for aspire.dev build pipeline, not documenting an Aspire product feature",
+  "mergedAt": "2026-05-14T17:38:31Z",
+  "number": 958,
+  "runDate": "2026-05-14T18:43:42Z",
+  "status": "excluded",
+  "title": "ci: Phase 2A — NuGet caching with packages.lock.json"
+}
