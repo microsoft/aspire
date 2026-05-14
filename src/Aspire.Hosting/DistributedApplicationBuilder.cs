@@ -235,7 +235,9 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         var appHostLogLevelValue = _innerBuilder.Configuration[KnownConfigNames.AppHostLogLevel];
         if (appHostLogLevelValue is not null && Enum.TryParse<LogLevel>(appHostLogLevelValue, ignoreCase: true, out var appHostLogLevel))
         {
-            _innerBuilder.Logging.SetMinimumLevel(appHostLogLevel);
+            // Add a default filter rule after configuration binding so this setting has the
+            // same precedence as Logging__LogLevel__Default without being inherited by child processes.
+            _innerBuilder.Logging.AddFilter((_, logLevel) => logLevel >= appHostLogLevel);
         }
 
         AppHostDirectory = options.ProjectDirectory ?? _innerBuilder.Environment.ContentRootPath;
