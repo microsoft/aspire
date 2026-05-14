@@ -514,6 +514,10 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
                 outputCollector.AppendError(e.Data);
             }
         };
+        // BeginOutputReadLine/BeginErrorReadLine is used here (instead of ReadAllLinesAsync) because
+        // the process is long-lived: this method returns immediately while the AppHost server continues
+        // running. ReadAllLinesAsync would require an async enumeration loop that runs for the entire
+        // process lifetime, which doesn't fit this fire-and-return pattern.
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
@@ -524,7 +528,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     {
         try
         {
-            var startInfo = new ProcessStartInfo("dotnet")
+            var result = Process.RunAndCaptureText(new ProcessStartInfo("dotnet")
             {
                 Arguments = "nuget config paths",
                 WorkingDirectory = workingDirectory,
@@ -532,23 +536,14 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true
-            };
+            });
 
-            using var process = Process.Start(startInfo);
-            if (process is null)
+            if (result.ExitStatus.ExitCode != 0)
             {
                 return null;
             }
 
-            var output = process.StandardOutput.ReadToEnd();
-            process.WaitForExit();
-
-            if (process.ExitCode != 0)
-            {
-                return null;
-            }
-
-            var configPaths = output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+            var configPaths = result.StandardOutput.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
             var workingDirFullPath = Path.GetFullPath(workingDirectory);
             var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
             var globalNuGetPath = Path.Combine(userProfile, ".nuget");

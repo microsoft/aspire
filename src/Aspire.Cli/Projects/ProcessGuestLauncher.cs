@@ -63,67 +63,29 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
             startInfo.EnvironmentVariables[key] = value;
         }
 
-        using var process = new Process { StartInfo = startInfo };
+        using var process = Process.Start(startInfo)
+            ?? throw new InvalidOperationException($"Failed to start process: {resolvedCommand}");
 
         var outputCollector = new OutputCollector(_fileLoggerProvider, "AppHost");
-        var stdoutCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var stderrCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        process.OutputDataReceived += (sender, e) =>
+        // Use ReadAllLinesAsync to multiplex stdout and stderr on a single loop,
+        // replacing the previous OutputDataReceived/ErrorDataReceived event-based approach.
+        await foreach (var line in process.ReadAllLinesAsync(cancellationToken))
         {
-            if (e.Data is null)
+            if (line.StandardError)
             {
-                // ProcessDataReceivedEventArgs.Data is null when the redirected stdout stream closes.
-                stdoutCompleted.TrySetResult();
+                _logger.LogTrace("{Language}({ProcessId}) stderr: {Line}", _language, process.Id, line.Content);
+                outputCollector.AppendError(line.Content);
             }
             else
             {
-                _logger.LogTrace("{Language}({ProcessId}) stdout: {Line}", _language, process.Id, e.Data);
-                outputCollector.AppendOutput(e.Data);
+                _logger.LogTrace("{Language}({ProcessId}) stdout: {Line}", _language, process.Id, line.Content);
+                outputCollector.AppendOutput(line.Content);
             }
-        };
-
-        process.ErrorDataReceived += (sender, e) =>
-        {
-            if (e.Data is null)
-            {
-                // ProcessDataReceivedEventArgs.Data is null when the redirected stderr stream closes.
-                stderrCompleted.TrySetResult();
-            }
-            else
-            {
-                _logger.LogTrace("{Language}({ProcessId}) stderr: {Line}", _language, process.Id, e.Data);
-                outputCollector.AppendError(e.Data);
-            }
-        };
-
-        process.Start();
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
+        }
 
         await process.WaitForExitAsync(cancellationToken);
 
-        // Wait for the redirected streams to finish draining so no trailing lines are lost.
-        if (!await WaitForDrainAsync(Task.WhenAll(stdoutCompleted.Task, stderrCompleted.Task), cancellationToken))
-        {
-            _logger.LogWarning("{Language}({ProcessId}): Timed out waiting for output streams to drain after process exit", _language, process.Id);
-        }
-
         return (process.ExitCode, outputCollector);
-    }
-
-    private static async Task<bool> WaitForDrainAsync(Task drainTask, CancellationToken cancellationToken)
-    {
-        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeoutCts.CancelAfter(TimeSpan.FromSeconds(5));
-        try
-        {
-            await drainTask.WaitAsync(timeoutCts.Token);
-            return true;
-        }
-        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-        {
-            return false;
-        }
     }
 }

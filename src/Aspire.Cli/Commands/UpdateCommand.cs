@@ -523,27 +523,11 @@ internal sealed class UpdateCommand : BaseCommand
     {
         try
         {
-            var psi = new ProcessStartInfo
-            {
-                FileName = exePath,
-                Arguments = "--version",
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false
-            };
+            var result = await Process.RunAndCaptureTextAsync(exePath, ["--version"], cancellationToken);
 
-            using var process = Process.Start(psi);
-            if (process is null)
+            if (result.ExitStatus.ExitCode == 0)
             {
-                return null;
-            }
-
-            var output = await process.StandardOutput.ReadToEndAsync(cancellationToken);
-            await process.WaitForExitAsync(cancellationToken);
-
-            if (process.ExitCode == 0)
-            {
-                var version = output.Trim();
+                var version = result.StandardOutput.Trim();
                 InteractionService.DisplaySuccess($"Updated to version: {version}");
                 return version;
             }

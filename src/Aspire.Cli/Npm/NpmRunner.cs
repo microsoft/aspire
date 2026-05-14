@@ -354,26 +354,19 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger, ProfilingTelemetry pr
         {
             var startInfo = CreateNpmProcessStartInfo(npmPath, args, workingDirectory);
 
-            using var process = new Process { StartInfo = startInfo };
             using var activity = profilingTelemetry.StartNpmCommand(npmPath, args.Length, workingDirectory);
-            process.Start();
-            activity.SetProcessId(process.Id);
+            var result = await Process.RunAndCaptureTextAsync(startInfo, cancellationToken).ConfigureAwait(false);
+            activity.SetProcessId(result.ProcessId);
+            activity.SetProcessExitCode(result.ExitStatus.ExitCode);
 
-            var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-            var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
-
-            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-            activity.SetProcessExitCode(process.ExitCode);
-
-            if (process.ExitCode != 0)
+            if (result.ExitStatus.ExitCode != 0)
             {
-                activity.SetError($"npm exited with code {process.ExitCode}.");
-                var errorOutput = await errorTask.ConfigureAwait(false);
-                logger.LogDebug("npm {Args} returned non-zero exit code {ExitCode}: {Error}", argsString, process.ExitCode, errorOutput.Trim());
+                activity.SetError($"npm exited with code {result.ExitStatus.ExitCode}.");
+                logger.LogDebug("npm {Args} returned non-zero exit code {ExitCode}: {Error}", argsString, result.ExitStatus.ExitCode, result.StandardError.Trim());
                 return null;
             }
 
-            return await outputTask.ConfigureAwait(false);
+            return result.StandardOutput;
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
         {

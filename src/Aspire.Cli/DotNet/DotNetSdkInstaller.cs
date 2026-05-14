@@ -27,26 +27,10 @@ internal sealed class DotNetSdkInstaller(IConfiguration configuration) : IDotNet
         {
             // Add --arch flag to ensure we only get SDKs that match the current architecture
             var currentArch = GetCurrentArchitecture();
-            var arguments = $"--list-sdks --arch {currentArch}";
 
-            using var process = new Process
-            {
-                StartInfo = new ProcessStartInfo
-                {
-                    FileName = "dotnet",
-                    Arguments = arguments,
-                    UseShellExecute = false,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    CreateNoWindow = true
-                }
-            };
+            var result = await Process.RunAndCaptureTextAsync("dotnet", ["--list-sdks", "--arch", currentArch], cancellationToken);
 
-            process.Start();
-            var output = await process.StandardOutput.ReadToEndAsync(cancellationToken);
-            await process.WaitForExitAsync(cancellationToken);
-
-            if (process.ExitCode != 0)
+            if (result.ExitStatus.ExitCode != 0)
             {
                 return (false, null, minimumVersion);
             }
@@ -58,7 +42,7 @@ internal sealed class DotNetSdkInstaller(IConfiguration configuration) : IDotNet
             }
 
             // Parse each line of the output to find SDK versions
-            var lines = output.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+            var lines = result.StandardOutput.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
             SemVersion? highestDetectedVersion = null;
             bool meetsMinimum = false;
 

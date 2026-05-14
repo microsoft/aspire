@@ -537,6 +537,10 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             }
         };
 
+        // BeginOutputReadLine/BeginErrorReadLine is used here (instead of ReadAllLinesAsync) because
+        // the process is long-lived: this method returns immediately while the AppHost server continues
+        // running. ReadAllLinesAsync would require an async enumeration loop that runs for the entire
+        // process lifetime, which doesn't fit this fire-and-return pattern.
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 

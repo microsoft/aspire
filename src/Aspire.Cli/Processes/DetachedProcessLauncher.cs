@@ -23,43 +23,23 @@ namespace Aspire.Cli.Processes;
 //    stdout to close (e.g. Node.js `execSync`, shell `$(...)` substitution)
 //    will hang until the AppHost exits — which defeats the purpose of --detach.
 //
-// These two constraints conflict when using .NET's Process.Start:
+// The .NET 11 Process APIs provide a clean cross-platform solution:
 //
-//   • RedirectStandardOutput = true  → solves (1) but violates (2) on Windows,
-//     because .NET calls CreateProcess with bInheritHandles=TRUE, and the pipe
-//     write-handle is duplicated into the child. The child passes it to the
-//     grandchild (AppHost), keeping the pipe alive.
+//   • StandardOutputHandle / StandardErrorHandle = File.OpenNullHandle()
+//     → sends child output to the null device, solving (1).
 //
-//   • RedirectStandardOutput = false → solves (2) but violates (1), because
-//     the child inherits the parent's console and writes directly to it.
-//
-// The solution is platform-specific:
-//
-// ┌─────────┬────────────────────────────────────────────────────────────────┐
-// │ Windows │ P/Invoke CreateProcess with CREATE_NEW_CONSOLE,               │
-// │         │ STARTUPINFOEX, SW_HIDE, and an explicit                       │
-// │         │ PROC_THREAD_ATTRIBUTE_HANDLE_LIST. This gives the child an    │
-// │         │ independent console lifetime while still letting us set       │
-// │         │ bInheritHandles=TRUE (required to assign hStdOutput to NUL)   │
-// │         │ and restrict inheritance to ONLY the NUL handle — so the      │
-// │         │ grandchild inherits nothing useful. Child stdout/stderr go to │
-// │         │ the NUL device.                                               │
-// │         │                                                               │
-// │ Linux / │ Process.Start with RedirectStandard{Output,Error} = true,     │
-// │ macOS   │ then immediately close the parent's read-end pipe streams.    │
-// │         │ The original pipe fds have O_CLOEXEC, but dup2 onto fd 0/1/2 │
-// │         │ clears it — so grandchildren inherit the pipe as their stdio. │
-// │         │ With no reader, writes produce harmless EPIPE. The critical   │
-// │         │ difference from Windows is that no caller gets stuck waiting  │
-// │         │ on a pipe handle — closing the read-end is sufficient.        │
-// └─────────┴────────────────────────────────────────────────────────────────┘
+//   • InheritedHandles = [] → restricts handle inheritance to only the
+//     standard handles (the NUL handles), preventing accidental leaks to
+//     grandchildren, solving (2). Note: InheritedHandles is not supported
+//     on macOS, but on Unix only fds 0/1/2 survive exec, so there is no
+//     accidental handle leakage to grandchildren anyway.
 //
 
 /// <summary>
 /// Launches a child process with stdout/stderr suppressed and no handle/fd
 /// inheritance to grandchild processes. Used by <c>aspire start</c>.
 /// </summary>
-internal static partial class DetachedProcessLauncher
+internal static class DetachedProcessLauncher
 {
     /// <summary>
     /// Starts a detached child process with stdout/stderr going to the null device
@@ -73,11 +53,63 @@ internal static partial class DetachedProcessLauncher
     /// <returns>A <see cref="Process"/> object representing the launched child.</returns>
     public static Process Start(string fileName, IReadOnlyList<string> arguments, string workingDirectory, Func<string, bool>? shouldRemoveEnvironmentVariable = null, IReadOnlyDictionary<string, string>? additionalEnvironmentVariables = null)
     {
-        if (OperatingSystem.IsWindows())
+        using var nullHandle = File.OpenNullHandle();
+
+        var startInfo = new ProcessStartInfo
         {
-            return StartWindows(fileName, arguments, workingDirectory, shouldRemoveEnvironmentVariable, additionalEnvironmentVariables);
+            FileName = fileName,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            WorkingDirectory = workingDirectory,
+            // Redirect stdout/stderr to the null device so the child's output
+            // never appears on the parent's console.
+            StandardOutputHandle = nullHandle,
+            StandardErrorHandle = nullHandle,
+        };
+
+        // On Windows, restrict handle inheritance to only the standard handles (the NUL
+        // handles) so the grandchild (AppHost) doesn't inherit any pipes from the parent.
+        // On macOS InheritedHandles is not supported, but on Unix only fds 0/1/2 survive
+        // exec so there is no accidental handle leakage to grandchildren anyway.
+        if (OperatingSystem.IsWindows() || OperatingSystem.IsLinux())
+        {
+            startInfo.InheritedHandles = [];
         }
 
-        return StartUnix(fileName, arguments, workingDirectory, shouldRemoveEnvironmentVariable, additionalEnvironmentVariables);
+        foreach (var arg in arguments)
+        {
+            startInfo.ArgumentList.Add(arg);
+        }
+
+        // Remove specified environment variables from the child process.
+        // Accessing startInfo.Environment auto-populates from the current process.
+        if (shouldRemoveEnvironmentVariable is not null)
+        {
+            var keysToRemove = new List<string>();
+            foreach (var key in startInfo.Environment.Keys)
+            {
+                if (shouldRemoveEnvironmentVariable(key))
+                {
+                    keysToRemove.Add(key);
+                }
+            }
+
+            foreach (var key in keysToRemove)
+            {
+                startInfo.Environment.Remove(key);
+            }
+        }
+
+        // Add additional environment variables to the child process without mutating the parent.
+        if (additionalEnvironmentVariables is not null)
+        {
+            foreach (var (key, value) in additionalEnvironmentVariables)
+            {
+                startInfo.Environment[key] = value;
+            }
+        }
+
+        return Process.Start(startInfo)
+            ?? throw new InvalidOperationException("Failed to start detached process");
     }
 }

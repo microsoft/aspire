@@ -89,32 +89,14 @@ internal static partial class CertificateHelpers
 
         try
         {
-            var processInfo = new ProcessStartInfo("openssl", "version -d")
-            {
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
+            var result = Process.RunAndCaptureText("openssl", ["version", "-d"], TimeSpan.FromSeconds(5));
 
-            using var process = Process.Start(processInfo);
-            if (process is null)
+            if (result.ExitStatus.ExitCode != 0)
             {
                 return false;
             }
 
-            var stdout = process.StandardOutput.ReadToEnd();
-            if (!process.WaitForExit(TimeSpan.FromSeconds(5)))
-            {
-                return false;
-            }
-
-            if (process.ExitCode != 0)
-            {
-                return false;
-            }
-
-            var match = OpenSslVersionRegex().Match(stdout);
+            var match = OpenSslVersionRegex().Match(result.StandardOutput);
             if (!match.Success)
             {
                 return false;

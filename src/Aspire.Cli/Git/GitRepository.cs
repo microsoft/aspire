@@ -33,30 +33,21 @@ internal sealed class GitRepository(CliExecutionContext executionContext, ILogge
             startInfo.ArgumentList.Add("rev-parse");
             startInfo.ArgumentList.Add("--show-toplevel");
 
-            using var process = new Process { StartInfo = startInfo };
             using var activity = profilingTelemetry.StartGitCommand("rev-parse", startInfo.ArgumentList.Count, executionContext.WorkingDirectory);
 
-            process.Start();
-            activity.SetProcessId(process.Id);
+            var result = await Process.RunAndCaptureTextAsync(startInfo, cancellationToken).ConfigureAwait(false);
+            activity.SetProcessId(result.ProcessId);
+            activity.SetProcessExitCode(result.ExitStatus.ExitCode);
+            activity.SetGitOutputLengths(result.StandardOutput.Length, result.StandardError.Length);
 
-            var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-            var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
-
-            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-            activity.SetProcessExitCode(process.ExitCode);
-
-            var output = await outputTask.ConfigureAwait(false);
-            var errorOutput = await errorTask.ConfigureAwait(false);
-            activity.SetGitOutputLengths(output.Length, errorOutput.Length);
-
-            if (process.ExitCode != 0)
+            if (result.ExitStatus.ExitCode != 0)
             {
-                activity.SetError($"git rev-parse exited with code {process.ExitCode}.");
-                logger.LogDebug("Git command returned non-zero exit code {ExitCode}: {Error}", process.ExitCode, errorOutput.Trim());
+                activity.SetError($"git rev-parse exited with code {result.ExitStatus.ExitCode}.");
+                logger.LogDebug("Git command returned non-zero exit code {ExitCode}: {Error}", result.ExitStatus.ExitCode, result.StandardError.Trim());
                 return null;
             }
 
-            var rootPath = output.Trim();
+            var rootPath = result.StandardOutput.Trim();
 
             if (string.IsNullOrEmpty(rootPath))
             {
@@ -116,26 +107,17 @@ internal sealed class GitRepository(CliExecutionContext executionContext, ILogge
             startInfo.ArgumentList.Add("--exclude-standard");
             startInfo.ArgumentList.Add("-z");
 
-            using var process = new Process { StartInfo = startInfo };
             using var activity = profilingTelemetry.StartGitCommand("ls-files", startInfo.ArgumentList.Count, searchRoot);
 
-            process.Start();
-            activity.SetProcessId(process.Id);
+            var result = await Process.RunAndCaptureTextAsync(startInfo, cancellationToken).ConfigureAwait(false);
+            activity.SetProcessId(result.ProcessId);
+            activity.SetProcessExitCode(result.ExitStatus.ExitCode);
+            activity.SetGitOutputLengths(result.StandardOutput.Length, result.StandardError.Length);
 
-            var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-            var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
-
-            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-            activity.SetProcessExitCode(process.ExitCode);
-
-            var output = await outputTask.ConfigureAwait(false);
-            var errorOutput = await errorTask.ConfigureAwait(false);
-            activity.SetGitOutputLengths(output.Length, errorOutput.Length);
-
-            if (process.ExitCode != 0)
+            if (result.ExitStatus.ExitCode != 0)
             {
-                activity.SetError($"git ls-files exited with code {process.ExitCode}.");
-                logger.LogDebug("git ls-files returned non-zero exit code {ExitCode} from {SearchRoot}: {Error}", process.ExitCode, searchRoot.FullName, errorOutput.Trim());
+                activity.SetError($"git ls-files exited with code {result.ExitStatus.ExitCode}.");
+                logger.LogDebug("git ls-files returned non-zero exit code {ExitCode} from {SearchRoot}: {Error}", result.ExitStatus.ExitCode, searchRoot.FullName, result.StandardError.Trim());
                 return null;
             }
 
@@ -145,7 +127,7 @@ internal sealed class GitRepository(CliExecutionContext executionContext, ILogge
             var includedFiles = new HashSet<string>(pathComparer);
 
             var rootFullName = searchRoot.FullName;
-            foreach (var rawPath in output.Split('\0', StringSplitOptions.RemoveEmptyEntries))
+            foreach (var rawPath in result.StandardOutput.Split('\0', StringSplitOptions.RemoveEmptyEntries))
             {
                 // git always emits paths with '/' separators; normalize to the OS separator.
                 var relativePath = Path.DirectorySeparatorChar == '/'

@@ -142,23 +142,11 @@ internal class CliDownloader(
                 var lddPath = "/usr/bin/ldd";
                 if (File.Exists(lddPath))
                 {
-                    var psi = new ProcessStartInfo
+                    var result = Process.RunAndCaptureText(lddPath, ["--version"]);
+                    if (result.ExitStatus.ExitCode == 0 &&
+                        (result.StandardOutput + result.StandardError).Contains("musl", StringComparison.OrdinalIgnoreCase))
                     {
-                        FileName = lddPath,
-                        Arguments = "--version",
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        UseShellExecute = false
-                    };
-                    using var process = Process.Start(psi);
-                    if (process is not null)
-                    {
-                        var output = process.StandardOutput.ReadToEnd() + process.StandardError.ReadToEnd();
-                        process.WaitForExit();
-                        if (output.Contains("musl", StringComparison.OrdinalIgnoreCase))
-                        {
-                            return "linux-musl";
-                        }
+                        return "linux-musl";
                     }
                 }
             }

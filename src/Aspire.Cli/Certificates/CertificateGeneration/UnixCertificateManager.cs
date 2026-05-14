@@ -691,9 +691,8 @@ internal sealed partial class UnixCertificateManager : CertificateManager
             RedirectStandardError = true,
         };
 
-        using var process = Process.Start(startInfo)!;
-        process.WaitForExit();
-        return process.ExitCode == 0;
+        var status = Process.Run(startInfo);
+        return status.ExitCode == 0;
     }
 
     /// <remarks>
@@ -714,9 +713,8 @@ internal sealed partial class UnixCertificateManager : CertificateManager
 
         try
         {
-            using var process = Process.Start(startInfo)!;
-            process.WaitForExit();
-            return process.ExitCode == 0;
+            var status = Process.Run(startInfo);
+            return status.ExitCode == 0;
         }
         catch (Exception ex)
         {
@@ -743,9 +741,8 @@ internal sealed partial class UnixCertificateManager : CertificateManager
 
         try
         {
-            using var process = Process.Start(startInfo)!;
-            process.WaitForExit();
-            return process.ExitCode == 0;
+            var status = Process.Run(startInfo);
+            return status.ExitCode == 0;
         }
         catch (Exception ex)
         {
@@ -767,9 +764,8 @@ internal sealed partial class UnixCertificateManager : CertificateManager
 
         try
         {
-            using var process = Process.Start(startInfo)!;
-            process.WaitForExit();
-            if (process.ExitCode == 0)
+            var status = Process.Run(startInfo);
+            if (status.ExitCode == 0)
             {
                 return true;
             }
@@ -933,23 +929,19 @@ internal sealed partial class UnixCertificateManager : CertificateManager
 
         try
         {
-            var processInfo = new ProcessStartInfo(OpenSslCommand, $"version -d")
+            var result = Process.RunAndCaptureText(new ProcessStartInfo(OpenSslCommand, $"version -d")
             {
                 RedirectStandardOutput = true,
                 RedirectStandardError = true
-            };
+            });
 
-            using var process = Process.Start(processInfo);
-            var stdout = process!.StandardOutput.ReadToEnd();
-
-            process.WaitForExit();
-            if (process.ExitCode != 0)
+            if (result.ExitStatus.ExitCode != 0)
             {
                 Log.UnixOpenSslVersionFailed();
                 return false;
             }
 
-            var match = OpenSslVersionRegex.Match(stdout);
+            var match = OpenSslVersionRegex.Match(result.StandardOutput);
             if (!match.Success)
             {
                 Log.UnixOpenSslVersionParsingFailed();
@@ -977,23 +969,19 @@ internal sealed partial class UnixCertificateManager : CertificateManager
         {
             // c_rehash actually does this twice: once with -subject_hash (equivalent to -hash) and again
             // with -subject_hash_old.  Old hashes are only  needed for pre-1.0.0, so we skip that.
-            var processInfo = new ProcessStartInfo(OpenSslCommand, $"x509 -hash -noout -in {certificatePath}")
+            var result = Process.RunAndCaptureText(new ProcessStartInfo(OpenSslCommand, $"x509 -hash -noout -in {certificatePath}")
             {
                 RedirectStandardOutput = true,
                 RedirectStandardError = true
-            };
+            });
 
-            using var process = Process.Start(processInfo);
-            var stdout = process!.StandardOutput.ReadToEnd();
-
-            process.WaitForExit();
-            if (process.ExitCode != 0)
+            if (result.ExitStatus.ExitCode != 0)
             {
                 Log.UnixOpenSslHashFailed(certificatePath);
                 return false;
             }
 
-            hash = stdout.Trim();
+            hash = result.StandardOutput.Trim();
             return true;
         }
         catch (Exception ex)
