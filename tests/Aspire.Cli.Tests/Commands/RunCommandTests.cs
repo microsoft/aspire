@@ -405,6 +405,49 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RunCommand_WhenAppHostReturnsCancelled_CompletesSuccessfully()
+    {
+        var runnerFactory = (IServiceProvider sp) =>
+        {
+            var runner = new TestDotNetCliRunner();
+            runner.BuildAsyncCallback = (projectFile, noRestore, options, ct) => 0;
+            runner.GetAppHostInformationAsyncCallback = (projectFile, options, ct) => (0, true, VersionHelper.GetDefaultTemplateVersion());
+            runner.RunAsyncCallback = (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, ct) =>
+            {
+                var backchannel = sp.GetRequiredService<IAppHostCliBackchannel>();
+                backchannelCompletionSource!.SetResult(backchannel);
+
+                return Task.FromResult(ExitCodeConstants.Cancelled);
+            };
+
+            return runner;
+        };
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.AppHostBackchannelFactory = _ => new TestAppHostBackchannel
+            {
+                GetDashboardUrlsAsyncCallback = _ => Task.FromResult(new DashboardUrlsState
+                {
+                    DashboardHealthy = true,
+                    BaseUrlWithLoginToken = "http://localhost:5000/login?t=abcd"
+                })
+            };
+            options.DotNetCliRunnerFactory = runnerFactory;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("run");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout(TestConstants.LongTimeoutDuration);
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+    }
+
+    [Fact]
     public async Task RunCommand_WithNoResources_CompletesSuccessfully()
     {
         var getResourceStatesAsyncCalled = new TaskCompletionSource();

@@ -425,7 +425,11 @@ internal sealed class RunCommand : BaseCommand
                 await pendingLogCapture;
                 var exitCode = await pendingRun;
                 lifetimeActivity.SetProcessExitCode(exitCode);
-                return CommandResult.FromExitCode(exitCode);
+
+                // Cancelled by user (e.g., Ctrl+C) - treat as successful exit since the user intentionally stopped the AppHost.
+                return exitCode == ExitCodeConstants.Cancelled
+                    ? CommandResult.Cancelled(ExitCodeConstants.Success)
+                    : CommandResult.FromExitCode(exitCode);
             }
         }
         catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken || ex is ExtensionOperationCanceledException)
