@@ -71,6 +71,22 @@
     <RemoveDir Directories="$(PublishDir)" />
     <MakeDir Directories="$(PublishDir)" />
     <Copy SourceFiles="$(PreBuiltCliBinaryPath)" DestinationFolder="$(PublishDir)" />
+
+    <!-- Copy the canonical .aspire-install.json sidecar into RID-specific dotnet-tool packs
+         (clipack passes a RuntimeIdentifier), but NOT into the cross-platform pointer pack
+         (no RuntimeIdentifier) — the pointer nupkg is a routing stub and ships without a
+         sidecar.
+
+         The dotnet-tool source's source-of-truth sidecar lives next to this csproj as
+         dotnet-tool.aspire-install.json. It is copied into the RID-specific tool nupkg
+         under the canonical name .aspire-install.json — the name BundleService and every
+         consumer (winget, brew, scripts, verify-cli-tool-nupkg.ps1) reads. The
+         disambiguated source filename keeps the dotnet-tool variant distinguishable from
+         the other source sidecars (script/winget/brew) that ship through other packaging
+         layers. -->
+    <Copy Condition="'$(IsCliToolProject)' == 'true' and '$(RuntimeIdentifier)' != ''"
+          SourceFiles="$(MSBuildThisFileDirectory)dotnet-tool.aspire-install.json"
+          DestinationFiles="$([MSBuild]::EnsureTrailingSlash('$(PublishDir)')).aspire-install.json" />
   </Target>
 
   <ItemGroup Condition="'$(PublishAot)' == 'true'">
