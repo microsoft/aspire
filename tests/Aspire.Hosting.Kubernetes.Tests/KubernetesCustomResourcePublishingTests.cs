@@ -16,7 +16,7 @@ public class KubernetesCustomResourcePublishingTests()
         using var tempDir = new TestTempDirectory();
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
 
-        var spec = new { data = new { configKey = "configValue" } };
+        var spec = new ConfigMapDataSpec(new { configKey = "configValue" });
         string apiVer = "v1";
         builder.AddKubernetesEnvironment("env")
             .AddCustomResource("my-config", apiVer, "ConfigMap")
@@ -43,12 +43,14 @@ public class KubernetesCustomResourcePublishingTests()
         using var tempDir = new TestTempDirectory();
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
 
-        var spec = new
-        {
-            replicas = 2,
-            selector = new { matchLabels = new { app = "test" } },
-            template = new { metadata = new { labels = new { app = "test" } } }
-        };
+        var spec = new KubernetesCustomResourceDeploymentSpec(
+            replicas: 2,
+            selector: new KubernetesCustomResourceSelectorSpec(
+                new Dictionary<string, string> { ["app"] = "test" }),
+            template: new KubernetesCustomResourceTemplateSpec(
+                new KubernetesCustomResourceTemplateMetadata(
+                    new Dictionary<string, string> { ["app"] = "test" }),
+                new KubernetesCustomResourcePodSpec(Array.Empty<KubernetesCustomResourceContainerSpec>())));
 
         string apiVer = "apps";
         string apiVerNum = "v1";
@@ -77,7 +79,7 @@ public class KubernetesCustomResourcePublishingTests()
         using var tempDir = new TestTempDirectory();
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
 
-        var spec = new { enabled = true, ns = "cert-manager" };
+        var spec = new CertManagerCustomResourceSpec(enabled: true, ns: "cert-manager");
         string certMgrApi = "cert-manager.io" + "/" + "v1alpha1";
         builder.AddKubernetesEnvironment("env")
             .AddCustomResource("my-cert", certMgrApi, "Certificate")
@@ -105,10 +107,10 @@ public class KubernetesCustomResourcePublishingTests()
         var env = builder.AddKubernetesEnvironment("env");
         
         env.AddCustomResource("config1", "v1", "ConfigMap")
-            .WithSpec(new { data = new { key1 = "value1" } });
+            .WithSpec(new ConfigMapDataSpec(new { key1 = "value1" }));
 
         env.AddCustomResource("secret1", "v1", "Secret")
-            .WithSpec(new { stringData = new { password = "secret" } });
+            .WithSpec(new SecretDataSpec(new { password = "secret" }));
 
         var app = builder.Build();
         app.Run();
@@ -136,7 +138,7 @@ public class KubernetesCustomResourcePublishingTests()
 
         builder.AddKubernetesEnvironment("env")
             .AddCustomResource("MyCustomResource", "v1", "ConfigMap")
-            .WithSpec(new { });
+            .WithSpec(new EmptyCustomResourceSpec());
 
         var app = builder.Build();
         app.Run();
@@ -160,7 +162,7 @@ public class KubernetesCustomResourcePublishingTests()
 
         builder.AddKubernetesEnvironment("env")
             .AddCustomResource("my-config", "v1", "ConfigMap")
-            .WithSpec(new { data = new { app = "myapp" } });
+            .WithSpec(new ConfigMapDataSpec(new { app = "myapp" }));
 
         var app = builder.Build();
         app.Run();
@@ -185,7 +187,7 @@ public class KubernetesCustomResourcePublishingTests()
         {
             ApiVersion = "v1",
             Kind = "ConfigMap",
-            Spec = new { data = new { key = "value" } }
+            Spec = new ConfigMapDataSpec(new { key = "value" })
         };
 
         var built = resource.Build();
@@ -222,7 +224,7 @@ public class KubernetesCustomResourcePublishingTests()
         using var tempDir = new TestTempDirectory();
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
 
-        var spec = new { replica = 1, name = "test" };
+        var spec = new SimpleCustomResourceSpec("test", 1, new NestedCustomResourceSpec("data"));
         string customIo = "custom.io";
         string customApiVer = customIo + "/" + "v1";
         builder.AddKubernetesEnvironment("env")
@@ -284,7 +286,7 @@ public class KubernetesCustomResourcePublishingTests()
         // Add a custom resource
         string monitoringApi = "monitoring.coreos.com" + "/" + "v1";
         env.AddCustomResource("my-alert", monitoringApi, "PrometheusRule")
-            .WithSpec(new { groups = new[] { new { name = "test" } } });
+            .WithSpec(new MonitoringRuleCustomResourceSpec(new[] { new MonitoringRuleGroupSpec("test") }));
 
         var app = builder.Build();
         app.Run();

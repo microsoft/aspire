@@ -71,13 +71,12 @@ public class KubernetesCustomResourceResourceTests
     }
 
     [Fact]
-    public void Spec_DefaultIsEmptyObject()
+    public void Spec_DefaultIsNull()
     {
         var environment = new KubernetesEnvironmentResource("env");
         var resource = new KubernetesCustomResourceResource("my-resource", environment);
 
-        Assert.NotNull(resource.Spec);
-        Assert.IsType<object>(resource.Spec);
+        Assert.Null(resource.Spec);
     }
 
     [Fact]
@@ -86,7 +85,7 @@ public class KubernetesCustomResourceResourceTests
         var environment = new KubernetesEnvironmentResource("env");
         var resource = new KubernetesCustomResourceResource("my-resource", environment);
 
-        var spec = new { replicas = 3, image = "nginx:latest" };
+        var spec = new GenericObjectSpec(new { replicas = 3, image = "nginx:latest" });
         resource.Spec = spec;
 
         Assert.Same(spec, resource.Spec);
@@ -160,7 +159,7 @@ public class KubernetesCustomResourceResourceTests
     public void Build_CopiesSpec()
     {
         var environment = new KubernetesEnvironmentResource("env");
-        var spec = new { replicas = 5, image = "nginx:latest" };
+        var spec = new GenericObjectSpec(new { replicas = 5, image = "nginx:latest" });
         var resource = new KubernetesCustomResourceResource("my-resource", environment)
         {
             Spec = spec
@@ -231,7 +230,7 @@ public class KubernetesCustomResourceResourceTests
     public void Build_WithMultipleSpecifications()
     {
         var environment = new KubernetesEnvironmentResource("env");
-        var spec = new { name = "test", version = 1, nested = new { value = "data" } };
+        var spec = new SimpleCustomResourceSpec("test", 1, new NestedCustomResourceSpec("data"));
         var resource = new KubernetesCustomResourceResource("my-resource", environment)
         {
             ApiVersion = "custom.io/v1",

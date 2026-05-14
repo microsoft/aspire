@@ -164,7 +164,7 @@ public class KubernetesCustomResourceExtensionsTests
         var k8s = builder.AddKubernetesEnvironment("env");
 
         var resource = k8s.AddCustomResource("my-resource", "v1", "ConfigMap")
-            .WithSpec(new { data = new { key = "value" } });
+            .WithSpec(new ConfigMapDataSpec(new { key = "value" }));
 
         Assert.Equal("my-resource", resource.Resource.Name);
         Assert.NotNull(resource.Resource.Spec);
@@ -186,7 +186,7 @@ public class KubernetesCustomResourceExtensionsTests
     public void WithSpec_NullBuilder_Throws()
     {
         var ex = Assert.Throws<ArgumentNullException>(() =>
-            KubernetesCustomResourceExtensions.WithSpec(null!, new object()));
+            KubernetesCustomResourceExtensions.WithSpec(null!, new GenericObjectSpec(new { })));
 
         Assert.Equal("builder", ex.ParamName);
     }
@@ -198,7 +198,7 @@ public class KubernetesCustomResourceExtensionsTests
         var k8s = builder.AddKubernetesEnvironment("env");
         var resource = k8s.AddCustomResource("my-resource", "v1", "ConfigMap");
 
-        var spec = new { data = new { key = "value" } };
+        var spec = new ConfigMapDataSpec(new { key = "value" });
         resource.WithSpec(spec);
 
         Assert.Same(spec, resource.Resource.Spec);
@@ -211,7 +211,7 @@ public class KubernetesCustomResourceExtensionsTests
         var k8s = builder.AddKubernetesEnvironment("env");
         var resource = k8s.AddCustomResource("my-resource", "v1", "ConfigMap");
 
-        var result = resource.WithSpec(new { data = new { } });
+        var result = resource.WithSpec(new ConfigMapDataSpec(new { }));
 
         Assert.Same(resource, result);
     }
@@ -223,12 +223,12 @@ public class KubernetesCustomResourceExtensionsTests
         var k8s = builder.AddKubernetesEnvironment("env");
 
         var resource = k8s.AddCustomResource("my-resource", "v1", "ConfigMap")
-            .WithSpec(new { data = new { key1 = "value1" } })
-            .WithSpec(new { data = new { key2 = "value2" } });
+            .WithSpec(new ConfigMapDataSpec(new { key1 = "value1" }))
+            .WithSpec(new ConfigMapDataSpec(new { key2 = "value2" }));
 
         // Last call wins
-        var spec = resource.Resource.Spec as dynamic;
-        Assert.NotNull(spec?.data?.key2);
+        var spec = resource.Resource.Spec as ConfigMapDataSpec;
+        Assert.Equal("value2", ((dynamic)spec!).Data.key2);
     }
 
     [Fact]
@@ -238,16 +238,15 @@ public class KubernetesCustomResourceExtensionsTests
         var k8s = builder.AddKubernetesEnvironment("env");
         var resource = k8s.AddCustomResource("my-deployment", "apps/v1", "Deployment");
 
-        var spec = new
-        {
-            replicas = 3,
-            selector = new { matchLabels = new { app = "nginx" } },
-            template = new
-            {
-                metadata = new { labels = new { app = "nginx" } },
-                spec = new { containers = new[] { new { name = "nginx", image = "nginx:latest" } } }
-            }
-        };
+        var spec = new KubernetesCustomResourceDeploymentSpec(
+            replicas: 3,
+            selector: new KubernetesCustomResourceSelectorSpec(
+                new Dictionary<string, string> { ["app"] = "nginx" }),
+            template: new KubernetesCustomResourceTemplateSpec(
+                new KubernetesCustomResourceTemplateMetadata(
+                    new Dictionary<string, string> { ["app"] = "nginx" }),
+                new KubernetesCustomResourcePodSpec(
+                    new[] { new KubernetesCustomResourceContainerSpec("nginx", "nginx:latest") })));
 
         resource.WithSpec(spec);
 
@@ -261,9 +260,9 @@ public class KubernetesCustomResourceExtensionsTests
         var k8s = builder.AddKubernetesEnvironment("env");
         var resource = k8s.AddCustomResource("my-resource", "v1", "String");
 
-        resource.WithSpec("simple string value");
+        resource.WithSpec(new StringValueSpec("simple string value"));
 
-        Assert.Equal("simple string value", resource.Resource.Spec);
+        Assert.Equal("simple string value", ((StringValueSpec)resource.Resource.Spec!).Value);
     }
 
     [Fact]
@@ -285,7 +284,7 @@ public class KubernetesCustomResourceExtensionsTests
         var k8s = builder.AddKubernetesEnvironment("env");
         var resource = k8s.AddCustomResource("my-list", "v1", "List");
 
-        var spec = new[] { "item1", "item2", "item3" };
+        var spec = new ArrayValueSpec(new[] { "item1", "item2", "item3" });
         resource.WithSpec(spec);
 
         Assert.Same(spec, resource.Resource.Spec);

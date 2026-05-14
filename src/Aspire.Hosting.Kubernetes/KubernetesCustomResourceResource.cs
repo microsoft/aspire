@@ -16,12 +16,12 @@ public interface IKubernetesCustomResourceResource : IResourceWithParent<Kuberne
     /// assigns the result to <see cref="GeneratedResource"/>.
     /// </summary>
     /// <returns>A fully configured <see cref="CustomResourceV1"/> ready for publishing.</returns>
-    object Build();
+    CustomResourceV1 Build();
 
     /// <summary>
     /// Gets or sets the publisher-ready resource.
     /// </summary>
-    object? GeneratedResource { get; set; }
+    CustomResourceV1? GeneratedResource { get; set; }
 }
 
 /// <summary>
@@ -45,13 +45,13 @@ public sealed class KubernetesCustomResourceResource(
     public string Kind { get; set; } = "";
 
     /// <inheritdoc /> 
-    public object Spec { get; set; } = new();
+    public CustomResourceSpecV1? Spec { get; set; }
     
     /// <inheritdoc />
-    public object? GeneratedResource { get; set; }
+    public CustomResourceV1? GeneratedResource { get; set; }
 
     /// <inheritdoc />
-    public object Build()
+    public CustomResourceV1 Build()
     {
         var builtResource = new CustomResourceV1(ApiVersion, Kind)
         {
