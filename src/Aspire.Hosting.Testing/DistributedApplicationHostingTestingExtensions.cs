@@ -153,7 +153,9 @@ public static class DistributedApplicationHostingTestingExtensions
         }
         else
         {
-            endpoint = GetEndpointOrDefault(resourceWithEndpoints, "http", networkIdentifier) ?? GetEndpointOrDefault(resourceWithEndpoints, "https", networkIdentifier);
+            // Prefer https over http to match the default service discovery behavior (https+http://),
+            // where https is tried first.
+            endpoint = GetEndpointOrDefault(resourceWithEndpoints, "https", networkIdentifier) ?? GetEndpointOrDefault(resourceWithEndpoints, "http", networkIdentifier);
         }
 
         if (endpoint is null)
