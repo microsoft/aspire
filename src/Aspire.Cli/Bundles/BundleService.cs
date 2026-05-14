@@ -12,6 +12,7 @@ using Aspire.Cli.Layout;
 using Aspire.Cli.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Bundles;
 
@@ -87,7 +88,7 @@ internal sealed class BundleService(
         // non-Windows and once the sidecar already exists.
         if (wingetFirstRunProbe is not null && OperatingSystem.IsWindows())
         {
-            var realBinaryPath = ResolveSymlinks(processPath);
+            var realBinaryPath = ResolveSymlinks(processPath, logger);
             var binaryDir = Path.GetDirectoryName(realBinaryPath);
             if (!string.IsNullOrEmpty(binaryDir))
             {
@@ -322,20 +323,22 @@ internal sealed class BundleService(
 
     /// <inheritdoc/>
     public string? GetDefaultExtractDir(string processPath)
-        => ComputeDefaultExtractDir(processPath);
+        => ComputeDefaultExtractDir(processPath, logger);
 
     /// <summary>
     /// Computes the bundle extract directory from the sidecar source value.
     /// See <c>docs/specs/install-routes.md</c> for the contract.
     /// </summary>
-    internal static string? ComputeDefaultExtractDir(string processPath)
+    internal static string? ComputeDefaultExtractDir(string processPath, ILogger? logger = null)
     {
+        logger ??= NullLogger.Instance;
+
         if (string.IsNullOrEmpty(processPath))
         {
             return null;
         }
 
-        var realBinaryPath = ResolveSymlinks(processPath);
+        var realBinaryPath = ResolveSymlinks(processPath, logger);
         var binaryDir = Path.GetDirectoryName(realBinaryPath);
         if (string.IsNullOrEmpty(binaryDir))
         {
@@ -343,7 +346,7 @@ internal sealed class BundleService(
         }
 
         var sidecarPath = Path.Combine(binaryDir, SidecarFileName);
-        var source = ReadSidecarSource(sidecarPath);
+        var source = ReadSidecarSource(sidecarPath, logger);
 
         return source switch
         {
@@ -355,7 +358,7 @@ internal sealed class BundleService(
 
     private const string SidecarFileName = ".aspire-install.json";
 
-    private static string? ReadSidecarSource(string sidecarPath)
+    private static string? ReadSidecarSource(string sidecarPath, ILogger logger)
     {
         if (!File.Exists(sidecarPath))
         {
@@ -373,30 +376,30 @@ internal sealed class BundleService(
                 return sourceElement.GetString();
             }
         }
-        catch (IOException)
+        catch (Exception ex)
         {
-            // File disappeared between File.Exists and File.OpenRead, or read failed.
-        }
-        catch (JsonException)
-        {
-            // Sidecar exists but contains invalid JSON.
+            // Best-effort sidecar read: any failure (I/O, malformed JSON, permissions,
+            // etc.) falls through to the parent-of-binary heuristic. Log so an
+            // unexpectedly-missing sidecar is diagnosable.
+            logger.LogDebug(ex, "Failed to read install-route sidecar at {Path}; treating as missing.", sidecarPath);
         }
 
         return null;
     }
 
-    private static string ResolveSymlinks(string path)
+    private static string ResolveSymlinks(string path, ILogger logger)
     {
         try
         {
             var resolved = File.ResolveLinkTarget(path, returnFinalTarget: true);
             return resolved is null ? path : resolved.FullName;
         }
-        catch (IOException)
+        catch (Exception ex)
         {
-            // Path is not a link, does not exist, or cycle detected — fall back to
-            // the raw path. Sidecar discovery using the raw path is still valid in
-            // the non-link case.
+            // Best-effort symlink resolution: any failure falls back to the raw
+            // path. Sidecar discovery using the raw path is still valid in the
+            // non-link case.
+            logger.LogDebug(ex, "Failed to resolve link target for {Path}; using raw path.", path);
             return path;
         }
     }

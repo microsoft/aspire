@@ -6,7 +6,7 @@ using Aspire.Cli.Bundles;
 namespace Aspire.Cli.Tests.Bundles;
 
 /// <summary>
-/// Verifies <see cref="BundleService.ComputeDefaultExtractDir(string)"/> against
+/// Verifies <see cref="BundleService.ComputeDefaultExtractDir(string, Microsoft.Extensions.Logging.ILogger?)"/> against
 /// every (source × prefix shape) combination the supported install routes produce.
 /// The matrix locks in the contract: the reader walks the sidecar's
 /// <c>source</c> field — and nothing else — to decide between

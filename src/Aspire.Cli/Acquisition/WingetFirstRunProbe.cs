@@ -79,28 +79,31 @@ internal sealed class WingetFirstRunProbe
             File.Move(tempPath, sidecarPath, overwrite: false);
             _logger.LogDebug("Winget first-run probe wrote sidecar at {Path}.", sidecarPath);
         }
-        catch (IOException)
+        catch (Exception ex)
         {
-            // Concurrent winner stamped the same literal bytes — install is
-            // still correctly stamped.
-            TryDeleteTemp(tempPath);
-        }
-        catch (UnauthorizedAccessException ex)
-        {
+            // Either a concurrent winner already stamped the same literal bytes
+            // (IOException from overwrite:false), a permission failure, or any
+            // other unexpected error. The probe is best-effort startup code, so
+            // swallow the failure and always clean up the temp file we just
+            // created so a partial install doesn't leave litter behind.
             _logger.LogDebug(ex, "Winget first-run probe could not rename temp sidecar to {Path}.", sidecarPath);
             TryDeleteTemp(tempPath);
         }
     }
 
-    private static void TryDeleteTemp(string tempPath)
+    private void TryDeleteTemp(string tempPath)
     {
         try
         {
             File.Delete(tempPath);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (IOException ex)
         {
-            _ = ex;
+            _logger.LogDebug(ex, "Winget first-run probe could not delete temp sidecar at {Path}.", tempPath);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            _logger.LogDebug(ex, "Winget first-run probe could not delete temp sidecar at {Path}.", tempPath);
         }
     }
 }

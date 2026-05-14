@@ -1193,7 +1193,7 @@ function Write-PRRouteSidecar {
         [int]$PRNumber
     )
 
-    $sidecarDir = Join-Path $InstallPrefix "dogfood" "pr-$PRNumber" "bin"
+    $sidecarDir = Join-Path (Join-Path (Join-Path $InstallPrefix "dogfood") "pr-$PRNumber") "bin"
     $sidecarPath = Join-Path $sidecarDir '.aspire-install.json'
     $sidecarContent = "{""source"":""pr""}`n"
 
@@ -1345,7 +1345,7 @@ function Start-InstallFromLocalDir {
     # collide with the script-route prefix or with other PR installs. Hives remain shared
     # under <prefix>/hives/<label>/packages.
     $cliBinDir = if ($PRNumber -gt 0) {
-        Join-Path $resolvedInstallPrefix "dogfood" "pr-$PRNumber" "bin"
+        Join-Path (Join-Path (Join-Path $resolvedInstallPrefix "dogfood") "pr-$PRNumber") "bin"
     } else {
         Join-Path $resolvedInstallPrefix "bin"
     }
@@ -1467,7 +1467,7 @@ function Start-DownloadAndInstall {
     # collide with the script-route prefix or with other PR installs. Hives remain shared
     # under <prefix>/hives/<label>/packages.
     $cliBinDir = if ($PRNumber -gt 0) {
-        Join-Path $resolvedInstallPrefix "dogfood" "pr-$PRNumber" "bin"
+        Join-Path (Join-Path (Join-Path $resolvedInstallPrefix "dogfood") "pr-$PRNumber") "bin"
     } else {
         Join-Path $resolvedInstallPrefix "bin"
     }
