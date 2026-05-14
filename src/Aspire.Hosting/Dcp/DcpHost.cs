@@ -40,14 +40,21 @@ internal sealed class DcpHost
     private string? _dcpTlsCertThumbprint;
     private Task? _logProcessorTask;
 
-    // These environment variables should never be inherited by DCP from app host.
+    // These environment variables (or prefixes) should never be inherited by DCP
+    // from the app host. Entries are matched case-insensitively using StartsWith so
+    // that both exact names (e.g. "ASPNETCORE_URLS") and prefixes (e.g. "Logging__")
+    // are handled uniformly. The Aspire CLI injects Logging__ variables such as
+    // Logging__LogLevel__Default=Debug to increase diagnostic output; these must not
+    // cascade through DCP into child project processes where they would override the
+    // application's appsettings.json log-level configuration.
     private static readonly string[] s_doNotInheritEnvironmentVars =
-    {
+    [
         "ASPNETCORE_URLS",
         "DOTNET_LAUNCH_PROFILE",
         "ASPNETCORE_ENVIRONMENT",
-        "DOTNET_ENVIRONMENT"
-    };
+        "DOTNET_ENVIRONMENT",
+        //"LOGGING__"
+    ];
 
     public DcpHost(
         ILoggerFactory loggerFactory,
@@ -336,7 +343,7 @@ internal sealed class DcpHost
         {
             var key = de.Key?.ToString();
             var val = de.Value?.ToString();
-            if (key is not null && val is not null && !s_doNotInheritEnvironmentVars.Contains(key))
+            if (key is not null && val is not null && !IsExcludedEnvironmentVariable(key))
             {
                 dcpProcessSpec.EnvironmentVariables[key] = val;
             }
@@ -361,6 +368,19 @@ internal sealed class DcpHost
         }
 
         return dcpProcessSpec;
+    }
+
+    private static bool IsExcludedEnvironmentVariable(string key)
+    {
+        foreach (var entry in s_doNotInheritEnvironmentVars)
+        {
+            if (key.StartsWith(entry, StringComparisons.EnvironmentVariableName))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static Socket CreateLoggingSocket(string socketPath)
