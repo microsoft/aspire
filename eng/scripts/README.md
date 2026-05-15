@@ -169,14 +169,29 @@ Additional scripts exist to fetch CLI and NuGet artifacts from a pull request bu
 - `get-aspire-cli-pr.sh`
 - `get-aspire-cli-pr.ps1`
 
-Quick fetch (Bash):
+The PR scripts support two install modes:
+
+- **Archive mode** (default) installs the PR's native CLI archive under a PR-specific dogfood path and copies PR packages into `~/.aspire/hives/pr-<PR_NUMBER>/packages`.
+- **Tool mode** installs the PR's `Aspire.Cli` dotnet-tool package from the RID-specific NuGet artifact. Use this when validating dotnet-tool packaging or acquisition behavior.
+
+Quick archive-mode fetch (Bash):
 ```bash
 curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.sh | bash -s -- <PR_NUMBER>
 ```
 
-Quick fetch (PowerShell):
+Quick archive-mode fetch (PowerShell):
 ```powershell
 iex "& { $(irm https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.ps1) } <PR_NUMBER>"
+```
+
+Quick tool-mode fetch (Bash):
+```bash
+curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.sh | bash -s -- <PR_NUMBER> --install-mode tool
+```
+
+Quick tool-mode fetch (PowerShell):
+```powershell
+iex "& { $(irm https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.ps1) } <PR_NUMBER> -InstallMode Tool"
 ```
 
 NuGet hive path pattern: `~/.aspire/hives/pr-<PR_NUMBER>/packages`
