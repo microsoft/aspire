@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Acquisition;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Tests.TestServices;
@@ -56,7 +57,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
                 var interactionService = sp.GetRequiredService<IInteractionService>();
 
                 // Use a custom notifier that overrides the current version
-                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0-dev", logger, nuGetPackageCache, interactionService);
+                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0-dev", logger, nuGetPackageCache, interactionService, sp.GetRequiredService<IInstallationDiscovery>(), sp.GetRequiredService<IUpgradeInstructionProvider>(), sp.GetRequiredService<CliExecutionContext>(), sp.GetRequiredService<WingetFirstRunProbe>());
             };
         });
 
@@ -108,7 +109,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
                 var interactionService = sp.GetRequiredService<IInteractionService>();
 
                 // Use a custom notifier that overrides the current version
-                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0-dev", logger, nuGetPackageCache, interactionService);
+                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0-dev", logger, nuGetPackageCache, interactionService, sp.GetRequiredService<IInstallationDiscovery>(), sp.GetRequiredService<IUpgradeInstructionProvider>(), sp.GetRequiredService<CliExecutionContext>(), sp.GetRequiredService<WingetFirstRunProbe>());
             };
         });
 
@@ -160,7 +161,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
                 var interactionService = sp.GetRequiredService<IInteractionService>();
 
                 // Use a custom notifier that overrides the current version
-                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, interactionService);
+                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, interactionService, sp.GetRequiredService<IInstallationDiscovery>(), sp.GetRequiredService<IUpgradeInstructionProvider>(), sp.GetRequiredService<CliExecutionContext>(), sp.GetRequiredService<WingetFirstRunProbe>());
             };
         });
 
@@ -196,7 +197,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
                 var logger = sp.GetRequiredService<ILogger<CliUpdateNotifier>>();
                 var nuGetPackageCache = sp.GetRequiredService<INuGetPackageCache>();
                 var interactionService = sp.GetRequiredService<IInteractionService>();
-                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, interactionService);
+                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, interactionService, sp.GetRequiredService<IInstallationDiscovery>(), sp.GetRequiredService<IUpgradeInstructionProvider>(), sp.GetRequiredService<CliExecutionContext>(), sp.GetRequiredService<WingetFirstRunProbe>());
             };
         });
 
@@ -233,7 +234,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
                 var logger = sp.GetRequiredService<ILogger<CliUpdateNotifier>>();
                 var nuGetPackageCache = sp.GetRequiredService<INuGetPackageCache>();
                 var service = sp.GetRequiredService<IInteractionService>();
-                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, service);
+                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, service, sp.GetRequiredService<IInstallationDiscovery>(), sp.GetRequiredService<IUpgradeInstructionProvider>(), sp.GetRequiredService<CliExecutionContext>(), sp.GetRequiredService<WingetFirstRunProbe>());
             };
         });
 
@@ -276,7 +277,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
                 var logger = sp.GetRequiredService<ILogger<CliUpdateNotifier>>();
                 var nuGetPackageCache = sp.GetRequiredService<INuGetPackageCache>();
                 var service = sp.GetRequiredService<IInteractionService>();
-                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, service);
+                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, service, sp.GetRequiredService<IInstallationDiscovery>(), sp.GetRequiredService<IUpgradeInstructionProvider>(), sp.GetRequiredService<CliExecutionContext>(), sp.GetRequiredService<WingetFirstRunProbe>());
             };
         });
 
@@ -291,7 +292,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task NotifyIfUpdateAvailable_UsesAspireUpdateCommandForStandaloneArchivePath()
+    public async Task NotifyIfUpdateAvailable_UsesAspireUpdateSelfCommandForStandaloneArchivePath()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var processPathScope = DotNetToolDetection.UseProcessPathForTesting("/home/test/.aspire/bin/aspire");
@@ -317,7 +318,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
                 var logger = sp.GetRequiredService<ILogger<CliUpdateNotifier>>();
                 var nuGetPackageCache = sp.GetRequiredService<INuGetPackageCache>();
                 var service = sp.GetRequiredService<IInteractionService>();
-                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, service);
+                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, service, sp.GetRequiredService<IInstallationDiscovery>(), sp.GetRequiredService<IUpgradeInstructionProvider>(), sp.GetRequiredService<CliExecutionContext>(), sp.GetRequiredService<WingetFirstRunProbe>());
             };
         });
 
@@ -328,7 +329,12 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
         notifier.NotifyIfUpdateAvailable();
 
         Assert.NotNull(interactionService);
-        Assert.Equal("aspire update", interactionService.LastVersionUpdateCommand);
+        // Script-route (and Unknown / legacy archive installs lacking a sidecar)
+        // recommend `aspire update --self` — the route-correct command that
+        // actually performs the in-process binary swap. The previous
+        // recommendation `aspire update` runs the project-update flow, not the
+        // CLI self-update, and was misleading for users hitting this notification.
+        Assert.Equal("aspire update --self", interactionService.LastVersionUpdateCommand);
     }
 
     [Fact]
@@ -365,7 +371,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
                 var interactionService = sp.GetRequiredService<IInteractionService>();
 
                 // Use a custom notifier that overrides the current version
-                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, interactionService);
+                return new CliUpdateNotifierWithPackageVersionOverride("9.4.0", logger, nuGetPackageCache, interactionService, sp.GetRequiredService<IInstallationDiscovery>(), sp.GetRequiredService<IUpgradeInstructionProvider>(), sp.GetRequiredService<CliExecutionContext>(), sp.GetRequiredService<WingetFirstRunProbe>());
             };
         });
 
@@ -449,7 +455,7 @@ public class CliUpdateNotificationServiceTests(ITestOutputHelper outputHelper)
     }
 }
 
-internal sealed class CliUpdateNotifierWithPackageVersionOverride(string currentVersion, ILogger<CliUpdateNotifier> logger, INuGetPackageCache nuGetPackageCache, IInteractionService interactionService) : CliUpdateNotifier(logger, nuGetPackageCache, interactionService)
+internal sealed class CliUpdateNotifierWithPackageVersionOverride(string currentVersion, ILogger<CliUpdateNotifier> logger, INuGetPackageCache nuGetPackageCache, IInteractionService interactionService, IInstallationDiscovery installationDiscovery, IUpgradeInstructionProvider upgradeInstructionProvider, CliExecutionContext executionContext, WingetFirstRunProbe wingetFirstRunProbe) : CliUpdateNotifier(logger, nuGetPackageCache, interactionService, installationDiscovery, upgradeInstructionProvider, executionContext, wingetFirstRunProbe)
 {
     protected override SemVersion? GetCurrentVersion()
     {

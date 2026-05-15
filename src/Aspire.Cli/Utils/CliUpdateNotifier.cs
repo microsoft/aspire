@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Acquisition;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.NuGet;
 using Aspire.Shared;
@@ -43,7 +44,11 @@ internal static class PackageUpdateRecommendationChannels
 internal class CliUpdateNotifier(
     ILogger<CliUpdateNotifier> logger,
     INuGetPackageCache nuGetPackageCache,
-    IInteractionService interactionService) : ICliUpdateNotifier
+    IInteractionService interactionService,
+    IInstallationDiscovery installationDiscovery,
+    IUpgradeInstructionProvider upgradeInstructionProvider,
+    CliExecutionContext executionContext,
+    WingetFirstRunProbe wingetFirstRunProbe) : ICliUpdateNotifier
 {
     private IEnumerable<Shared.NuGetPackageCli>? _availablePackages;
 
@@ -116,7 +121,7 @@ internal class CliUpdateNotifier(
         }
 
         var newerVersion = PackageUpdateHelpers.GetNewerVersion(logger, currentVersion, _availablePackages);
-        var updateCommand = newerVersion is null ? null : DotNetToolDetection.GetDotNetToolUpdateCommand() ?? "aspire update";
+        var updateCommand = newerVersion is null ? null : GetRouteAwareUpdateCommand();
         // Derive the lane the recommendation comes from so doctor can show
         // 'Latest version is X (channel: stable)' vs '(channel: prerelease)'.
         // GetNewerVersion picks between newestStable and newestPrerelease
@@ -127,6 +132,53 @@ internal class CliUpdateNotifier(
             ? null
             : (newerVersion.IsPrerelease ? PackageUpdateRecommendationChannels.Prerelease : PackageUpdateRecommendationChannels.Stable);
         return new CliVersionStatus(currentVersionString, newerVersion?.ToString(), updateCommand, UpdateCheckError: null, LatestVersionChannel: latestChannel);
+    }
+
+    /// <summary>
+    /// Returns the route-appropriate command to recommend in the
+    /// "version X available" notification. For script-route installs we
+    /// suggest <c>aspire update --self</c>. For every other route, including
+    /// Unknown, we defer to <see cref="IUpgradeInstructionProvider"/> so
+    /// users see the command or refusal hint that matches how they installed
+    /// the CLI (winget upgrade, brew upgrade --cask, dotnet tool update,
+    /// get-aspire-cli-pr, etc.).
+    /// </summary>
+    /// <remarks>
+    /// When the initial discovery reports no route (i.e., no sidecar on disk
+    /// yet), runs <see cref="WingetFirstRunProbe"/> on the binary directory
+    /// derived from the discovery's canonical path, then re-describes so the
+    /// freshly-stamped sidecar is picked up. The probe self-gates via
+    /// <see cref="IWindowsRegistryReader"/>, so the call is a cheap no-op
+    /// on non-Windows / non-WinGet installs.
+    /// </remarks>
+    private string GetRouteAwareUpdateCommand()
+    {
+        var info = installationDiscovery.DescribeSelf();
+        var canonicalPath = info.CanonicalPath ?? info.Path;
+
+        if (string.IsNullOrEmpty(info.Route) && !string.IsNullOrEmpty(canonicalPath))
+        {
+            var binaryDir = Path.GetDirectoryName(canonicalPath);
+            if (!string.IsNullOrEmpty(binaryDir))
+            {
+                wingetFirstRunProbe.Run(binaryDir);
+                info = installationDiscovery.DescribeSelf();
+                canonicalPath = info.CanonicalPath ?? info.Path;
+            }
+        }
+
+        var source = InstallSourceExtensions.ParseInstallSource(info.Route);
+
+        // Legacy fallback for pre-sidecar dotnet-tool installs (mirrors the
+        // UpdateCommand --self resolution rule). Uses the no-arg overload so
+        // the AsyncLocal test override is honored.
+        if (source == InstallSource.Unknown && DotNetToolDetection.IsRunningAsDotNetTool())
+        {
+            source = InstallSource.DotnetTool;
+        }
+
+        return upgradeInstructionProvider.GetUpdateCommand(source, canonicalPath, executionContext.IdentityChannel)
+            ?? "aspire update --self";
     }
 
     private async Task<IEnumerable<Shared.NuGetPackageCli>> GetCliPackagesAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)

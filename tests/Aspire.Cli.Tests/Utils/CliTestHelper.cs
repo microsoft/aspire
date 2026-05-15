@@ -159,6 +159,7 @@ internal static class CliTestHelper
         services.AddSingleton<IPeerInstallProbe, PeerInstallProbe>();
         services.AddSingleton<IInstallationDiscovery, InstallationDiscovery>();
         services.AddSingleton<IInstallationUninstaller, InstallationUninstaller>();
+        services.AddSingleton<IUpgradeInstructionProvider, UpgradeInstructionProvider>();
         services.AddSingleton<WingetFirstRunProbe>();
         if (OperatingSystem.IsWindows())
         {
@@ -362,7 +363,11 @@ internal sealed class CliServiceCollectionTestOptions
         var logger = NullLoggerFactory.Instance.CreateLogger<CliUpdateNotifier>();
         var nuGetPackageCache = serviceProvider.GetRequiredService<INuGetPackageCache>();
         var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
-        return new CliUpdateNotifier(logger, nuGetPackageCache, interactionService);
+        var installationDiscovery = serviceProvider.GetRequiredService<IInstallationDiscovery>();
+        var upgradeInstructionProvider = serviceProvider.GetRequiredService<IUpgradeInstructionProvider>();
+        var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
+        var wingetFirstRunProbe = serviceProvider.GetRequiredService<WingetFirstRunProbe>();
+        return new CliUpdateNotifier(logger, nuGetPackageCache, interactionService, installationDiscovery, upgradeInstructionProvider, executionContext, wingetFirstRunProbe);
     };
 
     public Func<IServiceProvider, IAddCommandPrompter> AddCommandPrompterFactory { get; set; } = (IServiceProvider serviceProvider) =>

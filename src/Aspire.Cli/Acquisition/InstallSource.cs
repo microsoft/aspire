@@ -13,7 +13,8 @@ internal enum InstallSource
 {
     /// <summary>
     /// No sidecar was found, or the sidecar contained a value that does not
-    /// match any known route. Treated as legacy / pre-sidecar by callers.
+    /// match any known route. Callers fail closed unless an explicit override
+    /// applies.
     /// </summary>
     Unknown = 0,
 
@@ -55,8 +56,7 @@ internal static class InstallSourceExtensions
     /// <summary>
     /// Parses a sidecar <c>source</c> string into the strongly-typed enum.
     /// Returns <see cref="InstallSource.Unknown"/> for null, empty, or
-    /// unrecognized values so callers can treat unknown sources as a
-    /// legacy / pre-sidecar install.
+    /// unrecognized values so callers can apply their unknown-route policy.
     /// </summary>
     public static InstallSource ParseInstallSource(string? raw)
     {

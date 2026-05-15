@@ -107,6 +107,12 @@ namespace Aspire.Cli.Resources {
     internal static string QualityOptionDescription => ResourceManager.GetString("QualityOptionDescription", resourceCulture);
     internal static string QualityOptionDescriptionWithStaging => ResourceManager.GetString("QualityOptionDescriptionWithStaging", resourceCulture);
     internal static string DotNetToolSelfUpdateMessage => ResourceManager.GetString("DotNetToolSelfUpdateMessage", resourceCulture);
+    internal static string WingetSelfUpdateMessage => ResourceManager.GetString("WingetSelfUpdateMessage", resourceCulture);
+    internal static string BrewSelfUpdateMessage => ResourceManager.GetString("BrewSelfUpdateMessage", resourceCulture);
+    internal static string PrSelfUpdateMessage => ResourceManager.GetString("PrSelfUpdateMessage", resourceCulture);
+    internal static string LocalHiveSelfUpdateMessage => ResourceManager.GetString("LocalHiveSelfUpdateMessage", resourceCulture);
+    internal static string SelfUpdateUnknownSourceMessage => ResourceManager.GetString("SelfUpdateUnknownSourceMessage", resourceCulture);
+    internal static string UnknownRouteRefusalHint => ResourceManager.GetString("UnknownRouteRefusalHint", resourceCulture);
     internal static string MigratedToNewSdkFormat => ResourceManager.GetString("MigratedToNewSdkFormat", resourceCulture);
     internal static string RemovedObsoleteAppHostPackage => ResourceManager.GetString("RemovedObsoleteAppHostPackage", resourceCulture);
     internal static string NoWritePermissionToInstallDirectory => ResourceManager.GetString("NoWritePermissionToInstallDirectory", resourceCulture);
@@ -117,6 +123,7 @@ namespace Aspire.Cli.Resources {
     internal static string RegeneratingSdkCode => ResourceManager.GetString("RegeneratingSdkCode", resourceCulture);
     internal static string RegeneratedSdkCode => ResourceManager.GetString("RegeneratedSdkCode", resourceCulture);
     internal static string SelfOptionDescription => ResourceManager.GetString("SelfOptionDescription", resourceCulture);
+    internal static string ForceOptionDescription => ResourceManager.GetString("ForceOptionDescription", resourceCulture);
     internal static string YesOptionDescription => ResourceManager.GetString("YesOptionDescription", resourceCulture);
     internal static string NuGetConfigDirOptionDescription => ResourceManager.GetString("NuGetConfigDirOptionDescription", resourceCulture);
     }

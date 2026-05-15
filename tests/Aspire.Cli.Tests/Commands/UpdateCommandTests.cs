@@ -13,6 +13,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Spectre.Console;
 using Spectre.Console.Rendering;
@@ -1085,6 +1086,12 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
+            // The channel prompt only fires when the host environment is
+            // interactive (regression guard for #15600). Default test setup
+            // uses non-interactive, so opt in here so we can exercise the
+            // cancellation path through the prompt.
+            options.CliHostEnvironmentFactory = sp => new CliHostEnvironment(sp.GetRequiredService<IConfiguration>(), nonInteractive: false);
+
             options.ProjectLocatorFactory = _ => new TestProjectLocator()
             {
                 UseOrFindAppHostProjectFileAsyncCallback = (projectFile, _, _) =>
@@ -1481,6 +1488,12 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
+            // The channel prompt only fires when the host environment is
+            // interactive (regression guard for #15600). Default test setup
+            // uses non-interactive, so opt in here to exercise the prompt's
+            // ordering / formatting contract.
+            options.CliHostEnvironmentFactory = sp => new CliHostEnvironment(sp.GetRequiredService<IConfiguration>(), nonInteractive: false);
+
             options.ProjectLocatorFactory = _ => new TestProjectLocator()
             {
                 UseOrFindAppHostProjectFileAsyncCallback = (projectFile, _, _) =>

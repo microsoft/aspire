@@ -43,11 +43,11 @@ internal sealed class AspireJsonConfiguration
     public string? Language { get; set; }
 
     /// <summary>
-    /// The Aspire channel to use for package resolution (e.g., "stable", "preview", "staging").
+    /// The Aspire channel to use for package resolution (e.g., "stable", "staging", "daily", or "pr-&lt;N&gt;").
     /// Used by aspire add to determine which NuGet feed to use.
     /// </summary>
     [JsonPropertyName("channel")]
-    [Description("The Aspire channel to use for package resolution (e.g., \"stable\", \"preview\", \"staging\"). Used by aspire add to determine which NuGet feed to use.")]
+    [Description("The Aspire channel to use for package resolution (e.g., \"stable\", \"staging\", \"daily\", or a per-PR \"pr-<N>\" label). Used by aspire add to determine which NuGet feed to use.")]
     public string? Channel { get; set; }
 
     /// <summary>

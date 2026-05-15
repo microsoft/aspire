@@ -91,7 +91,7 @@ internal sealed class AspireConfigFile
     /// Aspire channel for package resolution.
     /// </summary>
     [JsonPropertyName("channel")]
-    [Description("The Aspire channel to use for package resolution (e.g., \"stable\", \"preview\", \"staging\", \"daily\"). Used by aspire add to determine which NuGet feed to use.")]
+    [Description("The Aspire channel to use for package resolution (e.g., \"stable\", \"staging\", \"daily\", or a per-PR \"pr-<N>\" label). Used by aspire add to determine which NuGet feed to use.")]
     public string? Channel { get; set; }
 
     /// <summary>

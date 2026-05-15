@@ -408,6 +408,7 @@ public class Program
         builder.Services.AddSingleton<IPeerInstallProbe, PeerInstallProbe>();
         builder.Services.AddSingleton<IInstallationDiscovery, InstallationDiscovery>();
         builder.Services.AddSingleton<IInstallationUninstaller, InstallationUninstaller>();
+        builder.Services.AddSingleton<IUpgradeInstructionProvider, UpgradeInstructionProvider>();
         builder.Services.AddSingleton<IBundleService, BundleService>();
         builder.Services.AddSingleton<IAppHostServerProjectFactory, AppHostServerProjectFactory>();
         builder.Services.AddSingleton<ICliDownloader, CliDownloader>();
