@@ -1,4 +1,4 @@
-// aspire.ts - Capability-based Aspire SDK
+﻿// aspire.ts - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -288,6 +288,12 @@ type PipelineSummaryHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Pipelines.Pip
 
 /** Handle to ProjectResourceOptions */
 type ProjectResourceOptionsHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions'>;
+
+/** Handle to AfterPublishEvent */
+type AfterPublishEventHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Publishing.AfterPublishEvent'>;
+
+/** Handle to BeforePublishEvent */
+type BeforePublishEventHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Publishing.BeforePublishEvent'>;
 
 /** Handle to IConfiguration */
 type IConfigurationHandle = Handle<'Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfiguration'>;
@@ -1088,6 +1094,55 @@ export interface WithVolumeOptions {
 }
 
 // ============================================================================
+// AfterPublishEvent
+// ============================================================================
+
+export interface AfterPublishEvent {
+    toJSON(): MarshalledHandle;
+    /** Gets the Services property */
+    services(): ServiceProviderPromise;
+    /** Gets the Model property */
+    model(): DistributedApplicationModelPromise;
+}
+
+// ============================================================================
+// AfterPublishEventImpl
+// ============================================================================
+
+/**
+ * Type class for AfterPublishEvent.
+ */
+class AfterPublishEventImpl implements AfterPublishEvent {
+    constructor(private _handle: AfterPublishEventHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    services(): ServiceProviderPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<IServiceProviderHandle>(
+                'Aspire.Hosting.Publishing/AfterPublishEvent.services',
+                { context: this._handle }
+            );
+            return new ServiceProviderImpl(handle, this._client);
+        })();
+        return new ServiceProviderPromiseImpl(promise, this._client, false);
+    }
+
+    model(): DistributedApplicationModelPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<DistributedApplicationModelHandle>(
+                'Aspire.Hosting.Publishing/AfterPublishEvent.model',
+                { context: this._handle }
+            );
+            return new DistributedApplicationModelImpl(handle, this._client);
+        })();
+        return new DistributedApplicationModelPromiseImpl(promise, this._client, false);
+    }
+
+}
+
+// ============================================================================
 // AfterResourcesCreatedEvent
 // ============================================================================
 
@@ -1127,6 +1182,55 @@ class AfterResourcesCreatedEventImpl implements AfterResourcesCreatedEvent {
         const promise = (async () => {
             const handle = await this._client.invokeCapability<DistributedApplicationModelHandle>(
                 'Aspire.Hosting.ApplicationModel/AfterResourcesCreatedEvent.model',
+                { context: this._handle }
+            );
+            return new DistributedApplicationModelImpl(handle, this._client);
+        })();
+        return new DistributedApplicationModelPromiseImpl(promise, this._client, false);
+    }
+
+}
+
+// ============================================================================
+// BeforePublishEvent
+// ============================================================================
+
+export interface BeforePublishEvent {
+    toJSON(): MarshalledHandle;
+    /** Gets the Services property */
+    services(): ServiceProviderPromise;
+    /** Gets the Model property */
+    model(): DistributedApplicationModelPromise;
+}
+
+// ============================================================================
+// BeforePublishEventImpl
+// ============================================================================
+
+/**
+ * Type class for BeforePublishEvent.
+ */
+class BeforePublishEventImpl implements BeforePublishEvent {
+    constructor(private _handle: BeforePublishEventHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    services(): ServiceProviderPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<IServiceProviderHandle>(
+                'Aspire.Hosting.Publishing/BeforePublishEvent.services',
+                { context: this._handle }
+            );
+            return new ServiceProviderImpl(handle, this._client);
+        })();
+        return new ServiceProviderPromiseImpl(promise, this._client, false);
+    }
+
+    model(): DistributedApplicationModelPromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<DistributedApplicationModelHandle>(
+                'Aspire.Hosting.Publishing/BeforePublishEvent.model',
                 { context: this._handle }
             );
             return new DistributedApplicationModelImpl(handle, this._client);
@@ -3079,6 +3183,10 @@ export interface EventingSubscriberRegistrationContext {
     cancellationToken(): Promise<CancellationToken>;
     /** Subscribes an eventing subscriber to the BeforeStart event */
     onBeforeStart(callback: (arg: BeforeStartEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle>;
+    /** Subscribes an eventing subscriber to the BeforePublish event */
+    onBeforePublish(callback: (arg: BeforePublishEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle>;
+    /** Subscribes an eventing subscriber to the AfterPublish event */
+    onAfterPublish(callback: (arg: AfterPublishEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle>;
     /** Subscribes an eventing subscriber to the AfterResourcesCreated event */
     onAfterResourcesCreated(callback: (arg: AfterResourcesCreatedEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle>;
 }
@@ -3090,6 +3198,10 @@ export interface EventingSubscriberRegistrationContextPromise extends PromiseLik
     cancellationToken(): Promise<CancellationToken>;
     /** Subscribes an eventing subscriber to the BeforeStart event */
     onBeforeStart(callback: (arg: BeforeStartEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle>;
+    /** Subscribes an eventing subscriber to the BeforePublish event */
+    onBeforePublish(callback: (arg: BeforePublishEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle>;
+    /** Subscribes an eventing subscriber to the AfterPublish event */
+    onAfterPublish(callback: (arg: AfterPublishEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle>;
     /** Subscribes an eventing subscriber to the AfterResourcesCreated event */
     onAfterResourcesCreated(callback: (arg: AfterResourcesCreatedEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle>;
 }
@@ -3136,6 +3248,32 @@ class EventingSubscriberRegistrationContextImpl implements EventingSubscriberReg
         );
     }
 
+    async onBeforePublish(callback: (arg: BeforePublishEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as BeforePublishEventHandle;
+            const arg = new BeforePublishEventImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { context: this._handle, callback: callbackId };
+        return await this._client.invokeCapability<DistributedApplicationEventSubscriptionHandle>(
+            'Aspire.Hosting/eventingSubscriberOnBeforePublish',
+            rpcArgs
+        );
+    }
+
+    async onAfterPublish(callback: (arg: AfterPublishEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as AfterPublishEventHandle;
+            const arg = new AfterPublishEventImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { context: this._handle, callback: callbackId };
+        return await this._client.invokeCapability<DistributedApplicationEventSubscriptionHandle>(
+            'Aspire.Hosting/eventingSubscriberOnAfterPublish',
+            rpcArgs
+        );
+    }
+
     async onAfterResourcesCreated(callback: (arg: AfterResourcesCreatedEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as AfterResourcesCreatedEventHandle;
@@ -3176,6 +3314,14 @@ class EventingSubscriberRegistrationContextPromiseImpl implements EventingSubscr
 
     onBeforeStart(callback: (arg: BeforeStartEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle> {
         return this._promise.then(obj => obj.onBeforeStart(callback));
+    }
+
+    onBeforePublish(callback: (arg: BeforePublishEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle> {
+        return this._promise.then(obj => obj.onBeforePublish(callback));
+    }
+
+    onAfterPublish(callback: (arg: AfterPublishEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle> {
+        return this._promise.then(obj => obj.onAfterPublish(callback));
     }
 
     onAfterResourcesCreated(callback: (arg: AfterResourcesCreatedEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle> {
@@ -5795,6 +5941,10 @@ export interface DistributedApplicationBuilder {
     getConfiguration(): ConfigurationPromise;
     /** Subscribes to the BeforeStart event */
     subscribeBeforeStart(callback: (arg: BeforeStartEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle>;
+    /** Subscribes to the BeforePublish event */
+    subscribeBeforePublish(callback: (arg: BeforePublishEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle>;
+    /** Subscribes to the AfterPublish event */
+    subscribeAfterPublish(callback: (arg: AfterPublishEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle>;
     /** Subscribes to the AfterResourcesCreated event */
     subscribeAfterResourcesCreated(callback: (arg: AfterResourcesCreatedEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle>;
     /** Adds an eventing subscriber */
@@ -5852,6 +6002,10 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
     getConfiguration(): ConfigurationPromise;
     /** Subscribes to the BeforeStart event */
     subscribeBeforeStart(callback: (arg: BeforeStartEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle>;
+    /** Subscribes to the BeforePublish event */
+    subscribeBeforePublish(callback: (arg: BeforePublishEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle>;
+    /** Subscribes to the AfterPublish event */
+    subscribeAfterPublish(callback: (arg: AfterPublishEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle>;
     /** Subscribes to the AfterResourcesCreated event */
     subscribeAfterResourcesCreated(callback: (arg: AfterResourcesCreatedEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle>;
     /** Adds an eventing subscriber */
@@ -6196,6 +6350,32 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
         );
     }
 
+    async subscribeBeforePublish(callback: (arg: BeforePublishEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as BeforePublishEventHandle;
+            const arg = new BeforePublishEventImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        return await this._client.invokeCapability<DistributedApplicationEventSubscriptionHandle>(
+            'Aspire.Hosting/subscribeBeforePublish',
+            rpcArgs
+        );
+    }
+
+    async subscribeAfterPublish(callback: (arg: AfterPublishEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle> {
+        const callbackId = registerCallback(async (argData: unknown) => {
+            const argHandle = wrapIfHandle(argData) as AfterPublishEventHandle;
+            const arg = new AfterPublishEventImpl(argHandle, this._client);
+            await callback(arg);
+        });
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, callback: callbackId };
+        return await this._client.invokeCapability<DistributedApplicationEventSubscriptionHandle>(
+            'Aspire.Hosting/subscribeAfterPublish',
+            rpcArgs
+        );
+    }
+
     async subscribeAfterResourcesCreated(callback: (arg: AfterResourcesCreatedEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as AfterResourcesCreatedEventHandle;
@@ -6380,6 +6560,14 @@ class DistributedApplicationBuilderPromiseImpl implements DistributedApplication
 
     subscribeBeforeStart(callback: (arg: BeforeStartEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle> {
         return this._promise.then(obj => obj.subscribeBeforeStart(callback));
+    }
+
+    subscribeBeforePublish(callback: (arg: BeforePublishEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle> {
+        return this._promise.then(obj => obj.subscribeBeforePublish(callback));
+    }
+
+    subscribeAfterPublish(callback: (arg: AfterPublishEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle> {
+        return this._promise.then(obj => obj.subscribeAfterPublish(callback));
     }
 
     subscribeAfterResourcesCreated(callback: (arg: AfterResourcesCreatedEvent) => Promise<void>): Promise<DistributedApplicationEventSubscriptionHandle> {
@@ -32893,7 +33081,9 @@ process.on('uncaughtException', (error: Error) => {
 // ============================================================================
 
 // Register wrapper factories for typed handle wrapping in callbacks
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Publishing.AfterPublishEvent', (handle, client) => new AfterPublishEventImpl(handle as AfterPublishEventHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.AfterResourcesCreatedEvent', (handle, client) => new AfterResourcesCreatedEventImpl(handle as AfterResourcesCreatedEventHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Publishing.BeforePublishEvent', (handle, client) => new BeforePublishEventImpl(handle as BeforePublishEventHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeResourceStartedEvent', (handle, client) => new BeforeResourceStartedEventImpl(handle as BeforeResourceStartedEventHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeStartEvent', (handle, client) => new BeforeStartEventImpl(handle as BeforeStartEventHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLineArgsCallbackContext', (handle, client) => new CommandLineArgsCallbackContextImpl(handle as CommandLineArgsCallbackContextHandle, client));

@@ -1,4 +1,4 @@
-// aspire.go - Capability-based Aspire SDK
+﻿// aspire.go - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -834,6 +834,62 @@ type TestVaultResource interface {
 // ============================================================================
 // Handle wrappers
 // ============================================================================
+
+// AfterPublishEvent is the public interface for handle type AfterPublishEvent.
+type AfterPublishEvent interface {
+	handleReference
+	Model() DistributedApplicationModel
+	Services() ServiceProvider
+	Err() error
+}
+
+// afterPublishEvent is the unexported impl of AfterPublishEvent.
+type afterPublishEvent struct {
+	*resourceBuilderBase
+}
+
+// newAfterPublishEventFromHandle wraps an existing handle as AfterPublishEvent.
+func newAfterPublishEventFromHandle(h *handle, c *client) AfterPublishEvent {
+	return &afterPublishEvent{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// Model gets the Model property
+func (s *afterPublishEvent) Model() DistributedApplicationModel {
+	if s.err != nil { return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Publishing/AfterPublishEvent.model", reqArgs)
+	if err != nil {
+		return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.Publishing/AfterPublishEvent.model returned unexpected type %T", result)
+		return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &distributedApplicationModel{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// Services gets the Services property
+func (s *afterPublishEvent) Services() ServiceProvider {
+	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Publishing/AfterPublishEvent.services", reqArgs)
+	if err != nil {
+		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.Publishing/AfterPublishEvent.services returned unexpected type %T", result)
+		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
 
 // AfterResourcesCreatedEvent is the public interface for handle type AfterResourcesCreatedEvent.
 type AfterResourcesCreatedEvent interface {
@@ -2710,6 +2766,62 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithoutHttpsCe
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withoutHttpsCertificate", reqArgs); err != nil { s.setErr(err) }
 	return s
+}
+
+// BeforePublishEvent is the public interface for handle type BeforePublishEvent.
+type BeforePublishEvent interface {
+	handleReference
+	Model() DistributedApplicationModel
+	Services() ServiceProvider
+	Err() error
+}
+
+// beforePublishEvent is the unexported impl of BeforePublishEvent.
+type beforePublishEvent struct {
+	*resourceBuilderBase
+}
+
+// newBeforePublishEventFromHandle wraps an existing handle as BeforePublishEvent.
+func newBeforePublishEventFromHandle(h *handle, c *client) BeforePublishEvent {
+	return &beforePublishEvent{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// Model gets the Model property
+func (s *beforePublishEvent) Model() DistributedApplicationModel {
+	if s.err != nil { return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Publishing/BeforePublishEvent.model", reqArgs)
+	if err != nil {
+		return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.Publishing/BeforePublishEvent.model returned unexpected type %T", result)
+		return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &distributedApplicationModel{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// Services gets the Services property
+func (s *beforePublishEvent) Services() ServiceProvider {
+	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Publishing/BeforePublishEvent.services", reqArgs)
+	if err != nil {
+		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.Publishing/BeforePublishEvent.services returned unexpected type %T", result)
+		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
 // BeforeResourceStartedEvent is the public interface for handle type BeforeResourceStartedEvent.
@@ -7504,7 +7616,9 @@ type DistributedApplicationBuilder interface {
 	ExecutionContext() DistributedApplicationExecutionContext
 	GetConfiguration() Configuration
 	Pipeline() DistributedApplicationPipeline
+	SubscribeAfterPublish(callback func(arg AfterPublishEvent)) DistributedApplicationEventSubscription
 	SubscribeAfterResourcesCreated(callback func(arg AfterResourcesCreatedEvent)) DistributedApplicationEventSubscription
+	SubscribeBeforePublish(callback func(arg BeforePublishEvent)) DistributedApplicationEventSubscription
 	SubscribeBeforeStart(callback func(arg BeforeStartEvent)) DistributedApplicationEventSubscription
 	TryAddEventingSubscriber(subscribe func(arg EventingSubscriberRegistrationContext)) error
 	UserSecretsManager() UserSecretsManager
@@ -8061,6 +8175,33 @@ func (s *distributedApplicationBuilder) Pipeline() DistributedApplicationPipelin
 	return &distributedApplicationPipeline{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
+// SubscribeAfterPublish subscribes to the AfterPublish event
+func (s *distributedApplicationBuilder) SubscribeAfterPublish(callback func(arg AfterPublishEvent)) DistributedApplicationEventSubscription {
+	if s.err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[AfterPublishEvent](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/subscribeAfterPublish", reqArgs)
+	if err != nil {
+		return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting/subscribeAfterPublish returned unexpected type %T", result)
+		return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &distributedApplicationEventSubscription{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
 // SubscribeAfterResourcesCreated subscribes to the AfterResourcesCreated event
 func (s *distributedApplicationBuilder) SubscribeAfterResourcesCreated(callback func(arg AfterResourcesCreatedEvent)) DistributedApplicationEventSubscription {
 	if s.err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
@@ -8083,6 +8224,33 @@ func (s *distributedApplicationBuilder) SubscribeAfterResourcesCreated(callback 
 	href, ok := result.(handleReference)
 	if !ok {
 		err := fmt.Errorf("aspire: Aspire.Hosting/subscribeAfterResourcesCreated returned unexpected type %T", result)
+		return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &distributedApplicationEventSubscription{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// SubscribeBeforePublish subscribes to the BeforePublish event
+func (s *distributedApplicationBuilder) SubscribeBeforePublish(callback func(arg BeforePublishEvent)) DistributedApplicationEventSubscription {
+	if s.err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[BeforePublishEvent](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/subscribeBeforePublish", reqArgs)
+	if err != nil {
+		return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting/subscribeBeforePublish returned unexpected type %T", result)
 		return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	return &distributedApplicationEventSubscription{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
@@ -11311,7 +11479,9 @@ type EventingSubscriberRegistrationContext interface {
 	handleReference
 	CancellationToken() (*CancellationToken, error)
 	ExecutionContext() DistributedApplicationExecutionContext
+	OnAfterPublish(callback func(arg AfterPublishEvent)) DistributedApplicationEventSubscription
 	OnAfterResourcesCreated(callback func(arg AfterResourcesCreatedEvent)) DistributedApplicationEventSubscription
+	OnBeforePublish(callback func(arg BeforePublishEvent)) DistributedApplicationEventSubscription
 	OnBeforeStart(callback func(arg BeforeStartEvent)) DistributedApplicationEventSubscription
 	Err() error
 }
@@ -11360,6 +11530,33 @@ func (s *eventingSubscriberRegistrationContext) ExecutionContext() DistributedAp
 	return &distributedApplicationExecutionContext{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
+// OnAfterPublish subscribes an eventing subscriber to the AfterPublish event
+func (s *eventingSubscriberRegistrationContext) OnAfterPublish(callback func(arg AfterPublishEvent)) DistributedApplicationEventSubscription {
+	if s.err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[AfterPublishEvent](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/eventingSubscriberOnAfterPublish", reqArgs)
+	if err != nil {
+		return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting/eventingSubscriberOnAfterPublish returned unexpected type %T", result)
+		return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &distributedApplicationEventSubscription{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
 // OnAfterResourcesCreated subscribes an eventing subscriber to the AfterResourcesCreated event
 func (s *eventingSubscriberRegistrationContext) OnAfterResourcesCreated(callback func(arg AfterResourcesCreatedEvent)) DistributedApplicationEventSubscription {
 	if s.err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
@@ -11382,6 +11579,33 @@ func (s *eventingSubscriberRegistrationContext) OnAfterResourcesCreated(callback
 	href, ok := result.(handleReference)
 	if !ok {
 		err := fmt.Errorf("aspire: Aspire.Hosting/eventingSubscriberOnAfterResourcesCreated returned unexpected type %T", result)
+		return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &distributedApplicationEventSubscription{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// OnBeforePublish subscribes an eventing subscriber to the BeforePublish event
+func (s *eventingSubscriberRegistrationContext) OnBeforePublish(callback func(arg BeforePublishEvent)) DistributedApplicationEventSubscription {
+	if s.err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[BeforePublishEvent](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/eventingSubscriberOnBeforePublish", reqArgs)
+	if err != nil {
+		return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting/eventingSubscriberOnBeforePublish returned unexpected type %T", result)
 		return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	return &distributedApplicationEventSubscription{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
@@ -24234,6 +24458,9 @@ func registerWrappers(c *client) {
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression", func(h *handle, c *client) any {
 		return newHandleBackedReferenceExpression(h, c)
 	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Publishing.AfterPublishEvent", func(h *handle, c *client) any {
+		return newAfterPublishEventFromHandle(h, c)
+	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.AfterResourcesCreatedEvent", func(h *handle, c *client) any {
 		return newAfterResourcesCreatedEventFromHandle(h, c)
 	})
@@ -24242,6 +24469,9 @@ func registerWrappers(c *client) {
 	})
 	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestVaultResource", func(h *handle, c *client) any {
 		return newAspire_Hosting_CodeGeneration_Go_TestsTestVaultResourceFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Publishing.BeforePublishEvent", func(h *handle, c *client) any {
+		return newBeforePublishEventFromHandle(h, c)
 	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeResourceStartedEvent", func(h *handle, c *client) any {
 		return newBeforeResourceStartedEventFromHandle(h, c)
