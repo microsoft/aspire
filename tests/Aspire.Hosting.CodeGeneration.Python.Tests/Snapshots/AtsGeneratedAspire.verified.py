@@ -1520,7 +1520,7 @@ class MergeLoggingParameters(typing.TypedDict, total=False):
     log_level: typing.Required[str]
     log_path: str
     enable_console: bool
-    max_files: int | None
+    max_files: int
 
 
 class MergeRouteParameters(typing.TypedDict, total=False):
@@ -1602,7 +1602,7 @@ class DistributedApplicationBuilder:
         app = self.build()
         app.run(timeout=timeout)
 
-    def add_test_redis(self, name: str, *, port: int | None | None = None, **kwargs: typing.Unpack["TestRedisResourceKwargs"]) -> TestRedisResource:  # type: ignore
+    def add_test_redis(self, name: str, *, port: int | None = None, **kwargs: typing.Unpack["TestRedisResourceKwargs"]) -> TestRedisResource:  # type: ignore
         """Adds a test Redis resource"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['name'] = name
@@ -1655,16 +1655,16 @@ class TestCallbackContext:
         return self._handle
 
     @_uncached_property
-    def name(self) -> str | None:
+    def name(self) -> str:
         """Gets the Name property"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.name',
             {'context': self._handle}
         )
-        return typing.cast(str | None, result)
+        return typing.cast(str, result)
 
     @name.setter
-    def name(self, value: str | None) -> None:
+    def name(self, value: str) -> None:
         """Sets the Name property"""
         self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.setName',
@@ -1764,16 +1764,16 @@ class TestEnvironmentContext:
         )
 
     @_uncached_property
-    def description(self) -> str | None:
+    def description(self) -> str:
         """Gets the Description property"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.description',
             {'context': self._handle}
         )
-        return typing.cast(str | None, result)
+        return typing.cast(str, result)
 
     @description.setter
-    def description(self, value: str | None) -> None:
+    def description(self, value: str) -> None:
         """Sets the Description property"""
         self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.setDescription',
@@ -1997,7 +1997,7 @@ class AbstractResource(abc.ABC):
         """Configures a named endpoint"""
 
     @abc.abstractmethod
-    def with_merge_logging(self, log_level: str, *, log_path: str | None = None, enable_console: bool = True, max_files: int | None | None = None) -> typing.Self:
+    def with_merge_logging(self, log_level: str, *, log_path: str | None = None, enable_console: bool = True, max_files: int | None = None) -> typing.Self:
         """Configures resource logging"""
 
     @abc.abstractmethod
@@ -2283,7 +2283,7 @@ class _BaseResource(AbstractResource):
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_merge_logging(self, log_level: str, *, log_path: str | None = None, enable_console: bool = True, max_files: int | None | None = None) -> typing.Self:
+    def with_merge_logging(self, log_level: str, *, log_path: str | None = None, enable_console: bool = True, max_files: int | None = None) -> typing.Self:
         """Configures resource logging"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['logLevel'] = log_level

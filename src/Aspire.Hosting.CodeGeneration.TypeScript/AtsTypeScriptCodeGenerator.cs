@@ -180,31 +180,31 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         // ReferenceExpression is a value type defined in base.ts, not a handle-based wrapper
         if (typeRef.TypeId == AtsConstants.ReferenceExpressionTypeId)
         {
-            return AddNullType(GetReferenceExpressionInterfaceName(), typeRef.IsNullable);
+            return GetReferenceExpressionInterfaceName();
         }
 
         if (typeRef.TypeId == InputTypeTypeId)
         {
-            return AddNullType(GetInputTypeEnumName(), typeRef.IsNullable);
+            return GetInputTypeEnumName();
         }
 
         if (typeRef.TypeId == InteractionInputTypeId)
         {
-            return AddNullType(GetInteractionInputInterfaceName(), typeRef.IsNullable);
+            return GetInteractionInputInterfaceName();
         }
 
         if (typeRef.TypeId == InteractionInputCollectionTypeId)
         {
-            return AddNullType(GetInteractionInputCollectionClassName(), typeRef.IsNullable);
+            return GetInteractionInputCollectionClassName();
         }
 
         // Check for wrapper class first (handles custom types like resource builders)
         if (_wrapperClassNames.TryGetValue(typeRef.TypeId, out var wrapperClassName))
         {
-            return AddNullType(GetInterfaceName(wrapperClassName), typeRef.IsNullable);
+            return GetInterfaceName(wrapperClassName);
         }
 
-        var typeScriptType = typeRef.Category switch
+        return typeRef.Category switch
         {
             AtsTypeCategory.Primitive => MapPrimitiveType(typeRef.TypeId),
             AtsTypeCategory.Enum => MapEnumType(typeRef.TypeId),
@@ -220,8 +220,6 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             AtsTypeCategory.Unknown => "any",  // Unknown types use 'any' since they're not in the ATS universe
             _ => "any"  // Fallback for any unhandled categories
         };
-
-        return AddNullType(typeScriptType, typeRef.IsNullable);
     }
 
     /// <summary>
@@ -328,42 +326,30 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         {
             if (TryMapInterfaceInputTypeToTypeScript(typeRef!) is { } interfaceInputType)
             {
-                return AddNullType($"Awaitable<{interfaceInputType}>", typeRef!.IsNullable);
+                return $"Awaitable<{interfaceInputType}>";
             }
 
             var handleName = GetHandleReferenceInterfaceName();
-            return AddNullType($"Awaitable<{handleName}>", typeRef!.IsNullable);
+            return $"Awaitable<{handleName}>";
         }
 
         if (IsHandleType(typeRef) && _wrapperClassNames.TryGetValue(typeRef!.TypeId, out var className))
         {
             var ifaceName = GetInterfaceName(className);
-            return AddNullType($"Awaitable<{ifaceName}>", typeRef.IsNullable);
+            return $"Awaitable<{ifaceName}>";
         }
 
         if (typeRef?.TypeId == InteractionInputCollectionTypeId)
         {
-            return AddNullType($"Awaitable<{GetInteractionInputCollectionClassName()}>", typeRef.IsNullable);
+            return $"Awaitable<{GetInteractionInputCollectionClassName()}>";
         }
 
         if (IsCancellationTokenType(typeRef))
         {
-            return AddNullType($"AbortSignal | {GetCancellationTokenInterfaceName()}", typeRef!.IsNullable);
+            return $"AbortSignal | {GetCancellationTokenInterfaceName()}";
         }
 
         return MapTypeRefToTypeScript(typeRef);
-    }
-
-    private static string AddNullType(string typeName, bool isNullable)
-    {
-        if (!isNullable ||
-            typeName is "any" or "unknown" or "void" ||
-            typeName.Split(" | ", StringSplitOptions.TrimEntries).Contains("null", StringComparer.Ordinal))
-        {
-            return typeName;
-        }
-
-        return $"{typeName} | null";
     }
 
     private string MapInputUnionTypeToTypeScript(AtsTypeRef typeRef)
@@ -405,10 +391,10 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             var handleUnion = string.Join(" | ", handleTypeNames
                 .SelectMany(t => t.Split(" | ", StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
                 .Distinct(StringComparer.Ordinal));
-            return AddNullType(string.Join(" | ", allBaseTypes) + $" | Awaitable<{handleUnion}>", typeRef.IsNullable);
+            return string.Join(" | ", allBaseTypes) + $" | Awaitable<{handleUnion}>";
         }
 
-        return AddNullType(string.Join(" | ", allBaseTypes), typeRef.IsNullable);
+        return string.Join(" | ", allBaseTypes);
     }
 
     /// <summary>

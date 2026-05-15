@@ -3513,17 +3513,11 @@ public class ContainerImagePushOptions extends HandleWrapperBase {
         return (String) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.remoteImageName", reqArgs);
     }
 
-    public ContainerImagePushOptions setRemoteImageName() {
-        return setRemoteImageName(null);
-    }
-
     /** Sets the RemoteImageName property */
     public ContainerImagePushOptions setRemoteImageName(String value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        if (value != null) {
-            reqArgs.put("value", AspireClient.serializeValue(value));
-        }
+        reqArgs.put("value", AspireClient.serializeValue(value));
         return (ContainerImagePushOptions) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.setRemoteImageName", reqArgs);
     }
 
@@ -3534,17 +3528,11 @@ public class ContainerImagePushOptions extends HandleWrapperBase {
         return (String) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.remoteImageTag", reqArgs);
     }
 
-    public ContainerImagePushOptions setRemoteImageTag() {
-        return setRemoteImageTag(null);
-    }
-
     /** Sets the RemoteImageTag property */
     public ContainerImagePushOptions setRemoteImageTag(String value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        if (value != null) {
-            reqArgs.put("value", AspireClient.serializeValue(value));
-        }
+        reqArgs.put("value", AspireClient.serializeValue(value));
         return (ContainerImagePushOptions) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.setRemoteImageTag", reqArgs);
     }
 
@@ -11528,17 +11516,11 @@ public class IConfigurationSection extends HandleWrapperBase {
         return (String) getClient().invokeCapability("Microsoft.Extensions.Configuration/IConfigurationSection.value", reqArgs);
     }
 
-    public IConfigurationSection setValue() {
-        return setValue(null);
-    }
-
     /** Sets the Value property */
     public IConfigurationSection setValue(String value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        if (value != null) {
-            reqArgs.put("value", AspireClient.serializeValue(value));
-        }
+        reqArgs.put("value", AspireClient.serializeValue(value));
         return (IConfigurationSection) getClient().invokeCapability("Microsoft.Extensions.Configuration/IConfigurationSection.setValue", reqArgs);
     }
 
@@ -16021,17 +16003,11 @@ public class ProjectResourceOptions extends HandleWrapperBase {
         return (String) getClient().invokeCapability("Aspire.Hosting/ProjectResourceOptions.launchProfileName", reqArgs);
     }
 
-    public ProjectResourceOptions setLaunchProfileName() {
-        return setLaunchProfileName(null);
-    }
-
     /** Sets the LaunchProfileName property */
     public ProjectResourceOptions setLaunchProfileName(String value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        if (value != null) {
-            reqArgs.put("value", AspireClient.serializeValue(value));
-        }
+        reqArgs.put("value", AspireClient.serializeValue(value));
         return (ProjectResourceOptions) getClient().invokeCapability("Aspire.Hosting/ProjectResourceOptions.setLaunchProfileName", reqArgs);
     }
 
@@ -16898,17 +16874,11 @@ public class TestCallbackContext extends HandleWrapperBase {
         return (String) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.name", reqArgs);
     }
 
-    public TestCallbackContext setName() {
-        return setName(null);
-    }
-
     /** Sets the Name property */
     public TestCallbackContext setName(String value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        if (value != null) {
-            reqArgs.put("value", AspireClient.serializeValue(value));
-        }
+        reqArgs.put("value", AspireClient.serializeValue(value));
         return (TestCallbackContext) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.setName", reqArgs);
     }
 
@@ -18796,17 +18766,11 @@ public class TestEnvironmentContext extends HandleWrapperBase {
         return (String) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.description", reqArgs);
     }
 
-    public TestEnvironmentContext setDescription() {
-        return setDescription(null);
-    }
-
     /** Sets the Description property */
     public TestEnvironmentContext setDescription(String value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        if (value != null) {
-            reqArgs.put("value", AspireClient.serializeValue(value));
-        }
+        reqArgs.put("value", AspireClient.serializeValue(value));
         return (TestEnvironmentContext) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.setDescription", reqArgs);
     }
 
