@@ -5,6 +5,9 @@ namespace Aspire.Templates.Tests;
 
 public static class TestUtils
 {
+    public static string RepoRoot { get; } = FindRepoRoot()?.FullName
+        ?? throw new InvalidOperationException("Could not find repository root.");
+
     public static DirectoryInfo? FindRepoRoot()
     {
         DirectoryInfo? repoRoot = new(AppContext.BaseDirectory);

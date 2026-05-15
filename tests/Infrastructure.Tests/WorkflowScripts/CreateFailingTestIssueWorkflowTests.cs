@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using Aspire.Templates.Tests;
 using Aspire.TestUtilities;
 using Xunit;
 
@@ -22,7 +23,7 @@ public sealed class CreateFailingTestIssueWorkflowTests : IDisposable
     public CreateFailingTestIssueWorkflowTests(ITestOutputHelper output)
     {
         _output = output;
-        _repoRoot = FindRepoRoot();
+        _repoRoot = TestUtils.RepoRoot;
         _harnessPath = Path.Combine(_repoRoot, "tests", "Infrastructure.Tests", "WorkflowScripts", "create-failing-test-issue.harness.js");
     }
 
@@ -278,24 +279,6 @@ public sealed class CreateFailingTestIssueWorkflowTests : IDisposable
         var response = JsonSerializer.Deserialize<HarnessResponse<T>>(result.Output, s_jsonOptions);
         Assert.NotNull(response);
         return response!.Result;
-    }
-
-    private static string FindRepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-
-        while (directory is not null)
-        {
-            var gitPath = Path.Combine(directory.FullName, ".git");
-            if (Directory.Exists(gitPath) || File.Exists(gitPath))
-            {
-                return directory.FullName;
-            }
-
-            directory = directory.Parent;
-        }
-
-        throw new InvalidOperationException("Could not locate the repository root.");
     }
 
     private sealed record HarnessResponse<T>(T Result);

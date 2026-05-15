@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.TestUtilities;
+
 namespace Aspire.Acquisition.Tests.Scripts;
 
 /// <summary>
@@ -13,10 +15,6 @@ internal static class FileHelper
     /// </summary>
     internal static void MakeExecutable(string path)
     {
-        if (!OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(path,
-                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        }
+        TestFileHelpers.MakeExecutable(path);
     }
 }

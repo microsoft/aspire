@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using Aspire.Templates.Tests;
 using Xunit;
 
 namespace Infrastructure.Tests;
@@ -51,7 +52,7 @@ public sealed class ExtractTestPartitionsFixture : IAsyncLifetime
 
     private static string GetToolProjectPath()
     {
-        var repoRoot = FindRepoRoot();
+        var repoRoot = TestUtils.RepoRoot;
         var projectPath = Path.Combine(repoRoot, "tools", "ExtractTestPartitions", "ExtractTestPartitions.csproj");
 
         if (!File.Exists(projectPath))
@@ -63,17 +64,4 @@ public sealed class ExtractTestPartitionsFixture : IAsyncLifetime
         return projectPath;
     }
 
-    private static string FindRepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "Aspire.slnx")))
-            {
-                return dir.FullName;
-            }
-            dir = dir.Parent;
-        }
-        throw new InvalidOperationException("Could not find repository root (looking for Aspire.slnx)");
-    }
 }

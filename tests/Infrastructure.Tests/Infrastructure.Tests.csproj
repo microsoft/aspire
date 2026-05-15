@@ -28,6 +28,11 @@
 
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)TempDirectory.cs" Link="shared/TempDirectory.cs" />
+    <Compile Include="$(TestsSharedDir)Playwright/TestUtils.cs" Link="shared/TestUtils.cs" />
+    <Compile Include="$(TestsSharedDir)TemplatesTesting/CommandResult.cs" Link="shared/CommandResult.cs" />
+    <Compile Include="$(TestsSharedDir)TemplatesTesting/ScriptCommand.cs" Link="shared/ScriptCommand.cs" />
+    <Compile Include="$(TestsSharedDir)TemplatesTesting/ToolCommand.cs" Link="shared/ToolCommand.cs" />
+    <Compile Include="$(TestsSharedDir)TemplatesTesting/ToolCommandException.cs" Link="shared/ToolCommandException.cs" />
   </ItemGroup>
 
   <ItemGroup>

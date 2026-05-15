@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using Aspire.Templates.Tests;
 using Xunit;
 
 namespace Infrastructure.Tests;
@@ -17,7 +18,7 @@ public sealed class CreateFailingTestIssueFixture : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        RepoRoot = FindRepoRoot();
+        RepoRoot = TestUtils.RepoRoot;
         ToolProjectPath = Path.Combine(RepoRoot, "tools", "CreateFailingTestIssue", "CreateFailingTestIssue.csproj");
 
         if (!File.Exists(ToolProjectPath))
@@ -71,19 +72,4 @@ public sealed class CreateFailingTestIssueFixture : IAsyncLifetime
         }
     }
 
-    private static string FindRepoRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, "Aspire.slnx")))
-            {
-                return directory.FullName;
-            }
-
-            directory = directory.Parent;
-        }
-
-        throw new InvalidOperationException("Could not find repository root (looking for Aspire.slnx).");
-    }
 }

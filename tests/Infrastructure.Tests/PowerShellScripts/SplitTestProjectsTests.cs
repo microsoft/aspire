@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using Aspire.Templates.Tests;
 using Aspire.TestUtilities;
 using Xunit;
 
@@ -27,7 +28,7 @@ public class SplitTestProjectsTests : IDisposable
     public SplitTestProjectsTests(ITestOutputHelper output)
     {
         _output = output;
-        _repoRoot = FindRepoRoot();
+        _repoRoot = TestUtils.RepoRoot;
         _scriptPath = Path.Combine(_repoRoot, "eng", "scripts", "split-test-projects-for-ci.ps1");
     }
 
@@ -205,20 +206,6 @@ public class SplitTestProjectsTests : IDisposable
         {
             PropertyNameCaseInsensitive = true
         }) ?? throw new InvalidOperationException("Failed to parse partitions JSON");
-    }
-
-    private static string FindRepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "Aspire.slnx")))
-            {
-                return dir.FullName;
-            }
-            dir = dir.Parent;
-        }
-        throw new InvalidOperationException("Could not find repository root");
     }
 
     private sealed class TestPartitionsJson
