@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs site build performance improvement - not a product changelog entry",
+  "mergedAt": "2026-05-15T19:19:13Z",
+  "number": 985,
+  "runDate": "2026-05-15T20:30:03Z",
+  "status": "excluded",
+  "title": "perf(frontend): set `build.concurrency: 4` (-16% astro build)"
+}

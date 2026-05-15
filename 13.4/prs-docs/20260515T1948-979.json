@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs workflow improvement (API regen branch) - not a product changelog entry",
+  "mergedAt": "2026-05-15T19:48:58Z",
+  "number": 979,
+  "runDate": "2026-05-15T20:30:03Z",
+  "status": "excluded",
+  "title": "Add API docs regen branch to update-integration-data workflow"
+}

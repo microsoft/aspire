@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Adds dotnet-tool install mode to PR dogfooding scripts for validating Aspire.Cli dotnet-tool packaging",
+  "mergedAt": "2026-05-15T19:10:37Z",
+  "number": 16535,
+  "runDate": "2026-05-15T20:30:03Z",
+  "status": "included",
+  "title": "Add dotnet-tool mode to PR dogfooding scripts"
+}
