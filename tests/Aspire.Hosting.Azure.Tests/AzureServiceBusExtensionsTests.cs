@@ -608,7 +608,12 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
 
         var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator(configureContainer: builder =>
         {
-            builder.WithLifetime(lifetime);
+            _ = lifetime switch
+            {
+                ContainerLifetime.Session => builder.WithSessionLifetime(),
+                ContainerLifetime.Persistent => builder.WithPersistentLifetime(),
+                _ => throw new InvalidOperationException($"Unknown container lifetime '{Enum.GetName(typeof(ContainerLifetime), lifetime)}'.")
+            };
         });
 
         var sql = builder.Resources.FirstOrDefault(x => x.Name == "sb-mssql");

@@ -18,19 +18,19 @@ var param = builder.AddParameter("secretparam", "fakeSecret", secret: true);
 
 // Testing volumes
 var redis = builder.AddRedis("cache")
-    .WithLifetime(ContainerLifetime.Persistent)
+    .WithPersistentLifetime()
     .WithDataVolume();
 
 // Testing secret outputs
 var cosmosDb = builder.AddAzureCosmosDB("account")
                       .WithAccessKeyAuthentication()
-                      .RunAsEmulator(c => c.WithLifetime(ContainerLifetime.Persistent));
+                      .RunAsEmulator(c => c.WithPersistentLifetime());
 
 cosmosDb.AddCosmosDatabase("db");
 
 // Testing a connection string
 var storage = builder.AddAzureStorage("storage")
-                     .RunAsEmulator(c => c.WithLifetime(ContainerLifetime.Persistent));
+                     .RunAsEmulator(c => c.WithPersistentLifetime());
 var blobs = storage.AddBlobs("blobs");
 
 // Testing docker files

@@ -34,7 +34,7 @@ var subscription = serviceBus.AddServiceBusTopic("topicOne", "topic1")
 serviceBus.RunAsEmulator(configure => configure.WithConfiguration(document =>
 {
     document["UserConfig"]!["Logging"] = new JsonObject { ["Type"] = "Console" };
-}).WithLifetime(ContainerLifetime.Persistent));
+}).WithPersistentLifetime());
 
 builder.AddProject<Projects.ServiceBusWorker>("worker")
     .WithReference(queue).WaitFor(queue)

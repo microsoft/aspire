@@ -323,44 +323,6 @@ public static class ProjectResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Sets the lifetime behavior of the project executable resource.
-    /// </summary>
-    /// <typeparam name="TProjectResource">The project resource type.</typeparam>
-    /// <param name="builder">Builder for the project resource.</param>
-    /// <param name="lifetime">The lifetime behavior of the project executable resource. The default behavior is <see cref="Lifetime.Session"/>.</param>
-    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <remarks>
-    /// <example>
-    /// Marking a project resource to have a <see cref="Lifetime.Persistent"/> lifetime.
-    /// <code language="csharp">
-    /// var builder = DistributedApplication.CreateBuilder(args);
-    ///
-    /// builder.AddProject&lt;Projects.ApiService&gt;("api")
-    ///        .WithLifetime(Lifetime.Persistent);
-    ///
-    /// builder.Build().Run();
-    /// </code>
-    /// </example>
-    /// </remarks>
-    [Obsolete("Use ResourceBuilderExtensions.WithLifetime with Lifetime instead.")]
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the resource-level overload that accepts Lifetime.")]
-    public static IResourceBuilder<TProjectResource> WithLifetime<TProjectResource>(this IResourceBuilder<TProjectResource> builder, ExecutableLifetime lifetime)
-        where TProjectResource : ProjectResource
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-
-        return builder.WithLifetime(ToLifetime(lifetime));
-    }
-
-    private static Lifetime ToLifetime(ExecutableLifetime lifetime)
-        => lifetime switch
-        {
-            ExecutableLifetime.Session => Lifetime.Session,
-            ExecutableLifetime.Persistent => Lifetime.Persistent,
-            _ => throw new ArgumentOutOfRangeException(nameof(lifetime), lifetime, null)
-        };
-
-    /// <summary>
     /// Adds a C# project or file-based app to the application model.
     /// </summary>
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>

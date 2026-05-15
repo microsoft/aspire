@@ -9,12 +9,12 @@ namespace Aspire.Hosting.Tests;
 public class ProjectResourceBuilderExtensionTests
 {
     [Fact]
-    public void WithLifetimeAddsExecutableLifetimeAnnotation()
+    public void WithPersistentLifetimeAddsExecutableLifetimeAnnotation()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
         var project = builder.AddProject<TestProject>("project", options => options.ExcludeLaunchProfile = true)
-            .WithLifetime(Lifetime.Persistent);
+            .WithPersistentLifetime();
 
         var annotation = project.Resource.Annotations.OfType<ExecutableLifetimeAnnotation>().Single();
         Assert.Equal(Lifetime.Persistent, annotation.Lifetime);

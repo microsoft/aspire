@@ -69,7 +69,7 @@ var catalogService = builder.AddProject<Projects.CatalogService>("catalogservice
 
 var messaging = builder.AddRabbitMQ("messaging")
                        .WithDataVolume()
-                       .WithLifetime(ContainerLifetime.Persistent)
+                       .WithPersistentLifetime()
                        .WithManagementPlugin()
                        .PublishAsContainer();
 

@@ -511,7 +511,12 @@ public class AzureEventHubsExtensionsTests(ITestOutputHelper testOutputHelper)
 
         var serviceBus = builder.AddAzureEventHubs("eh").RunAsEmulator(configureContainer: builder =>
         {
-            builder.WithLifetime(lifetime);
+            _ = lifetime switch
+            {
+                ContainerLifetime.Session => builder.WithSessionLifetime(),
+                ContainerLifetime.Persistent => builder.WithPersistentLifetime(),
+                _ => throw new InvalidOperationException($"Unknown container lifetime '{Enum.GetName(typeof(ContainerLifetime), lifetime)}'.")
+            };
         });
 
         var azurite = builder.Resources.FirstOrDefault(x => x.Name == "eh-storage");

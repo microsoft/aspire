@@ -635,7 +635,7 @@ public class DcpExecutorTests
 
         const int desiredPort = TestKubernetesService.StartOfAutoPortRange - 1002;
         builder.AddExecutable("CoolProgram", "cool", Environment.CurrentDirectory, "--alpha", "--bravo")
-            .WithLifetime(Lifetime.Persistent)
+            .WithPersistentLifetime()
             .WithEndpoint(name: "PortSetNoTargetPort", port: desiredPort, env: "PORT_SET_NO_TARGET_PORT");
 
         var configDict = new Dictionary<string, string?>
@@ -1373,7 +1373,7 @@ public class DcpExecutorTests
 
         const int desiredPort = TestKubernetesService.StartOfAutoPortRange - 1002;
         builder.AddProject<Projects.ServiceA>("ServiceA", launchProfileName: null)
-            .WithLifetime(Lifetime.Persistent)
+            .WithPersistentLifetime()
             .WithHttpEndpoint(name: "stable", port: desiredPort);
 
         var configDict = new Dictionary<string, string?>
@@ -2172,7 +2172,7 @@ public class DcpExecutorTests
         var executable = new TestExecutableResource("test-working-directory");
         builder.AddResource(executable)
             .WithDebugSupport(mode => new ExecutableLaunchConfiguration("test") { Mode = mode }, "test")
-            .WithLifetime(Lifetime.Persistent);
+            .WithPersistentLifetime();
 
         var configDict = new Dictionary<string, string?>
         {
@@ -2205,11 +2205,11 @@ public class DcpExecutorTests
         var builder = DistributedApplication.CreateBuilder();
 
         builder.AddContainer("database", "image")
-            .WithLifetime(Lifetime.Persistent);
+            .WithPersistentLifetime();
         builder.AddExecutable("worker", "worker", Environment.CurrentDirectory)
-            .WithLifetime(Lifetime.Persistent);
+            .WithPersistentLifetime();
         builder.AddProject<TestProject>("project", launchProfileName: null)
-            .WithLifetime(Lifetime.Persistent);
+            .WithPersistentLifetime();
 
         var configDict = new Dictionary<string, string?>
         {
@@ -2252,11 +2252,11 @@ public class DcpExecutorTests
         var parentProcess = Process.GetCurrentProcess();
 
         builder.AddContainer("database", "image")
-            .WithParentProcessLifetime(parentProcess);
+            .WithParentProcessLifetime(parentProcess.Id);
         builder.AddExecutable("worker", "worker", Environment.CurrentDirectory)
-            .WithParentProcessLifetime(parentProcess);
+            .WithParentProcessLifetime(parentProcess.Id);
         builder.AddProject<TestProject>("project", launchProfileName: null)
-            .WithParentProcessLifetime(parentProcess);
+            .WithParentProcessLifetime(parentProcess.Id);
 
         var configDict = new Dictionary<string, string?>
         {
@@ -2294,7 +2294,7 @@ public class DcpExecutorTests
             Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
         });
         Assert.Equal(3, processMonitor.MonitoredProcesses.Count);
-        Assert.All(processMonitor.MonitoredProcesses, process => Assert.Same(parentProcess, process));
+        Assert.All(processMonitor.MonitoredProcesses, process => Assert.Equal(parentProcess.Id, process.Id));
     }
 
     [Fact]
@@ -2310,7 +2310,7 @@ public class DcpExecutorTests
         builder.AddResource(executable)
             .WithCertificateAuthorityCollection(certificateAuthorities)
             .WithCertificateTrustScope(CertificateTrustScope.Override)
-            .WithLifetime(Lifetime.Persistent);
+            .WithPersistentLifetime();
 
         var configDict = new Dictionary<string, string?>
         {

@@ -49,7 +49,7 @@ privateEndpointsSubnet.AddPrivateEndpoint(blobs);
 privateEndpointsSubnet.AddPrivateEndpoint(queues);
 
 var sqlServer = builder.AddAzureSqlServer("sql")
-    .RunAsContainer(c => c.WithLifetime(ContainerLifetime.Persistent));
+    .RunAsContainer(c => c.WithPersistentLifetime());
 privateEndpointsSubnet.AddPrivateEndpoint(sqlServer);
 
 var db = sqlServer.AddDatabase("sqldb");

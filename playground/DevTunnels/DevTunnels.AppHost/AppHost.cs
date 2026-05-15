@@ -3,10 +3,8 @@
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-var api = builder.AddProject<Projects.DevTunnels_ApiService>("api")
-    .WithEndpointProxySupport(false);
-var frontend = builder.AddProject<Projects.DevTunnels_WebFrontEnd>("frontend")
-    .WithEndpointProxySupport(false);
+var api = builder.AddProject<Projects.DevTunnels_ApiService>("api");
+var frontend = builder.AddProject<Projects.DevTunnels_WebFrontEnd>("frontend");
 
 var publicDevTunnel = builder.AddDevTunnel("devtunnel-public")
     .WithAnonymousAccess() // All ports on this tunnel default to allowing anonymous access

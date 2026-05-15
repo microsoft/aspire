@@ -13,7 +13,7 @@ var param = builder.AddParameter("secretparam", "fakeSecret", secret: true);
 
 // Testing kv secret refs
 var cosmosDb = builder.AddAzureCosmosDB("account")
-                      .RunAsEmulator(c => c.WithLifetime(ContainerLifetime.Persistent));
+                      .RunAsEmulator(c => c.WithPersistentLifetime());
 
 cosmosDb.AddCosmosDatabase("db");
 
@@ -24,7 +24,7 @@ var storage = builder.AddAzureStorage("storage")
                          var storage = infra.GetProvisionableResources().OfType<StorageAccount>().Single();
                          storage.AllowBlobPublicAccess = false;
                      })
-                     .RunAsEmulator(c => c.WithLifetime(ContainerLifetime.Persistent));
+                     .RunAsEmulator(c => c.WithPersistentLifetime());
 var blobs = storage.AddBlobs("blobs");
 
 // Testing projects

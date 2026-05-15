@@ -547,7 +547,7 @@ public class DistributedApplicationTests
 
             var containerBuilder = AddRedisContainer(testProgram.AppBuilder, notStartedResourceName)
                 .WithContainerName(notStartedResourceName)
-                .WithLifetime(ContainerLifetime.Persistent)
+                .WithPersistentLifetime()
                 .WithEndpoint(port: 6379, targetPort: 6379, name: "tcp", env: "REDIS_PORT")
                 .WithExplicitStart();
 
@@ -1860,7 +1860,7 @@ public class DistributedApplicationTests
         if (createPersistentContainer)
         {
             builder.AddContainer($"{testName}-persistent", RedisContainerImageTags.Image, RedisContainerImageTags.Tag)
-                .WithLifetime(ContainerLifetime.Persistent);
+                .WithPersistentLifetime();
         }
 
         builder.AddContainer($"{testName}-nonpersistent", RedisContainerImageTags.Image, RedisContainerImageTags.Tag);

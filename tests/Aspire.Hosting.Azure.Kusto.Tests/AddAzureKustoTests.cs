@@ -303,7 +303,7 @@ public class AddAzureKustoTests
         // Act
         var resourceBuilder = builder.AddAzureKustoCluster("test-kusto").RunAsEmulator(containerBuilder =>
         {
-            containerBuilder.WithLifetime(ContainerLifetime.Persistent);
+            containerBuilder.WithPersistentLifetime();
         });
 
         // Assert

@@ -572,14 +572,14 @@ public class MySqlFunctionalTests(ITestOutputHelper testOutputHelper)
 
             var passwordParameter = builder.AddParameter("pwd", "p@ssw0rd1", secret: true);
             var mysql = builder
-                .AddMySql("resource", password: passwordParameter).WithLifetime(ContainerLifetime.Persistent)
-                .WithPhpMyAdmin(c => c.WithLifetime(ContainerLifetime.Persistent))
+                .AddMySql("resource", password: passwordParameter).WithPersistentLifetime()
+                .WithPhpMyAdmin(c => c.WithPersistentLifetime())
                 .AddDatabase("db");
 
             if (useMultipleInstances)
             {
                 var passwordParameter2 = builder.AddParameter("pwd2", "p@ssw0rd2", secret: true);
-                builder.AddMySql("resource2", password: passwordParameter2).WithLifetime(ContainerLifetime.Persistent);
+                builder.AddMySql("resource2", password: passwordParameter2).WithPersistentLifetime();
             }
 
             var app = builder.Build();

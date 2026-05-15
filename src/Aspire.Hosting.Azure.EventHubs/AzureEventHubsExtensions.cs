@@ -288,7 +288,15 @@ public static class AzureEventHubsExtensions
             }
         }
 
-        storageResource = storageResource.RunAsEmulator(c => c.WithLifetime(lifetime));
+        storageResource = storageResource.RunAsEmulator(c =>
+        {
+            _ = lifetime switch
+            {
+                ContainerLifetime.Session => c.WithSessionLifetime(),
+                ContainerLifetime.Persistent => c.WithPersistentLifetime(),
+                _ => throw new InvalidOperationException($"Unknown container lifetime '{Enum.GetName(typeof(ContainerLifetime), lifetime)}'.")
+            };
+        });
 
         var storage = storageResource.Resource;
 

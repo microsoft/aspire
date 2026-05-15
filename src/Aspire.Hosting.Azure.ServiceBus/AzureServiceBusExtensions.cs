@@ -448,7 +448,12 @@ public static class AzureServiceBusExtensions
             }
         }
 
-        sqlServerResource = sqlServerResource.WithLifetime(lifetime);
+        sqlServerResource = lifetime switch
+        {
+            ContainerLifetime.Session => sqlServerResource.WithSessionLifetime(),
+            ContainerLifetime.Persistent => sqlServerResource.WithPersistentLifetime(),
+            _ => throw new InvalidOperationException($"Unknown container lifetime '{Enum.GetName(typeof(ContainerLifetime), lifetime)}'.")
+        };
 
         // RunAsEmulator() can be followed by custom model configuration so we need to delay the creation of the Config.json file
         // until all resources are about to be prepared and annotations can't be updated anymore.

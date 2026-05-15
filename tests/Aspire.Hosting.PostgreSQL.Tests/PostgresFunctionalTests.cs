@@ -559,9 +559,9 @@ public class PostgresFunctionalTests(ITestOutputHelper testOutputHelper)
 
             var passwordParameter = builder.AddParameter("pwd", "p@ssword1", secret: true);
             builder
-                .AddPostgres("resource", password: passwordParameter).WithLifetime(ContainerLifetime.Persistent)
-                .WithPgWeb(c => c.WithLifetime(ContainerLifetime.Persistent))
-                .WithPgAdmin(c => c.WithLifetime(ContainerLifetime.Persistent))
+                .AddPostgres("resource", password: passwordParameter).WithPersistentLifetime()
+                .WithPgWeb(c => c.WithPersistentLifetime())
+                .WithPgAdmin(c => c.WithPersistentLifetime())
                 .AddDatabase("mydb");
 
             var app = builder.Build();

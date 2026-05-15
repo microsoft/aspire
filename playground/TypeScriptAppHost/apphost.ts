@@ -8,7 +8,6 @@ import {
     createBuilder,
     refExpr,
     EnvironmentCallbackContext,
-    ContainerLifetime,
     ExecuteCommandContext,
     InputsDialogValidationContext,
     InputType
@@ -50,7 +49,7 @@ console.log("Added Express API with reference to PostgreSQL database");
 
 // Redis
 const cache = await builder.addRedis("cache");
-await cache.withLifetime(ContainerLifetime.Persistent);
+await cache.withPersistentLifetime();
 await cache.withCommand(
     "set-prefix",
     "Set prefix",

@@ -541,16 +541,22 @@ public static class ContainerResourceBuilderExtensions
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
     /// builder.AddContainer("mycontainer", "myimage")
-    ///        .WithLifetime(ContainerLifetime.Persistent);
+    ///        .WithPersistentLifetime();
     ///
     /// builder.Build().Run();
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Polyglot app hosts use the resource-level overload that accepts Lifetime.")]
+    [Obsolete("Use WithPersistentLifetime or WithSessionLifetime instead.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use WithPersistentLifetime or WithSessionLifetime instead.")]
     public static IResourceBuilder<T> WithLifetime<T>(this IResourceBuilder<T> builder, ContainerLifetime lifetime) where T : ContainerResource
     {
         ArgumentNullException.ThrowIfNull(builder);
+
+        foreach (var annotation in builder.Resource.Annotations.OfType<ParentProcessLifetimeAnnotation>().ToArray())
+        {
+            builder.Resource.Annotations.Remove(annotation);
+        }
 
         return builder.WithAnnotation(new ContainerLifetimeAnnotation { Lifetime = lifetime }, ResourceAnnotationMutationBehavior.Replace);
     }

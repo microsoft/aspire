@@ -61,7 +61,7 @@ public class DevTunnelResourceBuilderExtensionsTests
         using var builder = TestDistributedApplicationBuilder.Create();
 
         var tunnel = builder.AddDevTunnel("tunnel", "custom-id")
-            .WithLifetime(Lifetime.Persistent);
+            .WithPersistentLifetime();
 
         Assert.True(tunnel.Resource.TryGetLastAnnotation<ExecutableLifetimeAnnotation>(out var annotation));
         Assert.Equal(Lifetime.Persistent, annotation.Lifetime);
