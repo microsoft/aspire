@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Docs infrastructure change adding publishDate to what's new pages; no matching product changelog entry",
+  "mergedAt": "2026-05-15T12:06:04Z",
+  "number": 971,
+  "runDate": "2026-05-15T12:39:13Z",
+  "status": "excluded",
+  "title": "Adding publish date to what's new section"
+}
