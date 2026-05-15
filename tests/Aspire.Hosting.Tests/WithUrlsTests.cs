@@ -382,11 +382,9 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
         await app.StartAsync();
 
         // Wait for the resource to have URLs allocated (before it starts running)
-        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
         var resourceEvent = await rns.WaitForResourceAsync(
             servicea.Resource.Name,
-            e => e.Snapshot.Urls.Length > 0,
-            cts.Token);
+            e => e.Snapshot.Urls.Length > 0).DefaultTimeout();
 
         await app.StopAsync().DefaultTimeout();
 
@@ -409,11 +407,9 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
         await app.StartAsync();
 
         // Wait for URLs to be populated
-        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
         var resourceEvent = await rns.WaitForResourceAsync(
             servicea.Resource.Name,
-            e => e.Snapshot.Urls.Length > 0,
-            cts.Token);
+            e => e.Snapshot.Urls.Length > 0).DefaultTimeout();
 
         await app.StopAsync().DefaultTimeout();
 
@@ -470,8 +466,6 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
         await using var app = await builder.BuildAsync();
         var rns = app.Services.GetRequiredService<ResourceNotificationService>();
 
-        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
-
         var urlSnapshots = new List<UrlSnapshot[]>();
 
         static string FormatUrls(IEnumerable<UrlSnapshot> urls) =>
@@ -479,7 +473,7 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
 
         var watchTask = Task.Run(async () =>
         {
-            await foreach (var notification in rns.WatchAsync(cts.Token))
+            await foreach (var notification in rns.WatchAsync())
             {
                 if (notification.Resource == servicea.Resource && notification.Snapshot.Urls.Length > 0)
                 {
@@ -497,8 +491,8 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
         });
 
         await app.StartAsync();
-        await rns.WaitForResourceAsync(servicea.Resource.Name, KnownResourceStates.Running, cts.Token);
-        await watchTask;
+        await rns.WaitForResourceAsync(servicea.Resource.Name, KnownResourceStates.Running).DefaultTimeout();
+        await watchTask.DefaultTimeout();
         await app.StopAsync().DefaultTimeout();
 
         // Log all captured snapshots for diagnostics
@@ -588,8 +582,6 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
         await using var app = await builder.BuildAsync();
         var rns = app.Services.GetRequiredService<ResourceNotificationService>();
 
-        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
-
         var urlSnapshots = new List<UrlSnapshot[]>();
 
         static string FormatUrls(IEnumerable<UrlSnapshot> urls) =>
@@ -597,7 +589,7 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
 
         var watchTask = Task.Run(async () =>
         {
-            await foreach (var notification in rns.WatchAsync(cts.Token))
+            await foreach (var notification in rns.WatchAsync())
             {
                 if (notification.Resource == custom.Resource && notification.Snapshot.Urls.Length > 0)
                 {
@@ -615,8 +607,8 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
         });
 
         await app.StartAsync();
-        await rns.WaitForResourceAsync(custom.Resource.Name, KnownResourceStates.Running, cts.Token);
-        await watchTask;
+        await rns.WaitForResourceAsync(custom.Resource.Name, KnownResourceStates.Running).DefaultTimeout();
+        await watchTask.DefaultTimeout();
         await app.StopAsync().DefaultTimeout();
 
         // Log all captured snapshots for diagnostics
@@ -674,11 +666,9 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
         await app.StartAsync();
 
         // Wait for running state with multiple URLs
-        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
         var resourceEvent = await rns.WaitForResourceAsync(
             "servicea",
-            e => e.Snapshot.State == KnownResourceStates.Running && e.Snapshot.Urls.Length > 1,
-            cts.Token);
+            e => e.Snapshot.State == KnownResourceStates.Running && e.Snapshot.Urls.Length > 1).DefaultTimeout();
 
         await app.StopAsync().DefaultTimeout();
 
