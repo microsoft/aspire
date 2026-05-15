@@ -422,7 +422,7 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [ActiveIssue("https://github.com/microsoft/aspire/issues/17136", typeof(PlatformDetection), nameof(PlatformDetection.IsWindows))]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/17136", typeof(Microsoft.AspNetCore.InternalTesting.PlatformDetection), nameof(Microsoft.AspNetCore.InternalTesting.PlatformDetection.IsWindows))]
     public async Task ExpectedNumberOfUrlsForReplicatedResource()
     {
         // This test creates a single project resource with a custom URL and
