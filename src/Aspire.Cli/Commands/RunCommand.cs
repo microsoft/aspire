@@ -134,6 +134,9 @@ internal sealed class RunCommand : BaseCommand
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var linkedToken = cts.Token;
+
         var passedAppHostProjectFile = parseResult.GetValue(AppHostLauncher.s_appHostOption);
         var detach = parseResult.GetValue(s_detachOption);
         _isDetachMode = detach;
@@ -165,7 +168,7 @@ internal sealed class RunCommand : BaseCommand
         // Handle detached mode - spawn child process and exit
         if (detach)
         {
-            return await ExecuteDetachedAsync(parseResult, passedAppHostProjectFile, isExtensionHost, cancellationToken);
+            return await ExecuteDetachedAsync(parseResult, passedAppHostProjectFile, isExtensionHost, linkedToken);
         }
 
         // A user may run `aspire run` in an Aspire terminal in VS Code. In this case, intercept and prompt
@@ -206,7 +209,7 @@ internal sealed class RunCommand : BaseCommand
                     passedAppHostProjectFile,
                     multipleAppHostBehavior,
                     createSettingsFile: true,
-                    cancellationToken);
+                    linkedToken);
             }
             var effectiveAppHostFile = searchResult.SelectedProjectFile;
 
@@ -232,7 +235,7 @@ internal sealed class RunCommand : BaseCommand
             RunningInstanceResult runningInstanceResult;
             using (var stopRunningInstanceActivity = _profilingTelemetry.StartRunAppHostStopExistingInstance())
             {
-                runningInstanceResult = await project.FindAndStopRunningInstanceAsync(effectiveAppHostFile, ExecutionContext.HomeDirectory, cancellationToken);
+                runningInstanceResult = await project.FindAndStopRunningInstanceAsync(effectiveAppHostFile, ExecutionContext.HomeDirectory, linkedToken);
                 stopRunningInstanceActivity.SetAppHostRunningInstanceResult(runningInstanceResult);
             }
 
@@ -269,14 +272,14 @@ internal sealed class RunCommand : BaseCommand
             Task<int> pendingRun;
             using (_profilingTelemetry.StartRunAppHostStartProject(project.LanguageId, noBuild, waitForDebugger))
             {
-                pendingRun = project.RunAsync(context, cancellationToken);
+                pendingRun = project.RunAsync(context, linkedToken);
             }
 
             // Wait for the build to complete first (project handles its own build status spinners)
             bool buildSuccess;
             using (var waitForBuildActivity = _profilingTelemetry.StartRunAppHostWaitForBuild())
             {
-                buildSuccess = await buildCompletionSource.Task.WaitAsync(cancellationToken);
+                buildSuccess = await buildCompletionSource.Task.WaitAsync(linkedToken);
                 waitForBuildActivity.SetAppHostBuildSuccess(buildSuccess);
             }
             if (!buildSuccess)
@@ -302,12 +305,12 @@ internal sealed class RunCommand : BaseCommand
             {
                 backchannel = await InteractionService.ShowStatusAsync(
                     RunCommandStrings.ConnectingToAppHost,
-                    async () => await backchannelCompletionSource.Task.WaitAsync(cancellationToken));
+                    async () => await backchannelCompletionSource.Task.WaitAsync(linkedToken));
                 waitForBackchannelActivity.SetAppHostBackchannelConnected(true);
             }
 
             // Set up log capture - writes to unified CLI log file
-            var pendingLogCapture = CaptureAppHostLogsAsync(_fileLoggerProvider, backchannel, _interactionService, cancellationToken);
+            var pendingLogCapture = CaptureAppHostLogsAsync(_fileLoggerProvider, backchannel, _interactionService, linkedToken);
 
             // Get dashboard URLs
             DashboardUrlsState dashboardUrls;
@@ -315,7 +318,7 @@ internal sealed class RunCommand : BaseCommand
             {
                 dashboardUrls = await InteractionService.ShowStatusAsync(
                     RunCommandStrings.StartingDashboard,
-                    async () => await backchannel.GetDashboardUrlsAsync(cancellationToken));
+                    async () => await backchannel.GetDashboardUrlsAsync(linkedToken));
                 getDashboardUrlsActivity.SetAppHostDashboardHealthy(dashboardUrls.DashboardHealthy);
             }
 
@@ -392,8 +395,8 @@ internal sealed class RunCommand : BaseCommand
                 {
                     await InteractionService.DisplayLiveAsync(BuildLiveRenderable(), async updateTarget =>
                     {
-                        var resourceStates = backchannel.GetResourceStatesAsync(cancellationToken);
-                        await foreach (var resourceState in resourceStates.WithCancellation(cancellationToken))
+                        var resourceStates = backchannel.GetResourceStatesAsync(linkedToken);
+                        await foreach (var resourceState in resourceStates.WithCancellation(linkedToken))
                         {
                             ProcessResourceState(resourceState, (resource, endpoint) =>
                             {
@@ -403,7 +406,7 @@ internal sealed class RunCommand : BaseCommand
                         }
                     });
                 }
-                catch (ConnectionLostException) when (cancellationToken.IsCancellationRequested)
+                catch (ConnectionLostException) when (linkedToken.IsCancellationRequested)
                 {
                     // Orderly shutdown
                 }
@@ -422,6 +425,14 @@ internal sealed class RunCommand : BaseCommand
             using (var lifetimeActivity = _profilingTelemetry.StartRunAppHostLifetime())
             {
                 runActivity?.Stop();
+
+                // Signal the backchannel when the app host process exits so streaming
+                // retry loops (e.g. log capture) stop instead of reconnecting endlessly.
+                _ = pendingRun.ContinueWith(_ =>
+                {
+                    //backchannel.NotifyAppHostExited();
+                    cts.Cancel();
+                }, TaskScheduler.Default);
 
                 try
                 {
@@ -442,7 +453,7 @@ internal sealed class RunCommand : BaseCommand
                     : CommandResult.FromExitCode(exitCode);
             }
         }
-        catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken || ex is ExtensionOperationCanceledException)
+        catch (OperationCanceledException ex) when (ex.CancellationToken == linkedToken || ex is ExtensionOperationCanceledException)
         {
             runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "canceled");
 

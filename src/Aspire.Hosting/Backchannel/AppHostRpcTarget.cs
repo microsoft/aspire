@@ -25,9 +25,11 @@ internal class AppHostRpcTarget(
 
     public async IAsyncEnumerable<BackchannelLogEntry> GetAppHostLogEntriesAsync([EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        // Cancel immediately if shutdown has already been requested.
-        // Throw error rather than exiting to avoid clients retrying call.
-        _shutdownCts.Token.ThrowIfCancellationRequested();
+        // Complete the stream immediately if shutdown has already been requested.
+        if (_shutdownCts.IsCancellationRequested)
+        {
+            yield break;
+        }
 
         // Create a linked token source that will be cancelled when shutdown is requested
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token);
@@ -65,9 +67,11 @@ internal class AppHostRpcTarget(
 
     public async IAsyncEnumerable<PublishingActivity> GetPublishingActivitiesAsync([EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        // Cancel immediately if shutdown has already been requested.
-        // Throw error rather than exiting to avoid clients retrying call.
-        _shutdownCts.Token.ThrowIfCancellationRequested();
+        // Complete the stream immediately if shutdown has already been requested.
+        if (_shutdownCts.IsCancellationRequested)
+        {
+            yield break;
+        }
 
         // Create a linked token source that will be cancelled when shutdown is requested
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token);
@@ -100,9 +104,11 @@ internal class AppHostRpcTarget(
 
     public async IAsyncEnumerable<RpcResourceState> GetResourceStatesAsync([EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        // Cancel immediately if shutdown has already been requested.
-        // Throw error rather than exiting to avoid clients retrying call.
-        _shutdownCts.Token.ThrowIfCancellationRequested();
+        // Complete the stream immediately if shutdown has already been requested.
+        if (_shutdownCts.IsCancellationRequested)
+        {
+            yield break;
+        }
 
         // Create a linked token source that will be cancelled when shutdown is requested
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token);
