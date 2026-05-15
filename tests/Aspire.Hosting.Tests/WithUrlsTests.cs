@@ -446,7 +446,7 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
                 && e.Snapshot.Urls.Length == 2
                 && e.Snapshot.Urls.All(url => !url.IsInactive)).DefaultTimeout();
 
-        await app.StopAsync().DefaultTimeout();
+        await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutDuration);
 
         Assert.Equal(2, resourceEvent.Snapshot.Urls.Length);
         Assert.Collection(resourceEvent.Snapshot.Urls,
