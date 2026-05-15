@@ -99,12 +99,12 @@ builder.AddAzureContainerAppEnvironment("my-long-env-name")
        .WithCompactResourceNaming();
 
 // Container with a volume triggers storage account creation
-// Use a versioned tag because the unversioned "aspnetapp" tag no longer publishes a
-// linux/amd64 manifest, which causes Azure Container Apps to reject the image. The
-// "aspnetapp-10.0" tag has the same problem (Windows-only). Inspect the live manifest at:
-// https://mcr.microsoft.com/v2/dotnet/samples/manifests/aspnetapp
-// If/when the unversioned tag publishes a linux/amd64 child again, this pin can be removed.
-builder.AddContainer("worker", "mcr.microsoft.com/dotnet/samples", "aspnetapp-9.0")
+// Use the Azure Container Instances "hello world" sample as a generic linux container.
+// We previously used mcr.microsoft.com/dotnet/samples:aspnetapp, but the .NET samples team
+// republishes that tag without guaranteeing a linux/amd64 manifest, which broke ACA
+// provisioning here. azuredocs/aci-helloworld is a purpose-built Azure container demo image
+// (different team, multi-arch) so it's a more reliable choice for a deployment smoke test.
+builder.AddContainer("worker", "mcr.microsoft.com/azuredocs/aci-helloworld", "latest")
        .WithVolume("data", "/app/data");
 
 builder.Build().Run();
