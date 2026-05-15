@@ -10,6 +10,8 @@ using Microsoft.Extensions.Logging;
 /// </summary>
 internal static partial class ProcessSignaler
 {
+    private static readonly TimeSpan s_defaultGracefulShutdownTimeout = TimeSpan.FromSeconds(10);
+
     public static void RequestGracefulShutdown(int pid, DateTimeOffset? expectedStartTime, ILogger logger)
     {
         using var process = TryGetRunningProcess(pid, expectedStartTime, logger);
@@ -28,6 +30,34 @@ internal static partial class ProcessSignaler
         {
             RequestGracefulShutdownUnix(pid, logger);
         }
+    }
+
+    public static async Task RequestGracefulShutdownThenForceKillAsync(int pid, DateTimeOffset? expectedStartTime, ILogger logger, CancellationToken cancellationToken = default)
+    {
+        using var process = TryGetRunningProcess(pid, expectedStartTime, logger);
+        if (process is null)
+        {
+            return;
+        }
+
+        RequestGracefulShutdown(pid, expectedStartTime, logger);
+
+        try
+        {
+            await process.WaitForExitAsync(cancellationToken).WaitAsync(s_defaultGracefulShutdownTimeout, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+        catch (InvalidOperationException)
+        {
+            return;
+        }
+        catch (TimeoutException)
+        {
+            // Fall through to force-kill after the graceful shutdown window elapses.
+        }
+
+        logger.LogWarning("Process {Pid} did not stop gracefully within timeout. Forcing process to terminate.", pid);
+        ForceKill(pid, expectedStartTime, logger);
     }
 
     public static void ForceKill(int pid, DateTimeOffset? expectedStartTime, ILogger logger)

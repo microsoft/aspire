@@ -37,6 +37,7 @@ internal sealed class AppHostLauncher(
 {
     private const int MaxDisplayedChildLogLines = 80;
     private const int MaxParentLogReplayLines = 200;
+    private static readonly TimeSpan s_detachedFailureExitTimeout = TimeSpan.FromSeconds(5);
 
     /// <summary>
     /// Shared option for the AppHost project file path.
@@ -339,6 +340,7 @@ internal sealed class AppHostLauncher(
                     {
                         waitForBackchannelActivity.SetError(startupStatus.ErrorMessage ?? "Child CLI reported AppHost startup failure.");
                         logger.LogWarning("Child CLI reported AppHost startup failure: {ErrorMessage}", startupStatus.ErrorMessage);
+                        await WaitForChildExitAfterFailureStatusAsync(childProcess, cancellationToken).ConfigureAwait(false);
                         return new LaunchResult(childProcess, null, dashboardUrls, false, startupStatus.ExitCode ?? ExitCodeConstants.FailedToDotnetRunAppHost, startupStatus, childStartedAt);
                     }
 
@@ -400,13 +402,27 @@ internal sealed class AppHostLauncher(
         }
         catch (OperationCanceledException)
         {
-            ProcessSignaler.ForceKill(childProcess.Id, childStartedAt, logger);
+            await ProcessSignaler.RequestGracefulShutdownThenForceKillAsync(childProcess.Id, childStartedAt, logger, CancellationToken.None).ConfigureAwait(false);
             throw;
         }
 
         waitForBackchannelActivity.SetBackchannelScanCount(scanCount);
         waitForBackchannelActivity.SetError("Timed out waiting for AppHost startup readiness.");
+        await ProcessSignaler.RequestGracefulShutdownThenForceKillAsync(childProcess.Id, childStartedAt, logger, CancellationToken.None).ConfigureAwait(false);
         return new LaunchResult(childProcess, startupReady ? connection : null, dashboardUrls, false, 0, ChildStartedAt: childStartedAt);
+    }
+
+    private static async Task WaitForChildExitAfterFailureStatusAsync(Process childProcess, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await childProcess.WaitForExitAsync(cancellationToken).WaitAsync(s_detachedFailureExitTimeout, cancellationToken).ConfigureAwait(false);
+        }
+        catch (TimeoutException)
+        {
+            // The child reported startup failure but did not exit promptly. Do not kill it
+            // here; timeout and Ctrl+C are the only detached-start paths that terminate it.
+        }
     }
 
     private CommandResult HandleLaunchFailure(LaunchResult result, string childLogFile)
@@ -425,19 +441,10 @@ internal sealed class AppHostLauncher(
         else if (result.StartupStatus is { IsReady: false })
         {
             failureMessage = null;
-            if (!result.ChildProcess.HasExited)
-            {
-                ProcessSignaler.ForceKill(result.ChildProcess.Id, result.ChildStartedAt, logger);
-            }
         }
         else
         {
             failureMessage = RunCommandStrings.TimeoutWaitingForAppHost;
-
-            if (!result.ChildProcess.HasExited)
-            {
-                ProcessSignaler.ForceKill(result.ChildProcess.Id, result.ChildStartedAt, logger);
-            }
         }
 
         interactionService.DisplayError(RunCommandStrings.FailedToStartAppHost);
