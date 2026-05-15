@@ -441,14 +441,18 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
 
         await app.StartAsync();
 
-        // Wait for the resource to be running
-        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        // Wait for the resource to be running with its expected URLs. Running and URL
+        // activation are published through separate notification paths, and CI can observe
+        // the state transition before the URL snapshot catches up.
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.LongTimeoutDuration);
         var resourceEvent = await rns.WaitForResourceAsync(
             servicea.Resource.Name,
-            e => e.Snapshot.State == KnownResourceStates.Running,
+            e => e.Snapshot.State == KnownResourceStates.Running
+                && e.Snapshot.Urls.Length == 2
+                && e.Snapshot.Urls.All(url => !url.IsInactive),
             cts.Token);
 
-        await app.StopAsync().DefaultTimeout();
+        await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
 
         Assert.Equal(2, resourceEvent.Snapshot.Urls.Length);
         Assert.Collection(resourceEvent.Snapshot.Urls,
