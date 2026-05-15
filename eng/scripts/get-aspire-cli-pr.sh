@@ -839,6 +839,7 @@ install_or_update_aspire_cli_tool() {
         return 1
     fi
 
+    local tool_action
     local -a cmd
     local -a install_location_args
     if [[ -n "$tool_path" ]]; then
@@ -848,8 +849,10 @@ install_or_update_aspire_cli_tool() {
     fi
 
     if [[ "$FORCE" == true ]]; then
+        tool_action="update"
         cmd=(dotnet tool update "${install_location_args[@]}" Aspire.Cli --version "$version" --add-source "$hive_dir" --allow-downgrade)
     else
+        tool_action="install"
         cmd=(dotnet tool install "${install_location_args[@]}" Aspire.Cli --version "$version" --add-source "$hive_dir")
     fi
 
@@ -862,7 +865,7 @@ install_or_update_aspire_cli_tool() {
     say_verbose "Running: ${cmd[*]}"
 
     if ! "${cmd[@]}"; then
-        say_error "Failed to ${cmd[1]} Aspire.Cli dotnet tool from $hive_dir"
+        say_error "Failed to $tool_action Aspire.Cli dotnet tool from $hive_dir"
         if [[ "$FORCE" != true ]]; then
             say_info "If Aspire.Cli is already installed or this PR version needs to replace an existing install, re-run with --force."
         fi

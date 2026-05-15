@@ -62,7 +62,7 @@ public class PRScriptToolModeTests(ITestOutputHelper testOutput)
                     exit 0
                 )
                 if "%~1"=="tool" if "%~2"=="install" goto :tool_install
-                if "%~1"=="tool" if "%~2"=="update" exit 0
+                if "%~1"=="tool" if "%~2"=="update" goto :tool_update
                 echo Mock dotnet: Unknown command: %* 1>&2
                 exit 1
 
@@ -70,6 +70,13 @@ public class PRScriptToolModeTests(ITestOutputHelper testOutput)
                 if "%MOCK_DOTNET_TOOL_INSTALL_FAIL%"=="true" (
                     echo Mock dotnet tool install failed 1>&2
                     exit 42
+                )
+                exit 0
+
+                :tool_update
+                if "%MOCK_DOTNET_TOOL_UPDATE_FAIL%"=="true" (
+                    echo Mock dotnet tool update failed 1>&2
+                    exit 43
                 )
                 exit 0
                 """
@@ -96,6 +103,10 @@ public class PRScriptToolModeTests(ITestOutputHelper testOutput)
                                 exit 0
                                 ;;
                             update)
+                                if [[ "${MOCK_DOTNET_TOOL_UPDATE_FAIL:-}" == "true" ]]; then
+                                    echo "Mock dotnet tool update failed" >&2
+                                    exit 43
+                                fi
                                 exit 0
                                 ;;
                         esac
@@ -343,6 +354,7 @@ public class PRScriptToolModeTests(ITestOutputHelper testOutput)
             "--skip-path");
 
         Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("Failed to install Aspire.Cli dotnet tool", result.Output);
         Assert.Contains("re-run with --force", result.Output);
 
         var dotnetCommands = await File.ReadAllTextAsync(dotnetCommandsPath, TestContext.Current.CancellationToken);
@@ -379,6 +391,38 @@ public class PRScriptToolModeTests(ITestOutputHelper testOutput)
         Assert.Contains($"--add-source {localDir}", dotnetCommands);
         Assert.Contains("--allow-downgrade", dotnetCommands);
         Assert.False(Directory.Exists(Path.Combine(env.MockHome, ".aspire", "hives", "local", "packages")));
+    }
+
+    [Fact]
+    [SkipOnPlatform(TestPlatforms.Windows, "Bash script tests require bash shell")]
+    public async Task Bash_ToolMode_ForceUpdateFailureReportsUpdate()
+    {
+        using var env = new TestEnvironment();
+        var localDir = Path.Combine(env.TempDirectory, "artifacts");
+        await CreateLocalDirWithAspireCliPackageAsync(localDir, "13.3.0-pr.5678.deadbeef");
+        var mockDotnetPath = await CreateMockDotnetScriptAsync(env, _testOutput);
+        var dotnetCommandsPath = Path.Combine(env.TempDirectory, "dotnet-commands.txt");
+
+        using var cmd = new ScriptToolCommand(ScriptPaths.PRShell, env, _testOutput);
+        cmd.WithEnvironmentVariable("PATH", $"{mockDotnetPath}{Path.PathSeparator}{Environment.GetEnvironmentVariable("PATH")}");
+        cmd.WithEnvironmentVariable("MOCK_DOTNET_TOOL_UPDATE_FAIL", "true");
+        cmd.WithEnvironmentVariable("MOCK_DOTNET_COMMANDS_FILE", dotnetCommandsPath);
+
+        var result = await cmd.ExecuteAsync(
+            "--local-dir", localDir,
+            "--install-mode", "tool",
+            "--force",
+            "--skip-extension",
+            "--skip-path");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("Failed to update Aspire.Cli dotnet tool", result.Output);
+        Assert.DoesNotContain("re-run with --force", result.Output);
+
+        var dotnetCommands = await File.ReadAllTextAsync(dotnetCommandsPath, TestContext.Current.CancellationToken);
+        Assert.Contains("tool update --global Aspire.Cli --version 13.3.0-pr.5678.deadbeef", dotnetCommands);
+        Assert.Contains("--allow-downgrade", dotnetCommands);
+        Assert.DoesNotContain("tool install", dotnetCommands);
     }
 
     [Fact]
