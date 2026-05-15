@@ -500,6 +500,21 @@ public class AtsCapabilityScannerTests
     }
 
     [Fact]
+    public void ScanAssembly_GetOnlyMutableCollectionDtoProperties_EmitWarnings()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Severity == AtsDiagnosticSeverity.Warning
+            && diagnostic.Message.Contains("Add an init accessor", StringComparison.Ordinal)
+            && diagnostic.Location == $"{typeof(GetOnlyCollectionDto).FullName}.{nameof(GetOnlyCollectionDto.Items)}");
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Severity == AtsDiagnosticSeverity.Warning
+            && diagnostic.Message.Contains("Add an init accessor", StringComparison.Ordinal)
+            && diagnostic.Location == $"{typeof(GetOnlyCollectionDto).FullName}.{nameof(GetOnlyCollectionDto.Metadata)}");
+    }
+
+    [Fact]
     public void ScanAssembly_ExportedDtoValueWithIgnoredMutableProperty_IsIncluded()
     {
         var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
@@ -652,6 +667,14 @@ public class AtsCapabilityScannerTests
     private sealed class InvalidExportedDto
     {
         public List<string> Items { get; set; } = [];
+    }
+
+    [AspireDto]
+    private sealed class GetOnlyCollectionDto
+    {
+        public List<string> Items { get; } = [];
+
+        public Dictionary<string, string> Metadata { get; } = [];
     }
 
     private static class IgnoredPropertyExportedValues

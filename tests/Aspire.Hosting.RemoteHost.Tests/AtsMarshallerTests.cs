@@ -28,7 +28,7 @@ public class AtsMarshallerTests
                 new AtsDtoTypeInfo { TypeId = "test/DtoWithJsonPropertyName", Name = "DtoWithJsonPropertyName", ClrType = typeof(DtoWithJsonPropertyName), Properties = [] },
                 new AtsDtoTypeInfo { TypeId = "test/DtoWithJsonIgnore", Name = "DtoWithJsonIgnore", ClrType = typeof(DtoWithJsonIgnore), Properties = [] },
                 new AtsDtoTypeInfo { TypeId = "test/DtoWithReadOnlyProperty", Name = "DtoWithReadOnlyProperty", ClrType = typeof(DtoWithReadOnlyProperty), Properties = [] },
-                new AtsDtoTypeInfo { TypeId = "test/DtoWithReadOnlyListProperties", Name = "DtoWithReadOnlyListProperties", ClrType = typeof(DtoWithReadOnlyListProperties), Properties = [] },
+                new AtsDtoTypeInfo { TypeId = "test/DtoWithInitListProperties", Name = "DtoWithInitListProperties", ClrType = typeof(DtoWithInitListProperties), Properties = [] },
             ],
             EnumTypes = []
         };
@@ -714,7 +714,7 @@ public class AtsMarshallerTests
     }
 
     [Fact]
-    public async Task UnmarshalFromJson_UnmarshalsDtoReadOnlyListProperties()
+    public async Task UnmarshalFromJson_UnmarshalsDtoInitListProperties()
     {
         var (marshaller, context) = CreateMarshallerWithContext();
         var json = new JsonObject
@@ -733,9 +733,9 @@ public class AtsMarshallerTests
             }
         };
 
-        var result = marshaller.UnmarshalFromJson(json, typeof(DtoWithReadOnlyListProperties), context);
+        var result = marshaller.UnmarshalFromJson(json, typeof(DtoWithInitListProperties), context);
 
-        var dto = Assert.IsType<DtoWithReadOnlyListProperties>(result);
+        var dto = Assert.IsType<DtoWithInitListProperties>(result);
         Assert.Equal("test", dto.Name);
         Assert.Equal(["203.0.113.0/24", "198.51.100.0/24"], dto.AddressPrefixes);
         var reference = Assert.Single(dto.AddressPrefixReferences);
@@ -1109,13 +1109,13 @@ public class AtsMarshallerTests
     }
 
     [AspireDto]
-    private sealed class DtoWithReadOnlyListProperties
+    private sealed class DtoWithInitListProperties
     {
         public string? Name { get; set; }
 
-        public List<string> AddressPrefixes { get; } = ["default"];
+        public List<string> AddressPrefixes { get; init; } = ["default"];
 
-        public List<ReferenceExpression> AddressPrefixReferences { get; } = [];
+        public List<ReferenceExpression> AddressPrefixReferences { get; init; } = [];
     }
 
     [Fact]

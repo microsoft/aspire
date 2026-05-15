@@ -231,101 +231,123 @@ internal sealed class AtsMarshaller
 
     private object? DeserializeDto(JsonObject jsonObj, Type targetType, UnmarshalContext context)
     {
-        var instance = Activator.CreateInstance(targetType)
-            ?? throw CapabilityException.InvalidArgument(
+        try
+        {
+            return jsonObj.Deserialize(targetType, CreateDtoJsonOptions(context));
+        }
+        catch (Exception ex) when (ex is JsonException or NotSupportedException)
+        {
+            throw CapabilityException.InvalidArgument(
                 context.CapabilityId ?? "unknown",
                 context.ParameterName ?? "unknown",
-                $"Failed to create DTO instance of type '{targetType.Name}'");
-
-        var typeInfo = s_jsonOptions.GetTypeInfo(targetType);
-        foreach (var prop in typeInfo.Properties)
-        {
-            if (!TryGetJsonProperty(jsonObj, prop.Name, out var jsonValue))
-            {
-                continue;
-            }
-
-            var propContext = new UnmarshalContext
-            {
-                CapabilityId = context.CapabilityId,
-                ParameterName = $"{context.ParameterName ?? targetType.Name}.{prop.Name}"
-            };
-
-            if (prop.Set is not null)
-            {
-                prop.Set(instance, UnmarshalFromJson(jsonValue, prop.PropertyType, propContext));
-                continue;
-            }
-
-            if (jsonValue is JsonArray jsonArray &&
-                prop.Get is not null &&
-                prop.Get(instance) is IList list &&
-                TryGetListElementType(prop.PropertyType, out var elementType))
-            {
-                // The remote DTO JSON is the complete value for this property, not a
-                // patch over C# initializer defaults.
-                list.Clear();
-                for (var i = 0; i < jsonArray.Count; i++)
-                {
-                    var elementContext = new UnmarshalContext
-                    {
-                        CapabilityId = context.CapabilityId,
-                        ParameterName = $"{propContext.ParameterName}[{i}]"
-                    };
-                    list.Add(UnmarshalFromJson(jsonArray[i], elementType, elementContext));
-                }
-            }
+                $"Failed to deserialize DTO '{targetType.Name}': {ex.Message}");
         }
-
-        return instance;
     }
 
-    private static bool TryGetListElementType(Type collectionType, out Type elementType)
+    private JsonSerializerOptions CreateDtoJsonOptions(UnmarshalContext context)
     {
-        elementType = null!;
+        var options = new JsonSerializerOptions(s_jsonOptions);
+        options.PreferredObjectCreationHandling = JsonObjectCreationHandling.Replace;
+        options.Converters.Add(new CallbackJsonConverterFactory(this, context));
+        options.Converters.Add(new ReferenceExpressionJsonConverterFactory(this, context));
 
-        if (collectionType.IsGenericType)
-        {
-            var genericTypeDefinition = collectionType.GetGenericTypeDefinition();
-            if (genericTypeDefinition == typeof(List<>) ||
-                genericTypeDefinition == typeof(IList<>) ||
-                genericTypeDefinition == typeof(ICollection<>))
-            {
-                elementType = collectionType.GetGenericArguments()[0];
-                return true;
-            }
-        }
-
-        foreach (var interfaceType in collectionType.GetInterfaces())
-        {
-            if (interfaceType.IsGenericType && interfaceType.GetGenericTypeDefinition() == typeof(ICollection<>))
-            {
-                elementType = interfaceType.GetGenericArguments()[0];
-                return true;
-            }
-        }
-
-        return false;
+        return options;
     }
 
-    private static bool TryGetJsonProperty(JsonObject jsonObj, string propertyName, out JsonNode? value)
+    private sealed class CallbackJsonConverterFactory(AtsMarshaller marshaller, UnmarshalContext context) : JsonConverterFactory
     {
-        if (jsonObj.TryGetPropertyValue(propertyName, out value))
+        public override bool CanConvert(Type typeToConvert)
         {
-            return true;
+            return typeof(Delegate).IsAssignableFrom(typeToConvert);
         }
 
-        foreach (var property in jsonObj)
+        public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options)
         {
-            if (string.Equals(property.Key, propertyName, StringComparison.OrdinalIgnoreCase))
+            return (JsonConverter)Activator.CreateInstance(typeof(CallbackJsonConverter<>).MakeGenericType(typeToConvert), marshaller, context)!;
+        }
+    }
+
+    private sealed class CallbackJsonConverter<TDelegate>(AtsMarshaller marshaller, UnmarshalContext context) : JsonConverter<TDelegate>
+        where TDelegate : Delegate
+    {
+        public override TDelegate? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            if (reader.TokenType == JsonTokenType.Null)
             {
-                value = property.Value;
-                return true;
+                return null;
             }
+
+            if (reader.TokenType != JsonTokenType.String)
+            {
+                throw CapabilityException.InvalidArgument(
+                    context.CapabilityId ?? "unknown",
+                    context.ParameterName ?? "unknown",
+                    "Callback parameter must be a string callback ID");
+            }
+
+            var callbackId = reader.GetString();
+            var proxy = marshaller.CreateCallbackProxy(callbackId, typeToConvert, context);
+            return (TDelegate?)proxy;
         }
 
-        value = null;
-        return false;
+        public override void Write(Utf8JsonWriter writer, TDelegate value, JsonSerializerOptions options)
+        {
+            throw new NotSupportedException();
+        }
+    }
+
+    private object? CreateCallbackProxy(string? callbackId, Type callbackType, UnmarshalContext context)
+    {
+        if (string.IsNullOrEmpty(callbackId))
+        {
+            throw CapabilityException.InvalidArgument(
+                context.CapabilityId ?? "unknown",
+                context.ParameterName ?? "unknown",
+                "Callback parameter must be a string callback ID");
+        }
+
+        try
+        {
+            var proxy = _callbackProxyFactory.Value.CreateProxy(callbackId, callbackType);
+            return proxy ?? throw CapabilityException.InvalidArgument(
+                context.CapabilityId ?? "unknown",
+                context.ParameterName ?? "unknown",
+                $"Failed to create callback proxy for type '{callbackType.Name}'");
+        }
+        catch (Exception ex) when (ex is not CapabilityException)
+        {
+            throw CapabilityException.InvalidArgument(
+                context.CapabilityId ?? "unknown",
+                context.ParameterName ?? "unknown",
+                $"Callback proxy factory not available: {ex.Message}");
+        }
+    }
+
+    private sealed class ReferenceExpressionJsonConverterFactory(AtsMarshaller marshaller, UnmarshalContext context) : JsonConverterFactory
+    {
+        public override bool CanConvert(Type typeToConvert)
+        {
+            return typeToConvert.FullName == "Aspire.Hosting.ApplicationModel.ReferenceExpression";
+        }
+
+        public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options)
+        {
+            return (JsonConverter)Activator.CreateInstance(typeof(ReferenceExpressionJsonConverter<>).MakeGenericType(typeToConvert), marshaller, context)!;
+        }
+    }
+
+    private sealed class ReferenceExpressionJsonConverter<TReferenceExpression>(AtsMarshaller marshaller, UnmarshalContext context) : JsonConverter<TReferenceExpression>
+    {
+        public override TReferenceExpression? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            var node = JsonNode.Parse(ref reader);
+            return (TReferenceExpression?)marshaller.UnmarshalFromJson(node, typeToConvert, context);
+        }
+
+        public override void Write(Utf8JsonWriter writer, TReferenceExpression value, JsonSerializerOptions options)
+        {
+            throw new NotSupportedException();
+        }
     }
 
     private JsonNode? SerializeArray(object value, AtsTypeRef? elementType)
@@ -515,24 +537,7 @@ internal sealed class AtsMarshaller
             // Callback ID is passed as a string
             if (node is JsonValue callbackValue && callbackValue.TryGetValue<string>(out var callbackId))
             {
-                Delegate? proxy;
-                try
-                {
-                    proxy = _callbackProxyFactory.Value.CreateProxy(callbackId, targetType);
-                }
-                catch (Exception ex) when (ex is not CapabilityException)
-                {
-                    throw CapabilityException.InvalidArgument(
-                        capabilityId, paramName,
-                        $"Callback proxy factory not available: {ex.Message}");
-                }
-                if (proxy == null)
-                {
-                    throw CapabilityException.InvalidArgument(
-                        capabilityId, paramName,
-                        $"Failed to create callback proxy for type '{targetType.Name}'");
-                }
-                return proxy;
+                return CreateCallbackProxy(callbackId, targetType, context);
             }
             else
             {
