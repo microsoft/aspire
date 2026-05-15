@@ -384,7 +384,10 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
         // Wait for the resource to have URLs allocated (before it starts running)
         var resourceEvent = await rns.WaitForResourceAsync(
             servicea.Resource.Name,
-            e => e.Snapshot.Urls.Length > 0).DefaultTimeout();
+            e => e.Snapshot.Urls.Length == 1
+                && e.Snapshot.Urls[0].Name == httpEndpoint.EndpointName
+                && e.Snapshot.Urls[0].IsInactive
+                && e.Snapshot.Urls[0].Url == "https://example.com").DefaultTimeout();
 
         await app.StopAsync().DefaultTimeout();
 
@@ -409,7 +412,7 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
         // Wait for URLs to be populated
         var resourceEvent = await rns.WaitForResourceAsync(
             servicea.Resource.Name,
-            e => e.Snapshot.Urls.Length > 0).DefaultTimeout();
+            e => e.Snapshot.Urls.Length == 3).DefaultTimeout();
 
         await app.StopAsync().DefaultTimeout();
 
@@ -668,7 +671,7 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
         // Wait for running state with multiple URLs
         var resourceEvent = await rns.WaitForResourceAsync(
             "servicea",
-            e => e.Snapshot.State == KnownResourceStates.Running && e.Snapshot.Urls.Length > 1).DefaultTimeout();
+            e => e.Snapshot.State == KnownResourceStates.Running && e.Snapshot.Urls.Length == 4).DefaultTimeout();
 
         await app.StopAsync().DefaultTimeout();
 
