@@ -17,6 +17,7 @@ type LaunchConfigurationMode = "Debug" | "NoDebug";
 export interface ExecutableLaunchConfiguration {
     type: string;
     mode?: LaunchConfigurationMode | undefined;
+    serverReadyAction?: ServerReadyAction;
 }
 
 export interface ProjectLaunchConfiguration extends ExecutableLaunchConfiguration {
@@ -93,6 +94,7 @@ export interface DebugLaunchSettings {
     args?: string[];
     launchProfile?: string;
     disableLaunchProfile?: boolean;
+    serverReadyAction?: ServerReadyAction;
 }
 
 export interface DcpServerConnectionInfo {
