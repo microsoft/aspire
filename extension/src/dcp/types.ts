@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
-import { ServerReadyAction } from '../debugger/launchProfiles';
+import type { ServerReadyAction } from '../debugger/launchProfiles';
 
 export interface ErrorResponse {
     error: ErrorDetails;
