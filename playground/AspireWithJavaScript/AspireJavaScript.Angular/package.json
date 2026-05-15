@@ -2,7 +2,7 @@
   "name": "angular-weather",
   "version": "0.0.0",
   "engines": {
-    "node": ">=20.12"
+    "node": ">=22.22"
   },
   "scripts": {
     "ng": "ng",
@@ -45,5 +45,8 @@
     "vite": "7.3.2",
     "postcss": "8.5.10",
     "uuid": "14.0.0"
+  },
+  "volta": {
+    "node": "22.22.3"
   }
 }
