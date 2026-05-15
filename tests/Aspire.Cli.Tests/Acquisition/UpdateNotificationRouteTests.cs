@@ -35,6 +35,13 @@ public class UpdateNotificationRouteTests(ITestOutputHelper outputHelper)
     [InlineData("localhive", "./localhive.sh   # re-run from your Aspire checkout")]
     [InlineData("script", "aspire update --self")]
     [InlineData(null, "aspire update --self")]
+    // Unrecognized sidecar source value (a route added by a future build
+    // that this CLI doesn't know about yet). The reader returns
+    // InstallSource.Unknown with RawSource preserved; the notifier must
+    // still surface an actionable hint rather than printing the raw
+    // unrecognized name. Falls back to "aspire update --self" via
+    // SelfUpdateRouter's Unknown → in-process classification.
+    [InlineData("future-route-name", "aspire update --self")]
     public async Task NotifyIfUpdateAvailable_RouteAwareCommand_MatchesUpgradeInstructionProvider(string? sidecarSource, string expectedCommand)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

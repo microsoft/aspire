@@ -5,6 +5,7 @@ using Aspire.Cli.Acquisition;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -94,5 +95,122 @@ public class UpdateCommandRouteRegressionTests(ITestOutputHelper outputHelper)
         Assert.Contains(
             interactionService!.DisplayedPlainText,
             line => line.Contains(expectedCommand, StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Legacy compatibility check: when the running binary has no sidecar
+    /// (e.g., a dotnet-tool install that predates the sidecar contract)
+    /// BUT path-shape inspection identifies the binary as a dotnet tool,
+    /// the route is fixed up to <see cref="InstallSource.DotnetTool"/> and
+    /// refused with the dotnet-tool command rather than falling through to
+    /// the in-process update flow (which would corrupt the
+    /// package-manager-owned binary).
+    /// </summary>
+    [Fact]
+    public async Task SelfUpdate_NoSidecar_LegacyDotnetToolPathShape_RefusesWithDotnetToolHint()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var processPathScope = DotNetToolDetection.UseProcessPathForTesting(
+            "/home/test/.dotnet/tools/.store/aspire.cli/9.4.0/aspire.cli.linux-x64/9.4.0/tools/net10.0/linux-x64/aspire");
+
+        // Discovery returns no route (no sidecar on disk). The fallback in
+        // ResolveRunningInstall must then consult DotNetToolDetection via
+        // the no-arg overload, which honors UseProcessPathForTesting.
+        var selfInfo = new InstallationInfo
+        {
+            Path = "/test/aspire",
+            CanonicalPath = "/test/aspire",
+            Route = null,
+            Status = InstallationInfoStatus.Ok,
+        };
+
+        TestInteractionService? interactionService = null;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ =>
+            {
+                interactionService = new TestInteractionService();
+                return interactionService;
+            };
+        });
+        services.AddSingleton<IInstallationDiscovery>(_ => new FakeInstallationDiscovery(selfInfo));
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var exitCode = await command.Parse("update --self").InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.NotNull(interactionService);
+        // The refusal must surface the global dotnet-tool update command —
+        // the binary IS under ~/.dotnet/tools/.store/ so DotNetToolDetection
+        // classifies it as a global-tool install.
+        Assert.Contains(
+            interactionService!.DisplayedPlainText,
+            line => line.Contains("dotnet tool update -g Aspire.Cli", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Pre-sidecar script install compat: when the running binary has no
+    /// sidecar AND the process path doesn't match any dotnet-tool layout,
+    /// the resolver yields <see cref="InstallSource.Unknown"/> and
+    /// <see cref="SelfUpdateRouter.GetAction"/> routes Unknown to
+    /// <see cref="SelfUpdateAction.InProcess"/>. <c>--self</c> must then
+    /// reach the in-process flow rather than printing a refusal. We assert
+    /// the SUT does NOT print any of the refusal-message prefixes
+    /// (verifying it didn't take the gated branch) instead of trying to
+    /// drive a full network download.
+    /// </summary>
+    [Fact]
+    public async Task SelfUpdate_NoSidecar_NotDotnetTool_FallsThroughToInProcessFlow()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var processPathScope = DotNetToolDetection.UseProcessPathForTesting("/tmp/random/aspire");
+
+        var selfInfo = new InstallationInfo
+        {
+            Path = "/tmp/random/aspire",
+            CanonicalPath = "/tmp/random/aspire",
+            Route = null,
+            Status = InstallationInfoStatus.Ok,
+        };
+
+        TestInteractionService? interactionService = null;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ =>
+            {
+                interactionService = new TestInteractionService();
+                return interactionService;
+            };
+        });
+        services.AddSingleton<IInstallationDiscovery>(_ => new FakeInstallationDiscovery(selfInfo));
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        // Invoke --self; we don't expect this to complete the actual update
+        // (no real network in the test process), but we do expect it to NOT
+        // emit any of the route-refusal messages. Any non-refusal outcome
+        // (timeout / failure / success / cancellation) is acceptable here;
+        // what matters is that the gated branch was not taken.
+        try
+        {
+            await command.Parse("update --self --yes --channel stable").InvokeAsync().DefaultTimeout();
+        }
+        catch
+        {
+            // The in-process flow may throw for any number of network /
+            // download / signature reasons; the test doesn't depend on
+            // those succeeding.
+        }
+
+        Assert.NotNull(interactionService);
+        // None of the route-specific refusal messages must appear: those
+        // are the signal that the gated branch was taken.
+        var allOutput = string.Join("\n", interactionService!.DisplayedPlainText);
+        Assert.DoesNotContain("get-aspire-cli-pr.sh", allOutput, StringComparison.Ordinal);
+        Assert.DoesNotContain("winget upgrade", allOutput, StringComparison.Ordinal);
+        Assert.DoesNotContain("brew upgrade", allOutput, StringComparison.Ordinal);
+        Assert.DoesNotContain("./localhive.sh", allOutput, StringComparison.Ordinal);
+        Assert.DoesNotContain("dotnet tool update", allOutput, StringComparison.Ordinal);
     }
 }
