@@ -37,9 +37,15 @@ with create_builder() as builder:
     def configure_compose_file(compose_file):
         compose_file.name = "validation-compose"
         _compose_file_name = compose_file.name
+        compose_file.add_network("validation-network-extra", driver="bridge")
+        compose_file.add_service("validation-sidecar", image="busybox")
+        compose_file.add_volume("validation-data", driver="local")
+        compose_file.add_config("validation-config", content="enabled=true")
+        compose_file.add_secret("validation-secret", external=True)
         compose_api = compose_file.services["api"]
         compose_api.pull_policy = "always"
         _compose_api_pull_policy = compose_api.pull_policy
+        compose_api.add_volume("validation-data", "/container/compose-data", is_read_only=True)
 
     def configure_service(compose_service, service):
         service.set_container_name(container_name.as_environment_placeholder(compose_service))
