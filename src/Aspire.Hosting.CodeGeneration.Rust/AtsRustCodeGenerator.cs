@@ -882,7 +882,7 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
 
         if (typeRef.TypeId == AtsConstants.ReferenceExpressionTypeId)
         {
-            return isOptional ? "Option<ReferenceExpression>" : "ReferenceExpression";
+            return isOptional || typeRef.IsNullable ? "Option<ReferenceExpression>" : "ReferenceExpression";
         }
 
         var baseType = typeRef.Category switch
@@ -904,7 +904,7 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
             _ => "Value"
         };
 
-        return isOptional ? $"Option<{baseType}>" : baseType;
+        return isOptional || typeRef.IsNullable ? $"Option<{baseType}>" : baseType;
     }
 
     /// <summary>

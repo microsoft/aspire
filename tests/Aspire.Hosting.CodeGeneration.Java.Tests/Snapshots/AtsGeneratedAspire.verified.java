@@ -1,4 +1,4 @@
-﻿// ===== Aspire.java =====
+// ===== Aspire.java =====
 // Aspire.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
@@ -1575,11 +1575,17 @@ public class TestCallbackContext extends HandleWrapperBase {
         return (String) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.name", reqArgs);
     }
 
+    public TestCallbackContext setName() {
+        return setName(null);
+    }
+
     /** Sets the Name property */
     public TestCallbackContext setName(String value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("value", AspireClient.serializeValue(value));
+        if (value != null) {
+            reqArgs.put("value", AspireClient.serializeValue(value));
+        }
         return (TestCallbackContext) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.setName", reqArgs);
     }
 
@@ -2139,11 +2145,17 @@ public class TestEnvironmentContext extends HandleWrapperBase {
         return (String) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.description", reqArgs);
     }
 
+    public TestEnvironmentContext setDescription() {
+        return setDescription(null);
+    }
+
     /** Sets the Description property */
     public TestEnvironmentContext setDescription(String value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("value", AspireClient.serializeValue(value));
+        if (value != null) {
+            reqArgs.put("value", AspireClient.serializeValue(value));
+        }
         return (TestEnvironmentContext) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.setDescription", reqArgs);
     }
 

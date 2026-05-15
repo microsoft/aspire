@@ -206,10 +206,10 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
         // Check for wrapper class first (handles custom types like ReferenceExpression)
         if (_wrapperClassNames.TryGetValue(typeRef.TypeId, out var wrapperClassName))
         {
-            return wrapperClassName;
+            return AddNoneType(wrapperClassName, typeRef.IsNullable);
         }
 
-        return typeRef.Category switch
+        var pythonType = typeRef.Category switch
         {
             AtsTypeCategory.Primitive => MapPrimitiveType(typeRef.TypeId),
             AtsTypeCategory.Enum => MapEnumType(typeRef.TypeId),
@@ -225,6 +225,20 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
             AtsTypeCategory.Unknown => "typing.Any",  // Unknown types use 'Any' since they're not in the ATS universe
             _ => "typing.Any"  // Fallback for any unhandled categories
         };
+
+        return AddNoneType(pythonType, typeRef.IsNullable);
+    }
+
+    private static string AddNoneType(string typeName, bool isNullable)
+    {
+        if (!isNullable ||
+            typeName == "typing.Any" ||
+            typeName.Split(" | ", StringSplitOptions.TrimEntries).Contains("None", StringComparer.Ordinal))
+        {
+            return typeName;
+        }
+
+        return $"{typeName} | None";
     }
 
     /// <summary>

@@ -1930,7 +1930,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             _ => "any"
         };
 
-        if (isOptional && !IsNilableGoType(baseType))
+        if ((isOptional || typeRef.IsNullable) && !IsNilableGoType(baseType))
         {
             return $"*{baseType}";
         }

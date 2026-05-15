@@ -1501,6 +1501,8 @@ CommandResultFormat = typing.Literal["Text", "Json", "Markdown"]
 
 ContainerLifetime = typing.Literal["Session", "Persistent"]
 
+ContainerMountType = typing.Literal["BindMount", "Volume"]
+
 DistributedApplicationOperation = typing.Literal["Run", "Publish"]
 
 EndpointProperty = typing.Literal["Url", "Host", "IPV4Host", "Port", "Scheme", "TargetPort", "HostAndPort", "TlsEnabled"]
@@ -1538,35 +1540,35 @@ WaitBehavior = typing.Literal["WaitOnResourceUnavailable", "StopOnResourceUnavai
 
 
 class DockerfileBaseImageParameters(typing.TypedDict, total=False):
-    build_image: str
-    runtime_image: str
+    build_image: str | None
+    runtime_image: str | None
 
 
 class CommandParameters(typing.TypedDict, total=False):
     name: typing.Required[str]
     display_name: typing.Required[str]
     execute_command: typing.Required[typing.Callable[[ExecuteCommandContext], ExecuteCommandResult]]
-    command_options: CommandOptions
+    command_options: CommandOptions | None
 
 
 class ProcessCommandFactoryParameters(typing.TypedDict, total=False):
     command_name: typing.Required[str]
     display_name: typing.Required[str]
     create_process_spec: typing.Required[typing.Callable[[ExecuteCommandContext], ProcessCommandSpecExportData]]
-    options: ProcessCommandResultExportOptions
+    options: ProcessCommandResultExportOptions | None
 
 
 class PipelineStepFactoryParameters(typing.TypedDict, total=False):
     step_name: typing.Required[str]
     callback: typing.Required[typing.Callable[[PipelineStepContext], None]]
-    depends_on: typing.Iterable[str]
-    required_by: typing.Iterable[str]
-    tags: typing.Iterable[str]
-    description: str
+    depends_on: typing.Iterable[str] | None
+    required_by: typing.Iterable[str] | None
+    tags: typing.Iterable[str] | None
+    description: str | None
 
 
 class OptionalStringParameters(typing.TypedDict, total=False):
-    value: str
+    value: str | None
     enabled: bool
 
 
@@ -1580,7 +1582,7 @@ class MergeLoggingParameters(typing.TypedDict, total=False):
     log_level: typing.Required[str]
     log_path: str
     enable_console: bool
-    max_files: int
+    max_files: int | None
 
 
 class MergeRouteParameters(typing.TypedDict, total=False):
@@ -1599,32 +1601,32 @@ class BindMountParameters(typing.TypedDict, total=False):
 
 class DockerfileParameters(typing.TypedDict, total=False):
     context_path: typing.Required[str]
-    dockerfile_path: str
-    stage: str
+    dockerfile_path: str | None
+    stage: str | None
 
 
 class ContainerCertificatePathsParameters(typing.TypedDict, total=False):
-    custom_certificates_destination: str
-    default_certificate_bundle_paths: typing.Iterable[str]
-    default_certificate_dir_paths: typing.Iterable[str]
+    custom_certificates_destination: str | None
+    default_certificate_bundle_paths: typing.Iterable[str] | None
+    default_certificate_dir_paths: typing.Iterable[str] | None
 
 
 class DockerfileBuilderParameters(typing.TypedDict, total=False):
     context_path: typing.Required[str]
     callback: typing.Required[typing.Callable[[DockerfileBuilderCallbackContext], None]]
-    stage: str
+    stage: str | None
 
 
 class McpServerParameters(typing.TypedDict, total=False):
-    path: str
-    endpoint_name: str
+    path: str | None
+    endpoint_name: str | None
 
 
 class ReferenceParameters(typing.TypedDict, total=False):
     source: typing.Required[AbstractResource | EndpointReference | str]
-    connection_name: str
+    connection_name: str | None
     optional: bool
-    name: str
+    name: str | None
 
 
 class EndpointCallbackParameters(typing.TypedDict, total=False):
@@ -1635,74 +1637,74 @@ class EndpointCallbackParameters(typing.TypedDict, total=False):
 
 class HttpEndpointCallbackParameters(typing.TypedDict, total=False):
     callback: typing.Required[typing.Callable[[EndpointUpdateContext], None]]
-    name: str
+    name: str | None
     create_if_not_exists: bool
 
 
 class HttpsEndpointCallbackParameters(typing.TypedDict, total=False):
     callback: typing.Required[typing.Callable[[EndpointUpdateContext], None]]
-    name: str
+    name: str | None
     create_if_not_exists: bool
 
 
 class EndpointParameters(typing.TypedDict, total=False):
-    port: int
-    target_port: int
-    scheme: str
-    name: str
-    env: str
+    port: int | None
+    target_port: int | None
+    scheme: str | None
+    name: str | None
+    env: str | None
     is_proxied: bool
-    is_external: bool
-    protocol: ProtocolType
+    is_external: bool | None
+    protocol: ProtocolType | None
 
 
 class HttpEndpointParameters(typing.TypedDict, total=False):
-    port: int
-    target_port: int
-    name: str
-    env: str
+    port: int | None
+    target_port: int | None
+    name: str | None
+    env: str | None
     is_proxied: bool
 
 
 class HttpsEndpointParameters(typing.TypedDict, total=False):
-    port: int
-    target_port: int
-    name: str
-    env: str
+    port: int | None
+    target_port: int | None
+    name: str | None
+    env: str | None
     is_proxied: bool
 
 
 class HttpHealthCheckParameters(typing.TypedDict, total=False):
-    path: str
-    status_code: int
-    endpoint_name: str
+    path: str | None
+    status_code: int | None
+    endpoint_name: str | None
 
 
 class HttpCommandParameters(typing.TypedDict, total=False):
     path: typing.Required[str]
     display_name: typing.Required[str]
-    options: HttpCommandExportOptions
+    options: HttpCommandExportOptions | None
 
 
 class HttpProbeParameters(typing.TypedDict, total=False):
     probe_type: typing.Required[ProbeType]
-    path: str
-    initial_delay_seconds: int
-    period_seconds: int
-    timeout_seconds: int
-    failure_threshold: int
-    success_threshold: int
-    endpoint_name: str
+    path: str | None
+    initial_delay_seconds: int | None
+    period_seconds: int | None
+    timeout_seconds: int | None
+    failure_threshold: int | None
+    success_threshold: int | None
+    endpoint_name: str | None
 
 
 class VolumeParameters(typing.TypedDict, total=False):
     target: typing.Required[str]
-    name: str
+    name: str | None
     is_read_only: bool
 
 
 class DataVolumeParameters(typing.TypedDict, total=False):
-    name: str
+    name: str | None
     is_read_only: bool
 
 # ============================================================================
@@ -1711,7 +1713,7 @@ class DataVolumeParameters(typing.TypedDict, total=False):
 
 class AddContainerOptions(typing.TypedDict, total=False):
     Image: str
-    Tag: str
+    Tag: str | None
 
 class CertificateTrustExecutionConfigurationContext(typing.TypedDict, total=False):
     CertificateBundlePath: ReferenceExpression
@@ -1725,16 +1727,16 @@ class CertificateTrustExecutionConfigurationExportData(typing.TypedDict, total=F
     CustomBundlePaths: typing.Iterable[str]
 
 class CommandOptions(typing.TypedDict, total=False):
-    Description: str
+    Description: str | None
     Parameter: typing.Any
     Arguments: typing.Iterable[InteractionInput]
-    ValidateArguments: typing.Callable
+    ValidateArguments: typing.Callable | None
     Visibility: ResourceCommandVisibility
-    ConfirmationMessage: str
-    IconName: str
-    IconVariant: IconVariant
+    ConfirmationMessage: str | None
+    IconName: str | None
+    IconVariant: IconVariant | None
     IsHighlighted: bool
-    UpdateState: typing.Callable
+    UpdateState: typing.Callable | None
 
 class CommandResultData(typing.TypedDict, total=False):
     Value: str
@@ -1742,21 +1744,21 @@ class CommandResultData(typing.TypedDict, total=False):
     DisplayImmediately: bool
 
 class CreateBuilderOptions(typing.TypedDict, total=False):
-    Args: typing.Iterable[str]
-    ProjectDirectory: str
-    AppHostFilePath: str
-    ContainerRegistryOverride: str
+    Args: typing.Iterable[str] | None
+    ProjectDirectory: str | None
+    AppHostFilePath: str | None
+    ContainerRegistryOverride: str | None
     DisableDashboard: bool
-    DashboardApplicationName: str
+    DashboardApplicationName: str | None
     AllowUnsecuredTransport: bool
     EnableResourceLogging: bool
 
 class ExecuteCommandResult(typing.TypedDict, total=False):
     Success: bool
     Canceled: bool
-    ErrorMessage: str
-    Message: str
-    Data: CommandResultData
+    ErrorMessage: str | None
+    Message: str | None
+    Data: CommandResultData | None
 
 class GenerateParameterDefault(typing.TypedDict, total=False):
     MinLength: int
@@ -1770,14 +1772,14 @@ class GenerateParameterDefault(typing.TypedDict, total=False):
     MinSpecial: int
 
 class HttpCommandExportOptions(typing.TypedDict, total=False):
-    Description: str
-    ConfirmationMessage: str
-    IconName: str
-    IconVariant: IconVariant
+    Description: str | None
+    ConfirmationMessage: str | None
+    IconName: str | None
+    IconVariant: IconVariant | None
     IsHighlighted: bool
-    CommandName: str
-    EndpointName: str
-    MethodName: str
+    CommandName: str | None
+    EndpointName: str | None
+    MethodName: str | None
     ResultMode: HttpCommandResultMode
 
 class HttpsCertificateExecutionConfigurationContext(typing.TypedDict, total=False):
@@ -1787,60 +1789,60 @@ class HttpsCertificateExecutionConfigurationContext(typing.TypedDict, total=Fals
 
 class HttpsCertificateExecutionConfigurationExportData(typing.TypedDict, total=False):
     Subject: str
-    Thumbprint: str
+    Thumbprint: str | None
     KeyPathExpression: str
     PfxPathExpression: str
     IsKeyPathReferenced: bool
     IsPfxPathReferenced: bool
-    Password: str
+    Password: str | None
 
 class HttpsCertificateInfo(typing.TypedDict, total=False):
     Subject: str
     Issuer: str
-    Thumbprint: str
+    Thumbprint: str | None
 
 class InteractionInput(typing.TypedDict, total=False):
     Name: str
-    Label: str
-    Description: str
+    Label: str | None
+    Description: str | None
     EnableDescriptionMarkdown: bool
     InputType: InputType
     Required: bool
-    Options: typing.Iterable[typing.Any]
+    Options: typing.Iterable[typing.Any] | None
     DynamicLoading: typing.Any
-    Value: str
-    Placeholder: str
+    Value: str | None
+    Placeholder: str | None
     AllowCustomChoice: bool
     Disabled: bool
-    MaxLength: int
+    MaxLength: int | None
 
 class ProcessCommandExportOptions(typing.TypedDict, total=False):
-    ExecutablePath: str
-    Arguments: typing.Iterable[str]
-    WorkingDirectory: str
-    EnvironmentVariables: typing.Mapping[str, str]
-    InheritEnvironmentVariables: bool
-    StandardInputContent: str
-    KillEntireProcessTree: bool
-    CommandOptions: CommandOptions
-    MaxOutputLineCount: int
-    DisplayImmediately: bool
-    SuccessExitCodes: typing.Iterable[int]
+    ExecutablePath: str | None
+    Arguments: typing.Iterable[str] | None
+    WorkingDirectory: str | None
+    EnvironmentVariables: typing.Mapping[str, str] | None
+    InheritEnvironmentVariables: bool | None
+    StandardInputContent: str | None
+    KillEntireProcessTree: bool | None
+    CommandOptions: CommandOptions | None
+    MaxOutputLineCount: int | None
+    DisplayImmediately: bool | None
+    SuccessExitCodes: typing.Iterable[int] | None
 
 class ProcessCommandResultExportOptions(typing.TypedDict, total=False):
-    CommandOptions: CommandOptions
-    MaxOutputLineCount: int
-    DisplayImmediately: bool
-    SuccessExitCodes: typing.Iterable[int]
+    CommandOptions: CommandOptions | None
+    MaxOutputLineCount: int | None
+    DisplayImmediately: bool | None
+    SuccessExitCodes: typing.Iterable[int] | None
 
 class ProcessCommandSpecExportData(typing.TypedDict, total=False):
-    ExecutablePath: str
-    Arguments: typing.Iterable[str]
-    WorkingDirectory: str
-    EnvironmentVariables: typing.Mapping[str, str]
-    InheritEnvironmentVariables: bool
-    StandardInputContent: str
-    KillEntireProcessTree: bool
+    ExecutablePath: str | None
+    Arguments: typing.Iterable[str] | None
+    WorkingDirectory: str | None
+    EnvironmentVariables: typing.Mapping[str, str] | None
+    InheritEnvironmentVariables: bool | None
+    StandardInputContent: str | None
+    KillEntireProcessTree: bool | None
 
 class ReferenceEnvironmentInjectionOptions(typing.TypedDict, total=False):
     ConnectionString: bool
@@ -1851,22 +1853,22 @@ class ReferenceEnvironmentInjectionOptions(typing.TypedDict, total=False):
 class ResourceEventDto(typing.TypedDict, total=False):
     ResourceName: str
     ResourceId: str
-    State: str
-    StateStyle: str
-    HealthStatus: str
-    ExitCode: int
+    State: str | None
+    StateStyle: str | None
+    HealthStatus: str | None
+    ExitCode: int | None
 
 class ResourceUrlAnnotation(typing.TypedDict, total=False):
     Url: str
-    DisplayText: str
-    Endpoint: EndpointReference
+    DisplayText: str | None
+    Endpoint: EndpointReference | None
     DisplayLocation: UrlDisplayLocation
 
 class TestConfigDto(typing.TypedDict, total=False):
     Name: str
     Port: int
     Enabled: bool
-    OptionalField: str
+    OptionalField: str | None
 
 class TestDeeplyNestedDto(typing.TypedDict, total=False):
     NestedData: AspireDict[str, AspireList[TestConfigDto]]
@@ -1874,7 +1876,7 @@ class TestDeeplyNestedDto(typing.TypedDict, total=False):
 
 class TestNestedDto(typing.TypedDict, total=False):
     Id: str
-    Config: TestConfigDto
+    Config: TestConfigDto | None
     Tags: AspireList[str]
     Counts: AspireDict[str, int]
 
@@ -1952,6 +1954,15 @@ class AbstractAspireStore:
         """The underlying object reference handle."""
         return self._handle
 
+    @_cached_property
+    def base_path(self) -> str:
+        """Gets the BasePath property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/IAspireStore.basePath',
+            {'context': self._handle}
+        )
+        return typing.cast(str, result)
+
     def get_file_name_with_content(self, filename_template: str, source_filename: str) -> str:
         """Gets a deterministic file path for the specified file contents"""
         rpc_args: dict[str, typing.Any] = {'aspireStore': self._handle}
@@ -1979,7 +1990,7 @@ class AbstractConfiguration:
         """The underlying object reference handle."""
         return self._handle
 
-    def get_config_value(self, key: str) -> str:
+    def get_config_value(self, key: str) -> str | None:
         """Gets a configuration value by key"""
         rpc_args: dict[str, typing.Any] = {'configuration': self._handle}
         rpc_args['key'] = key
@@ -1989,7 +2000,7 @@ class AbstractConfiguration:
         )
         return result
 
-    def get_connection_string(self, name: str) -> str:
+    def get_connection_string(self, name: str) -> str | None:
         """Gets a connection string by name"""
         rpc_args: dict[str, typing.Any] = {'configuration': self._handle}
         rpc_args['name'] = name
@@ -2029,8 +2040,56 @@ class AbstractConfiguration:
         return result
 
 
-class AbstractConfigurationSection(abc.ABC):
-    """Abstract base class for AbstractConfigurationSection."""
+class AbstractConfigurationSection:
+    """Type class for AbstractConfigurationSection."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"AbstractConfigurationSection(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    @_cached_property
+    def key(self) -> str:
+        """Gets the Key property"""
+        result = self._client.invoke_capability(
+            'Microsoft.Extensions.Configuration/IConfigurationSection.key',
+            {'context': self._handle}
+        )
+        return typing.cast(str, result)
+
+    @_cached_property
+    def path(self) -> str:
+        """Gets the Path property"""
+        result = self._client.invoke_capability(
+            'Microsoft.Extensions.Configuration/IConfigurationSection.path',
+            {'context': self._handle}
+        )
+        return typing.cast(str, result)
+
+    @_uncached_property
+    def value(self) -> str | None:
+        """Gets the Value property"""
+        result = self._client.invoke_capability(
+            'Microsoft.Extensions.Configuration/IConfigurationSection.value',
+            {'context': self._handle}
+        )
+        return typing.cast(str | None, result)
+
+    @value.setter
+    def value(self, value: str | None) -> None:
+        """Sets the Value property"""
+        self._client.invoke_capability(
+            'Microsoft.Extensions.Configuration/IConfigurationSection.setValue',
+            {'context': self._handle, 'value': value}
+        )
+
 
 class AbstractContainerRegistry(abc.ABC):
     """Abstract base class for AbstractContainerRegistry."""
@@ -2154,7 +2213,7 @@ class DistributedApplicationBuilder:
         )
         return typing.cast(ContainerResource, result)
 
-    def add_dockerfile(self, name: str, context_path: str, *, dockerfile_path: str | None = None, stage: str | None = None, **kwargs: typing.Unpack["ContainerResourceKwargs"]) -> ContainerResource:  # type: ignore
+    def add_dockerfile(self, name: str, context_path: str, *, dockerfile_path: str | None | None = None, stage: str | None | None = None, **kwargs: typing.Unpack["ContainerResourceKwargs"]) -> ContainerResource:  # type: ignore
         """Adds a container resource built from a Dockerfile"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['name'] = name
@@ -2170,7 +2229,7 @@ class DistributedApplicationBuilder:
         )
         return typing.cast(ContainerResource, result)
 
-    def add_dockerfile_builder(self, name: str, context_path: str, callback: typing.Callable[[DockerfileBuilderCallbackContext], None], *, stage: str | None = None, **kwargs: typing.Unpack["ContainerResourceKwargs"]) -> ContainerResource:  # type: ignore
+    def add_dockerfile_builder(self, name: str, context_path: str, callback: typing.Callable[[DockerfileBuilderCallbackContext], None], *, stage: str | None | None = None, **kwargs: typing.Unpack["ContainerResourceKwargs"]) -> ContainerResource:  # type: ignore
         """Adds a container resource built from a programmatically generated Dockerfile"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['name'] = name
@@ -2197,13 +2256,14 @@ class DistributedApplicationBuilder:
         )
         return typing.cast(DotnetToolResource, result)
 
-    def add_executable(self, name: str, command: str, working_dir: str, args: typing.Iterable[str], **kwargs: typing.Unpack["ExecutableResourceKwargs"]) -> ExecutableResource:  # type: ignore
+    def add_executable(self, name: str, command: str, working_dir: str, *, args: typing.Iterable[str] | None | None = None, **kwargs: typing.Unpack["ExecutableResourceKwargs"]) -> ExecutableResource:  # type: ignore
         """Adds an executable resource"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['name'] = name
         rpc_args['command'] = command
         rpc_args['workingDirectory'] = working_dir
-        rpc_args['args'] = args
+        if args is not None:
+            rpc_args['args'] = args
         result = self._client.invoke_capability(
             'Aspire.Hosting/addExecutable',
             rpc_args,
@@ -2223,7 +2283,7 @@ class DistributedApplicationBuilder:
         )
         return typing.cast(ExternalServiceResource, result)
 
-    def add_parameter(self, name: str, *, value: str | None = None, publish_value_as_default: bool = False, secret: bool = False, **kwargs: typing.Unpack["ParameterResourceKwargs"]) -> ParameterResource:  # type: ignore
+    def add_parameter(self, name: str, *, value: str | None | None = None, publish_value_as_default: bool = False, secret: bool = False, **kwargs: typing.Unpack["ParameterResourceKwargs"]) -> ParameterResource:  # type: ignore
         """Adds a parameter resource"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['name'] = name
@@ -2296,7 +2356,7 @@ class DistributedApplicationBuilder:
         )
         return typing.cast(ProjectResource, result)
 
-    def add_c_sharp_app(self, name: str, path: str, *, options: ProjectResourceOptions | None = None, **kwargs: typing.Unpack["CSharpAppResourceKwargs"]) -> CSharpAppResource:  # type: ignore
+    def add_c_sharp_app(self, name: str, path: str, *, options: ProjectResourceOptions | None | None = None, **kwargs: typing.Unpack["CSharpAppResourceKwargs"]) -> CSharpAppResource:  # type: ignore
         """Adds a C# application resource"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['name'] = name
@@ -2357,7 +2417,7 @@ class DistributedApplicationBuilder:
             rpc_args
         )
 
-    def add_test_redis(self, name: str, *, port: int | None = None, **kwargs: typing.Unpack["TestRedisResourceKwargs"]) -> TestRedisResource:  # type: ignore
+    def add_test_redis(self, name: str, *, port: int | None | None = None, **kwargs: typing.Unpack["TestRedisResourceKwargs"]) -> TestRedisResource:  # type: ignore
         """Adds a test Redis resource"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['name'] = name
@@ -2434,7 +2494,7 @@ class AbstractDistributedApplicationPipeline:
         )
         return typing.cast(AbstractDistributedApplicationPipeline, result)
 
-    def add_step(self, step_name: str, callback: typing.Callable[[PipelineStepContext], None], *, depends_on: typing.Iterable[str] | None = None, required_by: typing.Iterable[str] | None = None) -> None:
+    def add_step(self, step_name: str, callback: typing.Callable[[PipelineStepContext], None], *, depends_on: typing.Iterable[str] | None | None = None, required_by: typing.Iterable[str] | None | None = None) -> None:
         """Adds a pipeline step to the application"""
         rpc_args: dict[str, typing.Any] = {'pipeline': self._handle}
         rpc_args['stepName'] = step_name
@@ -2482,7 +2542,7 @@ class AbstractExecutionConfigurationBuilder:
         """The underlying object reference handle."""
         return self._handle
 
-    def build(self, execution_context: DistributedApplicationExecutionContext, *, resource_logger: AbstractLogger | None = None, timeout: int | None = None) -> AbstractExecutionConfigurationResult:
+    def build(self, execution_context: DistributedApplicationExecutionContext, *, resource_logger: AbstractLogger | None | None = None, timeout: int | None = None) -> AbstractExecutionConfigurationResult:
         """Builds the execution configuration"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['executionContext'] = execution_context
@@ -2592,6 +2652,57 @@ class AbstractHostEnvironment:
     def handle(self) -> Handle:
         """The underlying object reference handle."""
         return self._handle
+
+    @_uncached_property
+    def env_name(self) -> str:
+        """Gets the EnvironmentName property"""
+        result = self._client.invoke_capability(
+            'Microsoft.Extensions.Hosting/IHostEnvironment.environmentName',
+            {'context': self._handle}
+        )
+        return typing.cast(str, result)
+
+    @env_name.setter
+    def env_name(self, value: str) -> None:
+        """Sets the EnvironmentName property"""
+        self._client.invoke_capability(
+            'Microsoft.Extensions.Hosting/IHostEnvironment.setEnvironmentName',
+            {'context': self._handle, 'value': value}
+        )
+
+    @_uncached_property
+    def app_name(self) -> str:
+        """Gets the ApplicationName property"""
+        result = self._client.invoke_capability(
+            'Microsoft.Extensions.Hosting/IHostEnvironment.applicationName',
+            {'context': self._handle}
+        )
+        return typing.cast(str, result)
+
+    @app_name.setter
+    def app_name(self, value: str) -> None:
+        """Sets the ApplicationName property"""
+        self._client.invoke_capability(
+            'Microsoft.Extensions.Hosting/IHostEnvironment.setApplicationName',
+            {'context': self._handle, 'value': value}
+        )
+
+    @_uncached_property
+    def content_root_path(self) -> str:
+        """Gets the ContentRootPath property"""
+        result = self._client.invoke_capability(
+            'Microsoft.Extensions.Hosting/IHostEnvironment.contentRootPath',
+            {'context': self._handle}
+        )
+        return typing.cast(str, result)
+
+    @content_root_path.setter
+    def content_root_path(self, value: str) -> None:
+        """Sets the ContentRootPath property"""
+        self._client.invoke_capability(
+            'Microsoft.Extensions.Hosting/IHostEnvironment.setContentRootPath',
+            {'context': self._handle, 'value': value}
+        )
 
     def is_development(self) -> bool:
         """Checks if running in Development environment"""
@@ -2848,7 +2959,7 @@ class AbstractReportingTask:
             rpc_args
         )
 
-    def complete_task(self, *, completion_message: str | None = None, completion_state: str = "completed", timeout: int | None = None) -> None:
+    def complete_task(self, *, completion_message: str | None | None = None, completion_state: str = "completed", timeout: int | None = None) -> None:
         """Completes the reporting task with plain-text completion text"""
         rpc_args: dict[str, typing.Any] = {'reportingTask': self._handle}
         if completion_message is not None:
@@ -2875,6 +2986,9 @@ class AbstractReportingTask:
             rpc_args
         )
 
+
+class AbstractResourceAnnotation(abc.ABC):
+    """Abstract base class for AbstractResourceAnnotation."""
 
 class AbstractValueWithReferences(abc.ABC):
     """Abstract base class for AbstractValueWithReferences."""
@@ -3264,16 +3378,16 @@ class ContainerImagePushOptions:
         return self._handle
 
     @_uncached_property
-    def remote_image_name(self) -> str:
+    def remote_image_name(self) -> str | None:
         """Gets the RemoteImageName property"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.remoteImageName',
             {'context': self._handle}
         )
-        return typing.cast(str, result)
+        return typing.cast(str | None, result)
 
     @remote_image_name.setter
-    def remote_image_name(self, value: str) -> None:
+    def remote_image_name(self, value: str | None) -> None:
         """Sets the RemoteImageName property"""
         self._client.invoke_capability(
             'Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.setRemoteImageName',
@@ -3281,16 +3395,16 @@ class ContainerImagePushOptions:
         )
 
     @_uncached_property
-    def remote_image_tag(self) -> str:
+    def remote_image_tag(self) -> str | None:
         """Gets the RemoteImageTag property"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.remoteImageTag',
             {'context': self._handle}
         )
-        return typing.cast(str, result)
+        return typing.cast(str | None, result)
 
     @remote_image_tag.setter
-    def remote_image_tag(self, value: str) -> None:
+    def remote_image_tag(self, value: str | None) -> None:
         """Sets the RemoteImageTag property"""
         self._client.invoke_capability(
             'Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.setRemoteImageTag',
@@ -3338,6 +3452,126 @@ class ContainerImagePushOptionsCallbackContext:
             {'context': self._handle}
         )
         return typing.cast(ContainerImagePushOptions, result)
+
+
+class ContainerImageReference:
+    """Type class for ContainerImageReference."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"ContainerImageReference(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    @_cached_property
+    def resource(self) -> AbstractResource:
+        """Gets the Resource property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerImageReference.resource',
+            {'context': self._handle}
+        )
+        return typing.cast(AbstractResource, result)
+
+    @_cached_property
+    def value_expression(self) -> str:
+        """Gets the ValueExpression property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerImageReference.valueExpression',
+            {'context': self._handle}
+        )
+        return typing.cast(str, result)
+
+
+class ContainerMountAnnotation:
+    """Type class for ContainerMountAnnotation."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"ContainerMountAnnotation(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    @_cached_property
+    def source(self) -> str | None:
+        """Gets the Source property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerMountAnnotation.source',
+            {'context': self._handle}
+        )
+        return typing.cast(str | None, result)
+
+    @_cached_property
+    def target(self) -> str:
+        """Gets the Target property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerMountAnnotation.target',
+            {'context': self._handle}
+        )
+        return typing.cast(str, result)
+
+    @_cached_property
+    def type(self) -> ContainerMountType:
+        """Gets the Type property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerMountAnnotation.type',
+            {'context': self._handle}
+        )
+        return typing.cast(ContainerMountType, result)
+
+    @_cached_property
+    def is_read_only(self) -> bool:
+        """Gets the IsReadOnly property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerMountAnnotation.isReadOnly',
+            {'context': self._handle}
+        )
+        return typing.cast(bool, result)
+
+
+class ContainerPortReference:
+    """Type class for ContainerPortReference."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"ContainerPortReference(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    @_cached_property
+    def resource(self) -> AbstractResource:
+        """Gets the Resource property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerPortReference.resource',
+            {'context': self._handle}
+        )
+        return typing.cast(AbstractResource, result)
+
+    @_cached_property
+    def value_expression(self) -> str:
+        """Gets the ValueExpression property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/ContainerPortReference.valueExpression',
+            {'context': self._handle}
+        )
+        return typing.cast(str, result)
 
 
 class DistributedApplication:
@@ -3475,7 +3709,7 @@ class DistributedApplicationModel:
         )
         return result
 
-    def find_resource_by_name(self, name: str) -> AbstractResource:
+    def find_resource_by_name(self, name: str) -> AbstractResource | None:
         """Finds a resource by name"""
         rpc_args: dict[str, typing.Any] = {'model': self._handle}
         rpc_args['name'] = name
@@ -3483,7 +3717,7 @@ class DistributedApplicationModel:
             'Aspire.Hosting/findResourceByName',
             rpc_args,
         )
-        return typing.cast(AbstractResource, result)
+        return typing.cast(AbstractResource | None, result)
 
 
 class DockerfileBuilder:
@@ -3501,7 +3735,7 @@ class DockerfileBuilder:
         """The underlying object reference handle."""
         return self._handle
 
-    def arg(self, name: str, *, default_value: str | None = None) -> DockerfileBuilder:
+    def arg(self, name: str, *, default_value: str | None | None = None) -> DockerfileBuilder:
         """Adds a global ARG statement to the Dockerfile"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['name'] = name
@@ -3513,7 +3747,7 @@ class DockerfileBuilder:
         )
         return typing.cast(DockerfileBuilder, result)
 
-    def from_(self, image: str, *, stage_name: str | None = None) -> DockerfileStage:
+    def from_(self, image: str, *, stage_name: str | None | None = None) -> DockerfileStage:
         """Adds a FROM statement to start a Dockerfile stage"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['image'] = image
@@ -3525,7 +3759,7 @@ class DockerfileBuilder:
         )
         return typing.cast(DockerfileStage, result)
 
-    def add_container_files_stages(self, resource: AbstractResource, *, logger: AbstractLogger | None = None) -> DockerfileBuilder:
+    def add_container_files_stages(self, resource: AbstractResource, *, logger: AbstractLogger | None | None = None) -> DockerfileBuilder:
         """Adds Dockerfile stages for published container files"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['resource'] = resource
@@ -3604,7 +3838,7 @@ class DockerfileStage:
         """The underlying object reference handle."""
         return self._handle
 
-    def arg(self, name: str, *, default_value: str | None = None) -> DockerfileStage:
+    def arg(self, name: str, *, default_value: str | None | None = None) -> DockerfileStage:
         """Adds an ARG statement to a Dockerfile stage"""
         rpc_args: dict[str, typing.Any] = {'stage': self._handle}
         rpc_args['name'] = name
@@ -3636,7 +3870,7 @@ class DockerfileStage:
         )
         return typing.cast(DockerfileStage, result)
 
-    def copy(self, source: str, destination: str, *, chown: str | None = None) -> DockerfileStage:
+    def copy(self, source: str, destination: str, *, chown: str | None | None = None) -> DockerfileStage:
         """Adds a COPY statement to a Dockerfile stage"""
         rpc_args: dict[str, typing.Any] = {'stage': self._handle}
         rpc_args['source'] = source
@@ -3649,7 +3883,7 @@ class DockerfileStage:
         )
         return typing.cast(DockerfileStage, result)
 
-    def copy_from(self, from_: str, source: str, destination: str, *, chown: str | None = None) -> DockerfileStage:
+    def copy_from(self, from_: str, source: str, destination: str, *, chown: str | None | None = None) -> DockerfileStage:
         """Adds a COPY --from statement to a Dockerfile stage"""
         rpc_args: dict[str, typing.Any] = {'stage': self._handle}
         rpc_args['from'] = from_
@@ -3744,7 +3978,7 @@ class DockerfileStage:
         )
         return typing.cast(DockerfileStage, result)
 
-    def add_container_files(self, resource: AbstractResource, root_destination_path: str, *, logger: AbstractLogger | None = None) -> DockerfileStage:
+    def add_container_files(self, resource: AbstractResource, root_destination_path: str, *, logger: AbstractLogger | None | None = None) -> DockerfileStage:
         """Adds COPY --from statements for published container files"""
         rpc_args: dict[str, typing.Any] = {'stage': self._handle}
         rpc_args['resource'] = resource
@@ -3792,13 +4026,13 @@ class EndpointReference:
         return typing.cast(str, result)
 
     @_cached_property
-    def error_message(self) -> str:
+    def error_message(self) -> str | None:
         """Gets the ErrorMessage property"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.ApplicationModel/EndpointReference.errorMessage',
             {'context': self._handle}
         )
-        return typing.cast(str, result)
+        return typing.cast(str | None, result)
 
     @_cached_property
     def is_allocated(self) -> bool:
@@ -3873,13 +4107,13 @@ class EndpointReference:
         return typing.cast(int, result)
 
     @_cached_property
-    def target_port(self) -> int:
+    def target_port(self) -> int | None:
         """Gets the TargetPort property"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.ApplicationModel/EndpointReference.targetPort',
             {'context': self._handle}
         )
-        return typing.cast(int, result)
+        return typing.cast(int | None, result)
 
     @_cached_property
     def host(self) -> str:
@@ -4026,16 +4260,16 @@ class EndpointUpdateContext:
         )
 
     @_uncached_property
-    def port(self) -> int:
+    def port(self) -> int | None:
         """Gets the Port property"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.port',
             {'context': self._handle}
         )
-        return typing.cast(int, result)
+        return typing.cast(int | None, result)
 
     @port.setter
-    def port(self, value: int) -> None:
+    def port(self, value: int | None) -> None:
         """Sets the Port property"""
         self._client.invoke_capability(
             'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setPort',
@@ -4043,16 +4277,16 @@ class EndpointUpdateContext:
         )
 
     @_uncached_property
-    def target_port(self) -> int:
+    def target_port(self) -> int | None:
         """Gets the TargetPort property"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.targetPort',
             {'context': self._handle}
         )
-        return typing.cast(int, result)
+        return typing.cast(int | None, result)
 
     @target_port.setter
-    def target_port(self, value: int) -> None:
+    def target_port(self, value: int | None) -> None:
         """Sets the TargetPort property"""
         self._client.invoke_capability(
             'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setTargetPort',
@@ -4724,13 +4958,13 @@ class PipelineStep:
         return typing.cast(str, result)
 
     @_cached_property
-    def description(self) -> str:
+    def description(self) -> str | None:
         """Gets the human-readable description of the step"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.Pipelines/PipelineStep.description',
             {'context': self._handle}
         )
-        return typing.cast(str, result)
+        return typing.cast(str | None, result)
 
     def depends_on(self, step_name: str) -> None:
         """Adds a dependency on another step by name"""
@@ -4933,16 +5167,16 @@ class ProjectResourceOptions:
         return self._handle
 
     @_uncached_property
-    def launch_profile_name(self) -> str:
+    def launch_profile_name(self) -> str | None:
         """Gets the LaunchProfileName property"""
         result = self._client.invoke_capability(
             'Aspire.Hosting/ProjectResourceOptions.launchProfileName',
             {'context': self._handle}
         )
-        return typing.cast(str, result)
+        return typing.cast(str | None, result)
 
     @launch_profile_name.setter
-    def launch_profile_name(self, value: str) -> None:
+    def launch_profile_name(self, value: str | None) -> None:
         """Sets the LaunchProfileName property"""
         self._client.invoke_capability(
             'Aspire.Hosting/ProjectResourceOptions.setLaunchProfileName',
@@ -5017,10 +5251,11 @@ class ReferenceExpressionBuilder:
             rpc_args
         )
 
-    def append_formatted(self, value: str, *, format: str | None = None) -> None:
+    def append_formatted(self, *, value: str | None | None = None, format: str | None | None = None) -> None:
         """Appends a formatted string value to the reference expression"""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
-        rpc_args['value'] = value
+        if value is not None:
+            rpc_args['value'] = value
         if format is not None:
             rpc_args['format'] = format
         self._client.invoke_capability(
@@ -5028,7 +5263,7 @@ class ReferenceExpressionBuilder:
             rpc_args
         )
 
-    def append_value_provider(self, value_provider: typing.Any, *, format: str | None = None) -> None:
+    def append_value_provider(self, value_provider: typing.Any, *, format: str | None | None = None) -> None:
         """Appends a value provider to the reference expression"""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
         rpc_args['valueProvider'] = value_provider
@@ -5132,7 +5367,7 @@ class ResourceNotificationService:
         """The underlying object reference handle."""
         return self._handle
 
-    def wait_for_resource_state(self, resource_name: str, *, target_state: str | None = None) -> None:
+    def wait_for_resource_state(self, resource_name: str, *, target_state: str | None | None = None) -> None:
         """Waits for a resource to reach a specified state"""
         rpc_args: dict[str, typing.Any] = {'notificationService': self._handle}
         rpc_args['resourceName'] = resource_name
@@ -5173,7 +5408,7 @@ class ResourceNotificationService:
             rpc_args
         )
 
-    def try_get_resource_state(self, resource_name: str) -> ResourceEventDto:
+    def try_get_resource_state(self, resource_name: str) -> ResourceEventDto | None:
         """Tries to get the current state of a resource"""
         rpc_args: dict[str, typing.Any] = {'notificationService': self._handle}
         rpc_args['resourceName'] = resource_name
@@ -5181,9 +5416,9 @@ class ResourceNotificationService:
             'Aspire.Hosting/tryGetResourceState',
             rpc_args,
         )
-        return typing.cast(ResourceEventDto, result)
+        return typing.cast(ResourceEventDto | None, result)
 
-    def publish_resource_update(self, resource: AbstractResource, *, state: str | None = None, state_style: str | None = None) -> None:
+    def publish_resource_update(self, resource: AbstractResource, *, state: str | None | None = None, state_style: str | None | None = None) -> None:
         """Publishes an update for a resource's state"""
         rpc_args: dict[str, typing.Any] = {'notificationService': self._handle}
         rpc_args['resource'] = resource
@@ -5316,7 +5551,7 @@ class ResourceUrlsCallbackContext:
         )
         return typing.cast(DistributedApplicationExecutionContext, result)
 
-    def get_endpoint(self, name: str) -> EndpointReference:
+    def get_endpoint(self, name: str) -> EndpointReference | None:
         """Gets an endpoint reference from the associated resource"""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
         rpc_args['name'] = name
@@ -5324,7 +5559,7 @@ class ResourceUrlsCallbackContext:
             'Aspire.Hosting.ApplicationModel/getEndpoint',
             rpc_args,
         )
-        return typing.cast(EndpointReference, result)
+        return typing.cast(EndpointReference | None, result)
 
 
 class ResourceUrlsEditor:
@@ -5351,7 +5586,7 @@ class ResourceUrlsEditor:
         )
         return typing.cast(DistributedApplicationExecutionContext, result)
 
-    def add(self, url: str | ReferenceExpression, *, display_text: str | None = None) -> None:
+    def add(self, url: str | ReferenceExpression, *, display_text: str | None | None = None) -> None:
         """Adds a displayed URL"""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
         rpc_args['url'] = url
@@ -5362,7 +5597,7 @@ class ResourceUrlsEditor:
             rpc_args
         )
 
-    def add_for_endpoint(self, endpoint: EndpointReference, url: str | ReferenceExpression, *, display_text: str | None = None) -> None:
+    def add_for_endpoint(self, endpoint: EndpointReference, url: str | ReferenceExpression, *, display_text: str | None | None = None) -> None:
         """Adds a displayed URL for a specific endpoint"""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
         rpc_args['endpoint'] = endpoint
@@ -5391,16 +5626,16 @@ class TestCallbackContext:
         return self._handle
 
     @_uncached_property
-    def name(self) -> str:
+    def name(self) -> str | None:
         """Gets the Name property"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.name',
             {'context': self._handle}
         )
-        return typing.cast(str, result)
+        return typing.cast(str | None, result)
 
     @name.setter
-    def name(self, value: str) -> None:
+    def name(self, value: str | None) -> None:
         """Sets the Name property"""
         self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.setName',
@@ -5500,16 +5735,16 @@ class TestEnvironmentContext:
         )
 
     @_uncached_property
-    def description(self) -> str:
+    def description(self) -> str | None:
         """Gets the Description property"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.description',
             {'context': self._handle}
         )
-        return typing.cast(str, result)
+        return typing.cast(str | None, result)
 
     @description.setter
-    def description(self, value: str) -> None:
+    def description(self, value: str | None) -> None:
         """Sets the Description property"""
         self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.setDescription',
@@ -5698,11 +5933,11 @@ class AbstractResource(abc.ABC):
         """Configures a resource to use a container registry"""
 
     @abc.abstractmethod
-    def with_dockerfile_base_image(self, *, build_image: str | None = None, runtime_image: str | None = None) -> typing.Self:
+    def with_dockerfile_base_image(self, *, build_image: str | None | None = None, runtime_image: str | None | None = None) -> typing.Self:
         """Sets the base image for a Dockerfile build"""
 
     @abc.abstractmethod
-    def with_required_command(self, command: str, *, help_link: str | None = None) -> typing.Self:
+    def with_required_command(self, command: str, *, help_link: str | None | None = None) -> typing.Self:
         """Adds a required command dependency"""
 
     @abc.abstractmethod
@@ -5710,7 +5945,7 @@ class AbstractResource(abc.ABC):
         """Customizes displayed URLs via callback"""
 
     @abc.abstractmethod
-    def with_url(self, url: str | ReferenceExpression, *, display_text: str | None = None) -> typing.Self:
+    def with_url(self, url: str | ReferenceExpression, *, display_text: str | None | None = None) -> typing.Self:
         """Adds or modifies displayed URLs"""
 
     @abc.abstractmethod
@@ -5730,7 +5965,7 @@ class AbstractResource(abc.ABC):
         """Adds a health check by key"""
 
     @abc.abstractmethod
-    def with_command(self, name: str, display_name: str, execute_command: typing.Callable[[ExecuteCommandContext], ExecuteCommandResult], *, command_options: CommandOptions | None = None) -> typing.Self:
+    def with_command(self, name: str, display_name: str, execute_command: typing.Callable[[ExecuteCommandContext], ExecuteCommandResult], *, command_options: CommandOptions | None | None = None) -> typing.Self:
         """Adds a resource command"""
 
     @abc.abstractmethod
@@ -5738,7 +5973,7 @@ class AbstractResource(abc.ABC):
         """Adds a process resource command"""
 
     @abc.abstractmethod
-    def with_process_command_factory(self, command_name: str, display_name: str, create_process_spec: typing.Callable[[ExecuteCommandContext], ProcessCommandSpecExportData], *, options: ProcessCommandResultExportOptions | None = None) -> typing.Self:
+    def with_process_command_factory(self, command_name: str, display_name: str, create_process_spec: typing.Callable[[ExecuteCommandContext], ProcessCommandSpecExportData], *, options: ProcessCommandResultExportOptions | None | None = None) -> typing.Self:
         """Adds a process resource command via callback"""
 
     @abc.abstractmethod
@@ -5762,7 +5997,7 @@ class AbstractResource(abc.ABC):
         """Excludes the resource from MCP server exposure"""
 
     @abc.abstractmethod
-    def with_pipeline_step_factory(self, step_name: str, callback: typing.Callable[[PipelineStepContext], None], *, depends_on: typing.Iterable[str] | None = None, required_by: typing.Iterable[str] | None = None, tags: typing.Iterable[str] | None = None, description: str | None = None) -> typing.Self:
+    def with_pipeline_step_factory(self, step_name: str, callback: typing.Callable[[PipelineStepContext], None], *, depends_on: typing.Iterable[str] | None | None = None, required_by: typing.Iterable[str] | None | None = None, tags: typing.Iterable[str] | None | None = None, description: str | None | None = None) -> typing.Self:
         """Adds a pipeline step to the resource"""
 
     @abc.abstractmethod
@@ -5794,7 +6029,7 @@ class AbstractResource(abc.ABC):
         """Creates an execution configuration builder"""
 
     @abc.abstractmethod
-    def with_optional_string(self, *, value: str | None = None, enabled: bool = True) -> typing.Self:
+    def with_optional_string(self, *, value: str | None | None = None, enabled: bool = True) -> typing.Self:
         """Adds an optional string parameter"""
 
     @abc.abstractmethod
@@ -5858,7 +6093,7 @@ class AbstractResource(abc.ABC):
         """Configures a named endpoint"""
 
     @abc.abstractmethod
-    def with_merge_logging(self, log_level: str, *, log_path: str | None = None, enable_console: bool = True, max_files: int | None = None) -> typing.Self:
+    def with_merge_logging(self, log_level: str, *, log_path: str | None = None, enable_console: bool = True, max_files: int | None | None = None) -> typing.Self:
         """Configures resource logging"""
 
     @abc.abstractmethod
@@ -5942,7 +6177,7 @@ class AbstractResourceWithEndpoints(AbstractResource):
     """Abstract base class for AbstractResourceWithEndpoints interface."""
 
     @abc.abstractmethod
-    def with_mcp_server(self, *, path: str = "/mcp", endpoint_name: str | None = None) -> typing.Self:
+    def with_mcp_server(self, *, path: str | None | None = "/mcp", endpoint_name: str | None | None = None) -> typing.Self:
         """Configures an MCP server endpoint on the resource"""
 
     @abc.abstractmethod
@@ -5950,23 +6185,23 @@ class AbstractResourceWithEndpoints(AbstractResource):
         """Updates a named endpoint via callback"""
 
     @abc.abstractmethod
-    def with_http_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None = None, create_if_not_exists: bool = True) -> typing.Self:
+    def with_http_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None | None = None, create_if_not_exists: bool = True) -> typing.Self:
         """Updates an HTTP endpoint via callback"""
 
     @abc.abstractmethod
-    def with_https_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None = None, create_if_not_exists: bool = True) -> typing.Self:
+    def with_https_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None | None = None, create_if_not_exists: bool = True) -> typing.Self:
         """Updates an HTTPS endpoint via callback"""
 
     @abc.abstractmethod
-    def with_endpoint(self, *, port: int | None = None, target_port: int | None = None, scheme: str | None = None, name: str | None = None, env: str | None = None, is_proxied: bool = True, is_external: bool | None = None, protocol: ProtocolType | None = None) -> typing.Self:
+    def with_endpoint(self, *, port: int | None | None = None, target_port: int | None | None = None, scheme: str | None | None = None, name: str | None | None = None, env: str | None | None = None, is_proxied: bool = True, is_external: bool | None | None = None, protocol: ProtocolType | None | None = None) -> typing.Self:
         """Adds a network endpoint"""
 
     @abc.abstractmethod
-    def with_http_endpoint(self, *, port: int | None = None, target_port: int | None = None, name: str | None = None, env: str | None = None, is_proxied: bool = True) -> typing.Self:
+    def with_http_endpoint(self, *, port: int | None | None = None, target_port: int | None | None = None, name: str | None | None = None, env: str | None | None = None, is_proxied: bool = True) -> typing.Self:
         """Adds an HTTP endpoint"""
 
     @abc.abstractmethod
-    def with_https_endpoint(self, *, port: int | None = None, target_port: int | None = None, name: str | None = None, env: str | None = None, is_proxied: bool = True) -> typing.Self:
+    def with_https_endpoint(self, *, port: int | None | None = None, target_port: int | None | None = None, name: str | None | None = None, env: str | None | None = None, is_proxied: bool = True) -> typing.Self:
         """Adds an HTTPS endpoint"""
 
     @abc.abstractmethod
@@ -5982,15 +6217,15 @@ class AbstractResourceWithEndpoints(AbstractResource):
         """Configures resource for HTTP/2"""
 
     @abc.abstractmethod
-    def with_http_health_check(self, *, path: str | None = None, status_code: int | None = None, endpoint_name: str | None = None) -> typing.Self:
+    def with_http_health_check(self, *, path: str | None | None = None, status_code: int | None | None = None, endpoint_name: str | None | None = None) -> typing.Self:
         """Adds an HTTP health check"""
 
     @abc.abstractmethod
-    def with_http_command(self, path: str, display_name: str, *, options: HttpCommandExportOptions | None = None) -> typing.Self:
+    def with_http_command(self, path: str, display_name: str, *, options: HttpCommandExportOptions | None | None = None) -> typing.Self:
         """Adds an HTTP resource command"""
 
     @abc.abstractmethod
-    def with_http_probe(self, probe_type: ProbeType, *, path: str | None = None, initial_delay_seconds: int | None = None, period_seconds: int | None = None, timeout_seconds: int | None = None, failure_threshold: int | None = None, success_threshold: int | None = None, endpoint_name: str | None = None) -> typing.Self:
+    def with_http_probe(self, probe_type: ProbeType, *, path: str | None | None = None, initial_delay_seconds: int | None | None = None, period_seconds: int | None | None = None, timeout_seconds: int | None | None = None, failure_threshold: int | None | None = None, success_threshold: int | None | None = None, endpoint_name: str | None | None = None) -> typing.Self:
         """Adds an HTTP health probe to the resource"""
 
     @abc.abstractmethod
@@ -6002,7 +6237,7 @@ class AbstractResourceWithEnvironment(AbstractResource):
     """Abstract base class for AbstractResourceWithEnvironment interface."""
 
     @abc.abstractmethod
-    def with_otlp_exporter(self, *, protocol: OtlpProtocol | None = None) -> typing.Self:
+    def with_otlp_exporter(self, *, protocol: OtlpProtocol | None | None = None) -> typing.Self:
         """Configures OTLP telemetry export"""
 
     @abc.abstractmethod
@@ -6018,7 +6253,7 @@ class AbstractResourceWithEnvironment(AbstractResource):
         """Configures which reference values are injected into environment variables"""
 
     @abc.abstractmethod
-    def with_reference(self, source: AbstractResource | EndpointReference | str, *, connection_name: str | None = None, optional: bool = False, name: str | None = None) -> typing.Self:
+    def with_reference(self, source: AbstractResource | EndpointReference | str, *, connection_name: str | None | None = None, optional: bool = False, name: str | None | None = None) -> typing.Self:
         """Adds a reference to another resource"""
 
     @abc.abstractmethod
@@ -6030,7 +6265,7 @@ class AbstractResourceWithEnvironment(AbstractResource):
         """Sets the certificate trust scope"""
 
     @abc.abstractmethod
-    def with_https_developer_certificate(self, *, password: ParameterResource | None = None) -> typing.Self:
+    def with_https_developer_certificate(self, *, password: ParameterResource | None | None = None) -> typing.Self:
         """Configures HTTPS with a developer certificate"""
 
     @abc.abstractmethod
@@ -6058,11 +6293,11 @@ class AbstractResourceWithWaitSupport(AbstractResource):
     """Abstract base class for AbstractResourceWithWaitSupport interface."""
 
     @abc.abstractmethod
-    def wait_for(self, dependency: AbstractResource, *, wait_behavior: WaitBehavior | None = None) -> typing.Self:
+    def wait_for(self, dependency: AbstractResource, *, wait_behavior: WaitBehavior | None | None = None) -> typing.Self:
         """Waits for another resource to be ready"""
 
     @abc.abstractmethod
-    def wait_for_start(self, dependency: AbstractResource, *, wait_behavior: WaitBehavior | None = None) -> typing.Self:
+    def wait_for_start(self, dependency: AbstractResource, *, wait_behavior: WaitBehavior | None | None = None) -> typing.Self:
         """Waits for another resource to start"""
 
     @abc.abstractmethod
@@ -6087,9 +6322,9 @@ class _BaseResourceKwargs(typing.TypedDict, total=False):
 
     container_registry: AbstractResource
     dockerfile_base_image: DockerfileBaseImageParameters | typing.Literal[True]
-    required_command: str | tuple[str, str]
+    required_command: str | tuple[str, str | None]
     urls: typing.Callable[[ResourceUrlsCallbackContext], None]
-    url: str | ReferenceExpression | tuple[str | ReferenceExpression, str]
+    url: str | ReferenceExpression | tuple[str | ReferenceExpression, str | None]
     url_for_endpoint: tuple[str, typing.Callable[[ResourceUrlAnnotation], None]]
     exclude_from_manifest: typing.Literal[True]
     explicit_start: typing.Literal[True]
@@ -6151,7 +6386,7 @@ class _BaseResource(AbstractResource):
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_dockerfile_base_image(self, *, build_image: str | None = None, runtime_image: str | None = None) -> typing.Self:
+    def with_dockerfile_base_image(self, *, build_image: str | None | None = None, runtime_image: str | None | None = None) -> typing.Self:
         """Sets the base image for a Dockerfile build"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if build_image is not None:
@@ -6165,7 +6400,7 @@ class _BaseResource(AbstractResource):
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_required_command(self, command: str, *, help_link: str | None = None) -> typing.Self:
+    def with_required_command(self, command: str, *, help_link: str | None | None = None) -> typing.Self:
         """Adds a required command dependency"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['command'] = command
@@ -6189,7 +6424,7 @@ class _BaseResource(AbstractResource):
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_url(self, url: str | ReferenceExpression, *, display_text: str | None = None) -> typing.Self:
+    def with_url(self, url: str | ReferenceExpression, *, display_text: str | None | None = None) -> typing.Self:
         """Adds or modifies displayed URLs"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['url'] = url
@@ -6245,7 +6480,7 @@ class _BaseResource(AbstractResource):
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_command(self, name: str, display_name: str, execute_command: typing.Callable[[ExecuteCommandContext], ExecuteCommandResult], *, command_options: CommandOptions | None = None) -> typing.Self:
+    def with_command(self, name: str, display_name: str, execute_command: typing.Callable[[ExecuteCommandContext], ExecuteCommandResult], *, command_options: CommandOptions | None | None = None) -> typing.Self:
         """Adds a resource command"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['name'] = name
@@ -6273,7 +6508,7 @@ class _BaseResource(AbstractResource):
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_process_command_factory(self, command_name: str, display_name: str, create_process_spec: typing.Callable[[ExecuteCommandContext], ProcessCommandSpecExportData], *, options: ProcessCommandResultExportOptions | None = None) -> typing.Self:
+    def with_process_command_factory(self, command_name: str, display_name: str, create_process_spec: typing.Callable[[ExecuteCommandContext], ProcessCommandSpecExportData], *, options: ProcessCommandResultExportOptions | None | None = None) -> typing.Self:
         """Adds a process resource command via callback"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['commandName'] = command_name
@@ -6345,7 +6580,7 @@ class _BaseResource(AbstractResource):
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_pipeline_step_factory(self, step_name: str, callback: typing.Callable[[PipelineStepContext], None], *, depends_on: typing.Iterable[str] | None = None, required_by: typing.Iterable[str] | None = None, tags: typing.Iterable[str] | None = None, description: str | None = None) -> typing.Self:
+    def with_pipeline_step_factory(self, step_name: str, callback: typing.Callable[[PipelineStepContext], None], *, depends_on: typing.Iterable[str] | None | None = None, required_by: typing.Iterable[str] | None | None = None, tags: typing.Iterable[str] | None | None = None, description: str | None | None = None) -> typing.Self:
         """Adds a pipeline step to the resource"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['stepName'] = step_name
@@ -6438,7 +6673,7 @@ class _BaseResource(AbstractResource):
         )
         return typing.cast(AbstractExecutionConfigurationBuilder, result)
 
-    def with_optional_string(self, *, value: str | None = None, enabled: bool = True) -> typing.Self:
+    def with_optional_string(self, *, value: str | None | None = None, enabled: bool = True) -> typing.Self:
         """Adds an optional string parameter"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if value is not None:
@@ -6625,7 +6860,7 @@ class _BaseResource(AbstractResource):
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_merge_logging(self, log_level: str, *, log_path: str | None = None, enable_console: bool = True, max_files: int | None = None) -> typing.Self:
+    def with_merge_logging(self, log_level: str, *, log_path: str | None = None, enable_console: bool = True, max_files: int | None | None = None) -> typing.Self:
         """Configures resource logging"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['logLevel'] = log_level
@@ -6684,13 +6919,13 @@ class _BaseResource(AbstractResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["command"] = typing.cast(str, _required_command)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withRequiredCommand', rpc_args))
-            elif _validate_tuple_types(_required_command, (str, str)):
+            elif _validate_tuple_types(_required_command, (str, str | None)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["command"] = typing.cast(tuple[str, str], _required_command)[0]
-                rpc_args["helpLink"] = typing.cast(tuple[str, str], _required_command)[1]
+                rpc_args["command"] = typing.cast(tuple[str, str | None], _required_command)[0]
+                rpc_args["helpLink"] = typing.cast(tuple[str, str | None], _required_command)[1]
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withRequiredCommand', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'required_command'. Expected: str or (str, str)")
+                raise TypeError("Invalid type for option 'required_command'. Expected: str or (str, str | None)")
         if _urls := kwargs.pop("urls", None):
             if _validate_type(_urls, typing.Callable[[ResourceUrlsCallbackContext], None]):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -6703,13 +6938,13 @@ class _BaseResource(AbstractResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["url"] = typing.cast(str | ReferenceExpression, _url)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withUrl', rpc_args))
-            elif _validate_tuple_types(_url, (str | ReferenceExpression, str)):
+            elif _validate_tuple_types(_url, (str | ReferenceExpression, str | None)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["url"] = typing.cast(tuple[str | ReferenceExpression, str], _url)[0]
-                rpc_args["displayText"] = typing.cast(tuple[str | ReferenceExpression, str], _url)[1]
+                rpc_args["url"] = typing.cast(tuple[str | ReferenceExpression, str | None], _url)[0]
+                rpc_args["displayText"] = typing.cast(tuple[str | ReferenceExpression, str | None], _url)[1]
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withUrl', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'url'. Expected: str | ReferenceExpression or (str | ReferenceExpression, str)")
+                raise TypeError("Invalid type for option 'url'. Expected: str | ReferenceExpression or (str | ReferenceExpression, str | None)")
         if _url_for_endpoint := kwargs.pop("url_for_endpoint", None):
             if _validate_tuple_types(_url_for_endpoint, (str, typing.Callable[[ResourceUrlAnnotation], None])):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -7055,8 +7290,8 @@ class ContainerResourceKwargs(_BaseResourceKwargs, total=False):
     bind_mount: tuple[str, str] | BindMountParameters
     entrypoint: str
     image_tag: str
-    image_registry: str
-    image: str | tuple[str, str]
+    image_registry: str | None | typing.Literal[True]
+    image: str | tuple[str, str | None]
     image_sha256: str
     container_runtime_args: typing.Iterable[str]
     lifetime: ContainerLifetime
@@ -7071,7 +7306,7 @@ class ContainerResourceKwargs(_BaseResourceKwargs, total=False):
     dockerfile_builder: tuple[str, typing.Callable[[DockerfileBuilderCallbackContext], None]] | DockerfileBuilderParameters
     container_network_alias: str
     mcp_server: McpServerParameters | typing.Literal[True]
-    otlp_exporter: OtlpProtocol | typing.Literal[True]
+    otlp_exporter: OtlpProtocol | None | typing.Literal[True]
     publish_as_connection_string: typing.Literal[True]
     env: tuple[str, str | ReferenceExpression | EndpointReference | ParameterResource | AbstractResourceWithConnectionString | AbstractExpressionValue]
     env_callback: typing.Callable[[EnvironmentCallbackContext], None]
@@ -7087,14 +7322,14 @@ class ContainerResourceKwargs(_BaseResourceKwargs, total=False):
     https_endpoint: HttpsEndpointParameters | typing.Literal[True]
     external_http_endpoints: typing.Literal[True]
     as_http2_service: typing.Literal[True]
-    wait_for: AbstractResource | tuple[AbstractResource, WaitBehavior]
-    wait_for_start: AbstractResource | tuple[AbstractResource, WaitBehavior]
+    wait_for: AbstractResource | tuple[AbstractResource, WaitBehavior | None]
+    wait_for_start: AbstractResource | tuple[AbstractResource, WaitBehavior | None]
     wait_for_completion: AbstractResource | tuple[AbstractResource, int]
     http_health_check: HttpHealthCheckParameters | typing.Literal[True]
     http_command: tuple[str, str] | HttpCommandParameters
     developer_certificate_trust: bool
     certificate_trust_scope: CertificateTrustScope
-    https_developer_certificate: ParameterResource | typing.Literal[True]
+    https_developer_certificate: ParameterResource | None | typing.Literal[True]
     without_https_certificate: typing.Literal[True]
     http_probe: ProbeType | HttpProbeParameters
     image_push_options: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]
@@ -7147,10 +7382,11 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_image_registry(self, registry: str) -> typing.Self:
+    def with_image_registry(self, *, registry: str | None | None = None) -> typing.Self:
         """Sets the container image registry"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['registry'] = registry
+        if registry is not None:
+            rpc_args['registry'] = registry
         result = self._client.invoke_capability(
             'Aspire.Hosting/withImageRegistry',
             rpc_args,
@@ -7158,7 +7394,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_image(self, image: str, *, tag: str | None = None) -> typing.Self:
+    def with_image(self, image: str, *, tag: str | None | None = None) -> typing.Self:
         """Sets the container image"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['image'] = image
@@ -7225,7 +7461,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_dockerfile(self, context_path: str, *, dockerfile_path: str | None = None, stage: str | None = None) -> typing.Self:
+    def with_dockerfile(self, context_path: str, *, dockerfile_path: str | None | None = None, stage: str | None | None = None) -> typing.Self:
         """Configures the resource to use a Dockerfile"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['contextPath'] = context_path
@@ -7275,7 +7511,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_container_certificate_paths(self, *, custom_certificates_destination: str | None = None, default_certificate_bundle_paths: typing.Iterable[str] | None = None, default_certificate_dir_paths: typing.Iterable[str] | None = None) -> typing.Self:
+    def with_container_certificate_paths(self, *, custom_certificates_destination: str | None | None = None, default_certificate_bundle_paths: typing.Iterable[str] | None | None = None, default_certificate_dir_paths: typing.Iterable[str] | None | None = None) -> typing.Self:
         """Overrides container certificate bundle and directory paths used for trust configuration"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if custom_certificates_destination is not None:
@@ -7302,7 +7538,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_dockerfile_builder(self, context_path: str, callback: typing.Callable[[DockerfileBuilderCallbackContext], None], *, stage: str | None = None) -> typing.Self:
+    def with_dockerfile_builder(self, context_path: str, callback: typing.Callable[[DockerfileBuilderCallbackContext], None], *, stage: str | None | None = None) -> typing.Self:
         """Configures the resource to use a programmatically generated Dockerfile"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['contextPath'] = context_path
@@ -7327,7 +7563,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_mcp_server(self, *, path: str = "/mcp", endpoint_name: str | None = None) -> typing.Self:
+    def with_mcp_server(self, *, path: str | None | None = "/mcp", endpoint_name: str | None | None = None) -> typing.Self:
         """Configures an MCP server endpoint on the resource"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if path is not None:
@@ -7341,7 +7577,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_otlp_exporter(self, *, protocol: OtlpProtocol | None = None) -> typing.Self:
+    def with_otlp_exporter(self, *, protocol: OtlpProtocol | None | None = None) -> typing.Self:
         """Configures OTLP telemetry export"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if protocol is not None:
@@ -7419,7 +7655,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_reference(self, source: AbstractResource | EndpointReference | str, *, connection_name: str | None = None, optional: bool = False, name: str | None = None) -> typing.Self:
+    def with_reference(self, source: AbstractResource | EndpointReference | str, *, connection_name: str | None | None = None, optional: bool = False, name: str | None | None = None) -> typing.Self:
         """Adds a reference to another resource"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['source'] = source
@@ -7450,7 +7686,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_http_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None = None, create_if_not_exists: bool = True) -> typing.Self:
+    def with_http_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None | None = None, create_if_not_exists: bool = True) -> typing.Self:
         """Updates an HTTP endpoint via callback"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['callback'] = self._client.register_callback(callback)
@@ -7465,7 +7701,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_https_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None = None, create_if_not_exists: bool = True) -> typing.Self:
+    def with_https_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None | None = None, create_if_not_exists: bool = True) -> typing.Self:
         """Updates an HTTPS endpoint via callback"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['callback'] = self._client.register_callback(callback)
@@ -7480,7 +7716,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_endpoint(self, *, port: int | None = None, target_port: int | None = None, scheme: str | None = None, name: str | None = None, env: str | None = None, is_proxied: bool = True, is_external: bool | None = None, protocol: ProtocolType | None = None) -> typing.Self:
+    def with_endpoint(self, *, port: int | None | None = None, target_port: int | None | None = None, scheme: str | None | None = None, name: str | None | None = None, env: str | None | None = None, is_proxied: bool = True, is_external: bool | None | None = None, protocol: ProtocolType | None | None = None) -> typing.Self:
         """Adds a network endpoint"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if port is not None:
@@ -7506,7 +7742,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_http_endpoint(self, *, port: int | None = None, target_port: int | None = None, name: str | None = None, env: str | None = None, is_proxied: bool = True) -> typing.Self:
+    def with_http_endpoint(self, *, port: int | None | None = None, target_port: int | None | None = None, name: str | None | None = None, env: str | None | None = None, is_proxied: bool = True) -> typing.Self:
         """Adds an HTTP endpoint"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if port is not None:
@@ -7526,7 +7762,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_https_endpoint(self, *, port: int | None = None, target_port: int | None = None, name: str | None = None, env: str | None = None, is_proxied: bool = True) -> typing.Self:
+    def with_https_endpoint(self, *, port: int | None | None = None, target_port: int | None | None = None, name: str | None | None = None, env: str | None | None = None, is_proxied: bool = True) -> typing.Self:
         """Adds an HTTPS endpoint"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if port is not None:
@@ -7576,7 +7812,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         self._handle = self._wrap_builder(result)
         return self
 
-    def wait_for(self, dependency: AbstractResource, *, wait_behavior: WaitBehavior | None = None) -> typing.Self:
+    def wait_for(self, dependency: AbstractResource, *, wait_behavior: WaitBehavior | None | None = None) -> typing.Self:
         """Waits for another resource to be ready"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['dependency'] = dependency
@@ -7589,7 +7825,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         self._handle = self._wrap_builder(result)
         return self
 
-    def wait_for_start(self, dependency: AbstractResource, *, wait_behavior: WaitBehavior | None = None) -> typing.Self:
+    def wait_for_start(self, dependency: AbstractResource, *, wait_behavior: WaitBehavior | None | None = None) -> typing.Self:
         """Waits for another resource to start"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['dependency'] = dependency
@@ -7615,7 +7851,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_http_health_check(self, *, path: str | None = None, status_code: int | None = None, endpoint_name: str | None = None) -> typing.Self:
+    def with_http_health_check(self, *, path: str | None | None = None, status_code: int | None | None = None, endpoint_name: str | None | None = None) -> typing.Self:
         """Adds an HTTP health check"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if path is not None:
@@ -7631,7 +7867,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_http_command(self, path: str, display_name: str, *, options: HttpCommandExportOptions | None = None) -> typing.Self:
+    def with_http_command(self, path: str, display_name: str, *, options: HttpCommandExportOptions | None | None = None) -> typing.Self:
         """Adds an HTTP resource command"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['path'] = path
@@ -7667,7 +7903,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_https_developer_certificate(self, *, password: ParameterResource | None = None) -> typing.Self:
+    def with_https_developer_certificate(self, *, password: ParameterResource | None | None = None) -> typing.Self:
         """Configures HTTPS with a developer certificate"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if password is not None:
@@ -7689,7 +7925,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_http_probe(self, probe_type: ProbeType, *, path: str | None = None, initial_delay_seconds: int | None = None, period_seconds: int | None = None, timeout_seconds: int | None = None, failure_threshold: int | None = None, success_threshold: int | None = None, endpoint_name: str | None = None) -> typing.Self:
+    def with_http_probe(self, probe_type: ProbeType, *, path: str | None | None = None, initial_delay_seconds: int | None | None = None, period_seconds: int | None | None = None, timeout_seconds: int | None | None = None, failure_threshold: int | None | None = None, success_threshold: int | None | None = None, endpoint_name: str | None | None = None) -> typing.Self:
         """Adds an HTTP health probe to the resource"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['probeType'] = probe_type
@@ -7747,7 +7983,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_volume(self, target: str, *, name: str | None = None, is_read_only: bool = False) -> typing.Self:
+    def with_volume(self, target: str, *, name: str | None | None = None, is_read_only: bool = False) -> typing.Self:
         """Adds a volume"""
         rpc_args: dict[str, typing.Any] = {'resource': self._handle}
         rpc_args['target'] = target
@@ -7825,24 +8061,27 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
             else:
                 raise TypeError("Invalid type for option 'image_tag'. Expected: str")
         if _image_registry := kwargs.pop("image_registry", None):
-            if _validate_type(_image_registry, str):
+            if _validate_type(_image_registry, str | None):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["registry"] = typing.cast(str, _image_registry)
+                rpc_args["registry"] = typing.cast(str | None, _image_registry)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withImageRegistry', rpc_args))
+            elif _image_registry is True:
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withImageRegistry', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'image_registry'. Expected: str")
+                raise TypeError("Invalid type for option 'image_registry'. Expected: str | None or Literal[True]")
         if _image := kwargs.pop("image", None):
             if _validate_type(_image, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["image"] = typing.cast(str, _image)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withImage', rpc_args))
-            elif _validate_tuple_types(_image, (str, str)):
+            elif _validate_tuple_types(_image, (str, str | None)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["image"] = typing.cast(tuple[str, str], _image)[0]
-                rpc_args["tag"] = typing.cast(tuple[str, str], _image)[1]
+                rpc_args["image"] = typing.cast(tuple[str, str | None], _image)[0]
+                rpc_args["tag"] = typing.cast(tuple[str, str | None], _image)[1]
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withImage', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'image'. Expected: str or (str, str)")
+                raise TypeError("Invalid type for option 'image'. Expected: str or (str, str | None)")
         if _image_sha256 := kwargs.pop("image_sha256", None):
             if _validate_type(_image_sha256, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -7965,15 +8204,15 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
             else:
                 raise TypeError("Invalid type for option 'mcp_server'. Expected: McpServerParameters or Literal[True]")
         if _otlp_exporter := kwargs.pop("otlp_exporter", None):
-            if _validate_type(_otlp_exporter, OtlpProtocol):
+            if _validate_type(_otlp_exporter, OtlpProtocol | None):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["protocol"] = typing.cast(OtlpProtocol, _otlp_exporter)
+                rpc_args["protocol"] = typing.cast(OtlpProtocol | None, _otlp_exporter)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withOtlpExporter', rpc_args))
             elif _otlp_exporter is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withOtlpExporter', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'otlp_exporter'. Expected: OtlpProtocol or Literal[True]")
+                raise TypeError("Invalid type for option 'otlp_exporter'. Expected: OtlpProtocol | None or Literal[True]")
         if _publish_as_connection_string := kwargs.pop("publish_as_connection_string", None):
             if _publish_as_connection_string is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -8132,25 +8371,25 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["dependency"] = typing.cast(AbstractResource, _wait_for)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitFor', rpc_args))
-            elif _validate_tuple_types(_wait_for, (AbstractResource, WaitBehavior)):
+            elif _validate_tuple_types(_wait_for, (AbstractResource, WaitBehavior | None)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for)[0]
-                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for)[1]
+                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for)[0]
+                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for)[1]
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitFor', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'wait_for'. Expected: AbstractResource or (AbstractResource, WaitBehavior)")
+                raise TypeError("Invalid type for option 'wait_for'. Expected: AbstractResource or (AbstractResource, WaitBehavior | None)")
         if _wait_for_start := kwargs.pop("wait_for_start", None):
             if _validate_type(_wait_for_start, AbstractResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["dependency"] = typing.cast(AbstractResource, _wait_for_start)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitForStart', rpc_args))
-            elif _validate_tuple_types(_wait_for_start, (AbstractResource, WaitBehavior)):
+            elif _validate_tuple_types(_wait_for_start, (AbstractResource, WaitBehavior | None)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for_start)[0]
-                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for_start)[1]
+                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for_start)[0]
+                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for_start)[1]
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitForStart', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'wait_for_start'. Expected: AbstractResource or (AbstractResource, WaitBehavior)")
+                raise TypeError("Invalid type for option 'wait_for_start'. Expected: AbstractResource or (AbstractResource, WaitBehavior | None)")
         if _wait_for_completion := kwargs.pop("wait_for_completion", None):
             if _validate_type(_wait_for_completion, AbstractResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -8204,15 +8443,15 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
             else:
                 raise TypeError("Invalid type for option 'certificate_trust_scope'. Expected: CertificateTrustScope")
         if _https_developer_certificate := kwargs.pop("https_developer_certificate", None):
-            if _validate_type(_https_developer_certificate, ParameterResource):
+            if _validate_type(_https_developer_certificate, ParameterResource | None):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["password"] = typing.cast(ParameterResource, _https_developer_certificate)
+                rpc_args["password"] = typing.cast(ParameterResource | None, _https_developer_certificate)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withParameterHttpsDeveloperCertificate', rpc_args))
             elif _https_developer_certificate is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withParameterHttpsDeveloperCertificate', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'https_developer_certificate'. Expected: ParameterResource or Literal[True]")
+                raise TypeError("Invalid type for option 'https_developer_certificate'. Expected: ParameterResource | None or Literal[True]")
         if _without_https_certificate := kwargs.pop("without_https_certificate", None):
             if _without_https_certificate is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -8299,7 +8538,7 @@ class ProjectResourceKwargs(_BaseResourceKwargs, total=False):
     """ProjectResource options."""
 
     mcp_server: McpServerParameters | typing.Literal[True]
-    otlp_exporter: OtlpProtocol | typing.Literal[True]
+    otlp_exporter: OtlpProtocol | None | typing.Literal[True]
     replicas: int
     disable_forwarded_headers: typing.Literal[True]
     publish_as_docker_file: typing.Callable[[ContainerResource], None] | typing.Literal[True]
@@ -8318,14 +8557,14 @@ class ProjectResourceKwargs(_BaseResourceKwargs, total=False):
     external_http_endpoints: typing.Literal[True]
     as_http2_service: typing.Literal[True]
     publish_with_container_files: tuple[AbstractResourceWithContainerFiles, str]
-    wait_for: AbstractResource | tuple[AbstractResource, WaitBehavior]
-    wait_for_start: AbstractResource | tuple[AbstractResource, WaitBehavior]
+    wait_for: AbstractResource | tuple[AbstractResource, WaitBehavior | None]
+    wait_for_start: AbstractResource | tuple[AbstractResource, WaitBehavior | None]
     wait_for_completion: AbstractResource | tuple[AbstractResource, int]
     http_health_check: HttpHealthCheckParameters | typing.Literal[True]
     http_command: tuple[str, str] | HttpCommandParameters
     developer_certificate_trust: bool
     certificate_trust_scope: CertificateTrustScope
-    https_developer_certificate: ParameterResource | typing.Literal[True]
+    https_developer_certificate: ParameterResource | None | typing.Literal[True]
     without_https_certificate: typing.Literal[True]
     http_probe: ProbeType | HttpProbeParameters
     image_push_options: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]
@@ -8341,7 +8580,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
     def __repr__(self) -> str:
         return "ProjectResource(handle={self._handle.handle_id})"
 
-    def with_mcp_server(self, *, path: str = "/mcp", endpoint_name: str | None = None) -> typing.Self:
+    def with_mcp_server(self, *, path: str | None | None = "/mcp", endpoint_name: str | None | None = None) -> typing.Self:
         """Configures an MCP server endpoint on the resource"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if path is not None:
@@ -8355,7 +8594,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_otlp_exporter(self, *, protocol: OtlpProtocol | None = None) -> typing.Self:
+    def with_otlp_exporter(self, *, protocol: OtlpProtocol | None | None = None) -> typing.Self:
         """Configures OTLP telemetry export"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if protocol is not None:
@@ -8456,7 +8695,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_reference(self, source: AbstractResource | EndpointReference | str, *, connection_name: str | None = None, optional: bool = False, name: str | None = None) -> typing.Self:
+    def with_reference(self, source: AbstractResource | EndpointReference | str, *, connection_name: str | None | None = None, optional: bool = False, name: str | None | None = None) -> typing.Self:
         """Adds a reference to another resource"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['source'] = source
@@ -8487,7 +8726,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_http_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None = None, create_if_not_exists: bool = True) -> typing.Self:
+    def with_http_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None | None = None, create_if_not_exists: bool = True) -> typing.Self:
         """Updates an HTTP endpoint via callback"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['callback'] = self._client.register_callback(callback)
@@ -8502,7 +8741,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_https_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None = None, create_if_not_exists: bool = True) -> typing.Self:
+    def with_https_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None | None = None, create_if_not_exists: bool = True) -> typing.Self:
         """Updates an HTTPS endpoint via callback"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['callback'] = self._client.register_callback(callback)
@@ -8517,7 +8756,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_endpoint(self, *, port: int | None = None, target_port: int | None = None, scheme: str | None = None, name: str | None = None, env: str | None = None, is_proxied: bool = True, is_external: bool | None = None, protocol: ProtocolType | None = None) -> typing.Self:
+    def with_endpoint(self, *, port: int | None | None = None, target_port: int | None | None = None, scheme: str | None | None = None, name: str | None | None = None, env: str | None | None = None, is_proxied: bool = True, is_external: bool | None | None = None, protocol: ProtocolType | None | None = None) -> typing.Self:
         """Adds a network endpoint"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if port is not None:
@@ -8543,7 +8782,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_http_endpoint(self, *, port: int | None = None, target_port: int | None = None, name: str | None = None, env: str | None = None, is_proxied: bool = True) -> typing.Self:
+    def with_http_endpoint(self, *, port: int | None | None = None, target_port: int | None | None = None, name: str | None | None = None, env: str | None | None = None, is_proxied: bool = True) -> typing.Self:
         """Adds an HTTP endpoint"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if port is not None:
@@ -8563,7 +8802,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_https_endpoint(self, *, port: int | None = None, target_port: int | None = None, name: str | None = None, env: str | None = None, is_proxied: bool = True) -> typing.Self:
+    def with_https_endpoint(self, *, port: int | None | None = None, target_port: int | None | None = None, name: str | None | None = None, env: str | None | None = None, is_proxied: bool = True) -> typing.Self:
         """Adds an HTTPS endpoint"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if port is not None:
@@ -8625,7 +8864,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         self._handle = self._wrap_builder(result)
         return self
 
-    def wait_for(self, dependency: AbstractResource, *, wait_behavior: WaitBehavior | None = None) -> typing.Self:
+    def wait_for(self, dependency: AbstractResource, *, wait_behavior: WaitBehavior | None | None = None) -> typing.Self:
         """Waits for another resource to be ready"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['dependency'] = dependency
@@ -8638,7 +8877,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         self._handle = self._wrap_builder(result)
         return self
 
-    def wait_for_start(self, dependency: AbstractResource, *, wait_behavior: WaitBehavior | None = None) -> typing.Self:
+    def wait_for_start(self, dependency: AbstractResource, *, wait_behavior: WaitBehavior | None | None = None) -> typing.Self:
         """Waits for another resource to start"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['dependency'] = dependency
@@ -8664,7 +8903,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_http_health_check(self, *, path: str | None = None, status_code: int | None = None, endpoint_name: str | None = None) -> typing.Self:
+    def with_http_health_check(self, *, path: str | None | None = None, status_code: int | None | None = None, endpoint_name: str | None | None = None) -> typing.Self:
         """Adds an HTTP health check"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if path is not None:
@@ -8680,7 +8919,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_http_command(self, path: str, display_name: str, *, options: HttpCommandExportOptions | None = None) -> typing.Self:
+    def with_http_command(self, path: str, display_name: str, *, options: HttpCommandExportOptions | None | None = None) -> typing.Self:
         """Adds an HTTP resource command"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['path'] = path
@@ -8716,7 +8955,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_https_developer_certificate(self, *, password: ParameterResource | None = None) -> typing.Self:
+    def with_https_developer_certificate(self, *, password: ParameterResource | None | None = None) -> typing.Self:
         """Configures HTTPS with a developer certificate"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if password is not None:
@@ -8738,7 +8977,7 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_http_probe(self, probe_type: ProbeType, *, path: str | None = None, initial_delay_seconds: int | None = None, period_seconds: int | None = None, timeout_seconds: int | None = None, failure_threshold: int | None = None, success_threshold: int | None = None, endpoint_name: str | None = None) -> typing.Self:
+    def with_http_probe(self, probe_type: ProbeType, *, path: str | None | None = None, initial_delay_seconds: int | None | None = None, period_seconds: int | None | None = None, timeout_seconds: int | None | None = None, failure_threshold: int | None | None = None, success_threshold: int | None | None = None, endpoint_name: str | None | None = None) -> typing.Self:
         """Adds an HTTP health probe to the resource"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['probeType'] = probe_type
@@ -8842,15 +9081,15 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
             else:
                 raise TypeError("Invalid type for option 'mcp_server'. Expected: McpServerParameters or Literal[True]")
         if _otlp_exporter := kwargs.pop("otlp_exporter", None):
-            if _validate_type(_otlp_exporter, OtlpProtocol):
+            if _validate_type(_otlp_exporter, OtlpProtocol | None):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["protocol"] = typing.cast(OtlpProtocol, _otlp_exporter)
+                rpc_args["protocol"] = typing.cast(OtlpProtocol | None, _otlp_exporter)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withOtlpExporter', rpc_args))
             elif _otlp_exporter is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withOtlpExporter', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'otlp_exporter'. Expected: OtlpProtocol or Literal[True]")
+                raise TypeError("Invalid type for option 'otlp_exporter'. Expected: OtlpProtocol | None or Literal[True]")
         if _replicas := kwargs.pop("replicas", None):
             if _validate_type(_replicas, int):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -9034,25 +9273,25 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["dependency"] = typing.cast(AbstractResource, _wait_for)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitFor', rpc_args))
-            elif _validate_tuple_types(_wait_for, (AbstractResource, WaitBehavior)):
+            elif _validate_tuple_types(_wait_for, (AbstractResource, WaitBehavior | None)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for)[0]
-                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for)[1]
+                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for)[0]
+                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for)[1]
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitFor', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'wait_for'. Expected: AbstractResource or (AbstractResource, WaitBehavior)")
+                raise TypeError("Invalid type for option 'wait_for'. Expected: AbstractResource or (AbstractResource, WaitBehavior | None)")
         if _wait_for_start := kwargs.pop("wait_for_start", None):
             if _validate_type(_wait_for_start, AbstractResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["dependency"] = typing.cast(AbstractResource, _wait_for_start)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitForStart', rpc_args))
-            elif _validate_tuple_types(_wait_for_start, (AbstractResource, WaitBehavior)):
+            elif _validate_tuple_types(_wait_for_start, (AbstractResource, WaitBehavior | None)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for_start)[0]
-                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for_start)[1]
+                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for_start)[0]
+                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for_start)[1]
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitForStart', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'wait_for_start'. Expected: AbstractResource or (AbstractResource, WaitBehavior)")
+                raise TypeError("Invalid type for option 'wait_for_start'. Expected: AbstractResource or (AbstractResource, WaitBehavior | None)")
         if _wait_for_completion := kwargs.pop("wait_for_completion", None):
             if _validate_type(_wait_for_completion, AbstractResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -9106,15 +9345,15 @@ class ProjectResource(_BaseResource, AbstractResourceWithEnvironment, AbstractRe
             else:
                 raise TypeError("Invalid type for option 'certificate_trust_scope'. Expected: CertificateTrustScope")
         if _https_developer_certificate := kwargs.pop("https_developer_certificate", None):
-            if _validate_type(_https_developer_certificate, ParameterResource):
+            if _validate_type(_https_developer_certificate, ParameterResource | None):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["password"] = typing.cast(ParameterResource, _https_developer_certificate)
+                rpc_args["password"] = typing.cast(ParameterResource | None, _https_developer_certificate)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withParameterHttpsDeveloperCertificate', rpc_args))
             elif _https_developer_certificate is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withParameterHttpsDeveloperCertificate', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'https_developer_certificate'. Expected: ParameterResource or Literal[True]")
+                raise TypeError("Invalid type for option 'https_developer_certificate'. Expected: ParameterResource | None or Literal[True]")
         if _without_https_certificate := kwargs.pop("without_https_certificate", None):
             if _without_https_certificate is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -9201,11 +9440,11 @@ class CSharpAppResource(ProjectResource):
 class ExecutableResourceKwargs(_BaseResourceKwargs, total=False):
     """ExecutableResource options."""
 
-    publish_as_docker_file: typing.Callable[[ContainerResource], None]
+    publish_as_docker_file: typing.Callable[[ContainerResource], None] | typing.Literal[True]
     executable_command: str
     working_dir: str
     mcp_server: McpServerParameters | typing.Literal[True]
-    otlp_exporter: OtlpProtocol | typing.Literal[True]
+    otlp_exporter: OtlpProtocol | None | typing.Literal[True]
     env: tuple[str, str | ReferenceExpression | EndpointReference | ParameterResource | AbstractResourceWithConnectionString | AbstractExpressionValue]
     env_callback: typing.Callable[[EnvironmentCallbackContext], None]
     args: typing.Iterable[str]
@@ -9220,14 +9459,14 @@ class ExecutableResourceKwargs(_BaseResourceKwargs, total=False):
     https_endpoint: HttpsEndpointParameters | typing.Literal[True]
     external_http_endpoints: typing.Literal[True]
     as_http2_service: typing.Literal[True]
-    wait_for: AbstractResource | tuple[AbstractResource, WaitBehavior]
-    wait_for_start: AbstractResource | tuple[AbstractResource, WaitBehavior]
+    wait_for: AbstractResource | tuple[AbstractResource, WaitBehavior | None]
+    wait_for_start: AbstractResource | tuple[AbstractResource, WaitBehavior | None]
     wait_for_completion: AbstractResource | tuple[AbstractResource, int]
     http_health_check: HttpHealthCheckParameters | typing.Literal[True]
     http_command: tuple[str, str] | HttpCommandParameters
     developer_certificate_trust: bool
     certificate_trust_scope: CertificateTrustScope
-    https_developer_certificate: ParameterResource | typing.Literal[True]
+    https_developer_certificate: ParameterResource | None | typing.Literal[True]
     without_https_certificate: typing.Literal[True]
     http_probe: ProbeType | HttpProbeParameters
     image_push_options: typing.Callable[[ContainerImagePushOptionsCallbackContext], None]
@@ -9243,10 +9482,11 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
     def __repr__(self) -> str:
         return "ExecutableResource(handle={self._handle.handle_id})"
 
-    def publish_as_docker_file(self, configure: typing.Callable[[ContainerResource], None]) -> typing.Self:
+    def publish_as_docker_file(self, *, configure: typing.Callable[[ContainerResource], None] | None = None) -> typing.Self:
         """Publishes an executable as a Docker file"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
-        rpc_args['configure'] = self._client.register_callback(configure)
+        if configure is not None:
+            rpc_args['configure'] = self._client.register_callback(configure)
         result = self._client.invoke_capability(
             'Aspire.Hosting/publishAsDockerFile',
             rpc_args,
@@ -9276,7 +9516,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_mcp_server(self, *, path: str = "/mcp", endpoint_name: str | None = None) -> typing.Self:
+    def with_mcp_server(self, *, path: str | None | None = "/mcp", endpoint_name: str | None | None = None) -> typing.Self:
         """Configures an MCP server endpoint on the resource"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if path is not None:
@@ -9290,7 +9530,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_otlp_exporter(self, *, protocol: OtlpProtocol | None = None) -> typing.Self:
+    def with_otlp_exporter(self, *, protocol: OtlpProtocol | None | None = None) -> typing.Self:
         """Configures OTLP telemetry export"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if protocol is not None:
@@ -9358,7 +9598,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_reference(self, source: AbstractResource | EndpointReference | str, *, connection_name: str | None = None, optional: bool = False, name: str | None = None) -> typing.Self:
+    def with_reference(self, source: AbstractResource | EndpointReference | str, *, connection_name: str | None | None = None, optional: bool = False, name: str | None | None = None) -> typing.Self:
         """Adds a reference to another resource"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['source'] = source
@@ -9389,7 +9629,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_http_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None = None, create_if_not_exists: bool = True) -> typing.Self:
+    def with_http_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None | None = None, create_if_not_exists: bool = True) -> typing.Self:
         """Updates an HTTP endpoint via callback"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['callback'] = self._client.register_callback(callback)
@@ -9404,7 +9644,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_https_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None = None, create_if_not_exists: bool = True) -> typing.Self:
+    def with_https_endpoint_callback(self, callback: typing.Callable[[EndpointUpdateContext], None], *, name: str | None | None = None, create_if_not_exists: bool = True) -> typing.Self:
         """Updates an HTTPS endpoint via callback"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['callback'] = self._client.register_callback(callback)
@@ -9419,7 +9659,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_endpoint(self, *, port: int | None = None, target_port: int | None = None, scheme: str | None = None, name: str | None = None, env: str | None = None, is_proxied: bool = True, is_external: bool | None = None, protocol: ProtocolType | None = None) -> typing.Self:
+    def with_endpoint(self, *, port: int | None | None = None, target_port: int | None | None = None, scheme: str | None | None = None, name: str | None | None = None, env: str | None | None = None, is_proxied: bool = True, is_external: bool | None | None = None, protocol: ProtocolType | None | None = None) -> typing.Self:
         """Adds a network endpoint"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if port is not None:
@@ -9445,7 +9685,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_http_endpoint(self, *, port: int | None = None, target_port: int | None = None, name: str | None = None, env: str | None = None, is_proxied: bool = True) -> typing.Self:
+    def with_http_endpoint(self, *, port: int | None | None = None, target_port: int | None | None = None, name: str | None | None = None, env: str | None | None = None, is_proxied: bool = True) -> typing.Self:
         """Adds an HTTP endpoint"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if port is not None:
@@ -9465,7 +9705,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_https_endpoint(self, *, port: int | None = None, target_port: int | None = None, name: str | None = None, env: str | None = None, is_proxied: bool = True) -> typing.Self:
+    def with_https_endpoint(self, *, port: int | None | None = None, target_port: int | None | None = None, name: str | None | None = None, env: str | None | None = None, is_proxied: bool = True) -> typing.Self:
         """Adds an HTTPS endpoint"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if port is not None:
@@ -9515,7 +9755,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         self._handle = self._wrap_builder(result)
         return self
 
-    def wait_for(self, dependency: AbstractResource, *, wait_behavior: WaitBehavior | None = None) -> typing.Self:
+    def wait_for(self, dependency: AbstractResource, *, wait_behavior: WaitBehavior | None | None = None) -> typing.Self:
         """Waits for another resource to be ready"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['dependency'] = dependency
@@ -9528,7 +9768,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         self._handle = self._wrap_builder(result)
         return self
 
-    def wait_for_start(self, dependency: AbstractResource, *, wait_behavior: WaitBehavior | None = None) -> typing.Self:
+    def wait_for_start(self, dependency: AbstractResource, *, wait_behavior: WaitBehavior | None | None = None) -> typing.Self:
         """Waits for another resource to start"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['dependency'] = dependency
@@ -9554,7 +9794,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_http_health_check(self, *, path: str | None = None, status_code: int | None = None, endpoint_name: str | None = None) -> typing.Self:
+    def with_http_health_check(self, *, path: str | None | None = None, status_code: int | None | None = None, endpoint_name: str | None | None = None) -> typing.Self:
         """Adds an HTTP health check"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if path is not None:
@@ -9570,7 +9810,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_http_command(self, path: str, display_name: str, *, options: HttpCommandExportOptions | None = None) -> typing.Self:
+    def with_http_command(self, path: str, display_name: str, *, options: HttpCommandExportOptions | None | None = None) -> typing.Self:
         """Adds an HTTP resource command"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['path'] = path
@@ -9606,7 +9846,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_https_developer_certificate(self, *, password: ParameterResource | None = None) -> typing.Self:
+    def with_https_developer_certificate(self, *, password: ParameterResource | None | None = None) -> typing.Self:
         """Configures HTTPS with a developer certificate"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if password is not None:
@@ -9628,7 +9868,7 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_http_probe(self, probe_type: ProbeType, *, path: str | None = None, initial_delay_seconds: int | None = None, period_seconds: int | None = None, timeout_seconds: int | None = None, failure_threshold: int | None = None, success_threshold: int | None = None, endpoint_name: str | None = None) -> typing.Self:
+    def with_http_probe(self, probe_type: ProbeType, *, path: str | None | None = None, initial_delay_seconds: int | None | None = None, period_seconds: int | None | None = None, timeout_seconds: int | None | None = None, failure_threshold: int | None | None = None, success_threshold: int | None | None = None, endpoint_name: str | None | None = None) -> typing.Self:
         """Adds an HTTP health probe to the resource"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['probeType'] = probe_type
@@ -9725,8 +9965,11 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["configure"] = client.register_callback(typing.cast(typing.Callable[[ContainerResource], None], _publish_as_docker_file))
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/publishAsDockerFile', rpc_args))
+            elif _publish_as_docker_file is True:
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/publishAsDockerFile', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'publish_as_docker_file'. Expected: Callable[[ContainerResource], None]")
+                raise TypeError("Invalid type for option 'publish_as_docker_file'. Expected: Callable[[ContainerResource], None] or Literal[True]")
         if _executable_command := kwargs.pop("executable_command", None):
             if _validate_type(_executable_command, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -9753,15 +9996,15 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
             else:
                 raise TypeError("Invalid type for option 'mcp_server'. Expected: McpServerParameters or Literal[True]")
         if _otlp_exporter := kwargs.pop("otlp_exporter", None):
-            if _validate_type(_otlp_exporter, OtlpProtocol):
+            if _validate_type(_otlp_exporter, OtlpProtocol | None):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["protocol"] = typing.cast(OtlpProtocol, _otlp_exporter)
+                rpc_args["protocol"] = typing.cast(OtlpProtocol | None, _otlp_exporter)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withOtlpExporter', rpc_args))
             elif _otlp_exporter is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withOtlpExporter', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'otlp_exporter'. Expected: OtlpProtocol or Literal[True]")
+                raise TypeError("Invalid type for option 'otlp_exporter'. Expected: OtlpProtocol | None or Literal[True]")
         if _env := kwargs.pop("env", None):
             if _validate_tuple_types(_env, (str, str | ReferenceExpression | EndpointReference | ParameterResource | AbstractResourceWithConnectionString | AbstractExpressionValue)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -9914,25 +10157,25 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["dependency"] = typing.cast(AbstractResource, _wait_for)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitFor', rpc_args))
-            elif _validate_tuple_types(_wait_for, (AbstractResource, WaitBehavior)):
+            elif _validate_tuple_types(_wait_for, (AbstractResource, WaitBehavior | None)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for)[0]
-                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for)[1]
+                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for)[0]
+                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for)[1]
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitFor', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'wait_for'. Expected: AbstractResource or (AbstractResource, WaitBehavior)")
+                raise TypeError("Invalid type for option 'wait_for'. Expected: AbstractResource or (AbstractResource, WaitBehavior | None)")
         if _wait_for_start := kwargs.pop("wait_for_start", None):
             if _validate_type(_wait_for_start, AbstractResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 rpc_args["dependency"] = typing.cast(AbstractResource, _wait_for_start)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitForStart', rpc_args))
-            elif _validate_tuple_types(_wait_for_start, (AbstractResource, WaitBehavior)):
+            elif _validate_tuple_types(_wait_for_start, (AbstractResource, WaitBehavior | None)):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for_start)[0]
-                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior], _wait_for_start)[1]
+                rpc_args["dependency"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for_start)[0]
+                rpc_args["waitBehavior"] = typing.cast(tuple[AbstractResource, WaitBehavior | None], _wait_for_start)[1]
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/waitForStart', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'wait_for_start'. Expected: AbstractResource or (AbstractResource, WaitBehavior)")
+                raise TypeError("Invalid type for option 'wait_for_start'. Expected: AbstractResource or (AbstractResource, WaitBehavior | None)")
         if _wait_for_completion := kwargs.pop("wait_for_completion", None):
             if _validate_type(_wait_for_completion, AbstractResource):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -9986,15 +10229,15 @@ class ExecutableResource(_BaseResource, AbstractResourceWithEnvironment, Abstrac
             else:
                 raise TypeError("Invalid type for option 'certificate_trust_scope'. Expected: CertificateTrustScope")
         if _https_developer_certificate := kwargs.pop("https_developer_certificate", None):
-            if _validate_type(_https_developer_certificate, ParameterResource):
+            if _validate_type(_https_developer_certificate, ParameterResource | None):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["password"] = typing.cast(ParameterResource, _https_developer_certificate)
+                rpc_args["password"] = typing.cast(ParameterResource | None, _https_developer_certificate)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withParameterHttpsDeveloperCertificate', rpc_args))
             elif _https_developer_certificate is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withParameterHttpsDeveloperCertificate', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'https_developer_certificate'. Expected: ParameterResource or Literal[True]")
+                raise TypeError("Invalid type for option 'https_developer_certificate'. Expected: ParameterResource | None or Literal[True]")
         if _without_https_certificate := kwargs.pop("without_https_certificate", None):
             if _without_https_certificate is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
@@ -10197,7 +10440,7 @@ class ExternalServiceResource(_BaseResource):
     def __repr__(self) -> str:
         return "ExternalServiceResource(handle={self._handle.handle_id})"
 
-    def with_http_health_check(self, *, path: str | None = None, status_code: int | None = None, endpoint_name: str | None = None) -> typing.Self:
+    def with_http_health_check(self, *, path: str | None | None = None, status_code: int | None | None = None, endpoint_name: str | None | None = None) -> typing.Self:
         """Adds an HTTP health check to the external service"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if path is not None:
@@ -10334,7 +10577,7 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
         self._handle = self._wrap_builder(result)
         return self
 
-    def add_test_child_database(self, name: str, *, database_name: str | None = None, **kwargs: typing.Unpack[TestDatabaseResourceKwargs]) -> TestDatabaseResource:  # type: ignore
+    def add_test_child_database(self, name: str, *, database_name: str | None | None = None, **kwargs: typing.Unpack[TestDatabaseResourceKwargs]) -> TestDatabaseResource:  # type: ignore
         """Adds a child database to a test Redis resource"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['name'] = name
@@ -10451,7 +10694,7 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_data_volume(self, *, name: str | None = None, is_read_only: bool = False) -> typing.Self:
+    def with_data_volume(self, *, name: str | None | None = None, is_read_only: bool = False) -> typing.Self:
         """Adds a data volume with persistence"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if name is not None:
@@ -10680,6 +10923,7 @@ _register_handle_wrapper("Aspire.Hosting/Dict<string,string>", AspireDict)
 _register_handle_wrapper("Aspire.Hosting/Dict<string,number>", AspireDict)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IAspireStore", AbstractAspireStore)
 _register_handle_wrapper("Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfiguration", AbstractConfiguration)
+_register_handle_wrapper("Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfigurationSection", AbstractConfigurationSection)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationEventing", AbstractDistributedApplicationEventing)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.IDistributedApplicationPipeline", AbstractDistributedApplicationPipeline)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationBuilder", AbstractExecutionConfigurationBuilder)
@@ -10699,6 +10943,9 @@ _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.Command
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ConnectionStringAvailableEvent", ConnectionStringAvailableEvent)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptions", ContainerImagePushOptions)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptionsCallbackContext", ContainerImagePushOptionsCallbackContext)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImageReference", ContainerImageReference)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerMountAnnotation", ContainerMountAnnotation)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerPortReference", ContainerPortReference)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.DistributedApplication", DistributedApplication)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Eventing.DistributedApplicationEventSubscription", DistributedApplicationEventSubscription)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext", DistributedApplicationExecutionContext)

@@ -56,6 +56,11 @@ public sealed class AtsTypeRef
     public bool IsReadOnly { get; init; }
 
     /// <summary>
+    /// Gets or sets whether this type reference can carry a null value.
+    /// </summary>
+    public bool IsNullable { get; set; }
+
+    /// <summary>
     /// Gets whether this type represents a resource builder target type.
     /// Computed from ClrType - true for types that implement the Aspire resource contract.
     /// </summary>

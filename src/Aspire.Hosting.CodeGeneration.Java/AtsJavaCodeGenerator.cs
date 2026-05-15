@@ -2021,7 +2021,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
 
         return typeRef.Category switch
         {
-            AtsTypeCategory.Primitive => MapPrimitiveType(typeRef.TypeId, isOptional || useBoxedTypes),
+            AtsTypeCategory.Primitive => MapPrimitiveType(typeRef.TypeId, isOptional || typeRef.IsNullable || useBoxedTypes),
             AtsTypeCategory.Enum => MapEnumType(typeRef.TypeId),
             AtsTypeCategory.Handle => MapHandleType(typeRef.TypeId),
             AtsTypeCategory.Dto => MapDtoType(typeRef.TypeId),

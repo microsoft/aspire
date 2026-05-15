@@ -1,4 +1,4 @@
 export interface WithDataVolumeOptions {
-    name?: string;
+    name?: string | null;
     isReadOnly?: boolean;
 }

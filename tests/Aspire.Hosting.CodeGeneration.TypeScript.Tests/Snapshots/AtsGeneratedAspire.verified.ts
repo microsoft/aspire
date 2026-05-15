@@ -119,7 +119,7 @@ export interface TestConfigDto {
     name?: string;
     port?: number;
     enabled?: boolean;
-    optionalField?: string;
+    optionalField?: string | null;
 }
 
 /** DTO interface for TestDeeplyNestedDto */
@@ -131,7 +131,7 @@ export interface TestDeeplyNestedDto {
 /** DTO interface for TestNestedDto */
 export interface TestNestedDto {
     id?: string;
-    config?: TestConfigDto;
+    config?: TestConfigDto | null;
     tags?: AspireList<string>;
     counts?: AspireDict<string, number>;
 }
@@ -159,15 +159,23 @@ export namespace TestConfigs {
 // ============================================================================
 
 export interface AddTestChildDatabaseOptions {
-    databaseName?: string;
+    databaseName?: string | null;
 }
 
 export interface AddTestRedisOptions {
-    port?: number;
+    port?: number | null;
 }
 
 export interface GetStatusAsyncOptions {
     cancellationToken?: AbortSignal | CancellationToken;
+}
+
+export interface SetDescriptionOptions {
+    value?: string | null;
+}
+
+export interface SetNameOptions {
+    value?: string | null;
 }
 
 export interface WaitForReadyAsyncOptions {
@@ -175,18 +183,18 @@ export interface WaitForReadyAsyncOptions {
 }
 
 export interface WithDataVolumeOptions {
-    name?: string;
+    name?: string | null;
     isReadOnly?: boolean;
 }
 
 export interface WithMergeLoggingOptions {
     enableConsole?: boolean;
-    maxFiles?: number;
+    maxFiles?: number | null;
 }
 
 export interface WithMergeLoggingPathOptions {
     enableConsole?: boolean;
-    maxFiles?: number;
+    maxFiles?: number | null;
 }
 
 export interface WithOptionalCallbackOptions {
@@ -194,7 +202,7 @@ export interface WithOptionalCallbackOptions {
 }
 
 export interface WithOptionalStringOptions {
-    value?: string;
+    value?: string | null;
     enabled?: boolean;
 }
 
@@ -210,8 +218,8 @@ export interface TestCallbackContext {
     toJSON(): MarshalledHandle;
     /** Gets the Name property */
     name: {
-        get: () => Promise<string>;
-        set: (value: string) => Promise<void>;
+        get: () => Promise<string | null>;
+        set: (value: string | null) => Promise<void>;
     };
     /** Gets the Value property */
     value: {
@@ -239,13 +247,13 @@ class TestCallbackContextImpl implements TestCallbackContext {
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
     name = {
-        get: async (): Promise<string> => {
-            return await this._client.invokeCapability<string>(
+        get: async (): Promise<string | null> => {
+            return await this._client.invokeCapability<string | null>(
                 'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.name',
                 { context: this._handle }
             );
         },
-        set: async (value: string): Promise<void> => {
+        set: async (value: string | null): Promise<void> => {
             await this._client.invokeCapability<void>(
                 'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.setName',
                 { context: this._handle, value }
@@ -352,8 +360,8 @@ export interface TestEnvironmentContext {
     };
     /** Gets the Description property */
     description: {
-        get: () => Promise<string>;
-        set: (value: string) => Promise<void>;
+        get: () => Promise<string | null>;
+        set: (value: string | null) => Promise<void>;
     };
     /** Gets the Priority property */
     priority: {
@@ -391,13 +399,13 @@ class TestEnvironmentContextImpl implements TestEnvironmentContext {
     };
 
     description = {
-        get: async (): Promise<string> => {
-            return await this._client.invokeCapability<string>(
+        get: async (): Promise<string | null> => {
+            return await this._client.invokeCapability<string | null>(
                 'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.description',
                 { context: this._handle }
             );
         },
-        set: async (value: string): Promise<void> => {
+        set: async (value: string | null): Promise<void> => {
             await this._client.invokeCapability<void>(
                 'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.setDescription',
                 { context: this._handle, value }
@@ -645,7 +653,7 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
     /** @internal */
-    async _addTestRedisInternal(name: string, port?: number): Promise<TestRedisResource> {
+    async _addTestRedisInternal(name: string, port?: number | null): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
         if (port !== undefined) rpcArgs.port = port;
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
@@ -822,7 +830,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<TestDatabaseResource> {
+    private async _withOptionalStringInternal(value?: string | null, enabled?: boolean): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (value !== undefined) rpcArgs.value = value;
         if (enabled !== undefined) rpcArgs.enabled = enabled;
@@ -1074,7 +1082,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withDataVolumeInternal(name?: string): Promise<TestDatabaseResource> {
+    private async _withDataVolumeInternal(name?: string | null): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (name !== undefined) rpcArgs.name = name;
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
@@ -1146,7 +1154,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<TestDatabaseResource> {
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number | null): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -1164,7 +1172,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<TestDatabaseResource> {
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number | null): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -1495,7 +1503,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _addTestChildDatabaseInternal(name: string, databaseName?: string): Promise<TestDatabaseResource> {
+    private async _addTestChildDatabaseInternal(name: string, databaseName?: string | null): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
         if (databaseName !== undefined) rpcArgs.databaseName = databaseName;
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
@@ -1527,7 +1535,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<TestRedisResource> {
+    private async _withOptionalStringInternal(value?: string | null, enabled?: boolean): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (value !== undefined) rpcArgs.value = value;
         if (enabled !== undefined) rpcArgs.enabled = enabled;
@@ -1886,7 +1894,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withDataVolumeInternal(name?: string, isReadOnly?: boolean): Promise<TestRedisResource> {
+    private async _withDataVolumeInternal(name?: string | null, isReadOnly?: boolean): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (name !== undefined) rpcArgs.name = name;
         if (isReadOnly !== undefined) rpcArgs.isReadOnly = isReadOnly;
@@ -1960,7 +1968,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<TestRedisResource> {
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number | null): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -1978,7 +1986,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<TestRedisResource> {
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number | null): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -2309,7 +2317,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<TestVaultResource> {
+    private async _withOptionalStringInternal(value?: string | null, enabled?: boolean): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (value !== undefined) rpcArgs.value = value;
         if (enabled !== undefined) rpcArgs.enabled = enabled;
@@ -2631,7 +2639,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<TestVaultResource> {
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number | null): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -2649,7 +2657,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<TestVaultResource> {
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number | null): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -2924,7 +2932,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** @internal */
-    private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<Resource> {
+    private async _withOptionalStringInternal(value?: string | null, enabled?: boolean): Promise<Resource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (value !== undefined) rpcArgs.value = value;
         if (enabled !== undefined) rpcArgs.enabled = enabled;
@@ -3199,7 +3207,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** @internal */
-    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<Resource> {
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number | null): Promise<Resource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -3217,7 +3225,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** @internal */
-    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<Resource> {
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number | null): Promise<Resource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;

@@ -478,7 +478,7 @@ export enum WaitBehavior {
 /** DTO interface for AddContainerOptions */
 export interface AddContainerOptions {
     image?: string;
-    tag?: string;
+    tag?: string | null;
 }
 
 /** DTO interface for CertificateTrustExecutionConfigurationContext */
@@ -498,14 +498,14 @@ export interface CertificateTrustExecutionConfigurationExportData {
 
 /** DTO interface for CommandOptions */
 export interface CommandOptions {
-    description?: string;
+    description?: string | null;
     parameter?: any;
     arguments?: InteractionInput[];
     validateArguments?: (arg: InputsDialogValidationContext) => Promise<void>;
     visibility?: ResourceCommandVisibility;
-    confirmationMessage?: string;
-    iconName?: string;
-    iconVariant?: IconVariant;
+    confirmationMessage?: string | null;
+    iconName?: string | null;
+    iconVariant?: IconVariant | null;
     isHighlighted?: boolean;
     updateState?: (arg: UpdateCommandStateContext) => Promise<ResourceCommandState>;
 }
@@ -519,12 +519,12 @@ export interface CommandResultData {
 
 /** DTO interface for CreateBuilderOptions */
 export interface CreateBuilderOptions {
-    args?: string[];
-    projectDirectory?: string;
-    appHostFilePath?: string;
-    containerRegistryOverride?: string;
+    args?: string[] | null;
+    projectDirectory?: string | null;
+    appHostFilePath?: string | null;
+    containerRegistryOverride?: string | null;
     disableDashboard?: boolean;
-    dashboardApplicationName?: string;
+    dashboardApplicationName?: string | null;
     allowUnsecuredTransport?: boolean;
     enableResourceLogging?: boolean;
     /** When false, pre-flush rejected promises are not re-thrown by build(). Default: true. */
@@ -535,9 +535,9 @@ export interface CreateBuilderOptions {
 export interface ExecuteCommandResult {
     success?: boolean;
     canceled?: boolean;
-    errorMessage?: string;
-    message?: string;
-    data?: CommandResultData;
+    errorMessage?: string | null;
+    message?: string | null;
+    data?: CommandResultData | null;
 }
 
 /** DTO interface for GenerateParameterDefault */
@@ -555,14 +555,14 @@ export interface GenerateParameterDefault {
 
 /** DTO interface for HttpCommandExportOptions */
 export interface HttpCommandExportOptions {
-    description?: string;
-    confirmationMessage?: string;
-    iconName?: string;
-    iconVariant?: IconVariant;
+    description?: string | null;
+    confirmationMessage?: string | null;
+    iconName?: string | null;
+    iconVariant?: IconVariant | null;
     isHighlighted?: boolean;
-    commandName?: string;
-    endpointName?: string;
-    methodName?: string;
+    commandName?: string | null;
+    endpointName?: string | null;
+    methodName?: string | null;
     resultMode?: HttpCommandResultMode;
 }
 
@@ -576,53 +576,53 @@ export interface HttpsCertificateExecutionConfigurationContext {
 /** DTO interface for HttpsCertificateExecutionConfigurationExportData */
 export interface HttpsCertificateExecutionConfigurationExportData {
     subject?: string;
-    thumbprint?: string;
+    thumbprint?: string | null;
     keyPathExpression?: string;
     pfxPathExpression?: string;
     isKeyPathReferenced?: boolean;
     isPfxPathReferenced?: boolean;
-    password?: string;
+    password?: string | null;
 }
 
 /** DTO interface for HttpsCertificateInfo */
 export interface HttpsCertificateInfo {
     subject?: string;
     issuer?: string;
-    thumbprint?: string;
+    thumbprint?: string | null;
 }
 
 /** DTO interface for ProcessCommandExportOptions */
 export interface ProcessCommandExportOptions {
-    executablePath?: string;
-    arguments?: string[];
-    workingDirectory?: string;
-    environmentVariables?: Record<string, string>;
-    inheritEnvironmentVariables?: boolean;
-    standardInputContent?: string;
-    killEntireProcessTree?: boolean;
-    commandOptions?: CommandOptions;
-    maxOutputLineCount?: number;
-    displayImmediately?: boolean;
-    successExitCodes?: number[];
+    executablePath?: string | null;
+    arguments?: string[] | null;
+    workingDirectory?: string | null;
+    environmentVariables?: Record<string, string> | null;
+    inheritEnvironmentVariables?: boolean | null;
+    standardInputContent?: string | null;
+    killEntireProcessTree?: boolean | null;
+    commandOptions?: CommandOptions | null;
+    maxOutputLineCount?: number | null;
+    displayImmediately?: boolean | null;
+    successExitCodes?: number[] | null;
 }
 
 /** DTO interface for ProcessCommandResultExportOptions */
 export interface ProcessCommandResultExportOptions {
-    commandOptions?: CommandOptions;
-    maxOutputLineCount?: number;
-    displayImmediately?: boolean;
-    successExitCodes?: number[];
+    commandOptions?: CommandOptions | null;
+    maxOutputLineCount?: number | null;
+    displayImmediately?: boolean | null;
+    successExitCodes?: number[] | null;
 }
 
 /** DTO interface for ProcessCommandSpecExportData */
 export interface ProcessCommandSpecExportData {
-    executablePath?: string;
-    arguments?: string[];
-    workingDirectory?: string;
-    environmentVariables?: Record<string, string>;
-    inheritEnvironmentVariables?: boolean;
-    standardInputContent?: string;
-    killEntireProcessTree?: boolean;
+    executablePath?: string | null;
+    arguments?: string[] | null;
+    workingDirectory?: string | null;
+    environmentVariables?: Record<string, string> | null;
+    inheritEnvironmentVariables?: boolean | null;
+    standardInputContent?: string | null;
+    killEntireProcessTree?: boolean | null;
 }
 
 /** DTO interface for ReferenceEnvironmentInjectionOptions */
@@ -637,17 +637,17 @@ export interface ReferenceEnvironmentInjectionOptions {
 export interface ResourceEventDto {
     resourceName?: string;
     resourceId?: string;
-    state?: string;
-    stateStyle?: string;
-    healthStatus?: string;
-    exitCode?: number;
+    state?: string | null;
+    stateStyle?: string | null;
+    healthStatus?: string | null;
+    exitCode?: number | null;
 }
 
 /** DTO interface for ResourceUrlAnnotation */
 export interface ResourceUrlAnnotation {
     url?: string;
-    displayText?: string;
-    endpoint?: EndpointReference;
+    displayText?: string | null;
+    endpoint?: EndpointReference | null;
     displayLocation?: UrlDisplayLocation;
 }
 
@@ -656,7 +656,7 @@ export interface TestConfigDto {
     name?: string;
     port?: number;
     enabled?: boolean;
-    optionalField?: string;
+    optionalField?: string | null;
 }
 
 /** DTO interface for TestDeeplyNestedDto */
@@ -668,7 +668,7 @@ export interface TestDeeplyNestedDto {
 /** DTO interface for TestNestedDto */
 export interface TestNestedDto {
     id?: string;
-    config?: TestConfigDto;
+    config?: TestConfigDto | null;
     tags?: AspireList<string>;
     counts?: AspireDict<string, number>;
 }
@@ -763,11 +763,11 @@ export interface AddConnectionStringOptions {
 }
 
 export interface AddContainerFilesOptions {
-    logger?: Awaitable<Logger>;
+    logger?: Awaitable<Logger> | null;
 }
 
 export interface AddContainerFilesStagesOptions {
-    logger?: Awaitable<Logger>;
+    logger?: Awaitable<Logger> | null;
 }
 
 export interface AddContainerRegistryOptions {
@@ -775,24 +775,28 @@ export interface AddContainerRegistryOptions {
 }
 
 export interface AddCSharpAppOptions {
-    options?: Awaitable<ProjectResourceOptions>;
+    options?: Awaitable<ProjectResourceOptions> | null;
 }
 
 export interface AddDockerfileBuilderOptions {
-    stage?: string;
+    stage?: string | null;
 }
 
 export interface AddDockerfileOptions {
-    dockerfilePath?: string;
-    stage?: string;
+    dockerfilePath?: string | null;
+    stage?: string | null;
+}
+
+export interface AddExecutableOptions {
+    args?: string[] | null;
 }
 
 export interface AddForEndpointOptions {
-    displayText?: string;
+    displayText?: string | null;
 }
 
 export interface AddOptions {
-    displayText?: string;
+    displayText?: string | null;
 }
 
 export interface AddParameterFromConfigurationOptions {
@@ -800,7 +804,7 @@ export interface AddParameterFromConfigurationOptions {
 }
 
 export interface AddParameterOptions {
-    value?: string;
+    value?: string | null;
     publishValueAsDefault?: boolean;
     secret?: boolean;
 }
@@ -815,32 +819,33 @@ export interface AddProjectOptions {
 }
 
 export interface AddStepOptions {
-    dependsOn?: string[];
-    requiredBy?: string[];
+    dependsOn?: string[] | null;
+    requiredBy?: string[] | null;
 }
 
 export interface AddTestChildDatabaseOptions {
-    databaseName?: string;
+    databaseName?: string | null;
 }
 
 export interface AddTestRedisOptions {
-    port?: number;
+    port?: number | null;
 }
 
 export interface AppendFormattedOptions {
-    format?: string;
+    value?: string | null;
+    format?: string | null;
 }
 
 export interface AppendValueProviderOptions {
-    format?: string;
+    format?: string | null;
 }
 
 export interface ArgOptions {
-    defaultValue?: string;
+    defaultValue?: string | null;
 }
 
 export interface BuildOptions {
-    resourceLogger?: Awaitable<Logger>;
+    resourceLogger?: Awaitable<Logger> | null;
     cancellationToken?: AbortSignal | CancellationToken;
 }
 
@@ -860,17 +865,17 @@ export interface CompleteTaskMarkdownOptions {
 }
 
 export interface CompleteTaskOptions {
-    completionMessage?: string;
+    completionMessage?: string | null;
     completionState?: string;
     cancellationToken?: AbortSignal | CancellationToken;
 }
 
 export interface CopyFromOptions {
-    chown?: string;
+    chown?: string | null;
 }
 
 export interface CopyOptions {
-    chown?: string;
+    chown?: string | null;
 }
 
 export interface CreateMarkdownTaskOptions {
@@ -882,7 +887,7 @@ export interface CreateTaskOptions {
 }
 
 export interface FromOptions {
-    stageName?: string;
+    stageName?: string | null;
 }
 
 export interface GetStatusAsyncOptions {
@@ -898,8 +903,8 @@ export interface PublishAsDockerFileOptions {
 }
 
 export interface PublishResourceUpdateOptions {
-    state?: string;
-    stateStyle?: string;
+    state?: string | null;
+    stateStyle?: string | null;
 }
 
 export interface RunOptions {
@@ -908,6 +913,38 @@ export interface RunOptions {
 
 export interface SaveStateJsonOptions {
     cancellationToken?: AbortSignal | CancellationToken;
+}
+
+export interface SetDescriptionOptions {
+    value?: string | null;
+}
+
+export interface SetLaunchProfileNameOptions {
+    value?: string | null;
+}
+
+export interface SetNameOptions {
+    value?: string | null;
+}
+
+export interface SetPortOptions {
+    value?: number | null;
+}
+
+export interface SetRemoteImageNameOptions {
+    value?: string | null;
+}
+
+export interface SetRemoteImageTagOptions {
+    value?: string | null;
+}
+
+export interface SetTargetPortOptions {
+    value?: number | null;
+}
+
+export interface SetValueOptions {
+    value?: string | null;
 }
 
 export interface UpdateTaskMarkdownOptions {
@@ -923,7 +960,7 @@ export interface WaitForCompletionOptions {
 }
 
 export interface WaitForOptions {
-    waitBehavior?: WaitBehavior;
+    waitBehavior?: WaitBehavior | null;
 }
 
 export interface WaitForReadyAsyncOptions {
@@ -931,11 +968,11 @@ export interface WaitForReadyAsyncOptions {
 }
 
 export interface WaitForResourceStateOptions {
-    targetState?: string;
+    targetState?: string | null;
 }
 
 export interface WaitForStartOptions {
-    waitBehavior?: WaitBehavior;
+    waitBehavior?: WaitBehavior | null;
 }
 
 export interface WithBindMountOptions {
@@ -943,17 +980,17 @@ export interface WithBindMountOptions {
 }
 
 export interface WithCommandOptions {
-    commandOptions?: CommandOptions;
+    commandOptions?: CommandOptions | null;
 }
 
 export interface WithContainerCertificatePathsOptions {
-    customCertificatesDestination?: string;
-    defaultCertificateBundlePaths?: string[];
-    defaultCertificateDirectoryPaths?: string[];
+    customCertificatesDestination?: string | null;
+    defaultCertificateBundlePaths?: string[] | null;
+    defaultCertificateDirectoryPaths?: string[] | null;
 }
 
 export interface WithDataVolumeOptions {
-    name?: string;
+    name?: string | null;
     isReadOnly?: boolean;
 }
 
@@ -962,17 +999,17 @@ export interface WithDescriptionOptions {
 }
 
 export interface WithDockerfileBaseImageOptions {
-    buildImage?: string;
-    runtimeImage?: string;
+    buildImage?: string | null;
+    runtimeImage?: string | null;
 }
 
 export interface WithDockerfileBuilderOptions {
-    stage?: string;
+    stage?: string | null;
 }
 
 export interface WithDockerfileOptions {
-    dockerfilePath?: string;
-    stage?: string;
+    dockerfilePath?: string | null;
+    stage?: string | null;
 }
 
 export interface WithEndpointCallbackOptions {
@@ -980,59 +1017,59 @@ export interface WithEndpointCallbackOptions {
 }
 
 export interface WithEndpointOptions {
-    port?: number;
-    targetPort?: number;
-    scheme?: string;
-    name?: string;
-    env?: string;
+    port?: number | null;
+    targetPort?: number | null;
+    scheme?: string | null;
+    name?: string | null;
+    env?: string | null;
     isProxied?: boolean;
-    isExternal?: boolean;
-    protocol?: ProtocolType;
+    isExternal?: boolean | null;
+    protocol?: ProtocolType | null;
 }
 
 export interface WithHttpEndpointCallbackOptions {
-    name?: string;
+    name?: string | null;
     createIfNotExists?: boolean;
 }
 
 export interface WithHttpEndpointOptions {
-    port?: number;
-    targetPort?: number;
-    name?: string;
-    env?: string;
+    port?: number | null;
+    targetPort?: number | null;
+    name?: string | null;
+    env?: string | null;
     isProxied?: boolean;
 }
 
 export interface WithHttpHealthCheckOptions {
-    path?: string;
-    statusCode?: number;
-    endpointName?: string;
+    path?: string | null;
+    statusCode?: number | null;
+    endpointName?: string | null;
 }
 
 export interface WithHttpProbeOptions {
-    path?: string;
-    initialDelaySeconds?: number;
-    periodSeconds?: number;
-    timeoutSeconds?: number;
-    failureThreshold?: number;
-    successThreshold?: number;
-    endpointName?: string;
+    path?: string | null;
+    initialDelaySeconds?: number | null;
+    periodSeconds?: number | null;
+    timeoutSeconds?: number | null;
+    failureThreshold?: number | null;
+    successThreshold?: number | null;
+    endpointName?: string | null;
 }
 
 export interface WithHttpsDeveloperCertificateOptions {
-    password?: Awaitable<ParameterResource>;
+    password?: Awaitable<ParameterResource> | null;
 }
 
 export interface WithHttpsEndpointCallbackOptions {
-    name?: string;
+    name?: string | null;
     createIfNotExists?: boolean;
 }
 
 export interface WithHttpsEndpointOptions {
-    port?: number;
-    targetPort?: number;
-    name?: string;
-    env?: string;
+    port?: number | null;
+    targetPort?: number | null;
+    name?: string | null;
+    env?: string | null;
     isProxied?: boolean;
 }
 
@@ -1041,22 +1078,26 @@ export interface WithIconNameOptions {
 }
 
 export interface WithImageOptions {
-    tag?: string;
+    tag?: string | null;
+}
+
+export interface WithImageRegistryOptions {
+    registry?: string | null;
 }
 
 export interface WithMcpServerOptions {
-    path?: string;
-    endpointName?: string;
+    path?: string | null;
+    endpointName?: string | null;
 }
 
 export interface WithMergeLoggingOptions {
     enableConsole?: boolean;
-    maxFiles?: number;
+    maxFiles?: number | null;
 }
 
 export interface WithMergeLoggingPathOptions {
     enableConsole?: boolean;
-    maxFiles?: number;
+    maxFiles?: number | null;
 }
 
 export interface WithOptionalCallbackOptions {
@@ -1064,12 +1105,12 @@ export interface WithOptionalCallbackOptions {
 }
 
 export interface WithOptionalStringOptions {
-    value?: string;
+    value?: string | null;
     enabled?: boolean;
 }
 
 export interface WithOtlpExporterOptions {
-    protocol?: OtlpProtocol;
+    protocol?: OtlpProtocol | null;
 }
 
 export interface WithPersistenceOptions {
@@ -1077,28 +1118,28 @@ export interface WithPersistenceOptions {
 }
 
 export interface WithPipelineStepFactoryOptions {
-    dependsOn?: string[];
-    requiredBy?: string[];
-    tags?: string[];
-    description?: string;
+    dependsOn?: string[] | null;
+    requiredBy?: string[] | null;
+    tags?: string[] | null;
+    description?: string | null;
 }
 
 export interface WithReferenceOptions {
-    connectionName?: string;
+    connectionName?: string | null;
     optional?: boolean;
-    name?: string;
+    name?: string | null;
 }
 
 export interface WithRequiredCommandOptions {
-    helpLink?: string;
+    helpLink?: string | null;
 }
 
 export interface WithUrlOptions {
-    displayText?: string;
+    displayText?: string | null;
 }
 
 export interface WithVolumeOptions {
-    name?: string;
+    name?: string | null;
     isReadOnly?: boolean;
 }
 
@@ -1444,13 +1485,13 @@ export interface ContainerImagePushOptions {
     toJSON(): MarshalledHandle;
     /** Gets the RemoteImageName property */
     remoteImageName: {
-        get: () => Promise<string>;
-        set: (value: string) => Promise<void>;
+        get: () => Promise<string | null>;
+        set: (value: string | null) => Promise<void>;
     };
     /** Gets the RemoteImageTag property */
     remoteImageTag: {
-        get: () => Promise<string>;
-        set: (value: string) => Promise<void>;
+        get: () => Promise<string | null>;
+        set: (value: string | null) => Promise<void>;
     };
 }
 
@@ -1468,13 +1509,13 @@ class ContainerImagePushOptionsImpl implements ContainerImagePushOptions {
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
     remoteImageName = {
-        get: async (): Promise<string> => {
-            return await this._client.invokeCapability<string>(
+        get: async (): Promise<string | null> => {
+            return await this._client.invokeCapability<string | null>(
                 'Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.remoteImageName',
                 { context: this._handle }
             );
         },
-        set: async (value: string): Promise<void> => {
+        set: async (value: string | null): Promise<void> => {
             await this._client.invokeCapability<void>(
                 'Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.setRemoteImageName',
                 { context: this._handle, value }
@@ -1483,13 +1524,13 @@ class ContainerImagePushOptionsImpl implements ContainerImagePushOptions {
     };
 
     remoteImageTag = {
-        get: async (): Promise<string> => {
-            return await this._client.invokeCapability<string>(
+        get: async (): Promise<string | null> => {
+            return await this._client.invokeCapability<string | null>(
                 'Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.remoteImageTag',
                 { context: this._handle }
             );
         },
-        set: async (value: string): Promise<void> => {
+        set: async (value: string | null): Promise<void> => {
             await this._client.invokeCapability<void>(
                 'Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.setRemoteImageTag',
                 { context: this._handle, value }
@@ -1607,7 +1648,7 @@ class ContainerImageReferenceImpl implements ContainerImageReference {
 export interface ContainerMountAnnotation {
     toJSON(): MarshalledHandle;
     /** Gets the Source property */
-    source(): Promise<string>;
+    source(): Promise<string | null>;
     /** Gets the Target property */
     target(): Promise<string>;
     /** Gets the Type property */
@@ -1629,8 +1670,8 @@ class ContainerMountAnnotationImpl implements ContainerMountAnnotation {
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
-    async source(): Promise<string> {
-        return await this._client.invokeCapability<string>(
+    async source(): Promise<string | null> {
+        return await this._client.invokeCapability<string | null>(
             'Aspire.Hosting.ApplicationModel/ContainerMountAnnotation.source',
             { context: this._handle }
         );
@@ -1972,7 +2013,7 @@ class DockerfileBuilderImpl implements DockerfileBuilder {
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
     /** @internal */
-    async _argInternal(name: string, defaultValue?: string): Promise<DockerfileBuilder> {
+    async _argInternal(name: string, defaultValue?: string | null): Promise<DockerfileBuilder> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
         if (defaultValue !== undefined) rpcArgs.defaultValue = defaultValue;
         const result = await this._client.invokeCapability<DockerfileBuilderHandle>(
@@ -1988,7 +2029,7 @@ class DockerfileBuilderImpl implements DockerfileBuilder {
     }
 
     /** @internal */
-    async _fromInternal(image: string, stageName?: string): Promise<DockerfileStage> {
+    async _fromInternal(image: string, stageName?: string | null): Promise<DockerfileStage> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, image };
         if (stageName !== undefined) rpcArgs.stageName = stageName;
         const result = await this._client.invokeCapability<DockerfileStageHandle>(
@@ -2004,7 +2045,7 @@ class DockerfileBuilderImpl implements DockerfileBuilder {
     }
 
     /** @internal */
-    async _addContainerFilesStagesInternal(resource: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, logger?: Awaitable<Logger>): Promise<DockerfileBuilder> {
+    async _addContainerFilesStagesInternal(resource: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, logger?: Awaitable<Logger> | null): Promise<DockerfileBuilder> {
         resource = isPromiseLike(resource) ? await resource : resource;
         logger = isPromiseLike(logger) ? await logger : logger;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, resource };
@@ -2205,7 +2246,7 @@ class DockerfileStageImpl implements DockerfileStage {
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
     /** @internal */
-    async _argInternal(name: string, defaultValue?: string): Promise<DockerfileStage> {
+    async _argInternal(name: string, defaultValue?: string | null): Promise<DockerfileStage> {
         const rpcArgs: Record<string, unknown> = { stage: this._handle, name };
         if (defaultValue !== undefined) rpcArgs.defaultValue = defaultValue;
         const result = await this._client.invokeCapability<DockerfileStageHandle>(
@@ -2249,7 +2290,7 @@ class DockerfileStageImpl implements DockerfileStage {
     }
 
     /** @internal */
-    async _copyInternal(source: string, destination: string, chown?: string): Promise<DockerfileStage> {
+    async _copyInternal(source: string, destination: string, chown?: string | null): Promise<DockerfileStage> {
         const rpcArgs: Record<string, unknown> = { stage: this._handle, source, destination };
         if (chown !== undefined) rpcArgs.chown = chown;
         const result = await this._client.invokeCapability<DockerfileStageHandle>(
@@ -2265,7 +2306,7 @@ class DockerfileStageImpl implements DockerfileStage {
     }
 
     /** @internal */
-    async _copyFromInternal(from: string, source: string, destination: string, chown?: string): Promise<DockerfileStage> {
+    async _copyFromInternal(from: string, source: string, destination: string, chown?: string | null): Promise<DockerfileStage> {
         const rpcArgs: Record<string, unknown> = { stage: this._handle, from, source, destination };
         if (chown !== undefined) rpcArgs.chown = chown;
         const result = await this._client.invokeCapability<DockerfileStageHandle>(
@@ -2393,7 +2434,7 @@ class DockerfileStageImpl implements DockerfileStage {
     }
 
     /** @internal */
-    async _addContainerFilesInternal(resource: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, rootDestinationPath: string, logger?: Awaitable<Logger>): Promise<DockerfileStage> {
+    async _addContainerFilesInternal(resource: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, rootDestinationPath: string, logger?: Awaitable<Logger> | null): Promise<DockerfileStage> {
         resource = isPromiseLike(resource) ? await resource : resource;
         logger = isPromiseLike(logger) ? await logger : logger;
         const rpcArgs: Record<string, unknown> = { stage: this._handle, resource, rootDestinationPath };
@@ -2496,7 +2537,7 @@ export interface EndpointReference {
     /** Gets the EndpointName property */
     endpointName(): Promise<string>;
     /** Gets the ErrorMessage property */
-    errorMessage(): Promise<string>;
+    errorMessage(): Promise<string | null>;
     /** Gets the IsAllocated property */
     isAllocated(): Promise<boolean>;
     /** Gets the Exists property */
@@ -2514,7 +2555,7 @@ export interface EndpointReference {
     /** Gets the Port property */
     port(): Promise<number>;
     /** Gets the TargetPort property */
-    targetPort(): Promise<number>;
+    targetPort(): Promise<number | null>;
     /** Gets the Host property */
     host(): Promise<string>;
     /** Gets the Scheme property */
@@ -2535,7 +2576,7 @@ export interface EndpointReferencePromise extends PromiseLike<EndpointReference>
     /** Gets the EndpointName property */
     endpointName(): Promise<string>;
     /** Gets the ErrorMessage property */
-    errorMessage(): Promise<string>;
+    errorMessage(): Promise<string | null>;
     /** Gets the IsAllocated property */
     isAllocated(): Promise<boolean>;
     /** Gets the Exists property */
@@ -2553,7 +2594,7 @@ export interface EndpointReferencePromise extends PromiseLike<EndpointReference>
     /** Gets the Port property */
     port(): Promise<number>;
     /** Gets the TargetPort property */
-    targetPort(): Promise<number>;
+    targetPort(): Promise<number | null>;
     /** Gets the Host property */
     host(): Promise<string>;
     /** Gets the Scheme property */
@@ -2599,8 +2640,8 @@ class EndpointReferenceImpl implements EndpointReference {
         );
     }
 
-    async errorMessage(): Promise<string> {
-        return await this._client.invokeCapability<string>(
+    async errorMessage(): Promise<string | null> {
+        return await this._client.invokeCapability<string | null>(
             'Aspire.Hosting.ApplicationModel/EndpointReference.errorMessage',
             { context: this._handle }
         );
@@ -2662,8 +2703,8 @@ class EndpointReferenceImpl implements EndpointReference {
         );
     }
 
-    async targetPort(): Promise<number> {
-        return await this._client.invokeCapability<number>(
+    async targetPort(): Promise<number | null> {
+        return await this._client.invokeCapability<number | null>(
             'Aspire.Hosting.ApplicationModel/EndpointReference.targetPort',
             { context: this._handle }
         );
@@ -2741,7 +2782,7 @@ class EndpointReferencePromiseImpl implements EndpointReferencePromise {
         return this._promise.then(obj => obj.endpointName());
     }
 
-    errorMessage(): Promise<string> {
+    errorMessage(): Promise<string | null> {
         return this._promise.then(obj => obj.errorMessage());
     }
 
@@ -2777,7 +2818,7 @@ class EndpointReferencePromiseImpl implements EndpointReferencePromise {
         return this._promise.then(obj => obj.port());
     }
 
-    targetPort(): Promise<number> {
+    targetPort(): Promise<number | null> {
         return this._promise.then(obj => obj.targetPort());
     }
 
@@ -2876,13 +2917,13 @@ export interface EndpointUpdateContext {
     };
     /** Gets the Port property */
     port: {
-        get: () => Promise<number>;
-        set: (value: number) => Promise<void>;
+        get: () => Promise<number | null>;
+        set: (value: number | null) => Promise<void>;
     };
     /** Gets the TargetPort property */
     targetPort: {
-        get: () => Promise<number>;
-        set: (value: number) => Promise<void>;
+        get: () => Promise<number | null>;
+        set: (value: number | null) => Promise<void>;
     };
     /** Gets the UriScheme property */
     uriScheme: {
@@ -2957,13 +2998,13 @@ class EndpointUpdateContextImpl implements EndpointUpdateContext {
     };
 
     port = {
-        get: async (): Promise<number> => {
-            return await this._client.invokeCapability<number>(
+        get: async (): Promise<number | null> => {
+            return await this._client.invokeCapability<number | null>(
                 'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.port',
                 { context: this._handle }
             );
         },
-        set: async (value: number): Promise<void> => {
+        set: async (value: number | null): Promise<void> => {
             await this._client.invokeCapability<void>(
                 'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setPort',
                 { context: this._handle, value }
@@ -2972,13 +3013,13 @@ class EndpointUpdateContextImpl implements EndpointUpdateContext {
     };
 
     targetPort = {
-        get: async (): Promise<number> => {
-            return await this._client.invokeCapability<number>(
+        get: async (): Promise<number | null> => {
+            return await this._client.invokeCapability<number | null>(
                 'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.targetPort',
                 { context: this._handle }
             );
         },
-        set: async (value: number): Promise<void> => {
+        set: async (value: number | null): Promise<void> => {
             await this._client.invokeCapability<void>(
                 'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setTargetPort',
                 { context: this._handle, value }
@@ -4027,7 +4068,7 @@ export interface PipelineStep {
     /** Gets the unique name of the step */
     name(): Promise<string>;
     /** Gets the human-readable description of the step */
-    description(): Promise<string>;
+    description(): Promise<string | null>;
     /** Adds a dependency on another step by name */
     dependsOn(stepName: string): PipelineStepPromise;
     /** Specifies that another step requires this step by name */
@@ -4040,7 +4081,7 @@ export interface PipelineStepPromise extends PromiseLike<PipelineStep> {
     /** Gets the unique name of the step */
     name(): Promise<string>;
     /** Gets the human-readable description of the step */
-    description(): Promise<string>;
+    description(): Promise<string | null>;
     /** Adds a dependency on another step by name */
     dependsOn(stepName: string): PipelineStepPromise;
     /** Specifies that another step requires this step by name */
@@ -4069,8 +4110,8 @@ class PipelineStepImpl implements PipelineStep {
         );
     }
 
-    async description(): Promise<string> {
-        return await this._client.invokeCapability<string>(
+    async description(): Promise<string | null> {
+        return await this._client.invokeCapability<string | null>(
             'Aspire.Hosting.Pipelines/PipelineStep.description',
             { context: this._handle }
         );
@@ -4139,7 +4180,7 @@ class PipelineStepPromiseImpl implements PipelineStepPromise {
         return this._promise.then(obj => obj.name());
     }
 
-    description(): Promise<string> {
+    description(): Promise<string | null> {
         return this._promise.then(obj => obj.description());
     }
 
@@ -4416,8 +4457,8 @@ export interface ProjectResourceOptions {
     toJSON(): MarshalledHandle;
     /** Gets the LaunchProfileName property */
     launchProfileName: {
-        get: () => Promise<string>;
-        set: (value: string) => Promise<void>;
+        get: () => Promise<string | null>;
+        set: (value: string | null) => Promise<void>;
     };
     /** Gets the ExcludeLaunchProfile property */
     excludeLaunchProfile: {
@@ -4445,13 +4486,13 @@ class ProjectResourceOptionsImpl implements ProjectResourceOptions {
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
     launchProfileName = {
-        get: async (): Promise<string> => {
-            return await this._client.invokeCapability<string>(
+        get: async (): Promise<string | null> => {
+            return await this._client.invokeCapability<string | null>(
                 'Aspire.Hosting/ProjectResourceOptions.launchProfileName',
                 { context: this._handle }
             );
         },
-        set: async (value: string): Promise<void> => {
+        set: async (value: string | null): Promise<void> => {
             await this._client.invokeCapability<void>(
                 'Aspire.Hosting/ProjectResourceOptions.setLaunchProfileName',
                 { context: this._handle, value }
@@ -4502,7 +4543,7 @@ export interface ReferenceExpressionBuilder {
     /** Appends a literal string to the reference expression */
     appendLiteral(value: string): ReferenceExpressionBuilderPromise;
     /** Appends a formatted string value to the reference expression */
-    appendFormatted(value: string, options?: AppendFormattedOptions): ReferenceExpressionBuilderPromise;
+    appendFormatted(options?: AppendFormattedOptions): ReferenceExpressionBuilderPromise;
     /** Appends a value provider to the reference expression */
     appendValueProvider(valueProvider: any, options?: AppendValueProviderOptions): ReferenceExpressionBuilderPromise;
     /** Builds the reference expression */
@@ -4515,7 +4556,7 @@ export interface ReferenceExpressionBuilderPromise extends PromiseLike<Reference
     /** Appends a literal string to the reference expression */
     appendLiteral(value: string): ReferenceExpressionBuilderPromise;
     /** Appends a formatted string value to the reference expression */
-    appendFormatted(value: string, options?: AppendFormattedOptions): ReferenceExpressionBuilderPromise;
+    appendFormatted(options?: AppendFormattedOptions): ReferenceExpressionBuilderPromise;
     /** Appends a value provider to the reference expression */
     appendValueProvider(valueProvider: any, options?: AppendValueProviderOptions): ReferenceExpressionBuilderPromise;
     /** Builds the reference expression */
@@ -4557,8 +4598,9 @@ class ReferenceExpressionBuilderImpl implements ReferenceExpressionBuilder {
     }
 
     /** @internal */
-    async _appendFormattedInternal(value: string, format?: string): Promise<ReferenceExpressionBuilder> {
-        const rpcArgs: Record<string, unknown> = { context: this._handle, value };
+    async _appendFormattedInternal(value?: string | null, format?: string | null): Promise<ReferenceExpressionBuilder> {
+        const rpcArgs: Record<string, unknown> = { context: this._handle };
+        if (value !== undefined) rpcArgs.value = value;
         if (format !== undefined) rpcArgs.format = format;
         await this._client.invokeCapability<void>(
             'Aspire.Hosting.ApplicationModel/appendFormatted',
@@ -4567,13 +4609,14 @@ class ReferenceExpressionBuilderImpl implements ReferenceExpressionBuilder {
         return this;
     }
 
-    appendFormatted(value: string, options?: AppendFormattedOptions): ReferenceExpressionBuilderPromise {
+    appendFormatted(options?: AppendFormattedOptions): ReferenceExpressionBuilderPromise {
+        const value = options?.value;
         const format = options?.format;
         return new ReferenceExpressionBuilderPromiseImpl(this._appendFormattedInternal(value, format), this._client);
     }
 
     /** @internal */
-    async _appendValueProviderInternal(valueProvider: any, format?: string): Promise<ReferenceExpressionBuilder> {
+    async _appendValueProviderInternal(valueProvider: any, format?: string | null): Promise<ReferenceExpressionBuilder> {
         const rpcArgs: Record<string, unknown> = { context: this._handle, valueProvider };
         if (format !== undefined) rpcArgs.format = format;
         await this._client.invokeCapability<void>(
@@ -4621,8 +4664,8 @@ class ReferenceExpressionBuilderPromiseImpl implements ReferenceExpressionBuilde
         return new ReferenceExpressionBuilderPromiseImpl(this._promise.then(obj => obj.appendLiteral(value)), this._client);
     }
 
-    appendFormatted(value: string, options?: AppendFormattedOptions): ReferenceExpressionBuilderPromise {
-        return new ReferenceExpressionBuilderPromiseImpl(this._promise.then(obj => obj.appendFormatted(value, options)), this._client);
+    appendFormatted(options?: AppendFormattedOptions): ReferenceExpressionBuilderPromise {
+        return new ReferenceExpressionBuilderPromiseImpl(this._promise.then(obj => obj.appendFormatted(options)), this._client);
     }
 
     appendValueProvider(valueProvider: any, options?: AppendValueProviderOptions): ReferenceExpressionBuilderPromise {
@@ -4787,7 +4830,7 @@ export interface ResourceNotificationService {
     /** Waits for all dependencies of a resource to be ready */
     waitForDependencies(resource: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ResourceNotificationServicePromise;
     /** Tries to get the current state of a resource */
-    tryGetResourceState(resourceName: string): Promise<ResourceEventDto>;
+    tryGetResourceState(resourceName: string): Promise<ResourceEventDto | null>;
     /** Publishes an update for a resource's state */
     publishResourceUpdate(resource: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, options?: PublishResourceUpdateOptions): ResourceNotificationServicePromise;
 }
@@ -4802,7 +4845,7 @@ export interface ResourceNotificationServicePromise extends PromiseLike<Resource
     /** Waits for all dependencies of a resource to be ready */
     waitForDependencies(resource: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ResourceNotificationServicePromise;
     /** Tries to get the current state of a resource */
-    tryGetResourceState(resourceName: string): Promise<ResourceEventDto>;
+    tryGetResourceState(resourceName: string): Promise<ResourceEventDto | null>;
     /** Publishes an update for a resource's state */
     publishResourceUpdate(resource: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, options?: PublishResourceUpdateOptions): ResourceNotificationServicePromise;
 }
@@ -4821,7 +4864,7 @@ class ResourceNotificationServiceImpl implements ResourceNotificationService {
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
     /** @internal */
-    async _waitForResourceStateInternal(resourceName: string, targetState?: string): Promise<ResourceNotificationService> {
+    async _waitForResourceStateInternal(resourceName: string, targetState?: string | null): Promise<ResourceNotificationService> {
         const rpcArgs: Record<string, unknown> = { notificationService: this._handle, resourceName };
         if (targetState !== undefined) rpcArgs.targetState = targetState;
         await this._client.invokeCapability<void>(
@@ -4867,16 +4910,16 @@ class ResourceNotificationServiceImpl implements ResourceNotificationService {
         return new ResourceNotificationServicePromiseImpl(this._waitForDependenciesInternal(resource), this._client);
     }
 
-    async tryGetResourceState(resourceName: string): Promise<ResourceEventDto> {
+    async tryGetResourceState(resourceName: string): Promise<ResourceEventDto | null> {
         const rpcArgs: Record<string, unknown> = { notificationService: this._handle, resourceName };
-        return await this._client.invokeCapability<ResourceEventDto>(
+        return await this._client.invokeCapability<ResourceEventDto | null>(
             'Aspire.Hosting/tryGetResourceState',
             rpcArgs
         );
     }
 
     /** @internal */
-    async _publishResourceUpdateInternal(resource: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, state?: string, stateStyle?: string): Promise<ResourceNotificationService> {
+    async _publishResourceUpdateInternal(resource: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, state?: string | null, stateStyle?: string | null): Promise<ResourceNotificationService> {
         resource = isPromiseLike(resource) ? await resource : resource;
         const rpcArgs: Record<string, unknown> = { notificationService: this._handle, resource };
         if (state !== undefined) rpcArgs.state = state;
@@ -4927,7 +4970,7 @@ class ResourceNotificationServicePromiseImpl implements ResourceNotificationServ
         return new ResourceNotificationServicePromiseImpl(this._promise.then(obj => obj.waitForDependencies(resource)), this._client);
     }
 
-    tryGetResourceState(resourceName: string): Promise<ResourceEventDto> {
+    tryGetResourceState(resourceName: string): Promise<ResourceEventDto | null> {
         return this._promise.then(obj => obj.tryGetResourceState(resourceName));
     }
 
@@ -5218,7 +5261,7 @@ class ResourceUrlsEditorImpl implements ResourceUrlsEditor {
     }
 
     /** @internal */
-    async _addInternal(url: string | ReferenceExpression, displayText?: string): Promise<ResourceUrlsEditor> {
+    async _addInternal(url: string | ReferenceExpression, displayText?: string | null): Promise<ResourceUrlsEditor> {
         const rpcArgs: Record<string, unknown> = { context: this._handle, url };
         if (displayText !== undefined) rpcArgs.displayText = displayText;
         await this._client.invokeCapability<void>(
@@ -5234,7 +5277,7 @@ class ResourceUrlsEditorImpl implements ResourceUrlsEditor {
     }
 
     /** @internal */
-    async _addForEndpointInternal(endpoint: Awaitable<EndpointReference>, url: string | ReferenceExpression, displayText?: string): Promise<ResourceUrlsEditor> {
+    async _addForEndpointInternal(endpoint: Awaitable<EndpointReference>, url: string | ReferenceExpression, displayText?: string | null): Promise<ResourceUrlsEditor> {
         endpoint = isPromiseLike(endpoint) ? await endpoint : endpoint;
         const rpcArgs: Record<string, unknown> = { context: this._handle, endpoint, url };
         if (displayText !== undefined) rpcArgs.displayText = displayText;
@@ -5289,8 +5332,8 @@ export interface TestCallbackContext {
     toJSON(): MarshalledHandle;
     /** Gets the Name property */
     name: {
-        get: () => Promise<string>;
-        set: (value: string) => Promise<void>;
+        get: () => Promise<string | null>;
+        set: (value: string | null) => Promise<void>;
     };
     /** Gets the Value property */
     value: {
@@ -5318,13 +5361,13 @@ class TestCallbackContextImpl implements TestCallbackContext {
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
     name = {
-        get: async (): Promise<string> => {
-            return await this._client.invokeCapability<string>(
+        get: async (): Promise<string | null> => {
+            return await this._client.invokeCapability<string | null>(
                 'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.name',
                 { context: this._handle }
             );
         },
-        set: async (value: string): Promise<void> => {
+        set: async (value: string | null): Promise<void> => {
             await this._client.invokeCapability<void>(
                 'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.setName',
                 { context: this._handle, value }
@@ -5431,8 +5474,8 @@ export interface TestEnvironmentContext {
     };
     /** Gets the Description property */
     description: {
-        get: () => Promise<string>;
-        set: (value: string) => Promise<void>;
+        get: () => Promise<string | null>;
+        set: (value: string | null) => Promise<void>;
     };
     /** Gets the Priority property */
     priority: {
@@ -5470,13 +5513,13 @@ class TestEnvironmentContextImpl implements TestEnvironmentContext {
     };
 
     description = {
-        get: async (): Promise<string> => {
-            return await this._client.invokeCapability<string>(
+        get: async (): Promise<string | null> => {
+            return await this._client.invokeCapability<string | null>(
                 'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.description',
                 { context: this._handle }
             );
         },
-        set: async (value: string): Promise<void> => {
+        set: async (value: string | null): Promise<void> => {
             await this._client.invokeCapability<void>(
                 'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.setDescription',
                 { context: this._handle, value }
@@ -5808,9 +5851,9 @@ class AspireStorePromiseImpl implements AspireStorePromise {
 export interface Configuration {
     toJSON(): MarshalledHandle;
     /** Gets a configuration value by key */
-    getConfigValue(key: string): Promise<string>;
+    getConfigValue(key: string): Promise<string | null>;
     /** Gets a connection string by name */
-    getConnectionString(name: string): Promise<string>;
+    getConnectionString(name: string): Promise<string | null>;
     /** Gets a configuration section by key */
     getSection(key: string): Promise<ConfigurationSection>;
     /** Gets child configuration sections */
@@ -5821,9 +5864,9 @@ export interface Configuration {
 
 export interface ConfigurationPromise extends PromiseLike<Configuration> {
     /** Gets a configuration value by key */
-    getConfigValue(key: string): Promise<string>;
+    getConfigValue(key: string): Promise<string | null>;
     /** Gets a connection string by name */
-    getConnectionString(name: string): Promise<string>;
+    getConnectionString(name: string): Promise<string | null>;
     /** Gets a configuration section by key */
     getSection(key: string): Promise<ConfigurationSection>;
     /** Gets child configuration sections */
@@ -5845,17 +5888,17 @@ class ConfigurationImpl implements Configuration {
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
-    async getConfigValue(key: string): Promise<string> {
+    async getConfigValue(key: string): Promise<string | null> {
         const rpcArgs: Record<string, unknown> = { configuration: this._handle, key };
-        return await this._client.invokeCapability<string>(
+        return await this._client.invokeCapability<string | null>(
             'Aspire.Hosting/getConfigValue',
             rpcArgs
         );
     }
 
-    async getConnectionString(name: string): Promise<string> {
+    async getConnectionString(name: string): Promise<string | null> {
         const rpcArgs: Record<string, unknown> = { configuration: this._handle, name };
-        return await this._client.invokeCapability<string>(
+        return await this._client.invokeCapability<string | null>(
             'Aspire.Hosting/getConnectionString',
             rpcArgs
         );
@@ -5902,11 +5945,11 @@ class ConfigurationPromiseImpl implements ConfigurationPromise {
         return this._promise.then(onfulfilled, onrejected);
     }
 
-    getConfigValue(key: string): Promise<string> {
+    getConfigValue(key: string): Promise<string | null> {
         return this._promise.then(obj => obj.getConfigValue(key));
     }
 
-    getConnectionString(name: string): Promise<string> {
+    getConnectionString(name: string): Promise<string | null> {
         return this._promise.then(obj => obj.getConnectionString(name));
     }
 
@@ -5936,8 +5979,8 @@ export interface ConfigurationSection {
     path(): Promise<string>;
     /** Gets the Value property */
     value: {
-        get: () => Promise<string>;
-        set: (value: string) => Promise<void>;
+        get: () => Promise<string | null>;
+        set: (value: string | null) => Promise<void>;
     };
 }
 
@@ -5969,13 +6012,13 @@ class ConfigurationSectionImpl implements ConfigurationSection {
     }
 
     value = {
-        get: async (): Promise<string> => {
-            return await this._client.invokeCapability<string>(
+        get: async (): Promise<string | null> => {
+            return await this._client.invokeCapability<string | null>(
                 'Microsoft.Extensions.Configuration/IConfigurationSection.value',
                 { context: this._handle }
             );
         },
-        set: async (value: string): Promise<void> => {
+        set: async (value: string | null): Promise<void> => {
             await this._client.invokeCapability<void>(
                 'Microsoft.Extensions.Configuration/IConfigurationSection.setValue',
                 { context: this._handle, value }
@@ -6016,7 +6059,7 @@ export interface DistributedApplicationBuilder {
     /** Adds a .NET tool resource */
     addDotnetTool(name: string, packageId: string): DotnetToolResourcePromise;
     /** Adds an executable resource */
-    addExecutable(name: string, command: string, workingDirectory: string, args: string[]): ExecutableResourcePromise;
+    addExecutable(name: string, command: string, workingDirectory: string, options?: AddExecutableOptions): ExecutableResourcePromise;
     /** Adds an external service resource */
     addExternalService(name: string, url: string | ParameterResource | Awaitable<ParameterResource>): ExternalServiceResourcePromise;
     /** Adds a parameter resource */
@@ -6073,7 +6116,7 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
     /** Adds a .NET tool resource */
     addDotnetTool(name: string, packageId: string): DotnetToolResourcePromise;
     /** Adds an executable resource */
-    addExecutable(name: string, command: string, workingDirectory: string, args: string[]): ExecutableResourcePromise;
+    addExecutable(name: string, command: string, workingDirectory: string, options?: AddExecutableOptions): ExecutableResourcePromise;
     /** Adds an external service resource */
     addExternalService(name: string, url: string | ParameterResource | Awaitable<ParameterResource>): ExternalServiceResourcePromise;
     /** Adds a parameter resource */
@@ -6224,7 +6267,7 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     }
 
     /** @internal */
-    async _addDockerfileInternal(name: string, contextPath: string, dockerfilePath?: string, stage?: string): Promise<ContainerResource> {
+    async _addDockerfileInternal(name: string, contextPath: string, dockerfilePath?: string | null, stage?: string | null): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, contextPath };
         if (dockerfilePath !== undefined) rpcArgs.dockerfilePath = dockerfilePath;
         if (stage !== undefined) rpcArgs.stage = stage;
@@ -6242,7 +6285,7 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     }
 
     /** @internal */
-    async _addDockerfileBuilderInternal(name: string, contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, stage?: string): Promise<ContainerResource> {
+    async _addDockerfileBuilderInternal(name: string, contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, stage?: string | null): Promise<ContainerResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as DockerfileBuilderCallbackContextHandle;
             const arg = new DockerfileBuilderCallbackContextImpl(argHandle, this._client);
@@ -6277,8 +6320,9 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     }
 
     /** @internal */
-    async _addExecutableInternal(name: string, command: string, workingDirectory: string, args: string[]): Promise<ExecutableResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, command, workingDirectory, args };
+    async _addExecutableInternal(name: string, command: string, workingDirectory: string, args?: string[] | null): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, name, command, workingDirectory };
+        if (args !== undefined) rpcArgs.args = args;
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
             'Aspire.Hosting/addExecutable',
             rpcArgs
@@ -6286,7 +6330,8 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
         return new ExecutableResourceImpl(result, this._client);
     }
 
-    addExecutable(name: string, command: string, workingDirectory: string, args: string[]): ExecutableResourcePromise {
+    addExecutable(name: string, command: string, workingDirectory: string, options?: AddExecutableOptions): ExecutableResourcePromise {
+        const args = options?.args;
         return new ExecutableResourcePromiseImpl(this._addExecutableInternal(name, command, workingDirectory, args), this._client);
     }
 
@@ -6306,7 +6351,7 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     }
 
     /** @internal */
-    async _addParameterInternal(name: string, value?: string, publishValueAsDefault?: boolean, secret?: boolean): Promise<ParameterResource> {
+    async _addParameterInternal(name: string, value?: string | null, publishValueAsDefault?: boolean, secret?: boolean): Promise<ParameterResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
         if (value !== undefined) rpcArgs.value = value;
         if (publishValueAsDefault !== undefined) rpcArgs.publishValueAsDefault = publishValueAsDefault;
@@ -6393,7 +6438,7 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     }
 
     /** @internal */
-    async _addCSharpAppInternal(name: string, path: string, options?: Awaitable<ProjectResourceOptions>): Promise<CSharpAppResource> {
+    async _addCSharpAppInternal(name: string, path: string, options?: Awaitable<ProjectResourceOptions> | null): Promise<CSharpAppResource> {
         options = isPromiseLike(options) ? await options : options;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name, path };
         if (options !== undefined) rpcArgs.options = options;
@@ -6488,7 +6533,7 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     }
 
     /** @internal */
-    async _addTestRedisInternal(name: string, port?: number): Promise<TestRedisResource> {
+    async _addTestRedisInternal(name: string, port?: number | null): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
         if (port !== undefined) rpcArgs.port = port;
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
@@ -6582,8 +6627,8 @@ class DistributedApplicationBuilderPromiseImpl implements DistributedApplication
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.addDotnetTool(name, packageId)), this._client);
     }
 
-    addExecutable(name: string, command: string, workingDirectory: string, args: string[]): ExecutableResourcePromise {
-        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.addExecutable(name, command, workingDirectory, args)), this._client);
+    addExecutable(name: string, command: string, workingDirectory: string, options?: AddExecutableOptions): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.addExecutable(name, command, workingDirectory, options)), this._client);
     }
 
     addExternalService(name: string, url: string | ParameterResource | Awaitable<ParameterResource>): ExternalServiceResourcePromise {
@@ -6760,7 +6805,7 @@ class DistributedApplicationPipelineImpl implements DistributedApplicationPipeli
     }
 
     /** @internal */
-    async _addStepInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[]): Promise<DistributedApplicationPipeline> {
+    async _addStepInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[] | null, requiredBy?: string[] | null): Promise<DistributedApplicationPipeline> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
             const arg = new PipelineStepContextImpl(argHandle, this._client);
@@ -6877,7 +6922,7 @@ class ExecutionConfigurationBuilderImpl implements ExecutionConfigurationBuilder
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
     /** @internal */
-    async _buildInternal(executionContext: Awaitable<DistributedApplicationExecutionContext>, resourceLogger?: Awaitable<Logger>, cancellationToken?: AbortSignal | CancellationToken): Promise<ExecutionConfigurationResult> {
+    async _buildInternal(executionContext: Awaitable<DistributedApplicationExecutionContext>, resourceLogger?: Awaitable<Logger> | null, cancellationToken?: AbortSignal | CancellationToken): Promise<ExecutionConfigurationResult> {
         executionContext = isPromiseLike(executionContext) ? await executionContext : executionContext;
         resourceLogger = isPromiseLike(resourceLogger) ? await resourceLogger : resourceLogger;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, executionContext };
@@ -7720,7 +7765,7 @@ class ReportingTaskImpl implements ReportingTask {
     }
 
     /** @internal */
-    async _completeTaskInternal(completionMessage?: string, completionState?: string, cancellationToken?: AbortSignal | CancellationToken): Promise<ReportingTask> {
+    async _completeTaskInternal(completionMessage?: string | null, completionState?: string, cancellationToken?: AbortSignal | CancellationToken): Promise<ReportingTask> {
         const rpcArgs: Record<string, unknown> = { reportingTask: this._handle };
         if (completionMessage !== undefined) rpcArgs.completionMessage = completionMessage;
         if (completionState !== undefined) rpcArgs.completionState = completionState;
@@ -8170,7 +8215,7 @@ export interface ContainerRegistryResource {
     /** Adds a process resource command */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ContainerRegistryResourcePromise;
     /** Adds a process resource command via callback */
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerRegistryResourcePromise;
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): ContainerRegistryResourcePromise;
     /** Adds a relationship to another resource */
     withRelationship(resourceBuilder: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, type: string): ContainerRegistryResourcePromise;
     /** Sets the parent relationship */
@@ -8267,7 +8312,7 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
     /** Adds a process resource command */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ContainerRegistryResourcePromise;
     /** Adds a process resource command via callback */
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerRegistryResourcePromise;
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): ContainerRegistryResourcePromise;
     /** Adds a relationship to another resource */
     withRelationship(resourceBuilder: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, type: string): ContainerRegistryResourcePromise;
     /** Sets the parent relationship */
@@ -8365,7 +8410,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     }
 
     /** @internal */
-    private async _withDockerfileBaseImageInternal(buildImage?: string, runtimeImage?: string): Promise<ContainerRegistryResource> {
+    private async _withDockerfileBaseImageInternal(buildImage?: string | null, runtimeImage?: string | null): Promise<ContainerRegistryResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (buildImage !== undefined) rpcArgs.buildImage = buildImage;
         if (runtimeImage !== undefined) rpcArgs.runtimeImage = runtimeImage;
@@ -8383,7 +8428,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     }
 
     /** @internal */
-    private async _withRequiredCommandInternal(command: string, helpLink?: string): Promise<ContainerRegistryResource> {
+    private async _withRequiredCommandInternal(command: string, helpLink?: string | null): Promise<ContainerRegistryResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, command };
         if (helpLink !== undefined) rpcArgs.helpLink = helpLink;
         const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
@@ -8418,7 +8463,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     }
 
     /** @internal */
-    private async _withUrlInternal(url: string | ReferenceExpression, displayText?: string): Promise<ContainerRegistryResource> {
+    private async _withUrlInternal(url: string | ReferenceExpression, displayText?: string | null): Promise<ContainerRegistryResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, url };
         if (displayText !== undefined) rpcArgs.displayText = displayText;
         const result = await this._client.invokeCapability<ContainerRegistryResourceHandle>(
@@ -8494,7 +8539,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     }
 
     /** @internal */
-    private async _withCommandInternal(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, commandOptions?: CommandOptions): Promise<ContainerRegistryResource> {
+    private async _withCommandInternal(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, commandOptions?: CommandOptions | null): Promise<ContainerRegistryResource> {
         const executeCommandId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
@@ -8529,7 +8574,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     }
 
     /** @internal */
-    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): Promise<ContainerRegistryResource> {
+    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): Promise<ContainerRegistryResource> {
         const createProcessSpecId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
@@ -8544,7 +8589,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
         return new ContainerRegistryResourceImpl(result, this._client);
     }
 
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerRegistryResourcePromise {
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
     }
 
@@ -8624,7 +8669,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     }
 
     /** @internal */
-    private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<ContainerRegistryResource> {
+    private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[] | null, requiredBy?: string[] | null, tags?: string[] | null, description?: string | null): Promise<ContainerRegistryResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
             const arg = new PipelineStepContextImpl(argHandle, this._client);
@@ -8762,7 +8807,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     }
 
     /** @internal */
-    private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<ContainerRegistryResource> {
+    private async _withOptionalStringInternal(value?: string | null, enabled?: boolean): Promise<ContainerRegistryResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (value !== undefined) rpcArgs.value = value;
         if (enabled !== undefined) rpcArgs.enabled = enabled;
@@ -9037,7 +9082,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     }
 
     /** @internal */
-    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<ContainerRegistryResource> {
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number | null): Promise<ContainerRegistryResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -9055,7 +9100,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     }
 
     /** @internal */
-    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<ContainerRegistryResource> {
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number | null): Promise<ContainerRegistryResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -9163,7 +9208,7 @@ class ContainerRegistryResourcePromiseImpl implements ContainerRegistryResourceP
         return new ContainerRegistryResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommand(commandName, displayName, options)), this._client);
     }
 
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerRegistryResourcePromise {
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): ContainerRegistryResourcePromise {
         return new ContainerRegistryResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommandFactory(commandName, displayName, createProcessSpec, options)), this._client);
     }
 
@@ -9324,7 +9369,7 @@ export interface ContainerResource {
     /** Sets the container image tag */
     withImageTag(tag: string): ContainerResourcePromise;
     /** Sets the container image registry */
-    withImageRegistry(registry: string): ContainerResourcePromise;
+    withImageRegistry(options?: WithImageRegistryOptions): ContainerResourcePromise;
     /** Sets the container image */
     withImage(image: string, options?: WithImageOptions): ContainerResourcePromise;
     /** Sets the image SHA256 digest */
@@ -9418,9 +9463,9 @@ export interface ContainerResource {
     /** Adds a process resource command */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ContainerResourcePromise;
     /** Adds a process resource command via callback */
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerResourcePromise;
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): ContainerResourcePromise;
     /** Adds an HTTP resource command */
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): ContainerResourcePromise;
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): ContainerResourcePromise;
     /** Configures developer certificate trust */
     withDeveloperCertificateTrust(trust: boolean): ContainerResourcePromise;
     /** Sets the certificate trust scope */
@@ -9527,7 +9572,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
     /** Sets the container image tag */
     withImageTag(tag: string): ContainerResourcePromise;
     /** Sets the container image registry */
-    withImageRegistry(registry: string): ContainerResourcePromise;
+    withImageRegistry(options?: WithImageRegistryOptions): ContainerResourcePromise;
     /** Sets the container image */
     withImage(image: string, options?: WithImageOptions): ContainerResourcePromise;
     /** Sets the image SHA256 digest */
@@ -9621,9 +9666,9 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
     /** Adds a process resource command */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ContainerResourcePromise;
     /** Adds a process resource command via callback */
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerResourcePromise;
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): ContainerResourcePromise;
     /** Adds an HTTP resource command */
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): ContainerResourcePromise;
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): ContainerResourcePromise;
     /** Configures developer certificate trust */
     withDeveloperCertificateTrust(trust: boolean): ContainerResourcePromise;
     /** Sets the certificate trust scope */
@@ -9789,8 +9834,9 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withImageRegistryInternal(registry: string): Promise<ContainerResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, registry };
+    private async _withImageRegistryInternal(registry?: string | null): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (registry !== undefined) rpcArgs.registry = registry;
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
             'Aspire.Hosting/withImageRegistry',
             rpcArgs
@@ -9798,12 +9844,13 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
         return new ContainerResourceImpl(result, this._client);
     }
 
-    withImageRegistry(registry: string): ContainerResourcePromise {
+    withImageRegistry(options?: WithImageRegistryOptions): ContainerResourcePromise {
+        const registry = options?.registry;
         return new ContainerResourcePromiseImpl(this._withImageRegistryInternal(registry), this._client);
     }
 
     /** @internal */
-    private async _withImageInternal(image: string, tag?: string): Promise<ContainerResource> {
+    private async _withImageInternal(image: string, tag?: string | null): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, image };
         if (tag !== undefined) rpcArgs.tag = tag;
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
@@ -9889,7 +9936,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withDockerfileInternal(contextPath: string, dockerfilePath?: string, stage?: string): Promise<ContainerResource> {
+    private async _withDockerfileInternal(contextPath: string, dockerfilePath?: string | null, stage?: string | null): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, contextPath };
         if (dockerfilePath !== undefined) rpcArgs.dockerfilePath = dockerfilePath;
         if (stage !== undefined) rpcArgs.stage = stage;
@@ -9951,7 +9998,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withContainerCertificatePathsInternal(customCertificatesDestination?: string, defaultCertificateBundlePaths?: string[], defaultCertificateDirectoryPaths?: string[]): Promise<ContainerResource> {
+    private async _withContainerCertificatePathsInternal(customCertificatesDestination?: string | null, defaultCertificateBundlePaths?: string[] | null, defaultCertificateDirectoryPaths?: string[] | null): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (customCertificatesDestination !== undefined) rpcArgs.customCertificatesDestination = customCertificatesDestination;
         if (defaultCertificateBundlePaths !== undefined) rpcArgs.defaultCertificateBundlePaths = defaultCertificateBundlePaths;
@@ -9985,7 +10032,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withDockerfileBuilderInternal(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, stage?: string): Promise<ContainerResource> {
+    private async _withDockerfileBuilderInternal(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, stage?: string | null): Promise<ContainerResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as DockerfileBuilderCallbackContextHandle;
             const arg = new DockerfileBuilderCallbackContextImpl(argHandle, this._client);
@@ -10006,7 +10053,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withDockerfileBaseImageInternal(buildImage?: string, runtimeImage?: string): Promise<ContainerResource> {
+    private async _withDockerfileBaseImageInternal(buildImage?: string | null, runtimeImage?: string | null): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (buildImage !== undefined) rpcArgs.buildImage = buildImage;
         if (runtimeImage !== undefined) rpcArgs.runtimeImage = runtimeImage;
@@ -10038,7 +10085,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withMcpServerInternal(path?: string, endpointName?: string): Promise<ContainerResource> {
+    private async _withMcpServerInternal(path?: string | null, endpointName?: string | null): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (path !== undefined) rpcArgs.path = path;
         if (endpointName !== undefined) rpcArgs.endpointName = endpointName;
@@ -10056,7 +10103,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withOtlpExporterInternal(protocol?: OtlpProtocol): Promise<ContainerResource> {
+    private async _withOtlpExporterInternal(protocol?: OtlpProtocol | null): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (protocol !== undefined) rpcArgs.protocol = protocol;
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
@@ -10086,7 +10133,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withRequiredCommandInternal(command: string, helpLink?: string): Promise<ContainerResource> {
+    private async _withRequiredCommandInternal(command: string, helpLink?: string | null): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, command };
         if (helpLink !== undefined) rpcArgs.helpLink = helpLink;
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
@@ -10183,7 +10230,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withReferenceInternal(source: CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference | string | Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference>, connectionName?: string, optional?: boolean, name?: string): Promise<ContainerResource> {
+    private async _withReferenceInternal(source: CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference | string | Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference>, connectionName?: string | null, optional?: boolean, name?: string | null): Promise<ContainerResource> {
         source = isPromiseLike(source) ? await source : source;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, source };
         if (connectionName !== undefined) rpcArgs.connectionName = connectionName;
@@ -10225,7 +10272,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withHttpEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string, createIfNotExists?: boolean): Promise<ContainerResource> {
+    private async _withHttpEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string | null, createIfNotExists?: boolean): Promise<ContainerResource> {
         const callbackId = registerCallback(async (objData: unknown) => {
             const objHandle = wrapIfHandle(objData) as EndpointUpdateContextHandle;
             const obj = new EndpointUpdateContextImpl(objHandle, this._client);
@@ -10248,7 +10295,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withHttpsEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string, createIfNotExists?: boolean): Promise<ContainerResource> {
+    private async _withHttpsEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string | null, createIfNotExists?: boolean): Promise<ContainerResource> {
         const callbackId = registerCallback(async (objData: unknown) => {
             const objHandle = wrapIfHandle(objData) as EndpointUpdateContextHandle;
             const obj = new EndpointUpdateContextImpl(objHandle, this._client);
@@ -10271,7 +10318,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withEndpointInternal(port?: number, targetPort?: number, scheme?: string, name?: string, env?: string, isProxied?: boolean, isExternal?: boolean, protocol?: ProtocolType): Promise<ContainerResource> {
+    private async _withEndpointInternal(port?: number | null, targetPort?: number | null, scheme?: string | null, name?: string | null, env?: string | null, isProxied?: boolean, isExternal?: boolean | null, protocol?: ProtocolType | null): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (port !== undefined) rpcArgs.port = port;
         if (targetPort !== undefined) rpcArgs.targetPort = targetPort;
@@ -10301,7 +10348,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withHttpEndpointInternal(port?: number, targetPort?: number, name?: string, env?: string, isProxied?: boolean): Promise<ContainerResource> {
+    private async _withHttpEndpointInternal(port?: number | null, targetPort?: number | null, name?: string | null, env?: string | null, isProxied?: boolean): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (port !== undefined) rpcArgs.port = port;
         if (targetPort !== undefined) rpcArgs.targetPort = targetPort;
@@ -10325,7 +10372,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withHttpsEndpointInternal(port?: number, targetPort?: number, name?: string, env?: string, isProxied?: boolean): Promise<ContainerResource> {
+    private async _withHttpsEndpointInternal(port?: number | null, targetPort?: number | null, name?: string | null, env?: string | null, isProxied?: boolean): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (port !== undefined) rpcArgs.port = port;
         if (targetPort !== undefined) rpcArgs.targetPort = targetPort;
@@ -10404,7 +10451,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withUrlInternal(url: string | ReferenceExpression, displayText?: string): Promise<ContainerResource> {
+    private async _withUrlInternal(url: string | ReferenceExpression, displayText?: string | null): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, url };
         if (displayText !== undefined) rpcArgs.displayText = displayText;
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
@@ -10452,7 +10499,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _waitForInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior): Promise<ContainerResource> {
+    private async _waitForInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior | null): Promise<ContainerResource> {
         dependency = isPromiseLike(dependency) ? await dependency : dependency;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         if (waitBehavior !== undefined) rpcArgs.waitBehavior = waitBehavior;
@@ -10469,7 +10516,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _waitForStartInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior): Promise<ContainerResource> {
+    private async _waitForStartInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior | null): Promise<ContainerResource> {
         dependency = isPromiseLike(dependency) ? await dependency : dependency;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         if (waitBehavior !== undefined) rpcArgs.waitBehavior = waitBehavior;
@@ -10531,7 +10578,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withHttpHealthCheckInternal(path?: string, statusCode?: number, endpointName?: string): Promise<ContainerResource> {
+    private async _withHttpHealthCheckInternal(path?: string | null, statusCode?: number | null, endpointName?: string | null): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (path !== undefined) rpcArgs.path = path;
         if (statusCode !== undefined) rpcArgs.statusCode = statusCode;
@@ -10551,7 +10598,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withCommandInternal(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, commandOptions?: CommandOptions): Promise<ContainerResource> {
+    private async _withCommandInternal(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, commandOptions?: CommandOptions | null): Promise<ContainerResource> {
         const executeCommandId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
@@ -10586,7 +10633,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): Promise<ContainerResource> {
+    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): Promise<ContainerResource> {
         const createProcessSpecId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
@@ -10601,12 +10648,12 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
         return new ContainerResourceImpl(result, this._client);
     }
 
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerResourcePromise {
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
     }
 
     /** @internal */
-    private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions): Promise<ContainerResource> {
+    private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions | null): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, path, displayName };
         if (options !== undefined) rpcArgs.options = options;
         const result = await this._client.invokeCapability<ContainerResourceHandle>(
@@ -10616,7 +10663,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
         return new ContainerResourceImpl(result, this._client);
     }
 
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): ContainerResourcePromise {
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withHttpCommandInternal(path, displayName, options), this._client);
     }
 
@@ -10649,7 +10696,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withHttpsDeveloperCertificateInternal(password?: Awaitable<ParameterResource>): Promise<ContainerResource> {
+    private async _withHttpsDeveloperCertificateInternal(password?: Awaitable<ParameterResource> | null): Promise<ContainerResource> {
         password = isPromiseLike(password) ? await password : password;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (password !== undefined) rpcArgs.password = password;
@@ -10741,7 +10788,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withHttpProbeInternal(probeType: ProbeType, path?: string, initialDelaySeconds?: number, periodSeconds?: number, timeoutSeconds?: number, failureThreshold?: number, successThreshold?: number, endpointName?: string): Promise<ContainerResource> {
+    private async _withHttpProbeInternal(probeType: ProbeType, path?: string | null, initialDelaySeconds?: number | null, periodSeconds?: number | null, timeoutSeconds?: number | null, failureThreshold?: number | null, successThreshold?: number | null, endpointName?: string | null): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, probeType };
         if (path !== undefined) rpcArgs.path = path;
         if (initialDelaySeconds !== undefined) rpcArgs.initialDelaySeconds = initialDelaySeconds;
@@ -10830,7 +10877,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<ContainerResource> {
+    private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[] | null, requiredBy?: string[] | null, tags?: string[] | null, description?: string | null): Promise<ContainerResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
             const arg = new PipelineStepContextImpl(argHandle, this._client);
@@ -10876,7 +10923,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withVolumeInternal(target: string, name?: string, isReadOnly?: boolean): Promise<ContainerResource> {
+    private async _withVolumeInternal(target: string, name?: string | null, isReadOnly?: boolean): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { resource: this._handle, target };
         if (name !== undefined) rpcArgs.name = name;
         if (isReadOnly !== undefined) rpcArgs.isReadOnly = isReadOnly;
@@ -11005,7 +11052,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<ContainerResource> {
+    private async _withOptionalStringInternal(value?: string | null, enabled?: boolean): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (value !== undefined) rpcArgs.value = value;
         if (enabled !== undefined) rpcArgs.enabled = enabled;
@@ -11313,7 +11360,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<ContainerResource> {
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number | null): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -11331,7 +11378,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /** @internal */
-    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<ContainerResource> {
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number | null): Promise<ContainerResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -11411,8 +11458,8 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withImageTag(tag)), this._client);
     }
 
-    withImageRegistry(registry: string): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withImageRegistry(registry)), this._client);
+    withImageRegistry(options?: WithImageRegistryOptions): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withImageRegistry(options)), this._client);
     }
 
     withImage(image: string, options?: WithImageOptions): ContainerResourcePromise {
@@ -11599,11 +11646,11 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommand(commandName, displayName, options)), this._client);
     }
 
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ContainerResourcePromise {
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommandFactory(commandName, displayName, createProcessSpec, options)), this._client);
     }
 
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): ContainerResourcePromise {
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)), this._client);
     }
 
@@ -11876,9 +11923,9 @@ export interface CSharpAppResource {
     /** Adds a process resource command */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): CSharpAppResourcePromise;
     /** Adds a process resource command via callback */
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): CSharpAppResourcePromise;
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): CSharpAppResourcePromise;
     /** Adds an HTTP resource command */
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): CSharpAppResourcePromise;
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): CSharpAppResourcePromise;
     /** Configures developer certificate trust */
     withDeveloperCertificateTrust(trust: boolean): CSharpAppResourcePromise;
     /** Sets the certificate trust scope */
@@ -12047,9 +12094,9 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
     /** Adds a process resource command */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): CSharpAppResourcePromise;
     /** Adds a process resource command via callback */
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): CSharpAppResourcePromise;
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): CSharpAppResourcePromise;
     /** Adds an HTTP resource command */
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): CSharpAppResourcePromise;
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): CSharpAppResourcePromise;
     /** Configures developer certificate trust */
     withDeveloperCertificateTrust(trust: boolean): CSharpAppResourcePromise;
     /** Sets the certificate trust scope */
@@ -12169,7 +12216,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _withDockerfileBaseImageInternal(buildImage?: string, runtimeImage?: string): Promise<CSharpAppResource> {
+    private async _withDockerfileBaseImageInternal(buildImage?: string | null, runtimeImage?: string | null): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (buildImage !== undefined) rpcArgs.buildImage = buildImage;
         if (runtimeImage !== undefined) rpcArgs.runtimeImage = runtimeImage;
@@ -12187,7 +12234,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _withMcpServerInternal(path?: string, endpointName?: string): Promise<CSharpAppResource> {
+    private async _withMcpServerInternal(path?: string | null, endpointName?: string | null): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (path !== undefined) rpcArgs.path = path;
         if (endpointName !== undefined) rpcArgs.endpointName = endpointName;
@@ -12205,7 +12252,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _withOtlpExporterInternal(protocol?: OtlpProtocol): Promise<CSharpAppResource> {
+    private async _withOtlpExporterInternal(protocol?: OtlpProtocol | null): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (protocol !== undefined) rpcArgs.protocol = protocol;
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
@@ -12270,7 +12317,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _withRequiredCommandInternal(command: string, helpLink?: string): Promise<CSharpAppResource> {
+    private async _withRequiredCommandInternal(command: string, helpLink?: string | null): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, command };
         if (helpLink !== undefined) rpcArgs.helpLink = helpLink;
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
@@ -12367,7 +12414,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _withReferenceInternal(source: CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference | string | Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference>, connectionName?: string, optional?: boolean, name?: string): Promise<CSharpAppResource> {
+    private async _withReferenceInternal(source: CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference | string | Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference>, connectionName?: string | null, optional?: boolean, name?: string | null): Promise<CSharpAppResource> {
         source = isPromiseLike(source) ? await source : source;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, source };
         if (connectionName !== undefined) rpcArgs.connectionName = connectionName;
@@ -12409,7 +12456,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _withHttpEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string, createIfNotExists?: boolean): Promise<CSharpAppResource> {
+    private async _withHttpEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string | null, createIfNotExists?: boolean): Promise<CSharpAppResource> {
         const callbackId = registerCallback(async (objData: unknown) => {
             const objHandle = wrapIfHandle(objData) as EndpointUpdateContextHandle;
             const obj = new EndpointUpdateContextImpl(objHandle, this._client);
@@ -12432,7 +12479,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _withHttpsEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string, createIfNotExists?: boolean): Promise<CSharpAppResource> {
+    private async _withHttpsEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string | null, createIfNotExists?: boolean): Promise<CSharpAppResource> {
         const callbackId = registerCallback(async (objData: unknown) => {
             const objHandle = wrapIfHandle(objData) as EndpointUpdateContextHandle;
             const obj = new EndpointUpdateContextImpl(objHandle, this._client);
@@ -12455,7 +12502,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _withEndpointInternal(port?: number, targetPort?: number, scheme?: string, name?: string, env?: string, isProxied?: boolean, isExternal?: boolean, protocol?: ProtocolType): Promise<CSharpAppResource> {
+    private async _withEndpointInternal(port?: number | null, targetPort?: number | null, scheme?: string | null, name?: string | null, env?: string | null, isProxied?: boolean, isExternal?: boolean | null, protocol?: ProtocolType | null): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (port !== undefined) rpcArgs.port = port;
         if (targetPort !== undefined) rpcArgs.targetPort = targetPort;
@@ -12485,7 +12532,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _withHttpEndpointInternal(port?: number, targetPort?: number, name?: string, env?: string, isProxied?: boolean): Promise<CSharpAppResource> {
+    private async _withHttpEndpointInternal(port?: number | null, targetPort?: number | null, name?: string | null, env?: string | null, isProxied?: boolean): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (port !== undefined) rpcArgs.port = port;
         if (targetPort !== undefined) rpcArgs.targetPort = targetPort;
@@ -12509,7 +12556,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _withHttpsEndpointInternal(port?: number, targetPort?: number, name?: string, env?: string, isProxied?: boolean): Promise<CSharpAppResource> {
+    private async _withHttpsEndpointInternal(port?: number | null, targetPort?: number | null, name?: string | null, env?: string | null, isProxied?: boolean): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (port !== undefined) rpcArgs.port = port;
         if (targetPort !== undefined) rpcArgs.targetPort = targetPort;
@@ -12588,7 +12635,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _withUrlInternal(url: string | ReferenceExpression, displayText?: string): Promise<CSharpAppResource> {
+    private async _withUrlInternal(url: string | ReferenceExpression, displayText?: string | null): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, url };
         if (displayText !== undefined) rpcArgs.displayText = displayText;
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
@@ -12651,7 +12698,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _waitForInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior): Promise<CSharpAppResource> {
+    private async _waitForInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior | null): Promise<CSharpAppResource> {
         dependency = isPromiseLike(dependency) ? await dependency : dependency;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         if (waitBehavior !== undefined) rpcArgs.waitBehavior = waitBehavior;
@@ -12668,7 +12715,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _waitForStartInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior): Promise<CSharpAppResource> {
+    private async _waitForStartInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior | null): Promise<CSharpAppResource> {
         dependency = isPromiseLike(dependency) ? await dependency : dependency;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         if (waitBehavior !== undefined) rpcArgs.waitBehavior = waitBehavior;
@@ -12730,7 +12777,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _withHttpHealthCheckInternal(path?: string, statusCode?: number, endpointName?: string): Promise<CSharpAppResource> {
+    private async _withHttpHealthCheckInternal(path?: string | null, statusCode?: number | null, endpointName?: string | null): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (path !== undefined) rpcArgs.path = path;
         if (statusCode !== undefined) rpcArgs.statusCode = statusCode;
@@ -12750,7 +12797,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _withCommandInternal(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, commandOptions?: CommandOptions): Promise<CSharpAppResource> {
+    private async _withCommandInternal(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, commandOptions?: CommandOptions | null): Promise<CSharpAppResource> {
         const executeCommandId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
@@ -12785,7 +12832,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): Promise<CSharpAppResource> {
+    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): Promise<CSharpAppResource> {
         const createProcessSpecId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
@@ -12800,12 +12847,12 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
         return new CSharpAppResourceImpl(result, this._client);
     }
 
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): CSharpAppResourcePromise {
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
     }
 
     /** @internal */
-    private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions): Promise<CSharpAppResource> {
+    private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions | null): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, path, displayName };
         if (options !== undefined) rpcArgs.options = options;
         const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
@@ -12815,7 +12862,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
         return new CSharpAppResourceImpl(result, this._client);
     }
 
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): CSharpAppResourcePromise {
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._withHttpCommandInternal(path, displayName, options), this._client);
     }
 
@@ -12848,7 +12895,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _withHttpsDeveloperCertificateInternal(password?: Awaitable<ParameterResource>): Promise<CSharpAppResource> {
+    private async _withHttpsDeveloperCertificateInternal(password?: Awaitable<ParameterResource> | null): Promise<CSharpAppResource> {
         password = isPromiseLike(password) ? await password : password;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (password !== undefined) rpcArgs.password = password;
@@ -12940,7 +12987,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _withHttpProbeInternal(probeType: ProbeType, path?: string, initialDelaySeconds?: number, periodSeconds?: number, timeoutSeconds?: number, failureThreshold?: number, successThreshold?: number, endpointName?: string): Promise<CSharpAppResource> {
+    private async _withHttpProbeInternal(probeType: ProbeType, path?: string | null, initialDelaySeconds?: number | null, periodSeconds?: number | null, timeoutSeconds?: number | null, failureThreshold?: number | null, successThreshold?: number | null, endpointName?: string | null): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, probeType };
         if (path !== undefined) rpcArgs.path = path;
         if (initialDelaySeconds !== undefined) rpcArgs.initialDelaySeconds = initialDelaySeconds;
@@ -13029,7 +13076,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<CSharpAppResource> {
+    private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[] | null, requiredBy?: string[] | null, tags?: string[] | null, description?: string | null): Promise<CSharpAppResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
             const arg = new PipelineStepContextImpl(argHandle, this._client);
@@ -13186,7 +13233,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<CSharpAppResource> {
+    private async _withOptionalStringInternal(value?: string | null, enabled?: boolean): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (value !== undefined) rpcArgs.value = value;
         if (enabled !== undefined) rpcArgs.enabled = enabled;
@@ -13494,7 +13541,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<CSharpAppResource> {
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number | null): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -13512,7 +13559,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
-    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<CSharpAppResource> {
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number | null): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -13720,11 +13767,11 @@ class CSharpAppResourcePromiseImpl implements CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommand(commandName, displayName, options)), this._client);
     }
 
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): CSharpAppResourcePromise {
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommandFactory(commandName, displayName, createProcessSpec, options)), this._client);
     }
 
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): CSharpAppResourcePromise {
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)), this._client);
     }
 
@@ -13937,7 +13984,7 @@ export interface DotnetToolResource {
     /** Ignores failed NuGet sources */
     withToolIgnoreFailedSources(): DotnetToolResourcePromise;
     /** Publishes an executable as a Docker file */
-    publishAsDockerFile(configure: (obj: ContainerResource) => Promise<void>): DotnetToolResourcePromise;
+    publishAsDockerFile(options?: PublishAsDockerFileOptions): DotnetToolResourcePromise;
     /** Sets the executable command */
     withExecutableCommand(command: string): DotnetToolResourcePromise;
     /** Sets the executable working directory */
@@ -14003,9 +14050,9 @@ export interface DotnetToolResource {
     /** Adds a process resource command */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): DotnetToolResourcePromise;
     /** Adds a process resource command via callback */
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): DotnetToolResourcePromise;
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): DotnetToolResourcePromise;
     /** Adds an HTTP resource command */
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): DotnetToolResourcePromise;
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): DotnetToolResourcePromise;
     /** Configures developer certificate trust */
     withDeveloperCertificateTrust(trust: boolean): DotnetToolResourcePromise;
     /** Sets the certificate trust scope */
@@ -14118,7 +14165,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
     /** Ignores failed NuGet sources */
     withToolIgnoreFailedSources(): DotnetToolResourcePromise;
     /** Publishes an executable as a Docker file */
-    publishAsDockerFile(configure: (obj: ContainerResource) => Promise<void>): DotnetToolResourcePromise;
+    publishAsDockerFile(options?: PublishAsDockerFileOptions): DotnetToolResourcePromise;
     /** Sets the executable command */
     withExecutableCommand(command: string): DotnetToolResourcePromise;
     /** Sets the executable working directory */
@@ -14184,9 +14231,9 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
     /** Adds a process resource command */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): DotnetToolResourcePromise;
     /** Adds a process resource command via callback */
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): DotnetToolResourcePromise;
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): DotnetToolResourcePromise;
     /** Adds an HTTP resource command */
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): DotnetToolResourcePromise;
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): DotnetToolResourcePromise;
     /** Configures developer certificate trust */
     withDeveloperCertificateTrust(trust: boolean): DotnetToolResourcePromise;
     /** Sets the certificate trust scope */
@@ -14306,7 +14353,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _withDockerfileBaseImageInternal(buildImage?: string, runtimeImage?: string): Promise<DotnetToolResource> {
+    private async _withDockerfileBaseImageInternal(buildImage?: string | null, runtimeImage?: string | null): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (buildImage !== undefined) rpcArgs.buildImage = buildImage;
         if (runtimeImage !== undefined) rpcArgs.runtimeImage = runtimeImage;
@@ -14408,13 +14455,14 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _publishAsDockerFileInternal(configure: (obj: ContainerResource) => Promise<void>): Promise<DotnetToolResource> {
-        const configureId = registerCallback(async (objData: unknown) => {
+    private async _publishAsDockerFileInternal(configure?: (obj: ContainerResource) => Promise<void>): Promise<DotnetToolResource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
             const objHandle = wrapIfHandle(objData) as ContainerResourceHandle;
             const obj = new ContainerResourceImpl(objHandle, this._client);
             await configure(obj);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, configure: configureId };
+        }) : undefined;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (configure !== undefined) rpcArgs.configure = configureId;
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
             'Aspire.Hosting/publishAsDockerFile',
             rpcArgs
@@ -14422,7 +14470,8 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
         return new DotnetToolResourceImpl(result, this._client);
     }
 
-    publishAsDockerFile(configure: (obj: ContainerResource) => Promise<void>): DotnetToolResourcePromise {
+    publishAsDockerFile(options?: PublishAsDockerFileOptions): DotnetToolResourcePromise {
+        const configure = options?.configure;
         return new DotnetToolResourcePromiseImpl(this._publishAsDockerFileInternal(configure), this._client);
     }
 
@@ -14455,7 +14504,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _withMcpServerInternal(path?: string, endpointName?: string): Promise<DotnetToolResource> {
+    private async _withMcpServerInternal(path?: string | null, endpointName?: string | null): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (path !== undefined) rpcArgs.path = path;
         if (endpointName !== undefined) rpcArgs.endpointName = endpointName;
@@ -14473,7 +14522,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _withOtlpExporterInternal(protocol?: OtlpProtocol): Promise<DotnetToolResource> {
+    private async _withOtlpExporterInternal(protocol?: OtlpProtocol | null): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (protocol !== undefined) rpcArgs.protocol = protocol;
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
@@ -14489,7 +14538,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _withRequiredCommandInternal(command: string, helpLink?: string): Promise<DotnetToolResource> {
+    private async _withRequiredCommandInternal(command: string, helpLink?: string | null): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, command };
         if (helpLink !== undefined) rpcArgs.helpLink = helpLink;
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
@@ -14586,7 +14635,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _withReferenceInternal(source: CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference | string | Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference>, connectionName?: string, optional?: boolean, name?: string): Promise<DotnetToolResource> {
+    private async _withReferenceInternal(source: CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference | string | Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference>, connectionName?: string | null, optional?: boolean, name?: string | null): Promise<DotnetToolResource> {
         source = isPromiseLike(source) ? await source : source;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, source };
         if (connectionName !== undefined) rpcArgs.connectionName = connectionName;
@@ -14628,7 +14677,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _withHttpEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string, createIfNotExists?: boolean): Promise<DotnetToolResource> {
+    private async _withHttpEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string | null, createIfNotExists?: boolean): Promise<DotnetToolResource> {
         const callbackId = registerCallback(async (objData: unknown) => {
             const objHandle = wrapIfHandle(objData) as EndpointUpdateContextHandle;
             const obj = new EndpointUpdateContextImpl(objHandle, this._client);
@@ -14651,7 +14700,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _withHttpsEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string, createIfNotExists?: boolean): Promise<DotnetToolResource> {
+    private async _withHttpsEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string | null, createIfNotExists?: boolean): Promise<DotnetToolResource> {
         const callbackId = registerCallback(async (objData: unknown) => {
             const objHandle = wrapIfHandle(objData) as EndpointUpdateContextHandle;
             const obj = new EndpointUpdateContextImpl(objHandle, this._client);
@@ -14674,7 +14723,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _withEndpointInternal(port?: number, targetPort?: number, scheme?: string, name?: string, env?: string, isProxied?: boolean, isExternal?: boolean, protocol?: ProtocolType): Promise<DotnetToolResource> {
+    private async _withEndpointInternal(port?: number | null, targetPort?: number | null, scheme?: string | null, name?: string | null, env?: string | null, isProxied?: boolean, isExternal?: boolean | null, protocol?: ProtocolType | null): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (port !== undefined) rpcArgs.port = port;
         if (targetPort !== undefined) rpcArgs.targetPort = targetPort;
@@ -14704,7 +14753,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _withHttpEndpointInternal(port?: number, targetPort?: number, name?: string, env?: string, isProxied?: boolean): Promise<DotnetToolResource> {
+    private async _withHttpEndpointInternal(port?: number | null, targetPort?: number | null, name?: string | null, env?: string | null, isProxied?: boolean): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (port !== undefined) rpcArgs.port = port;
         if (targetPort !== undefined) rpcArgs.targetPort = targetPort;
@@ -14728,7 +14777,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _withHttpsEndpointInternal(port?: number, targetPort?: number, name?: string, env?: string, isProxied?: boolean): Promise<DotnetToolResource> {
+    private async _withHttpsEndpointInternal(port?: number | null, targetPort?: number | null, name?: string | null, env?: string | null, isProxied?: boolean): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (port !== undefined) rpcArgs.port = port;
         if (targetPort !== undefined) rpcArgs.targetPort = targetPort;
@@ -14807,7 +14856,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _withUrlInternal(url: string | ReferenceExpression, displayText?: string): Promise<DotnetToolResource> {
+    private async _withUrlInternal(url: string | ReferenceExpression, displayText?: string | null): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, url };
         if (displayText !== undefined) rpcArgs.displayText = displayText;
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
@@ -14855,7 +14904,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _waitForInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior): Promise<DotnetToolResource> {
+    private async _waitForInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior | null): Promise<DotnetToolResource> {
         dependency = isPromiseLike(dependency) ? await dependency : dependency;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         if (waitBehavior !== undefined) rpcArgs.waitBehavior = waitBehavior;
@@ -14872,7 +14921,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _waitForStartInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior): Promise<DotnetToolResource> {
+    private async _waitForStartInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior | null): Promise<DotnetToolResource> {
         dependency = isPromiseLike(dependency) ? await dependency : dependency;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         if (waitBehavior !== undefined) rpcArgs.waitBehavior = waitBehavior;
@@ -14934,7 +14983,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _withHttpHealthCheckInternal(path?: string, statusCode?: number, endpointName?: string): Promise<DotnetToolResource> {
+    private async _withHttpHealthCheckInternal(path?: string | null, statusCode?: number | null, endpointName?: string | null): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (path !== undefined) rpcArgs.path = path;
         if (statusCode !== undefined) rpcArgs.statusCode = statusCode;
@@ -14954,7 +15003,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _withCommandInternal(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, commandOptions?: CommandOptions): Promise<DotnetToolResource> {
+    private async _withCommandInternal(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, commandOptions?: CommandOptions | null): Promise<DotnetToolResource> {
         const executeCommandId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
@@ -14989,7 +15038,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): Promise<DotnetToolResource> {
+    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): Promise<DotnetToolResource> {
         const createProcessSpecId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
@@ -15004,12 +15053,12 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
         return new DotnetToolResourceImpl(result, this._client);
     }
 
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): DotnetToolResourcePromise {
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
     }
 
     /** @internal */
-    private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions): Promise<DotnetToolResource> {
+    private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions | null): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, path, displayName };
         if (options !== undefined) rpcArgs.options = options;
         const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
@@ -15019,7 +15068,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
         return new DotnetToolResourceImpl(result, this._client);
     }
 
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): DotnetToolResourcePromise {
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withHttpCommandInternal(path, displayName, options), this._client);
     }
 
@@ -15052,7 +15101,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _withHttpsDeveloperCertificateInternal(password?: Awaitable<ParameterResource>): Promise<DotnetToolResource> {
+    private async _withHttpsDeveloperCertificateInternal(password?: Awaitable<ParameterResource> | null): Promise<DotnetToolResource> {
         password = isPromiseLike(password) ? await password : password;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (password !== undefined) rpcArgs.password = password;
@@ -15144,7 +15193,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _withHttpProbeInternal(probeType: ProbeType, path?: string, initialDelaySeconds?: number, periodSeconds?: number, timeoutSeconds?: number, failureThreshold?: number, successThreshold?: number, endpointName?: string): Promise<DotnetToolResource> {
+    private async _withHttpProbeInternal(probeType: ProbeType, path?: string | null, initialDelaySeconds?: number | null, periodSeconds?: number | null, timeoutSeconds?: number | null, failureThreshold?: number | null, successThreshold?: number | null, endpointName?: string | null): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, probeType };
         if (path !== undefined) rpcArgs.path = path;
         if (initialDelaySeconds !== undefined) rpcArgs.initialDelaySeconds = initialDelaySeconds;
@@ -15233,7 +15282,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<DotnetToolResource> {
+    private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[] | null, requiredBy?: string[] | null, tags?: string[] | null, description?: string | null): Promise<DotnetToolResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
             const arg = new PipelineStepContextImpl(argHandle, this._client);
@@ -15390,7 +15439,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<DotnetToolResource> {
+    private async _withOptionalStringInternal(value?: string | null, enabled?: boolean): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (value !== undefined) rpcArgs.value = value;
         if (enabled !== undefined) rpcArgs.enabled = enabled;
@@ -15698,7 +15747,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<DotnetToolResource> {
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number | null): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -15716,7 +15765,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /** @internal */
-    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<DotnetToolResource> {
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number | null): Promise<DotnetToolResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -15812,8 +15861,8 @@ class DotnetToolResourcePromiseImpl implements DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withToolIgnoreFailedSources()), this._client);
     }
 
-    publishAsDockerFile(configure: (obj: ContainerResource) => Promise<void>): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.publishAsDockerFile(configure)), this._client);
+    publishAsDockerFile(options?: PublishAsDockerFileOptions): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.publishAsDockerFile(options)), this._client);
     }
 
     withExecutableCommand(command: string): DotnetToolResourcePromise {
@@ -15944,11 +15993,11 @@ class DotnetToolResourcePromiseImpl implements DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommand(commandName, displayName, options)), this._client);
     }
 
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): DotnetToolResourcePromise {
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommandFactory(commandName, displayName, createProcessSpec, options)), this._client);
     }
 
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): DotnetToolResourcePromise {
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)), this._client);
     }
 
@@ -16149,7 +16198,7 @@ export interface ExecutableResource {
     /** Sets the base image for a Dockerfile build */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ExecutableResourcePromise;
     /** Publishes an executable as a Docker file */
-    publishAsDockerFile(configure: (obj: ContainerResource) => Promise<void>): ExecutableResourcePromise;
+    publishAsDockerFile(options?: PublishAsDockerFileOptions): ExecutableResourcePromise;
     /** Sets the executable command */
     withExecutableCommand(command: string): ExecutableResourcePromise;
     /** Sets the executable working directory */
@@ -16215,9 +16264,9 @@ export interface ExecutableResource {
     /** Adds a process resource command */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ExecutableResourcePromise;
     /** Adds a process resource command via callback */
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExecutableResourcePromise;
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): ExecutableResourcePromise;
     /** Adds an HTTP resource command */
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): ExecutableResourcePromise;
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): ExecutableResourcePromise;
     /** Configures developer certificate trust */
     withDeveloperCertificateTrust(trust: boolean): ExecutableResourcePromise;
     /** Sets the certificate trust scope */
@@ -16318,7 +16367,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
     /** Sets the base image for a Dockerfile build */
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ExecutableResourcePromise;
     /** Publishes an executable as a Docker file */
-    publishAsDockerFile(configure: (obj: ContainerResource) => Promise<void>): ExecutableResourcePromise;
+    publishAsDockerFile(options?: PublishAsDockerFileOptions): ExecutableResourcePromise;
     /** Sets the executable command */
     withExecutableCommand(command: string): ExecutableResourcePromise;
     /** Sets the executable working directory */
@@ -16384,9 +16433,9 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
     /** Adds a process resource command */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ExecutableResourcePromise;
     /** Adds a process resource command via callback */
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExecutableResourcePromise;
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): ExecutableResourcePromise;
     /** Adds an HTTP resource command */
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): ExecutableResourcePromise;
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): ExecutableResourcePromise;
     /** Configures developer certificate trust */
     withDeveloperCertificateTrust(trust: boolean): ExecutableResourcePromise;
     /** Sets the certificate trust scope */
@@ -16506,7 +16555,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _withDockerfileBaseImageInternal(buildImage?: string, runtimeImage?: string): Promise<ExecutableResource> {
+    private async _withDockerfileBaseImageInternal(buildImage?: string | null, runtimeImage?: string | null): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (buildImage !== undefined) rpcArgs.buildImage = buildImage;
         if (runtimeImage !== undefined) rpcArgs.runtimeImage = runtimeImage;
@@ -16524,13 +16573,14 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _publishAsDockerFileInternal(configure: (obj: ContainerResource) => Promise<void>): Promise<ExecutableResource> {
-        const configureId = registerCallback(async (objData: unknown) => {
+    private async _publishAsDockerFileInternal(configure?: (obj: ContainerResource) => Promise<void>): Promise<ExecutableResource> {
+        const configureId = configure ? registerCallback(async (objData: unknown) => {
             const objHandle = wrapIfHandle(objData) as ContainerResourceHandle;
             const obj = new ContainerResourceImpl(objHandle, this._client);
             await configure(obj);
-        });
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, configure: configureId };
+        }) : undefined;
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (configure !== undefined) rpcArgs.configure = configureId;
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
             'Aspire.Hosting/publishAsDockerFile',
             rpcArgs
@@ -16538,7 +16588,8 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
         return new ExecutableResourceImpl(result, this._client);
     }
 
-    publishAsDockerFile(configure: (obj: ContainerResource) => Promise<void>): ExecutableResourcePromise {
+    publishAsDockerFile(options?: PublishAsDockerFileOptions): ExecutableResourcePromise {
+        const configure = options?.configure;
         return new ExecutableResourcePromiseImpl(this._publishAsDockerFileInternal(configure), this._client);
     }
 
@@ -16571,7 +16622,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _withMcpServerInternal(path?: string, endpointName?: string): Promise<ExecutableResource> {
+    private async _withMcpServerInternal(path?: string | null, endpointName?: string | null): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (path !== undefined) rpcArgs.path = path;
         if (endpointName !== undefined) rpcArgs.endpointName = endpointName;
@@ -16589,7 +16640,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _withOtlpExporterInternal(protocol?: OtlpProtocol): Promise<ExecutableResource> {
+    private async _withOtlpExporterInternal(protocol?: OtlpProtocol | null): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (protocol !== undefined) rpcArgs.protocol = protocol;
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
@@ -16605,7 +16656,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _withRequiredCommandInternal(command: string, helpLink?: string): Promise<ExecutableResource> {
+    private async _withRequiredCommandInternal(command: string, helpLink?: string | null): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, command };
         if (helpLink !== undefined) rpcArgs.helpLink = helpLink;
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
@@ -16702,7 +16753,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _withReferenceInternal(source: CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference | string | Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference>, connectionName?: string, optional?: boolean, name?: string): Promise<ExecutableResource> {
+    private async _withReferenceInternal(source: CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference | string | Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference>, connectionName?: string | null, optional?: boolean, name?: string | null): Promise<ExecutableResource> {
         source = isPromiseLike(source) ? await source : source;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, source };
         if (connectionName !== undefined) rpcArgs.connectionName = connectionName;
@@ -16744,7 +16795,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _withHttpEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string, createIfNotExists?: boolean): Promise<ExecutableResource> {
+    private async _withHttpEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string | null, createIfNotExists?: boolean): Promise<ExecutableResource> {
         const callbackId = registerCallback(async (objData: unknown) => {
             const objHandle = wrapIfHandle(objData) as EndpointUpdateContextHandle;
             const obj = new EndpointUpdateContextImpl(objHandle, this._client);
@@ -16767,7 +16818,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _withHttpsEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string, createIfNotExists?: boolean): Promise<ExecutableResource> {
+    private async _withHttpsEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string | null, createIfNotExists?: boolean): Promise<ExecutableResource> {
         const callbackId = registerCallback(async (objData: unknown) => {
             const objHandle = wrapIfHandle(objData) as EndpointUpdateContextHandle;
             const obj = new EndpointUpdateContextImpl(objHandle, this._client);
@@ -16790,7 +16841,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _withEndpointInternal(port?: number, targetPort?: number, scheme?: string, name?: string, env?: string, isProxied?: boolean, isExternal?: boolean, protocol?: ProtocolType): Promise<ExecutableResource> {
+    private async _withEndpointInternal(port?: number | null, targetPort?: number | null, scheme?: string | null, name?: string | null, env?: string | null, isProxied?: boolean, isExternal?: boolean | null, protocol?: ProtocolType | null): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (port !== undefined) rpcArgs.port = port;
         if (targetPort !== undefined) rpcArgs.targetPort = targetPort;
@@ -16820,7 +16871,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _withHttpEndpointInternal(port?: number, targetPort?: number, name?: string, env?: string, isProxied?: boolean): Promise<ExecutableResource> {
+    private async _withHttpEndpointInternal(port?: number | null, targetPort?: number | null, name?: string | null, env?: string | null, isProxied?: boolean): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (port !== undefined) rpcArgs.port = port;
         if (targetPort !== undefined) rpcArgs.targetPort = targetPort;
@@ -16844,7 +16895,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _withHttpsEndpointInternal(port?: number, targetPort?: number, name?: string, env?: string, isProxied?: boolean): Promise<ExecutableResource> {
+    private async _withHttpsEndpointInternal(port?: number | null, targetPort?: number | null, name?: string | null, env?: string | null, isProxied?: boolean): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (port !== undefined) rpcArgs.port = port;
         if (targetPort !== undefined) rpcArgs.targetPort = targetPort;
@@ -16923,7 +16974,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _withUrlInternal(url: string | ReferenceExpression, displayText?: string): Promise<ExecutableResource> {
+    private async _withUrlInternal(url: string | ReferenceExpression, displayText?: string | null): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, url };
         if (displayText !== undefined) rpcArgs.displayText = displayText;
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
@@ -16971,7 +17022,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _waitForInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior): Promise<ExecutableResource> {
+    private async _waitForInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior | null): Promise<ExecutableResource> {
         dependency = isPromiseLike(dependency) ? await dependency : dependency;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         if (waitBehavior !== undefined) rpcArgs.waitBehavior = waitBehavior;
@@ -16988,7 +17039,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _waitForStartInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior): Promise<ExecutableResource> {
+    private async _waitForStartInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior | null): Promise<ExecutableResource> {
         dependency = isPromiseLike(dependency) ? await dependency : dependency;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         if (waitBehavior !== undefined) rpcArgs.waitBehavior = waitBehavior;
@@ -17050,7 +17101,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _withHttpHealthCheckInternal(path?: string, statusCode?: number, endpointName?: string): Promise<ExecutableResource> {
+    private async _withHttpHealthCheckInternal(path?: string | null, statusCode?: number | null, endpointName?: string | null): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (path !== undefined) rpcArgs.path = path;
         if (statusCode !== undefined) rpcArgs.statusCode = statusCode;
@@ -17070,7 +17121,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _withCommandInternal(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, commandOptions?: CommandOptions): Promise<ExecutableResource> {
+    private async _withCommandInternal(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, commandOptions?: CommandOptions | null): Promise<ExecutableResource> {
         const executeCommandId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
@@ -17105,7 +17156,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): Promise<ExecutableResource> {
+    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): Promise<ExecutableResource> {
         const createProcessSpecId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
@@ -17120,12 +17171,12 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
         return new ExecutableResourceImpl(result, this._client);
     }
 
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExecutableResourcePromise {
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
     }
 
     /** @internal */
-    private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions): Promise<ExecutableResource> {
+    private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions | null): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, path, displayName };
         if (options !== undefined) rpcArgs.options = options;
         const result = await this._client.invokeCapability<ExecutableResourceHandle>(
@@ -17135,7 +17186,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
         return new ExecutableResourceImpl(result, this._client);
     }
 
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): ExecutableResourcePromise {
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._withHttpCommandInternal(path, displayName, options), this._client);
     }
 
@@ -17168,7 +17219,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _withHttpsDeveloperCertificateInternal(password?: Awaitable<ParameterResource>): Promise<ExecutableResource> {
+    private async _withHttpsDeveloperCertificateInternal(password?: Awaitable<ParameterResource> | null): Promise<ExecutableResource> {
         password = isPromiseLike(password) ? await password : password;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (password !== undefined) rpcArgs.password = password;
@@ -17260,7 +17311,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _withHttpProbeInternal(probeType: ProbeType, path?: string, initialDelaySeconds?: number, periodSeconds?: number, timeoutSeconds?: number, failureThreshold?: number, successThreshold?: number, endpointName?: string): Promise<ExecutableResource> {
+    private async _withHttpProbeInternal(probeType: ProbeType, path?: string | null, initialDelaySeconds?: number | null, periodSeconds?: number | null, timeoutSeconds?: number | null, failureThreshold?: number | null, successThreshold?: number | null, endpointName?: string | null): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, probeType };
         if (path !== undefined) rpcArgs.path = path;
         if (initialDelaySeconds !== undefined) rpcArgs.initialDelaySeconds = initialDelaySeconds;
@@ -17349,7 +17400,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<ExecutableResource> {
+    private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[] | null, requiredBy?: string[] | null, tags?: string[] | null, description?: string | null): Promise<ExecutableResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
             const arg = new PipelineStepContextImpl(argHandle, this._client);
@@ -17506,7 +17557,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<ExecutableResource> {
+    private async _withOptionalStringInternal(value?: string | null, enabled?: boolean): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (value !== undefined) rpcArgs.value = value;
         if (enabled !== undefined) rpcArgs.enabled = enabled;
@@ -17814,7 +17865,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<ExecutableResource> {
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number | null): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -17832,7 +17883,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
-    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<ExecutableResource> {
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number | null): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -17904,8 +17955,8 @@ class ExecutableResourcePromiseImpl implements ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withDockerfileBaseImage(options)), this._client);
     }
 
-    publishAsDockerFile(configure: (obj: ContainerResource) => Promise<void>): ExecutableResourcePromise {
-        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.publishAsDockerFile(configure)), this._client);
+    publishAsDockerFile(options?: PublishAsDockerFileOptions): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.publishAsDockerFile(options)), this._client);
     }
 
     withExecutableCommand(command: string): ExecutableResourcePromise {
@@ -18036,11 +18087,11 @@ class ExecutableResourcePromiseImpl implements ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommand(commandName, displayName, options)), this._client);
     }
 
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExecutableResourcePromise {
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommandFactory(commandName, displayName, createProcessSpec, options)), this._client);
     }
 
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): ExecutableResourcePromise {
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)), this._client);
     }
 
@@ -18261,7 +18312,7 @@ export interface ExternalServiceResource {
     /** Adds a process resource command */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ExternalServiceResourcePromise;
     /** Adds a process resource command via callback */
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExternalServiceResourcePromise;
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): ExternalServiceResourcePromise;
     /** Adds a relationship to another resource */
     withRelationship(resourceBuilder: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, type: string): ExternalServiceResourcePromise;
     /** Sets the parent relationship */
@@ -18360,7 +18411,7 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
     /** Adds a process resource command */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ExternalServiceResourcePromise;
     /** Adds a process resource command via callback */
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExternalServiceResourcePromise;
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): ExternalServiceResourcePromise;
     /** Adds a relationship to another resource */
     withRelationship(resourceBuilder: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, type: string): ExternalServiceResourcePromise;
     /** Sets the parent relationship */
@@ -18458,7 +18509,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     }
 
     /** @internal */
-    private async _withDockerfileBaseImageInternal(buildImage?: string, runtimeImage?: string): Promise<ExternalServiceResource> {
+    private async _withDockerfileBaseImageInternal(buildImage?: string | null, runtimeImage?: string | null): Promise<ExternalServiceResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (buildImage !== undefined) rpcArgs.buildImage = buildImage;
         if (runtimeImage !== undefined) rpcArgs.runtimeImage = runtimeImage;
@@ -18476,7 +18527,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     }
 
     /** @internal */
-    private async _withHttpHealthCheckInternal(path?: string, statusCode?: number, endpointName?: string): Promise<ExternalServiceResource> {
+    private async _withHttpHealthCheckInternal(path?: string | null, statusCode?: number | null, endpointName?: string | null): Promise<ExternalServiceResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (path !== undefined) rpcArgs.path = path;
         if (statusCode !== undefined) rpcArgs.statusCode = statusCode;
@@ -18496,7 +18547,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     }
 
     /** @internal */
-    private async _withRequiredCommandInternal(command: string, helpLink?: string): Promise<ExternalServiceResource> {
+    private async _withRequiredCommandInternal(command: string, helpLink?: string | null): Promise<ExternalServiceResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, command };
         if (helpLink !== undefined) rpcArgs.helpLink = helpLink;
         const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
@@ -18531,7 +18582,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     }
 
     /** @internal */
-    private async _withUrlInternal(url: string | ReferenceExpression, displayText?: string): Promise<ExternalServiceResource> {
+    private async _withUrlInternal(url: string | ReferenceExpression, displayText?: string | null): Promise<ExternalServiceResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, url };
         if (displayText !== undefined) rpcArgs.displayText = displayText;
         const result = await this._client.invokeCapability<ExternalServiceResourceHandle>(
@@ -18607,7 +18658,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     }
 
     /** @internal */
-    private async _withCommandInternal(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, commandOptions?: CommandOptions): Promise<ExternalServiceResource> {
+    private async _withCommandInternal(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, commandOptions?: CommandOptions | null): Promise<ExternalServiceResource> {
         const executeCommandId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
@@ -18642,7 +18693,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     }
 
     /** @internal */
-    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): Promise<ExternalServiceResource> {
+    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): Promise<ExternalServiceResource> {
         const createProcessSpecId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
@@ -18657,7 +18708,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
         return new ExternalServiceResourceImpl(result, this._client);
     }
 
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExternalServiceResourcePromise {
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
     }
 
@@ -18737,7 +18788,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     }
 
     /** @internal */
-    private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<ExternalServiceResource> {
+    private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[] | null, requiredBy?: string[] | null, tags?: string[] | null, description?: string | null): Promise<ExternalServiceResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
             const arg = new PipelineStepContextImpl(argHandle, this._client);
@@ -18875,7 +18926,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     }
 
     /** @internal */
-    private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<ExternalServiceResource> {
+    private async _withOptionalStringInternal(value?: string | null, enabled?: boolean): Promise<ExternalServiceResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (value !== undefined) rpcArgs.value = value;
         if (enabled !== undefined) rpcArgs.enabled = enabled;
@@ -19150,7 +19201,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     }
 
     /** @internal */
-    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<ExternalServiceResource> {
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number | null): Promise<ExternalServiceResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -19168,7 +19219,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     }
 
     /** @internal */
-    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<ExternalServiceResource> {
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number | null): Promise<ExternalServiceResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -19280,7 +19331,7 @@ class ExternalServiceResourcePromiseImpl implements ExternalServiceResourcePromi
         return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommand(commandName, displayName, options)), this._client);
     }
 
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ExternalServiceResourcePromise {
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): ExternalServiceResourcePromise {
         return new ExternalServiceResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommandFactory(commandName, displayName, createProcessSpec, options)), this._client);
     }
 
@@ -19457,7 +19508,7 @@ export interface ParameterResource {
     /** Adds a process resource command */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ParameterResourcePromise;
     /** Adds a process resource command via callback */
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ParameterResourcePromise;
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): ParameterResourcePromise;
     /** Adds a relationship to another resource */
     withRelationship(resourceBuilder: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, type: string): ParameterResourcePromise;
     /** Sets the parent relationship */
@@ -19556,7 +19607,7 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
     /** Adds a process resource command */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ParameterResourcePromise;
     /** Adds a process resource command via callback */
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ParameterResourcePromise;
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): ParameterResourcePromise;
     /** Adds a relationship to another resource */
     withRelationship(resourceBuilder: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, type: string): ParameterResourcePromise;
     /** Sets the parent relationship */
@@ -19654,7 +19705,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     }
 
     /** @internal */
-    private async _withDockerfileBaseImageInternal(buildImage?: string, runtimeImage?: string): Promise<ParameterResource> {
+    private async _withDockerfileBaseImageInternal(buildImage?: string | null, runtimeImage?: string | null): Promise<ParameterResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (buildImage !== undefined) rpcArgs.buildImage = buildImage;
         if (runtimeImage !== undefined) rpcArgs.runtimeImage = runtimeImage;
@@ -19688,7 +19739,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     }
 
     /** @internal */
-    private async _withRequiredCommandInternal(command: string, helpLink?: string): Promise<ParameterResource> {
+    private async _withRequiredCommandInternal(command: string, helpLink?: string | null): Promise<ParameterResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, command };
         if (helpLink !== undefined) rpcArgs.helpLink = helpLink;
         const result = await this._client.invokeCapability<ParameterResourceHandle>(
@@ -19723,7 +19774,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     }
 
     /** @internal */
-    private async _withUrlInternal(url: string | ReferenceExpression, displayText?: string): Promise<ParameterResource> {
+    private async _withUrlInternal(url: string | ReferenceExpression, displayText?: string | null): Promise<ParameterResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, url };
         if (displayText !== undefined) rpcArgs.displayText = displayText;
         const result = await this._client.invokeCapability<ParameterResourceHandle>(
@@ -19799,7 +19850,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     }
 
     /** @internal */
-    private async _withCommandInternal(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, commandOptions?: CommandOptions): Promise<ParameterResource> {
+    private async _withCommandInternal(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, commandOptions?: CommandOptions | null): Promise<ParameterResource> {
         const executeCommandId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
@@ -19834,7 +19885,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     }
 
     /** @internal */
-    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): Promise<ParameterResource> {
+    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): Promise<ParameterResource> {
         const createProcessSpecId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
@@ -19849,7 +19900,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
         return new ParameterResourceImpl(result, this._client);
     }
 
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ParameterResourcePromise {
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
     }
 
@@ -19929,7 +19980,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     }
 
     /** @internal */
-    private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<ParameterResource> {
+    private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[] | null, requiredBy?: string[] | null, tags?: string[] | null, description?: string | null): Promise<ParameterResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
             const arg = new PipelineStepContextImpl(argHandle, this._client);
@@ -20067,7 +20118,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     }
 
     /** @internal */
-    private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<ParameterResource> {
+    private async _withOptionalStringInternal(value?: string | null, enabled?: boolean): Promise<ParameterResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (value !== undefined) rpcArgs.value = value;
         if (enabled !== undefined) rpcArgs.enabled = enabled;
@@ -20342,7 +20393,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     }
 
     /** @internal */
-    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<ParameterResource> {
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number | null): Promise<ParameterResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -20360,7 +20411,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     }
 
     /** @internal */
-    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<ParameterResource> {
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number | null): Promise<ParameterResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -20472,7 +20523,7 @@ class ParameterResourcePromiseImpl implements ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommand(commandName, displayName, options)), this._client);
     }
 
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ParameterResourcePromise {
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommandFactory(commandName, displayName, createProcessSpec, options)), this._client);
     }
 
@@ -20697,9 +20748,9 @@ export interface ProjectResource {
     /** Adds a process resource command */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ProjectResourcePromise;
     /** Adds a process resource command via callback */
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ProjectResourcePromise;
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): ProjectResourcePromise;
     /** Adds an HTTP resource command */
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): ProjectResourcePromise;
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): ProjectResourcePromise;
     /** Configures developer certificate trust */
     withDeveloperCertificateTrust(trust: boolean): ProjectResourcePromise;
     /** Sets the certificate trust scope */
@@ -20868,9 +20919,9 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
     /** Adds a process resource command */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ProjectResourcePromise;
     /** Adds a process resource command via callback */
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ProjectResourcePromise;
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): ProjectResourcePromise;
     /** Adds an HTTP resource command */
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): ProjectResourcePromise;
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): ProjectResourcePromise;
     /** Configures developer certificate trust */
     withDeveloperCertificateTrust(trust: boolean): ProjectResourcePromise;
     /** Sets the certificate trust scope */
@@ -20990,7 +21041,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _withDockerfileBaseImageInternal(buildImage?: string, runtimeImage?: string): Promise<ProjectResource> {
+    private async _withDockerfileBaseImageInternal(buildImage?: string | null, runtimeImage?: string | null): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (buildImage !== undefined) rpcArgs.buildImage = buildImage;
         if (runtimeImage !== undefined) rpcArgs.runtimeImage = runtimeImage;
@@ -21008,7 +21059,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _withMcpServerInternal(path?: string, endpointName?: string): Promise<ProjectResource> {
+    private async _withMcpServerInternal(path?: string | null, endpointName?: string | null): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (path !== undefined) rpcArgs.path = path;
         if (endpointName !== undefined) rpcArgs.endpointName = endpointName;
@@ -21026,7 +21077,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _withOtlpExporterInternal(protocol?: OtlpProtocol): Promise<ProjectResource> {
+    private async _withOtlpExporterInternal(protocol?: OtlpProtocol | null): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (protocol !== undefined) rpcArgs.protocol = protocol;
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
@@ -21091,7 +21142,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _withRequiredCommandInternal(command: string, helpLink?: string): Promise<ProjectResource> {
+    private async _withRequiredCommandInternal(command: string, helpLink?: string | null): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, command };
         if (helpLink !== undefined) rpcArgs.helpLink = helpLink;
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
@@ -21188,7 +21239,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _withReferenceInternal(source: CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference | string | Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference>, connectionName?: string, optional?: boolean, name?: string): Promise<ProjectResource> {
+    private async _withReferenceInternal(source: CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference | string | Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference>, connectionName?: string | null, optional?: boolean, name?: string | null): Promise<ProjectResource> {
         source = isPromiseLike(source) ? await source : source;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, source };
         if (connectionName !== undefined) rpcArgs.connectionName = connectionName;
@@ -21230,7 +21281,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _withHttpEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string, createIfNotExists?: boolean): Promise<ProjectResource> {
+    private async _withHttpEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string | null, createIfNotExists?: boolean): Promise<ProjectResource> {
         const callbackId = registerCallback(async (objData: unknown) => {
             const objHandle = wrapIfHandle(objData) as EndpointUpdateContextHandle;
             const obj = new EndpointUpdateContextImpl(objHandle, this._client);
@@ -21253,7 +21304,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _withHttpsEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string, createIfNotExists?: boolean): Promise<ProjectResource> {
+    private async _withHttpsEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string | null, createIfNotExists?: boolean): Promise<ProjectResource> {
         const callbackId = registerCallback(async (objData: unknown) => {
             const objHandle = wrapIfHandle(objData) as EndpointUpdateContextHandle;
             const obj = new EndpointUpdateContextImpl(objHandle, this._client);
@@ -21276,7 +21327,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _withEndpointInternal(port?: number, targetPort?: number, scheme?: string, name?: string, env?: string, isProxied?: boolean, isExternal?: boolean, protocol?: ProtocolType): Promise<ProjectResource> {
+    private async _withEndpointInternal(port?: number | null, targetPort?: number | null, scheme?: string | null, name?: string | null, env?: string | null, isProxied?: boolean, isExternal?: boolean | null, protocol?: ProtocolType | null): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (port !== undefined) rpcArgs.port = port;
         if (targetPort !== undefined) rpcArgs.targetPort = targetPort;
@@ -21306,7 +21357,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _withHttpEndpointInternal(port?: number, targetPort?: number, name?: string, env?: string, isProxied?: boolean): Promise<ProjectResource> {
+    private async _withHttpEndpointInternal(port?: number | null, targetPort?: number | null, name?: string | null, env?: string | null, isProxied?: boolean): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (port !== undefined) rpcArgs.port = port;
         if (targetPort !== undefined) rpcArgs.targetPort = targetPort;
@@ -21330,7 +21381,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _withHttpsEndpointInternal(port?: number, targetPort?: number, name?: string, env?: string, isProxied?: boolean): Promise<ProjectResource> {
+    private async _withHttpsEndpointInternal(port?: number | null, targetPort?: number | null, name?: string | null, env?: string | null, isProxied?: boolean): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (port !== undefined) rpcArgs.port = port;
         if (targetPort !== undefined) rpcArgs.targetPort = targetPort;
@@ -21409,7 +21460,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _withUrlInternal(url: string | ReferenceExpression, displayText?: string): Promise<ProjectResource> {
+    private async _withUrlInternal(url: string | ReferenceExpression, displayText?: string | null): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, url };
         if (displayText !== undefined) rpcArgs.displayText = displayText;
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
@@ -21472,7 +21523,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _waitForInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior): Promise<ProjectResource> {
+    private async _waitForInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior | null): Promise<ProjectResource> {
         dependency = isPromiseLike(dependency) ? await dependency : dependency;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         if (waitBehavior !== undefined) rpcArgs.waitBehavior = waitBehavior;
@@ -21489,7 +21540,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _waitForStartInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior): Promise<ProjectResource> {
+    private async _waitForStartInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior | null): Promise<ProjectResource> {
         dependency = isPromiseLike(dependency) ? await dependency : dependency;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         if (waitBehavior !== undefined) rpcArgs.waitBehavior = waitBehavior;
@@ -21551,7 +21602,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _withHttpHealthCheckInternal(path?: string, statusCode?: number, endpointName?: string): Promise<ProjectResource> {
+    private async _withHttpHealthCheckInternal(path?: string | null, statusCode?: number | null, endpointName?: string | null): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (path !== undefined) rpcArgs.path = path;
         if (statusCode !== undefined) rpcArgs.statusCode = statusCode;
@@ -21571,7 +21622,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _withCommandInternal(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, commandOptions?: CommandOptions): Promise<ProjectResource> {
+    private async _withCommandInternal(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, commandOptions?: CommandOptions | null): Promise<ProjectResource> {
         const executeCommandId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
@@ -21606,7 +21657,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): Promise<ProjectResource> {
+    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): Promise<ProjectResource> {
         const createProcessSpecId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
@@ -21621,12 +21672,12 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
         return new ProjectResourceImpl(result, this._client);
     }
 
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ProjectResourcePromise {
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
     }
 
     /** @internal */
-    private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions): Promise<ProjectResource> {
+    private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions | null): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, path, displayName };
         if (options !== undefined) rpcArgs.options = options;
         const result = await this._client.invokeCapability<ProjectResourceHandle>(
@@ -21636,7 +21687,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
         return new ProjectResourceImpl(result, this._client);
     }
 
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): ProjectResourcePromise {
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._withHttpCommandInternal(path, displayName, options), this._client);
     }
 
@@ -21669,7 +21720,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _withHttpsDeveloperCertificateInternal(password?: Awaitable<ParameterResource>): Promise<ProjectResource> {
+    private async _withHttpsDeveloperCertificateInternal(password?: Awaitable<ParameterResource> | null): Promise<ProjectResource> {
         password = isPromiseLike(password) ? await password : password;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (password !== undefined) rpcArgs.password = password;
@@ -21761,7 +21812,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _withHttpProbeInternal(probeType: ProbeType, path?: string, initialDelaySeconds?: number, periodSeconds?: number, timeoutSeconds?: number, failureThreshold?: number, successThreshold?: number, endpointName?: string): Promise<ProjectResource> {
+    private async _withHttpProbeInternal(probeType: ProbeType, path?: string | null, initialDelaySeconds?: number | null, periodSeconds?: number | null, timeoutSeconds?: number | null, failureThreshold?: number | null, successThreshold?: number | null, endpointName?: string | null): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, probeType };
         if (path !== undefined) rpcArgs.path = path;
         if (initialDelaySeconds !== undefined) rpcArgs.initialDelaySeconds = initialDelaySeconds;
@@ -21850,7 +21901,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<ProjectResource> {
+    private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[] | null, requiredBy?: string[] | null, tags?: string[] | null, description?: string | null): Promise<ProjectResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
             const arg = new PipelineStepContextImpl(argHandle, this._client);
@@ -22007,7 +22058,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<ProjectResource> {
+    private async _withOptionalStringInternal(value?: string | null, enabled?: boolean): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (value !== undefined) rpcArgs.value = value;
         if (enabled !== undefined) rpcArgs.enabled = enabled;
@@ -22315,7 +22366,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<ProjectResource> {
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number | null): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -22333,7 +22384,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
-    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<ProjectResource> {
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number | null): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -22541,11 +22592,11 @@ class ProjectResourcePromiseImpl implements ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommand(commandName, displayName, options)), this._client);
     }
 
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ProjectResourcePromise {
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommandFactory(commandName, displayName, createProcessSpec, options)), this._client);
     }
 
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): ProjectResourcePromise {
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)), this._client);
     }
 
@@ -22750,7 +22801,7 @@ export interface TestDatabaseResource {
     /** Sets the container image tag */
     withImageTag(tag: string): TestDatabaseResourcePromise;
     /** Sets the container image registry */
-    withImageRegistry(registry: string): TestDatabaseResourcePromise;
+    withImageRegistry(options?: WithImageRegistryOptions): TestDatabaseResourcePromise;
     /** Sets the container image */
     withImage(image: string, options?: WithImageOptions): TestDatabaseResourcePromise;
     /** Sets the image SHA256 digest */
@@ -22844,9 +22895,9 @@ export interface TestDatabaseResource {
     /** Adds a process resource command */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestDatabaseResourcePromise;
     /** Adds a process resource command via callback */
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestDatabaseResourcePromise;
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): TestDatabaseResourcePromise;
     /** Adds an HTTP resource command */
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): TestDatabaseResourcePromise;
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): TestDatabaseResourcePromise;
     /** Configures developer certificate trust */
     withDeveloperCertificateTrust(trust: boolean): TestDatabaseResourcePromise;
     /** Sets the certificate trust scope */
@@ -22953,7 +23004,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
     /** Sets the container image tag */
     withImageTag(tag: string): TestDatabaseResourcePromise;
     /** Sets the container image registry */
-    withImageRegistry(registry: string): TestDatabaseResourcePromise;
+    withImageRegistry(options?: WithImageRegistryOptions): TestDatabaseResourcePromise;
     /** Sets the container image */
     withImage(image: string, options?: WithImageOptions): TestDatabaseResourcePromise;
     /** Sets the image SHA256 digest */
@@ -23047,9 +23098,9 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
     /** Adds a process resource command */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestDatabaseResourcePromise;
     /** Adds a process resource command via callback */
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestDatabaseResourcePromise;
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): TestDatabaseResourcePromise;
     /** Adds an HTTP resource command */
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): TestDatabaseResourcePromise;
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): TestDatabaseResourcePromise;
     /** Configures developer certificate trust */
     withDeveloperCertificateTrust(trust: boolean): TestDatabaseResourcePromise;
     /** Sets the certificate trust scope */
@@ -23215,8 +23266,9 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withImageRegistryInternal(registry: string): Promise<TestDatabaseResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, registry };
+    private async _withImageRegistryInternal(registry?: string | null): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (registry !== undefined) rpcArgs.registry = registry;
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
             'Aspire.Hosting/withImageRegistry',
             rpcArgs
@@ -23224,12 +23276,13 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    withImageRegistry(registry: string): TestDatabaseResourcePromise {
+    withImageRegistry(options?: WithImageRegistryOptions): TestDatabaseResourcePromise {
+        const registry = options?.registry;
         return new TestDatabaseResourcePromiseImpl(this._withImageRegistryInternal(registry), this._client);
     }
 
     /** @internal */
-    private async _withImageInternal(image: string, tag?: string): Promise<TestDatabaseResource> {
+    private async _withImageInternal(image: string, tag?: string | null): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, image };
         if (tag !== undefined) rpcArgs.tag = tag;
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
@@ -23315,7 +23368,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withDockerfileInternal(contextPath: string, dockerfilePath?: string, stage?: string): Promise<TestDatabaseResource> {
+    private async _withDockerfileInternal(contextPath: string, dockerfilePath?: string | null, stage?: string | null): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, contextPath };
         if (dockerfilePath !== undefined) rpcArgs.dockerfilePath = dockerfilePath;
         if (stage !== undefined) rpcArgs.stage = stage;
@@ -23377,7 +23430,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withContainerCertificatePathsInternal(customCertificatesDestination?: string, defaultCertificateBundlePaths?: string[], defaultCertificateDirectoryPaths?: string[]): Promise<TestDatabaseResource> {
+    private async _withContainerCertificatePathsInternal(customCertificatesDestination?: string | null, defaultCertificateBundlePaths?: string[] | null, defaultCertificateDirectoryPaths?: string[] | null): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (customCertificatesDestination !== undefined) rpcArgs.customCertificatesDestination = customCertificatesDestination;
         if (defaultCertificateBundlePaths !== undefined) rpcArgs.defaultCertificateBundlePaths = defaultCertificateBundlePaths;
@@ -23411,7 +23464,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withDockerfileBuilderInternal(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, stage?: string): Promise<TestDatabaseResource> {
+    private async _withDockerfileBuilderInternal(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, stage?: string | null): Promise<TestDatabaseResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as DockerfileBuilderCallbackContextHandle;
             const arg = new DockerfileBuilderCallbackContextImpl(argHandle, this._client);
@@ -23432,7 +23485,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withDockerfileBaseImageInternal(buildImage?: string, runtimeImage?: string): Promise<TestDatabaseResource> {
+    private async _withDockerfileBaseImageInternal(buildImage?: string | null, runtimeImage?: string | null): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (buildImage !== undefined) rpcArgs.buildImage = buildImage;
         if (runtimeImage !== undefined) rpcArgs.runtimeImage = runtimeImage;
@@ -23464,7 +23517,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withMcpServerInternal(path?: string, endpointName?: string): Promise<TestDatabaseResource> {
+    private async _withMcpServerInternal(path?: string | null, endpointName?: string | null): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (path !== undefined) rpcArgs.path = path;
         if (endpointName !== undefined) rpcArgs.endpointName = endpointName;
@@ -23482,7 +23535,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withOtlpExporterInternal(protocol?: OtlpProtocol): Promise<TestDatabaseResource> {
+    private async _withOtlpExporterInternal(protocol?: OtlpProtocol | null): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (protocol !== undefined) rpcArgs.protocol = protocol;
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
@@ -23512,7 +23565,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withRequiredCommandInternal(command: string, helpLink?: string): Promise<TestDatabaseResource> {
+    private async _withRequiredCommandInternal(command: string, helpLink?: string | null): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, command };
         if (helpLink !== undefined) rpcArgs.helpLink = helpLink;
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
@@ -23609,7 +23662,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withReferenceInternal(source: CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference | string | Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference>, connectionName?: string, optional?: boolean, name?: string): Promise<TestDatabaseResource> {
+    private async _withReferenceInternal(source: CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference | string | Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference>, connectionName?: string | null, optional?: boolean, name?: string | null): Promise<TestDatabaseResource> {
         source = isPromiseLike(source) ? await source : source;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, source };
         if (connectionName !== undefined) rpcArgs.connectionName = connectionName;
@@ -23651,7 +23704,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withHttpEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string, createIfNotExists?: boolean): Promise<TestDatabaseResource> {
+    private async _withHttpEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string | null, createIfNotExists?: boolean): Promise<TestDatabaseResource> {
         const callbackId = registerCallback(async (objData: unknown) => {
             const objHandle = wrapIfHandle(objData) as EndpointUpdateContextHandle;
             const obj = new EndpointUpdateContextImpl(objHandle, this._client);
@@ -23674,7 +23727,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withHttpsEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string, createIfNotExists?: boolean): Promise<TestDatabaseResource> {
+    private async _withHttpsEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string | null, createIfNotExists?: boolean): Promise<TestDatabaseResource> {
         const callbackId = registerCallback(async (objData: unknown) => {
             const objHandle = wrapIfHandle(objData) as EndpointUpdateContextHandle;
             const obj = new EndpointUpdateContextImpl(objHandle, this._client);
@@ -23697,7 +23750,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withEndpointInternal(port?: number, targetPort?: number, scheme?: string, name?: string, env?: string, isProxied?: boolean, isExternal?: boolean, protocol?: ProtocolType): Promise<TestDatabaseResource> {
+    private async _withEndpointInternal(port?: number | null, targetPort?: number | null, scheme?: string | null, name?: string | null, env?: string | null, isProxied?: boolean, isExternal?: boolean | null, protocol?: ProtocolType | null): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (port !== undefined) rpcArgs.port = port;
         if (targetPort !== undefined) rpcArgs.targetPort = targetPort;
@@ -23727,7 +23780,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withHttpEndpointInternal(port?: number, targetPort?: number, name?: string, env?: string, isProxied?: boolean): Promise<TestDatabaseResource> {
+    private async _withHttpEndpointInternal(port?: number | null, targetPort?: number | null, name?: string | null, env?: string | null, isProxied?: boolean): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (port !== undefined) rpcArgs.port = port;
         if (targetPort !== undefined) rpcArgs.targetPort = targetPort;
@@ -23751,7 +23804,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withHttpsEndpointInternal(port?: number, targetPort?: number, name?: string, env?: string, isProxied?: boolean): Promise<TestDatabaseResource> {
+    private async _withHttpsEndpointInternal(port?: number | null, targetPort?: number | null, name?: string | null, env?: string | null, isProxied?: boolean): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (port !== undefined) rpcArgs.port = port;
         if (targetPort !== undefined) rpcArgs.targetPort = targetPort;
@@ -23830,7 +23883,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withUrlInternal(url: string | ReferenceExpression, displayText?: string): Promise<TestDatabaseResource> {
+    private async _withUrlInternal(url: string | ReferenceExpression, displayText?: string | null): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, url };
         if (displayText !== undefined) rpcArgs.displayText = displayText;
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
@@ -23878,7 +23931,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _waitForInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior): Promise<TestDatabaseResource> {
+    private async _waitForInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior | null): Promise<TestDatabaseResource> {
         dependency = isPromiseLike(dependency) ? await dependency : dependency;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         if (waitBehavior !== undefined) rpcArgs.waitBehavior = waitBehavior;
@@ -23895,7 +23948,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _waitForStartInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior): Promise<TestDatabaseResource> {
+    private async _waitForStartInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior | null): Promise<TestDatabaseResource> {
         dependency = isPromiseLike(dependency) ? await dependency : dependency;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         if (waitBehavior !== undefined) rpcArgs.waitBehavior = waitBehavior;
@@ -23957,7 +24010,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withHttpHealthCheckInternal(path?: string, statusCode?: number, endpointName?: string): Promise<TestDatabaseResource> {
+    private async _withHttpHealthCheckInternal(path?: string | null, statusCode?: number | null, endpointName?: string | null): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (path !== undefined) rpcArgs.path = path;
         if (statusCode !== undefined) rpcArgs.statusCode = statusCode;
@@ -23977,7 +24030,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withCommandInternal(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, commandOptions?: CommandOptions): Promise<TestDatabaseResource> {
+    private async _withCommandInternal(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, commandOptions?: CommandOptions | null): Promise<TestDatabaseResource> {
         const executeCommandId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
@@ -24012,7 +24065,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): Promise<TestDatabaseResource> {
+    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): Promise<TestDatabaseResource> {
         const createProcessSpecId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
@@ -24027,12 +24080,12 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestDatabaseResourcePromise {
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
     }
 
     /** @internal */
-    private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions): Promise<TestDatabaseResource> {
+    private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions | null): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, path, displayName };
         if (options !== undefined) rpcArgs.options = options;
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
@@ -24042,7 +24095,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): TestDatabaseResourcePromise {
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withHttpCommandInternal(path, displayName, options), this._client);
     }
 
@@ -24075,7 +24128,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withHttpsDeveloperCertificateInternal(password?: Awaitable<ParameterResource>): Promise<TestDatabaseResource> {
+    private async _withHttpsDeveloperCertificateInternal(password?: Awaitable<ParameterResource> | null): Promise<TestDatabaseResource> {
         password = isPromiseLike(password) ? await password : password;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (password !== undefined) rpcArgs.password = password;
@@ -24167,7 +24220,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withHttpProbeInternal(probeType: ProbeType, path?: string, initialDelaySeconds?: number, periodSeconds?: number, timeoutSeconds?: number, failureThreshold?: number, successThreshold?: number, endpointName?: string): Promise<TestDatabaseResource> {
+    private async _withHttpProbeInternal(probeType: ProbeType, path?: string | null, initialDelaySeconds?: number | null, periodSeconds?: number | null, timeoutSeconds?: number | null, failureThreshold?: number | null, successThreshold?: number | null, endpointName?: string | null): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, probeType };
         if (path !== undefined) rpcArgs.path = path;
         if (initialDelaySeconds !== undefined) rpcArgs.initialDelaySeconds = initialDelaySeconds;
@@ -24256,7 +24309,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<TestDatabaseResource> {
+    private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[] | null, requiredBy?: string[] | null, tags?: string[] | null, description?: string | null): Promise<TestDatabaseResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
             const arg = new PipelineStepContextImpl(argHandle, this._client);
@@ -24302,7 +24355,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withVolumeInternal(target: string, name?: string, isReadOnly?: boolean): Promise<TestDatabaseResource> {
+    private async _withVolumeInternal(target: string, name?: string | null, isReadOnly?: boolean): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { resource: this._handle, target };
         if (name !== undefined) rpcArgs.name = name;
         if (isReadOnly !== undefined) rpcArgs.isReadOnly = isReadOnly;
@@ -24431,7 +24484,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<TestDatabaseResource> {
+    private async _withOptionalStringInternal(value?: string | null, enabled?: boolean): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (value !== undefined) rpcArgs.value = value;
         if (enabled !== undefined) rpcArgs.enabled = enabled;
@@ -24739,7 +24792,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<TestDatabaseResource> {
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number | null): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -24757,7 +24810,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<TestDatabaseResource> {
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number | null): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -24837,8 +24890,8 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withImageTag(tag)), this._client);
     }
 
-    withImageRegistry(registry: string): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withImageRegistry(registry)), this._client);
+    withImageRegistry(options?: WithImageRegistryOptions): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withImageRegistry(options)), this._client);
     }
 
     withImage(image: string, options?: WithImageOptions): TestDatabaseResourcePromise {
@@ -25025,11 +25078,11 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommand(commandName, displayName, options)), this._client);
     }
 
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestDatabaseResourcePromise {
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommandFactory(commandName, displayName, createProcessSpec, options)), this._client);
     }
 
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): TestDatabaseResourcePromise {
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)), this._client);
     }
 
@@ -25238,7 +25291,7 @@ export interface TestRedisResource {
     /** Sets the container image tag */
     withImageTag(tag: string): TestRedisResourcePromise;
     /** Sets the container image registry */
-    withImageRegistry(registry: string): TestRedisResourcePromise;
+    withImageRegistry(options?: WithImageRegistryOptions): TestRedisResourcePromise;
     /** Sets the container image */
     withImage(image: string, options?: WithImageOptions): TestRedisResourcePromise;
     /** Sets the image SHA256 digest */
@@ -25336,9 +25389,9 @@ export interface TestRedisResource {
     /** Adds a process resource command */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestRedisResourcePromise;
     /** Adds a process resource command via callback */
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestRedisResourcePromise;
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): TestRedisResourcePromise;
     /** Adds an HTTP resource command */
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): TestRedisResourcePromise;
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): TestRedisResourcePromise;
     /** Configures developer certificate trust */
     withDeveloperCertificateTrust(trust: boolean): TestRedisResourcePromise;
     /** Sets the certificate trust scope */
@@ -25471,7 +25524,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
     /** Sets the container image tag */
     withImageTag(tag: string): TestRedisResourcePromise;
     /** Sets the container image registry */
-    withImageRegistry(registry: string): TestRedisResourcePromise;
+    withImageRegistry(options?: WithImageRegistryOptions): TestRedisResourcePromise;
     /** Sets the container image */
     withImage(image: string, options?: WithImageOptions): TestRedisResourcePromise;
     /** Sets the image SHA256 digest */
@@ -25569,9 +25622,9 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
     /** Adds a process resource command */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestRedisResourcePromise;
     /** Adds a process resource command via callback */
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestRedisResourcePromise;
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): TestRedisResourcePromise;
     /** Adds an HTTP resource command */
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): TestRedisResourcePromise;
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): TestRedisResourcePromise;
     /** Configures developer certificate trust */
     withDeveloperCertificateTrust(trust: boolean): TestRedisResourcePromise;
     /** Sets the certificate trust scope */
@@ -25763,8 +25816,9 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withImageRegistryInternal(registry: string): Promise<TestRedisResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, registry };
+    private async _withImageRegistryInternal(registry?: string | null): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (registry !== undefined) rpcArgs.registry = registry;
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
             'Aspire.Hosting/withImageRegistry',
             rpcArgs
@@ -25772,12 +25826,13 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    withImageRegistry(registry: string): TestRedisResourcePromise {
+    withImageRegistry(options?: WithImageRegistryOptions): TestRedisResourcePromise {
+        const registry = options?.registry;
         return new TestRedisResourcePromiseImpl(this._withImageRegistryInternal(registry), this._client);
     }
 
     /** @internal */
-    private async _withImageInternal(image: string, tag?: string): Promise<TestRedisResource> {
+    private async _withImageInternal(image: string, tag?: string | null): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, image };
         if (tag !== undefined) rpcArgs.tag = tag;
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
@@ -25863,7 +25918,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withDockerfileInternal(contextPath: string, dockerfilePath?: string, stage?: string): Promise<TestRedisResource> {
+    private async _withDockerfileInternal(contextPath: string, dockerfilePath?: string | null, stage?: string | null): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, contextPath };
         if (dockerfilePath !== undefined) rpcArgs.dockerfilePath = dockerfilePath;
         if (stage !== undefined) rpcArgs.stage = stage;
@@ -25925,7 +25980,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withContainerCertificatePathsInternal(customCertificatesDestination?: string, defaultCertificateBundlePaths?: string[], defaultCertificateDirectoryPaths?: string[]): Promise<TestRedisResource> {
+    private async _withContainerCertificatePathsInternal(customCertificatesDestination?: string | null, defaultCertificateBundlePaths?: string[] | null, defaultCertificateDirectoryPaths?: string[] | null): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (customCertificatesDestination !== undefined) rpcArgs.customCertificatesDestination = customCertificatesDestination;
         if (defaultCertificateBundlePaths !== undefined) rpcArgs.defaultCertificateBundlePaths = defaultCertificateBundlePaths;
@@ -25959,7 +26014,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withDockerfileBuilderInternal(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, stage?: string): Promise<TestRedisResource> {
+    private async _withDockerfileBuilderInternal(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, stage?: string | null): Promise<TestRedisResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as DockerfileBuilderCallbackContextHandle;
             const arg = new DockerfileBuilderCallbackContextImpl(argHandle, this._client);
@@ -25980,7 +26035,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withDockerfileBaseImageInternal(buildImage?: string, runtimeImage?: string): Promise<TestRedisResource> {
+    private async _withDockerfileBaseImageInternal(buildImage?: string | null, runtimeImage?: string | null): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (buildImage !== undefined) rpcArgs.buildImage = buildImage;
         if (runtimeImage !== undefined) rpcArgs.runtimeImage = runtimeImage;
@@ -26012,7 +26067,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withMcpServerInternal(path?: string, endpointName?: string): Promise<TestRedisResource> {
+    private async _withMcpServerInternal(path?: string | null, endpointName?: string | null): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (path !== undefined) rpcArgs.path = path;
         if (endpointName !== undefined) rpcArgs.endpointName = endpointName;
@@ -26030,7 +26085,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withOtlpExporterInternal(protocol?: OtlpProtocol): Promise<TestRedisResource> {
+    private async _withOtlpExporterInternal(protocol?: OtlpProtocol | null): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (protocol !== undefined) rpcArgs.protocol = protocol;
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
@@ -26060,7 +26115,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withRequiredCommandInternal(command: string, helpLink?: string): Promise<TestRedisResource> {
+    private async _withRequiredCommandInternal(command: string, helpLink?: string | null): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, command };
         if (helpLink !== undefined) rpcArgs.helpLink = helpLink;
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
@@ -26171,7 +26226,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withReferenceInternal(source: CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference | string | Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference>, connectionName?: string, optional?: boolean, name?: string): Promise<TestRedisResource> {
+    private async _withReferenceInternal(source: CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference | string | Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference>, connectionName?: string | null, optional?: boolean, name?: string | null): Promise<TestRedisResource> {
         source = isPromiseLike(source) ? await source : source;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, source };
         if (connectionName !== undefined) rpcArgs.connectionName = connectionName;
@@ -26221,7 +26276,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withHttpEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string, createIfNotExists?: boolean): Promise<TestRedisResource> {
+    private async _withHttpEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string | null, createIfNotExists?: boolean): Promise<TestRedisResource> {
         const callbackId = registerCallback(async (objData: unknown) => {
             const objHandle = wrapIfHandle(objData) as EndpointUpdateContextHandle;
             const obj = new EndpointUpdateContextImpl(objHandle, this._client);
@@ -26244,7 +26299,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withHttpsEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string, createIfNotExists?: boolean): Promise<TestRedisResource> {
+    private async _withHttpsEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string | null, createIfNotExists?: boolean): Promise<TestRedisResource> {
         const callbackId = registerCallback(async (objData: unknown) => {
             const objHandle = wrapIfHandle(objData) as EndpointUpdateContextHandle;
             const obj = new EndpointUpdateContextImpl(objHandle, this._client);
@@ -26267,7 +26322,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withEndpointInternal(port?: number, targetPort?: number, scheme?: string, name?: string, env?: string, isProxied?: boolean, isExternal?: boolean, protocol?: ProtocolType): Promise<TestRedisResource> {
+    private async _withEndpointInternal(port?: number | null, targetPort?: number | null, scheme?: string | null, name?: string | null, env?: string | null, isProxied?: boolean, isExternal?: boolean | null, protocol?: ProtocolType | null): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (port !== undefined) rpcArgs.port = port;
         if (targetPort !== undefined) rpcArgs.targetPort = targetPort;
@@ -26297,7 +26352,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withHttpEndpointInternal(port?: number, targetPort?: number, name?: string, env?: string, isProxied?: boolean): Promise<TestRedisResource> {
+    private async _withHttpEndpointInternal(port?: number | null, targetPort?: number | null, name?: string | null, env?: string | null, isProxied?: boolean): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (port !== undefined) rpcArgs.port = port;
         if (targetPort !== undefined) rpcArgs.targetPort = targetPort;
@@ -26321,7 +26376,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withHttpsEndpointInternal(port?: number, targetPort?: number, name?: string, env?: string, isProxied?: boolean): Promise<TestRedisResource> {
+    private async _withHttpsEndpointInternal(port?: number | null, targetPort?: number | null, name?: string | null, env?: string | null, isProxied?: boolean): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (port !== undefined) rpcArgs.port = port;
         if (targetPort !== undefined) rpcArgs.targetPort = targetPort;
@@ -26400,7 +26455,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withUrlInternal(url: string | ReferenceExpression, displayText?: string): Promise<TestRedisResource> {
+    private async _withUrlInternal(url: string | ReferenceExpression, displayText?: string | null): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, url };
         if (displayText !== undefined) rpcArgs.displayText = displayText;
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
@@ -26448,7 +26503,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _waitForInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior): Promise<TestRedisResource> {
+    private async _waitForInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior | null): Promise<TestRedisResource> {
         dependency = isPromiseLike(dependency) ? await dependency : dependency;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         if (waitBehavior !== undefined) rpcArgs.waitBehavior = waitBehavior;
@@ -26465,7 +26520,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _waitForStartInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior): Promise<TestRedisResource> {
+    private async _waitForStartInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior | null): Promise<TestRedisResource> {
         dependency = isPromiseLike(dependency) ? await dependency : dependency;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         if (waitBehavior !== undefined) rpcArgs.waitBehavior = waitBehavior;
@@ -26527,7 +26582,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withHttpHealthCheckInternal(path?: string, statusCode?: number, endpointName?: string): Promise<TestRedisResource> {
+    private async _withHttpHealthCheckInternal(path?: string | null, statusCode?: number | null, endpointName?: string | null): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (path !== undefined) rpcArgs.path = path;
         if (statusCode !== undefined) rpcArgs.statusCode = statusCode;
@@ -26547,7 +26602,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withCommandInternal(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, commandOptions?: CommandOptions): Promise<TestRedisResource> {
+    private async _withCommandInternal(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, commandOptions?: CommandOptions | null): Promise<TestRedisResource> {
         const executeCommandId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
@@ -26582,7 +26637,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): Promise<TestRedisResource> {
+    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): Promise<TestRedisResource> {
         const createProcessSpecId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
@@ -26597,12 +26652,12 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestRedisResourcePromise {
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
     }
 
     /** @internal */
-    private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions): Promise<TestRedisResource> {
+    private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions | null): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, path, displayName };
         if (options !== undefined) rpcArgs.options = options;
         const result = await this._client.invokeCapability<TestRedisResourceHandle>(
@@ -26612,7 +26667,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): TestRedisResourcePromise {
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withHttpCommandInternal(path, displayName, options), this._client);
     }
 
@@ -26645,7 +26700,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withHttpsDeveloperCertificateInternal(password?: Awaitable<ParameterResource>): Promise<TestRedisResource> {
+    private async _withHttpsDeveloperCertificateInternal(password?: Awaitable<ParameterResource> | null): Promise<TestRedisResource> {
         password = isPromiseLike(password) ? await password : password;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (password !== undefined) rpcArgs.password = password;
@@ -26737,7 +26792,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withHttpProbeInternal(probeType: ProbeType, path?: string, initialDelaySeconds?: number, periodSeconds?: number, timeoutSeconds?: number, failureThreshold?: number, successThreshold?: number, endpointName?: string): Promise<TestRedisResource> {
+    private async _withHttpProbeInternal(probeType: ProbeType, path?: string | null, initialDelaySeconds?: number | null, periodSeconds?: number | null, timeoutSeconds?: number | null, failureThreshold?: number | null, successThreshold?: number | null, endpointName?: string | null): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, probeType };
         if (path !== undefined) rpcArgs.path = path;
         if (initialDelaySeconds !== undefined) rpcArgs.initialDelaySeconds = initialDelaySeconds;
@@ -26826,7 +26881,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<TestRedisResource> {
+    private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[] | null, requiredBy?: string[] | null, tags?: string[] | null, description?: string | null): Promise<TestRedisResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
             const arg = new PipelineStepContextImpl(argHandle, this._client);
@@ -26872,7 +26927,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withVolumeInternal(target: string, name?: string, isReadOnly?: boolean): Promise<TestRedisResource> {
+    private async _withVolumeInternal(target: string, name?: string | null, isReadOnly?: boolean): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { resource: this._handle, target };
         if (name !== undefined) rpcArgs.name = name;
         if (isReadOnly !== undefined) rpcArgs.isReadOnly = isReadOnly;
@@ -27020,7 +27075,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _addTestChildDatabaseInternal(name: string, databaseName?: string): Promise<TestDatabaseResource> {
+    private async _addTestChildDatabaseInternal(name: string, databaseName?: string | null): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
         if (databaseName !== undefined) rpcArgs.databaseName = databaseName;
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
@@ -27052,7 +27107,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<TestRedisResource> {
+    private async _withOptionalStringInternal(value?: string | null, enabled?: boolean): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (value !== undefined) rpcArgs.value = value;
         if (enabled !== undefined) rpcArgs.enabled = enabled;
@@ -27411,7 +27466,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withDataVolumeInternal(name?: string, isReadOnly?: boolean): Promise<TestRedisResource> {
+    private async _withDataVolumeInternal(name?: string | null, isReadOnly?: boolean): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (name !== undefined) rpcArgs.name = name;
         if (isReadOnly !== undefined) rpcArgs.isReadOnly = isReadOnly;
@@ -27485,7 +27540,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<TestRedisResource> {
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number | null): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -27503,7 +27558,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<TestRedisResource> {
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number | null): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -27583,8 +27638,8 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withImageTag(tag)), this._client);
     }
 
-    withImageRegistry(registry: string): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withImageRegistry(registry)), this._client);
+    withImageRegistry(options?: WithImageRegistryOptions): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withImageRegistry(options)), this._client);
     }
 
     withImage(image: string, options?: WithImageOptions): TestRedisResourcePromise {
@@ -27779,11 +27834,11 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommand(commandName, displayName, options)), this._client);
     }
 
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestRedisResourcePromise {
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommandFactory(commandName, displayName, createProcessSpec, options)), this._client);
     }
 
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): TestRedisResourcePromise {
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)), this._client);
     }
 
@@ -28044,7 +28099,7 @@ export interface TestVaultResource {
     /** Sets the container image tag */
     withImageTag(tag: string): TestVaultResourcePromise;
     /** Sets the container image registry */
-    withImageRegistry(registry: string): TestVaultResourcePromise;
+    withImageRegistry(options?: WithImageRegistryOptions): TestVaultResourcePromise;
     /** Sets the container image */
     withImage(image: string, options?: WithImageOptions): TestVaultResourcePromise;
     /** Sets the image SHA256 digest */
@@ -28138,9 +28193,9 @@ export interface TestVaultResource {
     /** Adds a process resource command */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestVaultResourcePromise;
     /** Adds a process resource command via callback */
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestVaultResourcePromise;
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): TestVaultResourcePromise;
     /** Adds an HTTP resource command */
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): TestVaultResourcePromise;
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): TestVaultResourcePromise;
     /** Configures developer certificate trust */
     withDeveloperCertificateTrust(trust: boolean): TestVaultResourcePromise;
     /** Sets the certificate trust scope */
@@ -28249,7 +28304,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
     /** Sets the container image tag */
     withImageTag(tag: string): TestVaultResourcePromise;
     /** Sets the container image registry */
-    withImageRegistry(registry: string): TestVaultResourcePromise;
+    withImageRegistry(options?: WithImageRegistryOptions): TestVaultResourcePromise;
     /** Sets the container image */
     withImage(image: string, options?: WithImageOptions): TestVaultResourcePromise;
     /** Sets the image SHA256 digest */
@@ -28343,9 +28398,9 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
     /** Adds a process resource command */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): TestVaultResourcePromise;
     /** Adds a process resource command via callback */
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestVaultResourcePromise;
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): TestVaultResourcePromise;
     /** Adds an HTTP resource command */
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): TestVaultResourcePromise;
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): TestVaultResourcePromise;
     /** Configures developer certificate trust */
     withDeveloperCertificateTrust(trust: boolean): TestVaultResourcePromise;
     /** Sets the certificate trust scope */
@@ -28513,8 +28568,9 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withImageRegistryInternal(registry: string): Promise<TestVaultResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, registry };
+    private async _withImageRegistryInternal(registry?: string | null): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle };
+        if (registry !== undefined) rpcArgs.registry = registry;
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
             'Aspire.Hosting/withImageRegistry',
             rpcArgs
@@ -28522,12 +28578,13 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    withImageRegistry(registry: string): TestVaultResourcePromise {
+    withImageRegistry(options?: WithImageRegistryOptions): TestVaultResourcePromise {
+        const registry = options?.registry;
         return new TestVaultResourcePromiseImpl(this._withImageRegistryInternal(registry), this._client);
     }
 
     /** @internal */
-    private async _withImageInternal(image: string, tag?: string): Promise<TestVaultResource> {
+    private async _withImageInternal(image: string, tag?: string | null): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, image };
         if (tag !== undefined) rpcArgs.tag = tag;
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
@@ -28613,7 +28670,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withDockerfileInternal(contextPath: string, dockerfilePath?: string, stage?: string): Promise<TestVaultResource> {
+    private async _withDockerfileInternal(contextPath: string, dockerfilePath?: string | null, stage?: string | null): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, contextPath };
         if (dockerfilePath !== undefined) rpcArgs.dockerfilePath = dockerfilePath;
         if (stage !== undefined) rpcArgs.stage = stage;
@@ -28675,7 +28732,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withContainerCertificatePathsInternal(customCertificatesDestination?: string, defaultCertificateBundlePaths?: string[], defaultCertificateDirectoryPaths?: string[]): Promise<TestVaultResource> {
+    private async _withContainerCertificatePathsInternal(customCertificatesDestination?: string | null, defaultCertificateBundlePaths?: string[] | null, defaultCertificateDirectoryPaths?: string[] | null): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (customCertificatesDestination !== undefined) rpcArgs.customCertificatesDestination = customCertificatesDestination;
         if (defaultCertificateBundlePaths !== undefined) rpcArgs.defaultCertificateBundlePaths = defaultCertificateBundlePaths;
@@ -28709,7 +28766,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withDockerfileBuilderInternal(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, stage?: string): Promise<TestVaultResource> {
+    private async _withDockerfileBuilderInternal(contextPath: string, callback: (arg: DockerfileBuilderCallbackContext) => Promise<void>, stage?: string | null): Promise<TestVaultResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as DockerfileBuilderCallbackContextHandle;
             const arg = new DockerfileBuilderCallbackContextImpl(argHandle, this._client);
@@ -28730,7 +28787,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withDockerfileBaseImageInternal(buildImage?: string, runtimeImage?: string): Promise<TestVaultResource> {
+    private async _withDockerfileBaseImageInternal(buildImage?: string | null, runtimeImage?: string | null): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (buildImage !== undefined) rpcArgs.buildImage = buildImage;
         if (runtimeImage !== undefined) rpcArgs.runtimeImage = runtimeImage;
@@ -28762,7 +28819,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withMcpServerInternal(path?: string, endpointName?: string): Promise<TestVaultResource> {
+    private async _withMcpServerInternal(path?: string | null, endpointName?: string | null): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (path !== undefined) rpcArgs.path = path;
         if (endpointName !== undefined) rpcArgs.endpointName = endpointName;
@@ -28780,7 +28837,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withOtlpExporterInternal(protocol?: OtlpProtocol): Promise<TestVaultResource> {
+    private async _withOtlpExporterInternal(protocol?: OtlpProtocol | null): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (protocol !== undefined) rpcArgs.protocol = protocol;
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
@@ -28810,7 +28867,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withRequiredCommandInternal(command: string, helpLink?: string): Promise<TestVaultResource> {
+    private async _withRequiredCommandInternal(command: string, helpLink?: string | null): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, command };
         if (helpLink !== undefined) rpcArgs.helpLink = helpLink;
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
@@ -28907,7 +28964,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withReferenceInternal(source: CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference | string | Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference>, connectionName?: string, optional?: boolean, name?: string): Promise<TestVaultResource> {
+    private async _withReferenceInternal(source: CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference | string | Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference>, connectionName?: string | null, optional?: boolean, name?: string | null): Promise<TestVaultResource> {
         source = isPromiseLike(source) ? await source : source;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, source };
         if (connectionName !== undefined) rpcArgs.connectionName = connectionName;
@@ -28949,7 +29006,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withHttpEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string, createIfNotExists?: boolean): Promise<TestVaultResource> {
+    private async _withHttpEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string | null, createIfNotExists?: boolean): Promise<TestVaultResource> {
         const callbackId = registerCallback(async (objData: unknown) => {
             const objHandle = wrapIfHandle(objData) as EndpointUpdateContextHandle;
             const obj = new EndpointUpdateContextImpl(objHandle, this._client);
@@ -28972,7 +29029,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withHttpsEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string, createIfNotExists?: boolean): Promise<TestVaultResource> {
+    private async _withHttpsEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string | null, createIfNotExists?: boolean): Promise<TestVaultResource> {
         const callbackId = registerCallback(async (objData: unknown) => {
             const objHandle = wrapIfHandle(objData) as EndpointUpdateContextHandle;
             const obj = new EndpointUpdateContextImpl(objHandle, this._client);
@@ -28995,7 +29052,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withEndpointInternal(port?: number, targetPort?: number, scheme?: string, name?: string, env?: string, isProxied?: boolean, isExternal?: boolean, protocol?: ProtocolType): Promise<TestVaultResource> {
+    private async _withEndpointInternal(port?: number | null, targetPort?: number | null, scheme?: string | null, name?: string | null, env?: string | null, isProxied?: boolean, isExternal?: boolean | null, protocol?: ProtocolType | null): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (port !== undefined) rpcArgs.port = port;
         if (targetPort !== undefined) rpcArgs.targetPort = targetPort;
@@ -29025,7 +29082,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withHttpEndpointInternal(port?: number, targetPort?: number, name?: string, env?: string, isProxied?: boolean): Promise<TestVaultResource> {
+    private async _withHttpEndpointInternal(port?: number | null, targetPort?: number | null, name?: string | null, env?: string | null, isProxied?: boolean): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (port !== undefined) rpcArgs.port = port;
         if (targetPort !== undefined) rpcArgs.targetPort = targetPort;
@@ -29049,7 +29106,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withHttpsEndpointInternal(port?: number, targetPort?: number, name?: string, env?: string, isProxied?: boolean): Promise<TestVaultResource> {
+    private async _withHttpsEndpointInternal(port?: number | null, targetPort?: number | null, name?: string | null, env?: string | null, isProxied?: boolean): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (port !== undefined) rpcArgs.port = port;
         if (targetPort !== undefined) rpcArgs.targetPort = targetPort;
@@ -29128,7 +29185,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withUrlInternal(url: string | ReferenceExpression, displayText?: string): Promise<TestVaultResource> {
+    private async _withUrlInternal(url: string | ReferenceExpression, displayText?: string | null): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, url };
         if (displayText !== undefined) rpcArgs.displayText = displayText;
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
@@ -29176,7 +29233,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _waitForInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior): Promise<TestVaultResource> {
+    private async _waitForInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior | null): Promise<TestVaultResource> {
         dependency = isPromiseLike(dependency) ? await dependency : dependency;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         if (waitBehavior !== undefined) rpcArgs.waitBehavior = waitBehavior;
@@ -29193,7 +29250,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _waitForStartInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior): Promise<TestVaultResource> {
+    private async _waitForStartInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior | null): Promise<TestVaultResource> {
         dependency = isPromiseLike(dependency) ? await dependency : dependency;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         if (waitBehavior !== undefined) rpcArgs.waitBehavior = waitBehavior;
@@ -29255,7 +29312,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withHttpHealthCheckInternal(path?: string, statusCode?: number, endpointName?: string): Promise<TestVaultResource> {
+    private async _withHttpHealthCheckInternal(path?: string | null, statusCode?: number | null, endpointName?: string | null): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (path !== undefined) rpcArgs.path = path;
         if (statusCode !== undefined) rpcArgs.statusCode = statusCode;
@@ -29275,7 +29332,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withCommandInternal(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, commandOptions?: CommandOptions): Promise<TestVaultResource> {
+    private async _withCommandInternal(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, commandOptions?: CommandOptions | null): Promise<TestVaultResource> {
         const executeCommandId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
@@ -29310,7 +29367,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): Promise<TestVaultResource> {
+    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): Promise<TestVaultResource> {
         const createProcessSpecId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
@@ -29325,12 +29382,12 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestVaultResourcePromise {
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
     }
 
     /** @internal */
-    private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions): Promise<TestVaultResource> {
+    private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions | null): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, path, displayName };
         if (options !== undefined) rpcArgs.options = options;
         const result = await this._client.invokeCapability<TestVaultResourceHandle>(
@@ -29340,7 +29397,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): TestVaultResourcePromise {
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withHttpCommandInternal(path, displayName, options), this._client);
     }
 
@@ -29373,7 +29430,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withHttpsDeveloperCertificateInternal(password?: Awaitable<ParameterResource>): Promise<TestVaultResource> {
+    private async _withHttpsDeveloperCertificateInternal(password?: Awaitable<ParameterResource> | null): Promise<TestVaultResource> {
         password = isPromiseLike(password) ? await password : password;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (password !== undefined) rpcArgs.password = password;
@@ -29465,7 +29522,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withHttpProbeInternal(probeType: ProbeType, path?: string, initialDelaySeconds?: number, periodSeconds?: number, timeoutSeconds?: number, failureThreshold?: number, successThreshold?: number, endpointName?: string): Promise<TestVaultResource> {
+    private async _withHttpProbeInternal(probeType: ProbeType, path?: string | null, initialDelaySeconds?: number | null, periodSeconds?: number | null, timeoutSeconds?: number | null, failureThreshold?: number | null, successThreshold?: number | null, endpointName?: string | null): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, probeType };
         if (path !== undefined) rpcArgs.path = path;
         if (initialDelaySeconds !== undefined) rpcArgs.initialDelaySeconds = initialDelaySeconds;
@@ -29554,7 +29611,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<TestVaultResource> {
+    private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[] | null, requiredBy?: string[] | null, tags?: string[] | null, description?: string | null): Promise<TestVaultResource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
             const arg = new PipelineStepContextImpl(argHandle, this._client);
@@ -29600,7 +29657,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withVolumeInternal(target: string, name?: string, isReadOnly?: boolean): Promise<TestVaultResource> {
+    private async _withVolumeInternal(target: string, name?: string | null, isReadOnly?: boolean): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { resource: this._handle, target };
         if (name !== undefined) rpcArgs.name = name;
         if (isReadOnly !== undefined) rpcArgs.isReadOnly = isReadOnly;
@@ -29729,7 +29786,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<TestVaultResource> {
+    private async _withOptionalStringInternal(value?: string | null, enabled?: boolean): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (value !== undefined) rpcArgs.value = value;
         if (enabled !== undefined) rpcArgs.enabled = enabled;
@@ -30051,7 +30108,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<TestVaultResource> {
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number | null): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -30069,7 +30126,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<TestVaultResource> {
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number | null): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -30149,8 +30206,8 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withImageTag(tag)), this._client);
     }
 
-    withImageRegistry(registry: string): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withImageRegistry(registry)), this._client);
+    withImageRegistry(options?: WithImageRegistryOptions): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withImageRegistry(options)), this._client);
     }
 
     withImage(image: string, options?: WithImageOptions): TestVaultResourcePromise {
@@ -30337,11 +30394,11 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommand(commandName, displayName, options)), this._client);
     }
 
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): TestVaultResourcePromise {
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommandFactory(commandName, displayName, createProcessSpec, options)), this._client);
     }
 
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): TestVaultResourcePromise {
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)), this._client);
     }
 
@@ -30744,7 +30801,7 @@ export interface Resource {
     /** Adds a process resource command */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ResourcePromise;
     /** Adds a process resource command via callback */
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ResourcePromise;
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): ResourcePromise;
     /** Adds a relationship to another resource */
     withRelationship(resourceBuilder: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, type: string): ResourcePromise;
     /** Sets the parent relationship */
@@ -30841,7 +30898,7 @@ export interface ResourcePromise extends PromiseLike<Resource> {
     /** Adds a process resource command */
     withProcessCommand(commandName: string, displayName: string, options: ProcessCommandExportOptions): ResourcePromise;
     /** Adds a process resource command via callback */
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ResourcePromise;
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): ResourcePromise;
     /** Adds a relationship to another resource */
     withRelationship(resourceBuilder: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, type: string): ResourcePromise;
     /** Sets the parent relationship */
@@ -30939,7 +30996,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** @internal */
-    private async _withDockerfileBaseImageInternal(buildImage?: string, runtimeImage?: string): Promise<Resource> {
+    private async _withDockerfileBaseImageInternal(buildImage?: string | null, runtimeImage?: string | null): Promise<Resource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (buildImage !== undefined) rpcArgs.buildImage = buildImage;
         if (runtimeImage !== undefined) rpcArgs.runtimeImage = runtimeImage;
@@ -30957,7 +31014,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** @internal */
-    private async _withRequiredCommandInternal(command: string, helpLink?: string): Promise<Resource> {
+    private async _withRequiredCommandInternal(command: string, helpLink?: string | null): Promise<Resource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, command };
         if (helpLink !== undefined) rpcArgs.helpLink = helpLink;
         const result = await this._client.invokeCapability<IResourceHandle>(
@@ -30992,7 +31049,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** @internal */
-    private async _withUrlInternal(url: string | ReferenceExpression, displayText?: string): Promise<Resource> {
+    private async _withUrlInternal(url: string | ReferenceExpression, displayText?: string | null): Promise<Resource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, url };
         if (displayText !== undefined) rpcArgs.displayText = displayText;
         const result = await this._client.invokeCapability<IResourceHandle>(
@@ -31068,7 +31125,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** @internal */
-    private async _withCommandInternal(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, commandOptions?: CommandOptions): Promise<Resource> {
+    private async _withCommandInternal(name: string, displayName: string, executeCommand: (arg: ExecuteCommandContext) => Promise<ExecuteCommandResult>, commandOptions?: CommandOptions | null): Promise<Resource> {
         const executeCommandId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
@@ -31103,7 +31160,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** @internal */
-    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): Promise<Resource> {
+    private async _withProcessCommandFactoryInternal(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): Promise<Resource> {
         const createProcessSpecId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as ExecuteCommandContextHandle;
             const arg = new ExecuteCommandContextImpl(argHandle, this._client);
@@ -31118,7 +31175,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         return new ResourceImpl(result, this._client);
     }
 
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ResourcePromise {
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): ResourcePromise {
         return new ResourcePromiseImpl(this._withProcessCommandFactoryInternal(commandName, displayName, createProcessSpec, options), this._client);
     }
 
@@ -31198,7 +31255,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** @internal */
-    private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[], requiredBy?: string[], tags?: string[], description?: string): Promise<Resource> {
+    private async _withPipelineStepFactoryInternal(stepName: string, callback: (arg: PipelineStepContext) => Promise<void>, dependsOn?: string[] | null, requiredBy?: string[] | null, tags?: string[] | null, description?: string | null): Promise<Resource> {
         const callbackId = registerCallback(async (argData: unknown) => {
             const argHandle = wrapIfHandle(argData) as PipelineStepContextHandle;
             const arg = new PipelineStepContextImpl(argHandle, this._client);
@@ -31336,7 +31393,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** @internal */
-    private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<Resource> {
+    private async _withOptionalStringInternal(value?: string | null, enabled?: boolean): Promise<Resource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (value !== undefined) rpcArgs.value = value;
         if (enabled !== undefined) rpcArgs.enabled = enabled;
@@ -31611,7 +31668,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** @internal */
-    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number): Promise<Resource> {
+    private async _withMergeLoggingInternal(logLevel: string, enableConsole?: boolean, maxFiles?: number | null): Promise<Resource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -31629,7 +31686,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** @internal */
-    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number): Promise<Resource> {
+    private async _withMergeLoggingPathInternal(logLevel: string, logPath: string, enableConsole?: boolean, maxFiles?: number | null): Promise<Resource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, logLevel, logPath };
         if (enableConsole !== undefined) rpcArgs.enableConsole = enableConsole;
         if (maxFiles !== undefined) rpcArgs.maxFiles = maxFiles;
@@ -31737,7 +31794,7 @@ class ResourcePromiseImpl implements ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommand(commandName, displayName, options)), this._client);
     }
 
-    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions): ResourcePromise {
+    withProcessCommandFactory(commandName: string, displayName: string, createProcessSpec: (arg: ExecuteCommandContext) => Promise<ProcessCommandSpecExportData>, options?: ProcessCommandResultExportOptions | null): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withProcessCommandFactory(commandName, displayName, createProcessSpec, options)), this._client);
     }
 
@@ -32237,7 +32294,7 @@ export interface ResourceWithEndpoints {
     /** Adds an HTTP health check */
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): ResourceWithEndpointsPromise;
     /** Adds an HTTP resource command */
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): ResourceWithEndpointsPromise;
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): ResourceWithEndpointsPromise;
     /** Adds an HTTP health probe to the resource */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ResourceWithEndpointsPromise;
     /** Subscribes to the ResourceEndpointsAllocated event */
@@ -32268,7 +32325,7 @@ export interface ResourceWithEndpointsPromise extends PromiseLike<ResourceWithEn
     /** Adds an HTTP health check */
     withHttpHealthCheck(options?: WithHttpHealthCheckOptions): ResourceWithEndpointsPromise;
     /** Adds an HTTP resource command */
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): ResourceWithEndpointsPromise;
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): ResourceWithEndpointsPromise;
     /** Adds an HTTP health probe to the resource */
     withHttpProbe(probeType: ProbeType, options?: WithHttpProbeOptions): ResourceWithEndpointsPromise;
     /** Subscribes to the ResourceEndpointsAllocated event */
@@ -32285,7 +32342,7 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
     }
 
     /** @internal */
-    private async _withMcpServerInternal(path?: string, endpointName?: string): Promise<ResourceWithEndpoints> {
+    private async _withMcpServerInternal(path?: string | null, endpointName?: string | null): Promise<ResourceWithEndpoints> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (path !== undefined) rpcArgs.path = path;
         if (endpointName !== undefined) rpcArgs.endpointName = endpointName;
@@ -32324,7 +32381,7 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
     }
 
     /** @internal */
-    private async _withHttpEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string, createIfNotExists?: boolean): Promise<ResourceWithEndpoints> {
+    private async _withHttpEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string | null, createIfNotExists?: boolean): Promise<ResourceWithEndpoints> {
         const callbackId = registerCallback(async (objData: unknown) => {
             const objHandle = wrapIfHandle(objData) as EndpointUpdateContextHandle;
             const obj = new EndpointUpdateContextImpl(objHandle, this._client);
@@ -32347,7 +32404,7 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
     }
 
     /** @internal */
-    private async _withHttpsEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string, createIfNotExists?: boolean): Promise<ResourceWithEndpoints> {
+    private async _withHttpsEndpointCallbackInternal(callback: (obj: EndpointUpdateContext) => Promise<void>, name?: string | null, createIfNotExists?: boolean): Promise<ResourceWithEndpoints> {
         const callbackId = registerCallback(async (objData: unknown) => {
             const objHandle = wrapIfHandle(objData) as EndpointUpdateContextHandle;
             const obj = new EndpointUpdateContextImpl(objHandle, this._client);
@@ -32370,7 +32427,7 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
     }
 
     /** @internal */
-    private async _withEndpointInternal(port?: number, targetPort?: number, scheme?: string, name?: string, env?: string, isProxied?: boolean, isExternal?: boolean, protocol?: ProtocolType): Promise<ResourceWithEndpoints> {
+    private async _withEndpointInternal(port?: number | null, targetPort?: number | null, scheme?: string | null, name?: string | null, env?: string | null, isProxied?: boolean, isExternal?: boolean | null, protocol?: ProtocolType | null): Promise<ResourceWithEndpoints> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (port !== undefined) rpcArgs.port = port;
         if (targetPort !== undefined) rpcArgs.targetPort = targetPort;
@@ -32400,7 +32457,7 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
     }
 
     /** @internal */
-    private async _withHttpEndpointInternal(port?: number, targetPort?: number, name?: string, env?: string, isProxied?: boolean): Promise<ResourceWithEndpoints> {
+    private async _withHttpEndpointInternal(port?: number | null, targetPort?: number | null, name?: string | null, env?: string | null, isProxied?: boolean): Promise<ResourceWithEndpoints> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (port !== undefined) rpcArgs.port = port;
         if (targetPort !== undefined) rpcArgs.targetPort = targetPort;
@@ -32424,7 +32481,7 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
     }
 
     /** @internal */
-    private async _withHttpsEndpointInternal(port?: number, targetPort?: number, name?: string, env?: string, isProxied?: boolean): Promise<ResourceWithEndpoints> {
+    private async _withHttpsEndpointInternal(port?: number | null, targetPort?: number | null, name?: string | null, env?: string | null, isProxied?: boolean): Promise<ResourceWithEndpoints> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (port !== undefined) rpcArgs.port = port;
         if (targetPort !== undefined) rpcArgs.targetPort = targetPort;
@@ -32484,7 +32541,7 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
     }
 
     /** @internal */
-    private async _withHttpHealthCheckInternal(path?: string, statusCode?: number, endpointName?: string): Promise<ResourceWithEndpoints> {
+    private async _withHttpHealthCheckInternal(path?: string | null, statusCode?: number | null, endpointName?: string | null): Promise<ResourceWithEndpoints> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (path !== undefined) rpcArgs.path = path;
         if (statusCode !== undefined) rpcArgs.statusCode = statusCode;
@@ -32504,7 +32561,7 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
     }
 
     /** @internal */
-    private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions): Promise<ResourceWithEndpoints> {
+    private async _withHttpCommandInternal(path: string, displayName: string, options?: HttpCommandExportOptions | null): Promise<ResourceWithEndpoints> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, path, displayName };
         if (options !== undefined) rpcArgs.options = options;
         const result = await this._client.invokeCapability<IResourceWithEndpointsHandle>(
@@ -32514,12 +32571,12 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
         return new ResourceWithEndpointsImpl(result, this._client);
     }
 
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): ResourceWithEndpointsPromise {
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): ResourceWithEndpointsPromise {
         return new ResourceWithEndpointsPromiseImpl(this._withHttpCommandInternal(path, displayName, options), this._client);
     }
 
     /** @internal */
-    private async _withHttpProbeInternal(probeType: ProbeType, path?: string, initialDelaySeconds?: number, periodSeconds?: number, timeoutSeconds?: number, failureThreshold?: number, successThreshold?: number, endpointName?: string): Promise<ResourceWithEndpoints> {
+    private async _withHttpProbeInternal(probeType: ProbeType, path?: string | null, initialDelaySeconds?: number | null, periodSeconds?: number | null, timeoutSeconds?: number | null, failureThreshold?: number | null, successThreshold?: number | null, endpointName?: string | null): Promise<ResourceWithEndpoints> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, probeType };
         if (path !== undefined) rpcArgs.path = path;
         if (initialDelaySeconds !== undefined) rpcArgs.initialDelaySeconds = initialDelaySeconds;
@@ -32628,7 +32685,7 @@ class ResourceWithEndpointsPromiseImpl implements ResourceWithEndpointsPromise {
         return new ResourceWithEndpointsPromiseImpl(this._promise.then(obj => obj.withHttpHealthCheck(options)), this._client);
     }
 
-    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions): ResourceWithEndpointsPromise {
+    withHttpCommand(path: string, displayName: string, options?: HttpCommandExportOptions | null): ResourceWithEndpointsPromise {
         return new ResourceWithEndpointsPromiseImpl(this._promise.then(obj => obj.withHttpCommand(path, displayName, options)), this._client);
     }
 
@@ -32707,7 +32764,7 @@ class ResourceWithEnvironmentImpl extends ResourceBuilderBase<IResourceWithEnvir
     }
 
     /** @internal */
-    private async _withOtlpExporterInternal(protocol?: OtlpProtocol): Promise<ResourceWithEnvironment> {
+    private async _withOtlpExporterInternal(protocol?: OtlpProtocol | null): Promise<ResourceWithEnvironment> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (protocol !== undefined) rpcArgs.protocol = protocol;
         const result = await this._client.invokeCapability<IResourceWithEnvironmentHandle>(
@@ -32771,7 +32828,7 @@ class ResourceWithEnvironmentImpl extends ResourceBuilderBase<IResourceWithEnvir
     }
 
     /** @internal */
-    private async _withReferenceInternal(source: CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference | string | Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference>, connectionName?: string, optional?: boolean, name?: string): Promise<ResourceWithEnvironment> {
+    private async _withReferenceInternal(source: CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference | string | Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource | EndpointReference>, connectionName?: string | null, optional?: boolean, name?: string | null): Promise<ResourceWithEnvironment> {
         source = isPromiseLike(source) ? await source : source;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, source };
         if (connectionName !== undefined) rpcArgs.connectionName = connectionName;
@@ -32820,7 +32877,7 @@ class ResourceWithEnvironmentImpl extends ResourceBuilderBase<IResourceWithEnvir
     }
 
     /** @internal */
-    private async _withHttpsDeveloperCertificateInternal(password?: Awaitable<ParameterResource>): Promise<ResourceWithEnvironment> {
+    private async _withHttpsDeveloperCertificateInternal(password?: Awaitable<ParameterResource> | null): Promise<ResourceWithEnvironment> {
         password = isPromiseLike(password) ? await password : password;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (password !== undefined) rpcArgs.password = password;
@@ -32981,7 +33038,7 @@ class ResourceWithWaitSupportImpl extends ResourceBuilderBase<IResourceWithWaitS
     }
 
     /** @internal */
-    private async _waitForInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior): Promise<ResourceWithWaitSupport> {
+    private async _waitForInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior | null): Promise<ResourceWithWaitSupport> {
         dependency = isPromiseLike(dependency) ? await dependency : dependency;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         if (waitBehavior !== undefined) rpcArgs.waitBehavior = waitBehavior;
@@ -32998,7 +33055,7 @@ class ResourceWithWaitSupportImpl extends ResourceBuilderBase<IResourceWithWaitS
     }
 
     /** @internal */
-    private async _waitForStartInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior): Promise<ResourceWithWaitSupport> {
+    private async _waitForStartInternal(dependency: Awaitable<CSharpAppResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>, waitBehavior?: WaitBehavior | null): Promise<ResourceWithWaitSupport> {
         dependency = isPromiseLike(dependency) ? await dependency : dependency;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, dependency };
         if (waitBehavior !== undefined) rpcArgs.waitBehavior = waitBehavior;

@@ -1,4 +1,4 @@
-﻿{
+{
   CapabilityId: Aspire.Hosting/addContainer,
   MethodName: addContainer,
   QualifiedMethodName: addContainer,
@@ -12,6 +12,7 @@
         ClrType: string,
         IsInterface: false,
         IsReadOnly: false,
+        IsNullable: false,
         IsResourceBuilder: false,
         IsDistributedApplicationBuilder: false,
         IsDistributedApplication: false
@@ -27,6 +28,7 @@
         Category: Union,
         IsInterface: false,
         IsReadOnly: false,
+        IsNullable: false,
         IsResourceBuilder: false,
         IsDistributedApplicationBuilder: false,
         IsDistributedApplication: false,
@@ -36,6 +38,7 @@
             ClrType: string,
             IsInterface: false,
             IsReadOnly: false,
+            IsNullable: false,
             IsResourceBuilder: false,
             IsDistributedApplicationBuilder: false,
             IsDistributedApplication: false
@@ -46,6 +49,7 @@
             Category: Dto,
             IsInterface: false,
             IsReadOnly: false,
+            IsNullable: false,
             IsResourceBuilder: false,
             IsDistributedApplicationBuilder: false,
             IsDistributedApplication: false
@@ -63,6 +67,7 @@
     Category: Handle,
     IsInterface: false,
     IsReadOnly: false,
+    IsNullable: false,
     IsResourceBuilder: true,
     IsDistributedApplicationBuilder: false,
     IsDistributedApplication: false,
@@ -73,6 +78,7 @@
         Category: Handle,
         IsInterface: true,
         IsReadOnly: false,
+        IsNullable: false,
         IsResourceBuilder: true,
         IsDistributedApplicationBuilder: false,
         IsDistributedApplication: false
@@ -83,6 +89,7 @@
         Category: Handle,
         IsInterface: true,
         IsReadOnly: false,
+        IsNullable: false,
         IsResourceBuilder: true,
         IsDistributedApplicationBuilder: false,
         IsDistributedApplication: false,
@@ -93,6 +100,7 @@
             Category: Handle,
             IsInterface: true,
             IsReadOnly: false,
+            IsNullable: false,
             IsResourceBuilder: true,
             IsDistributedApplicationBuilder: false,
             IsDistributedApplication: false
@@ -105,6 +113,7 @@
         Category: Handle,
         IsInterface: true,
         IsReadOnly: false,
+        IsNullable: false,
         IsResourceBuilder: true,
         IsDistributedApplicationBuilder: false,
         IsDistributedApplication: false,
@@ -115,6 +124,7 @@
             Category: Handle,
             IsInterface: true,
             IsReadOnly: false,
+            IsNullable: false,
             IsResourceBuilder: true,
             IsDistributedApplicationBuilder: false,
             IsDistributedApplication: false
@@ -127,6 +137,7 @@
         Category: Handle,
         IsInterface: true,
         IsReadOnly: false,
+        IsNullable: false,
         IsResourceBuilder: true,
         IsDistributedApplicationBuilder: false,
         IsDistributedApplication: false,
@@ -137,6 +148,7 @@
             Category: Handle,
             IsInterface: true,
             IsReadOnly: false,
+            IsNullable: false,
             IsResourceBuilder: true,
             IsDistributedApplicationBuilder: false,
             IsDistributedApplication: false
@@ -149,6 +161,7 @@
         Category: Handle,
         IsInterface: true,
         IsReadOnly: false,
+        IsNullable: false,
         IsResourceBuilder: true,
         IsDistributedApplicationBuilder: false,
         IsDistributedApplication: false,
@@ -159,6 +172,7 @@
             Category: Handle,
             IsInterface: true,
             IsReadOnly: false,
+            IsNullable: false,
             IsResourceBuilder: true,
             IsDistributedApplicationBuilder: false,
             IsDistributedApplication: false
@@ -171,6 +185,7 @@
         Category: Handle,
         IsInterface: true,
         IsReadOnly: false,
+        IsNullable: false,
         IsResourceBuilder: true,
         IsDistributedApplicationBuilder: false,
         IsDistributedApplication: false,
@@ -181,6 +196,7 @@
             Category: Handle,
             IsInterface: true,
             IsReadOnly: false,
+            IsNullable: false,
             IsResourceBuilder: true,
             IsDistributedApplicationBuilder: false,
             IsDistributedApplication: false
@@ -193,6 +209,7 @@
         Category: Handle,
         IsInterface: true,
         IsReadOnly: false,
+        IsNullable: false,
         IsResourceBuilder: true,
         IsDistributedApplicationBuilder: false,
         IsDistributedApplication: false,
@@ -203,6 +220,7 @@
             Category: Handle,
             IsInterface: true,
             IsReadOnly: false,
+            IsNullable: false,
             IsResourceBuilder: true,
             IsDistributedApplicationBuilder: false,
             IsDistributedApplication: false
@@ -216,6 +234,7 @@
       Category: Handle,
       IsInterface: false,
       IsReadOnly: false,
+      IsNullable: false,
       IsResourceBuilder: true,
       IsDistributedApplicationBuilder: false,
       IsDistributedApplication: false,
@@ -226,6 +245,7 @@
           Category: Handle,
           IsInterface: true,
           IsReadOnly: false,
+          IsNullable: false,
           IsResourceBuilder: true,
           IsDistributedApplicationBuilder: false,
           IsDistributedApplication: false
@@ -240,6 +260,7 @@
     Category: Handle,
     IsInterface: true,
     IsReadOnly: false,
+    IsNullable: false,
     IsResourceBuilder: false,
     IsDistributedApplicationBuilder: true,
     IsDistributedApplication: false
@@ -252,6 +273,7 @@
       Category: Handle,
       IsInterface: true,
       IsReadOnly: false,
+      IsNullable: false,
       IsResourceBuilder: false,
       IsDistributedApplicationBuilder: true,
       IsDistributedApplication: false

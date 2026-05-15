@@ -20,6 +20,25 @@ use crate::base::{
 // Enums
 // ============================================================================
 
+/// ContainerMountType
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ContainerMountType {
+    #[default]
+    #[serde(rename = "BindMount")]
+    BindMount,
+    #[serde(rename = "Volume")]
+    Volume,
+}
+
+impl std::fmt::Display for ContainerMountType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::BindMount => write!(f, "BindMount"),
+            Self::Volume => write!(f, "Volume"),
+        }
+    }
+}
+
 /// ContainerLifetime
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ContainerLifetime {
@@ -509,24 +528,24 @@ impl std::fmt::Display for TestResourceStatus {
 pub struct InteractionInput {
     #[serde(rename = "Name")]
     pub name: String,
-    #[serde(rename = "Label")]
-    pub label: String,
-    #[serde(rename = "Description")]
-    pub description: String,
+    #[serde(rename = "Label", skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    #[serde(rename = "Description", skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     #[serde(rename = "EnableDescriptionMarkdown")]
     pub enable_description_markdown: bool,
     #[serde(rename = "InputType")]
     pub input_type: InputType,
     #[serde(rename = "Required")]
     pub required: bool,
-    #[serde(rename = "Options")]
-    pub options: Vec<Value>,
-    #[serde(rename = "DynamicLoading")]
-    pub dynamic_loading: Value,
-    #[serde(rename = "Value")]
-    pub value: String,
-    #[serde(rename = "Placeholder")]
-    pub placeholder: String,
+    #[serde(rename = "Options", skip_serializing_if = "Option::is_none")]
+    pub options: Option<Vec<Value>>,
+    #[serde(rename = "DynamicLoading", skip_serializing_if = "Option::is_none")]
+    pub dynamic_loading: Option<Value>,
+    #[serde(rename = "Value", skip_serializing_if = "Option::is_none")]
+    pub value: Option<String>,
+    #[serde(rename = "Placeholder", skip_serializing_if = "Option::is_none")]
+    pub placeholder: Option<String>,
     #[serde(rename = "AllowCustomChoice")]
     pub allow_custom_choice: bool,
     #[serde(rename = "Disabled")]
@@ -539,15 +558,27 @@ impl InteractionInput {
     pub fn to_map(&self) -> HashMap<String, Value> {
         let mut map = HashMap::new();
         map.insert("Name".to_string(), serde_json::to_value(&self.name).unwrap_or(Value::Null));
-        map.insert("Label".to_string(), serde_json::to_value(&self.label).unwrap_or(Value::Null));
-        map.insert("Description".to_string(), serde_json::to_value(&self.description).unwrap_or(Value::Null));
+        if let Some(ref v) = self.label {
+            map.insert("Label".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.description {
+            map.insert("Description".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map.insert("EnableDescriptionMarkdown".to_string(), serde_json::to_value(&self.enable_description_markdown).unwrap_or(Value::Null));
         map.insert("InputType".to_string(), serde_json::to_value(&self.input_type).unwrap_or(Value::Null));
         map.insert("Required".to_string(), serde_json::to_value(&self.required).unwrap_or(Value::Null));
-        map.insert("Options".to_string(), serde_json::to_value(&self.options).unwrap_or(Value::Null));
-        map.insert("DynamicLoading".to_string(), serde_json::to_value(&self.dynamic_loading).unwrap_or(Value::Null));
-        map.insert("Value".to_string(), serde_json::to_value(&self.value).unwrap_or(Value::Null));
-        map.insert("Placeholder".to_string(), serde_json::to_value(&self.placeholder).unwrap_or(Value::Null));
+        if let Some(ref v) = self.options {
+            map.insert("Options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.dynamic_loading {
+            map.insert("DynamicLoading".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.value {
+            map.insert("Value".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.placeholder {
+            map.insert("Placeholder".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map.insert("AllowCustomChoice".to_string(), serde_json::to_value(&self.allow_custom_choice).unwrap_or(Value::Null));
         map.insert("Disabled".to_string(), serde_json::to_value(&self.disabled).unwrap_or(Value::Null));
         if let Some(ref v) = self.max_length {
@@ -562,15 +593,17 @@ impl InteractionInput {
 pub struct AddContainerOptions {
     #[serde(rename = "Image")]
     pub image: String,
-    #[serde(rename = "Tag")]
-    pub tag: String,
+    #[serde(rename = "Tag", skip_serializing_if = "Option::is_none")]
+    pub tag: Option<String>,
 }
 
 impl AddContainerOptions {
     pub fn to_map(&self) -> HashMap<String, Value> {
         let mut map = HashMap::new();
         map.insert("Image".to_string(), serde_json::to_value(&self.image).unwrap_or(Value::Null));
-        map.insert("Tag".to_string(), serde_json::to_value(&self.tag).unwrap_or(Value::Null));
+        if let Some(ref v) = self.tag {
+            map.insert("Tag".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map
     }
 }
@@ -578,18 +611,18 @@ impl AddContainerOptions {
 /// CreateBuilderOptions
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CreateBuilderOptions {
-    #[serde(rename = "Args")]
-    pub args: Vec<String>,
-    #[serde(rename = "ProjectDirectory")]
-    pub project_directory: String,
-    #[serde(rename = "AppHostFilePath")]
-    pub app_host_file_path: String,
-    #[serde(rename = "ContainerRegistryOverride")]
-    pub container_registry_override: String,
+    #[serde(rename = "Args", skip_serializing_if = "Option::is_none")]
+    pub args: Option<Vec<String>>,
+    #[serde(rename = "ProjectDirectory", skip_serializing_if = "Option::is_none")]
+    pub project_directory: Option<String>,
+    #[serde(rename = "AppHostFilePath", skip_serializing_if = "Option::is_none")]
+    pub app_host_file_path: Option<String>,
+    #[serde(rename = "ContainerRegistryOverride", skip_serializing_if = "Option::is_none")]
+    pub container_registry_override: Option<String>,
     #[serde(rename = "DisableDashboard")]
     pub disable_dashboard: bool,
-    #[serde(rename = "DashboardApplicationName")]
-    pub dashboard_application_name: String,
+    #[serde(rename = "DashboardApplicationName", skip_serializing_if = "Option::is_none")]
+    pub dashboard_application_name: Option<String>,
     #[serde(rename = "AllowUnsecuredTransport")]
     pub allow_unsecured_transport: bool,
     #[serde(rename = "EnableResourceLogging")]
@@ -599,12 +632,22 @@ pub struct CreateBuilderOptions {
 impl CreateBuilderOptions {
     pub fn to_map(&self) -> HashMap<String, Value> {
         let mut map = HashMap::new();
-        map.insert("Args".to_string(), serde_json::to_value(&self.args).unwrap_or(Value::Null));
-        map.insert("ProjectDirectory".to_string(), serde_json::to_value(&self.project_directory).unwrap_or(Value::Null));
-        map.insert("AppHostFilePath".to_string(), serde_json::to_value(&self.app_host_file_path).unwrap_or(Value::Null));
-        map.insert("ContainerRegistryOverride".to_string(), serde_json::to_value(&self.container_registry_override).unwrap_or(Value::Null));
+        if let Some(ref v) = self.args {
+            map.insert("Args".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.project_directory {
+            map.insert("ProjectDirectory".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.app_host_file_path {
+            map.insert("AppHostFilePath".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.container_registry_override {
+            map.insert("ContainerRegistryOverride".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map.insert("DisableDashboard".to_string(), serde_json::to_value(&self.disable_dashboard).unwrap_or(Value::Null));
-        map.insert("DashboardApplicationName".to_string(), serde_json::to_value(&self.dashboard_application_name).unwrap_or(Value::Null));
+        if let Some(ref v) = self.dashboard_application_name {
+            map.insert("DashboardApplicationName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map.insert("AllowUnsecuredTransport".to_string(), serde_json::to_value(&self.allow_unsecured_transport).unwrap_or(Value::Null));
         map.insert("EnableResourceLogging".to_string(), serde_json::to_value(&self.enable_resource_logging).unwrap_or(Value::Null));
         map
@@ -618,8 +661,8 @@ pub struct HttpsCertificateInfo {
     pub subject: String,
     #[serde(rename = "Issuer")]
     pub issuer: String,
-    #[serde(rename = "Thumbprint")]
-    pub thumbprint: String,
+    #[serde(rename = "Thumbprint", skip_serializing_if = "Option::is_none")]
+    pub thumbprint: Option<String>,
 }
 
 impl HttpsCertificateInfo {
@@ -627,7 +670,9 @@ impl HttpsCertificateInfo {
         let mut map = HashMap::new();
         map.insert("Subject".to_string(), serde_json::to_value(&self.subject).unwrap_or(Value::Null));
         map.insert("Issuer".to_string(), serde_json::to_value(&self.issuer).unwrap_or(Value::Null));
-        map.insert("Thumbprint".to_string(), serde_json::to_value(&self.thumbprint).unwrap_or(Value::Null));
+        if let Some(ref v) = self.thumbprint {
+            map.insert("Thumbprint".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map
     }
 }
@@ -658,8 +703,8 @@ impl CertificateTrustExecutionConfigurationExportData {
 pub struct HttpsCertificateExecutionConfigurationExportData {
     #[serde(rename = "Subject")]
     pub subject: String,
-    #[serde(rename = "Thumbprint")]
-    pub thumbprint: String,
+    #[serde(rename = "Thumbprint", skip_serializing_if = "Option::is_none")]
+    pub thumbprint: Option<String>,
     #[serde(rename = "KeyPathExpression")]
     pub key_path_expression: String,
     #[serde(rename = "PfxPathExpression")]
@@ -668,20 +713,24 @@ pub struct HttpsCertificateExecutionConfigurationExportData {
     pub is_key_path_referenced: bool,
     #[serde(rename = "IsPfxPathReferenced")]
     pub is_pfx_path_referenced: bool,
-    #[serde(rename = "Password")]
-    pub password: String,
+    #[serde(rename = "Password", skip_serializing_if = "Option::is_none")]
+    pub password: Option<String>,
 }
 
 impl HttpsCertificateExecutionConfigurationExportData {
     pub fn to_map(&self) -> HashMap<String, Value> {
         let mut map = HashMap::new();
         map.insert("Subject".to_string(), serde_json::to_value(&self.subject).unwrap_or(Value::Null));
-        map.insert("Thumbprint".to_string(), serde_json::to_value(&self.thumbprint).unwrap_or(Value::Null));
+        if let Some(ref v) = self.thumbprint {
+            map.insert("Thumbprint".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map.insert("KeyPathExpression".to_string(), serde_json::to_value(&self.key_path_expression).unwrap_or(Value::Null));
         map.insert("PfxPathExpression".to_string(), serde_json::to_value(&self.pfx_path_expression).unwrap_or(Value::Null));
         map.insert("IsKeyPathReferenced".to_string(), serde_json::to_value(&self.is_key_path_referenced).unwrap_or(Value::Null));
         map.insert("IsPfxPathReferenced".to_string(), serde_json::to_value(&self.is_pfx_path_referenced).unwrap_or(Value::Null));
-        map.insert("Password".to_string(), serde_json::to_value(&self.password).unwrap_or(Value::Null));
+        if let Some(ref v) = self.password {
+            map.insert("Password".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map
     }
 }
@@ -693,12 +742,12 @@ pub struct ResourceEventDto {
     pub resource_name: String,
     #[serde(rename = "ResourceId")]
     pub resource_id: String,
-    #[serde(rename = "State")]
-    pub state: String,
-    #[serde(rename = "StateStyle")]
-    pub state_style: String,
-    #[serde(rename = "HealthStatus")]
-    pub health_status: String,
+    #[serde(rename = "State", skip_serializing_if = "Option::is_none")]
+    pub state: Option<String>,
+    #[serde(rename = "StateStyle", skip_serializing_if = "Option::is_none")]
+    pub state_style: Option<String>,
+    #[serde(rename = "HealthStatus", skip_serializing_if = "Option::is_none")]
+    pub health_status: Option<String>,
     #[serde(rename = "ExitCode", skip_serializing_if = "Option::is_none")]
     pub exit_code: Option<f64>,
 }
@@ -708,9 +757,15 @@ impl ResourceEventDto {
         let mut map = HashMap::new();
         map.insert("ResourceName".to_string(), serde_json::to_value(&self.resource_name).unwrap_or(Value::Null));
         map.insert("ResourceId".to_string(), serde_json::to_value(&self.resource_id).unwrap_or(Value::Null));
-        map.insert("State".to_string(), serde_json::to_value(&self.state).unwrap_or(Value::Null));
-        map.insert("StateStyle".to_string(), serde_json::to_value(&self.state_style).unwrap_or(Value::Null));
-        map.insert("HealthStatus".to_string(), serde_json::to_value(&self.health_status).unwrap_or(Value::Null));
+        if let Some(ref v) = self.state {
+            map.insert("State".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.state_style {
+            map.insert("StateStyle".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.health_status {
+            map.insert("HealthStatus".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         if let Some(ref v) = self.exit_code {
             map.insert("ExitCode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
@@ -769,43 +824,55 @@ impl CertificateTrustExecutionConfigurationContext {
 /// CommandOptions
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CommandOptions {
-    #[serde(rename = "Description")]
-    pub description: String,
-    #[serde(rename = "Parameter")]
-    pub parameter: Value,
+    #[serde(rename = "Description", skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(rename = "Parameter", skip_serializing_if = "Option::is_none")]
+    pub parameter: Option<Value>,
     #[serde(rename = "Arguments")]
     pub arguments: Vec<InteractionInput>,
-    #[serde(rename = "ValidateArguments")]
-    pub validate_arguments: Value,
+    #[serde(rename = "ValidateArguments", skip_serializing_if = "Option::is_none")]
+    pub validate_arguments: Option<Value>,
     #[serde(rename = "Visibility")]
     pub visibility: ResourceCommandVisibility,
-    #[serde(rename = "ConfirmationMessage")]
-    pub confirmation_message: String,
-    #[serde(rename = "IconName")]
-    pub icon_name: String,
+    #[serde(rename = "ConfirmationMessage", skip_serializing_if = "Option::is_none")]
+    pub confirmation_message: Option<String>,
+    #[serde(rename = "IconName", skip_serializing_if = "Option::is_none")]
+    pub icon_name: Option<String>,
     #[serde(rename = "IconVariant", skip_serializing_if = "Option::is_none")]
     pub icon_variant: Option<IconVariant>,
     #[serde(rename = "IsHighlighted")]
     pub is_highlighted: bool,
-    #[serde(rename = "UpdateState")]
-    pub update_state: Value,
+    #[serde(rename = "UpdateState", skip_serializing_if = "Option::is_none")]
+    pub update_state: Option<Value>,
 }
 
 impl CommandOptions {
     pub fn to_map(&self) -> HashMap<String, Value> {
         let mut map = HashMap::new();
-        map.insert("Description".to_string(), serde_json::to_value(&self.description).unwrap_or(Value::Null));
-        map.insert("Parameter".to_string(), serde_json::to_value(&self.parameter).unwrap_or(Value::Null));
+        if let Some(ref v) = self.description {
+            map.insert("Description".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.parameter {
+            map.insert("Parameter".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map.insert("Arguments".to_string(), serde_json::to_value(&self.arguments).unwrap_or(Value::Null));
-        map.insert("ValidateArguments".to_string(), serde_json::to_value(&self.validate_arguments).unwrap_or(Value::Null));
+        if let Some(ref v) = self.validate_arguments {
+            map.insert("ValidateArguments".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map.insert("Visibility".to_string(), serde_json::to_value(&self.visibility).unwrap_or(Value::Null));
-        map.insert("ConfirmationMessage".to_string(), serde_json::to_value(&self.confirmation_message).unwrap_or(Value::Null));
-        map.insert("IconName".to_string(), serde_json::to_value(&self.icon_name).unwrap_or(Value::Null));
+        if let Some(ref v) = self.confirmation_message {
+            map.insert("ConfirmationMessage".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.icon_name {
+            map.insert("IconName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         if let Some(ref v) = self.icon_variant {
             map.insert("IconVariant".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         map.insert("IsHighlighted".to_string(), serde_json::to_value(&self.is_highlighted).unwrap_or(Value::Null));
-        map.insert("UpdateState".to_string(), serde_json::to_value(&self.update_state).unwrap_or(Value::Null));
+        if let Some(ref v) = self.update_state {
+            map.insert("UpdateState".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map
     }
 }
@@ -813,22 +880,22 @@ impl CommandOptions {
 /// HttpCommandExportOptions
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct HttpCommandExportOptions {
-    #[serde(rename = "Description")]
-    pub description: String,
-    #[serde(rename = "ConfirmationMessage")]
-    pub confirmation_message: String,
-    #[serde(rename = "IconName")]
-    pub icon_name: String,
+    #[serde(rename = "Description", skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(rename = "ConfirmationMessage", skip_serializing_if = "Option::is_none")]
+    pub confirmation_message: Option<String>,
+    #[serde(rename = "IconName", skip_serializing_if = "Option::is_none")]
+    pub icon_name: Option<String>,
     #[serde(rename = "IconVariant", skip_serializing_if = "Option::is_none")]
     pub icon_variant: Option<IconVariant>,
     #[serde(rename = "IsHighlighted")]
     pub is_highlighted: bool,
-    #[serde(rename = "CommandName")]
-    pub command_name: String,
-    #[serde(rename = "EndpointName")]
-    pub endpoint_name: String,
-    #[serde(rename = "MethodName")]
-    pub method_name: String,
+    #[serde(rename = "CommandName", skip_serializing_if = "Option::is_none")]
+    pub command_name: Option<String>,
+    #[serde(rename = "EndpointName", skip_serializing_if = "Option::is_none")]
+    pub endpoint_name: Option<String>,
+    #[serde(rename = "MethodName", skip_serializing_if = "Option::is_none")]
+    pub method_name: Option<String>,
     #[serde(rename = "ResultMode")]
     pub result_mode: HttpCommandResultMode,
 }
@@ -836,16 +903,28 @@ pub struct HttpCommandExportOptions {
 impl HttpCommandExportOptions {
     pub fn to_map(&self) -> HashMap<String, Value> {
         let mut map = HashMap::new();
-        map.insert("Description".to_string(), serde_json::to_value(&self.description).unwrap_or(Value::Null));
-        map.insert("ConfirmationMessage".to_string(), serde_json::to_value(&self.confirmation_message).unwrap_or(Value::Null));
-        map.insert("IconName".to_string(), serde_json::to_value(&self.icon_name).unwrap_or(Value::Null));
+        if let Some(ref v) = self.description {
+            map.insert("Description".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.confirmation_message {
+            map.insert("ConfirmationMessage".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.icon_name {
+            map.insert("IconName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         if let Some(ref v) = self.icon_variant {
             map.insert("IconVariant".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         map.insert("IsHighlighted".to_string(), serde_json::to_value(&self.is_highlighted).unwrap_or(Value::Null));
-        map.insert("CommandName".to_string(), serde_json::to_value(&self.command_name).unwrap_or(Value::Null));
-        map.insert("EndpointName".to_string(), serde_json::to_value(&self.endpoint_name).unwrap_or(Value::Null));
-        map.insert("MethodName".to_string(), serde_json::to_value(&self.method_name).unwrap_or(Value::Null));
+        if let Some(ref v) = self.command_name {
+            map.insert("CommandName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.endpoint_name {
+            map.insert("EndpointName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.method_name {
+            map.insert("MethodName".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map.insert("ResultMode".to_string(), serde_json::to_value(&self.result_mode).unwrap_or(Value::Null));
         map
     }
@@ -914,52 +993,66 @@ impl GenerateParameterDefault {
 /// ProcessCommandExportOptions
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ProcessCommandExportOptions {
-    #[serde(rename = "ExecutablePath")]
-    pub executable_path: String,
-    #[serde(rename = "Arguments")]
-    pub arguments: Vec<String>,
-    #[serde(rename = "WorkingDirectory")]
-    pub working_directory: String,
-    #[serde(rename = "EnvironmentVariables")]
-    pub environment_variables: HashMap<String, String>,
+    #[serde(rename = "ExecutablePath", skip_serializing_if = "Option::is_none")]
+    pub executable_path: Option<String>,
+    #[serde(rename = "Arguments", skip_serializing_if = "Option::is_none")]
+    pub arguments: Option<Vec<String>>,
+    #[serde(rename = "WorkingDirectory", skip_serializing_if = "Option::is_none")]
+    pub working_directory: Option<String>,
+    #[serde(rename = "EnvironmentVariables", skip_serializing_if = "Option::is_none")]
+    pub environment_variables: Option<HashMap<String, String>>,
     #[serde(rename = "InheritEnvironmentVariables", skip_serializing_if = "Option::is_none")]
     pub inherit_environment_variables: Option<bool>,
-    #[serde(rename = "StandardInputContent")]
-    pub standard_input_content: String,
+    #[serde(rename = "StandardInputContent", skip_serializing_if = "Option::is_none")]
+    pub standard_input_content: Option<String>,
     #[serde(rename = "KillEntireProcessTree", skip_serializing_if = "Option::is_none")]
     pub kill_entire_process_tree: Option<bool>,
-    #[serde(rename = "CommandOptions")]
-    pub command_options: CommandOptions,
+    #[serde(rename = "CommandOptions", skip_serializing_if = "Option::is_none")]
+    pub command_options: Option<CommandOptions>,
     #[serde(rename = "MaxOutputLineCount", skip_serializing_if = "Option::is_none")]
     pub max_output_line_count: Option<f64>,
     #[serde(rename = "DisplayImmediately", skip_serializing_if = "Option::is_none")]
     pub display_immediately: Option<bool>,
-    #[serde(rename = "SuccessExitCodes")]
-    pub success_exit_codes: Vec<f64>,
+    #[serde(rename = "SuccessExitCodes", skip_serializing_if = "Option::is_none")]
+    pub success_exit_codes: Option<Vec<f64>>,
 }
 
 impl ProcessCommandExportOptions {
     pub fn to_map(&self) -> HashMap<String, Value> {
         let mut map = HashMap::new();
-        map.insert("ExecutablePath".to_string(), serde_json::to_value(&self.executable_path).unwrap_or(Value::Null));
-        map.insert("Arguments".to_string(), serde_json::to_value(&self.arguments).unwrap_or(Value::Null));
-        map.insert("WorkingDirectory".to_string(), serde_json::to_value(&self.working_directory).unwrap_or(Value::Null));
-        map.insert("EnvironmentVariables".to_string(), serde_json::to_value(&self.environment_variables).unwrap_or(Value::Null));
+        if let Some(ref v) = self.executable_path {
+            map.insert("ExecutablePath".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.arguments {
+            map.insert("Arguments".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.working_directory {
+            map.insert("WorkingDirectory".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.environment_variables {
+            map.insert("EnvironmentVariables".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         if let Some(ref v) = self.inherit_environment_variables {
             map.insert("InheritEnvironmentVariables".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
-        map.insert("StandardInputContent".to_string(), serde_json::to_value(&self.standard_input_content).unwrap_or(Value::Null));
+        if let Some(ref v) = self.standard_input_content {
+            map.insert("StandardInputContent".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         if let Some(ref v) = self.kill_entire_process_tree {
             map.insert("KillEntireProcessTree".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
-        map.insert("CommandOptions".to_string(), serde_json::to_value(&self.command_options).unwrap_or(Value::Null));
+        if let Some(ref v) = self.command_options {
+            map.insert("CommandOptions".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         if let Some(ref v) = self.max_output_line_count {
             map.insert("MaxOutputLineCount".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         if let Some(ref v) = self.display_immediately {
             map.insert("DisplayImmediately".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
-        map.insert("SuccessExitCodes".to_string(), serde_json::to_value(&self.success_exit_codes).unwrap_or(Value::Null));
+        if let Some(ref v) = self.success_exit_codes {
+            map.insert("SuccessExitCodes".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map
     }
 }
@@ -967,18 +1060,18 @@ impl ProcessCommandExportOptions {
 /// ProcessCommandSpecExportData
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ProcessCommandSpecExportData {
-    #[serde(rename = "ExecutablePath")]
-    pub executable_path: String,
-    #[serde(rename = "Arguments")]
-    pub arguments: Vec<String>,
-    #[serde(rename = "WorkingDirectory")]
-    pub working_directory: String,
-    #[serde(rename = "EnvironmentVariables")]
-    pub environment_variables: HashMap<String, String>,
+    #[serde(rename = "ExecutablePath", skip_serializing_if = "Option::is_none")]
+    pub executable_path: Option<String>,
+    #[serde(rename = "Arguments", skip_serializing_if = "Option::is_none")]
+    pub arguments: Option<Vec<String>>,
+    #[serde(rename = "WorkingDirectory", skip_serializing_if = "Option::is_none")]
+    pub working_directory: Option<String>,
+    #[serde(rename = "EnvironmentVariables", skip_serializing_if = "Option::is_none")]
+    pub environment_variables: Option<HashMap<String, String>>,
     #[serde(rename = "InheritEnvironmentVariables", skip_serializing_if = "Option::is_none")]
     pub inherit_environment_variables: Option<bool>,
-    #[serde(rename = "StandardInputContent")]
-    pub standard_input_content: String,
+    #[serde(rename = "StandardInputContent", skip_serializing_if = "Option::is_none")]
+    pub standard_input_content: Option<String>,
     #[serde(rename = "KillEntireProcessTree", skip_serializing_if = "Option::is_none")]
     pub kill_entire_process_tree: Option<bool>,
 }
@@ -986,14 +1079,24 @@ pub struct ProcessCommandSpecExportData {
 impl ProcessCommandSpecExportData {
     pub fn to_map(&self) -> HashMap<String, Value> {
         let mut map = HashMap::new();
-        map.insert("ExecutablePath".to_string(), serde_json::to_value(&self.executable_path).unwrap_or(Value::Null));
-        map.insert("Arguments".to_string(), serde_json::to_value(&self.arguments).unwrap_or(Value::Null));
-        map.insert("WorkingDirectory".to_string(), serde_json::to_value(&self.working_directory).unwrap_or(Value::Null));
-        map.insert("EnvironmentVariables".to_string(), serde_json::to_value(&self.environment_variables).unwrap_or(Value::Null));
+        if let Some(ref v) = self.executable_path {
+            map.insert("ExecutablePath".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.arguments {
+            map.insert("Arguments".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.working_directory {
+            map.insert("WorkingDirectory".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.environment_variables {
+            map.insert("EnvironmentVariables".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         if let Some(ref v) = self.inherit_environment_variables {
             map.insert("InheritEnvironmentVariables".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
-        map.insert("StandardInputContent".to_string(), serde_json::to_value(&self.standard_input_content).unwrap_or(Value::Null));
+        if let Some(ref v) = self.standard_input_content {
+            map.insert("StandardInputContent".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         if let Some(ref v) = self.kill_entire_process_tree {
             map.insert("KillEntireProcessTree".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
@@ -1004,27 +1107,31 @@ impl ProcessCommandSpecExportData {
 /// ProcessCommandResultExportOptions
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ProcessCommandResultExportOptions {
-    #[serde(rename = "CommandOptions")]
-    pub command_options: CommandOptions,
+    #[serde(rename = "CommandOptions", skip_serializing_if = "Option::is_none")]
+    pub command_options: Option<CommandOptions>,
     #[serde(rename = "MaxOutputLineCount", skip_serializing_if = "Option::is_none")]
     pub max_output_line_count: Option<f64>,
     #[serde(rename = "DisplayImmediately", skip_serializing_if = "Option::is_none")]
     pub display_immediately: Option<bool>,
-    #[serde(rename = "SuccessExitCodes")]
-    pub success_exit_codes: Vec<f64>,
+    #[serde(rename = "SuccessExitCodes", skip_serializing_if = "Option::is_none")]
+    pub success_exit_codes: Option<Vec<f64>>,
 }
 
 impl ProcessCommandResultExportOptions {
     pub fn to_map(&self) -> HashMap<String, Value> {
         let mut map = HashMap::new();
-        map.insert("CommandOptions".to_string(), serde_json::to_value(&self.command_options).unwrap_or(Value::Null));
+        if let Some(ref v) = self.command_options {
+            map.insert("CommandOptions".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         if let Some(ref v) = self.max_output_line_count {
             map.insert("MaxOutputLineCount".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         if let Some(ref v) = self.display_immediately {
             map.insert("DisplayImmediately".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
-        map.insert("SuccessExitCodes".to_string(), serde_json::to_value(&self.success_exit_codes).unwrap_or(Value::Null));
+        if let Some(ref v) = self.success_exit_codes {
+            map.insert("SuccessExitCodes".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map
     }
 }
@@ -1036,12 +1143,12 @@ pub struct ExecuteCommandResult {
     pub success: bool,
     #[serde(rename = "Canceled")]
     pub canceled: bool,
-    #[serde(rename = "ErrorMessage")]
-    pub error_message: String,
-    #[serde(rename = "Message")]
-    pub message: String,
-    #[serde(rename = "Data")]
-    pub data: CommandResultData,
+    #[serde(rename = "ErrorMessage", skip_serializing_if = "Option::is_none")]
+    pub error_message: Option<String>,
+    #[serde(rename = "Message", skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    #[serde(rename = "Data", skip_serializing_if = "Option::is_none")]
+    pub data: Option<CommandResultData>,
 }
 
 impl ExecuteCommandResult {
@@ -1049,9 +1156,15 @@ impl ExecuteCommandResult {
         let mut map = HashMap::new();
         map.insert("Success".to_string(), serde_json::to_value(&self.success).unwrap_or(Value::Null));
         map.insert("Canceled".to_string(), serde_json::to_value(&self.canceled).unwrap_or(Value::Null));
-        map.insert("ErrorMessage".to_string(), serde_json::to_value(&self.error_message).unwrap_or(Value::Null));
-        map.insert("Message".to_string(), serde_json::to_value(&self.message).unwrap_or(Value::Null));
-        map.insert("Data".to_string(), serde_json::to_value(&self.data).unwrap_or(Value::Null));
+        if let Some(ref v) = self.error_message {
+            map.insert("ErrorMessage".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.message {
+            map.insert("Message".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.data {
+            map.insert("Data".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map
     }
 }
@@ -1082,10 +1195,10 @@ impl CommandResultData {
 pub struct ResourceUrlAnnotation {
     #[serde(rename = "Url")]
     pub url: String,
-    #[serde(rename = "DisplayText")]
-    pub display_text: String,
-    #[serde(rename = "Endpoint")]
-    pub endpoint: Handle,
+    #[serde(rename = "DisplayText", skip_serializing_if = "Option::is_none")]
+    pub display_text: Option<String>,
+    #[serde(rename = "Endpoint", skip_serializing_if = "Option::is_none")]
+    pub endpoint: Option<Handle>,
     #[serde(rename = "DisplayLocation")]
     pub display_location: UrlDisplayLocation,
 }
@@ -1094,8 +1207,12 @@ impl ResourceUrlAnnotation {
     pub fn to_map(&self) -> HashMap<String, Value> {
         let mut map = HashMap::new();
         map.insert("Url".to_string(), serde_json::to_value(&self.url).unwrap_or(Value::Null));
-        map.insert("DisplayText".to_string(), serde_json::to_value(&self.display_text).unwrap_or(Value::Null));
-        map.insert("Endpoint".to_string(), serde_json::to_value(&self.endpoint).unwrap_or(Value::Null));
+        if let Some(ref v) = self.display_text {
+            map.insert("DisplayText".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.endpoint {
+            map.insert("Endpoint".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map.insert("DisplayLocation".to_string(), serde_json::to_value(&self.display_location).unwrap_or(Value::Null));
         map
     }
@@ -1110,8 +1227,8 @@ pub struct TestConfigDto {
     pub port: f64,
     #[serde(rename = "Enabled")]
     pub enabled: bool,
-    #[serde(rename = "OptionalField")]
-    pub optional_field: String,
+    #[serde(rename = "OptionalField", skip_serializing_if = "Option::is_none")]
+    pub optional_field: Option<String>,
 }
 
 impl TestConfigDto {
@@ -1120,7 +1237,9 @@ impl TestConfigDto {
         map.insert("Name".to_string(), serde_json::to_value(&self.name).unwrap_or(Value::Null));
         map.insert("Port".to_string(), serde_json::to_value(&self.port).unwrap_or(Value::Null));
         map.insert("Enabled".to_string(), serde_json::to_value(&self.enabled).unwrap_or(Value::Null));
-        map.insert("OptionalField".to_string(), serde_json::to_value(&self.optional_field).unwrap_or(Value::Null));
+        if let Some(ref v) = self.optional_field {
+            map.insert("OptionalField".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map
     }
 }
@@ -1130,8 +1249,8 @@ impl TestConfigDto {
 pub struct TestNestedDto {
     #[serde(rename = "Id")]
     pub id: String,
-    #[serde(rename = "Config")]
-    pub config: TestConfigDto,
+    #[serde(rename = "Config", skip_serializing_if = "Option::is_none")]
+    pub config: Option<TestConfigDto>,
     #[serde(rename = "Tags")]
     pub tags: Vec<String>,
     #[serde(rename = "Counts")]
@@ -1142,7 +1261,9 @@ impl TestNestedDto {
     pub fn to_map(&self) -> HashMap<String, Value> {
         let mut map = HashMap::new();
         map.insert("Id".to_string(), serde_json::to_value(&self.id).unwrap_or(Value::Null));
-        map.insert("Config".to_string(), serde_json::to_value(&self.config).unwrap_or(Value::Null));
+        if let Some(ref v) = self.config {
+            map.insert("Config".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map.insert("Tags".to_string(), serde_json::to_value(&self.tags).unwrap_or(Value::Null));
         map.insert("Counts".to_string(), serde_json::to_value(&self.counts).unwrap_or(Value::Null));
         map
@@ -1998,7 +2119,7 @@ impl CSharpAppResource {
     }
 
     /// Configures HTTPS with a developer certificate
-    pub fn with_https_developer_certificate(&self, password: Option<&ParameterResource>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+    pub fn with_https_developer_certificate(&self, password: Option<&Option<ParameterResource>>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         if let Some(ref v) = password {
@@ -2681,7 +2802,7 @@ impl ContainerImagePushOptions {
     }
 
     /// Gets the RemoteImageName property
-    pub fn remote_image_name(&self) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn remote_image_name(&self) -> Result<Option<String>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.remoteImageName", args)?;
@@ -2699,7 +2820,7 @@ impl ContainerImagePushOptions {
     }
 
     /// Gets the RemoteImageTag property
-    pub fn remote_image_tag(&self) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn remote_image_tag(&self) -> Result<Option<String>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.remoteImageTag", args)?;
@@ -2794,6 +2915,23 @@ impl ContainerImageReference {
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
     }
+
+    /// Gets the Resource property
+    pub fn resource(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerImageReference.resource", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Gets the ValueExpression property
+    pub fn value_expression(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerImageReference.valueExpression", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
 }
 
 /// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerMountAnnotation
@@ -2820,6 +2958,38 @@ impl ContainerMountAnnotation {
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
     }
+
+    /// Gets the Source property
+    pub fn source(&self) -> Result<Option<String>, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerMountAnnotation.source", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Gets the Target property
+    pub fn target(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerMountAnnotation.target", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Gets the Type property
+    pub fn r#type(&self) -> Result<ContainerMountType, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerMountAnnotation.type", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Gets the IsReadOnly property
+    pub fn is_read_only(&self) -> Result<bool, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerMountAnnotation.isReadOnly", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
 }
 
 /// Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerPortReference
@@ -2845,6 +3015,23 @@ impl ContainerPortReference {
 
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
+    }
+
+    /// Gets the Resource property
+    pub fn resource(&self) -> Result<IResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerPortReference.resource", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IResource::new(handle, self.client.clone()))
+    }
+
+    /// Gets the ValueExpression property
+    pub fn value_expression(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/ContainerPortReference.valueExpression", args)?;
+        Ok(serde_json::from_value(result)?)
     }
 }
 
@@ -4157,7 +4344,7 @@ impl ContainerResource {
     }
 
     /// Configures HTTPS with a developer certificate
-    pub fn with_https_developer_certificate(&self, password: Option<&ParameterResource>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+    pub fn with_https_developer_certificate(&self, password: Option<&Option<ParameterResource>>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         if let Some(ref v) = password {
@@ -4891,7 +5078,7 @@ impl DistributedApplicationModel {
     }
 
     /// Finds a resource by name
-    pub fn find_resource_by_name(&self, name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
+    pub fn find_resource_by_name(&self, name: &str) -> Result<Option<IResource>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("model".to_string(), self.handle.to_json());
         args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
@@ -4979,7 +5166,7 @@ impl DockerfileBuilder {
     }
 
     /// Adds Dockerfile stages for published container files
-    pub fn add_container_files_stages(&self, resource: &IResource, logger: Option<&ILogger>) -> Result<DockerfileBuilder, Box<dyn std::error::Error>> {
+    pub fn add_container_files_stages(&self, resource: &IResource, logger: Option<&Option<ILogger>>) -> Result<DockerfileBuilder, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("resource".to_string(), resource.handle().to_json());
@@ -5223,7 +5410,7 @@ impl DockerfileStage {
     }
 
     /// Adds COPY --from statements for published container files
-    pub fn add_container_files(&self, resource: &IResource, root_destination_path: &str, logger: Option<&ILogger>) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
+    pub fn add_container_files(&self, resource: &IResource, root_destination_path: &str, logger: Option<&Option<ILogger>>) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("stage".to_string(), self.handle.to_json());
         args.insert("resource".to_string(), resource.handle().to_json());
@@ -5845,7 +6032,7 @@ impl DotnetToolResource {
     }
 
     /// Configures HTTPS with a developer certificate
-    pub fn with_https_developer_certificate(&self, password: Option<&ParameterResource>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+    pub fn with_https_developer_certificate(&self, password: Option<&Option<ParameterResource>>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         if let Some(ref v) = password {
@@ -6404,7 +6591,7 @@ impl EndpointReference {
     }
 
     /// Gets the ErrorMessage property
-    pub fn error_message(&self) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn error_message(&self) -> Result<Option<String>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointReference.errorMessage", args)?;
@@ -6476,7 +6663,7 @@ impl EndpointReference {
     }
 
     /// Gets the TargetPort property
-    pub fn target_port(&self) -> Result<f64, Box<dyn std::error::Error>> {
+    pub fn target_port(&self) -> Result<Option<f64>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointReference.targetPort", args)?;
@@ -6643,7 +6830,7 @@ impl EndpointUpdateContext {
     }
 
     /// Gets the Port property
-    pub fn port(&self) -> Result<f64, Box<dyn std::error::Error>> {
+    pub fn port(&self) -> Result<Option<f64>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.port", args)?;
@@ -6661,7 +6848,7 @@ impl EndpointUpdateContext {
     }
 
     /// Gets the TargetPort property
-    pub fn target_port(&self) -> Result<f64, Box<dyn std::error::Error>> {
+    pub fn target_port(&self) -> Result<Option<f64>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.targetPort", args)?;
@@ -7520,7 +7707,7 @@ impl ExecutableResource {
     }
 
     /// Configures HTTPS with a developer certificate
-    pub fn with_https_developer_certificate(&self, password: Option<&ParameterResource>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+    pub fn with_https_developer_certificate(&self, password: Option<&Option<ParameterResource>>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         if let Some(ref v) = password {
@@ -8722,6 +8909,14 @@ impl IAspireStore {
         &self.client
     }
 
+    /// Gets the BasePath property
+    pub fn base_path(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/IAspireStore.basePath", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
     /// Gets a deterministic file path for the specified file contents
     pub fn get_file_name_with_content(&self, filename_template: &str, source_filename: &str) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -8785,7 +8980,7 @@ impl IConfiguration {
     }
 
     /// Gets a configuration value by key
-    pub fn get_config_value(&self, key: &str) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn get_config_value(&self, key: &str) -> Result<Option<String>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("configuration".to_string(), self.handle.to_json());
         args.insert("key".to_string(), serde_json::to_value(&key).unwrap_or(Value::Null));
@@ -8794,7 +8989,7 @@ impl IConfiguration {
     }
 
     /// Gets a connection string by name
-    pub fn get_connection_string(&self, name: &str) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn get_connection_string(&self, name: &str) -> Result<Option<String>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("configuration".to_string(), self.handle.to_json());
         args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
@@ -8854,6 +9049,40 @@ impl IConfigurationSection {
 
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
+    }
+
+    /// Gets the Key property
+    pub fn key(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Microsoft.Extensions.Configuration/IConfigurationSection.key", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Gets the Path property
+    pub fn path(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Microsoft.Extensions.Configuration/IConfigurationSection.path", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Gets the Value property
+    pub fn value(&self) -> Result<Option<String>, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Microsoft.Extensions.Configuration/IConfigurationSection.value", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Sets the Value property
+    pub fn set_value(&self, value: &str) -> Result<IConfigurationSection, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Microsoft.Extensions.Configuration/IConfigurationSection.setValue", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IConfigurationSection::new(handle, self.client.clone()))
     }
 }
 
@@ -8978,7 +9207,7 @@ impl IDistributedApplicationBuilder {
     }
 
     /// Adds an executable resource
-    pub fn add_executable(&self, name: &str, command: &str, working_directory: &str, args: Vec<String>) -> Result<ExecutableResource, Box<dyn std::error::Error>> {
+    pub fn add_executable(&self, name: &str, command: &str, working_directory: &str, args: Option<Vec<String>>) -> Result<ExecutableResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
@@ -9141,7 +9370,7 @@ impl IDistributedApplicationBuilder {
     }
 
     /// Adds a C# application resource
-    pub fn add_c_sharp_app(&self, name: &str, path: &str, options: Option<&ProjectResourceOptions>) -> Result<CSharpAppResource, Box<dyn std::error::Error>> {
+    pub fn add_c_sharp_app(&self, name: &str, path: &str, options: Option<&Option<ProjectResourceOptions>>) -> Result<CSharpAppResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
@@ -9404,7 +9633,7 @@ impl IExecutionConfigurationBuilder {
     }
 
     /// Builds the execution configuration
-    pub fn build(&self, execution_context: &DistributedApplicationExecutionContext, resource_logger: Option<&ILogger>, cancellation_token: Option<&CancellationToken>) -> Result<IExecutionConfigurationResult, Box<dyn std::error::Error>> {
+    pub fn build(&self, execution_context: &DistributedApplicationExecutionContext, resource_logger: Option<&Option<ILogger>>, cancellation_token: Option<&CancellationToken>) -> Result<IExecutionConfigurationResult, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         args.insert("executionContext".to_string(), execution_context.handle().to_json());
@@ -9552,6 +9781,60 @@ impl IHostEnvironment {
 
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
+    }
+
+    /// Gets the EnvironmentName property
+    pub fn environment_name(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Microsoft.Extensions.Hosting/IHostEnvironment.environmentName", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Sets the EnvironmentName property
+    pub fn set_environment_name(&self, value: &str) -> Result<IHostEnvironment, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Microsoft.Extensions.Hosting/IHostEnvironment.setEnvironmentName", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IHostEnvironment::new(handle, self.client.clone()))
+    }
+
+    /// Gets the ApplicationName property
+    pub fn application_name(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Microsoft.Extensions.Hosting/IHostEnvironment.applicationName", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Sets the ApplicationName property
+    pub fn set_application_name(&self, value: &str) -> Result<IHostEnvironment, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Microsoft.Extensions.Hosting/IHostEnvironment.setApplicationName", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IHostEnvironment::new(handle, self.client.clone()))
+    }
+
+    /// Gets the ContentRootPath property
+    pub fn content_root_path(&self) -> Result<String, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Microsoft.Extensions.Hosting/IHostEnvironment.contentRootPath", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// Sets the ContentRootPath property
+    pub fn set_content_root_path(&self, value: &str) -> Result<IHostEnvironment, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("value".to_string(), serde_json::to_value(&value).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Microsoft.Extensions.Hosting/IHostEnvironment.setContentRootPath", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(IHostEnvironment::new(handle, self.client.clone()))
     }
 
     /// Checks if running in Development environment
@@ -11348,7 +11631,7 @@ impl PipelineStep {
     }
 
     /// Gets the human-readable description of the step
-    pub fn description(&self) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn description(&self) -> Result<Option<String>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.Pipelines/PipelineStep.description", args)?;
@@ -12132,7 +12415,7 @@ impl ProjectResource {
     }
 
     /// Configures HTTPS with a developer certificate
-    pub fn with_https_developer_certificate(&self, password: Option<&ParameterResource>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+    pub fn with_https_developer_certificate(&self, password: Option<&Option<ParameterResource>>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         if let Some(ref v) = password {
@@ -12674,7 +12957,7 @@ impl ProjectResourceOptions {
     }
 
     /// Gets the LaunchProfileName property
-    pub fn launch_profile_name(&self) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn launch_profile_name(&self) -> Result<Option<String>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/ProjectResourceOptions.launchProfileName", args)?;
@@ -12957,7 +13240,7 @@ impl ResourceNotificationService {
     }
 
     /// Tries to get the current state of a resource
-    pub fn try_get_resource_state(&self, resource_name: &str) -> Result<ResourceEventDto, Box<dyn std::error::Error>> {
+    pub fn try_get_resource_state(&self, resource_name: &str) -> Result<Option<ResourceEventDto>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("notificationService".to_string(), self.handle.to_json());
         args.insert("resourceName".to_string(), serde_json::to_value(&resource_name).unwrap_or(Value::Null));
@@ -13131,7 +13414,7 @@ impl ResourceUrlsCallbackContext {
     }
 
     /// Gets an endpoint reference from the associated resource
-    pub fn get_endpoint(&self, name: &str) -> Result<EndpointReference, Box<dyn std::error::Error>> {
+    pub fn get_endpoint(&self, name: &str) -> Result<Option<EndpointReference>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
@@ -13227,7 +13510,7 @@ impl TestCallbackContext {
     }
 
     /// Gets the Name property
-    pub fn name(&self) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn name(&self) -> Result<Option<String>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.name", args)?;
@@ -14057,7 +14340,7 @@ impl TestDatabaseResource {
     }
 
     /// Configures HTTPS with a developer certificate
-    pub fn with_https_developer_certificate(&self, password: Option<&ParameterResource>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+    pub fn with_https_developer_certificate(&self, password: Option<&Option<ParameterResource>>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         if let Some(ref v) = password {
@@ -14633,7 +14916,7 @@ impl TestEnvironmentContext {
     }
 
     /// Gets the Description property
-    pub fn description(&self) -> Result<String, Box<dyn std::error::Error>> {
+    pub fn description(&self) -> Result<Option<String>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.description", args)?;
@@ -15481,7 +15764,7 @@ impl TestRedisResource {
     }
 
     /// Configures HTTPS with a developer certificate
-    pub fn with_https_developer_certificate(&self, password: Option<&ParameterResource>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+    pub fn with_https_developer_certificate(&self, password: Option<&Option<ParameterResource>>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         if let Some(ref v) = password {
@@ -16971,7 +17254,7 @@ impl TestVaultResource {
     }
 
     /// Configures HTTPS with a developer certificate
-    pub fn with_https_developer_certificate(&self, password: Option<&ParameterResource>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
+    pub fn with_https_developer_certificate(&self, password: Option<&Option<ParameterResource>>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         if let Some(ref v) = password {
