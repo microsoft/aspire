@@ -77,10 +77,14 @@ public class UpgradeInstructionProviderTests
         // <tool-path>/<rid>/<v>/tools/<tfm>/<rid>/aspire and its sibling .store
         // directory makes the path-shape detector recognize it. The tool path
         // is emitted unquoted when it contains no whitespace (see
-        // DotNetToolDetection.QuoteCommandArgument).
-        var toolPath = "/opt/my-aspire";
+        // DotNetToolDetection.QuoteCommandArgument). Build the path using
+        // Path.DirectorySeparatorChar so the test passes on both Unix (where
+        // it's `/`) and Windows (where DotNetToolDetection.NormalizeDirectorySeparators
+        // produces `\` separators in the extracted toolPath).
+        var s = Path.DirectorySeparatorChar;
+        var toolPath = $"{s}opt{s}my-aspire";
         using var processPathScope = DotNetToolDetection.UseProcessPathForTesting(
-            $"{toolPath}/.store/aspire.cli/9.4.0/aspire.cli.linux-x64/9.4.0/tools/net10.0/linux-x64/aspire");
+            $"{toolPath}{s}.store{s}aspire.cli{s}9.4.0{s}aspire.cli.linux-x64{s}9.4.0{s}tools{s}net10.0{s}linux-x64{s}aspire");
 
         var command = s_provider.GetUpdateCommand(InstallSource.DotnetTool, processPath: null, identityChannel: "stable");
 
@@ -92,10 +96,11 @@ public class UpgradeInstructionProviderTests
     {
         // Paths with whitespace get quoted by DotNetToolDetection.QuoteCommandArgument
         // so the resulting command remains a single argv element when copy-pasted
-        // into a shell.
-        var toolPath = "/opt/My Aspire";
+        // into a shell. Platform-native separators (see ToolPath test for context).
+        var s = Path.DirectorySeparatorChar;
+        var toolPath = $"{s}opt{s}My Aspire";
         using var processPathScope = DotNetToolDetection.UseProcessPathForTesting(
-            $"{toolPath}/.store/aspire.cli/9.4.0/aspire.cli.linux-x64/9.4.0/tools/net10.0/linux-x64/aspire");
+            $"{toolPath}{s}.store{s}aspire.cli{s}9.4.0{s}aspire.cli.linux-x64{s}9.4.0{s}tools{s}net10.0{s}linux-x64{s}aspire");
 
         var command = s_provider.GetUpdateCommand(InstallSource.DotnetTool, processPath: null, identityChannel: "stable");
 
