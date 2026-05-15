@@ -1,4 +1,4 @@
-import { createBuilder, DeploymentScope, refExpr } from './.modules/aspire.js';
+import { createBuilder, DeploymentScope, refExpr } from './.aspire/modules/aspire.js';
 
 const builder = await createBuilder();
 

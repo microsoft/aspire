@@ -1,4 +1,4 @@
-import { createBuilder } from './.modules/aspire.js';
+import { createBuilder } from './.aspire/modules/aspire.js';
 
 const builder = await createBuilder();
 const password = await builder.addParameter('valkey-password', { secret: true });

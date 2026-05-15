@@ -1,7 +1,7 @@
 // Aspire TypeScript AppHost — Azure Functions validation
 // Exercises every exported member of Aspire.Hosting.Azure.Functions
 
-import { createBuilder } from './.modules/aspire.js';
+import { createBuilder } from './.aspire/modules/aspire.js';
 
 const builder = await createBuilder();
 

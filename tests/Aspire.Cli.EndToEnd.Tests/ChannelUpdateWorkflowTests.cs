@@ -128,7 +128,7 @@ public sealed class ChannelUpdateWorkflowTests(ITestOutputHelper output)
         // would have nothing to assert against.
         await File.WriteAllTextAsync(appHostPath,
             """
-            import { createBuilder } from './.modules/aspire.js';
+            import { createBuilder } from './.aspire/modules/aspire.js';
 
             const builder = await createBuilder();
             await builder.addRedis("cache");

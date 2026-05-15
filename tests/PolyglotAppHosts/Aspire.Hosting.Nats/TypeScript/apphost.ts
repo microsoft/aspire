@@ -1,7 +1,7 @@
 // Aspire TypeScript AppHost — NATS integration validation
 // Exercises all [AspireExport] methods for Aspire.Hosting.Nats
 
-import { createBuilder } from './.modules/aspire.js';
+import { createBuilder } from './.aspire/modules/aspire.js';
 
 const builder = await createBuilder();
 

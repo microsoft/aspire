@@ -1,4 +1,4 @@
-import { AzureAppConfigurationRole, createBuilder } from './.modules/aspire.js';
+import { AzureAppConfigurationRole, createBuilder } from './.aspire/modules/aspire.js';
 
 const builder = await createBuilder();
 

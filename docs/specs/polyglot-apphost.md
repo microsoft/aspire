@@ -240,7 +240,7 @@ flowchart TB
     subgraph Guest["Guest Process"]
         direction TB
         UserCode["User Code<br/>(apphost.ts)"]
-        SDK["Generated SDK<br/>(.modules/aspire.js)"]
+        SDK["Generated SDK<br/>(.aspire/modules/aspire.js)"]
         ATSClient["ATS Client"]
         UserCode --> SDK --> ATSClient
     end
@@ -951,7 +951,7 @@ The CLI generates language-specific SDKs from ATS capabilities.
 
 ### When It Runs
 
-- First run (no `.modules/` folder)
+- First run (no `.aspire/modules/` folder)
 - Package hash changed (after `aspire add`)
 - Development mode (`ASPIRE_REPO_ROOT` set)
 
@@ -1070,7 +1070,7 @@ flowchart LR
 ### Output (TypeScript)
 
 ```text
-.modules/
+.aspire/modules/
 ├── .codegen-hash     # Hash of package references for cache invalidation
 ├── aspire.ts         # Generated SDK (builder classes, wrapper registrations)
 ├── base.ts           # Base classes, ReferenceExpression, AspireDict, AspireList
@@ -1112,7 +1112,7 @@ Primitive type mapping:
 ### Generated SDK Usage
 
 ```typescript
-import { createBuilder, refExpr, EnvironmentCallbackContext } from './.modules/aspire.js';
+import { createBuilder, refExpr, EnvironmentCallbackContext } from './.aspire/modules/aspire.js';
 
 const builder = await createBuilder();
 
@@ -1204,7 +1204,7 @@ await api.withEnvironment("REDIS_URL", connectionString);
 Enums are generated as TypeScript enums with string values matching the C# member names:
 
 ```typescript
-import { createBuilder, ContainerLifetime } from './.modules/aspire.js';
+import { createBuilder, ContainerLifetime } from './.aspire/modules/aspire.js';
 
 const builder = await createBuilder();
 
@@ -1651,13 +1651,13 @@ The `-d` (or `--debug`) flag enables additional diagnostic output, useful when d
 
 ### Development Workflow Tips
 
-1. **Rapid iteration**: With `ASPIRE_REPO_ROOT` set, the generated SDK in `.modules/` is regenerated on each run, so changes to code generation logic are immediately reflected.
+1. **Rapid iteration**: With `ASPIRE_REPO_ROOT` set, the generated SDK in `.aspire/modules/` is regenerated on each run, so changes to code generation logic are immediately reflected.
 
 2. **Testing code generators**: Modify your `ICodeGenerator` implementation, then run `aspire run` in a test app—the new generated code will be produced automatically.
 
 3. **Testing language support**: Modify your `ILanguageSupport` implementation, then use `aspire init --language <language>` to test scaffolding or `aspire run` to test detection and execution.
 
-4. **Inspecting generated code**: Check the `.modules/` folder in your test app to see the generated SDK files and verify they match your expectations.
+4. **Inspecting generated code**: Check the `.aspire/modules/` folder in your test app to see the generated SDK files and verify they match your expectations.
 
 ### Quick Reference
 

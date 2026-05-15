@@ -10,6 +10,6 @@
     "rootDir": ".",
     "strict": true
   },
-  "include": ["apphost.ts", ".modules/**/*.ts"],
+  "include": ["apphost.ts", ".aspire/modules/**/*.ts"],
   "exclude": ["node_modules"]
 }

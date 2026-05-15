@@ -69,8 +69,8 @@ public sealed class TypeScriptReusablePackageTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
         await auto.WaitForSuccessPromptAsync(counter);
 
-        var helperModulesDirectory = Path.Combine(helperDirectory.FullName, ".modules");
-        Assert.True(Directory.Exists(helperModulesDirectory), $".modules directory was not created for helper package at {helperModulesDirectory}");
+        var helperModulesDirectory = Path.Combine(helperDirectory.FullName, ".aspire/modules");
+        Assert.True(Directory.Exists(helperModulesDirectory), $".aspire/modules directory was not created for helper package at {helperModulesDirectory}");
         Assert.Contains("addRedis", File.ReadAllText(Path.Combine(helperModulesDirectory, "aspire.ts")));
 
         await auto.TypeAsync("npx tsc --noEmit");
@@ -107,7 +107,7 @@ public sealed class TypeScriptReusablePackageTests(ITestOutputHelper output)
     private static void RewriteAppHostFiles(DirectoryInfo appDirectory)
     {
         File.WriteAllText(Path.Combine(appDirectory.FullName, "apphost.ts"), """
-            import { createBuilder, refExpr } from './.modules/aspire.js';
+            import { createBuilder, refExpr } from './.aspire/modules/aspire.js';
             import { configureRedis } from '../packages/aspire-commands/src/index.js';
 
             const builder = await createBuilder();
@@ -133,9 +133,9 @@ public sealed class TypeScriptReusablePackageTests(ITestOutputHelper output)
               },
               "include": [
                 "apphost.ts",
-                ".modules/**/*.ts",
+                ".aspire/modules/**/*.ts",
                 "../packages/aspire-commands/src/**/*.ts",
-                "../packages/aspire-commands/.modules/**/*.ts"
+                "../packages/aspire-commands/.aspire/modules/**/*.ts"
               ],
               "exclude": [
                 "node_modules"
@@ -191,7 +191,7 @@ public sealed class TypeScriptReusablePackageTests(ITestOutputHelper output)
               },
               "include": [
                 "src/**/*.ts",
-                ".modules/**/*.ts"
+                ".aspire/modules/**/*.ts"
               ],
               "exclude": [
                 "node_modules"
@@ -205,7 +205,7 @@ public sealed class TypeScriptReusablePackageTests(ITestOutputHelper output)
                 ExecuteCommandResult,
                 RedisResource,
                 ReferenceExpression
-            } from '../.modules/aspire.js';
+            } from '../.aspire/modules/aspire.js';
 
             export async function configureRedis(
                 redis: RedisResource,

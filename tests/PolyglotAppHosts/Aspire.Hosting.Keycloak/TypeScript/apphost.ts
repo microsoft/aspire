@@ -1,4 +1,4 @@
-import { createBuilder, OtlpProtocol } from './.modules/aspire.js';
+import { createBuilder, OtlpProtocol } from './.aspire/modules/aspire.js';
 
 const builder = await createBuilder();
 
