@@ -91,23 +91,30 @@ public sealed class TestEnvironment : IDisposable
                 goto :api_arg_loop
 
                 :api_args_done
-                if not "%HAS_JQ%"=="true" (
-                    echo {"_mock_missing_jq":true}
-                    exit 1
-                )
-
                 if "%ENDPOINT%"=="graphql" (
+                    if not "%HAS_JQ%"=="true" (
+                        echo {"_mock_missing_jq":true}
+                        exit 1
+                    )
                     echo abc123def456789012345678901234567890abcd
                     exit 0
                 )
                 echo "%ENDPOINT%" | findstr /C:"/pulls/" >nul 2>&1
                 if not errorlevel 1 (
+                    if not "%HAS_JQ%"=="true" (
+                        echo {"_mock_missing_jq":true}
+                        exit 1
+                    )
                     echo abc123def456789012345678901234567890abcd
                     exit 0
                 )
                 echo "%ENDPOINT%" | findstr /C:"/actions/workflows/" >nul 2>&1
                 if not errorlevel 1 (
-                    echo 987654321
+                    if "%HAS_JQ%"=="true" (
+                        echo 987654321
+                    ) else (
+                        echo {"workflow_runs":[{"id":987654321,"conclusion":"success"}]}
+                    )
                     exit 0
                 )
                 echo {}
@@ -228,20 +235,23 @@ public sealed class TestEnvironment : IDisposable
                         esac
                     done
 
-                    if [ -z "$jq_filter" ]; then
-                        echo '{"_mock_missing_jq":true}'
-                        exit 1
-                    fi
-
                     # PR head SHA lookup: repos/.../pulls/<number>
                     if echo "$endpoint" | grep -q "/pulls/"; then
+                        if [ -z "$jq_filter" ]; then
+                            echo '{"_mock_missing_jq":true}'
+                            exit 1
+                        fi
                         echo "abc123def456789012345678901234567890abcd"
                         exit 0
                     fi
 
                     # Workflow run lookup: repos/.../actions/workflows/...
                     if echo "$endpoint" | grep -q "/actions/workflows/"; then
-                        echo "987654321"
+                        if [ -n "$jq_filter" ]; then
+                            echo "987654321"
+                        else
+                            echo '{"workflow_runs":[{"id":987654321,"conclusion":"success"}]}'
+                        fi
                         exit 0
                     fi
 
