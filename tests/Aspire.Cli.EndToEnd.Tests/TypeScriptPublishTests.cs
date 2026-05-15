@@ -60,7 +60,7 @@ public sealed class TypeScriptPublishTests(ITestOutputHelper output)
 
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
         var newContent = """
-            import { createBuilder } from './.modules/aspire.js';
+            import { createBuilder } from './.aspire/modules/aspire.js';
 
             const builder = await createBuilder();
 
@@ -153,7 +153,7 @@ public sealed class TypeScriptPublishTests(ITestOutputHelper output)
 
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
         var newContent = """
-            import { createBuilder } from './.modules/aspire.js';
+            import { createBuilder } from './.aspire/modules/aspire.js';
 
             const builder = await createBuilder();
 
@@ -235,7 +235,7 @@ public sealed class TypeScriptPublishTests(ITestOutputHelper output)
 
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
         var newContent = """
-            import { createBuilder } from './.modules/aspire.js';
+            import { createBuilder } from './.aspire/modules/aspire.js';
 
             const builder = await createBuilder();
 

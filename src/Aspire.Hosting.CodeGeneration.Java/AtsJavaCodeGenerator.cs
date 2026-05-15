@@ -59,7 +59,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
             files.Keys
                 .Where(static key => key.EndsWith(".java", StringComparison.Ordinal))
                 .OrderBy(static key => key, StringComparer.Ordinal)
-                .Select(static key => $".modules/{key}")) + '\n';
+                .Select(static key => $".aspire/modules/{key}")) + '\n';
 
         return files;
     }

@@ -1,7 +1,7 @@
 // Aspire TypeScript AppHost — Azure Application Insights validation
 // Exercises exported members of Aspire.Hosting.Azure.ApplicationInsights
 
-import { createBuilder } from './.modules/aspire.js';
+import { createBuilder } from './.aspire/modules/aspire.js';
 
 const builder = await createBuilder();
 

@@ -96,7 +96,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
             // Aspire TypeScript AppHost
             // For more information, see: https://aspire.dev
 
-            import { createBuilder } from './.modules/aspire.js';
+            import { createBuilder } from './.aspire/modules/aspire.js';
 
             const builder = await createBuilder();
 
@@ -240,7 +240,7 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
             // Aspire TypeScript AppHost
             // For more information, see: https://aspire.dev
 
-            import { createBuilder } from './.modules/aspire.js';
+            import { createBuilder } from './.aspire/modules/aspire.js';
 
             const builder = await createBuilder();
 

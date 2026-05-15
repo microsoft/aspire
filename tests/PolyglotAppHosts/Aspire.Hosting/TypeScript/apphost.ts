@@ -10,8 +10,8 @@ import {
     OtlpProtocol,
     ProbeType,
     refExpr,
-} from './.modules/aspire.js';
-import type { DockerfileBuilderCallbackContext } from './.modules/aspire.js';
+} from './.aspire/modules/aspire.js';
+import type { DockerfileBuilderCallbackContext } from './.aspire/modules/aspire.js';
 import { fileURLToPath } from 'node:url';
 
 const builder = await createBuilder();

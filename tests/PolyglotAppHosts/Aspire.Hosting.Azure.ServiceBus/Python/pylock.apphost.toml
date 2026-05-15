@@ -7,4 +7,4 @@ name = "aspire_app"
 editable = true
 
 [packages.directory]
-path = ".modules"
+path = ".aspire/modules"

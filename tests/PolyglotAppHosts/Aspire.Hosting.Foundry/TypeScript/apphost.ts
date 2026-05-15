@@ -1,4 +1,4 @@
-import { AzureContainerRegistryRole, FoundryModels, type FoundryModel, createBuilder } from './.modules/aspire.js';
+import { AzureContainerRegistryRole, FoundryModels, type FoundryModel, createBuilder } from './.aspire/modules/aspire.js';
 
 const builder = await createBuilder();
 

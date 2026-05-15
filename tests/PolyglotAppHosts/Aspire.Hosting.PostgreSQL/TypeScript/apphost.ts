@@ -1,7 +1,7 @@
 // Aspire TypeScript AppHost - PostgreSQL Integration Validation
 // Validates all [AspireExport] methods for Aspire.Hosting.PostgreSQL
 
-import { createBuilder } from './.modules/aspire.js';
+import { createBuilder } from './.aspire/modules/aspire.js';
 
 const builder = await createBuilder();
 

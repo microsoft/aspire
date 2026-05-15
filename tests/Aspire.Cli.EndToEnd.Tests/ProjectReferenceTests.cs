@@ -126,8 +126,8 @@ public sealed class ProjectReferenceTests(ITestOutputHelper output)
             var updatedJson = config.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
             File.WriteAllText(configPath, updatedJson);
 
-            // Delete the generated .modules folder to force re-codegen with the new integration
-            var modulesDir = Path.Combine(workDir, ".modules");
+            // Delete the generated .aspire/modules folder to force re-codegen with the new integration
+            var modulesDir = Path.Combine(workDir, ".aspire/modules");
             if (Directory.Exists(modulesDir))
             {
                 Directory.Delete(modulesDir, recursive: true);
@@ -135,7 +135,7 @@ public sealed class ProjectReferenceTests(ITestOutputHelper output)
 
             // Update apphost.ts to use the custom integration
             File.WriteAllText(Path.Combine(workDir, "apphost.ts"), """
-                import { createBuilder } from './.modules/aspire.js';
+                import { createBuilder } from './.aspire/modules/aspire.js';
 
                 const builder = await createBuilder();
                 await builder.addMyService("my-svc");
@@ -163,7 +163,7 @@ public sealed class ProjectReferenceTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(10));
 
         // Step 4: Verify the custom integration was code-generated
-        await auto.TypeAsync("grep addMyService .modules/aspire.ts");
+        await auto.TypeAsync("grep addMyService .aspire/modules/aspire.ts");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("addMyService", timeout: TimeSpan.FromSeconds(5));
         await auto.WaitForSuccessPromptAsync(counter);

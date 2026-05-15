@@ -267,7 +267,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
         // Step 4: Generate SDK code via RPC
         // This must happen before dependency installation because the generated
-        // code directory (.modules) may not exist yet and dependency files reference it.
+        // code directory (.aspire/modules) may not exist yet and dependency files reference it.
         await GenerateCodeViaRpcAsync(
             directory.FullName,
             rpcClient,
@@ -438,7 +438,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
             // Step 6: Generate SDK code via RPC if needed
             // This must happen before dependency installation because the generated
-            // code directory (.modules) may not exist yet (e.g., freshly cloned project)
+            // code directory (.aspire/modules) may not exist yet (e.g., freshly cloned project)
             // and dependency files (pylock.toml, requirements.txt) reference it.
             if (buildResult.NeedsCodeGen)
             {
@@ -912,7 +912,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
             // Step 4: Generate code via RPC if needed
             // This must happen before dependency installation because the generated
-            // code directory (.modules) may not exist yet (e.g., freshly cloned project)
+            // code directory (.aspire/modules) may not exist yet (e.g., freshly cloned project)
             // and dependency files (pylock.toml, requirements.txt) reference it.
             if (needsCodeGen)
             {
