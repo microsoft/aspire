@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
-import type { ServerReadyAction } from '../debugger/launchProfiles';
+import type { VSCodeServerReadyAction } from '../debugger/vscode/serverReadyAction';
 
 export interface ErrorResponse {
     error: ErrorDetails;
@@ -17,7 +17,7 @@ type LaunchConfigurationMode = "Debug" | "NoDebug";
 export interface ExecutableLaunchConfiguration {
     type: string;
     mode?: LaunchConfigurationMode | undefined;
-    serverReadyAction?: ServerReadyAction;
+    serverReadyAction?: VSCodeServerReadyAction;
 }
 
 export interface ProjectLaunchConfiguration extends ExecutableLaunchConfiguration {
@@ -94,7 +94,7 @@ export interface DebugLaunchSettings {
     args?: string[];
     launchProfile?: string;
     disableLaunchProfile?: boolean;
-    serverReadyAction?: ServerReadyAction;
+    serverReadyAction?: VSCodeServerReadyAction;
 }
 
 export interface DcpServerConnectionInfo {
@@ -157,7 +157,7 @@ export interface AspireResourceExtendedDebugConfiguration extends vscode.DebugCo
     debugSessionId: string | null;
     projectFile?: string;
     isApphost?: boolean;
-    serverReadyAction?: ServerReadyAction;
+    serverReadyAction?: VSCodeServerReadyAction;
 }
 
 export type AspireCommandType = 'run' | 'deploy' | 'publish' | 'do';
