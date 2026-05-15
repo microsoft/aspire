@@ -422,7 +422,17 @@ internal sealed class RunCommand : BaseCommand
             using (var lifetimeActivity = _profilingTelemetry.StartRunAppHostLifetime())
             {
                 runActivity?.Stop();
-                await pendingLogCapture;
+
+                try
+                {
+                    await pendingLogCapture;
+                }
+                catch (Exception ex)
+                {
+                    InteractionService.DisplayError("Error capturing logs from AppHost.");
+                    _logger.LogError(ex, "Error capturing logs from AppHost.");
+                }
+
                 var exitCode = await pendingRun;
                 lifetimeActivity.SetProcessExitCode(exitCode);
 

@@ -25,16 +25,13 @@ internal class AppHostRpcTarget(
 
     public async IAsyncEnumerable<BackchannelLogEntry> GetAppHostLogEntriesAsync([EnumeratorCancellation] CancellationToken cancellationToken)
     {
+        // Cancel immediately if shutdown has already been requested.
+        // Throw error rather than exiting to avoid clients retrying call.
+        _shutdownCts.Token.ThrowIfCancellationRequested();
+
         // Create a linked token source that will be cancelled when shutdown is requested
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token);
         var linkedToken = linkedCts.Token;
-
-        // If cancellation was already requested, exit immediately to avoid subscribing to log events unnecessarily.
-        // This can happen if the app host is shutting down.
-        if (linkedToken.IsCancellationRequested)
-        {
-            yield break;
-        }
 
         var loggerProvider = serviceProvider.GetService<BackchannelLoggerProvider>();
         if (loggerProvider is null)
@@ -68,16 +65,13 @@ internal class AppHostRpcTarget(
 
     public async IAsyncEnumerable<PublishingActivity> GetPublishingActivitiesAsync([EnumeratorCancellation] CancellationToken cancellationToken)
     {
+        // Cancel immediately if shutdown has already been requested.
+        // Throw error rather than exiting to avoid clients retrying call.
+        _shutdownCts.Token.ThrowIfCancellationRequested();
+
         // Create a linked token source that will be cancelled when shutdown is requested
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token);
         var linkedToken = linkedCts.Token;
-
-        // If cancellation was already requested, exit immediately to avoid subscribing to log events unnecessarily.
-        // This can happen if the app host is shutting down.
-        if (linkedToken.IsCancellationRequested)
-        {
-            yield break;
-        }
 
         while (!linkedToken.IsCancellationRequested)
         {
@@ -106,16 +100,13 @@ internal class AppHostRpcTarget(
 
     public async IAsyncEnumerable<RpcResourceState> GetResourceStatesAsync([EnumeratorCancellation] CancellationToken cancellationToken)
     {
+        // Cancel immediately if shutdown has already been requested.
+        // Throw error rather than exiting to avoid clients retrying call.
+        _shutdownCts.Token.ThrowIfCancellationRequested();
+
         // Create a linked token source that will be cancelled when shutdown is requested
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token);
         var linkedToken = linkedCts.Token;
-
-        // If cancellation was already requested, exit immediately to avoid subscribing to log events unnecessarily.
-        // This can happen if the app host is shutting down.
-        if (linkedToken.IsCancellationRequested)
-        {
-            yield break;
-        }
 
         var resourceEvents = resourceNotificationService.WatchAsync(linkedToken);
 
@@ -123,7 +114,7 @@ internal class AppHostRpcTarget(
         // since yield return cannot appear in a try/catch block.
         await foreach (var resourceEvent in AsyncEnumerableUtils.ReadUntilCancelledAsync(resourceEvents, linkedToken).ConfigureAwait(false))
         {
-            if (resourceEvent.Resource.Name == "aspire-dashboard")
+            if (string.Equals(resourceEvent.Resource.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName))
             {
                 // Skip the dashboard resource, as it is handled separately.
                 continue;
