@@ -430,8 +430,15 @@ internal sealed class RunCommand : BaseCommand
                 // retry loops (e.g. log capture) stop instead of reconnecting endlessly.
                 _ = pendingRun.ContinueWith(_ =>
                 {
-                    //backchannel.NotifyAppHostExited();
-                    cts.Cancel();
+                    try
+                    {
+                        cts.Cancel();
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        // The CTS may already be disposed if pendingLogCapture completed
+                        // independently (e.g. connection lost) before this callback ran.
+                    }
                 }, TaskScheduler.Default);
 
                 try
