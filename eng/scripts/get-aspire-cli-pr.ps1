@@ -1127,7 +1127,13 @@ function Test-ToolModeRuntimeIdentifier {
     $hostArch = Get-CLIArchitectureFromArchitecture "<auto>"
 
     if ($targetOS -ne $Script:HostOS -or $targetArch -ne $hostArch) {
-        throw "-InstallMode Tool cannot target $targetOS-$targetArch from this $($Script:HostOS)-$hostArch host. dotnet tool install resolves RID-specific packages for the current host. Run tool mode on the target machine, or use archive mode for cross-RID downloads."
+        # Split the message across Write-Message + throw so the second sentence isn't
+        # truncated by PowerShell 7's ConciseView when the exception is rendered. See
+        # the parallel Bash twin in get-aspire-cli-pr.sh which uses say_error + say_info,
+        # and the same pattern used elsewhere in this script (e.g. -HiveOnly + -InstallMode Tool).
+        Write-Message "-InstallMode Tool cannot target $targetOS-$targetArch from this $($Script:HostOS)-$hostArch host." -Level Error
+        Write-Message "dotnet tool install resolves RID-specific packages for the current host. Run tool mode on the target machine, or use archive mode for cross-RID downloads." -Level Info
+        throw "-InstallMode Tool cannot target $targetOS-$targetArch from this $($Script:HostOS)-$hostArch host."
     }
 }
 
