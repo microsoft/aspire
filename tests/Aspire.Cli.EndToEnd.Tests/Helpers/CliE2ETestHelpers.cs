@@ -134,7 +134,7 @@ internal static class CliE2ETestHelpers
         PolyglotJava,
     }
 
-    private const string PolyglotBaseImageName = "aspire-e2e-polyglot-base";
+    private const string PolyglotBaseImageName = "mcr.microsoft.com/dotnet/aspire/e2e-polyglot-base:local";
     private const string PodmanBaseImageName = "aspire-e2e-podman-base";
     private static readonly object s_polyglotBaseImageLock = new();
     private static readonly object s_podmanBaseImageLock = new();

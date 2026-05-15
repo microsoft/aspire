@@ -1,7 +1,7 @@
 # Polyglot Dockerfile for Java AppHost E2E tests.
 # Extends the shared polyglot base with the JDK required by Java AppHosts.
 
-FROM aspire-e2e-polyglot-base
+FROM mcr.microsoft.com/dotnet/aspire/e2e-polyglot-base:local
 
 ARG UBUNTU_APT_MIRROR=
 
