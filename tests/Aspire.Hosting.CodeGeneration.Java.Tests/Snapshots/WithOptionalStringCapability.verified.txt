@@ -1,4 +1,4 @@
-{
+﻿{
   CapabilityId: Aspire.Hosting.CodeGeneration.Java.Tests/withOptionalString,
   MethodName: withOptionalString,
   QualifiedMethodName: withOptionalString,

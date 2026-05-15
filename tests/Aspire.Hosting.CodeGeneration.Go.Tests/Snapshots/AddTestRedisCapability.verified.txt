@@ -1,4 +1,4 @@
-{
+﻿{
   CapabilityId: Aspire.Hosting.CodeGeneration.Go.Tests/addTestRedis,
   MethodName: addTestRedis,
   QualifiedMethodName: addTestRedis,

@@ -1,4 +1,4 @@
-{
+﻿{
   CapabilityId: Aspire.Hosting.CodeGeneration.Go.Tests/withPersistence,
   MethodName: withPersistence,
   QualifiedMethodName: withPersistence,

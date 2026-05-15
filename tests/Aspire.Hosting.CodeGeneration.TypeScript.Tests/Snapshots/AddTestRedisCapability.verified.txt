@@ -1,4 +1,4 @@
-{
+﻿{
   CapabilityId: Aspire.Hosting.CodeGeneration.TypeScript.Tests/addTestRedis,
   MethodName: addTestRedis,
   QualifiedMethodName: addTestRedis,

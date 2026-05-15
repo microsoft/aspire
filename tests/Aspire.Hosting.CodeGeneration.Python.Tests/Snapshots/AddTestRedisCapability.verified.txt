@@ -1,4 +1,4 @@
-{
+﻿{
   CapabilityId: Aspire.Hosting.CodeGeneration.Python.Tests/addTestRedis,
   MethodName: addTestRedis,
   QualifiedMethodName: addTestRedis,
