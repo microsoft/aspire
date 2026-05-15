@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Infrastructure change to aspire.dev AppHost, not product documentation",
+  "mergedAt": "2026-05-15T01:35:11Z",
+  "number": 967,
+  "runDate": "2026-05-15T03:10:00Z",
+  "status": "excluded",
+  "title": "Use Aspire Front Door integration"
+}

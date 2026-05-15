@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs site UI restructuring, not product documentation",
+  "mergedAt": "2026-05-15T01:43:03Z",
+  "number": 962,
+  "runDate": "2026-05-15T03:10:00Z",
+  "status": "excluded",
+  "title": "Restructure docs sidebar: always-visible topics, full-width filter, anchored toggle"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Release process automation: chains GitHub release tasks into AzDO pipeline",
+  "mergedAt": "2026-05-15T02:16:04Z",
+  "number": 17073,
+  "runDate": "2026-05-15T03:10:00Z",
+  "status": "included",
+  "title": "Chain release-github-tasks workflow from AzDO release pipeline"
+}

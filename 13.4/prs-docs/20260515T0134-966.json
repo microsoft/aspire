@@ -1,0 +1,9 @@
+{
+  "author": "app/dependabot",
+  "comment": "Dependency version bump, not product documentation",
+  "mergedAt": "2026-05-15T01:34:16Z",
+  "number": 966,
+  "runDate": "2026-05-15T03:10:00Z",
+  "status": "excluded",
+  "title": "build(deps): bump devalue from 5.8.0 to 5.8.1 in /src/frontend"
+}

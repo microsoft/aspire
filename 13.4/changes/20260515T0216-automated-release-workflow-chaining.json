@@ -1,0 +1,19 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "\ud83d\udd27",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The release process now automatically chains GitHub release tasks (tagging, GitHub Release creation, merge-back and baseline PRs) directly from the AzDO NuGet publish pipeline, so release managers only need to kick off a single AzDO pipeline run.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\ude80",
+  "firstMergedAt": "2026-05-15T02:16:04Z",
+  "lastMergedAt": "2026-05-15T02:16:04Z",
+  "name": "Automated release workflow chaining",
+  "owner": "joperezr",
+  "prs": [
+    17073
+  ]
+}
