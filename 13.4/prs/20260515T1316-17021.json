@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Updates built-in resource commands to use structured Arguments on ResourceCommandAnnotation — grouped with existing resource command arguments entry",
+  "mergedAt": "2026-05-15T13:16:18Z",
+  "number": 17021,
+  "runDate": "2026-05-15T14:53:43Z",
+  "status": "included",
+  "title": "Use arguments for built-in resource commands"
+}
