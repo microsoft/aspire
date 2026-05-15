@@ -1,0 +1,21 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@ellahathaway"
+  ],
+  "description": "Fixed `aspire new` not catching `NuGetPackageCacheException`, which caused NuGet feed failures (offline, bad config, expired auth) to surface as unexpected error stack traces instead of friendly messages.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-05-14T23:39:01Z",
+  "lastMergedAt": "2026-05-14T23:39:01Z",
+  "name": "Fix NuGet feed error handling in aspire new",
+  "owner": "JamesNK",
+  "prs": [
+    17061
+  ]
+}

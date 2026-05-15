@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Bug fix: NuGet feed error handling in aspire new",
+  "mergedAt": "2026-05-14T23:39:01Z",
+  "number": 17061,
+  "runDate": "2026-05-15T00:33:31Z",
+  "status": "included",
+  "title": "Catch NuGetPackageCacheException in aspire new"
+}
