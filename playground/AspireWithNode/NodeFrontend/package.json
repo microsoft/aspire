@@ -32,12 +32,12 @@
   },
   "overrides": {
     "uuid": "14.0.0",
-    "protobufjs": "7.5.8"
+    "protobufjs": "8.2.0"
   },
   "pnpm": {
     "overrides": {
       "uuid": "14.0.0",
-      "protobufjs": "7.5.8"
+      "protobufjs": "8.2.0"
     }
   }
 }
