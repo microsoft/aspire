@@ -25,24 +25,67 @@ jobs:
           ./dotnet.sh build src/Aspire.Cli/Aspire.Cli.csproj --configuration Release
           ./dotnet.sh build tools/TypeScriptApiCompat/TypeScriptApiCompat.csproj --configuration Release
 
-      - name: Extract base ATS baseline
+      - name: Generate base ATS surface
         shell: bash
         env:
           BASE_BRANCH: ${{ github.base_ref }}
         run: |
           set -euo pipefail
 
-          BASE_REF="origin/${BASE_BRANCH}"
+          BASE_WORKTREE="${RUNNER_TEMP}/base-worktree"
           BASELINE_DIR="${RUNNER_TEMP}/ats-baseline"
-          mkdir -p "$BASELINE_DIR"
 
           git fetch --no-tags --depth=1 origin "+refs/heads/${BASE_BRANCH}:refs/remotes/origin/${BASE_BRANCH}"
-          git ls-tree -r --name-only "$BASE_REF" -- src | grep '\.ats\.txt$' > "${RUNNER_TEMP}/ats-baseline-files.txt"
+          git worktree add --detach "$BASE_WORKTREE" "origin/${BASE_BRANCH}"
+
+          pushd "$BASE_WORKTREE"
+          ./restore.sh
+          ./dotnet.sh build src/Aspire.Cli/Aspire.Cli.csproj --configuration Release
+
+          export ASPIRE_REPO_ROOT="$BASE_WORKTREE"
+          ASPIRE_CLI="./dotnet.sh run --no-build --project src/Aspire.Cli/Aspire.Cli.csproj --configuration Release -- --nologo"
+          PROJECTS_FILE="${RUNNER_TEMP}/ats-base-projects.txt"
+          SORTED_PROJECTS_FILE="${RUNNER_TEMP}/ats-base-projects-sorted.txt"
+
+          mkdir -p "$BASELINE_DIR/src/Aspire.Hosting/api"
+          : > "$PROJECTS_FILE"
+
+          echo "::group::Base Aspire.Hosting (core)"
+          $ASPIRE_CLI sdk dump --format ci -o "$BASELINE_DIR/src/Aspire.Hosting/api/Aspire.Hosting.ats.txt"
+          echo "::endgroup::"
 
           while IFS= read -r file; do
-            mkdir -p "${BASELINE_DIR}/$(dirname "$file")"
-            git show "${BASE_REF}:${file}" > "${BASELINE_DIR}/${file}"
-          done < "${RUNNER_TEMP}/ats-baseline-files.txt"
+            case "$file" in
+              */obj/*|*/bin/*|*Aspire.Hosting.Analyzers*|*Aspire.Hosting.CodeGeneration*|*Aspire.Hosting.RemoteHost*)
+                continue
+                ;;
+            esac
+
+            dir=$(dirname "$file")
+            while [ "$dir" != "." ] && [ "$dir" != "/" ]; do
+              if compgen -G "$dir/*.csproj" > /dev/null; then
+                echo "$dir" >> "$PROJECTS_FILE"
+                break
+              fi
+
+              dir=$(dirname "$dir")
+            done
+          done < <(grep -rl '\[AspireExport(' src/Aspire.Hosting.*/ --include='*.cs' || true)
+
+          sort -u "$PROJECTS_FILE" > "$SORTED_PROJECTS_FILE"
+
+          while IFS= read -r proj; do
+            [ -n "$proj" ] || continue
+            proj_name=$(basename "$proj")
+            csproj="$proj/$proj_name.csproj"
+            if [ -f "$csproj" ]; then
+              echo "::group::Base $proj_name"
+              mkdir -p "$BASELINE_DIR/$proj/api"
+              $ASPIRE_CLI sdk dump --format ci "$csproj" -o "$BASELINE_DIR/$proj/api/$proj_name.ats.txt"
+              echo "::endgroup::"
+            fi
+          done < "$SORTED_PROJECTS_FILE"
+          popd
 
           echo "BASELINE_DIR=$BASELINE_DIR" >> "$GITHUB_ENV"
 

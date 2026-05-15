@@ -4,11 +4,11 @@ The TypeScript API compatibility check prevents pull requests from introducing u
 
 ## Baseline
 
-The checked-in `src/Aspire.Hosting*/api/*.ats.txt` files are the compatibility baseline. In pull request CI, `.github/workflows/typescript-api-compat.yml` reads those files from the pull request target branch and compares them with fresh `aspire sdk dump --format ci` output generated from the pull request.
+The checked-in `src/Aspire.Hosting*/api/*.ats.txt` files are the release compatibility baseline. The scheduled `.github/workflows/generate-ats-diffs.yml` workflow remains the review and release mechanism for updating the checked-in ATS files after API changes are accepted.
 
-This intentionally differs from a plain git diff. A pull request cannot hide a breaking change by editing the baseline file in the same PR; the baseline is always loaded from the merge target branch.
+In pull request CI, `.github/workflows/typescript-api-compat.yml` generates ATS output from the pull request target branch and compares it with fresh `aspire sdk dump --format ci` output generated from the pull request. This mergeable baseline avoids failing unrelated pull requests when the target branch contains accepted source changes that have not yet been rolled into the release baseline.
 
-The scheduled `.github/workflows/generate-ats-diffs.yml` workflow remains the review and release mechanism for updating the checked-in ATS files after API changes are accepted.
+This intentionally differs from a plain git diff. A pull request cannot hide a breaking change by editing the checked-in ATS files in the same PR; the pull request check compares generated target-branch output with generated pull request output.
 
 After a new version ships, reset the compatibility baseline by updating the checked-in ATS files to the shipped surface. Suppressions for breaks that are now part of that new baseline should be deleted in the same change; keep only suppressions that still describe intentional breaks relative to the target branch baseline. The compatibility checker fails on unused suppressions, which helps catch declarations that should have been removed during the reset.
 
