@@ -253,6 +253,35 @@ public class InstallationUninstallerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void IsPathUnderPrefix_ResolvesSymlinkAncestors()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(),
+            "Directory symlink creation generally requires Developer Mode or elevation on Windows.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var realRoot = Path.Combine(workspace.WorkspaceRoot.FullName, "real-root");
+        var linkRoot = Path.Combine(workspace.WorkspaceRoot.FullName, "link-root");
+        var realPrefix = Path.Combine(realRoot, "install");
+        var linkPrefix = Path.Combine(linkRoot, "install");
+        var realBinDir = Path.Combine(realPrefix, "bin");
+        Directory.CreateDirectory(realBinDir);
+        var realProcessPath = Path.Combine(realBinDir, BinaryName());
+        File.WriteAllText(realProcessPath, "fake aspire binary");
+
+        try
+        {
+            Directory.CreateSymbolicLink(linkRoot, realRoot);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            Assert.Skip("Symlink creation is not available on this machine.");
+            return;
+        }
+
+        Assert.True(InstallationUninstaller.IsPathUnderPrefix(realProcessPath, linkPrefix));
+    }
+
+    [Fact]
     public async Task ExecuteAsync_OnRefusalPlan_Throws()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

@@ -9,6 +9,7 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
 namespace Aspire.Cli.Commands;
@@ -45,6 +46,7 @@ internal sealed class InfoCommand : BaseCommand
     private readonly IInstallationDiscovery _discovery;
     private readonly WingetFirstRunProbe _wingetFirstRunProbe;
     private readonly IAnsiConsole _ansiConsole;
+    private readonly ILogger<InfoCommand> _logger;
 
     public InfoCommand(
         IInstallationDiscovery discovery,
@@ -54,12 +56,14 @@ internal sealed class InfoCommand : BaseCommand
         CliExecutionContext executionContext,
         IInteractionService interactionService,
         IAnsiConsole ansiConsole,
-        AspireCliTelemetry telemetry)
+        AspireCliTelemetry telemetry,
+        ILogger<InfoCommand> logger)
         : base("info", InfoCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _discovery = discovery;
         _wingetFirstRunProbe = wingetFirstRunProbe;
         _ansiConsole = ansiConsole;
+        _logger = logger;
 
         Options.Add(s_selfOption);
         Options.Add(s_allOption);
@@ -147,13 +151,10 @@ internal sealed class InfoCommand : BaseCommand
             var pathDisplay = string.IsNullOrEmpty(install.Path)
                 ? InfoCommandStrings.ValueUnknown
                 : install.Path;
+            pathDisplay = pathDisplay.EscapeMarkup();
             if (isSelf)
             {
                 pathDisplay = $"{pathDisplay} [grey]{InfoCommandStrings.ValueCurrentMarker.EscapeMarkup()}[/]";
-            }
-            else
-            {
-                pathDisplay = pathDisplay.EscapeMarkup();
             }
 
             table.AddRow(
@@ -181,15 +182,16 @@ internal sealed class InfoCommand : BaseCommand
             : InfoCommandStrings.ValueUnknown;
     }
 
-    private static string? TryResolveSymlink(string path)
+    private string? TryResolveSymlink(string path)
     {
         try
         {
             var resolved = File.ResolveLinkTarget(path, returnFinalTarget: true);
             return resolved?.FullName ?? Path.GetFullPath(path);
         }
-        catch (IOException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PathTooLongException or System.Security.SecurityException)
         {
+            _logger.LogDebug(ex, "Could not resolve symlink target for {Path}; using the normalized path.", path);
             return Path.GetFullPath(path);
         }
     }

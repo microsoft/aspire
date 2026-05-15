@@ -187,6 +187,7 @@ internal sealed class PeerInstallProbe : IPeerInstallProbe
         var readStdoutTask = ReadCappedAsync(process.StandardOutput, stdoutBuffer, StdoutByteCap, timeoutCts.Token);
 
         bool timedOut = false;
+        bool cancelled = false;
         try
         {
             await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
@@ -197,21 +198,23 @@ internal sealed class PeerInstallProbe : IPeerInstallProbe
             // cancellation: peer overstayed its budget.
             timedOut = true;
         }
-
-        if (timedOut)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            TryKillProcessTree(process);
-            await SwallowAsync(readStdoutTask).ConfigureAwait(false);
-            using (process) { /* dispose */ }
-            return new SpawnResult(ExitCode: -1, Stdout: stdoutBuffer.ToString(), Failure: $"Peer probe timed out after {_timeout.TotalSeconds:F1}s.", Cancelled: false);
+            // Caller cancellation (for example Ctrl-C) must tear down the
+            // spawned peer immediately rather than letting it survive the
+            // cancelled command.
+            cancelled = true;
         }
 
-        if (cancellationToken.IsCancellationRequested)
+        if (timedOut || cancelled)
         {
             TryKillProcessTree(process);
+            await SwallowAsync(process.WaitForExitAsync(CancellationToken.None)).ConfigureAwait(false);
             await SwallowAsync(readStdoutTask).ConfigureAwait(false);
             using (process) { /* dispose */ }
-            return new SpawnResult(ExitCode: -1, Stdout: stdoutBuffer.ToString(), Failure: null, Cancelled: true);
+            return timedOut
+                ? new SpawnResult(ExitCode: -1, Stdout: stdoutBuffer.ToString(), Failure: $"Peer probe timed out after {_timeout.TotalSeconds:F1}s.", Cancelled: false)
+                : new SpawnResult(ExitCode: -1, Stdout: stdoutBuffer.ToString(), Failure: null, Cancelled: true);
         }
 
         try

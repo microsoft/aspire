@@ -86,7 +86,7 @@ internal sealed class BundleService(
         // non-Windows and once the sidecar already exists.
         if (wingetFirstRunProbe is not null && OperatingSystem.IsWindows())
         {
-            var realBinaryPath = ResolveSymlinks(processPath);
+            var realBinaryPath = ResolveSymlinks(processPath, logger);
             var binaryDir = Path.GetDirectoryName(realBinaryPath);
             if (!string.IsNullOrEmpty(binaryDir))
             {
@@ -321,20 +321,23 @@ internal sealed class BundleService(
 
     /// <inheritdoc/>
     public string? GetDefaultExtractDir(string processPath)
-        => ComputeDefaultExtractDir(processPath);
+        => ComputeDefaultExtractDir(processPath, logger);
 
     /// <summary>
     /// Computes the bundle extract directory from the sidecar source value.
     /// See <c>docs/specs/install-routes.md</c> for the contract.
     /// </summary>
     internal static string? ComputeDefaultExtractDir(string processPath)
+        => ComputeDefaultExtractDir(processPath, logger: null);
+
+    private static string? ComputeDefaultExtractDir(string processPath, ILogger? logger)
     {
         if (string.IsNullOrEmpty(processPath))
         {
             return null;
         }
 
-        var realBinaryPath = ResolveSymlinks(processPath);
+        var realBinaryPath = ResolveSymlinks(processPath, logger);
         var binaryDir = Path.GetDirectoryName(realBinaryPath);
         if (string.IsNullOrEmpty(binaryDir))
         {
@@ -360,18 +363,19 @@ internal sealed class BundleService(
         };
     }
 
-    private static string ResolveSymlinks(string path)
+    private static string ResolveSymlinks(string path, ILogger? logger)
     {
         try
         {
             var resolved = File.ResolveLinkTarget(path, returnFinalTarget: true);
             return resolved is null ? path : resolved.FullName;
         }
-        catch (IOException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PathTooLongException or System.Security.SecurityException)
         {
-            // Path is not a link, does not exist, or cycle detected — fall back to
+            // Path is not a link, does not exist, is inaccessible, or cycle detected — fall back to
             // the raw path. Sidecar discovery using the raw path is still valid in
             // the non-link case.
+            logger?.LogDebug(ex, "Could not resolve symlink target for {Path}; using the raw path.", path);
             return path;
         }
     }

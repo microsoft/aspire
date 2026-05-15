@@ -329,8 +329,13 @@ internal sealed class InstallationUninstaller : IInstallationUninstaller
             return false;
         }
 
-        var canonicalProcess = ResolveSymlinkOrSelf(processPath);
-        var canonicalPrefix = ResolveSymlinkOrSelf(prefix);
+        return IsPathUnderPrefix(processPath, prefix);
+    }
+
+    internal static bool IsPathUnderPrefix(string processPath, string prefix)
+    {
+        var canonicalProcess = ResolveFullPathSymlinksOrSelf(processPath);
+        var canonicalPrefix = ResolveFullPathSymlinksOrSelf(prefix);
 
         if (string.IsNullOrEmpty(canonicalProcess) || string.IsNullOrEmpty(canonicalPrefix))
         {
@@ -347,17 +352,75 @@ internal sealed class InstallationUninstaller : IInstallationUninstaller
         return canonicalProcess.StartsWith(prefixWithSep, comparison);
     }
 
-    private static string? ResolveSymlinkOrSelf(string path)
+    private static string ResolveFullPathSymlinksOrSelf(string path)
     {
-        try
+        var fullPath = Path.GetFullPath(path);
+        for (var remainingResolutions = 40; remainingResolutions > 0; remainingResolutions--)
         {
-            var resolved = File.ResolveLinkTarget(path, returnFinalTarget: true);
-            return resolved?.FullName ?? Path.GetFullPath(path);
+            if (!TryResolveFirstSymlinkComponent(fullPath, out var resolved))
+            {
+                return fullPath;
+            }
+
+            fullPath = resolved;
         }
-        catch (IOException)
+
+        return Path.GetFullPath(path);
+    }
+
+    private static bool TryResolveFirstSymlinkComponent(string fullPath, out string resolvedPath)
+    {
+        resolvedPath = fullPath;
+        var root = Path.GetPathRoot(fullPath);
+        if (string.IsNullOrEmpty(root))
         {
-            return Path.GetFullPath(path);
+            return false;
         }
+
+        var components = fullPath[root.Length..]
+            .Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries);
+        var current = root;
+        for (var i = 0; i < components.Length; i++)
+        {
+            var candidate = Path.Combine(current, components[i]);
+            FileSystemInfo fileSystemInfo = Directory.Exists(candidate)
+                ? new DirectoryInfo(candidate)
+                : new FileInfo(candidate);
+
+            FileSystemInfo? target;
+            try
+            {
+                target = fileSystemInfo.ResolveLinkTarget(returnFinalTarget: false);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PathTooLongException or System.Security.SecurityException)
+            {
+                return false;
+            }
+
+            if (target is not null)
+            {
+                var targetPath = Path.IsPathFullyQualified(target.FullName)
+                    ? Path.GetFullPath(target.FullName)
+                    : Path.GetFullPath(target.FullName, current);
+                resolvedPath = CombineRemaining(targetPath, components, i + 1);
+                return true;
+            }
+
+            current = candidate;
+        }
+
+        return false;
+    }
+
+    private static string CombineRemaining(string prefix, string[] components, int startIndex)
+    {
+        var result = prefix;
+        for (var i = startIndex; i < components.Length; i++)
+        {
+            result = Path.Combine(result, components[i]);
+        }
+
+        return Path.GetFullPath(result);
     }
 
     /// <summary>

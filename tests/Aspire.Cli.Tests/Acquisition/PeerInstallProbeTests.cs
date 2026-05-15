@@ -4,6 +4,7 @@
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Diagnostics;
 
 namespace Aspire.Cli.Tests.Acquisition;
 
@@ -171,6 +172,51 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper)
         Assert.True(sw.Elapsed < TimeSpan.FromSeconds(5),
             $"Expected probe to return within a few seconds after timing out; took {sw.Elapsed}.");
     }
+
+    [Fact]
+    public async Task ProbeAsync_CallerCancels_KillsSpawnedProcess()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(),
+            "This regression test records the shell process id using POSIX $$; Windows process-tree cancellation is covered by production code.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var pidFile = Path.Combine(workspace.WorkspaceRoot.FullName, "peer.pid");
+        using var fakePeer = FakePeerScript.BuildSleeperWithPidFile(outputHelper, pidFile, sleepSeconds: 30);
+
+        var probe = new PeerInstallProbe(TimeSpan.FromSeconds(30), NullLogger<PeerInstallProbe>.Instance);
+        using var cts = new CancellationTokenSource();
+        var probeTask = probe.ProbeAsync(fakePeer.Path, cts.Token);
+
+        using var process = await WaitForProcessIdAsync(pidFile, TestContext.Current.CancellationToken);
+        cts.Cancel();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() => probeTask);
+        await WaitForExitAsync(process, TestContext.Current.CancellationToken);
+
+        Assert.True(process.HasExited);
+    }
+
+    private static async Task<Process> WaitForProcessIdAsync(string pidFile, CancellationToken cancellationToken)
+    {
+        while (!File.Exists(pidFile))
+        {
+            await Task.Delay(20, cancellationToken);
+        }
+
+        var pidText = await File.ReadAllTextAsync(pidFile, cancellationToken);
+        var pid = int.Parse(pidText.Trim(), System.Globalization.CultureInfo.InvariantCulture);
+        return Process.GetProcessById(pid);
+    }
+
+    private static async Task WaitForExitAsync(Process process, CancellationToken cancellationToken)
+    {
+        var deadline = DateTimeOffset.UtcNow + TimeSpan.FromSeconds(5);
+        while (!process.HasExited && DateTimeOffset.UtcNow < deadline)
+        {
+            await Task.Delay(20, cancellationToken);
+            process.Refresh();
+        }
+    }
 }
 
 /// <summary>
@@ -212,6 +258,11 @@ internal static class FakePeerScript
         return BuildInternal(outputHelper, body: ScriptBody.Sleep(sleepSeconds));
     }
 
+    internal static FakeScriptResult BuildSleeperWithPidFile(ITestOutputHelper outputHelper, string pidFile, int sleepSeconds)
+    {
+        return BuildInternal(outputHelper, body: ScriptBody.SleepWithPidFile(pidFile, sleepSeconds));
+    }
+
     private static FakeScriptResult BuildInternal(ITestOutputHelper outputHelper, ScriptBody body)
     {
         var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -248,6 +299,7 @@ internal abstract record ScriptBody
 
     public static ScriptBody EmitAndExit(string stdout, int exitCode) => new EmitExit(stdout, exitCode);
     public static ScriptBody Sleep(int seconds) => new SleepScript(seconds);
+    public static ScriptBody SleepWithPidFile(string pidFile, int seconds) => new SleepWithPidFileScript(pidFile, seconds);
     public static ScriptBody InfoOrVersion(string infoStdout, int infoExitCode, string versionStdout, int versionExitCode)
         => new InfoOrVersionScript(infoStdout, infoExitCode, versionStdout, versionExitCode);
 
@@ -303,6 +355,19 @@ internal abstract record ScriptBody
              @echo off
              ping -n {Seconds + 1} 127.0.0.1 > nul
              """;
+    }
+
+    private sealed record SleepWithPidFileScript(string PidFile, int Seconds) : ScriptBody
+    {
+        public override string RenderShell() =>
+            $$"""
+              #!/bin/sh
+              printf '%s\n' "$$" > '{{PidFile}}'
+              sleep {{Seconds}}
+              """;
+
+        public override string RenderBatch() =>
+            throw new PlatformNotSupportedException("POSIX pid-file sleeper is not supported on Windows.");
     }
 
     private sealed record InfoOrVersionScript(string InfoStdout, int InfoExitCode, string VersionStdout, int VersionExitCode) : ScriptBody

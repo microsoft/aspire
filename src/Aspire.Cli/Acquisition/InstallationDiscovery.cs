@@ -61,7 +61,7 @@ internal sealed class InstallationDiscovery : IInstallationDiscovery
     public InstallationInfo DescribeSelf()
     {
         var processPath = Environment.ProcessPath;
-        var canonicalPath = ResolveCanonicalPath(processPath);
+        var canonicalPath = ResolveCanonicalPath(processPath, _logger);
         var binaryDir = !string.IsNullOrEmpty(canonicalPath) ? Path.GetDirectoryName(canonicalPath) : null;
 
         var sidecar = !string.IsNullOrEmpty(binaryDir) ? _sidecarReader.TryRead(binaryDir) : null;
@@ -78,7 +78,7 @@ internal sealed class InstallationDiscovery : IInstallationDiscovery
             Version = VersionHelper.GetDefaultTemplateVersion(),
             Channel = TryReadChannel(),
             Route = route,
-            IsOnPath = IsOnPathSelf(canonicalPath),
+            IsOnPath = IsOnPathSelf(canonicalPath, _logger),
             Status = InstallationInfoStatus.Ok,
         };
     }
@@ -93,7 +93,7 @@ internal sealed class InstallationDiscovery : IInstallationDiscovery
             "Discovery: starting walk. self.Path='{SelfPath}', self.Canonical='{SelfCanonical}', HOME='{Home}'.",
             self.Path,
             self.CanonicalPath ?? "(null)",
-            GetUserHomeDirectory());
+            HomeDirectoryResolver.GetUserHomeDirectory());
 
         var results = new List<InstallationInfo> { self };
         // Deduplicate by canonical path (case-insensitive on Windows). The
@@ -103,7 +103,7 @@ internal sealed class InstallationDiscovery : IInstallationDiscovery
             self.CanonicalPath is { Length: > 0 } sp ? [sp] : [],
             OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
 
-        var pathHit = FindFirstAspireOnPath();
+        var pathHit = FindFirstAspireOnPath(_logger);
         if (pathHit is null)
         {
             _logger.LogDebug("Discovery: no 'aspire' binary found on $PATH.");
@@ -125,7 +125,7 @@ internal sealed class InstallationDiscovery : IInstallationDiscovery
                 "Discovery: considering candidate #{Index} '{Path}' (origin: {Origin}).",
                 candidateCount, candidate.BinaryPath, candidate.Origin);
 
-            var canonical = ResolveCanonicalPath(candidate.BinaryPath);
+            var canonical = ResolveCanonicalPath(candidate.BinaryPath, _logger);
             if (string.IsNullOrEmpty(canonical))
             {
                 _logger.LogDebug(
@@ -290,18 +290,6 @@ internal sealed class InstallationDiscovery : IInstallationDiscovery
         return label;
     }
 
-    private static string GetUserHomeDirectory()
-    {
-        var primaryEnvironmentVariable = OperatingSystem.IsWindows() ? "USERPROFILE" : "HOME";
-        var home = Environment.GetEnvironmentVariable(primaryEnvironmentVariable);
-        if (!string.IsNullOrEmpty(home))
-        {
-            return home;
-        }
-
-        return Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-    }
-
     /// <summary>
     /// Resolves any symlinks in <paramref name="processPath"/> so that two
     /// PATH entries pointing at the same backing file produce the same
@@ -309,7 +297,7 @@ internal sealed class InstallationDiscovery : IInstallationDiscovery
     /// <see cref="Bundles.BundleService"/> uses for sidecar lookup so
     /// <c>info</c> and <c>BundleService</c> agree on identity.
     /// </summary>
-    private static string? ResolveCanonicalPath(string? processPath)
+    private static string? ResolveCanonicalPath(string? processPath, ILogger? logger)
     {
         if (string.IsNullOrEmpty(processPath))
         {
@@ -321,8 +309,9 @@ internal sealed class InstallationDiscovery : IInstallationDiscovery
             var resolved = File.ResolveLinkTarget(processPath, returnFinalTarget: true);
             return resolved?.FullName ?? Path.GetFullPath(processPath);
         }
-        catch (IOException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PathTooLongException or System.Security.SecurityException)
         {
+            logger?.LogDebug(ex, "Could not resolve symlink target for {Path}; using the normalized path.", processPath);
             return Path.GetFullPath(processPath);
         }
     }
@@ -347,14 +336,14 @@ internal sealed class InstallationDiscovery : IInstallationDiscovery
     /// Returns <see langword="true"/> when the canonical resolution of
     /// <c>aspire</c> on the current <c>$PATH</c> matches <paramref name="canonicalSelfPath"/>.
     /// </summary>
-    private static bool IsOnPathSelf(string? canonicalSelfPath)
+    private static bool IsOnPathSelf(string? canonicalSelfPath, ILogger? logger)
     {
         if (string.IsNullOrEmpty(canonicalSelfPath))
         {
             return false;
         }
 
-        var first = FindFirstAspireOnPath();
+        var first = FindFirstAspireOnPath(logger);
         if (first is null)
         {
             return false;
@@ -369,7 +358,7 @@ internal sealed class InstallationDiscovery : IInstallationDiscovery
     /// <c>aspire.exe</c> binary the shell would resolve. Returns
     /// <see langword="null"/> when nothing is found.
     /// </summary>
-    private static PathHit? FindFirstAspireOnPath()
+    private static PathHit? FindFirstAspireOnPath(ILogger? logger)
     {
         var path = Environment.GetEnvironmentVariable("PATH");
         if (string.IsNullOrEmpty(path))
@@ -387,7 +376,7 @@ internal sealed class InstallationDiscovery : IInstallationDiscovery
                 {
                     continue;
                 }
-                var canonical = ResolveCanonicalPath(candidate);
+                var canonical = ResolveCanonicalPath(candidate, logger);
                 if (!string.IsNullOrEmpty(canonical))
                 {
                     return new PathHit(candidate, canonical);
@@ -412,7 +401,7 @@ internal sealed class InstallationDiscovery : IInstallationDiscovery
             yield return new DiscoveryCandidate(pathHit.OriginalPath, "$PATH");
         }
 
-        var home = GetUserHomeDirectory();
+        var home = HomeDirectoryResolver.GetUserHomeDirectory();
         if (string.IsNullOrEmpty(home))
         {
             _logger.LogDebug("Discovery: no user home directory available; skipping well-known prefix walk and dotnet-tool store probe.");

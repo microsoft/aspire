@@ -88,7 +88,7 @@ internal sealed class UninstallCommand : BaseCommand
         }
 
         var prefix = string.IsNullOrEmpty(prefixArg)
-            ? Path.Combine(GetUserHomeOrThrow(), ".aspire", "dogfood", FormattableString.Invariant($"pr-{prNumber!.Value}"))
+            ? Path.Combine(HomeDirectoryResolver.GetUserHomeOrThrow(), ".aspire", "dogfood", FormattableString.Invariant($"pr-{prNumber!.Value}"))
             : Path.GetFullPath(prefixArg);
 
         var plan = _uninstaller.Plan(prefix);
@@ -189,13 +189,4 @@ internal sealed class UninstallCommand : BaseCommand
         _ansiConsole.WriteLine();
     }
 
-    private static string GetUserHomeOrThrow()
-    {
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        if (string.IsNullOrEmpty(home))
-        {
-            throw new InvalidOperationException("Could not resolve the current user's home directory.");
-        }
-        return home;
-    }
 }

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Acquisition;
+using Aspire.Cli.Tests.Acquisition;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -111,6 +112,42 @@ public class UninstallCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(ExitCodeConstants.Success, exitCode);
         Assert.False(File.Exists(aspireBinary));
         Assert.Empty(interactionService.BooleanPromptCalls);
+    }
+
+    [Fact]
+    public async Task UninstallCommand_PrTarget_UsesEnvironmentHome()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var _ = new EnvVarOverride("HOME", workspace.WorkspaceRoot.FullName);
+        using var __ = new EnvVarOverride("USERPROFILE", workspace.WorkspaceRoot.FullName);
+
+        var prefix = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "dogfood", "pr-1234");
+        WritePrRouteInstall(prefix);
+        Assert.True(Directory.Exists(prefix));
+
+        var interactionService = new TestInteractionService();
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+        var result = command.Parse("uninstall --pr 1234 --yes");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.False(Directory.Exists(prefix));
+    }
+
+    private static void WritePrRouteInstall(string prefix)
+    {
+        var binDir = Path.Combine(prefix, "bin");
+        Directory.CreateDirectory(binDir);
+        File.WriteAllText(Path.Combine(binDir, OperatingSystem.IsWindows() ? "aspire.exe" : "aspire"), "stub");
+        File.WriteAllText(
+            Path.Combine(binDir, InstallSidecarReader.SidecarFileName),
+            "{\"source\":\"pr\"}");
     }
 
     [Fact]
