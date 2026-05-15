@@ -29,6 +29,13 @@ internal class AppHostRpcTarget(
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token);
         var linkedToken = linkedCts.Token;
 
+        // If cancellation was already requested, exit immediately to avoid subscribing to log events unnecessarily.
+        // This can happen if the app host is shutting down.
+        if (linkedToken.IsCancellationRequested)
+        {
+            yield break;
+        }
+
         var loggerProvider = serviceProvider.GetService<BackchannelLoggerProvider>();
         if (loggerProvider is null)
         {
@@ -65,10 +72,17 @@ internal class AppHostRpcTarget(
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token);
         var linkedToken = linkedCts.Token;
 
+        // If cancellation was already requested, exit immediately to avoid subscribing to log events unnecessarily.
+        // This can happen if the app host is shutting down.
+        if (linkedToken.IsCancellationRequested)
+        {
+            yield break;
+        }
+
         while (!linkedToken.IsCancellationRequested)
         {
             PublishingActivity? publishingActivity = null;
-            
+
             try
             {
                 publishingActivity = await activityReporter.ActivityItemUpdated.Reader.ReadAsync(linkedToken).ConfigureAwait(false);
@@ -95,6 +109,13 @@ internal class AppHostRpcTarget(
         // Create a linked token source that will be cancelled when shutdown is requested
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token);
         var linkedToken = linkedCts.Token;
+
+        // If cancellation was already requested, exit immediately to avoid subscribing to log events unnecessarily.
+        // This can happen if the app host is shutting down.
+        if (linkedToken.IsCancellationRequested)
+        {
+            yield break;
+        }
 
         var resourceEvents = resourceNotificationService.WatchAsync(linkedToken);
 
@@ -136,10 +157,10 @@ internal class AppHostRpcTarget(
     public Task RequestStopAsync(CancellationToken cancellationToken)
     {
         _ = cancellationToken;
-        
+
         // Cancel inflight streaming RPC calls before stopping the application
         _shutdownCts.Cancel();
-        
+
         lifetime.StopApplication();
         return Task.CompletedTask;
     }
