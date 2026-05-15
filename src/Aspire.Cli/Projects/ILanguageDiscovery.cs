@@ -47,9 +47,9 @@ internal sealed record LanguageInfo(
     bool IsExperimental = false)
 {
     /// <summary>
-    /// The well-known folder name where generated code is placed for all guest languages.
+    /// The well-known folder path where generated code is placed for all guest languages.
     /// </summary>
-    internal const string GeneratedFolderName = ".modules";
+    internal static string GeneratedFolderName { get; } = Path.Combine(".aspire", "modules");
 
     /// <summary>
     /// Maximum directory depth used when scanning the file system for language

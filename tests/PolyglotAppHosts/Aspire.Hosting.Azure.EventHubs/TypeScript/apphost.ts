@@ -1,4 +1,4 @@
-import { AzureEventHubsRole, createBuilder } from './.modules/aspire.js';
+import { AzureEventHubsRole, createBuilder } from './.aspire/modules/aspire.js';
 
 const builder = await createBuilder();
 const eventHubs = await builder.addAzureEventHubs('eventhubs');

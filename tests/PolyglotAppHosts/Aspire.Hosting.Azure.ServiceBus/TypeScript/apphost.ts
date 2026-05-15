@@ -7,7 +7,7 @@ import {
     AzureServiceBusFilterType,
     type AzureServiceBusRule,
     type AzureServiceBusCorrelationFilter,
-} from './.modules/aspire.js';
+} from './.aspire/modules/aspire.js';
 
 const builder = await createBuilder();
 

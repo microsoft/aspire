@@ -1,4 +1,4 @@
-import { AzureStorageRole, createBuilder } from './.modules/aspire.js';
+import { AzureStorageRole, createBuilder } from './.aspire/modules/aspire.js';
 
 const builder = await createBuilder();
 

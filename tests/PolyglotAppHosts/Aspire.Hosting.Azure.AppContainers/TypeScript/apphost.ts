@@ -1,7 +1,7 @@
 // Aspire TypeScript AppHost - Validation for Aspire.Hosting.Azure.AppContainers
 // For more information, see: https://aspire.dev
 
-import { createBuilder } from './.modules/aspire.js';
+import { createBuilder } from './.aspire/modules/aspire.js';
 
 const builder = await createBuilder();
 
