@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "\ud83e\udde9",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The VS Code extension now tracks and reliably terminates all in-flight Aspire CLI child processes (aspire describe --follow, aspire ps, aspire extension get-apphosts) when polling stops or the repository is disposed. A shared termination helper sends a graceful signal and forces termination if the process does not exit within the grace period.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83e\uddf9",
+  "firstMergedAt": "2026-05-15T22:14:50Z",
+  "lastMergedAt": "2026-05-15T22:14:50Z",
+  "name": "Reliable cleanup of extension Aspire CLI child processes",
+  "owner": "adamint",
+  "prs": [
+    17087
+  ]
+}

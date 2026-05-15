@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Extension improvement: reliable cleanup of Aspire CLI child processes (describe --follow, ps, get-apphosts) on polling stop or repository dispose",
+  "mergedAt": "2026-05-15T22:14:50Z",
+  "number": 17087,
+  "runDate": "2026-05-15T22:22:41Z",
+  "status": "included",
+  "title": "Clean up extension Aspire CLI processes"
+}
