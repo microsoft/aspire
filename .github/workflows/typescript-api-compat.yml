@@ -88,6 +88,7 @@ jobs:
           popd
 
           echo "BASELINE_DIR=$BASELINE_DIR" >> "$GITHUB_ENV"
+          echo "BASE_SUPPRESSIONS_ROOT=$BASE_WORKTREE" >> "$GITHUB_ENV"
 
       - name: Generate current ATS surface
         shell: bash
@@ -155,6 +156,7 @@ jobs:
             --baseline "$BASELINE_DIR" \
             --current "$CURRENT_DIR" \
             --suppressions-root "${{ github.workspace }}" \
+            --baseline-suppressions-root "$BASE_SUPPRESSIONS_ROOT" \
             --report "${RUNNER_TEMP}/typescript-api-compat-report.md" \
             --github-annotations
 

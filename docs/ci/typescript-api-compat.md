@@ -10,7 +10,7 @@ In pull request CI, `.github/workflows/typescript-api-compat.yml` generates ATS 
 
 This intentionally differs from a plain git diff. A pull request cannot hide a breaking change by editing the checked-in ATS files in the same PR; the pull request check compares generated target-branch output with generated pull request output.
 
-After a new version ships, reset the compatibility baseline by updating the checked-in ATS files to the shipped surface. Suppressions for breaks that are now part of that new baseline should be deleted in the same change; keep only suppressions that still describe intentional breaks relative to the target branch baseline. The compatibility checker fails on unused suppressions, which helps catch declarations that should have been removed during the reset.
+After a new version ships, reset the compatibility baseline by updating the checked-in ATS files to the shipped surface. Suppressions for breaks that are now part of that new baseline should be deleted in the same change; keep only suppressions that still describe intentional breaks relative to the release baseline. The compatibility checker fails on unused suppressions added by a pull request, but suppressions already present in the target branch are allowed to become unused against the generated target-branch baseline so merged intentional breaks do not block unrelated pull requests before the next release reset.
 
 ## Breaking changes
 

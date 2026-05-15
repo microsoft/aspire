@@ -19,11 +19,15 @@ internal static class ApiCompatSuppressor
 {
     public static ApiCompatResult ApplySuppressions(
         IReadOnlyList<ApiCompatDiagnostic> diagnostics,
-        SuppressionLoadResult suppressionLoadResult)
+        SuppressionLoadResult suppressionLoadResult,
+        SuppressionLoadResult? baselineSuppressionLoadResult = null)
     {
         var suppressionsByKey = suppressionLoadResult.Suppressions
             .GroupBy(static suppression => suppression.SuppressionKey, StringComparer.Ordinal)
             .ToDictionary(static group => group.Key, static group => group.ToArray(), StringComparer.Ordinal);
+        var baselineSuppressionKeys = baselineSuppressionLoadResult?.Suppressions
+            .Select(static suppression => suppression.SuppressionKey)
+            .ToHashSet(StringComparer.Ordinal);
         var usedSuppressionKeys = new HashSet<string>(StringComparer.Ordinal);
         var unsuppressedDiagnostics = new List<ApiCompatDiagnostic>();
         var suppressedDiagnostics = new List<ApiCompatDiagnostic>();
@@ -43,6 +47,7 @@ internal static class ApiCompatSuppressor
 
         var unusedSuppressions = suppressionLoadResult.Suppressions
             .Where(suppression => !usedSuppressionKeys.Contains(suppression.SuppressionKey))
+            .Where(suppression => baselineSuppressionKeys is null || !baselineSuppressionKeys.Contains(suppression.SuppressionKey))
             .OrderBy(static suppression => suppression.FilePath, StringComparer.Ordinal)
             .ThenBy(static suppression => suppression.LineNumber)
             .ToArray();

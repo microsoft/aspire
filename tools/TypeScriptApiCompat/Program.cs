@@ -22,6 +22,11 @@ var suppressionsRootOption = new Option<string?>("--suppressions-root")
     DefaultValueFactory = _ => Directory.GetCurrentDirectory()
 };
 
+var baselineSuppressionsRootOption = new Option<string?>("--baseline-suppressions-root")
+{
+    Description = "Target-branch repository root containing inherited suppression files."
+};
+
 var reportOption = new Option<string?>("--report")
 {
     Description = "Write a Markdown report."
@@ -36,6 +41,7 @@ var rootCommand = new RootCommand("Compare Aspire TypeScript/ATS API baselines."
 rootCommand.Options.Add(baselineOption);
 rootCommand.Options.Add(currentOption);
 rootCommand.Options.Add(suppressionsRootOption);
+rootCommand.Options.Add(baselineSuppressionsRootOption);
 rootCommand.Options.Add(reportOption);
 rootCommand.Options.Add(githubAnnotationsOption);
 
@@ -45,6 +51,7 @@ rootCommand.SetAction(parseResult =>
         parseResult.GetValue(baselineOption)!,
         parseResult.GetValue(currentOption)!,
         parseResult.GetValue(suppressionsRootOption)!,
+        parseResult.GetValue(baselineSuppressionsRootOption),
         parseResult.GetValue(reportOption),
         parseResult.GetValue(githubAnnotationsOption));
 

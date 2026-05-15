@@ -157,6 +157,32 @@ public sealed class TypeScriptApiCompatTests
     }
 
     [Fact]
+    public void SuppressionsIgnoreUnusedEntriesInheritedFromBaseline()
+    {
+        using var tempDirectory = new TestTempDirectory();
+        var currentSuppressionPath = Path.Combine(tempDirectory.Path, "current", "Pkg.tscompat.suppression.txt");
+        var baselineSuppressionPath = Path.Combine(tempDirectory.Path, "baseline", "Pkg.tscompat.suppression.txt");
+        Directory.CreateDirectory(Path.GetDirectoryName(currentSuppressionPath)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(baselineSuppressionPath)!);
+
+        File.WriteAllText(currentSuppressionPath, """
+            BREAK capability-removed Pkg Pkg/inheritedBreak -- https://github.com/microsoft/aspire/issues/16961 -- Inherited accepted break
+            BREAK dto-removed Pkg Pkg/NewStale -- https://github.com/microsoft/aspire/issues/16961 -- Newly stale suppression
+            """);
+        File.WriteAllText(baselineSuppressionPath, """
+            BREAK capability-removed Pkg Pkg/inheritedBreak -- https://github.com/microsoft/aspire/issues/16961 -- Inherited accepted break
+            """);
+
+        var currentSuppressions = ApiCompatSuppressionLoader.Load(Path.Combine(tempDirectory.Path, "current"));
+        var baselineSuppressions = ApiCompatSuppressionLoader.Load(Path.Combine(tempDirectory.Path, "baseline"));
+
+        var result = ApiCompatSuppressor.ApplySuppressions([], currentSuppressions, baselineSuppressions);
+
+        var unused = Assert.Single(result.UnusedSuppressions);
+        Assert.Equal("dto-removed|Pkg|Pkg/NewStale", unused.SuppressionKey);
+    }
+
+    [Fact]
     public void RunnerWritesReportAndReturnsFailureForUnsuppressedBreaks()
     {
         using var tempDirectory = new TestTempDirectory();
@@ -181,7 +207,8 @@ public sealed class TypeScriptApiCompatTests
             baselineRoot,
             currentRoot,
             tempDirectory.Path,
-            reportPath,
+            BaselineSuppressionsRoot: null,
+            ReportPath: reportPath,
             GitHubAnnotations: false));
 
         Assert.Equal(1, exitCode);
