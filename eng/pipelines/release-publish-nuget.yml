@@ -806,14 +806,22 @@ extends:
                   $assetsDir = Join-Path "$(Pipeline.Workspace)" 'aspire-build/BlobArtifacts'
                   Write-Host "Assets dir: $assetsDir"
 
-                  # Use a custom name — $args is an automatic variable in PowerShell.
-                  $scriptArgs = @(
-                    '-AssetsDir',    $assetsDir,
-                    '-Tag',          $tag,
-                    '-AppId',        $env:ASPIRE_BOT_APP_ID,
-                    '-PrivateKeyPem',$env:ASPIRE_BOT_PRIVATE_KEY
-                  )
-                  if ($dryRun) { $scriptArgs += '-DryRun' }
+                  # Use hashtable splatting (not array splatting) because the PEM
+                  # private key value starts with `-----BEGIN PRIVATE KEY-----`.
+                  # With `@arr` splat, PowerShell's parameter binder sees the value
+                  # for -PrivateKeyPem also starting with `-` and tries to interpret
+                  # it as another switch, failing with "A positional parameter cannot
+                  # be found that accepts argument '-PrivateKeyPem'." Hashtable splat
+                  # explicitly binds each value to its named parameter and bypasses
+                  # the "looks like a switch" heuristic. See dispatch step above for
+                  # the equivalent inline backtick form (also safe).
+                  $scriptArgs = @{
+                    AssetsDir     = $assetsDir
+                    Tag           = $tag
+                    AppId         = $env:ASPIRE_BOT_APP_ID
+                    PrivateKeyPem = $env:ASPIRE_BOT_PRIVATE_KEY
+                  }
+                  if ($dryRun) { $scriptArgs.DryRun = $true }
 
                   & "$(Build.SourcesDirectory)/eng/pipelines/scripts/publish-release-cli-assets.ps1" @scriptArgs
                 displayName: 'Verify SHA512s and upload to GitHub Release'
