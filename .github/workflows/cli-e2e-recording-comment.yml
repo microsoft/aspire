@@ -231,7 +231,9 @@ jobs:
             UPLOAD_COUNT=0
             FAIL_COUNT=0
             TOTAL_COUNT=0
+            TEST_PASS_COUNT=0
             TEST_FAIL_COUNT=0
+            TEST_UNKNOWN_COUNT=0
 
             # Arrays to track failed test recordings separately
             FAILED_TESTS_BODY=""
@@ -255,11 +257,13 @@ jobs:
                 TEST_OUTCOME=$(jq -r --arg name "$filename" '.[$name] // "Unknown"' test_outcomes.json)
                 if [ "$TEST_OUTCOME" = "Passed" ]; then
                   STATUS_EMOJI="✅"
+                  TEST_PASS_COUNT=$((TEST_PASS_COUNT + 1))
                 elif [ "$TEST_OUTCOME" = "Failed" ]; then
                   STATUS_EMOJI="❌"
                   TEST_FAIL_COUNT=$((TEST_FAIL_COUNT + 1))
                 else
                   STATUS_EMOJI="❔"
+                  TEST_UNKNOWN_COUNT=$((TEST_UNKNOWN_COUNT + 1))
                 fi
 
                 # Upload to asciinema with retry logic for transient failures
@@ -302,18 +306,33 @@ jobs:
               fi
             done
 
-            echo "Uploaded $UPLOAD_COUNT recordings, $FAIL_COUNT upload failures, $TEST_FAIL_COUNT test failures"
+            echo "Uploaded $UPLOAD_COUNT recordings, $FAIL_COUNT upload failures, $TEST_PASS_COUNT passed, $TEST_FAIL_COUNT failed, $TEST_UNKNOWN_COUNT unknown"
 
-            # Build comment with summary outside collapsible and table inside
+            # Build the summary line in the same style as the deployment E2E comment:
+            # "<emoji> **CLI E2E Tests <status>** — X passed, Y failed[, Z unknown]"
+            # Status reflects test outcomes; recording-upload failures are a secondary concern
+            # surfaced in the table rather than the headline status.
             if [ "$TEST_FAIL_COUNT" -gt 0 ]; then
               SUMMARY_EMOJI="❌"
-              SUMMARY_TEXT="${TEST_FAIL_COUNT} test(s) failed, ${UPLOAD_COUNT} recordings uploaded"
-            elif [ "$FAIL_COUNT" -gt 0 ]; then
-              SUMMARY_EMOJI="⚠️"
-              SUMMARY_TEXT="${UPLOAD_COUNT}/${TOTAL_COUNT} recordings uploaded, ${FAIL_COUNT} upload(s) failed"
-            else
+              SUMMARY_STATUS="failed"
+            elif [ "$TEST_PASS_COUNT" -gt 0 ] && [ "$TEST_UNKNOWN_COUNT" -eq 0 ]; then
+              SUMMARY_EMOJI="✅"
+              SUMMARY_STATUS="passed"
+            elif [ "$TEST_PASS_COUNT" -eq 0 ] && [ "$TEST_FAIL_COUNT" -eq 0 ]; then
+              # No TRX outcomes available — fall back to a recording-only summary
               SUMMARY_EMOJI="🎬"
-              SUMMARY_TEXT="${UPLOAD_COUNT} recordings uploaded"
+              SUMMARY_STATUS="completed"
+            else
+              SUMMARY_EMOJI="❓"
+              SUMMARY_STATUS="unknown"
+            fi
+
+            SUMMARY_TEXT="${TEST_PASS_COUNT} passed, ${TEST_FAIL_COUNT} failed"
+            if [ "$TEST_UNKNOWN_COUNT" -gt 0 ]; then
+              SUMMARY_TEXT="${SUMMARY_TEXT}, ${TEST_UNKNOWN_COUNT} unknown"
+            fi
+            if [ "$FAIL_COUNT" -gt 0 ]; then
+              SUMMARY_TEXT="${SUMMARY_TEXT} (${UPLOAD_COUNT}/${TOTAL_COUNT} recordings uploaded, ${FAIL_COUNT} upload(s) failed)"
             fi
 
             # Build the failed tests section (shown outside the collapsible)
@@ -326,7 +345,7 @@ jobs:
             fi
 
             COMMENT_BODY="${COMMENT_MARKER}
-          ${SUMMARY_EMOJI} **CLI E2E Test Recordings** — ${SUMMARY_TEXT} (commit \`${SHORT_SHA}\`)
+          ${SUMMARY_EMOJI} **CLI E2E Tests ${SUMMARY_STATUS}** — ${SUMMARY_TEXT} (commit \`${SHORT_SHA}\`)
           ${FAILED_SECTION}
           <details>
           <summary>View all recordings</summary>
