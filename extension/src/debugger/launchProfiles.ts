@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as fs from 'fs';
-import { ExecutableLaunchConfiguration, EnvVar, ProjectLaunchConfiguration } from '../dcp/types';
+import { EnvVar, ProjectLaunchConfiguration } from '../dcp/types';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { isFileBasedApp } from './languages/dotnet';
 import { stripComments } from 'jsonc-parser';
@@ -246,37 +246,78 @@ export function determineWorkingDirectory(
     projectPath: string,
     baseProfile: LaunchProfile | null
 ): string {
+    const normalizeToPosixPath = (value: string): string => path.posix.normalize(value.replace(/\\/g, '/'));
+
     if (baseProfile?.workingDirectory) {
         const workingDirectory = expandEnvironmentVariables(baseProfile.workingDirectory);
+        const isAbsoluteWorkingDirectory = path.isAbsolute(workingDirectory) || path.win32.isAbsolute(workingDirectory);
+        const isWindowsProjectPath = path.win32.isAbsolute(projectPath);
+
         // If working directory is relative, resolve it relative to project directory
-        if (path.isAbsolute(workingDirectory)) {
-            extensionLogOutputChannel.debug(`Using absolute working directory from launch profile: ${workingDirectory}`);
-            return workingDirectory;
+        if (isAbsoluteWorkingDirectory) {
+            const normalizedWorkingDirectory = normalizeToPosixPath(workingDirectory);
+            extensionLogOutputChannel.debug(`Using absolute working directory from launch profile: ${normalizedWorkingDirectory}`);
+            return normalizedWorkingDirectory;
         } else {
-            const projectDir = path.dirname(projectPath);
-            const workingDir = path.resolve(projectDir, workingDirectory);
-            extensionLogOutputChannel.debug(`Using relative working directory from launch profile: ${workingDir}`);
-            return workingDir;
+            const projectDir = isWindowsProjectPath ? path.win32.dirname(projectPath) : path.dirname(projectPath);
+            const resolvedWorkingDirectory = isWindowsProjectPath
+                ? path.win32.resolve(projectDir, workingDirectory)
+                : path.resolve(projectDir, workingDirectory);
+            const normalizedWorkingDirectory = normalizeToPosixPath(resolvedWorkingDirectory);
+            extensionLogOutputChannel.debug(`Using relative working directory from launch profile: ${normalizedWorkingDirectory}`);
+            return normalizedWorkingDirectory;
         }
     }
 
     // Default to project directory
-    const projectDir = path.dirname(projectPath);
-    extensionLogOutputChannel.debug(`Using default working directory (project directory): ${projectDir}`);
-    return projectDir;
+    const projectDir = path.win32.isAbsolute(projectPath) ? path.win32.dirname(projectPath) : path.dirname(projectPath);
+    const normalizedProjectDir = normalizeToPosixPath(projectDir);
+    extensionLogOutputChannel.debug(`Using default working directory (project directory): ${normalizedProjectDir}`);
+    return normalizedProjectDir;
 }
 
-export interface ServerReadyAction {
-    action: "openExternally";
-    pattern: string;
-    uriFormat: string;
-}
+// Matches VS Code's debug-server-ready schema while remaining permissive for future action strings.
+export type ServerReadyAction =
+    | {
+        action: "openExternally";
+        pattern: string;
+        uriFormat: string;
+        killOnServerStop?: boolean;
+    }
+    | {
+        action: "debugWithChrome" | "debugWithEdge";
+        pattern: string;
+        uriFormat: string;
+        webRoot: string;
+        killOnServerStop?: boolean;
+    }
+    | {
+        action: "startDebugging";
+        pattern: string;
+        name: string;
+        killOnServerStop?: boolean;
+    }
+    | {
+        action: "startDebugging";
+        pattern: string;
+        config: Record<string, unknown>;
+        killOnServerStop?: boolean;
+    }
+    | {
+        action: string;
+        pattern: string;
+        uriFormat?: string;
+        webRoot?: string;
+        name?: string;
+        config?: Record<string, unknown>;
+        killOnServerStop?: boolean;
+    };
 
 export function determineServerReadyAction(launchBrowser?: boolean, applicationUrl?: string, debugConfigurationServerReadyAction?: ServerReadyAction): ServerReadyAction | undefined {
     if (launchBrowser === false) {
         return undefined;
     }
-    
+
     // A serverReadyAction may already have been defined in the aspire launch configuration. In that case, it applies to all resources unless launchBrowser is false (resource explicitly has opted out of browser launch).
     if (debugConfigurationServerReadyAction) {
         return debugConfigurationServerReadyAction;

@@ -448,6 +448,7 @@ suite('Launch Profile Tests', () => {
         const projectPath = path.join(systemRoot, 'project', 'MyApp.csproj');
         const projectDir = path.dirname(projectPath);
         const absoluteWorkingDir = path.join(systemRoot, 'custom', 'working', 'dir');
+        const toDebugPath = (value: string): string => path.posix.normalize(value.replace(/\\/g, '/'));
 
         test('uses absolute working directory from launch profile', () => {
             const baseProfile: LaunchProfile = {
@@ -457,7 +458,7 @@ suite('Launch Profile Tests', () => {
 
             const result = determineWorkingDirectory(projectPath, baseProfile);
 
-            assert.strictEqual(result, absoluteWorkingDir);
+            assert.strictEqual(result, toDebugPath(absoluteWorkingDir));
         });
 
         test('resolves relative working directory from launch profile', () => {
@@ -468,7 +469,7 @@ suite('Launch Profile Tests', () => {
 
             const result = determineWorkingDirectory(projectPath, baseProfile);
 
-            assert.strictEqual(result, path.join(projectDir, 'custom'));
+            assert.strictEqual(result, toDebugPath(path.join(projectDir, 'custom')));
         });
 
         test('uses project directory when no working directory specified', () => {
@@ -478,13 +479,13 @@ suite('Launch Profile Tests', () => {
 
             const result = determineWorkingDirectory(projectPath, baseProfile);
 
-            assert.strictEqual(result, projectDir);
+            assert.strictEqual(result, toDebugPath(projectDir));
         });
 
         test('uses project directory when base profile is null', () => {
             const result = determineWorkingDirectory(projectPath, null);
 
-            assert.strictEqual(result, projectDir);
+            assert.strictEqual(result, toDebugPath(projectDir));
         });
 
         test('expands environment variables in working directory before resolving', () => {
@@ -497,7 +498,7 @@ suite('Launch Profile Tests', () => {
             const result = determineWorkingDirectory('/dummy/project.csproj', baseProfile);
 
             // $(TEST_WD_ROOT) expands to /opt/app, making it an absolute path
-            assert.strictEqual(result, '/opt/app/output');
+            assert.strictEqual(result, toDebugPath('/opt/app/output'));
             delete process.env['TEST_WD_ROOT'];
         });
 
@@ -511,12 +512,34 @@ suite('Launch Profile Tests', () => {
             const result = determineWorkingDirectory('/projects/myapp/myapp.csproj', baseProfile);
 
             // $(TEST_WD_SUBDIR) expands to build-output, still relative, resolved against project dir
-            assert.strictEqual(result, path.resolve('/projects/myapp', 'build-output/bin'));
+            assert.strictEqual(result, toDebugPath(path.resolve('/projects/myapp', 'build-output/bin')));
             delete process.env['TEST_WD_SUBDIR'];
+        });
+
+        test('normalizes Windows-style project paths to forward slashes', () => {
+            const baseProfile: LaunchProfile = {
+                commandName: 'Project',
+                workingDirectory: 'custom'
+            };
+
+            const result = determineWorkingDirectory('C:\\project\\MyApp.csproj', baseProfile);
+
+            assert.strictEqual(result, 'C:/project/custom');
         });
     });
 
     suite('determineServerReadyAction', () => {
+        const assertUriServerReadyAction = (
+            result: ReturnType<typeof determineServerReadyAction>,
+            expectedUriFormat: string
+        ): void => {
+            assert.notStrictEqual(result, undefined);
+            assert.ok(result);
+            assert.ok('uriFormat' in result);
+            assert.strictEqual(result.uriFormat, expectedUriFormat);
+            assert.strictEqual(result.pattern, '\\bNow listening on:\\s+(https?://\\S+)');
+        };
+
         test('returns undefined when launchBrowser is false', () => {
             const result = determineServerReadyAction(false, 'https://localhost:5001');
             assert.strictEqual(result, undefined);
@@ -529,18 +552,39 @@ suite('Launch Profile Tests', () => {
 
         test('returns existing when launchBrowser is undefined, applicationUrl is undefined and existing launch config serverReadyAction', () => {
             const result = determineServerReadyAction(undefined, undefined, { action: 'openExternally', uriFormat: 'https://localhost:5001', pattern: '\\bNow listening on:\\s+(https?://\\S+)' });
-            assert.notStrictEqual(result, undefined);
             assert.strictEqual(result?.action, 'openExternally');
-            assert.strictEqual(result?.uriFormat, 'https://localhost:5001');
-            assert.strictEqual(result?.pattern, '\\bNow listening on:\\s+(https?://\\S+)');
+            assertUriServerReadyAction(result, 'https://localhost:5001');
         });
 
         test('returns existing when launchBrowser is true, applicationUrl is undefined and existing launch config serverReadyAction', () => {
             const result = determineServerReadyAction(true, undefined, { action: 'openExternally', uriFormat: 'https://localhost:5001', pattern: '\\bNow listening on:\\s+(https?://\\S+)' });
-            assert.notStrictEqual(result, undefined);
             assert.strictEqual(result?.action, 'openExternally');
-            assert.strictEqual(result?.uriFormat, 'https://localhost:5001');
-            assert.strictEqual(result?.pattern, '\\bNow listening on:\\s+(https?://\\S+)');
+            assertUriServerReadyAction(result, 'https://localhost:5001');
+        });
+
+        test('returns existing browser debugger serverReadyAction when provided', () => {
+            const existing = {
+                action: 'debugWithEdge' as const,
+                pattern: '\\bNow listening on:\\s+(https?://\\S+)',
+                uriFormat: 'https://localhost:5001',
+                webRoot: '/client'
+            };
+
+            const result = determineServerReadyAction(true, undefined, existing);
+
+            assert.deepStrictEqual(result, existing);
+        });
+
+        test('returns existing custom serverReadyAction when provided', () => {
+            const existing = {
+                action: 'someFutureAction',
+                pattern: 'listening on port ([0-9]+)',
+                killOnServerStop: true
+            };
+
+            const result = determineServerReadyAction(true, undefined, existing);
+
+            assert.deepStrictEqual(result, existing);
         });
 
         test('returns undefined when launchBrowser is false, applicationUrl is undefined and existing launch config serverReadyAction', () => {
@@ -557,20 +601,16 @@ suite('Launch Profile Tests', () => {
             const applicationUrl = 'https://localhost:5001';
             const result = determineServerReadyAction(true, applicationUrl);
 
-            assert.notStrictEqual(result, undefined);
             assert.strictEqual(result?.action, 'openExternally');
-            assert.strictEqual(result?.uriFormat, applicationUrl);
-            assert.strictEqual(result?.pattern, '\\bNow listening on:\\s+(https?://\\S+)');
+            assertUriServerReadyAction(result, applicationUrl);
         });
 
         test('returns serverReadyAction with first URL when multiple URLs separated by semicolon', () => {
             const applicationUrl = 'https://localhost:5001;http://localhost:5000';
             const result = determineServerReadyAction(true, applicationUrl);
 
-            assert.notStrictEqual(result, undefined);
             assert.strictEqual(result?.action, 'openExternally');
-            assert.strictEqual(result?.uriFormat, 'https://localhost:5001');
-            assert.strictEqual(result?.pattern, '\\bNow listening on:\\s+(https?://\\S+)');
+            assertUriServerReadyAction(result, 'https://localhost:5001');
         });
     });
 
