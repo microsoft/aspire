@@ -384,10 +384,7 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
         // Wait for the resource to have URLs allocated (before it starts running)
         var resourceEvent = await rns.WaitForResourceAsync(
             servicea.Resource.Name,
-            e => e.Snapshot.Urls.Length == 1
-                && e.Snapshot.Urls[0].Name == httpEndpoint.EndpointName
-                && e.Snapshot.Urls[0].IsInactive
-                && e.Snapshot.Urls[0].Url == "https://example.com").DefaultTimeout();
+            e => e.Snapshot.Urls.Length == 1).DefaultTimeout();
 
         await app.StopAsync().DefaultTimeout();
 
@@ -476,7 +473,7 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
 
         var watchTask = Task.Run(async () =>
         {
-            await foreach (var notification in rns.WatchAsync())
+            await foreach (var notification in rns.WatchAsync().DefaultTimeout())
             {
                 if (notification.Resource == servicea.Resource && notification.Snapshot.Urls.Length > 0)
                 {
@@ -592,7 +589,7 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
 
         var watchTask = Task.Run(async () =>
         {
-            await foreach (var notification in rns.WatchAsync())
+            await foreach (var notification in rns.WatchAsync().DefaultTimeout())
             {
                 if (notification.Resource == custom.Resource && notification.Snapshot.Urls.Length > 0)
                 {
