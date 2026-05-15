@@ -117,11 +117,7 @@ public class ConformanceTests : ConformanceTests<IConnection, RabbitMQClientSett
     {
 #if RABBITMQ_V6
         var channel = service.CreateModel();
-        // Declare as transient exclusive (queue auto-deleted when the connection closes).
-        // RabbitMQ 4.3+ disables the deprecated `transient_nonexcl_queues` feature by default,
-        // so non-durable + non-exclusive queues are rejected with AMQP error 541.
-        // See https://github.com/rabbitmq/rabbitmq-server/releases/tag/v4.3.0.
-        channel.QueueDeclare("test-queue", exclusive: true);
+        channel.QueueDeclare("test-queue");
         channel.BasicPublish(
             exchange: "",
             routingKey: "test-queue",
@@ -131,11 +127,7 @@ public class ConformanceTests : ConformanceTests<IConnection, RabbitMQClientSett
         Task.Run(async () =>
         {
             using var channel = await service.CreateChannelAsync();
-            // Declare as transient exclusive (queue auto-deleted when the connection closes).
-            // RabbitMQ 4.3+ disables the deprecated `transient_nonexcl_queues` feature by default,
-            // so non-durable + non-exclusive queues are rejected with AMQP error 541.
-            // See https://github.com/rabbitmq/rabbitmq-server/releases/tag/v4.3.0.
-            await channel.QueueDeclareAsync("test-queue", exclusive: true);
+            await channel.QueueDeclareAsync("test-queue");
             await channel.BasicPublishAsync(
                 exchange: "",
                 routingKey: "test-queue",
