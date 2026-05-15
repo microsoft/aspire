@@ -17,11 +17,12 @@
 
     <dependencyManagement>
         <dependencies>
-            <dependency>
-                <groupId>org.eclipse.jetty</groupId>
-                <artifactId>jetty-server</artifactId>
-                <version>9.4.57.v20241219</version>
-            </dependency>
+            <!--
+                These overrides pin transitive versions brought in by azure-identity (via azure-core,
+                msal4j, reactor-netty, etc.) and the PostgreSQL JDBC driver. They exist so Component
+                Governance sees the patched versions rather than whatever older versions the upstream
+                BOMs would otherwise resolve.
+            -->
             <dependency>
                 <groupId>org.postgresql</groupId>
                 <artifactId>postgresql</artifactId>
@@ -56,11 +57,11 @@
     </dependencyManagement>
 
     <dependencies>
-        <dependency>
-            <groupId>com.sparkjava</groupId>
-            <artifactId>spark-core</artifactId>
-            <version>2.9.4</version>
-        </dependency>
+        <!--
+            HTTP server: we use the JDK's built-in com.sun.net.httpserver.HttpServer (see App.java),
+            so there is intentionally no third-party web framework dependency here. This avoids
+            transitive Jetty/Netty versions that Component Governance flags.
+        -->
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
