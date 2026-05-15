@@ -763,7 +763,7 @@ public class PRScriptToolModeTests(ITestOutputHelper testOutput)
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains("-InstallMode Tool cannot target", result.Output);
-        Assert.Contains("current host", result.Output);
+        Assert.Contains("dotnet tool install resolves RID-specific packages", result.Output);
     }
 
     [Fact]
