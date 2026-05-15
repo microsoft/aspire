@@ -100,6 +100,15 @@ type ContainerImagePushOptionsHandle = Handle<'Aspire.Hosting/Aspire.Hosting.App
 /** Handle to ContainerImagePushOptionsCallbackContext */
 type ContainerImagePushOptionsCallbackContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptionsCallbackContext'>;
 
+/** Handle to ContainerImageReference */
+type ContainerImageReferenceHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImageReference'>;
+
+/** Handle to ContainerMountAnnotation */
+type ContainerMountAnnotationHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerMountAnnotation'>;
+
+/** Handle to ContainerPortReference */
+type ContainerPortReferenceHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerPortReference'>;
+
 /** Handle to ContainerRegistryResource */
 type ContainerRegistryResourceHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerRegistryResource'>;
 
@@ -330,6 +339,12 @@ export enum CommandResultFormat {
 export enum ContainerLifetime {
     Session = "Session",
     Persistent = "Persistent",
+}
+
+/** Enum type for ContainerMountType */
+export enum ContainerMountType {
+    BindMount = "BindMount",
+    Volume = "Volume",
 }
 
 /** Enum type for DistributedApplicationOperation */
@@ -1536,6 +1551,155 @@ class ContainerImagePushOptionsCallbackContextImpl implements ContainerImagePush
             { context: this._handle }
         );
         return new ContainerImagePushOptionsImpl(handle, this._client);
+    }
+
+}
+
+// ============================================================================
+// ContainerImageReference
+// ============================================================================
+
+export interface ContainerImageReference {
+    toJSON(): MarshalledHandle;
+    /** Gets the Resource property */
+    resource(): ResourcePromise;
+    /** Gets the ValueExpression property */
+    valueExpression(): Promise<string>;
+}
+
+// ============================================================================
+// ContainerImageReferenceImpl
+// ============================================================================
+
+/**
+ * Type class for ContainerImageReference.
+ */
+class ContainerImageReferenceImpl implements ContainerImageReference {
+    constructor(private _handle: ContainerImageReferenceHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    resource(): ResourcePromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<IResourceHandle>(
+                'Aspire.Hosting.ApplicationModel/ContainerImageReference.resource',
+                { context: this._handle }
+            );
+            return new ResourceImpl(handle, this._client);
+        })();
+        return new ResourcePromiseImpl(promise, this._client, false);
+    }
+
+    async valueExpression(): Promise<string> {
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting.ApplicationModel/ContainerImageReference.valueExpression',
+            { context: this._handle }
+        );
+    }
+
+}
+
+// ============================================================================
+// ContainerMountAnnotation
+// ============================================================================
+
+export interface ContainerMountAnnotation {
+    toJSON(): MarshalledHandle;
+    /** Gets the Source property */
+    source(): Promise<string>;
+    /** Gets the Target property */
+    target(): Promise<string>;
+    /** Gets the Type property */
+    type(): Promise<ContainerMountType>;
+    /** Gets the IsReadOnly property */
+    isReadOnly(): Promise<boolean>;
+}
+
+// ============================================================================
+// ContainerMountAnnotationImpl
+// ============================================================================
+
+/**
+ * Type class for ContainerMountAnnotation.
+ */
+class ContainerMountAnnotationImpl implements ContainerMountAnnotation {
+    constructor(private _handle: ContainerMountAnnotationHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    async source(): Promise<string> {
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting.ApplicationModel/ContainerMountAnnotation.source',
+            { context: this._handle }
+        );
+    }
+
+    async target(): Promise<string> {
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting.ApplicationModel/ContainerMountAnnotation.target',
+            { context: this._handle }
+        );
+    }
+
+    async type(): Promise<ContainerMountType> {
+        return await this._client.invokeCapability<ContainerMountType>(
+            'Aspire.Hosting.ApplicationModel/ContainerMountAnnotation.type',
+            { context: this._handle }
+        );
+    }
+
+    async isReadOnly(): Promise<boolean> {
+        return await this._client.invokeCapability<boolean>(
+            'Aspire.Hosting.ApplicationModel/ContainerMountAnnotation.isReadOnly',
+            { context: this._handle }
+        );
+    }
+
+}
+
+// ============================================================================
+// ContainerPortReference
+// ============================================================================
+
+export interface ContainerPortReference {
+    toJSON(): MarshalledHandle;
+    /** Gets the Resource property */
+    resource(): ResourcePromise;
+    /** Gets the ValueExpression property */
+    valueExpression(): Promise<string>;
+}
+
+// ============================================================================
+// ContainerPortReferenceImpl
+// ============================================================================
+
+/**
+ * Type class for ContainerPortReference.
+ */
+class ContainerPortReferenceImpl implements ContainerPortReference {
+    constructor(private _handle: ContainerPortReferenceHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    resource(): ResourcePromise {
+        const promise = (async () => {
+            const handle = await this._client.invokeCapability<IResourceHandle>(
+                'Aspire.Hosting.ApplicationModel/ContainerPortReference.resource',
+                { context: this._handle }
+            );
+            return new ResourceImpl(handle, this._client);
+        })();
+        return new ResourcePromiseImpl(promise, this._client, false);
+    }
+
+    async valueExpression(): Promise<string> {
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting.ApplicationModel/ContainerPortReference.valueExpression',
+            { context: this._handle }
+        );
     }
 
 }
@@ -5569,11 +5733,15 @@ class UpdateCommandStateContextImpl implements UpdateCommandStateContext {
 
 export interface AspireStore {
     toJSON(): MarshalledHandle;
+    /** Gets the BasePath property */
+    basePath(): Promise<string>;
     /** Gets a deterministic file path for the specified file contents */
     getFileNameWithContent(filenameTemplate: string, sourceFilename: string): Promise<string>;
 }
 
 export interface AspireStorePromise extends PromiseLike<AspireStore> {
+    /** Gets the BasePath property */
+    basePath(): Promise<string>;
     /** Gets a deterministic file path for the specified file contents */
     getFileNameWithContent(filenameTemplate: string, sourceFilename: string): Promise<string>;
 }
@@ -5590,6 +5758,13 @@ class AspireStoreImpl implements AspireStore {
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    async basePath(): Promise<string> {
+        return await this._client.invokeCapability<string>(
+            'Aspire.Hosting.ApplicationModel/IAspireStore.basePath',
+            { context: this._handle }
+        );
+    }
 
     async getFileNameWithContent(filenameTemplate: string, sourceFilename: string): Promise<string> {
         const rpcArgs: Record<string, unknown> = { aspireStore: this._handle, filenameTemplate, sourceFilename };
@@ -5616,6 +5791,10 @@ class AspireStorePromiseImpl implements AspireStorePromise {
         return this._promise.then(onfulfilled, onrejected);
     }
 
+    basePath(): Promise<string> {
+        return this._promise.then(obj => obj.basePath());
+    }
+
     getFileNameWithContent(filenameTemplate: string, sourceFilename: string): Promise<string> {
         return this._promise.then(obj => obj.getFileNameWithContent(filenameTemplate, sourceFilename));
     }
@@ -5633,9 +5812,9 @@ export interface Configuration {
     /** Gets a connection string by name */
     getConnectionString(name: string): Promise<string>;
     /** Gets a configuration section by key */
-    getSection(key: string): Promise<IConfigurationSectionHandle>;
+    getSection(key: string): Promise<ConfigurationSection>;
     /** Gets child configuration sections */
-    getChildren(): Promise<IConfigurationSectionHandle[]>;
+    getChildren(): Promise<ConfigurationSection[]>;
     /** Checks whether a configuration section exists */
     exists(key: string): Promise<boolean>;
 }
@@ -5646,9 +5825,9 @@ export interface ConfigurationPromise extends PromiseLike<Configuration> {
     /** Gets a connection string by name */
     getConnectionString(name: string): Promise<string>;
     /** Gets a configuration section by key */
-    getSection(key: string): Promise<IConfigurationSectionHandle>;
+    getSection(key: string): Promise<ConfigurationSection>;
     /** Gets child configuration sections */
-    getChildren(): Promise<IConfigurationSectionHandle[]>;
+    getChildren(): Promise<ConfigurationSection[]>;
     /** Checks whether a configuration section exists */
     exists(key: string): Promise<boolean>;
 }
@@ -5682,17 +5861,17 @@ class ConfigurationImpl implements Configuration {
         );
     }
 
-    async getSection(key: string): Promise<IConfigurationSectionHandle> {
+    async getSection(key: string): Promise<ConfigurationSection> {
         const rpcArgs: Record<string, unknown> = { configuration: this._handle, key };
-        return await this._client.invokeCapability<IConfigurationSectionHandle>(
+        return await this._client.invokeCapability<ConfigurationSection>(
             'Aspire.Hosting/getSection',
             rpcArgs
         );
     }
 
-    async getChildren(): Promise<IConfigurationSectionHandle[]> {
+    async getChildren(): Promise<ConfigurationSection[]> {
         const rpcArgs: Record<string, unknown> = { configuration: this._handle };
-        return await this._client.invokeCapability<IConfigurationSectionHandle[]>(
+        return await this._client.invokeCapability<ConfigurationSection[]>(
             'Aspire.Hosting/getChildren',
             rpcArgs
         );
@@ -5731,17 +5910,78 @@ class ConfigurationPromiseImpl implements ConfigurationPromise {
         return this._promise.then(obj => obj.getConnectionString(name));
     }
 
-    getSection(key: string): Promise<IConfigurationSectionHandle> {
+    getSection(key: string): Promise<ConfigurationSection> {
         return this._promise.then(obj => obj.getSection(key));
     }
 
-    getChildren(): Promise<IConfigurationSectionHandle[]> {
+    getChildren(): Promise<ConfigurationSection[]> {
         return this._promise.then(obj => obj.getChildren());
     }
 
     exists(key: string): Promise<boolean> {
         return this._promise.then(obj => obj.exists(key));
     }
+
+}
+
+// ============================================================================
+// ConfigurationSection
+// ============================================================================
+
+export interface ConfigurationSection {
+    toJSON(): MarshalledHandle;
+    /** Gets the Key property */
+    key(): Promise<string>;
+    /** Gets the Path property */
+    path(): Promise<string>;
+    /** Gets the Value property */
+    value: {
+        get: () => Promise<string>;
+        set: (value: string) => Promise<void>;
+    };
+}
+
+// ============================================================================
+// ConfigurationSectionImpl
+// ============================================================================
+
+/**
+ * Type class for ConfigurationSection.
+ */
+class ConfigurationSectionImpl implements ConfigurationSection {
+    constructor(private _handle: IConfigurationSectionHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    async key(): Promise<string> {
+        return await this._client.invokeCapability<string>(
+            'Microsoft.Extensions.Configuration/IConfigurationSection.key',
+            { context: this._handle }
+        );
+    }
+
+    async path(): Promise<string> {
+        return await this._client.invokeCapability<string>(
+            'Microsoft.Extensions.Configuration/IConfigurationSection.path',
+            { context: this._handle }
+        );
+    }
+
+    value = {
+        get: async (): Promise<string> => {
+            return await this._client.invokeCapability<string>(
+                'Microsoft.Extensions.Configuration/IConfigurationSection.value',
+                { context: this._handle }
+            );
+        },
+        set: async (value: string): Promise<void> => {
+            await this._client.invokeCapability<void>(
+                'Microsoft.Extensions.Configuration/IConfigurationSection.setValue',
+                { context: this._handle, value }
+            );
+        }
+    };
 
 }
 
@@ -6841,6 +7081,21 @@ class ExecutionConfigurationResultPromiseImpl implements ExecutionConfigurationR
 
 export interface HostEnvironment {
     toJSON(): MarshalledHandle;
+    /** Gets the EnvironmentName property */
+    environmentName: {
+        get: () => Promise<string>;
+        set: (value: string) => Promise<void>;
+    };
+    /** Gets the ApplicationName property */
+    applicationName: {
+        get: () => Promise<string>;
+        set: (value: string) => Promise<void>;
+    };
+    /** Gets the ContentRootPath property */
+    contentRootPath: {
+        get: () => Promise<string>;
+        set: (value: string) => Promise<void>;
+    };
     /** Checks if running in Development environment */
     isDevelopment(): Promise<boolean>;
     /** Checks if running in Production environment */
@@ -6874,6 +7129,51 @@ class HostEnvironmentImpl implements HostEnvironment {
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    environmentName = {
+        get: async (): Promise<string> => {
+            return await this._client.invokeCapability<string>(
+                'Microsoft.Extensions.Hosting/IHostEnvironment.environmentName',
+                { context: this._handle }
+            );
+        },
+        set: async (value: string): Promise<void> => {
+            await this._client.invokeCapability<void>(
+                'Microsoft.Extensions.Hosting/IHostEnvironment.setEnvironmentName',
+                { context: this._handle, value }
+            );
+        }
+    };
+
+    applicationName = {
+        get: async (): Promise<string> => {
+            return await this._client.invokeCapability<string>(
+                'Microsoft.Extensions.Hosting/IHostEnvironment.applicationName',
+                { context: this._handle }
+            );
+        },
+        set: async (value: string): Promise<void> => {
+            await this._client.invokeCapability<void>(
+                'Microsoft.Extensions.Hosting/IHostEnvironment.setApplicationName',
+                { context: this._handle, value }
+            );
+        }
+    };
+
+    contentRootPath = {
+        get: async (): Promise<string> => {
+            return await this._client.invokeCapability<string>(
+                'Microsoft.Extensions.Hosting/IHostEnvironment.contentRootPath',
+                { context: this._handle }
+            );
+        },
+        set: async (value: string): Promise<void> => {
+            await this._client.invokeCapability<void>(
+                'Microsoft.Extensions.Hosting/IHostEnvironment.setContentRootPath',
+                { context: this._handle, value }
+            );
+        }
+    };
 
     async isDevelopment(): Promise<boolean> {
         const rpcArgs: Record<string, unknown> = { environment: this._handle };
@@ -32901,6 +33201,9 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandLin
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ConnectionStringAvailableEvent', (handle, client) => new ConnectionStringAvailableEventImpl(handle as ConnectionStringAvailableEventHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptions', (handle, client) => new ContainerImagePushOptionsImpl(handle as ContainerImagePushOptionsHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImagePushOptionsCallbackContext', (handle, client) => new ContainerImagePushOptionsCallbackContextImpl(handle as ContainerImagePushOptionsCallbackContextHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerImageReference', (handle, client) => new ContainerImageReferenceImpl(handle as ContainerImageReferenceHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerMountAnnotation', (handle, client) => new ContainerMountAnnotationImpl(handle as ContainerMountAnnotationHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerPortReference', (handle, client) => new ContainerPortReferenceImpl(handle as ContainerPortReferenceHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.DistributedApplication', (handle, client) => new DistributedApplicationImpl(handle as DistributedApplicationHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.DistributedApplicationExecutionContext', (handle, client) => new DistributedApplicationExecutionContextImpl(handle as DistributedApplicationExecutionContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.DistributedApplicationModel', (handle, client) => new DistributedApplicationModelImpl(handle as DistributedApplicationModelHandle, client));
@@ -32941,6 +33244,7 @@ registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hos
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.UpdateCommandStateContext', (handle, client) => new UpdateCommandStateContextImpl(handle as UpdateCommandStateContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IAspireStore', (handle, client) => new AspireStoreImpl(handle as IAspireStoreHandle, client));
 registerHandleWrapper('Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfiguration', (handle, client) => new ConfigurationImpl(handle as IConfigurationHandle, client));
+registerHandleWrapper('Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfigurationSection', (handle, client) => new ConfigurationSectionImpl(handle as IConfigurationSectionHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder', (handle, client) => new DistributedApplicationBuilderImpl(handle as IDistributedApplicationBuilderHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Eventing.IDistributedApplicationEventing', (handle, client) => new DistributedApplicationEventingImpl(handle as IDistributedApplicationEventingHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.IDistributedApplicationPipeline', (handle, client) => new DistributedApplicationPipelineImpl(handle as IDistributedApplicationPipelineHandle, client));

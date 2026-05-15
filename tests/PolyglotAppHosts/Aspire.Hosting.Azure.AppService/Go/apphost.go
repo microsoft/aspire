@@ -30,8 +30,16 @@ func main() {
 
 	website := builder.AddContainer("frontend", "nginx").
 		PublishAsAzureAppServiceWebsite(&aspire.PublishAsAzureAppServiceWebsiteOptions{
-			Configure:     func(_ aspire.AzureResourceInfrastructure, _ aspire.WebSite) {},
-			ConfigureSlot: func(_ aspire.AzureResourceInfrastructure, _ aspire.WebSiteSlot) {},
+			Configure: func(_ aspire.AzureResourceInfrastructure, appService aspire.WebSite) {
+				if err := appService.ConfigureSiteConfig(&aspire.AzureAppServiceSiteConfig{IsAlwaysOn: aspire.BoolPtr(true)}); err != nil {
+					log.Fatalf(aspire.FormatError(err))
+				}
+			},
+			ConfigureSlot: func(_ aspire.AzureResourceInfrastructure, appServiceSlot aspire.WebSiteSlot) {
+				if err := appServiceSlot.ConfigureSlotSiteConfig(&aspire.AzureAppServiceSiteConfig{IsAlwaysOn: aspire.BoolPtr(false)}); err != nil {
+					log.Fatalf(aspire.FormatError(err))
+				}
+			},
 		}).SkipEnvironmentVariableNameChecks()
 	if website.Err() != nil {
 		log.Fatalf(aspire.FormatError(website.Err()))
@@ -39,7 +47,11 @@ func main() {
 
 	worker := builder.AddExecutable("worker", "dotnet", ".", []string{"run"}).
 		PublishAsAzureAppServiceWebsite(&aspire.PublishAsAzureAppServiceWebsiteOptions{
-			Configure: func(_ aspire.AzureResourceInfrastructure, _ aspire.WebSite) {}}).
+			Configure: func(_ aspire.AzureResourceInfrastructure, appService aspire.WebSite) {
+				if err := appService.ConfigureSiteConfig(&aspire.AzureAppServiceSiteConfig{IsAlwaysOn: aspire.BoolPtr(true)}); err != nil {
+					log.Fatalf(aspire.FormatError(err))
+				}
+			}}).
 		SkipEnvironmentVariableNameChecks()
 	if worker.Err() != nil {
 		log.Fatalf(aspire.FormatError(worker.Err()))
@@ -47,7 +59,11 @@ func main() {
 
 	api := builder.AddProject("api", "../Fake.Api/Fake.Api.csproj", &aspire.AddProjectOptions{LaunchProfileOrOptions: "https"}).
 		PublishAsAzureAppServiceWebsite(&aspire.PublishAsAzureAppServiceWebsiteOptions{
-			Configure: func(_ aspire.AzureResourceInfrastructure, _ aspire.WebSite) {}}).
+			ConfigureSlot: func(_ aspire.AzureResourceInfrastructure, appServiceSlot aspire.WebSiteSlot) {
+				if err := appServiceSlot.ConfigureSlotSiteConfig(&aspire.AzureAppServiceSiteConfig{IsAlwaysOn: aspire.BoolPtr(false)}); err != nil {
+					log.Fatalf(aspire.FormatError(err))
+				}
+			}}).
 		SkipEnvironmentVariableNameChecks()
 	if api.Err() != nil {
 		log.Fatalf(aspire.FormatError(api.Err()))

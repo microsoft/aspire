@@ -333,7 +333,7 @@ public static class AtsCapabilityScanner
             // If ExposeProperties or ExposeMethods, create context type capabilities
             if (assemblyExportAttr.ExposeProperties || assemblyExportAttr.ExposeMethods)
             {
-                var contextResult = CreateContextTypeCapabilities(exportedType, assemblyName, assemblyExportedTypeCache);
+                var contextResult = CreateContextTypeCapabilities(exportedType, assemblyName, assemblyExportedTypeCache, assemblyExportAttr);
                 capabilities.AddRange(contextResult.Capabilities);
                 diagnostics.AddRange(contextResult.Diagnostics);
 
@@ -1471,7 +1471,8 @@ public static class AtsCapabilityScanner
     private static ContextTypeCapabilitiesResult CreateContextTypeCapabilities(
         Type contextType,
         string assemblyName,
-        AssemblyExportedTypeCache assemblyExportedTypeCache)
+        AssemblyExportedTypeCache assemblyExportedTypeCache,
+        AspireExportData? assemblyExportAttr = null)
     {
         var capabilities = new List<AtsCapabilityInfo>();
         var diagnostics = new List<AtsDiagnostic>();
@@ -1489,9 +1490,9 @@ public static class AtsCapabilityScanner
         var package = lastDot >= 0 ? fullName[..lastDot] : assemblyName;
 
         // Check for ExposeProperties and ExposeMethods flags
-        var exposeAllProperties = HasExposePropertiesAttribute(contextType);
-        var exposeAllMethods = HasExposeMethodsAttribute(contextType);
-        var typeExportAttr = GetAspireExportAttribute(contextType);
+        var typeExportAttr = assemblyExportAttr ?? GetAspireExportAttribute(contextType);
+        var exposeAllProperties = typeExportAttr?.ExposeProperties == true || HasExposePropertiesAttribute(contextType);
+        var exposeAllMethods = typeExportAttr?.ExposeMethods == true || HasExposeMethodsAttribute(contextType);
 
         // Scan properties
         foreach (var property in contextType.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static))
