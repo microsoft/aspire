@@ -1,4 +1,4 @@
-// aspire.go - Capability-based Aspire SDK
+﻿// aspire.go - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -368,6 +368,36 @@ func (d *ResourceEventDto) ToMap() map[string]any {
 	m["StateStyle"] = serializeValue(d.StateStyle)
 	m["HealthStatus"] = serializeValue(d.HealthStatus)
 	if d.ExitCode != nil { m["ExitCode"] = serializeValue(d.ExitCode) }
+	return m
+}
+
+// ParameterCustomInputOptions represents ParameterCustomInputOptions.
+type ParameterCustomInputOptions struct {
+	InputType *InputType `json:"InputType,omitempty"`
+	Label string `json:"Label,omitempty"`
+	Description string `json:"Description,omitempty"`
+	EnableDescriptionMarkdown *bool `json:"EnableDescriptionMarkdown,omitempty"`
+	Options map[string]string `json:"Options,omitempty"`
+	Value string `json:"Value,omitempty"`
+	Placeholder string `json:"Placeholder,omitempty"`
+	AllowCustomChoice *bool `json:"AllowCustomChoice,omitempty"`
+	Disabled *bool `json:"Disabled,omitempty"`
+	MaxLength *float64 `json:"MaxLength,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *ParameterCustomInputOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if d.InputType != nil { m["InputType"] = serializeValue(d.InputType) }
+	m["Label"] = serializeValue(d.Label)
+	m["Description"] = serializeValue(d.Description)
+	if d.EnableDescriptionMarkdown != nil { m["EnableDescriptionMarkdown"] = serializeValue(d.EnableDescriptionMarkdown) }
+	if d.Options != nil { m["Options"] = serializeValue(d.Options) }
+	m["Value"] = serializeValue(d.Value)
+	m["Placeholder"] = serializeValue(d.Placeholder)
+	if d.AllowCustomChoice != nil { m["AllowCustomChoice"] = serializeValue(d.AllowCustomChoice) }
+	if d.Disabled != nil { m["Disabled"] = serializeValue(d.Disabled) }
+	if d.MaxLength != nil { m["MaxLength"] = serializeValue(d.MaxLength) }
 	return m
 }
 
@@ -14576,6 +14606,7 @@ type ParameterResource interface {
 	WithContainerRegistry(registry Resource) ParameterResource
 	WithCorrelationId(correlationId string) ParameterResource
 	WithCreatedAt(createdAt string) ParameterResource
+	WithCustomInput(options *ParameterCustomInputOptions) ParameterResource
 	WithDependency(dependency ResourceWithConnectionString) ParameterResource
 	WithDescription(description string, options ...*WithDescriptionOptions) ParameterResource
 	WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) ParameterResource
@@ -14871,6 +14902,18 @@ func (s *parameterResource) WithCreatedAt(createdAt string) ParameterResource {
 	}
 	reqArgs["createdAt"] = serializeValue(createdAt)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withCreatedAt", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithCustomInput sets a custom input for the parameter
+func (s *parameterResource) WithCustomInput(options *ParameterCustomInputOptions) ParameterResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if options != nil { reqArgs["options"] = serializeValue(options) }
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withCustomInput", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 

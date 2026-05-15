@@ -1,4 +1,4 @@
-// aspire.ts - Capability-based Aspire SDK
+﻿// aspire.ts - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -574,6 +574,20 @@ export interface HttpsCertificateInfo {
     subject?: string;
     issuer?: string;
     thumbprint?: string;
+}
+
+/** DTO interface for ParameterCustomInputOptions */
+export interface ParameterCustomInputOptions {
+    inputType?: InputType;
+    label?: string;
+    description?: string;
+    enableDescriptionMarkdown?: boolean;
+    options?: Record<string, string>;
+    value?: string;
+    placeholder?: string;
+    allowCustomChoice?: boolean;
+    disabled?: boolean;
+    maxLength?: number;
 }
 
 /** DTO interface for ProcessCommandExportOptions */
@@ -19138,6 +19152,8 @@ export interface ParameterResource {
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ParameterResourcePromise;
     /** Sets a parameter description */
     withDescription(description: string, options?: WithDescriptionOptions): ParameterResourcePromise;
+    /** Sets a custom input for the parameter */
+    withCustomInput(options: ParameterCustomInputOptions): ParameterResourcePromise;
     /** Adds a required command dependency */
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ParameterResourcePromise;
     /** Customizes displayed URLs via callback */
@@ -19237,6 +19253,8 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ParameterResourcePromise;
     /** Sets a parameter description */
     withDescription(description: string, options?: WithDescriptionOptions): ParameterResourcePromise;
+    /** Sets a custom input for the parameter */
+    withCustomInput(options: ParameterCustomInputOptions): ParameterResourcePromise;
     /** Adds a required command dependency */
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ParameterResourcePromise;
     /** Customizes displayed URLs via callback */
@@ -19385,6 +19403,20 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     withDescription(description: string, options?: WithDescriptionOptions): ParameterResourcePromise {
         const enableMarkdown = options?.enableMarkdown;
         return new ParameterResourcePromiseImpl(this._withDescriptionInternal(description, enableMarkdown), this._client);
+    }
+
+    /** @internal */
+    private async _withCustomInputInternal(options: ParameterCustomInputOptions): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, options };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withCustomInput',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    withCustomInput(options: ParameterCustomInputOptions): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._withCustomInputInternal(options), this._client);
     }
 
     /** @internal */
@@ -20134,6 +20166,10 @@ class ParameterResourcePromiseImpl implements ParameterResourcePromise {
 
     withDescription(description: string, options?: WithDescriptionOptions): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withDescription(description, options)), this._client);
+    }
+
+    withCustomInput(options: ParameterCustomInputOptions): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withCustomInput(options)), this._client);
     }
 
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ParameterResourcePromise {

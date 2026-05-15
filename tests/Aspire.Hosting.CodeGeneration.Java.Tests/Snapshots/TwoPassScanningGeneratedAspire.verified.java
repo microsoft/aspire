@@ -1,4 +1,4 @@
-// ===== AddContainerOptions.java =====
+﻿// ===== AddContainerOptions.java =====
 // AddContainerOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
@@ -13113,6 +13113,64 @@ public enum OtlpProtocol implements WireValueEnum {
     }
 }
 
+// ===== ParameterCustomInputOptions.java =====
+// ParameterCustomInputOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** ParameterCustomInputOptions DTO. */
+public class ParameterCustomInputOptions implements JsonSerializable {
+    private InputType inputType;
+    private String label;
+    private String description;
+    private Boolean enableDescriptionMarkdown;
+    private Map<String, String> options;
+    private String value;
+    private String placeholder;
+    private Boolean allowCustomChoice;
+    private Boolean disabled;
+    private Double maxLength;
+
+    public InputType getInputType() { return inputType; }
+    public void setInputType(InputType value) { this.inputType = value; }
+    public String getLabel() { return label; }
+    public void setLabel(String value) { this.label = value; }
+    public String getDescription() { return description; }
+    public void setDescription(String value) { this.description = value; }
+    public Boolean getEnableDescriptionMarkdown() { return enableDescriptionMarkdown; }
+    public void setEnableDescriptionMarkdown(Boolean value) { this.enableDescriptionMarkdown = value; }
+    public Map<String, String> getOptions() { return options; }
+    public void setOptions(Map<String, String> value) { this.options = value; }
+    public String getValue() { return value; }
+    public void setValue(String value) { this.value = value; }
+    public String getPlaceholder() { return placeholder; }
+    public void setPlaceholder(String value) { this.placeholder = value; }
+    public Boolean getAllowCustomChoice() { return allowCustomChoice; }
+    public void setAllowCustomChoice(Boolean value) { this.allowCustomChoice = value; }
+    public Boolean getDisabled() { return disabled; }
+    public void setDisabled(Boolean value) { this.disabled = value; }
+    public Double getMaxLength() { return maxLength; }
+    public void setMaxLength(Double value) { this.maxLength = value; }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("InputType", AspireClient.serializeValue(inputType));
+        map.put("Label", AspireClient.serializeValue(label));
+        map.put("Description", AspireClient.serializeValue(description));
+        map.put("EnableDescriptionMarkdown", AspireClient.serializeValue(enableDescriptionMarkdown));
+        map.put("Options", AspireClient.serializeValue(options));
+        map.put("Value", AspireClient.serializeValue(value));
+        map.put("Placeholder", AspireClient.serializeValue(placeholder));
+        map.put("AllowCustomChoice", AspireClient.serializeValue(allowCustomChoice));
+        map.put("Disabled", AspireClient.serializeValue(disabled));
+        map.put("MaxLength", AspireClient.serializeValue(maxLength));
+        return map;
+    }
+}
+
 // ===== ParameterResource.java =====
 // ParameterResource.java - GENERATED CODE - DO NOT EDIT
 
@@ -13178,6 +13236,15 @@ public class ParameterResource extends ResourceBuilderBase {
             reqArgs.put("enableMarkdown", AspireClient.serializeValue(enableMarkdown));
         }
         getClient().invokeCapability("Aspire.Hosting/withDescription", reqArgs);
+        return this;
+    }
+
+    /** Sets a custom input for the parameter */
+    public ParameterResource withCustomInput(ParameterCustomInputOptions options) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("options", AspireClient.serializeValue(options));
+        getClient().invokeCapability("Aspire.Hosting/withCustomInput", reqArgs);
         return this;
     }
 
@@ -23369,6 +23436,7 @@ public final class WithVolumeOptions {
 .modules/JsonSerializable.java
 .modules/LogFacade.java
 .modules/OtlpProtocol.java
+.modules/ParameterCustomInputOptions.java
 .modules/ParameterResource.java
 .modules/PipelineConfigurationContext.java
 .modules/PipelineContext.java

@@ -97,6 +97,17 @@ func main() {
 			Secret:  aspire.BoolPtr(true),
 			Persist: aspire.BoolPtr(true),
 		})
+	customInputType := aspire.InputTypeNumber
+	customInputParam := builder.AddParameter("custom-input")
+	customInputParam.WithCustomInput(&aspire.ParameterCustomInputOptions{
+		InputType:   &customInputType,
+		Label:       "Worker Count",
+		Placeholder: "Enter number (1-10)",
+		Options: map[string]string{
+			"one": "One",
+			"two": "Two",
+		},
+	})
 
 	// ===================================================================
 	// Container-specific methods on ContainerResource

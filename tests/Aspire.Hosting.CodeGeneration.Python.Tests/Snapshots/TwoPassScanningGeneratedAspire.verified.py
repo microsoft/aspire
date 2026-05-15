@@ -1,4 +1,4 @@
-#   -------------------------------------------------------------
+﻿#   -------------------------------------------------------------
 #   Copyright (c) Microsoft Corporation. All rights reserved.
 #   Licensed under the MIT License. See LICENSE in project root for information.
 #
@@ -1808,6 +1808,18 @@ class InteractionInput(typing.TypedDict, total=False):
     Required: bool
     Options: typing.Iterable[typing.Any]
     DynamicLoading: typing.Any
+    Value: str
+    Placeholder: str
+    AllowCustomChoice: bool
+    Disabled: bool
+    MaxLength: int
+
+class ParameterCustomInputOptions(typing.TypedDict, total=False):
+    InputType: InputType
+    Label: str
+    Description: str
+    EnableDescriptionMarkdown: bool
+    Options: typing.Mapping[str, str]
     Value: str
     Placeholder: str
     AllowCustomChoice: bool
@@ -10233,6 +10245,7 @@ class ParameterResourceKwargs(_BaseResourceKwargs, total=False):
     """ParameterResource options."""
 
     description: str | tuple[str, bool]
+    custom_input: ParameterCustomInputOptions
 
 class ParameterResource(_BaseResource, AbstractExpressionValue):
     """ParameterResource resource."""
@@ -10253,6 +10266,17 @@ class ParameterResource(_BaseResource, AbstractExpressionValue):
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_custom_input(self, options: ParameterCustomInputOptions) -> typing.Self:
+        """Sets a custom input for the parameter"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['options'] = options
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withCustomInput',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def __init__(self, handle: Handle, client: AspireClient, **kwargs: typing.Unpack[ParameterResourceKwargs]) -> None:
         if _description := kwargs.pop("description", None):
             if _validate_type(_description, str):
@@ -10266,6 +10290,13 @@ class ParameterResource(_BaseResource, AbstractExpressionValue):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withDescription', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'description'. Expected: str or (str, bool)")
+        if _custom_input := kwargs.pop("custom_input", None):
+            if _validate_type(_custom_input, ParameterCustomInputOptions):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["options"] = typing.cast(ParameterCustomInputOptions, _custom_input)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withCustomInput', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'custom_input'. Expected: ParameterCustomInputOptions")
         super().__init__(handle, client, **kwargs)
 
 

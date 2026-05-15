@@ -4,8 +4,10 @@
 #pragma warning disable ASPIREUSERSECRETS001
 
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Resources;
 using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Hosting;
@@ -239,6 +241,37 @@ public static class ParameterResourceBuilderExtensions
         ArgumentNullException.ThrowIfNull(createInput);
 
         builder.Resource.Annotations.Add(new InputGeneratorAnnotation(createInput));
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Sets a custom input for the parameter resource from a polyglot app host.
+    /// </summary>
+    /// <param name="builder">Resource builder for the parameter.</param>
+    /// <param name="options">Options used to customize the input for the parameter.</param>
+    /// <returns>Resource builder for the parameter.</returns>
+    [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport("withCustomInput", Description = "Sets a custom input for the parameter")]
+    internal static IResourceBuilder<ParameterResource> WithCustomInputForPolyglot(this IResourceBuilder<ParameterResource> builder, Ats.ParameterCustomInputOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(options);
+
+        builder.Resource.Annotations.Add(new InputGeneratorAnnotation(parameter => new InteractionInput
+        {
+            Name = parameter.Name,
+            InputType = options.InputType ?? (parameter.Secret ? InputType.SecretText : InputType.Text),
+            Label = options.Label ?? parameter.Name,
+            Description = options.Description ?? parameter.Description,
+            EnableDescriptionMarkdown = options.EnableDescriptionMarkdown ?? parameter.EnableDescriptionMarkdown,
+            Options = options.Options?.Select(static option => KeyValuePair.Create(option.Key, option.Value)).ToArray(),
+            Value = options.Value,
+            Placeholder = options.Placeholder ?? string.Format(CultureInfo.CurrentCulture, InteractionStrings.ParametersInputsParameterPlaceholder, parameter.Name),
+            AllowCustomChoice = options.AllowCustomChoice ?? false,
+            Disabled = options.Disabled ?? false,
+            MaxLength = options.MaxLength
+        }));
 
         return builder;
     }
