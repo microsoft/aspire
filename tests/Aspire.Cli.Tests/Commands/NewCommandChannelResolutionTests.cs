@@ -370,7 +370,7 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
         var workingDirectory = workspace.WorkspaceRoot;
         var hivesDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "hives"));
         var cacheDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "cache"));
-        var sdksDirectory = new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-sdks"));
+        var sdksDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "sdks"));
         var logsDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "logs"));
         var logFilePath = Path.Combine(logsDirectory.FullName, "test.log");
         return new CliExecutionContext(
