@@ -1,12 +1,11 @@
 package com.example;
 
-import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.text.ParseException;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -15,8 +14,8 @@ import com.azure.core.credential.AccessToken;
 import com.azure.core.credential.TokenCredential;
 import com.azure.core.credential.TokenRequestContext;
 import com.azure.identity.DefaultAzureCredentialBuilder;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.JWTParser;
 import io.javalin.Javalin;
 
 /**
@@ -26,7 +25,6 @@ import io.javalin.Javalin;
  */
 public final class App {
     private static final String AZURE_DB_FOR_POSTGRES_SCOPE = "https://ossrdbms-aad.database.windows.net/.default";
-    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private App() {
     }
@@ -88,31 +86,26 @@ public final class App {
         }
 
         var token = accessToken.getToken();
-        var claims = decodeJwtPayload(token);
+        JWTClaimsSet claims;
+        try {
+            // Nimbus JOSE+JWT is already on the classpath (azure-identity pulls it in via msal4j)
+            // and pinned in dependencyManagement, so we use it instead of hand-rolling base64
+            // segment decoding. We only need to read the claims; the issuer already signed the
+            // token and the Postgres server will validate it on connect.
+            // See https://connect2id.com/products/nimbus-jose-jwt
+            claims = JWTParser.parse(token).getJWTClaimsSet();
+        } catch (ParseException ex) {
+            throw new IllegalStateException("Failed to parse Entra access token.", ex);
+        }
 
         // Entra emits the username under different claim names depending on the account type
         // (work/school vs. personal, federated vs. cloud-only). Try the common ones in order.
         for (var name : List.of("upn", "preferred_username", "unique_name")) {
-            if (claims.get(name) instanceof String value && !value.isEmpty()) {
+            if (claims.getClaim(name) instanceof String value && !value.isEmpty()) {
                 return new EntraConnection(value, token);
             }
         }
 
         throw new IllegalStateException("Could not extract a username from the access token. Have you logged in?");
-    }
-
-    private static Map<String, Object> decodeJwtPayload(String token) {
-        // JWT layout: header.payload.signature, each segment base64url-encoded. We only
-        // need the middle (claims) segment; the signature was verified by the issuer.
-        var parts = token.split("\\.");
-        if (parts.length < 2) {
-            throw new IllegalArgumentException("Invalid JWT token format.");
-        }
-        try {
-            return MAPPER.readValue(Base64.getUrlDecoder().decode(parts[1]),
-                new TypeReference<Map<String, Object>>() { });
-        } catch (java.io.IOException ex) {
-            throw new IllegalStateException("Failed to decode JWT payload.", ex);
-        }
     }
 }

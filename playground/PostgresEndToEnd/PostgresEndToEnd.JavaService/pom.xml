@@ -53,6 +53,11 @@
                 <version>9.48</version>
             </dependency>
             <dependency>
+                <groupId>com.fasterxml.jackson.core</groupId>
+                <artifactId>jackson-databind</artifactId>
+                <version>2.21.3</version>
+            </dependency>
+            <dependency>
                 <groupId>io.projectreactor.netty</groupId>
                 <artifactId>reactor-netty-core</artifactId>
                 <version>1.0.48</version>
@@ -101,9 +106,14 @@
             <version>1.1.19</version>
         </dependency>
         <dependency>
+            <groupId>com.nimbusds</groupId>
+            <artifactId>nimbus-jose-jwt</artifactId>
+        </dependency>
+        <!-- Javalin uses Jackson for ctx.json(). The version is pinned in
+             <dependencyManagement> above so Component Governance sees the patched build. -->
+        <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>2.21.3</version>
         </dependency>
     </dependencies>
 
