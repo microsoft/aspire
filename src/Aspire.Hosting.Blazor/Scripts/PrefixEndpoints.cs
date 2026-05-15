@@ -4,6 +4,7 @@
 // This script uses the same typed model and logic as EndpointsManifestTransformer
 // in the Hosting library.
 
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -64,7 +65,7 @@ if (dir is not null)
     Directory.CreateDirectory(dir);
 }
 
-File.WriteAllText(outputPath, JsonSerializer.Serialize(manifest, ManifestJsonContext.Default.EndpointsManifest));
+File.WriteAllText(outputPath, JsonSerializer.Serialize(manifest, ManifestJsonContext.Relaxed.EndpointsManifest));
 
 return 0;
 
@@ -111,4 +112,9 @@ class EndpointResponseHeader
     WriteIndented = true)]
 partial class ManifestJsonContext : JsonSerializerContext
 {
+    internal static ManifestJsonContext Relaxed { get; } = new(new JsonSerializerOptions
+    {
+        WriteIndented = true,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    });
 }
