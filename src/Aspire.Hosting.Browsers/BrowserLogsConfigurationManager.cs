@@ -196,13 +196,14 @@ internal sealed class BrowserLogsConfigurationManager(
 
     private void LoadProfileOptions(BrowserLogsResource resource, LoadInputContext context)
     {
+        var currentConfiguration = resource.ResolveCurrentConfiguration(configuration, configurationStore);
         if (context.Input.Value is null)
         {
-            var currentConfiguration = resource.ResolveCurrentConfiguration(configuration, configurationStore);
             context.Input.Value = currentConfiguration.Profile ?? BrowserDefaultProfileValue;
         }
 
-        var browser = context.AllInputs[BrowserInputName].Value;
+        var browser = context.AllInputs[BrowserInputName].Value ?? currentConfiguration.Browser;
+        var userDataModeValue = context.AllInputs[UserDataModeInputName].Value ?? currentConfiguration.UserDataMode.ToString();
         var profile = context.Input.Value;
 
         var options = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
@@ -211,7 +212,7 @@ internal sealed class BrowserLogsConfigurationManager(
         };
 
         var disableProfileInput = true;
-        if (Enum.TryParse<BrowserUserDataMode>(context.AllInputs[UserDataModeInputName].Value, ignoreCase: true, out var userDataMode) &&
+        if (Enum.TryParse<BrowserUserDataMode>(userDataModeValue, ignoreCase: true, out var userDataMode) &&
             userDataMode == BrowserUserDataMode.Shared &&
             !string.IsNullOrWhiteSpace(browser))
         {

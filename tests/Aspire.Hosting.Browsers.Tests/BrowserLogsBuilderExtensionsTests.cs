@@ -135,6 +135,42 @@ public class BrowserLogsBuilderExtensionsTests(ITestOutputHelper testOutputHelpe
     }
 
     [Fact]
+    public async Task WithBrowserLogs_ConfigureCommandProfileInputDefaultsToCurrentConfigurationBeforeDependenciesLoad()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var web = builder.AddResource(new TestHttpResource("web"))
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithEndpoint("http", endpoint => endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 8080))
+            .WithInitialState(new CustomResourceSnapshot
+            {
+                ResourceType = "TestHttp",
+                State = new ResourceStateSnapshot(KnownResourceStates.Running, KnownResourceStateStyles.Success),
+                Properties = []
+            });
+
+        web.WithBrowserLogs(browser: "custom-browser", profile: "Profile 1", userDataMode: BrowserUserDataMode.Shared);
+
+        using var app = builder.Build();
+        var browserLogsResource = Assert.Single(app.Services.GetRequiredService<DistributedApplicationModel>().Resources.OfType<BrowserLogsResource>());
+        var configureCommand = Assert.Single(browserLogsResource.Annotations.OfType<ResourceCommandAnnotation>(), annotation => annotation.Name == BrowserLogsBuilderExtensions.ConfigureTrackedBrowserCommandName);
+        var arguments = configureCommand.Arguments;
+        var profileInput = arguments.Single(input => input.Name == BrowserLogsConfigurationManager.ProfileInputName);
+
+        await profileInput.DynamicLoading!.LoadCallback(new LoadInputContext
+        {
+            Input = profileInput,
+            AllInputs = new InteractionInputCollection(arguments),
+            Services = app.Services,
+            CancellationToken = CancellationToken.None
+        });
+
+        Assert.Equal("Profile 1", profileInput.Value);
+        Assert.False(profileInput.Disabled);
+        Assert.Contains(profileInput.Options!, option => option.Key == "Profile 1" && option.Value == "Profile 1");
+    }
+
+    [Fact]
     public void WithBrowserLogs_ConfigureCommandSaveInputDescribesUnavailableUserSecrets()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
