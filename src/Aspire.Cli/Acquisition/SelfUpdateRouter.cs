@@ -21,8 +21,11 @@ internal enum SelfUpdateAction
 
     /// <summary>
     /// Refuse to update in-process and instead print a route-appropriate
-    /// command via <see cref="IUpgradeInstructionProvider"/>. The exit
-    /// code is non-zero so scripts notice the no-op.
+    /// command via <see cref="IUpgradeInstructionProvider"/>. Returns
+    /// exit code 0 to match the existing dotnet-tool refusal contract;
+    /// callers that need to detect whether an update actually happened
+    /// should compare the binary version before and after the run rather
+    /// than relying on the exit code.
     /// </summary>
     Delegate,
 }

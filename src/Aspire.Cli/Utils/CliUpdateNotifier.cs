@@ -47,7 +47,8 @@ internal class CliUpdateNotifier(
     IInteractionService interactionService,
     IInstallationDiscovery installationDiscovery,
     IUpgradeInstructionProvider upgradeInstructionProvider,
-    CliExecutionContext executionContext) : ICliUpdateNotifier
+    CliExecutionContext executionContext,
+    WingetFirstRunProbe wingetFirstRunProbe) : ICliUpdateNotifier
 {
     private IEnumerable<Shared.NuGetPackageCli>? _availablePackages;
 
@@ -142,11 +143,31 @@ internal class CliUpdateNotifier(
     /// command that matches how they installed the CLI (winget upgrade,
     /// brew upgrade --cask, dotnet tool update, get-aspire-cli-pr, etc.).
     /// </summary>
+    /// <remarks>
+    /// When the initial discovery reports no route (i.e., no sidecar on disk
+    /// yet), runs <see cref="WingetFirstRunProbe"/> on the binary directory
+    /// derived from the discovery's canonical path, then re-describes so the
+    /// freshly-stamped sidecar is picked up. The probe self-gates via
+    /// <see cref="IWindowsRegistryReader"/>, so the call is a cheap no-op
+    /// on non-Windows / non-WinGet installs.
+    /// </remarks>
     private string GetRouteAwareUpdateCommand()
     {
         var info = installationDiscovery.DescribeSelf();
-        var source = InstallSourceExtensions.ParseInstallSource(info.Route);
         var canonicalPath = info.CanonicalPath ?? info.Path;
+
+        if (string.IsNullOrEmpty(info.Route) && !string.IsNullOrEmpty(canonicalPath))
+        {
+            var binaryDir = Path.GetDirectoryName(canonicalPath);
+            if (!string.IsNullOrEmpty(binaryDir))
+            {
+                wingetFirstRunProbe.Run(binaryDir);
+                info = installationDiscovery.DescribeSelf();
+                canonicalPath = info.CanonicalPath ?? info.Path;
+            }
+        }
+
+        var source = InstallSourceExtensions.ParseInstallSource(info.Route);
 
         // Legacy fallback for pre-sidecar dotnet-tool installs (mirrors the
         // UpdateCommand --self resolution rule). Uses the no-arg overload so

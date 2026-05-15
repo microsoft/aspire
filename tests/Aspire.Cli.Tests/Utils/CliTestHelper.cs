@@ -366,7 +366,8 @@ internal sealed class CliServiceCollectionTestOptions
         var installationDiscovery = serviceProvider.GetRequiredService<IInstallationDiscovery>();
         var upgradeInstructionProvider = serviceProvider.GetRequiredService<IUpgradeInstructionProvider>();
         var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
-        return new CliUpdateNotifier(logger, nuGetPackageCache, interactionService, installationDiscovery, upgradeInstructionProvider, executionContext);
+        var wingetFirstRunProbe = serviceProvider.GetRequiredService<WingetFirstRunProbe>();
+        return new CliUpdateNotifier(logger, nuGetPackageCache, interactionService, installationDiscovery, upgradeInstructionProvider, executionContext, wingetFirstRunProbe);
     };
 
     public Func<IServiceProvider, IAddCommandPrompter> AddCommandPrompterFactory { get; set; } = (IServiceProvider serviceProvider) =>

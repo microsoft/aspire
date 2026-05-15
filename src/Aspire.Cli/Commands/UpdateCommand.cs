@@ -36,6 +36,7 @@ internal sealed class UpdateCommand : BaseCommand
     private readonly IInstallationDiscovery _installationDiscovery;
     private readonly IUpgradeInstructionProvider _upgradeInstructionProvider;
     private readonly ICliHostEnvironment _hostEnvironment;
+    private readonly WingetFirstRunProbe _wingetFirstRunProbe;
 
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", UpdateCommandStrings.ProjectArgumentDescription);
     private static readonly Option<bool> s_selfOption = new("--self")
@@ -69,7 +70,8 @@ internal sealed class UpdateCommand : BaseCommand
         IConfiguration configuration,
         IInstallationDiscovery installationDiscovery,
         IUpgradeInstructionProvider upgradeInstructionProvider,
-        ICliHostEnvironment hostEnvironment)
+        ICliHostEnvironment hostEnvironment,
+        WingetFirstRunProbe wingetFirstRunProbe)
         : base("update", UpdateCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _projectLocator = projectLocator;
@@ -84,6 +86,7 @@ internal sealed class UpdateCommand : BaseCommand
         _installationDiscovery = installationDiscovery;
         _upgradeInstructionProvider = upgradeInstructionProvider;
         _hostEnvironment = hostEnvironment;
+        _wingetFirstRunProbe = wingetFirstRunProbe;
 
         Options.Add(s_appHostOption);
         Options.Add(s_selfOption);
@@ -346,11 +349,44 @@ internal sealed class UpdateCommand : BaseCommand
     /// contract shipped still get classified as <see cref="InstallSource.DotnetTool"/>
     /// rather than <see cref="InstallSource.Unknown"/>.
     /// </summary>
+    /// <summary>
+    /// Resolves the install source and canonical binary path for the running CLI
+    /// via <see cref="IInstallationDiscovery.DescribeSelf"/> (the single source of
+    /// truth for "what is the running binary?"). Falls back to
+    /// <see cref="DotNetToolDetection"/> path-shape detection when no sidecar is
+    /// present, so legacy dotnet-tool installs created before the sidecar
+    /// contract shipped still get classified as <see cref="InstallSource.DotnetTool"/>
+    /// rather than <see cref="InstallSource.Unknown"/>.
+    /// </summary>
+    /// <remarks>
+    /// When the initial discovery reports no route (i.e., no sidecar on disk
+    /// yet), runs <see cref="WingetFirstRunProbe"/> on the binary directory
+    /// derived from the discovery's canonical path, then re-describes so the
+    /// freshly-stamped sidecar is picked up. Without this, a fresh WinGet
+    /// install whose very first invocation is <c>aspire update --self</c>
+    /// would classify as <see cref="InstallSource.Unknown"/>, route to
+    /// in-process update, and silently overwrite the WinGet-owned binary.
+    /// The probe is idempotent and self-gates via
+    /// <see cref="IWindowsRegistryReader"/>, so the call is a cheap no-op
+    /// on non-Windows / non-WinGet installs.
+    /// </remarks>
     private (InstallSource Source, string? CanonicalPath) ResolveRunningInstall()
     {
         var info = _installationDiscovery.DescribeSelf();
-        var source = InstallSourceExtensions.ParseInstallSource(info.Route);
         var canonicalPath = info.CanonicalPath ?? info.Path;
+
+        if (string.IsNullOrEmpty(info.Route) && !string.IsNullOrEmpty(canonicalPath))
+        {
+            var binaryDir = Path.GetDirectoryName(canonicalPath);
+            if (!string.IsNullOrEmpty(binaryDir))
+            {
+                _wingetFirstRunProbe.Run(binaryDir);
+                info = _installationDiscovery.DescribeSelf();
+                canonicalPath = info.CanonicalPath ?? info.Path;
+            }
+        }
+
+        var source = InstallSourceExtensions.ParseInstallSource(info.Route);
 
         // No-arg DotNetToolDetection.IsRunningAsDotNetTool honors the
         // s_processPathOverride AsyncLocal used by tests, so this fallback

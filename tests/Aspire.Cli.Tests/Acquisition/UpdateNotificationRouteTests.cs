@@ -85,7 +85,8 @@ public class UpdateNotificationRouteTests(ITestOutputHelper outputHelper)
                     "9.4.0", logger, nuGetPackageCache, service,
                     sp.GetRequiredService<IInstallationDiscovery>(),
                     sp.GetRequiredService<IUpgradeInstructionProvider>(),
-                    sp.GetRequiredService<CliExecutionContext>());
+                    sp.GetRequiredService<CliExecutionContext>(),
+                    sp.GetRequiredService<WingetFirstRunProbe>());
             };
         });
 
