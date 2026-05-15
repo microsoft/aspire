@@ -20,7 +20,6 @@ namespace Aspire.Hosting.RemoteHost;
 /// </summary>
 public static class AtsCapabilityScanner
 {
-    private static readonly NullabilityInfoContext s_nullabilityInfoContext = new();
 
     /// <summary>
     /// Result of scanning an assembly.
@@ -1085,9 +1084,7 @@ public static class AtsCapabilityScanner
             }
 
             var propDescription = GetXmlDocSummary(xmlDoc, $"P:{type.FullName}.{prop.Name}");
-            var propNullability = GetPropertyNullability(prop);
-            propTypeRef.IsNullable = propNullability.ReadState == NullabilityState.Nullable;
-            var isOptional = !prop.CanWrite || propTypeRef.IsNullable;
+            var isOptional = !prop.CanWrite || Nullable.GetUnderlyingType(prop.PropertyType) is not null;
 
             properties.Add(new AtsDtoPropertyInfo
             {
@@ -1614,7 +1611,9 @@ public static class AtsCapabilityScanner
                     var getterMethodName = methodNameOverride ?? camelCaseName;
                     var getMethodName = customMethodName ?? $"{typeName}.{getterMethodName}";
                     var getCapabilityId = $"{package}/{getMethodName}";
-                    var getterTypeRef = CreateNullableTypeRef(propertyTypeRef!, propertyNullability.ReadState == NullabilityState.Nullable);
+                    var getterTypeRef = CreateNullableTypeRef(
+                        propertyTypeRef!,
+                        ShouldApplyPropertyNullability(property, propertyTypeRef!, propertyNullability.ReadState));
 
                     capabilities.Add(new AtsCapabilityInfo
                     {
@@ -1656,7 +1655,9 @@ public static class AtsCapabilityScanner
                         : property.Name;
                     var setMethodName = $"set{setterMethodNameSuffix}";
                     var setCapabilityId = $"{package}/{typeName}.{setMethodName}";
-                    var setterTypeRef = CreateNullableTypeRef(propertyTypeRef!, propertyNullability.WriteState == NullabilityState.Nullable);
+                    var setterTypeRef = CreateNullableTypeRef(
+                        propertyTypeRef!,
+                        ShouldApplyPropertyNullability(property, propertyTypeRef!, propertyNullability.WriteState));
 
                     capabilities.Add(new AtsCapabilityInfo
                     {
@@ -1825,7 +1826,6 @@ public static class AtsCapabilityScanner
 
                 // Get return type
                 var returnTypeRef = CreateTypeRef(method.ReturnType, enumCollector: null, assemblyExportedTypeCache);
-                returnTypeRef = ApplyNullability(returnTypeRef, GetReturnNullability(method) == NullabilityState.Nullable);
 
                 // Get description from attribute if specified
                 var description = memberExportAttr?.Description ?? $"Invokes the {method.Name} method";
@@ -1999,7 +1999,6 @@ public static class AtsCapabilityScanner
 
         // Get return type
         var returnTypeRef = CreateTypeRef(method.ReturnType, enumCollector: null, assemblyExportedTypeCache);
-        returnTypeRef = ApplyNullability(returnTypeRef, GetReturnNullability(method) == NullabilityState.Nullable);
         var returnTypeId = MapToAtsTypeId(method.ReturnType, assemblyExportedTypeCache);
 
         // Only set ReturnsBuilder if the return type is actually a resource builder type
@@ -2025,13 +2024,21 @@ public static class AtsCapabilityScanner
     }
 
     private static NullabilityInfo GetPropertyNullability(PropertyInfo property) =>
-        s_nullabilityInfoContext.Create(property);
+        new NullabilityInfoContext().Create(property);
 
-    private static NullabilityState GetParameterNullability(ParameterInfo parameter) =>
-        s_nullabilityInfoContext.Create(parameter).ReadState;
+    private static bool ShouldApplyPropertyNullability(PropertyInfo property, AtsTypeRef typeRef, NullabilityState nullabilityState)
+    {
+        if (nullabilityState != NullabilityState.Nullable)
+        {
+            return false;
+        }
 
-    private static NullabilityState GetReturnNullability(MethodInfo method) =>
-        s_nullabilityInfoContext.Create(method.ReturnParameter).ReadState;
+        // Apply reference nullability only for direct string properties. Several exported Azure provisioning
+        // properties are wrapper types that map to scalar ATS values, but their C# nullability does not mean
+        // the generated scalar API should accept or return null.
+        return property.PropertyType == typeof(string)
+            && typeRef is { Category: AtsTypeCategory.Primitive, TypeId: AtsConstants.String };
+    }
 
     private static AtsTypeRef CreateNullableTypeRef(AtsTypeRef typeRef, bool isNullable)
     {
@@ -2052,13 +2059,8 @@ public static class AtsCapabilityScanner
         };
     }
 
-    private static AtsTypeRef? ApplyNullability(AtsTypeRef? typeRef, bool isNullable)
+    private static AtsTypeRef ApplyNullability(AtsTypeRef typeRef, bool isNullable)
     {
-        if (typeRef is null)
-        {
-            return null;
-        }
-
         typeRef.IsNullable = isNullable;
         return typeRef;
     }
@@ -2111,13 +2113,17 @@ public static class AtsCapabilityScanner
             (callbackParameters, callbackReturnType) = ExtractCallbackSignature(paramType, assemblyExportedTypeCache);
         }
 
-        var isNullable = Nullable.GetUnderlyingType(paramType) is not null ||
-            GetParameterNullability(param) == NullabilityState.Nullable;
+        var isNullable = Nullable.GetUnderlyingType(paramType) is not null;
 
         // For callbacks, create a callback type ref
         var finalTypeRef = isCallback
             ? new AtsTypeRef { TypeId = "callback", Category = AtsTypeCategory.Callback }
             : typeRef;
+        if (finalTypeRef is null)
+        {
+            return null;
+        }
+
         finalTypeRef = ApplyNullability(finalTypeRef, isNullable);
 
         return new AtsParameterInfo
@@ -2614,7 +2620,7 @@ public static class AtsCapabilityScanner
         if (underlyingType is not null)
         {
             var typeRef = CreateTypeRef(underlyingType, enumCollector, assemblyExportedTypeCache);
-            return ApplyNullability(typeRef, isNullable: true);
+            return typeRef is not null ? ApplyNullability(typeRef, isNullable: true) : null;
         }
 
         // Handle primitives

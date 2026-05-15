@@ -1506,7 +1506,7 @@ TestResourceStatus = typing.Literal["Pending", "Running", "Stopped", "Failed"]
 
 
 class OptionalStringParameters(typing.TypedDict, total=False):
-    value: str | None
+    value: str
     enabled: bool
 
 
@@ -1532,7 +1532,7 @@ class MergeRouteParameters(typing.TypedDict, total=False):
 
 
 class DataVolumeParameters(typing.TypedDict, total=False):
-    name: str | None
+    name: str
     is_read_only: bool
 
 # ============================================================================
@@ -1543,7 +1543,7 @@ class TestConfigDto(typing.TypedDict, total=False):
     Name: str
     Port: int
     Enabled: bool
-    OptionalField: str | None
+    OptionalField: str
 
 class TestDeeplyNestedDto(typing.TypedDict, total=False):
     NestedData: AspireDict[str, AspireList[TestConfigDto]]
@@ -1551,7 +1551,7 @@ class TestDeeplyNestedDto(typing.TypedDict, total=False):
 
 class TestNestedDto(typing.TypedDict, total=False):
     Id: str
-    Config: TestConfigDto | None
+    Config: TestConfigDto
     Tags: AspireList[str]
     Counts: AspireDict[str, int]
 
@@ -1933,7 +1933,7 @@ class AbstractResource(abc.ABC):
     """Abstract base class for AbstractResource interface."""
 
     @abc.abstractmethod
-    def with_optional_string(self, *, value: str | None | None = None, enabled: bool = True) -> typing.Self:
+    def with_optional_string(self, *, value: str | None = None, enabled: bool = True) -> typing.Self:
         """Adds an optional string parameter"""
 
     @abc.abstractmethod
@@ -2096,7 +2096,7 @@ class _BaseResource(AbstractResource):
         """The underlying object reference handle."""
         return self._handle
 
-    def with_optional_string(self, *, value: str | None | None = None, enabled: bool = True) -> typing.Self:
+    def with_optional_string(self, *, value: str | None = None, enabled: bool = True) -> typing.Self:
         """Adds an optional string parameter"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if value is not None:
@@ -2539,7 +2539,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
 class TestDatabaseResourceKwargs(ContainerResourceKwargs, total=False):
     """TestDatabaseResource options."""
 
-    data_volume: str | None | typing.Literal[True]
+    data_volume: str | typing.Literal[True]
 
 class TestDatabaseResource(ContainerResource):
     """TestDatabaseResource resource."""
@@ -2547,7 +2547,7 @@ class TestDatabaseResource(ContainerResource):
     def __repr__(self) -> str:
         return "TestDatabaseResource(handle={self._handle.handle_id})"
 
-    def with_data_volume(self, *, name: str | None | None = None) -> typing.Self:
+    def with_data_volume(self, *, name: str | None = None) -> typing.Self:
         """Adds a data volume"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if name is not None:
@@ -2561,15 +2561,15 @@ class TestDatabaseResource(ContainerResource):
 
     def __init__(self, handle: Handle, client: AspireClient, **kwargs: typing.Unpack[TestDatabaseResourceKwargs]) -> None:
         if _data_volume := kwargs.pop("data_volume", None):
-            if _validate_type(_data_volume, str | None):
+            if _validate_type(_data_volume, str):
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
-                rpc_args["name"] = typing.cast(str | None, _data_volume)
+                rpc_args["name"] = typing.cast(str, _data_volume)
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withDataVolume', rpc_args))
             elif _data_volume is True:
                 rpc_args: dict[str, typing.Any] = {"builder": handle}
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting.CodeGeneration.Python.Tests/withDataVolume', rpc_args))
             else:
-                raise TypeError("Invalid type for option 'data_volume'. Expected: str | None or Literal[True]")
+                raise TypeError("Invalid type for option 'data_volume'. Expected: str or Literal[True]")
         super().__init__(handle, client, **kwargs)
 
 
@@ -2589,7 +2589,7 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
     def __repr__(self) -> str:
         return "TestRedisResource(handle={self._handle.handle_id})"
 
-    def add_test_child_database(self, name: str, *, database_name: str | None | None = None, **kwargs: typing.Unpack[TestDatabaseResourceKwargs]) -> TestDatabaseResource:  # type: ignore
+    def add_test_child_database(self, name: str, *, database_name: str | None = None, **kwargs: typing.Unpack[TestDatabaseResourceKwargs]) -> TestDatabaseResource:  # type: ignore
         """Adds a child database to a test Redis resource"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['name'] = name
@@ -2706,7 +2706,7 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
         self._handle = self._wrap_builder(result)
         return self
 
-    def with_data_volume(self, *, name: str | None | None = None, is_read_only: bool = False) -> typing.Self:
+    def with_data_volume(self, *, name: str | None = None, is_read_only: bool = False) -> typing.Self:
         """Adds a data volume with persistence"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if name is not None:

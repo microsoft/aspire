@@ -30,7 +30,7 @@ await kubernetes.withProperties(async (environment) => {
     const _configuredDefaultStorageType: string = await environment.defaultStorageType.get();
 
     await environment.defaultStorageClassName.set('fast-storage');
-    const _configuredDefaultStorageClassName: string | undefined = await environment.defaultStorageClassName.get();
+    const _configuredDefaultStorageClassName: string | null | undefined = await environment.defaultStorageClassName.get();
 
     await environment.defaultStorageSize.set('5Gi');
     const _configuredDefaultStorageSize: string = await environment.defaultStorageSize.get();
@@ -45,7 +45,7 @@ await kubernetes.withProperties(async (environment) => {
     const _configuredDefaultServiceType: string = await environment.defaultServiceType.get();
 });
 
-const _resolvedDefaultStorageClassName: string | undefined = await kubernetes.defaultStorageClassName.get();
+const _resolvedDefaultStorageClassName: string | null | undefined = await kubernetes.defaultStorageClassName.get();
 const _resolvedDefaultServiceType: string = await kubernetes.defaultServiceType.get();
 
 const gateway = await kubernetes.addGateway('public-gateway');

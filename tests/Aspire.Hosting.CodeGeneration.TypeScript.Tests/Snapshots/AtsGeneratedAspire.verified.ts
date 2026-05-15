@@ -119,7 +119,7 @@ export interface TestConfigDto {
     name?: string;
     port?: number;
     enabled?: boolean;
-    optionalField?: string | null;
+    optionalField?: string;
 }
 
 /** DTO interface for TestDeeplyNestedDto */
@@ -131,7 +131,7 @@ export interface TestDeeplyNestedDto {
 /** DTO interface for TestNestedDto */
 export interface TestNestedDto {
     id?: string;
-    config?: TestConfigDto | null;
+    config?: TestConfigDto;
     tags?: AspireList<string>;
     counts?: AspireDict<string, number>;
 }
@@ -159,7 +159,7 @@ export namespace TestConfigs {
 // ============================================================================
 
 export interface AddTestChildDatabaseOptions {
-    databaseName?: string | null;
+    databaseName?: string;
 }
 
 export interface AddTestRedisOptions {
@@ -183,7 +183,7 @@ export interface WaitForReadyAsyncOptions {
 }
 
 export interface WithDataVolumeOptions {
-    name?: string | null;
+    name?: string;
     isReadOnly?: boolean;
 }
 
@@ -202,7 +202,7 @@ export interface WithOptionalCallbackOptions {
 }
 
 export interface WithOptionalStringOptions {
-    value?: string | null;
+    value?: string;
     enabled?: boolean;
 }
 
@@ -830,7 +830,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withOptionalStringInternal(value?: string | null, enabled?: boolean): Promise<TestDatabaseResource> {
+    private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (value !== undefined) rpcArgs.value = value;
         if (enabled !== undefined) rpcArgs.enabled = enabled;
@@ -1082,7 +1082,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /** @internal */
-    private async _withDataVolumeInternal(name?: string | null): Promise<TestDatabaseResource> {
+    private async _withDataVolumeInternal(name?: string): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (name !== undefined) rpcArgs.name = name;
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
@@ -1503,7 +1503,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _addTestChildDatabaseInternal(name: string, databaseName?: string | null): Promise<TestDatabaseResource> {
+    private async _addTestChildDatabaseInternal(name: string, databaseName?: string): Promise<TestDatabaseResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
         if (databaseName !== undefined) rpcArgs.databaseName = databaseName;
         const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
@@ -1535,7 +1535,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withOptionalStringInternal(value?: string | null, enabled?: boolean): Promise<TestRedisResource> {
+    private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (value !== undefined) rpcArgs.value = value;
         if (enabled !== undefined) rpcArgs.enabled = enabled;
@@ -1894,7 +1894,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /** @internal */
-    private async _withDataVolumeInternal(name?: string | null, isReadOnly?: boolean): Promise<TestRedisResource> {
+    private async _withDataVolumeInternal(name?: string, isReadOnly?: boolean): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (name !== undefined) rpcArgs.name = name;
         if (isReadOnly !== undefined) rpcArgs.isReadOnly = isReadOnly;
@@ -2317,7 +2317,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /** @internal */
-    private async _withOptionalStringInternal(value?: string | null, enabled?: boolean): Promise<TestVaultResource> {
+    private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (value !== undefined) rpcArgs.value = value;
         if (enabled !== undefined) rpcArgs.enabled = enabled;
@@ -2932,7 +2932,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /** @internal */
-    private async _withOptionalStringInternal(value?: string | null, enabled?: boolean): Promise<Resource> {
+    private async _withOptionalStringInternal(value?: string, enabled?: boolean): Promise<Resource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (value !== undefined) rpcArgs.value = value;
         if (enabled !== undefined) rpcArgs.enabled = enabled;

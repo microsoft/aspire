@@ -376,7 +376,7 @@ await container.withPipelineConfiguration(async (configContext) => {
     const taggedSteps = await configPipeline.stepsByTag(WellKnownPipelineTags.BuildCompute);
 
     const _stepName: string = await allSteps[0].name();
-    const _description: string = await allSteps[0].description();
+    const _description: string | null = await allSteps[0].description();
 
     await allSteps[0].addTag("validated");
     await allSteps[0].dependsOn("restore");

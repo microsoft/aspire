@@ -12,13 +12,13 @@
         ClrType: string,
         IsInterface: false,
         IsReadOnly: false,
-        IsNullable: true,
+        IsNullable: false,
         IsResourceBuilder: false,
         IsDistributedApplicationBuilder: false,
         IsDistributedApplication: false
       },
       IsOptional: true,
-      IsNullable: true,
+      IsNullable: false,
       IsCallback: false
     },
     {

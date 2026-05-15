@@ -51,7 +51,7 @@ type TestConfigDto struct {
 	Name string `json:"Name,omitempty"`
 	Port float64 `json:"Port,omitempty"`
 	Enabled bool `json:"Enabled,omitempty"`
-	OptionalField *string `json:"OptionalField,omitempty"`
+	OptionalField string `json:"OptionalField,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
@@ -60,7 +60,7 @@ func (d *TestConfigDto) ToMap() map[string]any {
 	m["Name"] = serializeValue(d.Name)
 	m["Port"] = serializeValue(d.Port)
 	m["Enabled"] = serializeValue(d.Enabled)
-	if d.OptionalField != nil { m["OptionalField"] = serializeValue(d.OptionalField) }
+	m["OptionalField"] = serializeValue(d.OptionalField)
 	return m
 }
 
@@ -646,9 +646,9 @@ func newIResourceWithEnvironmentFromHandle(h *handle, c *client) IResourceWithEn
 type TestCallbackContext interface {
 	handleReference
 	CancellationToken() (*CancellationToken, error)
-	Name() (*string, error)
+	Name() (string, error)
 	SetCancellationToken(options ...*SetCancellationTokenOptions) TestCallbackContext
-	SetName(value *string) TestCallbackContext
+	SetName(value string) TestCallbackContext
 	SetValue(value float64) TestCallbackContext
 	Value() (float64, error)
 	Err() error
@@ -680,18 +680,18 @@ func (s *testCallbackContext) CancellationToken() (*CancellationToken, error) {
 }
 
 // Name gets the Name property
-func (s *testCallbackContext) Name() (*string, error) {
-	if s.err != nil { var zero *string; return zero, s.err }
+func (s *testCallbackContext) Name() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.name", reqArgs)
 	if err != nil {
-		var zero *string
+		var zero string
 		return zero, err
 	}
-	return decodeAs[*string](result)
+	return decodeAs[string](result)
 }
 
 // SetCancellationToken sets the CancellationToken property
@@ -719,13 +719,13 @@ func (s *testCallbackContext) SetCancellationToken(options ...*SetCancellationTo
 }
 
 // SetName sets the Name property
-func (s *testCallbackContext) SetName(value *string) TestCallbackContext {
+func (s *testCallbackContext) SetName(value string) TestCallbackContext {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
-	if value != nil { reqArgs["value"] = serializeValue(value) }
+	reqArgs["value"] = serializeValue(value)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.setName", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
@@ -1218,10 +1218,10 @@ func (s *testDatabaseResource) WithValidator(validator func(arg TestResourceCont
 // TestEnvironmentContext is the public interface for handle type TestEnvironmentContext.
 type TestEnvironmentContext interface {
 	handleReference
-	Description() (*string, error)
+	Description() (string, error)
 	Name() (string, error)
 	Priority() (float64, error)
-	SetDescription(value *string) TestEnvironmentContext
+	SetDescription(value string) TestEnvironmentContext
 	SetName(value string) TestEnvironmentContext
 	SetPriority(value float64) TestEnvironmentContext
 	Err() error
@@ -1238,18 +1238,18 @@ func newTestEnvironmentContextFromHandle(h *handle, c *client) TestEnvironmentCo
 }
 
 // Description gets the Description property
-func (s *testEnvironmentContext) Description() (*string, error) {
-	if s.err != nil { var zero *string; return zero, s.err }
+func (s *testEnvironmentContext) Description() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.description", reqArgs)
 	if err != nil {
-		var zero *string
+		var zero string
 		return zero, err
 	}
-	return decodeAs[*string](result)
+	return decodeAs[string](result)
 }
 
 // Name gets the Name property
@@ -1283,13 +1283,13 @@ func (s *testEnvironmentContext) Priority() (float64, error) {
 }
 
 // SetDescription sets the Description property
-func (s *testEnvironmentContext) SetDescription(value *string) TestEnvironmentContext {
+func (s *testEnvironmentContext) SetDescription(value string) TestEnvironmentContext {
 	if s.err != nil { return s }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"context": s.handle.ToJSON(),
 	}
-	if value != nil { reqArgs["value"] = serializeValue(value) }
+	reqArgs["value"] = serializeValue(value)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.setDescription", reqArgs); err != nil { s.setErr(err) }
 	return s
 }

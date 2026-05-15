@@ -80,7 +80,7 @@ await queue.withProperties(async (q) => {
     // Read back properties to verify getter generation
     const _dlq: boolean = await q.deadLetteringOnMessageExpiration.get();
     const _ttl: number = await q.defaultMessageTimeToLive.get();
-    const _fwd: string = await q.forwardTo.get();
+    const _fwd: string | null = await q.forwardTo.get();
     const _maxDel: number = await q.maxDeliveryCount.get();
 });
 

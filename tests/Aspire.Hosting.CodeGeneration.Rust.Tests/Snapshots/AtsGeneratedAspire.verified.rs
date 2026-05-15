@@ -80,8 +80,8 @@ pub struct TestConfigDto {
     pub port: f64,
     #[serde(rename = "Enabled")]
     pub enabled: bool,
-    #[serde(rename = "OptionalField", skip_serializing_if = "Option::is_none")]
-    pub optional_field: Option<String>,
+    #[serde(rename = "OptionalField")]
+    pub optional_field: String,
 }
 
 impl TestConfigDto {
@@ -90,9 +90,7 @@ impl TestConfigDto {
         map.insert("Name".to_string(), serde_json::to_value(&self.name).unwrap_or(Value::Null));
         map.insert("Port".to_string(), serde_json::to_value(&self.port).unwrap_or(Value::Null));
         map.insert("Enabled".to_string(), serde_json::to_value(&self.enabled).unwrap_or(Value::Null));
-        if let Some(ref v) = self.optional_field {
-            map.insert("OptionalField".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
-        }
+        map.insert("OptionalField".to_string(), serde_json::to_value(&self.optional_field).unwrap_or(Value::Null));
         map
     }
 }
@@ -102,8 +100,8 @@ impl TestConfigDto {
 pub struct TestNestedDto {
     #[serde(rename = "Id")]
     pub id: String,
-    #[serde(rename = "Config", skip_serializing_if = "Option::is_none")]
-    pub config: Option<TestConfigDto>,
+    #[serde(rename = "Config")]
+    pub config: TestConfigDto,
     #[serde(rename = "Tags")]
     pub tags: Vec<String>,
     #[serde(rename = "Counts")]
@@ -114,9 +112,7 @@ impl TestNestedDto {
     pub fn to_map(&self) -> HashMap<String, Value> {
         let mut map = HashMap::new();
         map.insert("Id".to_string(), serde_json::to_value(&self.id).unwrap_or(Value::Null));
-        if let Some(ref v) = self.config {
-            map.insert("Config".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
-        }
+        map.insert("Config".to_string(), serde_json::to_value(&self.config).unwrap_or(Value::Null));
         map.insert("Tags".to_string(), serde_json::to_value(&self.tags).unwrap_or(Value::Null));
         map.insert("Counts".to_string(), serde_json::to_value(&self.counts).unwrap_or(Value::Null));
         map
@@ -353,7 +349,7 @@ impl TestCallbackContext {
     }
 
     /// Gets the Name property
-    pub fn name(&self) -> Result<Option<String>, Box<dyn std::error::Error>> {
+    pub fn name(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.name", args)?;
@@ -802,7 +798,7 @@ impl TestEnvironmentContext {
     }
 
     /// Gets the Description property
-    pub fn description(&self) -> Result<Option<String>, Box<dyn std::error::Error>> {
+    pub fn description(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.description", args)?;
