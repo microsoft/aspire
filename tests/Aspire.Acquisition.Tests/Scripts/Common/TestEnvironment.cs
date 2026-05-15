@@ -110,11 +110,11 @@ public sealed class TestEnvironment : IDisposable
                 )
                 echo "%ENDPOINT%" | findstr /C:"/actions/workflows/" >nul 2>&1
                 if not errorlevel 1 (
-                    if "%HAS_JQ%"=="true" (
-                        echo 987654321
-                    ) else (
-                        echo {"workflow_runs":[{"id":987654321,"conclusion":"success"}]}
-                    )
+                    rem Workflow-run endpoints include '&' query separators. When PowerShell
+                    rem invokes this .cmd shim, cmd.exe treats those as command separators before
+                    rem this script can see later arguments like --jq, so this endpoint must keep
+                    rem returning the scalar value used by the scripts' --jq path.
+                    echo 987654321
                     exit 0
                 )
                 echo {}
