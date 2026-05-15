@@ -324,7 +324,8 @@ public class Program
         // Configure OpenTelemetry tracing. TelemetryManager reads configuration and creates
         // separate TracerProvider instances:
         // - Azure Monitor provider with filtering (only exports activities with EXTERNAL_TELEMETRY=true)
-        // - Diagnostic provider for OTLP/console exporters (exports all activities, DEBUG only)
+        // - Profiling provider for explicit startup profiling OTLP export
+        // - Diagnostic provider for DEBUG-only diagnostics
         builder.Services.AddSingleton(sp => new TelemetryManager(sp.GetRequiredService<IConfiguration>(), args));
 
         // Shared services.

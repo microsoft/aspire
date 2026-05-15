@@ -49,6 +49,11 @@ internal static class TelemetryConstants
         public const string ProcessExecutableName = "process.executable.name";
 
         /// <summary>
+        /// Tag for the resolved process executable path.
+        /// </summary>
+        public const string ProcessExecutablePath = "process.executable.path";
+
+        /// <summary>
         /// Tag for the process exit code.
         /// </summary>
         public const string ProcessExitCode = "process.exit.code";
