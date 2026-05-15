@@ -91,7 +91,7 @@
     <!-- NuGet dependencies -->
     <PackageVersion Include="NuGet.Commands" Version="6.14.0" />
     <PackageVersion Include="NuGet.ProjectModel" Version="6.14.0" />
-    <PackageVersion Include="NuGet.Protocol" Version="6.14.0" />
+    <PackageVersion Include="NuGet.Protocol" Version="6.14.3" />
     <PackageVersion Include="NuGet.Resolver" Version="6.14.0" />
     <!-- external dependencies -->
     <PackageVersion Include="Confluent.Kafka" Version="2.13.0" />
@@ -184,7 +184,7 @@
     <PackageVersion Include="Microsoft.Azure.Functions.Worker.Extensions.DurableTask" Version="1.11.0" />
     <PackageVersion Include="Microsoft.Azure.Functions.Worker.Extensions.DurableTask.AzureManaged" Version="1.0.1" />
     <!-- playground apps dependencies for javascript -->
-    <PackageVersion Include="Swashbuckle.AspNetCore" Version="9.0.6" />
+    <PackageVersion Include="Swashbuckle.AspNetCore" Version="10.1.7" />
     <!-- Pinned versions for Component Governance - Remove when root dependencies are updated -->
     <PackageVersion Include="Azure.Core" Version="1.54.0" />
     <PackageVersion Include="Azure.Identity" Version="1.21.0" />
