@@ -193,10 +193,10 @@ extends:
                   script: |
                     Get-ChildItem -Path "$(Build.SourcesDirectory)\artifacts\packages" -File -Recurse | Select-Object FullName, @{Name="Size(MB)";Expression={[math]::Round($_.Length/1MB,2)}} | Format-Table -AutoSize
 
-              - task: NodeTool@0
+              - task: UseNode@1
                 displayName: 🟣Install node.js
                 inputs:
-                  versionSpec: '20.x'
+                  version: '20.x'
 
               - task: npmAuthenticate@0
                 displayName: 🟣NPM authenticate

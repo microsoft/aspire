@@ -51,10 +51,10 @@ jobs:
       useGlobalJson: true
 
   # Install Node.js, yarn, and vsce so the VS Code extension can be built
-  - task: NodeTool@0
+  - task: UseNode@1
     displayName: Install node.js
     inputs:
-      versionSpec: '20.x'
+      version: '20.x'
 
   - task: PowerShell@2
     displayName: Install yarn
