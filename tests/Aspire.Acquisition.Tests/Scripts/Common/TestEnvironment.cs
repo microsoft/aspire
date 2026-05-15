@@ -235,6 +235,15 @@ public sealed class TestEnvironment : IDisposable
                         esac
                     done
 
+                    if [ "$endpoint" = "graphql" ]; then
+                        if [ -z "$jq_filter" ]; then
+                            echo '{"_mock_missing_jq":true}'
+                            exit 1
+                        fi
+                        echo "abc123def456789012345678901234567890abcd"
+                        exit 0
+                    fi
+
                     # PR head SHA lookup: repos/.../pulls/<number>
                     if echo "$endpoint" | grep -q "/pulls/"; then
                         if [ -z "$jq_filter" ]; then

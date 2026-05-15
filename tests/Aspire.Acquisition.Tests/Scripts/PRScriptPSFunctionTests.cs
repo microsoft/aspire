@@ -93,7 +93,6 @@ public class PRScriptPSFunctionTests(ITestOutputHelper testOutput)
             $env:GITHUB_ACTIONS = 'true'
             $env:GITHUB_PATH = '{githubPath}'
             Update-PathEnvironment -CliBinDir '{cliBinDir}'
-            Get-Content -LiteralPath '{githubPath}'
             """,
             env,
             _testOutput);
@@ -102,7 +101,7 @@ public class PRScriptPSFunctionTests(ITestOutputHelper testOutput)
 
         result.EnsureSuccessful();
         Assert.Contains("already exists in PATH", result.Output);
-        Assert.Contains(cliBinDir, result.Output);
+        Assert.Contains(cliBinDir, await File.ReadAllLinesAsync(githubPath));
     }
 
     #endregion

@@ -108,6 +108,34 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
     }
 
     [Fact]
+    public async Task MockGhApiGraphQlWithoutJqFailsLoudly()
+    {
+        using var env = new TestEnvironment();
+        var mockBinPath = await env.CreateMockGhScriptAsync(_testOutput);
+        var mockGhPath = Path.Combine(mockBinPath, OperatingSystem.IsWindows() ? "gh.cmd" : "gh");
+        using var cmd = new ToolCommand(mockGhPath, _testOutput, "mock-gh");
+
+        var result = await cmd.ExecuteAsync("api", "graphql");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("_mock_missing_jq", result.Output);
+    }
+
+    [Fact]
+    public async Task MockGhApiGraphQlWithJqReturnsHeadSha()
+    {
+        using var env = new TestEnvironment();
+        var mockBinPath = await env.CreateMockGhScriptAsync(_testOutput);
+        var mockGhPath = Path.Combine(mockBinPath, OperatingSystem.IsWindows() ? "gh.cmd" : "gh");
+        using var cmd = new ToolCommand(mockGhPath, _testOutput, "mock-gh");
+
+        var result = await cmd.ExecuteAsync("api", "graphql", "--jq", ".data.repository.pullRequest.headRefOid");
+
+        result.EnsureSuccessful();
+        Assert.Equal("abc123def456789012345678901234567890abcd", result.Output.Trim());
+    }
+
+    [Fact]
     public async Task CustomInstallPath_IsRecognized()
     {
         using var env = new TestEnvironment();
