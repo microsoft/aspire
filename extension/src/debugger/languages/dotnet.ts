@@ -10,16 +10,16 @@ import * as fs from 'fs';
 import { doesFileExist } from '../../utils/io';
 import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, isProjectLaunchConfiguration, ProjectLaunchConfiguration } from '../../dcp/types';
 import { ResourceDebuggerExtension } from '../debuggerExtensions';
+import { readLaunchSettings } from '../dotnetLaunchSettings';
 import {
-    readLaunchSettings,
     determineBaseLaunchProfile,
     mergeEnvironmentVariables,
     determineArguments,
     determineWorkingDirectory,
-    determineServerReadyAction,
     LaunchProfileCommandName,
     expandEnvironmentVariables
-} from '../launchProfiles';
+} from '../dotnetLaunchProfiles';
+import { determineVSCodeServerReadyAction } from '../vscode/serverReadyAction';
 import { AspireDebugSession } from '../AspireDebugSession';
 
 interface IDotNetService {
@@ -309,7 +309,7 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
             // The apphost's application URL is the Aspire dashboard URL. We already get the dashboard login URL later on,
             // so we should just avoid setting up serverReadyAction and manually open the browser ourselves.
             if (!launchOptions.isApphost) {
-                debugConfiguration.serverReadyAction = determineServerReadyAction(baseProfile?.launchBrowser, baseProfile?.applicationUrl, debugConfiguration.serverReadyAction);
+                debugConfiguration.serverReadyAction = determineVSCodeServerReadyAction(baseProfile?.launchBrowser, baseProfile?.applicationUrl, debugConfiguration.serverReadyAction);
             }
 
             // Temporarily disable GH Copilot on the dashboard before the extension implementation is approved
