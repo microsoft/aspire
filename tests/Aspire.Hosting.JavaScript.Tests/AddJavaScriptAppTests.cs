@@ -143,12 +143,14 @@ public class AddJavaScriptAppTests
         var dockerfilePath = Path.Combine(tempDir.Path, "js.Dockerfile");
         var dockerfileLines = await File.ReadAllLinesAsync(dockerfilePath);
 
-        var copyLineIndex = Array.FindIndex(dockerfileLines, line => line.StartsWith("COPY ", StringComparison.Ordinal));
+        var copyLineIndex = Array.FindIndex(
+            dockerfileLines,
+            line => line.StartsWith("COPY ", StringComparison.Ordinal)
+                && line.Contains("pnpm-workspace.yaml", StringComparison.Ordinal));
         var installLineIndex = Array.FindIndex(dockerfileLines, line => line.Contains("pnpm install", StringComparison.Ordinal));
 
         Assert.NotEqual(-1, copyLineIndex);
         Assert.NotEqual(-1, installLineIndex);
-        Assert.Contains("pnpm-workspace.yaml", dockerfileLines[copyLineIndex]);
         Assert.True(copyLineIndex < installLineIndex);
     }
 
