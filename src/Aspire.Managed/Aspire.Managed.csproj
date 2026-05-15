@@ -47,6 +47,10 @@
     <PackageReference Include="System.CommandLine" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="$(SharedDir)IntegrationPackageProbeManifest.cs" Link="NuGet\IntegrationPackageProbeManifest.cs" />
+  </ItemGroup>
+
   <!-- Exclude unwanted files from publish output -->
   <Target Name="RemoveUnwantedPublishFiles" AfterTargets="ComputeResolvedFilesToPublishList">
     <ItemGroup>

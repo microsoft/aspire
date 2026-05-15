@@ -104,10 +104,10 @@ internal static class ResourceSnapshotMapper
 
         // Only include enabled commands
         var commands = snapshot.Commands
-            .Where(c => string.Equals(c.State, "Enabled", StringComparison.OrdinalIgnoreCase) && IsCommandVisibleToApi(c.Visibility))
+            .Where(IsCommandAvailableToApi)
             .OrderBy(c => c.Name)
             .ToDistinctDictionary(
-                 c => c.Name,
+                  c => c.Name,
                   c => new ResourceCommandJson
                   {
                       Description = c.Description,
@@ -150,16 +150,22 @@ internal static class ResourceSnapshotMapper
             Relationships = relationships.ToArray(),
             Commands = commands
         };
+    }
 
-        static bool IsDefaultCommandVisibility(string visibility)
-        {
-            return string.Equals(visibility, KnownCommandVisibility.Default, StringComparison.OrdinalIgnoreCase);
-        }
+    internal static bool IsCommandAvailableToApi(ResourceSnapshotCommand command)
+    {
+        return string.Equals(command.State, "Enabled", StringComparison.OrdinalIgnoreCase) &&
+            IsCommandVisibleToApi(command.Visibility);
+    }
 
-        static bool IsCommandVisibleToApi(string visibility)
-        {
-            return visibility.Split(',').Any(static value => string.Equals(value.Trim(), KnownCommandVisibility.Api, StringComparison.OrdinalIgnoreCase));
-        }
+    private static bool IsDefaultCommandVisibility(string? visibility)
+    {
+        return string.Equals(visibility, KnownCommandVisibility.Default, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsCommandVisibleToApi(string? visibility)
+    {
+        return visibility?.Split(',').Any(static value => string.Equals(value.Trim(), KnownCommandVisibility.Api, StringComparison.OrdinalIgnoreCase)) is true;
     }
 
     private static ResourceCommandArgumentJson MapCommandArgumentInput(ResourceSnapshotCommandArgument input)

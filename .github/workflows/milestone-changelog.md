@@ -39,8 +39,10 @@ env:
   PRODUCT: "Aspire"
   REPO: "microsoft/aspire"
   DOCS_REPO: "microsoft/aspire.dev"
-  MILESTONE_START: "2026-03-01"
-  MILESTONE: "13.3"
+  MILESTONE_START: "2026-05-08"
+  MILESTONE: "13.4"
+  PREVIOUS_MILESTONE: "13.3"
+  RELEASE_NOTES_URL: "https://aka.ms/aspire/update-latest"
   BATCH_SIZE: "20"
 
 on:
@@ -136,12 +138,12 @@ jobs:
               echo "::warning::Memory branch clone failed: $(cat "$CLONE_ERR")"
             fi
           fi
-          rm -rf "$MEMORY_TMP" "$CLONE_ERR"
+          rm -f "$CLONE_ERR"
 
           # 1. Fetch ALL merged PRs in milestone, sorted by merge date ascending
           gh pr list --repo "$REPO" --state merged --limit 5000 \
             --search "milestone:$MILESTONE" \
-            --json number,title,body,author,mergedAt,labels,additions,deletions,changedFiles,files \
+            --json number,title,body,author,mergedBy,mergedAt,labels,additions,deletions,changedFiles \
             | jq 'sort_by(.mergedAt)' \
             > "$DATA_DIR/all-milestone-prs.json"
 
@@ -163,29 +165,67 @@ jobs:
           echo "Already processed: $PROCESSED_COUNT"
           echo "Batch PRs (oldest $BATCH_SIZE unprocessed): $BATCH_COUNT"
 
-          # 2a. Enrich batch PRs with author_association (not available via gh pr list)
+          rm -rf "$MEMORY_TMP"
+
+          # 2a. Enrich batch PRs with comments, files, and authorAssociation.
+          #     The per-PR author_association from the REST API is unreliable
+          #     with GITHUB_TOKEN: org members show as CONTRIBUTOR because the
+          #     token lacks org-level read scope. Instead, we check each author
+          #     via the per-user collaborator/permission endpoint (only needs
+          #     metadata-read scope). Authors with write/maintain/admin are
+          #     MEMBER; others are CONTRIBUTOR.
           if [ "$BATCH_COUNT" -gt 0 ]; then
-            echo "Enriching batch PRs with author_association..."
-            # Build a JSON lookup object {"number": "association", ...} in one pass
-            ASSOC_JSON="{}"
+            echo "Enriching batch PRs with authorAssociation, comments, and files..."
+            : > "$DATA_DIR/enrichment.jsonl"
             for NUM in $(jq -r '.[].number' "$DATA_DIR/batch-prs.json"); do
-              ASSOC=$(gh api "repos/$REPO/pulls/$NUM" --jq '.author_association' 2>/dev/null || echo "UNKNOWN")
-              ASSOC_JSON=$(echo "$ASSOC_JSON" | jq --arg n "$NUM" --arg a "$ASSOC" '. + {($n): $a}')
+              VIEW=$(gh pr view "$NUM" --repo "$REPO" --json files,comments 2>/dev/null) \
+                || VIEW='{"files":[],"comments":[]}'
+              # Determine authorAssociation via per-user permission endpoint.
+              # This endpoint only requires metadata-read scope, unlike the
+              # bulk collaborators list which requires push/admin access.
+              AUTHOR=$(jq -r --argjson n "$NUM" '.[] | select(.number == $n) | .author.login' "$DATA_DIR/batch-prs.json")
+              if [ -z "$AUTHOR" ] || [ "$AUTHOR" = "null" ]; then
+                ASSOC="UNKNOWN"
+              else
+                PERM=$(gh api "repos/$REPO/collaborators/$AUTHOR/permission" --jq '.permission' 2>/dev/null) || PERM=""
+                case "$PERM" in
+                  write|maintain|admin) ASSOC="MEMBER" ;;
+                  *) ASSOC="CONTRIBUTOR" ;;
+                esac
+              fi
+              echo "$VIEW" | jq --arg n "$NUM" --arg a "$ASSOC" '{($n): {
+                authorAssociation: $a,
+                comments: [(.comments // [])[] | {author: .author.login, body: .body, createdAt: .createdAt}],
+                files: [(.files // [])[] | {path: .path, additions: .additions, deletions: .deletions, changeType: .changeType}]
+              }}' >> "$DATA_DIR/enrichment.jsonl"
             done
-            # Merge all associations into batch-prs.json in a single rewrite
-            echo "$ASSOC_JSON" | jq --slurpfile prs "$DATA_DIR/batch-prs.json" \
-              '. as $lookup | $prs[0] | map(. + {authorAssociation: ($lookup[(.number | tostring)] // "UNKNOWN")})' \
-              > "$DATA_DIR/batch-prs-tmp.json" \
+            # Merge enrichment lookup into batch-prs.json
+            jq -s 'add // {}' "$DATA_DIR/enrichment.jsonl" \
+              | jq --slurpfile prs "$DATA_DIR/batch-prs.json" '. as $lookup | $prs[0] | map(
+                  ($lookup[(.number | tostring)] // {}) as $e |
+                  . + {authorAssociation: ($e.authorAssociation // "UNKNOWN"), comments: ($e.comments // []), files: ($e.files // [])}
+                )' > "$DATA_DIR/batch-prs-tmp.json" \
               && mv "$DATA_DIR/batch-prs-tmp.json" "$DATA_DIR/batch-prs.json"
-            echo "Enriched $BATCH_COUNT batch PRs with author_association"
+            rm -f "$DATA_DIR/enrichment.jsonl"
+            echo "Enriched $BATCH_COUNT batch PRs with authorAssociation, comments, and files"
           fi
 
-          # 2b. Fetch docs PRs from DOCS_REPO merged after milestone start date
+          # 2b. Fetch docs PRs from DOCS_REPO merged after milestone start date.
+          #     Cap the date range to the most recently merged PR in the current
+          #     batch so that docs PRs are only evaluated once their corresponding
+          #     product PRs have been processed. When the batch is smaller than
+          #     BATCH_SIZE, all product PRs are caught up and no cap is needed.
           DOCS_REPO="${{ env.DOCS_REPO }}"
           MILESTONE_START="${{ env.MILESTONE_START }}"
+          DOCS_MERGED_RANGE="merged:>=${MILESTONE_START}"
+          if [ "$BATCH_COUNT" -ge "$BATCH_SIZE" ]; then
+            BATCH_CUTOFF=$(jq -r '.[-1].mergedAt' "$DATA_DIR/batch-prs.json")
+            DOCS_MERGED_RANGE="merged:${MILESTONE_START}..${BATCH_CUTOFF}"
+            echo "Capping docs PRs to merged on or before $BATCH_CUTOFF (batch is full)"
+          fi
           gh pr list --repo "$DOCS_REPO" --state merged --limit 5000 \
-            --search "merged:>=${MILESTONE_START}" \
-            --json number,title,body,author,mergedAt,labels,additions,deletions,changedFiles,files \
+            --search "$DOCS_MERGED_RANGE" \
+            --json number,title,body,author,mergedBy,mergedAt,labels,additions,deletions,changedFiles,files \
             | jq 'sort_by(.mergedAt)' \
             > "$DATA_DIR/all-docs-prs.json"
 
@@ -422,8 +462,8 @@ Generate and maintain a changelog for the **${PRODUCT} ${MILESTONE} milestone** 
 Each run appends newly merged changes to the existing content while preserving
 previous entries. A companion feedback issue collects editorial comments.
 
-> **Note:** `${PRODUCT}`, `${REPO}`, `${DOCS_REPO}`, `${MILESTONE_START}`, `${MILESTONE}`, and `${BATCH_SIZE}` refer to values set in the workflow's
-> `env` block (currently **`Aspire`**, **`microsoft/aspire`**, **`microsoft/aspire.dev`**, **`2026-03-01`**, **`13.3`**, and **`20`**). All file names,
+> **Note:** `${PRODUCT}`, `${REPO}`, `${DOCS_REPO}`, `${MILESTONE_START}`, `${MILESTONE}`, `${PREVIOUS_MILESTONE}`, `${RELEASE_NOTES_URL}`, and `${BATCH_SIZE}` refer to values set in the workflow's
+> `env` block (currently **`Aspire`**, **`microsoft/aspire`**, **`microsoft/aspire.dev`**, **`2026-05-08`**, **`13.4`**, **`13.3`**, **`https://aka.ms/aspire/update-latest`**, and **`20`**). All file names,
 > titles, and references below derive from those values.
 
 ## Important: available tools
@@ -462,6 +502,8 @@ use one of these patterns:
 | Docs milestone start | `${MILESTONE_START}` (fetch docs PRs merged on or after this date) |
 | Docs batch file | `/tmp/gh-aw/pr-data/batch-docs-prs.json` (unprocessed docs PRs) |
 | Docs PR tracker directory | `prs-docs/` (under memory directories; one JSON file per docs PR) |
+| Previous milestone | `${PREVIOUS_MILESTONE}` (optional; used to identify the release branch for backport detection) |
+| Release notes URL | `${RELEASE_NOTES_URL}` (official release notes page) |
 
 ## Step 1: Load existing changelog and feedback
 
@@ -471,11 +513,11 @@ to determine what work is available.
 
 - If `batch-prs.json` is **non-empty**, proceed through all steps (1–8).
 - If `batch-prs.json` is **empty** but `batch-docs-prs.json` is non-empty,
-  **skip Steps 3 and 5a–5e** (no product PRs to process) but continue through
-  Steps 1, 2, 4, 5f, 6, 7, and 8 to process docs PRs, apply editorial
+  **skip Steps 3 and 5a–5f** (no product PRs to process) but continue through
+  Steps 1, 2, 4, 5g, 6, 7, and 8 to process docs PRs, apply editorial
   feedback, and update the wiki.
 - If **both** batches are empty, the `fetch-data` job detected updated feedback.
-  **Skip Steps 3, 5a–5e, and 5f** but continue through Steps 1, 2, 4, 6, 7,
+  **Skip Steps 3, 5a–5f, and 5g** but continue through Steps 1, 2, 4, 6, 7,
   and 8 to apply editorial feedback, refresh the “What’s New” section, and
   update the footer counts.
 
@@ -502,40 +544,43 @@ to determine what work is available.
    on this issue will be read in Step 4 when processing editorial feedback. If the file does not exist, there is no
    feedback to process.
 
-## Step 2: Review the pre-computed batch
+## Step 2: Review the pre-computed data
 
-The pre-computation step (in the frontmatter) has already:
-- Fetched **all** merged PRs in the ${MILESTONE} milestone, sorted by merge date
-  ascending (oldest first) → `/tmp/gh-aw/pr-data/all-milestone-prs.json`
-- Compared each PR against the individual PR tracker files in `prs/` on the
-  memory branch to identify which PRs have not yet been processed (no tracker
-  file present)
-- Written the oldest ${BATCH_SIZE} unprocessed PRs to `/tmp/gh-aw/pr-data/batch-prs.json`
+All paths are under `/tmp/gh-aw/pr-data/`.
 
-Each entry in `batch-prs.json` contains: `number`, `title`, `body`, `author` (object
-with `login` and `is_bot`), `authorAssociation` (string, e.g. `"MEMBER"`, `"OWNER"`,
-`"CONTRIBUTOR"`, `"NONE"`), `mergedAt`, `labels` (array of objects with `name`),
-`additions`, `deletions`, `changedFiles`, and `files` (array of objects with
-`path`, `additions`, `deletions`, `changeType`) listing the changed file paths.
+| File | Contents |
+|------|----------|
+| `all-milestone-prs.json` | All merged PRs in the `${MILESTONE}` milestone, sorted by `mergedAt` ascending |
+| `batch-prs.json` | Oldest ${BATCH_SIZE} unprocessed product PRs. Includes `authorAssociation`, `files`, and `comments` added by the enrichment step (not available from `gh pr list`) |
+| `all-docs-prs.json` | All merged PRs in `${DOCS_REPO}` since `${MILESTONE_START}`, sorted by `mergedAt` ascending |
+| `batch-docs-prs.json` | Oldest ${BATCH_SIZE} unprocessed docs PRs (same base fields as product PRs plus `files`, but **without** `authorAssociation` or `comments`) |
 
-The pre-computation step has also fetched merged PRs from `${DOCS_REPO}` that
-were merged on or after `${MILESTONE_START}`:
-- All matching docs PRs → `/tmp/gh-aw/pr-data/all-docs-prs.json`
-- Oldest ${BATCH_SIZE} unprocessed docs PRs → `/tmp/gh-aw/pr-data/batch-docs-prs.json`
+Each entry in `batch-prs.json` contains:
 
-Each entry in `batch-docs-prs.json` has the same schema as `batch-prs.json`,
-except without the `authorAssociation` field (which is only enriched for
-product PRs).
+| Field | Type | Description |
+|-------|------|-------------|
+| `number` | number | PR number |
+| `title` | string | PR title |
+| `body` | string | PR description/body text |
+| `author` | object | `{login, is_bot}` — PR author |
+| `mergedBy` | object | null | `{login, is_bot}` — user who merged the PR (null if unavailable) |
+| `mergedAt` | string | ISO 8601 UTC merge timestamp |
+| `labels` | array | Array of `{name}` objects |
+| `additions` | number | Total lines added |
+| `deletions` | number | Total lines deleted |
+| `changedFiles` | number | Number of files changed |
+| `authorAssociation` | string | `"MEMBER"`, `"CONTRIBUTOR"`, or `"UNKNOWN"` |
+| `files` | array | Array of `{path, additions, deletions, changeType}` objects |
+| `comments` | array | Array of `{author, body, createdAt}` objects |
+
+Entries in `batch-docs-prs.json` have the same base fields (from `gh pr list`)
+but **without** `authorAssociation` or `comments`.
 
 ## Step 3: Process the batch PRs
 
 Read `/tmp/gh-aw/pr-data/batch-prs.json`. This is a JSON array of up to ${BATCH_SIZE}
-unprocessed PRs, sorted by `mergedAt` ascending (oldest first). Each entry contains:
-`number`, `title`, `body`, `author` (object with `login` and `is_bot`), `mergedAt`,
-`labels` (array of objects with `name`), `additions`, `deletions`, `changedFiles`,
-and `files` (array of objects with `path`, `additions`, `deletions`, `changeType`).
-The batch is also enriched with `authorAssociation` (fetched via REST API in the
-pre-computation step).
+unprocessed PRs, sorted by `mergedAt` ascending (oldest first). See Step 2 for the
+full schema of each entry.
 
 1. **Exclude bot-authored PRs** — remove any PR whose `author.is_bot` is `true`,
    **except** these cases which should be processed normally:
@@ -547,13 +592,28 @@ pre-computation step).
      targeting a release branch.
    Record each excluded bot PR as an individual tracker file in `prs/` with
    `status: "excluded"` in Step 6b so they are not re-processed on future runs.
-2. If the batch has fewer than ${BATCH_SIZE} PRs, this is the last batch — after
+2. **Exclude PRs already shipped via backport** — if `${PREVIOUS_MILESTONE}`
+   is empty or not set, skip this check entirely. Otherwise, for each batch PR
+   whose `mergedAt` is **before** `${MILESTONE_START}` (i.e., the PR was merged
+   in the previous milestone window and carried over), check the PR's `body` and
+   `comments` (both available in the batch data) for evidence that a backport
+   to the previous milestone's release branch was triggered. Look for:
+   - A `/backport to release/${PREVIOUS_MILESTONE}` command in comments.
+   - A bot comment (e.g., from `github-actions[bot]` or `mergifyio`) confirming
+     a backport PR was created targeting `release/${PREVIOUS_MILESTONE}`.
+   - Body text stating the PR was backported to `release/${PREVIOUS_MILESTONE}`.
+   If a backport was triggered, exclude the PR — its changes already shipped
+   in the previous milestone. Set `status: "excluded"` in the PR tracker with
+   a comment like `"Backported to release/${PREVIOUS_MILESTONE}"`.
+   PRs merged **on or after** `${MILESTONE_START}` should **not** be checked
+   for backports — they are new to this milestone by definition.
+3. If the batch has fewer than ${BATCH_SIZE} PRs, this is the last batch — after
    processing it, the backlog will be fully caught up.
 
 For each remaining (non-bot) PR, collect all data from the batch: number, title,
-author, `authorAssociation`, body, labels, changed file paths (`files` array), and
-total changed lines (additions + deletions). No additional API calls are needed —
-the batch data contains everything required.
+author, `mergedBy`, `authorAssociation`, body, labels, changed file paths (`files`
+array), and total changed lines (additions + deletions). No additional API calls
+are needed — the batch data contains everything required.
 
 ### 3a. Processing backport PRs
 
@@ -579,13 +639,16 @@ or partially filled. To process them:
 4. **Use the backport PR's number** (not the original) in the `Changes:` line
    and in `prs` arrays, since the backport is the PR that was merged into the
    milestone.
-5. **Use the original PR author's `author_association`** for the community
-   contribution flag (Step 5b), since the backport bot is not a meaningful author.
-   Set the `author` field in the PR tracker to the original PR's author, not the
-   bot. When evaluating Step 5b's "Community contribution" flag for a backport PR,
-   use the **original author's** `author_association` and treat `author.is_bot` as
-   `false` (since the original author — not the backport bot — is the meaningful
-   contributor).
+5. **Use the original PR author** for the community contribution flag
+   (Step 5b), since the backport bot is not a meaningful author. Set the
+   `author` field in the PR tracker to the original PR's author, not the bot.
+   To determine whether the original author is a team member, query:
+   ```bash
+   gh api "repos/${REPO}/collaborators/<AUTHOR>/permission" --jq '.permission'
+   ```
+   If the result is `write`, `maintain`, or `admin`, they are `MEMBER`;
+   otherwise `CONTRIBUTOR`. Treat `author.is_bot` as `false` (since the
+   original author — not the backport bot — is the meaningful contributor).
 6. **Set `backport: true`** in the change file for this entry (see Step 6a schema).
    If the backport PR is grouped with an existing entry that was not a backport,
    keep `backport: false` (the entry is not purely backport-derived).
@@ -617,7 +680,7 @@ body, labels, and file paths only.
 
 Use the diff to write a more accurate changelog name and description. If the diff
 reveals the change is not notable (e.g., pure refactoring despite a misleading title),
-apply the filtering rules from Step 5e.
+apply the filtering rules from Step 5f.
 
 ## Step 4: Process editorial feedback from comments
 
@@ -686,25 +749,27 @@ Then determine whether either of these optional flags applies:
 | Flag | Emoji | When to set |
 |------|-------|-------------|
 | **Breaking change** | ⚠️ | Removed or renamed API, changed default behavior, migration required |
-| **Docs required** | 📝 | Change needs documentation (new feature, changed behavior, new config options) |
+| **Docs required** | 📝 | Change needs documentation (new feature, changed behavior, new config options, new public API). Always set this for breaking changes. |
 | **Community contribution** | 🌍 | PR's `authorAssociation` (from the batch data) is not `MEMBER` or `OWNER`, **and** the PR's `author.is_bot` (from the batch data) is not `true` — i.e., the author is a human external community contributor. For **backport PRs** (Step 3a), use the original PR author's `authorAssociation` and ignore the backport bot's `is_bot` flag. |
 
 The `authorAssociation` field is pre-populated in the batch data by the fetch-data
 job. Use it directly — no additional API calls are needed. For **backport PRs**,
-the original PR's `author_association` is not in the batch; fetch it via:
+the original PR's author is not in the batch; query:
 ```bash
-gh api "repos/${REPO}/pulls/<ORIGINAL_NUMBER>" --jq '.author_association'
+gh api "repos/${REPO}/collaborators/<AUTHOR>/permission" --jq '.permission'
 ```
+If the result is `write`, `maintain`, or `admin`, they are `MEMBER`; otherwise
+`CONTRIBUTOR`.
 
 > **Never infer community-contributor status from fork origin, username, or any
-> other heuristic.** Only the `author_association` / `authorAssociation` field
-> from the GitHub API is authoritative. Team members frequently submit PRs from
-> personal forks.
+> other heuristic.** Only the collaborator list and `authorAssociation` field are
+> authoritative. Team members frequently submit PRs from personal forks.
 
 A change can have zero or more flags. When present, show each flag on its own
 indented line below the Changes line:
 
 ```
+  Owner: [@jamesnk](https://github.com/jamesnk)  
   Changes: [#1234](https://github.com/${REPO}/pull/1234)  
   ⚠️ **Breaking change**  
   📝 **Documentation required**  
@@ -719,15 +784,34 @@ This gives visibility and recognition to external contributors.
 Omit flag lines entirely when a flag does not apply.
 
 When documentation PRs have been matched to an entry (the `docsPrs` array is
-non-empty after Step 5f), add a `Docs:` line linking to the docs PRs:
+non-empty after Step 5g), add a `Docs:` line linking to the docs PRs:
 ```
   Docs: [${DOCS_REPO}#456](https://github.com/${DOCS_REPO}/pull/456)  
 ```
-When multiple docs PRs are linked, separate them with commas. The `Docs:` line
-appears immediately after the `Changes:` line. Keep the
-`📝 **Documentation required**` flag line as well.
+When multiple docs PRs are linked, separate them with commas. The line order
+within each entry is: `Owner:`, `Changes:`, `Docs:` (if any), then flag lines.
+Keep the `📝 **Documentation required**` flag line as well.
 
-### 5c. Write name and description
+### 5c. Determine owner
+
+Every changelog entry has an **owner** — the team member accountable for the
+change. Determine the owner as follows:
+
+1. **Default:** The PR author (`author.login` from the batch data).
+2. **Community contribution:** If the PR author is a community contributor
+   (i.e., `authorAssociation` is not `MEMBER` or `OWNER`), the owner is the
+   person who merged the PR (`mergedBy.login` from the batch data). If
+   `mergedBy` is null or missing, fall back to the PR author as owner.
+3. **Backport PRs:** Use the original PR's author (per Step 3a item 5). If
+   that author is a community contributor, use the backport PR's `mergedBy`
+   (or the PR author if `mergedBy` is null).
+4. **Grouped entries (Step 5e):** When multiple PRs are grouped into one
+   entry, the owner is determined by the **first** (oldest) PR in the group.
+
+Set the `owner` field in the change file (Step 6a) to the owner's GitHub
+username (without `@` prefix).
+
+### 5d. Write name and description
 
 - **Emoji**: Choose a single emoji that represents the change. Pick something specific
   and evocative — avoid reusing the area emoji. Examples: 🧭 for navigation, 🚀 for
@@ -737,7 +821,7 @@ appears immediately after the `Changes:` line. Keep the
 - **Description**: One to two sentences describing the change from an end-user
   perspective. Focus on *what* changed and *why* it matters.
 
-### 5d. Group related PRs
+### 5e. Group related PRs
 
 If multiple PRs **within the current batch** represent the same logical change
 (e.g., a feature spread across several PRs), combine them into **one** changelog
@@ -752,7 +836,7 @@ rather than creating a new one:
   (e.g., new capabilities, platform support, configuration options).
 - Keep the description concise — add detail, don't repeat what's already there.
 
-### 5e. Filtering rules
+### 5f. Filtering rules
 
 - **Include**: new features, notable bug fixes, breaking changes, performance
   improvements, new integrations, new resource types, and notable engineering or
@@ -764,11 +848,12 @@ rather than creating a new one:
 - When in doubt about whether a change is notable, include it — it can always be
   removed via a comment later.
 
-### 5f. Match documentation PRs
+### 5g. Match documentation PRs
 
 Read `/tmp/gh-aw/pr-data/batch-docs-prs.json`. This is a JSON array of up to
 ${BATCH_SIZE} unprocessed docs PRs from `${DOCS_REPO}`, sorted by `mergedAt`
-ascending. Each entry has the same schema as the product PR batch.
+ascending. Each entry has the same fields as product PRs except
+`authorAssociation` and `comments` (which are only enriched for product PRs).
 
 Unlike product PRs (Step 3), **do not exclude bot-authored docs PRs** —
 automated docs PRs from bots often contain meaningful documentation updates.
@@ -779,8 +864,8 @@ filter but documents an unrelated product or version), record it as
 `"excluded"` in the docs PR tracker (Step 6d) with a comment explaining why.
 
 For each remaining docs PR, determine whether it documents a changelog entry.
-The batch data already contains each docs PR's `title`, `body`, and `files`
-(changed file paths) — no additional API calls are needed. Match by:
+The batch data already contains each docs PR's `title`, `body`, `files`
+(changed file paths), and `labels` — no additional API calls are needed. Match by:
 
 1. **Explicit product PR reference** — the docs PR body or title mentions a
    product PR number (e.g., "Documents #1234", links to
@@ -836,7 +921,7 @@ Where:
 Create the `changes/` directory (via `mkdir -p`) if it does not exist.
 
 If a changelog entry was updated (e.g., a new PR was grouped with an existing entry
-per Step 5d), overwrite the existing change file with the updated content.
+per Step 5e), overwrite the existing change file with the updated content.
 
 Schema:
 
@@ -855,6 +940,7 @@ Schema:
   "firstMergedAt": "2026-04-20T14:15:00Z",
   "lastMergedAt": "2026-04-22T18:30:00Z",
   "name": "New CLI command",
+  "owner": "jamesnk",
   "prs": [1240]
 }
 ```
@@ -869,11 +955,12 @@ Field definitions:
   external community contributors. Empty array if none.
 - **description**: User-facing description (one to two sentences)
 - **docsPrs**: Array of PR numbers from `${DOCS_REPO}` that document this change. Empty array if none.
-- **docsRequired**: `true` if documentation is needed, `false` otherwise
+- **docsRequired**: `true` if documentation is needed or `breaking` is `true`, `false` otherwise
 - **emoji**: A single emoji representing the change
 - **firstMergedAt**: ISO 8601 UTC timestamp of the earliest PR's merge date
 - **lastMergedAt**: ISO 8601 UTC timestamp of the most recent PR's merge date
 - **name**: Short, user-friendly name for the change
+- **owner**: GitHub username (without `@`) of the team member accountable for this change
 - **prs**: Array of PR numbers associated with this entry
 
 After writing each file, **normalize formatting** by running:
@@ -1043,16 +1130,24 @@ entry's individual emoji, `<Name>` is the changelog entry name, and
 (e.g., `-apphost`, `-cli`, `-dashboard`). The `#` before the slug is mandatory
 markdown anchor syntax — always write `(#-apphost)`, never `(-apphost)`.
 
+After the What's New list, add a blockquote disclaimer:
+
+```markdown
+> ℹ️ This changelog is automatically generated from merged pull requests and may
+> contain inaccuracies. For official release notes, see
+> [${RELEASE_NOTES_URL}](${RELEASE_NOTES_URL}).
+```
+
 Under each area heading, add a one-line **summary** counting the entries per change
 type, e.g. `2 new features, 1 improvement` or `3 bug fixes`. Use singular form
 for counts of 1 (`1 new feature`, `1 bug fix`, `1 improvement`).
 
-**Every line** within a changelog entry (name, description, Changes, Docs, and each flag
-line) must end with **two trailing spaces** (`  `) to produce a markdown line break.
-This includes the last line of each entry, even when there are no flags.
+**Every line** within a changelog entry (name, description, Changes, Owner, Docs, and
+each flag line) must end with **two trailing spaces** (`  `) to produce a markdown
+line break. This includes the last line of each entry, even when there are no flags.
 
-When a changelog entry has a non-empty `docsPrs` array, add a **Docs:** line immediately
-after the `Changes:` line. Each docs PR is linked using the format
+When a changelog entry has a non-empty `docsPrs` array, add a **Docs:** line after
+the `Changes:` line. Each docs PR is linked using the format
 `[${DOCS_REPO}#456](https://github.com/${DOCS_REPO}/pull/456)`. Separate multiple
 docs PRs with commas. The `📝 **Documentation required**` flag line is kept
 regardless of whether docs PRs are linked.
@@ -1068,6 +1163,10 @@ Use this exact format:
 - [💻 CLI](#-cli)
 - [📊 Dashboard](#-dashboard)
 
+> ℹ️ This changelog is automatically generated from merged pull requests and may
+> contain inaccuracies. For official release notes, see
+> [${RELEASE_NOTES_URL}](${RELEASE_NOTES_URL}).
+
 ## What's New
 
 - [2026-04-22 22:48 — 🧭 Feature name](#-apphost)
@@ -1082,12 +1181,14 @@ Use this exact format:
 
 1. **🧭 Feature name**  
   Brief user-facing description  
+  Owner: [@jamesnk](https://github.com/jamesnk)  
   Changes: [#1234](https://github.com/${REPO}/pull/1234), [#1235](https://github.com/${REPO}/pull/1235)  
   ⚠️ **Breaking change**  
   📝 **Documentation required**  
 
 1. **🚀 Another feature**  
   What this means for users  
+  Owner: [@davidfowl](https://github.com/davidfowl)  
   Changes: [#1236](https://github.com/${REPO}/pull/1236)  
   Docs: [${DOCS_REPO}#456](https://github.com/${DOCS_REPO}/pull/456)  
   📝 **Documentation required**  
@@ -1096,6 +1197,7 @@ Use this exact format:
 
 1. **⚡ Performance boost**  
   Faster startup for container resources  
+  Owner: [@eerhardt](https://github.com/eerhardt)  
   Changes: [#1238](https://github.com/${REPO}/pull/1238)  
 
 ## 💻 CLI
@@ -1106,12 +1208,14 @@ Use this exact format:
 
 1. **🆕 New CLI command**  
   Added a new command for scaffolding resources  
+  Owner: [@jamesnk](https://github.com/jamesnk)  
   Changes: [#1240](https://github.com/${REPO}/pull/1240)  
 
 #### Bug fixes
 
 1. **🐛 Fix crash on init**  
   Resolved a crash when running init in an empty directory  
+  Owner: [@maddymontaquila](https://github.com/maddymontaquila)  
   Changes: [#1239](https://github.com/${REPO}/pull/1239)  
   ⚠️ **Breaking change**  
   🌍 **Community contribution** by [@contributor](https://github.com/contributor)  
@@ -1124,11 +1228,12 @@ Use this exact format:
 
 1. **🎨 Dashboard improvement**  
   Description of the change  
+  Owner: [@AdrianJSClique](https://github.com/AdrianJSClique)  
   Changes: [#1237](https://github.com/${REPO}/pull/1237)  
 
 ---
 
-*This changelog is automatically generated. To provide feedback, comment on the
+*To provide feedback, comment on the
 [Changelog feedback](<link to the "[${MILESTONE}] Changelog feedback" issue in this repo>) issue
 (e.g., "Exclude PR #1234", "Rename: X → Y", "Merge PRs #1234 and #5678").*
 
@@ -1179,7 +1284,7 @@ if it exists) and check that:
    body must still be present in the new body (unless editorial feedback explicitly
    requested removal).
 2. **No existing entries were modified** unless the modification adds a PR number from
-   the current batch to that entry's Changes line (per Step 5d grouping rules), or
+   the current batch to that entry's Changes line (per Step 5e grouping rules), or
    editorial feedback from Step 4 explicitly requested the change (e.g., rename,
    merge, area override).
 3. **All new entries reference only PR numbers from the current batch** — any PR number

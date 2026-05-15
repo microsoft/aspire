@@ -28,8 +28,8 @@ public class ProfilingTelemetryTests
         Activity? startedActivity = null;
         using var listener = CreateProfilingActivityListener(activity => startedActivity = activity);
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
-            (ProfilingTelemetry.EnabledEnvironmentVariable, "true"),
-            (ProfilingTelemetry.SessionIdEnvironmentVariable, "session-1")));
+            (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
+            (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1")));
 
         using var activity = profilingTelemetry.StartRunCommand();
 
@@ -38,7 +38,7 @@ public class ProfilingTelemetryTests
         Assert.Equal(ProfilingTelemetry.ActivitySourceName, startedActivity.Source.Name);
         Assert.Equal("session-1", startedActivity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId));
         Assert.Equal("session-1", startedActivity.GetTagItem(ProfilingTelemetry.Tags.LegacyStartupOperationId));
-        Assert.Equal("session-1", startedActivity.GetBaggageItem(ProfilingTelemetry.SessionIdBaggageName));
+        Assert.Equal("session-1", startedActivity.GetBaggageItem(ProfilingTelemetry.Baggage.SessionId));
     }
 
     [Fact]
@@ -50,10 +50,10 @@ public class ProfilingTelemetryTests
         using var parentSource = new ActivitySource("test-parent");
         using var parentActivity = parentSource.StartActivity("parent");
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
-            (ProfilingTelemetry.EnabledEnvironmentVariable, "true")));
+            (ProfilingTelemetry.EnvironmentVariables.Enabled, "true")));
         Assert.NotNull(parentActivity);
 
-        parentActivity.SetBaggage(ProfilingTelemetry.SessionIdBaggageName, "session-1");
+        parentActivity.SetBaggage(ProfilingTelemetry.Baggage.SessionId, "session-1");
 
         using (profilingTelemetry.StartDetachedSpawnChild("aspire", argsCount: 1, childCommand: "start"))
         {
@@ -66,7 +66,7 @@ public class ProfilingTelemetryTests
         Assert.Equal(2, startedActivities.Count);
         Assert.All(startedActivities, activity =>
         {
-            Assert.Equal("session-1", activity.GetBaggageItem(ProfilingTelemetry.SessionIdBaggageName));
+            Assert.Equal("session-1", activity.GetBaggageItem(ProfilingTelemetry.Baggage.SessionId));
             Assert.Equal("session-1", activity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId));
         });
     }
@@ -82,7 +82,7 @@ public class ProfilingTelemetryTests
         using var diagnosticSource = new ActivitySource("test-diagnostic");
         using var parentActivity = parentSource.StartActivity("parent");
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
-            (ProfilingTelemetry.EnabledEnvironmentVariable, "true")));
+            (ProfilingTelemetry.EnvironmentVariables.Enabled, "true")));
         Assert.NotNull(parentActivity);
 
         using (diagnosticSource.StartActivity("diagnostic"))
@@ -97,13 +97,28 @@ public class ProfilingTelemetryTests
         }
 
         Assert.Equal(2, startedActivities.Count);
-        var sessionId = parentActivity.GetBaggageItem(ProfilingTelemetry.SessionIdBaggageName);
+        var sessionId = parentActivity.GetBaggageItem(ProfilingTelemetry.Baggage.SessionId);
         Assert.NotNull(sessionId);
         Assert.All(startedActivities, activity =>
         {
-            Assert.Equal(sessionId, activity.GetBaggageItem(ProfilingTelemetry.SessionIdBaggageName));
+            Assert.Equal(sessionId, activity.GetBaggageItem(ProfilingTelemetry.Baggage.SessionId));
             Assert.Equal(sessionId, activity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId));
         });
+    }
+
+    [Fact]
+    public void BackchannelTraceContextCarriesActivityBaggage()
+    {
+        using var listener = CreateProfilingActivityListener(_ => { });
+        using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
+            (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
+            (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1")));
+
+        using var activity = profilingTelemetry.StartJsonRpcClientCall("aux", "GetCapabilitiesAsync", streaming: false);
+        var traceContext = activity.CreateBackchannelTraceContext();
+
+        Assert.NotNull(traceContext);
+        Assert.Equal("session-1", traceContext.Baggage[ProfilingTelemetry.Baggage.SessionId]);
     }
 
     private static ActivityListener CreateProfilingActivityListener(Action<Activity> activityStarted)

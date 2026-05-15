@@ -20,6 +20,8 @@ internal sealed class TestProjectLocator : IProjectLocator
 
     public Func<DirectoryInfo, AppHostDiscoveryScope, CancellationToken, Task<List<FileInfo>>>? FindAppHostProjectFilesAsyncCallback { get; set; }
 
+    public Func<DirectoryInfo, AppHostDiscoveryScope, int?, CancellationToken, Task<List<FileInfo>>>? FindAppHostProjectFilesWithDepthAsyncCallback { get; set; }
+
     public async Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(
         DirectoryInfo searchDirectory,
         AppHostDiscoveryScope scope,
@@ -56,6 +58,16 @@ internal sealed class TestProjectLocator : IProjectLocator
         }
 
         return [];
+    }
+
+    public async Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, int? maxDepth, CancellationToken cancellationToken)
+    {
+        if (FindAppHostProjectFilesWithDepthAsyncCallback != null)
+        {
+            return await FindAppHostProjectFilesWithDepthAsyncCallback(searchDirectory, scope, maxDepth, cancellationToken);
+        }
+
+        return await FindAppHostProjectFilesAsync(searchDirectory, scope, cancellationToken);
     }
 
     public async Task<FileInfo?> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, bool createSettingsFile, CancellationToken cancellationToken)
@@ -101,5 +113,10 @@ internal sealed class TestProjectLocator : IProjectLocator
 
         // Default: no settings file found
         return null;
+    }
+
+    public async Task<FileInfo?> GetAppHostFromSettingsAsync(DirectoryInfo searchDirectory, bool searchParentDirectories, CancellationToken cancellationToken = default)
+    {
+        return await GetAppHostFromSettingsAsync(cancellationToken);
     }
 }

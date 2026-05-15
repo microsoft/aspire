@@ -5,6 +5,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
@@ -28,6 +29,238 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
+    }
+
+    [Fact]
+    public async Task ResourceCommand_HelpShowsAvailableResourceCommandsMatchesSnapshot()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var helpWriter = new StringWriter();
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "web",
+                    CreateCommand("wait-for-browser", "Waits for text in the browser."),
+                    CreateCommand("configure", "Configures the browser."),
+                    CreateCommand("dashboard-only", "Dashboard-only command.", state: "Enabled", visibility: KnownCommandVisibility.UI),
+                    CreateCommand("missing-visibility", "Missing visibility command.", state: "Enabled", visibility: null!)),
+                CreateResourceSnapshot(
+                    "api",
+                    CreateCommand("wait-for-browser", "Waits for text in the browser."),
+                    CreateCommand("disabled-command", "Disabled command.", state: "Disabled", visibility: KnownCommandVisibility.Api))
+            ]
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("resource web --non-interactive --help");
+
+        var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        await Verify(helpWriter.ToString(), extension: "txt");
+    }
+
+    [Fact]
+    public async Task ResourceCommand_HelpDoesNotPromptForOutOfScopeAppHostsMatchesSnapshot()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var helpWriter = new StringWriter();
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            IsInScope = false,
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "web",
+                    CreateCommand("wait-for-browser", "Waits for text in the browser."))
+            ]
+        };
+        var interactionService = new TestInteractionService
+        {
+            PromptForSelectionCallback = (_, _, _, _) => throw new InvalidOperationException("Help should not prompt for an AppHost.")
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel, interactionService);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("resource web --help");
+
+        var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        await Verify(helpWriter.ToString(), extension: "txt");
+    }
+
+    [Fact]
+    public async Task ResourceCommand_HelpFallsBackToDefaultHelpWhenAvailableCommandsScanFails()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var helpWriter = new StringWriter();
+
+        var monitor = new TestAuxiliaryBackchannelMonitor
+        {
+            ScanAsyncCallback = _ => throw new InvalidOperationException("Scan failed.")
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("resource web --help");
+
+        var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
+        var helpOutput = helpWriter.ToString();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Contains("Execute a command on a resource", helpOutput);
+        Assert.DoesNotContain("Available resource commands:", helpOutput);
+    }
+
+    [Fact]
+    public async Task ResourceCommand_HelpFallsBackToDefaultHelpWhenAvailableCommandsSnapshotFails()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var helpWriter = new StringWriter();
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            GetResourceSnapshotsHandler = _ => throw new InvalidOperationException("Snapshot failed.")
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("resource web --help");
+
+        var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
+        var helpOutput = helpWriter.ToString();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Contains("Execute a command on a resource", helpOutput);
+        Assert.DoesNotContain("Available resource commands:", helpOutput);
+    }
+
+    [Fact]
+    public async Task ResourceCommand_HelpWithAppHostDirectoryDoesNotPromptWhenMultipleAppHostsFound()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var helpWriter = new StringWriter();
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("Apps");
+        var prompted = false;
+        var interactionService = new TestInteractionService
+        {
+            PromptForSelectionCallback = (_, _, _, _) =>
+            {
+                prompted = true;
+                throw new InvalidOperationException("Help should not prompt for an AppHost.");
+            }
+        };
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, behavior, _, _) =>
+            {
+                Assert.Equal(MultipleAppHostProjectsFoundBehavior.Throw, behavior);
+                throw new ProjectLocatorException("multiple", ProjectLocatorFailureReason.MultipleProjectFilesFound);
+            }
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"""resource web --apphost "{appHostDirectory.FullName}" --help""");
+
+        var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
+        var helpOutput = helpWriter.ToString();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.False(prompted);
+        Assert.Contains("Execute a command on a resource", helpOutput);
+        Assert.DoesNotContain("Available resource commands:", helpOutput);
+    }
+
+    [Fact]
+    public async Task ResourceCommand_HelpWithAppHostDoesNotPromptWhenMultipleRunningAppHostsMatch()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var helpWriter = new StringWriter();
+        var appHostProjectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        File.WriteAllText(appHostProjectFile.FullName, "<Project />");
+        var prompted = false;
+        var interactionService = new TestInteractionService
+        {
+            PromptForSelectionCallback = (_, _, _, _) =>
+            {
+                prompted = true;
+                throw new InvalidOperationException("Help should not prompt for an AppHost.");
+            }
+        };
+        var appHostInfo = new AppHostInformation
+        {
+            AppHostPath = appHostProjectFile.FullName,
+            ProcessId = 1
+        };
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection(
+            "hash1",
+            Path.Combine(workspace.WorkspaceRoot.FullName, "socket1"),
+            new TestAppHostAuxiliaryBackchannel { AppHostInfo = appHostInfo });
+        monitor.AddConnection(
+            "hash2",
+            Path.Combine(workspace.WorkspaceRoot.FullName, "socket2"),
+            new TestAppHostAuxiliaryBackchannel { AppHostInfo = appHostInfo });
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.InteractionServiceFactory = _ => interactionService;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"""resource web --apphost "{appHostProjectFile.FullName}" --help""");
+
+        var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
+        var helpOutput = helpWriter.ToString();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.False(prompted);
+        Assert.Contains("Execute a command on a resource", helpOutput);
+        Assert.DoesNotContain("Available resource commands:", helpOutput);
+    }
+
+    [Fact]
+    public async Task ResourceCommand_HelpIncludesHiddenResourceCommandsWhenRequestedMatchesSnapshot()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var helpWriter = new StringWriter();
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "hidden-worker",
+                    "Hidden",
+                    CreateCommand("inspect-hidden-worker", "Inspects the hidden worker."))
+            ]
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("resource hidden-worker --include-hidden --help");
+
+        var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        await Verify(helpWriter.ToString(), extension: "txt");
     }
 
     [Fact]
@@ -786,6 +1019,32 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ResourceCommand_FailsWhenCommandUsesInteractionService()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "web",
+                    CreateCommand("configure", "Configures the resource."))
+            ]
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel, interactionService);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("""resource web configure""");
+
+        await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(1, backchannel.ExecuteResourceCommandCallCount);
+        Assert.True(backchannel.ExecuteResourceCommandOptions?.NonInteractive == true);
+    }
+
+    [Fact]
     public async Task ResourceCommand_ForwardsCustomChoiceCommandOptionWhenAllowed()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -1143,6 +1402,36 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ResourceCommand_IncludeHiddenExecutesHiddenResourceCommandWithMetadata()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "hidden-worker",
+                    "Hidden",
+                    CreateCommand(
+                        "configure",
+                        CreateArgument("message")))
+            ]
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("resource hidden-worker configure --include-hidden -- --message \"from hidden resource\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(1, backchannel.ExecuteResourceCommandCallCount);
+        AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("message", "from hidden resource"));
+    }
+
+    [Fact]
     public async Task ResourceCommand_DoesNotForwardCommandOptionWithoutDelimiterWhenNameCollidesWithCliOption()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -1299,6 +1588,67 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains("Selector to wait for. Required.", helpOutput);
         Assert.Contains("--timeout-milliseconds <value>", helpOutput);
         Assert.Contains("Timeout in milliseconds.", helpOutput);
+    }
+
+    [Fact]
+    public async Task ResourceCommand_CommandSpecificHelpBeforeDelimiterShowsHelp()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var helpWriter = new StringWriter();
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "web-browser-automation",
+                    CreateCommand(
+                        "wait-for-browser",
+                        "Waits for text in the browser.",
+                        CreateArgument("selector", description: "Selector to wait for.", required: true)))
+            ]
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("""resource web-browser-automation wait-for-browser --help -- --selector #main""");
+
+        var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
+        var helpOutput = helpWriter.ToString();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(0, backchannel.ExecuteResourceCommandCallCount);
+        Assert.Contains("Waits for text in the browser.", helpOutput);
+        Assert.Contains("--selector <value>", helpOutput);
+    }
+
+    [Fact]
+    public async Task ResourceCommand_HelpAfterDelimiterIsForwardedToResourceCommand()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var helpWriter = new StringWriter();
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "web-browser-automation",
+                    CreateCommand("custom-command"))
+            ]
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("""resource web-browser-automation custom-command -- --help""");
+
+        var exitCode = await result.InvokeAsync(new InvocationConfiguration { Output = helpWriter }).DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(1, backchannel.ExecuteResourceCommandCallCount);
+        Assert.DoesNotContain("Usage:", helpWriter.ToString());
+        AssertJsonObject(backchannel.ExecuteResourceCommandArguments, ("--help", null));
     }
 
     [Fact]
@@ -1526,11 +1876,16 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
     private static ResourceSnapshot CreateResourceSnapshot(string name, params ResourceSnapshotCommand[] commands)
     {
+        return CreateResourceSnapshot(name, state: "Running", commands);
+    }
+
+    private static ResourceSnapshot CreateResourceSnapshot(string name, string state, params ResourceSnapshotCommand[] commands)
+    {
         return new ResourceSnapshot
         {
             Name = name,
             DisplayName = name,
-            State = "Running",
+            State = state,
             Commands = commands
         };
     }
@@ -1563,11 +1918,17 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
 
     private static ResourceSnapshotCommand CreateCommand(string name, string? description, params ResourceSnapshotCommandArgument[] argumentInputs)
     {
+        return CreateCommand(name, description, state: "Enabled", visibility: KnownCommandVisibility.Default, argumentInputs);
+    }
+
+    private static ResourceSnapshotCommand CreateCommand(string name, string? description, string state, string? visibility, params ResourceSnapshotCommandArgument[] argumentInputs)
+    {
         return new ResourceSnapshotCommand
         {
             Name = name,
             Description = description,
-            State = "Enabled",
+            State = state,
+            Visibility = visibility!,
             ArgumentInputs = argumentInputs
         };
     }

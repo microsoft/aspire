@@ -22,6 +22,11 @@
         <target state="needs-review-translation">輸出記錄採用 JSON 格式 (NDJSON)。</target>
         <note />
       </trans-unit>
+      <trans-unit id="NoLogsFound">
+        <source>No logs found.</source>
+        <target state="new">No logs found.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NoResourcesFound">
         <source>No resources found.</source>
         <target state="translated">找不到任何資源。</target>
@@ -40,6 +45,11 @@
       <trans-unit id="ResourceRequiredWithoutFollow">
         <source>A resource name is required when not using --follow. Use --follow to stream logs from all resources.</source>
         <target state="translated">當未使用 --follow 時，必須指定資源名稱。使用 --follow 從所有資源串流記錄。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SearchOptionDescription">
+        <source>Full-text search to filter log content</source>
+        <target state="new">Full-text search to filter log content</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">

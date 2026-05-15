@@ -463,6 +463,7 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
         Assert.NotNull(response.Capabilities);
         Assert.Contains(AuxiliaryBackchannelCapabilities.V1, response.Capabilities);
         Assert.Contains(AuxiliaryBackchannelCapabilities.V2, response.Capabilities);
+        Assert.Contains(AuxiliaryBackchannelCapabilities.V3, response.Capabilities);
 
         await app.StopAsync().DefaultTimeout();
     }

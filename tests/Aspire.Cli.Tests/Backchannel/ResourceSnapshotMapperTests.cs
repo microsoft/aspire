@@ -48,7 +48,8 @@ public class ResourceSnapshotMapperTests
                     ]
                 },
                 new ResourceSnapshotCommand { Name = "start", State = "Disabled", Description = "Start" },
-                new ResourceSnapshotCommand { Name = "dashboard-only", State = "Enabled", Description = "UI only", Visibility = KnownCommandVisibility.UI }
+                new ResourceSnapshotCommand { Name = "dashboard-only", State = "Enabled", Description = "UI only", Visibility = KnownCommandVisibility.UI },
+                new ResourceSnapshotCommand { Name = "missing-visibility", State = "Enabled", Description = "Missing visibility", Visibility = null! }
             ],
             EnvironmentVariables =
             [

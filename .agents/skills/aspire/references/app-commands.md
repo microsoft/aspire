@@ -18,6 +18,8 @@ Keep these points in mind:
 - In git worktrees or when another local instance may already be running, use `aspire start --isolated`.
 - If the CLI shape may have changed or the skill instructions look older than the local CLI, confirm the exact command form with `aspire --help` or the relevant subcommand help before executing.
 - To restart after AppHost changes, rerun the same start command. In a worktree, rerun `aspire start --isolated`.
+- Treat this as the AppHost-wide restart path. Do not use it as the default response to every resource implementation change while the AppHost is already running.
+- For one changed resource, keep the AppHost running and prefer `aspire resource <resource-name> <command>`, runtime watch/hot reload, dashboard actions, or IDE-managed debugging.
 - Use `aspire stop` only when the ask is explicitly to stop the app or clean up a running AppHost.
 - Avoid `aspire run` in normal agent workflows because it blocks the terminal.
 

@@ -55,7 +55,7 @@ internal sealed class LsCommand : BaseCommand
         Options.Add(s_allOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
@@ -108,12 +108,12 @@ internal sealed class LsCommand : BaseCommand
                 }
             }
 
-            return ExitCodeConstants.Success;
+            return CommandResult.Success();
         }
         catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken || cancellationToken.IsCancellationRequested)
         {
             _interactionService.DisplayCancellationMessage();
-            return ExitCodeConstants.Success;
+            return CommandResult.Success();
         }
     }
 

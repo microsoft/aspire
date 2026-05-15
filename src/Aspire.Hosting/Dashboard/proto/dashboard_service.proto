@@ -52,7 +52,7 @@ message ResourceCommand {
     // or hidden in the UI.
     ResourceCommandState state = 9;
     // Static, ordered input metadata that describes the invocation arguments accepted by the command.
-    // Dashboard clients can render these inputs and send object-shaped values in ResourceCommandRequest.arguments.
+    // Dashboard clients can render these inputs and send a map of Values in ResourceCommandRequest.arguments keyed by InteractionInput.name.
     repeated InteractionInput argument_inputs = 10;
 }
 
@@ -77,10 +77,10 @@ message ResourceCommandRequest {
     // Deprecated. An optional parameter to accompany the command.
     // Copied from the ResourceCommand that this request object is initialized from.
     optional google.protobuf.Value parameter = 4 [deprecated = true];
-    // Optional invocation arguments to pass to the command.
+    // Invocation arguments to pass to the command.
     // Unlike parameter, this value is supplied by the client for this execution.
-    // Dashboard requests encode arguments as an object-valued google.protobuf.Value keyed by InteractionInput.name.
-    optional google.protobuf.Value arguments = 5;
+    // Keys are InteractionInput.name values; each value is a google.protobuf.Value (string, number, bool, or null).
+    map<string, google.protobuf.Value> arguments = 5;
     // When true, command execution should fail instead of prompting for missing input.
     bool non_interactive = 6;
 }
@@ -104,7 +104,6 @@ message ResourceCommandResponse {
     optional string error_message = 2 [deprecated = true];
     optional string message = 3;
     optional ResourceCommandResult result = 4;
-    repeated InteractionInput argument_inputs = 5;
 }
 
 message ResourceCommandResult {

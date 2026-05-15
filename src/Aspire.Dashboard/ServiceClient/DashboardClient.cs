@@ -760,11 +760,18 @@ internal sealed class DashboardClient : IDashboardClient
         var request = new ResourceCommandRequest()
         {
             CommandName = command.Name,
-            Arguments = options.Arguments,
             ResourceName = resourceName,
             ResourceType = resourceType,
             NonInteractive = options.NonInteractive
         };
+
+        if (options.Arguments is { } arguments)
+        {
+            foreach (var (key, value) in arguments)
+            {
+                request.Arguments.Add(key, value);
+            }
+        }
 
         try
         {

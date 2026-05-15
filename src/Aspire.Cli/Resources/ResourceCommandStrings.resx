@@ -73,6 +73,9 @@
   <data name="ArgumentRequired" xml:space="preserve">
     <value>The '{0}' argument is required.</value>
   </data>
+  <data name="AvailableResourceCommands" xml:space="preserve">
+    <value>Available resource commands:</value>
+  </data>
   <data name="CommandSpecificHelpUsageSyntax" xml:space="preserve">
     <value>aspire resource {0} {1} [options] [[--] &lt;command-options&gt;...]</value>
   </data>

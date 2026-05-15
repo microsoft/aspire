@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	builder, err := aspire.CreateBuilder(nil)
+	builder, err := aspire.CreateBuilder()
 	if err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
@@ -54,6 +54,9 @@ func main() {
 		_, _ = service.ContainerName()
 		_, _ = service.PullPolicy()
 		_, _ = service.Restart()
+		_, _ = service.Configs().Count()
+		_, _ = service.Secrets().Count()
+		_, _ = service.Ulimits().Count()
 	})
 
 	_, _ = compose.DefaultNetworkName()
@@ -67,7 +70,7 @@ func main() {
 	if err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
-	if err := app.Run(nil); err != nil {
+	if err := app.Run(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
 }

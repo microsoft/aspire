@@ -37,6 +37,20 @@ Notes:
 
 The scripts attempt to add `~/.aspire/bin` to your shell/profile PATH so you can invoke `aspire` directly in new terminals. If PATH isn't updated automatically, add it manually per the script's message.
 
+## Channel names
+
+Every Aspire CLI binary is built for a specific channel. The channel name controls which package feed (or local hive) is used by commands like `aspire new` and `aspire add`, and is the value you pass to `aspire update --self --channel`.
+
+| Channel | Description |
+|---------|-------------|
+| `stable` | Official release builds. Default for most users. |
+| `staging` | RC and preview builds. |
+| `daily` | Latest daily CI builds. |
+| `local` | Locally built from source. Uses `~/.aspire/hives/local/packages/` as the package feed. This is the default channel for developer builds with no explicit `/p:AspireCliChannel=` override. |
+| `pr-<N>` | A single PR's CI build (for example `pr-16820`). Uses `~/.aspire/hives/pr-<N>/packages/` as the package feed. |
+
+The PR dogfooding scripts install a `pr-<N>` CLI and populate the matching hive directory automatically — you do not need to set the channel manually.
+
 ## Quickstart
 
 > **⚠️ WARNING: Do not do this without first carefully reviewing the code of this PR to satisfy yourself it is safe.**
@@ -172,6 +186,28 @@ The scripts auto-detect your OS and architecture and locate the latest `ci.yml` 
 
 - Remove PR-specific packages:
   - Delete `~/.aspire/hives/pr-<PR_NUMBER>/packages`
+
+### Brew uninstall caveats
+
+The Homebrew cask (`eng/homebrew/aspire.rb.template`) installs Aspire entirely
+inside the Caskroom version directory — `brew uninstall aspire` removes
+the binary and the route sidecar end-to-end. The cask intentionally carries
+no `zap` stanza, because `~/.aspire/` is a shared prefix with the script-route
+and PR-route installers and a brew-driven recursive delete would clobber state
+those installers still own.
+
+If you installed via the Homebrew cask before this change, you may have a
+stale dogfood state directory under `~/.aspire/installs/brew-stable/`. The
+new cask never touches that path, and `brew uninstall` will not remove it.
+Clean it up manually once after upgrading the cask:
+
+```bash
+rm -rf ~/.aspire/installs/brew-stable
+```
+
+NuGet hives under `~/.aspire/hives/` and any script-route or PR-route
+binaries under `~/.aspire/bin/` and `~/.aspire/dogfood/` are not touched by
+the cask in either direction; manage those with the steps above.
 
 ## Safety note
 

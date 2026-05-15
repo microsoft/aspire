@@ -46,6 +46,7 @@ internal static class KnownEmojis
     public static readonly KnownEmoji Microscope = new("microscope", "blue");
     public static readonly KnownEmoji Package = new("package", "yellow");
     public static readonly KnownEmoji PageFacingUp = new("page_facing_up", "white");
+    public static readonly KnownEmoji Robot = new("robot", "blue");
     public static readonly KnownEmoji Rocket = new("rocket", "darkorange");
     public static readonly KnownEmoji RunningShoe = new("running_shoe", "green");
     public static readonly KnownEmoji Dizzy = new("dizzy");

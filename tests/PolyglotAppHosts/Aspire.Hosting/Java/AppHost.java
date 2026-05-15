@@ -3,6 +3,7 @@ import aspire.*;
 void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var container = builder.addContainer("mycontainer", "nginx");
+        container.withOtlpExporter(OtlpProtocol.HTTP_JSON);
         var dockerContainer = builder.addDockerfile("dockerapp", "./app");
         var configureDockerfileBuilder = (AspireAction1<DockerfileBuilderCallbackContext>) (dockerfileContext) -> {
             var _dockerfileResource = dockerfileContext.resource();

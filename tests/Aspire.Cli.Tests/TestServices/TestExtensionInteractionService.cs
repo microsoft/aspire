@@ -46,7 +46,7 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
         return PromptForStringAsync(promptText, validator, isSecret: false, required, binding, cancellationToken);
     }
 
-    public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull
+    public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
     {
         if (!choices.Any())
         {
@@ -56,7 +56,7 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
         return Task.FromResult(choices.First());
     }
 
-    public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull
+    public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
     {
         if (!choices.Any())
         {
@@ -76,7 +76,7 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
         return 0;
     }
 
-    public void DisplayError(string errorMessage)
+    public void DisplayError(string errorMessage, bool allowMarkup = false)
     {
         DisplayErrorCallback?.Invoke(errorMessage);
     }

@@ -380,6 +380,13 @@ internal sealed class ConfigurationService(IConfiguration configuration, CliExec
         }
 
         // 2. Global settings file fallback (lower precedence).
+        //
+        // Transitional path: identity-channel is now baked into the CLI binary (AspireCliChannel
+        // assembly metadata) and the acquisition scripts no longer seed a "channel" field into
+        // global settings. The read here remains so a user who deliberately ran
+        // `aspire config set -g channel <x>` continues to get their preference honored by
+        // `aspire update` until that workflow is removed in a follow-up. New per-project flows
+        // (`aspire add`, `aspire init`) do not consult global config and must not start to.
         if (File.Exists(globalSettingsFile.FullName))
         {
             var globalConfig = LoadSettingsFileForReading(globalSettingsFile.FullName);

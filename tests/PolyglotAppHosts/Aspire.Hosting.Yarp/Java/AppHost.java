@@ -49,7 +49,7 @@ void main() throws Exception {
             var httpClientConfig = new YarpHttpClientConfig();
             httpClientConfig.setDangerousAcceptAnyServerCertificate(true);
             httpClientConfig.setEnableMultipleHttp2Connections(true);
-            httpClientConfig.setMaxConnectionsPerServer(10);
+            httpClientConfig.setMaxConnectionsPerServer(10.0);
             httpClientConfig.setRequestHeaderEncoding("utf-8");
             httpClientConfig.setResponseHeaderEncoding("utf-8");
             endpointCluster.withHttpClientConfig(httpClientConfig);

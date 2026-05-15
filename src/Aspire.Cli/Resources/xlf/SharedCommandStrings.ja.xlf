@@ -42,6 +42,11 @@
         <target state="new">Status</target>
         <note />
       </trans-unit>
+      <trans-unit id="IncludeHiddenOptionDescription">
+        <source>Include hidden resources in the output</source>
+        <target state="new">Include hidden resources in the output</target>
+        <note />
+      </trans-unit>
       <trans-unit id="IsolatedOptionDescription">
         <source>Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously</source>
         <target state="new">Run in isolated mode with randomized ports and isolated user secrets, allowing multiple instances to run simultaneously</target>
@@ -81,6 +86,11 @@
         <source>The path to the Aspire AppHost project file or a directory to search</source>
         <target state="new">The path to the Aspire AppHost project file or a directory to search</target>
         <note />
+      </trans-unit>
+      <trans-unit id="NonInteractiveRequiresYesFormat">
+        <source>The {0} command requires --yes when the --non-interactive option is specified.</source>
+        <target state="new">The {0} command requires --yes when the --non-interactive option is specified.</target>
+        <note>{0} is the command name.</note>
       </trans-unit>
       <trans-unit id="PipelineEnvironmentOptionDescription">
         <source>The environment to use for the operation. The default is 'Production'.</source>

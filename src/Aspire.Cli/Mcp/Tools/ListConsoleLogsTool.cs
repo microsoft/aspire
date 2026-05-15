@@ -29,6 +29,10 @@ internal sealed class ListConsoleLogsTool(IAuxiliaryBackchannelMonitor auxiliary
                 "resourceName": {
                   "type": "string",
                   "description": "The resource name."
+                },
+                "search": {
+                  "type": "string",
+                  "description": "Full-text search to filter log content."
                 }
               },
               "required": ["resourceName"]
@@ -42,7 +46,8 @@ internal sealed class ListConsoleLogsTool(IAuxiliaryBackchannelMonitor auxiliary
 
         // Get the resource name from arguments
         string? resourceName = null;
-        if (arguments is not null && arguments.TryGetValue("resourceName", out var resourceNameElement))
+        if (arguments is not null && arguments.TryGetValue("resourceName", out var resourceNameElement) &&
+            resourceNameElement.ValueKind == JsonValueKind.String)
         {
             resourceName = resourceNameElement.GetString();
         }
@@ -50,6 +55,13 @@ internal sealed class ListConsoleLogsTool(IAuxiliaryBackchannelMonitor auxiliary
         if (string.IsNullOrEmpty(resourceName))
         {
             throw new McpProtocolException("The resourceName parameter is required.", McpErrorCode.InvalidParams);
+        }
+
+        string? search = null;
+        if (arguments is not null && arguments.TryGetValue("search", out var searchElement) &&
+            searchElement.ValueKind == JsonValueKind.String)
+        {
+            search = searchElement.GetString();
         }
 
         var connection = await AppHostConnectionHelper.GetSelectedConnectionAsync(auxiliaryBackchannelMonitor, logger, cancellationToken).ConfigureAwait(false);
@@ -71,7 +83,22 @@ internal sealed class ListConsoleLogsTool(IAuxiliaryBackchannelMonitor auxiliary
             }
 
             var entries = logEntries.GetEntries().ToList();
-            var totalLogsCount = entries.Count == 0 ? 0 : entries.Last().LineNumber;
+
+            // Apply full-text search filter on log content
+            if (!string.IsNullOrEmpty(search))
+            {
+                entries = entries.Where(e =>
+                    (e.Content is not null && e.Content.Contains(search, StringComparisons.FullTextSearch)) ||
+                    (e.RawContent is not null && e.RawContent.Contains(search, StringComparisons.FullTextSearch)))
+                    .ToList();
+            }
+
+            // When search is applied, total reflects matching entries. Otherwise, use the
+            // last line number which represents the total lines collected by the LogEntries buffer.
+            var totalLogsCount = string.IsNullOrEmpty(search)
+                ? (entries.Count == 0 ? 0 : entries.Last().LineNumber)
+                : entries.Count;
+
             var (trimmedItems, limitMessage) = SharedAIHelpers.GetLimitFromEndWithSummary(
                 entries,
                 totalLogsCount,

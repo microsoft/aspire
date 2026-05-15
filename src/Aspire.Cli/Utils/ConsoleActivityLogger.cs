@@ -314,7 +314,7 @@ internal sealed class ConsoleActivityLogger
         {
             var plainKey = item.Key.EscapeMarkup();
             var plainValue = item.EnableMarkdown
-                ? MarkdownToSpectreConverter.ConvertLinksToPlainText(item.Value).EscapeMarkup()
+                ? MarkdownLinkConverter.ConvertLinksToPlainText(item.Value).EscapeMarkup()
                 : item.Value.EscapeMarkup();
             return $"  {plainKey}: {plainValue}";
         }

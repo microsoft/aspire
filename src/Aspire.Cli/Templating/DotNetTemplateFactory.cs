@@ -9,6 +9,7 @@ using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
@@ -459,7 +460,7 @@ internal class DotNetTemplateFactory(
             // release/13.3. Surfacing channel/version errors before prompting for extra args
             // avoids discarding answers the user just gave.
             var query = new TemplatePackageQuery(
-                ChannelOverride: inputs.Channel,
+                RequestedChannel: inputs.Channel,
                 VersionOverride: inputs.Version,
                 SourceOverride: inputs.Source,
                 IncludePrHives: true);
@@ -480,7 +481,7 @@ internal class DotNetTemplateFactory(
             if (installOutcome.ExitCode != 0)
             {
                 interactionService.DisplayLines(installOutcome.OutputLines);
-                interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.TemplateInstallationFailed, installOutcome.ExitCode, executionContext.LogFilePath));
+                interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.TemplateInstallationFailed, installOutcome.ExitCode));
                 return new TemplateResult(ExitCodeConstants.FailedToInstallTemplates);
             }
 
@@ -519,7 +520,7 @@ internal class DotNetTemplateFactory(
                 }
 
                 interactionService.DisplayLines(newProjectCollector.GetLines());
-                interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.ProjectCreationFailed, newProjectExitCode, executionContext.LogFilePath));
+                interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.ProjectCreationFailed, newProjectExitCode));
                 return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
             }
 
@@ -536,8 +537,7 @@ internal class DotNetTemplateFactory(
         }
         catch (OperationCanceledException)
         {
-            interactionService.DisplayCancellationMessage();
-            return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+            return new TemplateResult(ExitCodeConstants.Cancelled);
         }
         catch (CertificateServiceException ex)
         {
@@ -551,6 +551,15 @@ internal class DotNetTemplateFactory(
         }
         catch (EmptyChoicesException ex)
         {
+            interactionService.DisplayError(ex.Message);
+            return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+        }
+        catch (NuGetPackageCacheException ex)
+        {
+            // Surface NuGet feed search failures (offline, inaccessible feed, etc.) with a friendly error
+            // instead of letting them bubble up to the top-level "unexpected error" handler. The pre-extraction
+            // init code went straight to `dotnet new install` and never invoked a NuGet search, so this catch
+            // restores parity with the prior init failure mode for these scenarios.
             interactionService.DisplayError(ex.Message);
             return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
         }
@@ -605,7 +614,7 @@ internal class DotNetTemplateFactory(
 
             // Re-validate the adjusted path for non-empty directory since appending the
             // project name may target a different directory than the one already validated.
-            var validationError = OutputPathHelper.ValidateResolvedOutputPath(outputPath);
+            var validationError = OutputPathHelper.ValidateOutputPath(outputPath, executionContext.WorkingDirectory.FullName, isExplicitOutput: inputs.Output is not null);
             if (validationError is not null)
             {
                 interactionService.DisplayError(validationError);

@@ -110,18 +110,18 @@ internal sealed class RenderCommand : BaseCommand
 
     protected override bool UpdateNotificationsEnabled => false;
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         if (parseResult.GetValue(s_listScenariosOption))
         {
             ListScenarios();
-            return ExitCodeConstants.Success;
+            return CommandResult.Success();
         }
 
         var requestedScenario = parseResult.GetValue(s_scenarioOption);
         if (!string.IsNullOrEmpty(requestedScenario))
         {
-            return await ExecuteChoiceAsync(requestedScenario, parseResult.GetValue(s_consoleWidthOption), cancellationToken);
+            return CommandResult.FromExitCode(await ExecuteChoiceAsync(requestedScenario, parseResult.GetValue(s_consoleWidthOption), cancellationToken));
         }
 
         while (true)
@@ -135,7 +135,7 @@ internal sealed class RenderCommand : BaseCommand
             var exitCode = await ExecuteChoiceAsync(choice, parseResult.GetValue(s_consoleWidthOption), cancellationToken);
             if (choice == "exit" || exitCode != ExitCodeConstants.Success)
             {
-                return exitCode;
+                return CommandResult.FromExitCode(exitCode);
             }
         }
     }
@@ -244,7 +244,7 @@ internal sealed class RenderCommand : BaseCommand
                 async () =>
                 {
                     await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
-                    return ExitCodeConstants.Success;
+                    return CommandResult.Success();
                 },
                 emoji: emoji);
         }
@@ -259,7 +259,7 @@ internal sealed class RenderCommand : BaseCommand
             async () =>
             {
                 await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
-                return ExitCodeConstants.Success;
+                return CommandResult.Success();
             },
             emoji: KnownEmojis.Package,
             allowMarkup: true);
@@ -274,7 +274,7 @@ internal sealed class RenderCommand : BaseCommand
             async () =>
             {
                 await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
-                return ExitCodeConstants.Success;
+                return CommandResult.Success();
             },
             emoji: KnownEmojis.Package);
 
@@ -299,7 +299,6 @@ internal sealed class RenderCommand : BaseCommand
             p => $"{p.Item1.EscapeMarkup()} [dim]v{p.Item2}[/] ({p.Item3})",
             cancellationToken: cancellationToken);
 
-        InteractionService.DisplayMessage(KnownEmojis.Package, $"Selected: {selected.Item1} v{selected.Item2}");
         return ExitCodeConstants.Success;
     }
 

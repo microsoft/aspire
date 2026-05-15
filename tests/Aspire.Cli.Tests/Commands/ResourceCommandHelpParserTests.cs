@@ -65,8 +65,11 @@ public class ResourceCommandHelpParserTests
     [Theory]
     [InlineData("resource --help")]
     [InlineData("resource web --help")]
+    [InlineData("resource web --apphost ./AppHost/AppHost.csproj --help")]
+    [InlineData("resource web --project ./AppHost/AppHost.csproj --help")]
     [InlineData("resource web --message --help")]
     [InlineData("resource web --message=hi --help")]
+    [InlineData("resource web --help -- --message help")]
     [InlineData("resource web -- --message hi --help")]
     public void Parse_WithGenericResourceHelp_ReturnsNull(string commandLine)
     {

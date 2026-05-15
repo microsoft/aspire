@@ -140,8 +140,8 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
         var startedActivities = new List<Activity>();
         using var listener = CreateProfilingActivityListener(startedActivities.Add);
         using var profilingTelemetry = CreateProfilingTelemetry(
-            (ProfilingTelemetry.EnabledEnvironmentVariable, "true"),
-            (ProfilingTelemetry.SessionIdEnvironmentVariable, "session-1"));
+            (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
+            (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1"));
 
         var appHost = await WriteFileAsync(workspace.WorkspaceRoot, "App/AppHost.csproj");
         var gitRepository = CreateGitRepository(appHost.FullName);
@@ -196,8 +196,8 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
         var startedActivities = new List<Activity>();
         using var listener = CreateProfilingActivityListener(startedActivities.Add);
         using var profilingTelemetry = CreateProfilingTelemetry(
-            (ProfilingTelemetry.EnabledEnvironmentVariable, "true"),
-            (ProfilingTelemetry.SessionIdEnvironmentVariable, "session-1"));
+            (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
+            (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1"));
 
         var appHost = await WriteFileAsync(workspace.WorkspaceRoot, "App/AppHost.csproj");
         await WriteFileAsync(workspace.WorkspaceRoot, "node_modules/pkg/AppHost.csproj");
@@ -335,6 +335,53 @@ public class AppHostCandidateFinderTests(ITestOutputHelper outputHelper)
         var path = Assert.Single(result.Files).FullName;
         Assert.Equal(appHost.FullName, path);
         Assert.False(gitCalled);
+        Assert.Equal(1, result.CountsByPattern["AppHost.csproj"]);
+    }
+
+    [Fact]
+    public async Task FindCandidateFilesAsync_MaxDepthZero_MatchesOnlySearchDirectoryFiles()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var directAppHost = await WriteFileAsync(workspace.WorkspaceRoot, "AppHost.csproj");
+        var nestedAppHost = await WriteFileAsync(workspace.WorkspaceRoot, "App/AppHost.csproj");
+        var finder = CreateFinder();
+
+        var result = await finder.FindCandidateFilesAsync(workspace.WorkspaceRoot, ["AppHost.csproj"], nugetCachePath: null, AppHostDiscoveryScope.ExplicitDirectory, CancellationToken.None, maxDepth: 0).DefaultTimeout();
+
+        var path = Assert.Single(result.Files).FullName;
+        Assert.Equal(directAppHost.FullName, path);
+        Assert.DoesNotContain(result.Files, file => file.FullName == nestedAppHost.FullName);
+        Assert.Equal(1, result.CountsByPattern["AppHost.csproj"]);
+    }
+
+    [Fact]
+    public async Task FindCandidateFilesAsync_MaxDepthZero_DoesNotMatchDirectoryAwarePatternsBelowSearchDirectory()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var nestedAppHost = await WriteFileAsync(workspace.WorkspaceRoot, "App/AppHost.csproj");
+        var finder = CreateFinder();
+
+        var result = await finder.FindCandidateFilesAsync(workspace.WorkspaceRoot, ["App/AppHost.csproj"], nugetCachePath: null, AppHostDiscoveryScope.ExplicitDirectory, CancellationToken.None, maxDepth: 0).DefaultTimeout();
+
+        Assert.Empty(result.Files);
+        Assert.DoesNotContain(result.Files, file => file.FullName == nestedAppHost.FullName);
+        Assert.Equal(0, result.CountsByPattern["App/AppHost.csproj"]);
+    }
+
+    [Fact]
+    public async Task FindCandidateFilesAsync_DefaultFilteredGitMode_MaxDepthZero_MatchesOnlySearchDirectoryFiles()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var directAppHost = await WriteFileAsync(workspace.WorkspaceRoot, "AppHost.csproj");
+        var nestedAppHost = await WriteFileAsync(workspace.WorkspaceRoot, "App/AppHost.csproj");
+        var gitRepository = CreateGitRepository(directAppHost.FullName, nestedAppHost.FullName);
+        var finder = CreateFinder(gitRepository);
+
+        var result = await finder.FindCandidateFilesAsync(workspace.WorkspaceRoot, ["AppHost.csproj"], nugetCachePath: null, AppHostDiscoveryScope.DefaultFiltered, CancellationToken.None, maxDepth: 0).DefaultTimeout();
+
+        var path = Assert.Single(result.Files).FullName;
+        Assert.Equal(directAppHost.FullName, path);
+        Assert.DoesNotContain(result.Files, file => file.FullName == nestedAppHost.FullName);
         Assert.Equal(1, result.CountsByPattern["AppHost.csproj"]);
     }
 

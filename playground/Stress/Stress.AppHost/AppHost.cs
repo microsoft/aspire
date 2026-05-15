@@ -121,4 +121,6 @@ builder.AddProject<Projects.Stress_Empty>("empty-profile-2", launchProfileName: 
     .WithEnvironment("ENV_TO_OVERRIDE", "this value came from the apphost")
     .WithArgs("arg_from_apphost");
 
+builder.AddNoStatusResource("no-status-resource");
+
 builder.Build().Run();

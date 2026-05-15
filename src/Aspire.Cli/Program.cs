@@ -2,12 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
-using System.CommandLine.Parsing;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
+using Aspire.Cli.Acquisition;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.ClaudeCode;
 using Aspire.Cli.Agents.CopilotCli;
@@ -169,6 +169,11 @@ public class Program
                 var legacyJson = File.ReadAllText(legacyPath);
                 var legacyConfig = JsonSerializer.Deserialize(legacyJson, JsonSourceGenerationContext.Default.AspireJsonConfiguration);
                 var config = AspireConfigFile.FromLegacy(legacyConfig, profiles: null);
+                // Drop the legacy global identity-channel field — the CLI's channel is now
+                // baked into the binary (AspireCliChannel assembly metadata) and never read
+                // from global config. The per-project channel migration in AspireConfigFile.FromLegacy
+                // remains for project-local aspire.config.json files.
+                config.Channel = null;
                 config.Save(usersAspirePath);
             }
             catch (Exception ex)
@@ -323,9 +328,21 @@ public class Program
         builder.Services.AddSingleton(sp => new TelemetryManager(sp.GetRequiredService<IConfiguration>(), args));
 
         // Shared services.
+        builder.Services.AddSingleton<IIdentityChannelReader>(_ => new IdentityChannelReader(typeof(Program).Assembly));
+        if (OperatingSystem.IsWindows())
+        {
+            builder.Services.AddSingleton<IWindowsRegistryReader, WindowsRegistryReader>();
+        }
+        else
+        {
+            builder.Services.AddSingleton<IWindowsRegistryReader, NullWindowsRegistryReader>();
+        }
+        builder.Services.AddSingleton<WingetFirstRunProbe>();
         builder.Services.AddSingleton(sp =>
         {
-            return BuildCliExecutionContext(startupContext.LoggingOptions.DebugMode, startupContext.LoggingOptions.LogsDirectory, startupContext.LoggingOptions.LogFilePath);
+            var channelReader = sp.GetRequiredService<IIdentityChannelReader>();
+            var channel = channelReader.ReadChannel();
+            return BuildCliExecutionContext(startupContext.LoggingOptions.DebugMode, startupContext.LoggingOptions.LogsDirectory, startupContext.LoggingOptions.LogFilePath, channel);
         });
         builder.Services.AddSingleton(s => new ConsoleEnvironment(
             BuildAnsiConsole(s, Console.Out),
@@ -457,6 +474,7 @@ public class Program
         builder.Services.AddSingleton<IAppHostProjectFactory, AppHostProjectFactory>();
 
         // Environment checking services.
+        builder.Services.AddSingleton<IEnvironmentCheck, AspireVersionCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, WslEnvironmentCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, DotNetSdkCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, TypeScriptAppHostToolingCheck>();
@@ -501,7 +519,6 @@ public class Program
         builder.Services.AddTransient<DeployCommand>();
         builder.Services.AddTransient<DestroyCommand>();
         builder.Services.AddTransient<DoCommand>();
-        builder.Services.AddTransient<ExecCommand>();
         builder.Services.AddTransient<McpCommand>();
         builder.Services.AddTransient<McpStartCommand>();
         builder.Services.AddTransient<McpInitCommand>();
@@ -559,14 +576,14 @@ public class Program
         return new DirectoryInfo(sdksPath);
     }
 
-    private static CliExecutionContext BuildCliExecutionContext(bool debugMode, string logsDirectory, string logFilePath)
+    private static CliExecutionContext BuildCliExecutionContext(bool debugMode, string logsDirectory, string logFilePath, string channel)
     {
         var workingDirectory = new DirectoryInfo(Environment.CurrentDirectory);
         var hivesDirectory = GetHivesDirectory();
         var cacheDirectory = GetCacheDirectory();
         var sdksDirectory = GetSdksDirectory();
         var packagesDirectory = GetPackagesDirectory();
-        return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, sdksDirectory, new DirectoryInfo(logsDirectory), logFilePath, debugMode, packagesDirectory: packagesDirectory);
+        return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, sdksDirectory, new DirectoryInfo(logsDirectory), logFilePath, debugMode, packagesDirectory: packagesDirectory, identityChannel: channel);
     }
 
     private static DirectoryInfo GetCacheDirectory()
@@ -847,7 +864,7 @@ public class Program
         // Walk the parent command tree to find the top-level command name and get the full command name for this parseresult.
         var parentNames = new List<string> { r.CommandResult.Command.Name };
         var current = r.CommandResult.Parent;
-        while (current is CommandResult parentCommandResult)
+        while (current is System.CommandLine.Parsing.CommandResult parentCommandResult)
         {
             parentNames.Add(parentCommandResult.Command.Name);
             current = parentCommandResult.Parent;

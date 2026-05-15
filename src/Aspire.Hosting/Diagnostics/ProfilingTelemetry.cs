@@ -4,12 +4,13 @@
 using System.Diagnostics;
 using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Dcp;
 using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Hosting.Diagnostics;
 
-internal static class ProfilingTelemetry
+internal sealed class ProfilingTelemetry(IConfiguration configuration)
 {
     public const string ActivitySourceName = "Aspire.Hosting.Profiling";
 
@@ -34,6 +35,7 @@ internal static class ProfilingTelemetry
         public const string ResourceWaitForDependencies = "aspire.hosting.resource.wait_for_dependencies";
         public const string ResourceStop = "aspire.hosting.resource.stop";
         public const string ResourceStart = "aspire.hosting.resource.start";
+        public const string JsonRpcServerCall = "aspire.hosting.jsonrpc.server";
     }
 
     internal static class Tags
@@ -87,6 +89,9 @@ internal static class ProfilingTelemetry
         public const string DcpCreateObjectName = "aspire.hosting.dcp.create_object.name";
         public const string DcpCreateObjectTraceId = "aspire.hosting.dcp.create_object.trace_id";
         public const string DcpCreateObjectSpanId = "aspire.hosting.dcp.create_object.span_id";
+        public const string JsonRpcMethod = "rpc.method";
+        public const string JsonRpcStreaming = "aspire.hosting.jsonrpc.streaming";
+        public const string JsonRpcStreamItemCount = "aspire.hosting.jsonrpc.stream.item_count";
         public const string ExceptionType = "exception.type";
         public const string ExceptionMessage = "exception.message";
     }
@@ -106,6 +111,8 @@ internal static class ProfilingTelemetry
         public const string ResourceWaitCompleted = "aspire.resource.wait.completed";
         public const string ResourceWaitCancelled = "aspire.resource.wait.cancelled";
         public const string Exception = "exception";
+        public const string JsonRpcStreamFirstItem = "aspire.hosting.jsonrpc.stream.first_item";
+        public const string JsonRpcStreamCompleted = "aspire.hosting.jsonrpc.stream.completed";
     }
 
     internal static class Annotations
@@ -121,6 +128,8 @@ internal static class ProfilingTelemetry
     }
 
     private static readonly ActivitySource s_activitySource = new(ActivitySourceName);
+
+    private readonly IConfiguration _configuration = configuration;
 
     public static ActivityScope CurrentActivity(IConfiguration? configuration) =>
         IsEnabled(configuration) ? new(Activity.Current, configuration, ownsActivity: false) : default;
@@ -246,6 +255,13 @@ internal static class ProfilingTelemetry
         return activity;
     }
 
+    public ActivityScope StartJsonRpcServerCall(string methodName, bool streaming, BackchannelTraceContext? traceContext = null)
+    {
+        var activity = StartActivityFromTraceContext(Activities.JsonRpcServerCall, ActivityKind.Server, traceContext);
+        activity.SetJsonRpcCall(methodName, streaming);
+        return activity;
+    }
+
     public static ActivityScope StartResourceStop(IConfiguration? configuration, IResource resource, string resourceKind, string resourceName)
     {
         var activity = StartActivity(configuration, Activities.ResourceStop);
@@ -269,7 +285,7 @@ internal static class ProfilingTelemetry
         return activity;
     }
 
-    private static ActivityScope StartActivity(IConfiguration? configuration, string name)
+    private static ActivityScope StartActivity(IConfiguration? configuration, string name, ActivityKind activityKind = ActivityKind.Internal)
     {
         if (!IsEnabled(configuration))
         {
@@ -277,8 +293,8 @@ internal static class ProfilingTelemetry
         }
 
         var activity = Activity.Current is null && TryGetProfilingParentContext(configuration, out var parentContext)
-            ? s_activitySource.StartActivity(name, ActivityKind.Internal, parentContext)
-            : s_activitySource.StartActivity(name, ActivityKind.Internal);
+            ? s_activitySource.StartActivity(name, activityKind, parentContext)
+            : s_activitySource.StartActivity(name, activityKind);
 
         AddProfilingSessionId(activity, configuration);
         return new ActivityScope(activity, configuration);
@@ -313,6 +329,25 @@ internal static class ProfilingTelemetry
         return new ActivityScope(activity, configuration);
     }
 
+    private ActivityScope StartActivityFromTraceContext(string name, ActivityKind activityKind, BackchannelTraceContext? traceContext)
+    {
+        if (!IsEnabled(_configuration))
+        {
+            return default;
+        }
+
+        // StreamJsonRpc's ActivityTracingStrategy creates Activity.Current from the W3C
+        // traceparent/tracestate values on the JSON-RPC request envelope. If the caller is
+        // older or tracing was unavailable, fall back to the configured profiling parent.
+        var activity = Activity.Current is null && TryGetProfilingParentContext(_configuration, out var parentContext)
+            ? s_activitySource.StartActivity(name, activityKind, parentContext)
+            : s_activitySource.StartActivity(name, activityKind);
+
+        AddBaggage(activity, traceContext);
+        AddProfilingSessionId(activity, _configuration, traceContext);
+        return new ActivityScope(activity, _configuration);
+    }
+
     private static void SetDcpCreateObjectTags(Activity activity, string resourceKind, string resourceName, string traceId, string spanId)
     {
         activity.SetTag(Tags.DcpCreateObjectId, $"{resourceKind}/{resourceName}");
@@ -334,6 +369,38 @@ internal static class ProfilingTelemetry
             : GetConfigurationValue(configuration, KnownConfigNames.ProfilingSessionId, KnownConfigNames.Legacy.StartupOperationId);
         if (!string.IsNullOrEmpty(sessionId))
         {
+            activity.SetBaggage(Tags.ProfilingSessionId, sessionId);
+            activity.SetTag(Tags.ProfilingSessionId, sessionId);
+            activity.SetTag(Tags.LegacyStartupOperationId, sessionId);
+        }
+    }
+
+    private static void AddBaggage(Activity? activity, BackchannelTraceContext? traceContext)
+    {
+        if (activity is null || traceContext is null)
+        {
+            return;
+        }
+
+        foreach (var (key, value) in traceContext.Baggage)
+        {
+            activity.SetBaggage(key, value);
+        }
+    }
+
+    private static void AddProfilingSessionId(Activity? activity, IConfiguration? configuration, BackchannelTraceContext? traceContext)
+    {
+        if (activity is null)
+        {
+            return;
+        }
+
+        var sessionId = traceContext?.Baggage.TryGetValue(Tags.ProfilingSessionId, out var baggageSessionId) == true && !string.IsNullOrEmpty(baggageSessionId)
+            ? baggageSessionId
+            : GetConfigurationValue(configuration, KnownConfigNames.ProfilingSessionId, KnownConfigNames.Legacy.StartupOperationId);
+        if (!string.IsNullOrEmpty(sessionId))
+        {
+            activity.SetBaggage(Tags.ProfilingSessionId, sessionId);
             activity.SetTag(Tags.ProfilingSessionId, sessionId);
             activity.SetTag(Tags.LegacyStartupOperationId, sessionId);
         }
@@ -416,6 +483,10 @@ internal static class ProfilingTelemetry
         public void AddKubernetesApiTimeout() => AddEvent(Events.KubernetesApiTimeout);
 
         public void AddKubernetesClientCreated() => AddEvent(Events.KubernetesClientCreated);
+
+        public void AddJsonRpcStreamFirstItemEvent() => AddEvent(Events.JsonRpcStreamFirstItem);
+
+        public void AddJsonRpcStreamCompletedEvent() => AddEvent(Events.JsonRpcStreamCompleted);
 
         public void AddResourceWaitCancelled(string resourceName, string waitCondition)
         {
@@ -506,6 +577,14 @@ internal static class ProfilingTelemetry
         }
 
         public void SetDcpKubernetesClientAlreadyInitialized() => SetTag(Tags.DcpKubernetesClientAlreadyInitialized, true);
+
+        public void SetJsonRpcCall(string methodName, bool streaming)
+        {
+            SetTag(Tags.JsonRpcMethod, methodName);
+            SetTag(Tags.JsonRpcStreaming, streaming);
+        }
+
+        public void SetJsonRpcStreamItemCount(int count) => SetTag(Tags.JsonRpcStreamItemCount, count);
 
         public void SetDcpPreparedResourceCounts(int containerCount, int executableCount)
         {

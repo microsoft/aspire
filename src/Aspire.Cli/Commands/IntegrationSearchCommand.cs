@@ -46,7 +46,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
 
     protected abstract string? GetSearchTerm(ParseResult parseResult);
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
@@ -59,7 +59,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
             var (workingDirectory, configuredChannel, contextExitCode) = await _integrationPackageSearchService.GetPackageSearchContextAsync(passedAppHostProjectFile, cancellationToken);
             if (contextExitCode is { } exitCode)
             {
-                return exitCode;
+                return CommandResult.FromExitCode(exitCode);
             }
 
             var packagesWithChannels = (await InteractionService.ShowStatusAsync(
@@ -72,7 +72,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
                 .OrderBy(p => p.FriendlyName, new CommunityToolkitFirstComparer())
                 .ToArray();
 
-            return DisplayIntegrationResults(packagesWithShortName, searchTerm, format);
+            return CommandResult.FromExitCode(DisplayIntegrationResults(packagesWithShortName, searchTerm, format));
         }
         catch (ProjectLocatorException ex)
         {
@@ -80,15 +80,13 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
         }
         catch (OperationCanceledException)
         {
-            InteractionService.DisplayCancellationMessage();
-            return ExitCodeConstants.FailedToSearchIntegrations;
+            return CommandResult.Cancelled();
         }
         catch (Exception ex)
         {
             var errorMessage = string.Format(CultureInfo.CurrentCulture, AddCommandStrings.ErrorOccurredWhileSearchingIntegrations, ex.Message);
             Telemetry.RecordError(errorMessage, ex);
-            InteractionService.DisplayError(errorMessage);
-            return ExitCodeConstants.FailedToSearchIntegrations;
+            return CommandResult.Failure(ExitCodeConstants.FailedToSearchIntegrations, errorMessage);
         }
     }
 

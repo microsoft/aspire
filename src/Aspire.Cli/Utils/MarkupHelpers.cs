@@ -37,4 +37,38 @@ internal static class MarkupHelpers
 
         return noTitle ? link : $"{title} ({link})";
     }
+
+    /// <summary>
+    /// Builds a clickable file-link markup string for the specified file path
+    /// when the console supports links, otherwise returns a plain-text fallback.
+    /// The displayed text is the original <paramref name="filePath"/> and the
+    /// link target is a <c>file://</c> URI built from the absolute path.
+    /// </summary>
+    public static string SafeFileLink(IInteractionService interactionService, string filePath)
+    {
+        return SafeFileLink(interactionService.SupportsLinks, filePath);
+    }
+
+    /// <summary>
+    /// Builds a clickable file-link markup string for the specified file path
+    /// when the console supports links, otherwise returns a plain-text fallback.
+    /// The displayed text is the original <paramref name="filePath"/> and the
+    /// link target is a <c>file://</c> URI built from the absolute path.
+    /// </summary>
+    public static string SafeFileLink(bool supportsLinks, string filePath)
+    {
+        if (string.IsNullOrEmpty(filePath))
+        {
+            return string.Empty;
+        }
+
+        if (!supportsLinks)
+        {
+            return filePath.EscapeMarkup();
+        }
+
+        var fileUri = new Uri(Path.GetFullPath(filePath)).AbsoluteUri;
+
+        return SafeLink(supportsLinks: true, fileUri, filePath);
+    }
 }

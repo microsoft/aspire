@@ -13,7 +13,6 @@ using System.Diagnostics;
 
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Commands.Sdk;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using BaseRootCommand = System.CommandLine.RootCommand;
@@ -128,7 +127,6 @@ internal sealed class RootCommand : BaseRootCommand
         CacheCommand cacheCommand,
         CertificatesCommand certificatesCommand,
         DoctorCommand doctorCommand,
-        ExecCommand execCommand,
         UpdateCommand updateCommand,
         McpCommand mcpCommand,
         AgentCommand agentCommand,
@@ -145,7 +143,6 @@ internal sealed class RootCommand : BaseRootCommand
 #endif
         ExtensionInternalCommand extensionInternalCommand,
         IBundleService bundleService,
-        IFeatures featureFlags,
         IInteractionService interactionService,
         IAnsiConsole ansiConsole)
         : base(RootCommandStrings.Description)
@@ -239,11 +236,6 @@ internal sealed class RootCommand : BaseRootCommand
         if (bundleService.IsBundle)
         {
             Subcommands.Add(setupCommand);
-        }
-
-        if (featureFlags.IsFeatureEnabled(KnownFeatures.ExecCommandEnabled, false))
-        {
-            Subcommands.Add(execCommand);
         }
 
         Subcommands.Add(sdkCommand);

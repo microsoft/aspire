@@ -1782,6 +1782,29 @@ public class AzureContainerAppsTests
     }
 
     [Fact]
+    public async Task ValidateAzureContainerApps_DoesNotThrowInRunMode()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/16940.
+        // In run mode, AddAzureContainerAppEnvironment does not add the env resource to the
+        // model. If a compute resource still ends up with an AzureContainerAppCustomizationAnnotation
+        // (e.g. via WithAnnotation), the validation step should not throw at 'aspire run' time —
+        // PublishAs* customizations are only meaningful at publish/deploy time.
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        builder.AddAzureContainerAppEnvironment("env");
+
+        builder.AddContainer("api", "myimage")
+            .WithAnnotation(new AzureContainerAppCustomizationAnnotation((_, _) => { }));
+
+        builder.AddContainer("worker", "myimage")
+            .WithAnnotation(new AzureContainerAppJobCustomizationAnnotation((_, _) => { }));
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+    }
+
+    [Fact]
     public async Task MultipleAzureContainerAppEnvironmentsSupported()
     {
         using var tempDir = new TestTempDirectory();

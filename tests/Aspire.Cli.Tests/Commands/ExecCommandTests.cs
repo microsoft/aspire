@@ -43,7 +43,6 @@ public class ExecCommandTests
         using var workspace = TemporaryWorkspace.Create(_outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, _outputHelper, options =>
         {
-            options.EnabledFeatures = [KnownFeatures.ExecCommandEnabled];
             options.ProjectLocatorFactory = _ => new NoProjectFileProjectLocator();
         });
         using var provider = services.BuildServiceProvider();
@@ -61,7 +60,6 @@ public class ExecCommandTests
         using var workspace = TemporaryWorkspace.Create(_outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, _outputHelper, options =>
         {
-            options.EnabledFeatures = [KnownFeatures.ExecCommandEnabled];
             options.ProjectLocatorFactory = _ => new MultipleProjectFilesProjectLocator();
         });
         using var provider = services.BuildServiceProvider();
@@ -79,7 +77,6 @@ public class ExecCommandTests
         using var workspace = TemporaryWorkspace.Create(_outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, _outputHelper, options =>
         {
-            options.EnabledFeatures = [KnownFeatures.ExecCommandEnabled];
             options.ProjectLocatorFactory = _ => new ProjectFileDoesNotExistLocator();
         });
         using var provider = services.BuildServiceProvider();
@@ -92,13 +89,10 @@ public class ExecCommandTests
     }
 
     [Fact]
-    public async Task ExecCommand_WhenFeatureFlagEnabled_CommandAvailable()
+    public async Task ExecCommand_CommandAvailable()
     {
         using var workspace = TemporaryWorkspace.Create(_outputHelper);
-        var services = CliTestHelper.CreateServiceCollection(workspace, _outputHelper, options =>
-        {
-            options.EnabledFeatures = [KnownFeatures.ExecCommandEnabled];
-        });
+        var services = CliTestHelper.CreateServiceCollection(workspace, _outputHelper);
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
@@ -110,7 +104,6 @@ public class ExecCommandTests
 
         var exitCode = await result.InvokeAsync(invokeConfiguration).DefaultTimeout();
 
-        // Should succeed because exec command is registered when feature flag is enabled
         Assert.Equal(ExitCodeConstants.Success, exitCode);
     }
 
@@ -144,7 +137,6 @@ public class ExecCommandTests
         using var workspace = TemporaryWorkspace.Create(_outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, _outputHelper, options =>
         {
-            options.EnabledFeatures = [KnownFeatures.ExecCommandEnabled];
             options.ProjectLocatorFactory = _ => new TestProjectLocator();
 
             options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner

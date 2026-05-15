@@ -41,6 +41,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
     private static readonly Option<string?> s_traceIdOption = TelemetryCommandHelpers.CreateTraceIdOption("--trace-id");
     private static readonly Option<string?> s_dashboardUrlOption = TelemetryCommandHelpers.CreateDashboardUrlOption();
     private static readonly Option<string?> s_apiKeyOption = TelemetryCommandHelpers.CreateApiKeyOption();
+    private static readonly Option<string?> s_searchOption = TelemetryCommandHelpers.CreateSearchOption();
     // Logs-specific option
     private static readonly Option<string?> s_severityOption = new("--severity")
     {
@@ -79,9 +80,10 @@ internal sealed class TelemetryLogsCommand : BaseCommand
         Options.Add(s_dashboardUrlOption);
         Options.Add(s_apiKeyOption);
         Options.Add(s_severityOption);
+        Options.Add(s_searchOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
@@ -94,23 +96,23 @@ internal sealed class TelemetryLogsCommand : BaseCommand
         var severity = parseResult.GetValue(s_severityOption);
         var dashboardUrl = parseResult.GetValue(s_dashboardUrlOption);
         var apiKey = parseResult.GetValue(s_apiKeyOption);
+        var search = parseResult.GetValue(s_searchOption);
 
         // Validate --limit value
         if (limit.HasValue && limit.Value < 1)
         {
-            _interactionService.DisplayError(TelemetryCommandStrings.LimitMustBePositive);
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(ExitCodeConstants.InvalidCommand, TelemetryCommandStrings.LimitMustBePositive);
         }
 
         var dashboardApi = await TelemetryCommandHelpers.GetDashboardApiAsync(
-            _connectionResolver, _interactionService, _httpClientFactory, _logger, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: true, ExecutionContext.LogFilePath, cancellationToken);
+            _connectionResolver, _interactionService, _httpClientFactory, _logger, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: true, cancellationToken);
 
         if (!dashboardApi.Success)
         {
-            return dashboardApi.ExitCode;
+            return CommandResult.FromExitCode(dashboardApi.ExitCode);
         }
 
-        return await FetchLogsAsync(dashboardApi.BaseUrl!, dashboardApi.ApiToken!, resourceName, traceId, severity, limit, follow, format, dashboardOnly: dashboardUrl is not null, dashboardApi.DashboardUrl!, cancellationToken);
+        return CommandResult.FromExitCode(await FetchLogsAsync(dashboardApi.BaseUrl!, dashboardApi.ApiToken!, resourceName, traceId, severity, limit, follow, format, dashboardOnly: dashboardUrl is not null, dashboardApi.DashboardUrl!, search, cancellationToken));
     }
 
     private async Task<int> FetchLogsAsync(
@@ -124,6 +126,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
         OutputFormat format,
         bool dashboardOnly,
         string dashboardUrl,
+        string? search,
         CancellationToken cancellationToken)
     {
         try
@@ -147,7 +150,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
             // Build URL with query parameters
             int? effectiveLimit = (limit.HasValue && !follow) ? limit.Value : null;
 
-            var url = DashboardUrls.TelemetryLogsApiUrl(baseUrl, resolvedResources, traceId: traceId, severity: severity, limit: effectiveLimit, follow: follow ? true : null);
+            var url = DashboardUrls.TelemetryLogsApiUrl(baseUrl, resolvedResources, traceId: traceId, severity: severity, limit: effectiveLimit, follow: follow ? true : null, search: search);
 
             if (follow)
             {
@@ -162,7 +165,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
         {
             _logger.LogError(ex, "Failed to fetch logs from Dashboard API");
             var errorInfo = await TelemetryCommandHelpers.FormatTelemetryErrorAsync(ex, baseUrl, dashboardOnly, _httpClientFactory, _logger, cancellationToken);
-            TelemetryCommandHelpers.DisplayTelemetryError(_interactionService, errorInfo, ExecutionContext.LogFilePath);
+            TelemetryCommandHelpers.DisplayTelemetryError(_interactionService, errorInfo);
             return ExitCodeConstants.DashboardFailure;
         }
     }

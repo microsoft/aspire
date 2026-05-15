@@ -81,6 +81,12 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        internal static string IncludeHiddenOptionDescription {
+            get {
+                return ResourceManager.GetString("IncludeHiddenOptionDescription", resourceCulture);
+            }
+        }
+
         internal static string FormatOptionDescription {
             get {
                 return ResourceManager.GetString("FormatOptionDescription", resourceCulture);
@@ -192,6 +198,12 @@ namespace Aspire.Cli.Resources {
         internal static string PipelineStepsSummaryTitle {
             get {
                 return ResourceManager.GetString("PipelineStepsSummaryTitle", resourceCulture);
+            }
+        }
+
+        internal static string NonInteractiveRequiresYesFormat {
+            get {
+                return ResourceManager.GetString("NonInteractiveRequiresYesFormat", resourceCulture);
             }
         }
     }

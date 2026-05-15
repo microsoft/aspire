@@ -33,19 +33,18 @@ steps:
         exit 1
       }
 
-      if ($channel -eq 'stable') {
-        $templateDir = 'microsoft.aspire'
-        $artifactName = 'winget-manifests-stable'
-      } elseif ($channel -eq 'prerelease') {
-        $templateDir = 'microsoft.aspire.prerelease'
-        $artifactName = 'winget-manifests-prerelease'
-      } else {
-        Write-Error "Channel must be 'stable' or 'prerelease', got: $channel"
-        exit 1
-      }
+      # Manifests are generated for every channel. The artifact is a CI-only
+      # build output consumed by dogfooders via 'winget install --manifest <path>'.
+      # Public WinGet publishing is gated separately by publish-winget.yml in the
+      # release-publish pipeline, which downloads 'winget-manifests-stable' by
+      # name — so prerelease artifacts can never reach the public catalog.
+      $isPrereleaseInStablePackage = $channel -ne 'stable'
+      $templateDir = 'microsoft.aspire'
+      $artifactName = "winget-manifests-$channel"
 
       Write-Host "Version: $version"
       Write-Host "Channel: $channel"
+      Write-Host "Is prerelease in stable package: $isPrereleaseInStablePackage"
       Write-Host "Artifact version: $(if ([string]::IsNullOrWhiteSpace($artifactVersion)) { $version } else { $artifactVersion })"
       Write-Host "Template dir: $templateDir"
       Write-Host "Artifact name: $artifactName"
@@ -53,6 +52,7 @@ steps:
       Write-Host "##vso[task.setvariable variable=CliArtifactVersion]$(if ([string]::IsNullOrWhiteSpace($artifactVersion)) { $version } else { $artifactVersion })"
       Write-Host "##vso[task.setvariable variable=WinGetTemplateDir]$templateDir"
       Write-Host "##vso[task.setvariable variable=WinGetArtifactName]$artifactName"
+      Write-Host "##vso[task.setvariable variable=WinGetIsPrereleaseInStablePackage]$isPrereleaseInStablePackage"
     displayName: 🟣Set version ${{ parameters.version }}
 
   - pwsh: |
@@ -102,6 +102,10 @@ steps:
 
       if ('${{ parameters.skipUrlValidation }}' -eq 'true') {
         $args.SkipUrlValidation = $true
+      }
+
+      if ('$(WinGetIsPrereleaseInStablePackage)' -eq 'True') {
+        $args.IsPrereleaseInStablePackage = $true
       }
 
       & "$(Build.SourcesDirectory)/eng/winget/generate-manifests.ps1" @args

@@ -41,7 +41,6 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     private readonly string _repoRoot;
     private readonly IDotNetCliRunner _dotNetCliRunner;
     private readonly IPackagingService _packagingService;
-    private readonly IConfigurationService _configurationService;
     private readonly ILogger _logger;
 
     public DotNetBasedAppHostServerProject(
@@ -50,7 +49,6 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         string repoRoot,
         IDotNetCliRunner dotNetCliRunner,
         IPackagingService packagingService,
-        IConfigurationService configurationService,
         ILogger<DotNetBasedAppHostServerProject> logger,
         string? projectModelPath = null)
     {
@@ -61,7 +59,6 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         _repoRoot = Path.GetFullPath(repoRoot) + Path.DirectorySeparatorChar;
         _dotNetCliRunner = dotNetCliRunner;
         _packagingService = packagingService;
-        _configurationService = configurationService;
         _logger = logger;
 
         var pathHash = SHA256.HashData(Encoding.UTF8.GetBytes(_appPath));
@@ -327,11 +324,6 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         var configuredChannelName = AspireConfigFile.Load(_appPath)?.Channel
             ?? AspireJsonConfiguration.Load(_appPath)?.Channel;
 
-        if (string.IsNullOrEmpty(configuredChannelName))
-        {
-            configuredChannelName = await _configurationService.GetConfigurationAsync("channel", cancellationToken);
-        }
-
         // Resolve channel sources and add them via RestoreAdditionalProjectSources
         // This is additive — it preserves the user's nuget.config and adds channel-specific sources
         var channelSources = new List<string>();
@@ -496,7 +488,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
 
         if (debug)
         {
-            startInfo.Environment["Logging__LogLevel__Default"] = "Debug";
+            startInfo.Environment[KnownConfigNames.AspireLogLevel] = "Debug";
             _logger.LogDebug("Enabling debug logging for AppHostServer");
         }
 

@@ -133,6 +133,15 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         var builder = options is not null ? WebApplication.CreateBuilder(options) : WebApplication.CreateBuilder();
 
+        // WebApplication.CreateBuilder already enables static web assets in the Development environment.
+        // The dashboard also needs them in other environments when running from source (e.g. to serve
+        // _content/ files from NuGet packages like FluentUI). The call is a no-op when published
+        // because the static web assets manifest doesn't exist.
+        if (!builder.Environment.IsDevelopment())
+        {
+            builder.WebHost.UseStaticWebAssets();
+        }
+
         preConfigureBuilder?.Invoke(builder);
 
 #if !DEBUG

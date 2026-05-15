@@ -7,7 +7,6 @@ using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Commands;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Packaging;
@@ -352,10 +351,9 @@ public class DotNetTemplateFactoryTests
         var cacheDirectory = new DirectoryInfo("/tmp/cache");
         var executionContext = new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
         sdkInstaller ??= new TestDotNetSdkInstaller();
-        var configurationService = new FakeConfigurationService();
         var telemetry = TestTelemetryHelper.CreateInitializedTelemetry();
         var hostEnvironment = new FakeCliHostEnvironment(nonInteractive);
-        var templateNuGetConfigService = new TemplateNuGetConfigService(interactionService, executionContext, packagingService, configurationService, prompter, hostEnvironment);
+        var templateNuGetConfigService = new TemplateNuGetConfigService(interactionService, executionContext, packagingService, prompter, hostEnvironment);
 
         return new DotNetTemplateFactory(
             interactionService,
@@ -370,58 +368,15 @@ public class DotNetTemplateFactoryTests
             templateNuGetConfigService);
     }
 
-    private sealed class FakeConfigurationService : IConfigurationService
-    {
-        public Task SetConfigurationAsync(string key, string value, bool isGlobal = false, CancellationToken cancellationToken = default)
-        {
-            return Task.CompletedTask;
-        }
-
-        public Task<bool> DeleteConfigurationAsync(string key, bool isGlobal = false, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(false);
-        }
-
-        public Task<Dictionary<string, string>> GetAllConfigurationAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(new Dictionary<string, string>());
-        }
-
-        public Task<Dictionary<string, string>> GetLocalConfigurationAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(new Dictionary<string, string>());
-        }
-
-        public Task<Dictionary<string, string>> GetGlobalConfigurationAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(new Dictionary<string, string>());
-        }
-
-        public Task<string?> GetConfigurationAsync(string key, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult<string?>(null);
-        }
-
-        public Task<string?> GetConfigurationFromDirectoryAsync(string key, DirectoryInfo startDirectory, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult<string?>(null);
-        }
-
-        public string GetSettingsFilePath(bool isGlobal)
-        {
-            return "/tmp/settings.json";
-        }
-    }
-
     private sealed class TestInteractionService : IInteractionService
     {
         public ConsoleOutput Console { get; set; }
         public bool SupportsLinks { get; set; }
 
-        public Task<T> PromptForSelectionAsync<T>(string prompt, IEnumerable<T> choices, Func<T, string> displaySelector, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull
+        public Task<T> PromptForSelectionAsync<T>(string prompt, IEnumerable<T> choices, Func<T, string> displaySelector, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
             => throw new NotImplementedException();
 
-        public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull
+        public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
             => throw new NotImplementedException();
 
         public Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
@@ -443,7 +398,7 @@ public class DotNetTemplateFactoryTests
             => throw new NotImplementedException();
 
         public void DisplaySuccess(string message, bool allowMarkup = false) { }
-        public void DisplayError(string message) { }
+        public void DisplayError(string message, bool allowMarkup = false) { }
         public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false) { }
         public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines) { }
         public void DisplayCancellationMessage() { }

@@ -10,6 +10,7 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using StreamJsonRpc;
 
 namespace Aspire.Cli.Tests.Commands;
@@ -686,7 +687,7 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
             _disposables.Add(messageHandler);
             _disposables.Add(serverStream);
 
-            return await AppHostAuxiliaryBackchannel.CreateFromSocketAsync("hash1", "socket.hash1", isInScope: true, clientSocket).DefaultTimeout();
+            return await AppHostAuxiliaryBackchannel.CreateFromSocketAsync("hash1", "socket.hash1", isInScope: true, NullLogger.Instance, clientSocket).DefaultTimeout();
         }
 
         public void Dispose()

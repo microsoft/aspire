@@ -4,7 +4,7 @@
 using System.CommandLine;
 using System.CommandLine.Help;
 using System.CommandLine.Invocation;
-using System.CommandLine.Parsing;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text;
 using System.Text.Json.Nodes;
@@ -24,6 +24,8 @@ internal sealed class ResourceCommand : BaseCommand
     internal override HelpGroup HelpGroup => HelpGroup.ResourceManagement;
 
     private readonly IInteractionService _interactionService;
+    private readonly IAuxiliaryBackchannelMonitor _backchannelMonitor;
+    private readonly IProjectLocator _projectLocator;
     private readonly AppHostConnectionResolver _connectionResolver;
     private readonly ILogger<ResourceCommand> _logger;
 
@@ -42,6 +44,10 @@ internal sealed class ResourceCommand : BaseCommand
     };
 
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", SharedCommandStrings.AppHostOptionDescription);
+    private static readonly Option<bool> s_includeHiddenOption = new("--include-hidden")
+    {
+        Description = SharedCommandStrings.IncludeHiddenOptionDescription
+    };
 
     /// <summary>
     /// Well-known commands with their display metadata.
@@ -66,12 +72,15 @@ internal sealed class ResourceCommand : BaseCommand
         : base("resource", ResourceCommandStrings.CommandDescription, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _interactionService = interactionService;
+        _backchannelMonitor = backchannelMonitor;
+        _projectLocator = projectLocator;
         _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, projectLocator, executionContext, logger);
         _logger = logger;
 
         Arguments.Add(s_resourceArgument);
         Arguments.Add(s_commandArgument);
         Options.Add(s_appHostOption);
+        Options.Add(s_includeHiddenOption);
         Options.Add(new HelpOption { Action = new ResourceCommandHelpAction(this) });
         TreatUnmatchedTokensAsErrors = false;
 
@@ -92,11 +101,12 @@ internal sealed class ResourceCommand : BaseCommand
         });
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var resourceName = parseResult.GetValue(s_resourceArgument)!;
         var commandName = parseResult.GetValue(s_commandArgument)!;
         var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
+        var includeHidden = parseResult.GetValue(s_includeHiddenOption);
         var capturedArguments = parseResult.UnmatchedTokens.ToArray();
 
         var result = await _connectionResolver.ResolveConnectionAsync(
@@ -108,16 +118,15 @@ internal sealed class ResourceCommand : BaseCommand
 
         if (!result.Success)
         {
-            return AppHostConnectionResultHandler.DisplayFailureAsError(result, _interactionService, ExitCodeConstants.FailedToFindProject);
+            return CommandResult.FromExitCode(AppHostConnectionResultHandler.DisplayFailureAsError(result, _interactionService, ExitCodeConstants.FailedToFindProject));
         }
 
         var connection = result.Connection!;
-        var command = await GetCommandMetadataAsync(connection, resourceName, commandName, includeHidden: false, cancellationToken).ConfigureAwait(false);
+        var command = await GetCommandMetadataAsync(connection, resourceName, commandName, includeHidden, cancellationToken).ConfigureAwait(false);
         var commandArgumentsResult = CreateCommandArguments(command, capturedArguments);
         if (commandArgumentsResult.ErrorMessage is { } errorMessage)
         {
-            _interactionService.DisplayError(errorMessage);
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(ExitCodeConstants.InvalidCommand, errorMessage);
         }
 
         var commandArguments = commandArgumentsResult.Arguments;
@@ -125,7 +134,7 @@ internal sealed class ResourceCommand : BaseCommand
         // Map well-known friendly names (start/stop/restart) to their display metadata
         if (s_wellKnownCommands.TryGetValue(commandName, out var knownCommand))
         {
-            return await ResourceCommandHelper.ExecuteResourceCommandAsync(
+            return CommandResult.FromExitCode(await ResourceCommandHelper.ExecuteResourceCommandAsync(
                 connection,
                 _interactionService,
                 _logger,
@@ -135,17 +144,17 @@ internal sealed class ResourceCommand : BaseCommand
                 knownCommand.BaseVerb,
                 knownCommand.PastTenseVerb,
                 commandArguments,
-                cancellationToken);
+                cancellationToken));
         }
 
-        return await ResourceCommandHelper.ExecuteGenericCommandAsync(
+        return CommandResult.FromExitCode(await ResourceCommandHelper.ExecuteGenericCommandAsync(
             connection,
             _interactionService,
             _logger,
             resourceName,
             commandName,
             commandArguments,
-            cancellationToken);
+            cancellationToken));
     }
 
     private static async Task<ResourceSnapshotCommand?> GetCommandMetadataAsync(IAppHostAuxiliaryBackchannel connection, string resourceName, string commandName, bool includeHidden, CancellationToken cancellationToken)
@@ -156,6 +165,27 @@ internal sealed class ResourceCommand : BaseCommand
         return resources
             .SelectMany(static resource => resource.Commands)
             .FirstOrDefault(command => string.Equals(command.Name, commandName, StringComparisons.CommandName));
+    }
+
+    private static async Task<(string Name, string Description)[]> GetAvailableCommandMetadataAsync(IAppHostAuxiliaryBackchannel connection, string resourceName, bool includeHidden, CancellationToken cancellationToken)
+    {
+        var snapshots = await connection.GetResourceSnapshotsAsync(includeHidden, cancellationToken).ConfigureAwait(false);
+        var resources = ResourceSnapshotMapper.ResolveResources(resourceName, snapshots);
+
+        return resources
+            .SelectMany(static resource => resource.Commands)
+            .Where(ResourceSnapshotMapper.IsCommandAvailableToApi)
+            .GroupBy(static command => command.Name, StringComparers.CommandName)
+            .OrderBy(static group => group.Key, StringComparers.CommandName)
+            .Select(static group =>
+            {
+                var description = group
+                    .Select(static command => command.Description ?? command.DisplayName)
+                    .FirstOrDefault(static description => !string.IsNullOrEmpty(description));
+
+                return (group.Key, description ?? string.Empty);
+            })
+            .ToArray();
     }
 
     private static (JsonNode? Arguments, string? ErrorMessage) CreateCommandArguments(ResourceSnapshotCommand? command, string[] capturedArguments)
@@ -452,7 +482,20 @@ internal sealed class ResourceCommand : BaseCommand
             var request = ResourceCommandHelpParser.Parse(parseResult, s_resourceArgument, s_commandArgument, s_appHostOption);
             if (request is null)
             {
-                return _defaultHelpAction.Invoke(parseResult);
+                var exitCode = _defaultHelpAction.Invoke(parseResult);
+                if (TryGetResourceOnlyHelp(parseResult, out var resourceName))
+                {
+                    try
+                    {
+                        await WriteAvailableCommandsAsync(parseResult, resourceName, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        command._logger.LogDebug(ex, "Failed to augment resource help with available resource commands.");
+                    }
+                }
+
+                return exitCode;
             }
 
             var result = await command._connectionResolver.ResolveConnectionAsync(
@@ -467,7 +510,8 @@ internal sealed class ResourceCommand : BaseCommand
                 return _defaultHelpAction.Invoke(parseResult);
             }
 
-            var resourceCommand = await GetCommandMetadataAsync(result.Connection!, request.ResourceName, request.CommandName, includeHidden: false, cancellationToken).ConfigureAwait(false);
+            var includeHidden = parseResult.GetValue(s_includeHiddenOption);
+            var resourceCommand = await GetCommandMetadataAsync(result.Connection!, request.ResourceName, request.CommandName, includeHidden, cancellationToken).ConfigureAwait(false);
             if (resourceCommand is null)
             {
                 return _defaultHelpAction.Invoke(parseResult);
@@ -477,7 +521,121 @@ internal sealed class ResourceCommand : BaseCommand
             return ExitCodeConstants.Success;
         }
 
-        private static void WriteResourceCommandHelp(TextWriter writer, CommandResult commandResult, string resourceName, ResourceSnapshotCommand command)
+        private async Task WriteAvailableCommandsAsync(ParseResult parseResult, string resourceName, CancellationToken cancellationToken)
+        {
+            var connection = await ResolveConnectionForAvailableCommandsAsync(parseResult, cancellationToken).ConfigureAwait(false);
+            if (connection is null)
+            {
+                return;
+            }
+
+            var includeHidden = parseResult.GetValue(s_includeHiddenOption);
+            var commands = await GetAvailableCommandMetadataAsync(connection, resourceName, includeHidden, cancellationToken).ConfigureAwait(false);
+            if (commands.Length == 0)
+            {
+                return;
+            }
+
+            GroupedHelpWriter.WriteTwoColumnSection(
+                parseResult.InvocationConfiguration.Output,
+                ResourceCommandStrings.AvailableResourceCommands,
+                commands,
+                maxWidth: 120,
+                trailingBlankLine: false);
+        }
+
+        private async Task<IAppHostAuxiliaryBackchannel?> ResolveConnectionForAvailableCommandsAsync(ParseResult parseResult, CancellationToken cancellationToken)
+        {
+            var appHostProjectFile = parseResult.GetValue(s_appHostOption);
+            if (appHostProjectFile is not null)
+            {
+                return await ResolveExplicitConnectionForAvailableCommandsAsync(appHostProjectFile, cancellationToken).ConfigureAwait(false);
+            }
+
+            var inScopeConnections = await command._interactionService.ShowStatusAsync(
+                SharedCommandStrings.ScanningForRunningAppHosts,
+                async () =>
+                {
+                    await command._backchannelMonitor.ScanAsync(cancellationToken).ConfigureAwait(false);
+                    return command._backchannelMonitor.Connections.Where(static connection => connection.IsInScope).ToList();
+                });
+
+            return inScopeConnections.Count == 1 ? inScopeConnections[0] : null;
+        }
+
+        private async Task<IAppHostAuxiliaryBackchannel?> ResolveExplicitConnectionForAvailableCommandsAsync(FileInfo appHostProjectFile, CancellationToken cancellationToken)
+        {
+            FileInfo? selectedAppHostProjectFile = appHostProjectFile;
+
+            if (Directory.Exists(appHostProjectFile.FullName))
+            {
+                var searchResult = await command._projectLocator.UseOrFindAppHostProjectFileAsync(
+                    appHostProjectFile,
+                    MultipleAppHostProjectsFoundBehavior.Throw,
+                    createSettingsFile: false,
+                    cancellationToken).ConfigureAwait(false);
+
+                selectedAppHostProjectFile = searchResult.SelectedProjectFile;
+            }
+            else if (!appHostProjectFile.Exists)
+            {
+                return null;
+            }
+
+            if (selectedAppHostProjectFile is null)
+            {
+                return null;
+            }
+
+            var targetPath = Path.GetFullPath(selectedAppHostProjectFile.FullName);
+            var matchingConnections = await command._interactionService.ShowStatusAsync(
+                SharedCommandStrings.ScanningForRunningAppHosts,
+                async () =>
+                {
+                    await command._backchannelMonitor.ScanAsync(cancellationToken).ConfigureAwait(false);
+                    return command._backchannelMonitor.Connections
+                        .Where(connection => IsMatchingAppHostPath(connection.AppHostInfo?.AppHostPath, targetPath))
+                        .ToList();
+                });
+
+            return matchingConnections.Count == 1 ? matchingConnections[0] : null;
+        }
+
+        private static bool IsMatchingAppHostPath(string? appHostPath, string targetPath)
+        {
+            return !string.IsNullOrEmpty(appHostPath) &&
+                string.Equals(Path.GetFullPath(appHostPath), targetPath, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool TryGetResourceOnlyHelp(ParseResult parseResult, [NotNullWhen(true)] out string? resourceName)
+        {
+            // Resource-only help is `aspire resource <resource> --help`. Because the command argument has a default,
+            // System.CommandLine can bind the next option token (or an option value like --apphost's path) as the
+            // command. Treat those as "no command" so resource-scoped help can still show the resource's commands.
+            var resourceArgumentResult = parseResult.GetResult(s_resourceArgument);
+            resourceName = resourceArgumentResult?.Tokens.Count > 0 ? resourceArgumentResult.Tokens[0].Value : null;
+            var commandArgumentResult = parseResult.GetResult(s_commandArgument);
+            var commandName = commandArgumentResult?.Tokens.Count > 0 ? commandArgumentResult.Tokens[0].Value : null;
+            var appHostOptionValue = GetOptionTokenValue(parseResult, s_appHostOption.InnerOption) ?? GetOptionTokenValue(parseResult, s_appHostOption.LegacyOption);
+
+            var hasResourceName = !string.IsNullOrEmpty(resourceName) && !IsOptionLikeToken(resourceName);
+
+            // The command slot is considered empty when it has no token, when it captured an option like --help,
+            // or when it captured the value for --apphost/--project instead of an actual resource command name.
+            var hasNoCommandName = string.IsNullOrEmpty(commandName) ||
+                IsOptionLikeToken(commandName) ||
+                string.Equals(commandName, appHostOptionValue, StringComparison.Ordinal);
+
+            return hasResourceName && hasNoCommandName;
+        }
+
+        private static string? GetOptionTokenValue(ParseResult parseResult, Option<FileInfo?> option)
+        {
+            var result = parseResult.GetResult(option);
+            return result?.Tokens.Count > 0 ? result.Tokens[0].Value : null;
+        }
+
+        private static void WriteResourceCommandHelp(TextWriter writer, System.CommandLine.Parsing.CommandResult commandResult, string resourceName, ResourceSnapshotCommand command)
         {
             var cliOptionNames = GetCliOptionNames(commandResult);
 
@@ -504,7 +662,7 @@ internal sealed class ResourceCommand : BaseCommand
                 trailingBlankLine: false);
         }
 
-        private static IEnumerable<Option> GetVisibleCliOptions(CommandResult commandResult)
+        private static IEnumerable<Option> GetVisibleCliOptions(System.CommandLine.Parsing.CommandResult commandResult)
         {
             var seenOptionNames = new HashSet<string>(StringComparer.Ordinal);
 
@@ -517,7 +675,7 @@ internal sealed class ResourceCommand : BaseCommand
             }
 
             var current = commandResult.Parent;
-            while (current is CommandResult parentCommandResult)
+            while (current is System.CommandLine.Parsing.CommandResult parentCommandResult)
             {
                 foreach (var option in parentCommandResult.Command.Options)
                 {
@@ -531,14 +689,14 @@ internal sealed class ResourceCommand : BaseCommand
             }
         }
 
-        private static HashSet<string> GetCliOptionNames(CommandResult commandResult)
+        private static HashSet<string> GetCliOptionNames(System.CommandLine.Parsing.CommandResult commandResult)
         {
             var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             AddOptionNames(commandResult.Command.Options, includeOnlyRecursive: false, names);
 
             var current = commandResult.Parent;
-            while (current is CommandResult parentCommandResult)
+            while (current is System.CommandLine.Parsing.CommandResult parentCommandResult)
             {
                 AddOptionNames(parentCommandResult.Command.Options, includeOnlyRecursive: true, names);
                 current = parentCommandResult.Parent;

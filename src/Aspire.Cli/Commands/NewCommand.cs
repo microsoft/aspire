@@ -29,7 +29,6 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
     private readonly ITemplate[] _templates;
     private readonly IFeatures _features;
     private readonly IPackagingService _packagingService;
-    private readonly IConfigurationService _configurationService;
     private readonly AgentInitCommand _agentInitCommand;
     private readonly ICliHostEnvironment _hostEnvironment;
 
@@ -82,7 +81,6 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         ICliUpdateNotifier updateNotifier,
         CliExecutionContext executionContext,
         IPackagingService packagingService,
-        IConfigurationService configurationService,
         AgentInitCommand agentInitCommand,
         ICliHostEnvironment hostEnvironment,
         IConfiguration configuration)
@@ -92,7 +90,6 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         _templateProvider = templateProvider;
         _features = features;
         _packagingService = packagingService;
-        _configurationService = configurationService;
         _agentInitCommand = agentInitCommand;
         _hostEnvironment = hostEnvironment;
 
@@ -173,10 +170,6 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             choices,
             choice => choice.DisplayName.EscapeMarkup(),
             cancellationToken: cancellationToken);
-
-        // The prompt is cleared after selection.
-        // Write out the selected language again for context before proceeding.
-        InteractionService.DisplayPlainText($"Which language would you like to use? {selected.DisplayName}");
 
         return selected.LanguageId;
     }
@@ -294,12 +287,6 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
 
         var result = await _prompter.PromptForTemplateAsync(templatesForPrompt, cancellationToken);
 
-        // The prompt is cleared after selection.
-        // Write out the selected template again for context before proceeding.
-        if (result != null)
-        {
-            InteractionService.DisplayPlainText($"{NewCommandStrings.SelectAProjectTemplate} {result.Description}");
-        }
         return result;
     }
 
@@ -325,13 +312,27 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
                 var channels = await _packagingService.GetChannelsAsync(cancellationToken);
 
                 var configuredChannelName = parseResult.GetValue(_channelOption);
-                if (string.IsNullOrWhiteSpace(configuredChannelName))
+
+                // When the running CLI was built on a local-build channel (pr-*, run-*, local) and
+                // the matching hive-backed channel is registered, prefer it over the Implicit
+                // (nuget.org) channel. Without this, `aspire new` resolves the template version
+                // from nuget.org and yields the latest stable (e.g. 13.2.4), which is then routed
+                // by Package Source Mapping to the PR hive and rejected because the hive only
+                // contains the corresponding prerelease (e.g. 13.4.0-pr.16820.gSHA). Aligning the
+                // selected channel with the CLI's own build channel keeps the version-range
+                // semantics coherent end-to-end (build → execution context → hive → restore).
+                PackageChannel? localBuildChannel = null;
+                if (string.IsNullOrWhiteSpace(configuredChannelName) &&
+                    VersionHelper.IsLocalBuildChannel(ExecutionContext.IdentityChannel))
                 {
-                    configuredChannelName = await _configurationService.GetConfigurationAsync("channel", cancellationToken);
+                    localBuildChannel = channels.FirstOrDefault(c =>
+                        string.Equals(c.Name, ExecutionContext.IdentityChannel, StringComparison.OrdinalIgnoreCase));
                 }
 
                 var selectedChannel = string.IsNullOrWhiteSpace(configuredChannelName)
-                    ? channels.FirstOrDefault(c => c.Type is PackageChannelType.Implicit) ?? channels.FirstOrDefault()
+                    ? localBuildChannel
+                        ?? channels.FirstOrDefault(c => c.Type is PackageChannelType.Implicit)
+                        ?? channels.FirstOrDefault()
                     : channels.FirstOrDefault(c => string.Equals(c.Name, configuredChannelName, StringComparison.OrdinalIgnoreCase));
 
                 if (selectedChannel is null)
@@ -343,38 +344,45 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
                     return new ResolveTemplateVersionResult { ErrorMessage = errorMessage };
                 }
 
-                var packages = (await selectedChannel.GetTemplatePackagesAsync(ExecutionContext.WorkingDirectory, cancellationToken))
-                    .Where(p => Semver.SemVersion.TryParse(p.Version, Semver.SemVersionStyles.Strict, out _))
-                    .ToArray();
-                var hasPrHives = ExecutionContext.GetPrHiveCount() > 0;
-
-                NuGetPackage? package = VersionHelper.TryGetCurrentCliVersionMatch(
-                    packages,
-                    p => p.Version,
-                    out var cliVersionPackage,
-                    channelName: selectedChannel.Name,
-                    hasPrHives: hasPrHives)
-                    ? cliVersionPackage
-                    : null;
-
-                package ??= packages
-                    .OrderByDescending(p => Semver.SemVersion.Parse(p.Version, Semver.SemVersionStyles.Strict), Semver.SemVersion.PrecedenceComparer)
-                    .FirstOrDefault();
-
-                if (package is null)
+                try
                 {
-                    return new ResolveTemplateVersionResult { ErrorMessage = $"No template versions found in channel '{selectedChannel.Name}'." };
+                    var packages = (await selectedChannel.GetTemplatePackagesAsync(ExecutionContext.WorkingDirectory, cancellationToken))
+                        .Where(p => Semver.SemVersion.TryParse(p.Version, Semver.SemVersionStyles.Strict, out _))
+                        .ToArray();
+                    var hasPrHives = ExecutionContext.GetHiveCount() > 0;
+
+                    NuGetPackage? package = VersionHelper.TryGetCurrentCliVersionMatch(
+                        packages,
+                        p => p.Version,
+                        out var cliVersionPackage,
+                        channelName: selectedChannel.Name,
+                        hasPrHives: hasPrHives)
+                        ? cliVersionPackage
+                        : null;
+
+                    package ??= packages
+                        .OrderByDescending(p => Semver.SemVersion.Parse(p.Version, Semver.SemVersionStyles.Strict), Semver.SemVersion.PrecedenceComparer)
+                        .FirstOrDefault();
+
+                    if (package is null)
+                    {
+                        return new ResolveTemplateVersionResult { ErrorMessage = $"No template versions found in channel '{selectedChannel.Name}'." };
+                    }
+
+                    // Only persist explicit channel names (e.g. local, daily) — implicit channels
+                    // (stable/nuget.org) should not be written so aspire add uses its default behavior.
+                    var channelName = selectedChannel.Type is PackageChannelType.Explicit ? selectedChannel.Name : null;
+
+                    return new ResolveTemplateVersionResult { Version = package.Version, ChannelName = channelName };
                 }
-
-                // Only persist explicit channel names (e.g. local, daily) — implicit channels
-                // (stable/nuget.org) should not be written so aspire add uses its default behavior.
-                var channelName = selectedChannel.Type is PackageChannelType.Explicit ? selectedChannel.Name : null;
-
-                return new ResolveTemplateVersionResult { Version = package.Version, ChannelName = channelName };
+                catch (NuGetPackageCacheException ex)
+                {
+                    return new ResolveTemplateVersionResult { ErrorMessage = ex.Message };
+                }
             });
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(this.Name);
 
@@ -386,13 +394,13 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         var template = await GetProjectTemplateAsync(availableTemplates, parseResult, cancellationToken);
         if (template is null)
         {
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(ExitCodeConstants.InvalidCommand);
         }
 
         var (languageResolutionSuccess, selectedLanguageId) = await ResolveSelectedLanguageAsync(template, parseResult, cancellationToken);
         if (!languageResolutionSuccess)
         {
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(ExitCodeConstants.InvalidCommand);
         }
 
         var version = parseResult.GetValue(s_versionOption);
@@ -403,9 +411,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             var resolveResult = await ResolveCliTemplateVersionAsync(parseResult, cancellationToken);
             if (!resolveResult.Success)
             {
-                InteractionService.DisplayError(resolveResult.ErrorMessage);
-                InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ProjectCouldNotBeCreated, ExecutionContext.LogFilePath));
-                return ExitCodeConstants.InvalidCommand;
+                return CommandResult.Failure(ExitCodeConstants.InvalidCommand, resolveResult.ErrorMessage);
             }
 
             version = resolveResult.Version;
@@ -432,7 +438,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             extensionInteractionService.OpenEditor(templateResult.OutputPath);
         }
 
-        return agentInitResult.ExitCode;
+        return CommandResult.FromExitCode(agentInitResult.ExitCode);
     }
 
     private static bool ShouldResolveCliTemplateVersion(ITemplate template)

@@ -10,8 +10,8 @@ var builder = DistributedApplication.CreateBuilder(args);
 
 var aca = builder.AddAzureContainerAppEnvironment("env");
 
-var foundry = builder.AddFoundry("aif-myfoundry");
-var project = foundry.AddProject("proj-myproject")
+var foundry = builder.AddFoundry("aifmyfoundry");
+var project = foundry.AddProject("projmyproject")
     // workaround for https://github.com/microsoft/aspire/issues/15971
     .ConfigureInfrastructure(infra =>
     {

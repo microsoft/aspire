@@ -7,6 +7,11 @@
         <target state="new">The '{0}' argument is required.</target>
         <note />
       </trans-unit>
+      <trans-unit id="AvailableResourceCommands">
+        <source>Available resource commands:</source>
+        <target state="new">Available resource commands:</target>
+        <note />
+      </trans-unit>
       <trans-unit id="CommandDescription">
         <source>Execute a command on a resource (e.g. start, stop, restart)</source>
         <target state="needs-review-translation">Eseguire un comando su una risorsa.</target>

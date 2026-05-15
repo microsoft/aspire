@@ -21,10 +21,14 @@
 
 .PARAMETER LocalDir
     Use pre-downloaded artifacts from a local directory instead of downloading from GitHub.
-    Mutually exclusive with PRNumber and WorkflowRunId.
+    Mutually exclusive with PRNumber and WorkflowRunId. The directory is auto-detected:
+    if it contains an aspire-cli-*.tar.gz / .zip archive the archive flow is used; otherwise
+    it is treated as raw 'dotnet build' / 'dotnet publish' output and the contained
+    'aspire' or 'aspire.exe' executable is installed directly. NuGet packages (*.nupkg)
+    in the directory are always installed into the hive.
 
 .PARAMETER HiveLabel
-    Override the NuGet hive label (default: pr-PRNUMBER, run-RUNID, or run-GITHUB_RUN_ID for LocalDir).
+    Override the NuGet hive label (default: pr-PRNUMBER, run-RUNID, or local for LocalDir).
 
 .PARAMETER InstallPath
     Directory prefix to install (default: $HOME/.aspire on Unix, %USERPROFILE%\.aspire on Windows)
@@ -60,6 +64,9 @@
 
 .EXAMPLE
     .\get-aspire-cli-pr.ps1 -LocalDir "C:\path\to\artifacts" -HiveLabel my-build
+
+.EXAMPLE
+    .\get-aspire-cli-pr.ps1 -LocalDir "artifacts\bin\Aspire.Cli\Debug\net10.0"
 
 .EXAMPLE
     .\get-aspire-cli-pr.ps1 1234 -InstallPath "C:\my-aspire"
@@ -109,7 +116,7 @@ param(
     [Parameter(HelpMessage = "Use pre-downloaded artifacts from a local directory instead of downloading from GitHub")]
     [string]$LocalDir = "",
 
-    [Parameter(HelpMessage = "Override the NuGet hive label (default: pr-<PR>, run-<RUN_ID>, or run-<GITHUB_RUN_ID> (run-local when GITHUB_RUN_ID is unset))")]
+    [Parameter(HelpMessage = "Override the NuGet hive label (default: pr-<PR>, run-<RUN_ID>, or local for --LocalDir)")]
     [string]$HiveLabel = "",
 
     [Parameter(HelpMessage = "Directory prefix to install")]
@@ -414,11 +421,11 @@ function Backup-ExistingCliExecutable {
         [Parameter(Mandatory = $true)]
         [string]$TargetExePath
     )
-    
+
     if (Test-Path $TargetExePath) {
         $unixTimestamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
         $backupPath = "$TargetExePath.old.$unixTimestamp"
-        
+
         if ($PSCmdlet.ShouldProcess($TargetExePath, "Backup to $backupPath")) {
             Write-Message "Backing up existing CLI: $TargetExePath -> $backupPath" -Level Verbose
 
@@ -434,7 +441,7 @@ function Backup-ExistingCliExecutable {
             return $backupPath
         }
     }
-    
+
     return $null
 }
 
@@ -444,18 +451,18 @@ function Restore-CliExecutableFromBackup {
     param(
         [Parameter(Mandatory = $true)]
         [string]$BackupPath,
-        
+
         [Parameter(Mandatory = $true)]
         [string]$TargetExePath
     )
-    
+
     if ($PSCmdlet.ShouldProcess($BackupPath, "Restore to $TargetExePath")) {
         Write-Message "Restoring CLI from backup: $BackupPath -> $TargetExePath" -Level Warning
-        
+
         if (Test-Path $TargetExePath) {
             Remove-Item -Path $TargetExePath -Force -ErrorAction SilentlyContinue
         }
-        
+
         Move-Item -Path $BackupPath -Destination $TargetExePath -Force -ErrorAction Stop
     }
 }
@@ -467,15 +474,15 @@ function Remove-OldCliBackupFiles {
         [Parameter(Mandatory = $true)]
         [string]$TargetExePath
     )
-    
+
     $directory = Split-Path -Parent $TargetExePath
     if ([string]::IsNullOrEmpty($directory)) {
         return
     }
-    
+
     $exeName = Split-Path -Leaf $TargetExePath
     $searchPattern = "$exeName.old.*"
-    
+
     $oldBackupFiles = Get-ChildItem -Path $directory -Filter $searchPattern -ErrorAction SilentlyContinue
     foreach ($backupFile in $oldBackupFiles) {
         if ($PSCmdlet.ShouldProcess($backupFile.FullName, "Delete old backup")) {
@@ -742,37 +749,6 @@ function Remove-TempDirectory {
 # END: Shared code
 # =============================================================================
 
-# Function to save global settings using the aspire CLI
-# Uses 'aspire config set -g' to set global configuration values
-# Expected schema of ~/.aspire/globalsettings.json:
-# {
-#   "channel": "string"  // The channel name (e.g., "daily", "staging", "pr-1234")
-# }
-function Save-GlobalSettings {
-    [CmdletBinding(SupportsShouldProcess)]
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$CliPath,
-        
-        [Parameter(Mandatory = $true)]
-        [string]$Key,
-        
-        [Parameter(Mandatory = $true)]
-        [string]$Value
-    )
-    
-    if ($PSCmdlet.ShouldProcess("$Key = $Value", "Set global config via aspire CLI")) {
-        Write-Message "Setting global config: $Key = $Value" -Level Verbose
-        
-        $output = & $CliPath config set -g $Key $Value 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            Write-Message "Failed to set global config via aspire CLI" -Level Warning
-            return
-        }
-        Write-Message "Global config saved: $Key = $Value" -Level Verbose
-    }
-}
-
 # Function to check if gh command is available
 function Test-GitHubCLIDependency {
     [CmdletBinding()]
@@ -939,32 +915,36 @@ function Get-VersionSuffixFromPackages {
         [Parameter(Mandatory = $true)]
         [string]$DownloadDir
     )
-    
+
     if ($PSCmdlet.ShouldProcess("packages", "Extract version suffix from packages") -and $WhatIfPreference) {
-        # Return a mock version for WhatIf
-        return "pr.1234.a1b2c3d4"
+        # Return a non-PR-shaped sentinel so the -LocalDir auto-detect regex at the
+        # call site (^pr\.(\d+)\.[0-9a-g]+$) does NOT match and the caller falls
+        # through to hive_label="local". A "pr.<N>.gSHA"-shaped mock would always
+        # match and force hive_label="pr-1234" in every -WhatIf run, regardless of
+        # what is actually in -LocalDir.
+        return "local"
     }
-    
+
     # Look for any .nupkg file and extract version from its name
     $nupkgFiles = Get-ChildItem -Path $DownloadDir -Filter "*.nupkg" -Recurse | Select-Object -First 1
-    
+
     if (-not $nupkgFiles) {
         Write-Message "No .nupkg files found to extract version from" -Level Verbose
         throw "No NuGet packages found to extract version information from"
     }
-    
+
     $filename = $nupkgFiles.Name
     Write-Message "Extracting version from package: $filename" -Level Verbose
-    
+
     # Extract version from package name using a more robust approach
     # Remove .nupkg extension first, then look for the specific version pattern
     $baseName = $filename -replace '\.nupkg$', ''
-    
+
     # Look for semantic version pattern with PR suffix (more specific and robust)
     if ($baseName -match '.*\.(\d+\.\d+\.\d+-pr\.\d+\.[0-9a-g]+)$') {
         $version = $Matches[1]
         Write-Message "Extracted version: $version" -Level Verbose
-        
+
         # Extract just the PR suffix part using more specific regex
         if ($version -match '(pr\.[0-9]+\.[0-9a-g]+)') {
             $versionSuffix = $Matches[1]
@@ -1193,9 +1173,37 @@ function Get-AspireCliFromArtifact {
     $cliArchiveName = "$($Script:CliArchiveArtifactNamePrefix)-$RID"
     $downloadDir = Join-Path $TempDir "cli"
     Write-Message "Downloading CLI from GitHub - $cliArchiveName ..." -Level Info
+
     Invoke-ArtifactDownload -RunId $RunId -ArtifactName $cliArchiveName -DownloadDirectory $downloadDir
 
     return $downloadDir
+}
+
+# Writes the PR-route install-source sidecar (.aspire-install.json) next to
+# the installed binary. Under -WhatIf, prints the target path and skips the
+# write so a real user's sidecar is never overwritten by a describe pass.
+# Authorship contract: docs/specs/install-routes.md.
+function Write-PRRouteSidecar {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$InstallPrefix,
+
+        [Parameter(Mandatory = $true)]
+        [int]$PRNumber
+    )
+
+    $sidecarDir = Join-Path (Join-Path (Join-Path $InstallPrefix "dogfood") "pr-$PRNumber") "bin"
+    $sidecarPath = Join-Path $sidecarDir '.aspire-install.json'
+    $sidecarContent = "{""source"":""pr""}`n"
+
+    if ($PSCmdlet.ShouldProcess($sidecarPath, "Write route sidecar")) {
+        [System.IO.Directory]::CreateDirectory($sidecarDir) | Out-Null
+        [System.IO.File]::WriteAllText($sidecarPath, $sidecarContent)
+    }
+    else {
+        Write-Host "What if: Route sidecar would be written to: $sidecarPath"
+    }
 }
 
 # Function to install downloaded Aspire CLI
@@ -1210,6 +1218,12 @@ function Install-AspireCliFromDownload {
     )
 
     if (!$PSCmdlet.ShouldProcess($CliBinDir, "Installing Aspire CLI to $CliBinDir")) {
+        # Honor the -WhatIf / dry-run contract: describe-but-do-not-do. Emit the
+        # install path as an informational message that tests can parse, instead of
+        # touching the filesystem.
+        $binaryName = if ($Script:HostOS -eq 'win') { 'aspire.exe' } else { 'aspire' }
+        $binaryPath = Join-Path $CliBinDir $binaryName
+        Write-Host "What if: Aspire CLI binary would be installed to: $binaryPath"
         return
     }
 
@@ -1249,6 +1263,68 @@ function Install-AspireCliFromDownload {
     Write-Message "Aspire CLI successfully installed to: $cliPath" -Level Success
 }
 
+# Function to install a raw 'dotnet build' / 'dotnet publish' CLI binary tree.
+# Used by the auto-detect raw-build branch of Start-InstallFromLocalDir to bypass the
+# archive (.tar.gz/.zip) search & extraction. Searches recursively under $SourceDir for
+# 'aspire' or 'aspire.exe' and copies the containing directory's files into $CliBinDir.
+function Install-AspireCliFromLocalBinary {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SourceDir,
+
+        [Parameter(Mandatory = $true)]
+        [string]$CliBinDir
+    )
+
+    if (!$PSCmdlet.ShouldProcess($CliBinDir, "Installing raw Aspire CLI binary tree from $SourceDir")) {
+        return
+    }
+
+    $exeFiles = Get-ChildItem -Path $SourceDir -File -Recurse -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -eq "aspire" -or $_.Name -eq "aspire.exe" } |
+        Sort-Object FullName
+
+    if ($exeFiles.Count -eq 0) {
+        Write-Message "No 'aspire' or 'aspire.exe' executable found in: $SourceDir" -Level Error
+        Write-Message "Expected raw 'dotnet build' or 'dotnet publish' output containing the aspire executable." -Level Info
+        Get-ChildItem -Path $SourceDir -File -Recurse -ErrorAction SilentlyContinue |
+            Select-Object -First 25 |
+            ForEach-Object { Write-Message "  $($_.FullName)" -Level Info }
+        throw "aspire executable not found"
+    }
+
+    $exeFile = $null
+    if ($exeFiles.Count -eq 1) {
+        $exeFile = $exeFiles[0]
+    }
+    else {
+        # When multiple matches exist (e.g. both build and publish outputs are present),
+        # prefer the 'publish' directory because it carries the full set of runtime deps.
+        $exeFile = $exeFiles | Where-Object { $_.FullName -match '[\\/]publish[\\/]' } | Select-Object -First 1
+        if (-not $exeFile) {
+            Write-Message "Multiple aspire executables found under $SourceDir (specify a more precise -LocalDir):" -Level Error
+            $exeFiles | ForEach-Object { Write-Message "  $($_.FullName)" -Level Error }
+            throw "Multiple aspire executables found"
+        }
+        Write-Message "Multiple aspire executables found; preferring publish output: $($exeFile.FullName)" -Level Verbose
+    }
+
+    $exeDir = $exeFile.Directory.FullName
+    Write-Message "Installing raw CLI binary tree from: $exeDir" -Level Verbose
+
+    if (-not (Test-Path $CliBinDir -PathType Container)) {
+        Write-Message "Creating install directory: $CliBinDir" -Level Verbose
+        New-Item -ItemType Directory -Path $CliBinDir -Force | Out-Null
+    }
+
+    # Copy the contents of the exe's directory (binary + runtime deps + config) into the install dir.
+    Copy-Item -Path (Join-Path $exeDir '*') -Destination $CliBinDir -Recurse -Force
+
+    $installedExe = Join-Path $CliBinDir $exeFile.Name
+    Write-Message "Aspire CLI successfully installed from raw build to: $installedExe" -Level Success
+}
+
 # Main function to install from a local directory of pre-built artifacts
 function Start-InstallFromLocalDir {
     [CmdletBinding(SupportsShouldProcess)]
@@ -1264,14 +1340,32 @@ function Start-InstallFromLocalDir {
 
     Write-Message "Installing from local directory: $LocalDirPath" -Level Info
 
-    # Set installation paths
-    $cliBinDir = Join-Path $resolvedInstallPrefix "bin"
+    # Set installation paths.
+    # PR-route installs are isolated under <prefix>/dogfood/pr-<N>/bin so they don't
+    # collide with the script-route prefix or with other PR installs. Hives remain shared
+    # under <prefix>/hives/<label>/packages.
+    $cliBinDir = if ($PRNumber -gt 0) {
+        Join-Path (Join-Path (Join-Path $resolvedInstallPrefix "dogfood") "pr-$PRNumber") "bin"
+    } else {
+        Join-Path $resolvedInstallPrefix "bin"
+    }
     $resolvedHiveLabel = if ($HiveLabel) {
         $HiveLabel
-    } elseif ($env:GITHUB_RUN_ID) {
-        "run-$($env:GITHUB_RUN_ID)"
     } else {
-        "run-local"
+        # Auto-detect PR identity from .nupkg filenames (e.g. "13.4.0-pr.16820.g3703c5c4")
+        # so PR-built packages land in the same hive the CLI's CliExecutionContext.Channel
+        # resolves to ("pr-<N>"). Falls back to "local" for true local-dev builds.
+        $detectedLabel = "local"
+        try {
+            $detectedSuffix = Get-VersionSuffixFromPackages -DownloadDir $LocalDirPath
+            if ($detectedSuffix -match '^pr\.(\d+)\.[0-9a-g]+$') {
+                $detectedLabel = "pr-$($Matches[1])"
+            }
+        }
+        catch {
+            # No PR-style packages in the local dir; keep "local".
+        }
+        $detectedLabel
     }
     $nugetHiveDir = Join-Path $resolvedInstallPrefix "hives" $resolvedHiveLabel "packages"
 
@@ -1279,11 +1373,34 @@ function Start-InstallFromLocalDir {
 
     $rid = Get-RuntimeIdentifier $OS $Architecture
 
-    # Install CLI from local directory
+    # Install CLI from local directory: auto-detect archive vs. raw 'dotnet build'/'dotnet publish' output.
     if ($HiveOnly) {
         Write-Message "Skipping CLI installation due to -HiveOnly flag" -Level Info
     } else {
-        Install-AspireCliFromDownload -DownloadDir $LocalDirPath -CliBinDir $cliBinDir
+        $archiveMatch = Get-ChildItem -Path $LocalDirPath -File -Recurse -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -match "^$Script:AspireCliArtifactNamePrefix-.*\.(tar\.gz|zip)$" } |
+            Select-Object -First 1
+
+        if ($archiveMatch) {
+            Install-AspireCliFromDownload -DownloadDir $LocalDirPath -CliBinDir $cliBinDir
+        }
+        else {
+            $rawExe = Get-ChildItem -Path $LocalDirPath -File -Recurse -ErrorAction SilentlyContinue |
+                Where-Object { $_.Name -eq "aspire" -or $_.Name -eq "aspire.exe" } |
+                Select-Object -First 1
+            if ($rawExe) {
+                Write-Message "No CLI archive found; detected raw aspire executable at: $($rawExe.FullName) (raw-build flow)" -Level Verbose
+                Install-AspireCliFromLocalBinary -SourceDir $LocalDirPath -CliBinDir $cliBinDir
+            }
+            else {
+                Write-Message "No CLI archive ($Script:AspireCliArtifactNamePrefix-*.tar.gz or .zip) and no 'aspire'/'aspire.exe' executable found in: $LocalDirPath" -Level Error
+                Write-Message "Expected either a published CLI archive or a 'dotnet build'/'dotnet publish' output directory." -Level Info
+                Get-ChildItem -Path $LocalDirPath -File -Recurse -ErrorAction SilentlyContinue |
+                    Select-Object -First 25 |
+                    ForEach-Object { Write-Message "  $($_.FullName)" -Level Info }
+                throw "CLI archive or aspire executable not found"
+            }
+        }
     }
 
     # Install NuGet packages from local directory
@@ -1298,12 +1415,12 @@ function Start-InstallFromLocalDir {
         Write-Message "Could not extract version suffix from local packages: $($_.Exception.Message)" -Level Warning
     }
 
-    # Save the global channel setting
-    if (-not $HiveOnly) {
-        $cliExe = if ($Script:HostOS -eq "win") { "aspire.exe" } else { "aspire" }
-        $cliPath = Join-Path $cliBinDir $cliExe
-        Save-GlobalSettings -CliPath $cliPath -Key "channel" -Value $resolvedHiveLabel
+    # PR-source installs get a sidecar; --local-dir installs are unmanaged
+    # (no sidecar).
+    if (-not $HiveOnly -and $PRNumber -gt 0) {
+        Write-PRRouteSidecar -InstallPrefix $resolvedInstallPrefix -PRNumber $PRNumber
     }
+
 
     # Update PATH environment variables
     if (-not $HiveOnly) {
@@ -1345,14 +1462,26 @@ function Start-DownloadAndInstall {
 
     Write-Message "Using workflow run https://github.com/$Script:Repository/actions/runs/$runId" -Level Info
 
-    # Set installation paths
-    $cliBinDir = Join-Path $resolvedInstallPrefix "bin"
+    # Set installation paths.
+    # PR-route installs are isolated under <prefix>/dogfood/pr-<N>/bin so they don't
+    # collide with the script-route prefix or with other PR installs. Hives remain shared
+    # under <prefix>/hives/<label>/packages.
+    $cliBinDir = if ($PRNumber -gt 0) {
+        Join-Path (Join-Path (Join-Path $resolvedInstallPrefix "dogfood") "pr-$PRNumber") "bin"
+    } else {
+        Join-Path $resolvedInstallPrefix "bin"
+    }
     $resolvedHiveLabel = if ($HiveLabel) {
         $HiveLabel
     } elseif ($PRNumber -gt 0) {
         "pr-$PRNumber"
     } else {
-        "run-$runId"
+        # The installed CLI's identity (CliExecutionContext.Channel) is baked at build
+        # time via AspireCliChannel — one of pr-<N>/staging/daily/local. There is no
+        # 'run-<id>' channel, so packages dropped into hives/run-<id>/packages would
+        # be invisible to the CLI. Reject early with actionable guidance instead of
+        # silently producing an unusable layout.
+        throw "Cannot determine hive label from -WorkflowRunId alone. The installed CLI's package channel is baked at build time (pr-<N>/staging/daily/local) and will not look in a 'run-<id>' hive. Re-run with -PRNumber <N> (preferred) or -HiveLabel <label> matching the CLI's baked AspireCliChannel."
     }
     $nugetHiveDir = Join-Path $resolvedInstallPrefix "hives" $resolvedHiveLabel "packages"
 
@@ -1399,14 +1528,10 @@ function Start-DownloadAndInstall {
         }
     }
 
-    # Save the global channel setting to the PR hive channel
-    # This allows 'aspire new' and 'aspire init' to use the same channel by default
-    if (-not $HiveOnly) {
-        # Determine CLI path
-        $cliExe = if ($Script:HostOS -eq "win") { "aspire.exe" } else { "aspire" }
-        $cliPath = Join-Path $cliBinDir $cliExe
-        Save-GlobalSettings -CliPath $cliPath -Key "channel" -Value $resolvedHiveLabel
+    if (-not $HiveOnly -and $PRNumber -gt 0) {
+        Write-PRRouteSidecar -InstallPrefix $resolvedInstallPrefix -PRNumber $PRNumber
     }
+
 
     # Update PATH environment variables
     if (-not $HiveOnly) {
@@ -1415,6 +1540,18 @@ function Start-DownloadAndInstall {
         } else {
             Update-PathEnvironment -CliBinDir $cliBinDir
         }
+    }
+
+    # Print PATH activation hint for PR installs.
+    # Uses Write-Host so the hint is visible on the host stream (not stderr) in normal output.
+    # Printed in success path (after install completes) and also under -WhatIf.
+    # The OS path separator is used so the line is valid on both Windows (;) and Unix (:).
+    # The new-PATH expression is emitted with double quotes so PowerShell expands `$env:PATH`
+    # when the user pastes the line into their profile — single quotes would assign the literal
+    # text "$env:PATH" and clobber the existing PATH.
+    if (-not $HiveOnly -and $PRNumber -gt 0) {
+        $pathSep = [System.IO.Path]::PathSeparator
+        Write-Host "Add to your shell profile: `$env:PATH = `"$cliBinDir$pathSep`$env:PATH`";"
     }
 }
 

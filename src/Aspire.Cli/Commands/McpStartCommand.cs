@@ -33,12 +33,12 @@ internal sealed class McpStartCommand : BaseCommand
 
     protected override bool UpdateNotificationsEnabled => false;
 
-    protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         // Display deprecation warning to stderr (all MCP logging goes to stderr)
         InteractionService.DisplayMarkupLine($"[yellow]⚠ {McpCommandStrings.DeprecatedCommandWarning}[/]");
 
         // Delegate to the new AgentMcpCommand
-        return _agentMcpCommand.ExecuteCommandAsync(parseResult, cancellationToken);
+        return await _agentMcpCommand.ExecuteCommandAsync(parseResult, cancellationToken);
     }
 }

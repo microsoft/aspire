@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	builder, err := aspire.CreateBuilder(nil)
+	builder, err := aspire.CreateBuilder()
 	if err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
@@ -44,43 +44,43 @@ func main() {
 
 		endpointCluster := config.AddClusterFromEndpoint(endpoint).
 			WithForwarderRequestConfig(&aspire.YarpForwarderRequestConfig{
-				ActivityTimeout:        30_000_000,
-				AllowResponseBuffering: true,
+				ActivityTimeout:        aspire.Float64Ptr(30_000_000),
+				AllowResponseBuffering: aspire.BoolPtr(true),
 				Version:                "2.0",
 			}).
 			WithHttpClientConfig(&aspire.YarpHttpClientConfig{
-				DangerousAcceptAnyServerCertificate: true,
-				EnableMultipleHttp2Connections:      true,
-				MaxConnectionsPerServer:             10,
+				DangerousAcceptAnyServerCertificate: aspire.BoolPtr(true),
+				EnableMultipleHttp2Connections:      aspire.BoolPtr(true),
+				MaxConnectionsPerServer:             aspire.Float64Ptr(10),
 				RequestHeaderEncoding:               "utf-8",
 				ResponseHeaderEncoding:              "utf-8",
 			}).
 			WithSessionAffinityConfig(&aspire.YarpSessionAffinityConfig{
 				AffinityKeyName: ".Aspire.Affinity",
-				Enabled:         true,
+				Enabled:         aspire.BoolPtr(true),
 				FailurePolicy:   "Redistribute",
 				Policy:          "Cookie",
 				Cookie: &aspire.YarpSessionAffinityCookieConfig{
 					Domain:      "example.com",
-					HttpOnly:    true,
-					IsEssential: true,
+					HttpOnly:    aspire.BoolPtr(true),
+					IsEssential: aspire.BoolPtr(true),
 					Path:        "/",
 				},
 			}).
 			WithHealthCheckConfig(&aspire.YarpHealthCheckConfig{
 				AvailableDestinationsPolicy: "HealthyOrPanic",
 				Active: &aspire.YarpActiveHealthCheckConfig{
-					Enabled:  true,
-					Interval: 50_000_000,
+					Enabled:  aspire.BoolPtr(true),
+					Interval: aspire.Float64Ptr(50_000_000),
 					Path:     "/health",
 					Policy:   "ConsecutiveFailures",
 					Query:    "probe=1",
-					Timeout:  20_000_000,
+					Timeout:  aspire.Float64Ptr(20_000_000),
 				},
 				Passive: &aspire.YarpPassiveHealthCheckConfig{
-					Enabled:            true,
+					Enabled:            aspire.BoolPtr(true),
 					Policy:             "TransportFailureRateHealthPolicy",
-					ReactivationPeriod: 100_000_000,
+					ReactivationPeriod: aspire.Float64Ptr(100_000_000),
 				},
 			})
 
@@ -214,7 +214,7 @@ func main() {
 	if err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
-	if err := app.Run(nil); err != nil {
+	if err := app.Run(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
 	}
 }

@@ -444,29 +444,35 @@ public static class FoundryExtensions
                     resource.Name = name;
                     return resource;
                 },
-                (infrastructure) => new CognitiveServicesAccount(infrastructure.AspireResource.GetBicepIdentifier())
+                (infrastructure) =>
                 {
-                    Kind = "AIServices",
-                    Sku = new CognitiveServicesSku()
+                    // Cognitive Services account names are limited to 64 characters; reserve room for the unique suffix.
+                    var accountNamePrefix = infrastructure.AspireResource.Name[..Math.Min(infrastructure.AspireResource.Name.Length, 50)];
+                    var accountName = ToLower(Interpolate($"{accountNamePrefix}-{GetUniqueString(GetResourceGroup().Id)}"));
+
+                    return new CognitiveServicesAccount(infrastructure.AspireResource.GetBicepIdentifier())
                     {
-                        Name = "S0"
-                    },
-                    Properties = new CognitiveServicesAccountProperties()
-                    {
-                        // Until this bug is fixed, CustomSubDomainName must be set to the
-                        // account's name: https://msdata.visualstudio.com/Vienna/_workitems/edit/4866592
-                        CustomSubDomainName = ToLower(Take(Concat(infrastructure.AspireResource.Name, GetUniqueString(GetResourceGroup().Id)), 24)),
-                        PublicNetworkAccess = hasPrivateEndpoint
-                            ? ServiceAccountPublicNetworkAccess.Disabled
-                            : ServiceAccountPublicNetworkAccess.Enabled,
-                        DisableLocalAuth = true,
-                        AllowProjectManagement = true
-                    },
-                    Identity = new ManagedServiceIdentity()
-                    {
-                        ManagedServiceIdentityType = ManagedServiceIdentityType.SystemAssigned
-                    },
-                    Tags = { { "aspire-resource-name", infrastructure.AspireResource.Name } }
+                        Name = accountName,
+                        Kind = "AIServices",
+                        Sku = new CognitiveServicesSku()
+                        {
+                            Name = "S0"
+                        },
+                        Properties = new CognitiveServicesAccountProperties()
+                        {
+                            CustomSubDomainName = accountName,
+                            PublicNetworkAccess = hasPrivateEndpoint
+                                ? ServiceAccountPublicNetworkAccess.Disabled
+                                : ServiceAccountPublicNetworkAccess.Enabled,
+                            DisableLocalAuth = true,
+                            AllowProjectManagement = true
+                        },
+                        Identity = new ManagedServiceIdentity()
+                        {
+                            ManagedServiceIdentityType = ManagedServiceIdentityType.SystemAssigned
+                        },
+                        Tags = { { "aspire-resource-name", infrastructure.AspireResource.Name } }
+                    };
                 });
 
         infrastructure.Add(new ProvisioningOutput("aiFoundryApiEndpoint", typeof(string))

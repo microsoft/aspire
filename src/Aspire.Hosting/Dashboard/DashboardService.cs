@@ -4,6 +4,7 @@
 using System.Text.RegularExpressions;
 using System.Globalization;
 using Aspire.DashboardService.Proto.V1;
+using Google.Protobuf.Collections;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
 using Microsoft.AspNetCore.Authorization;
@@ -410,34 +411,18 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             };
         }
 
-        if (invalidArguments is not null)
-        {
-            response.ArgumentInputs.AddRange(invalidArguments.Select(argument => CreateInteractionInputDto(argument)));
-        }
-
         return response;
     }
 
-    private static IReadOnlyDictionary<string, string?>? ConvertArgumentValues(Value? value)
+    private static IReadOnlyDictionary<string, string?>? ConvertArgumentValues(MapField<string, Value> arguments)
     {
-        if (value is null)
+        if (arguments.Count == 0)
         {
             return null;
         }
 
-        // ResourceCommandRequest arguments are encoded as an object-valued google.protobuf.Value in the dashboard gRPC protocol:
-        // {
-        //   "command_name": "click",
-        //   "resource_name": "web-browser-logs",
-        //   "arguments": { "selector": "#submit" }
-        // }
-        if (value.KindCase != Value.KindOneofCase.StructValue)
-        {
-            throw new RpcException(new Status(StatusCode.InvalidArgument, "Resource command arguments must be an object."));
-        }
-
         var values = new Dictionary<string, string?>(StringComparers.InteractionInputName);
-        foreach (var field in value.StructValue.Fields)
+        foreach (var field in arguments)
         {
             values[field.Key] = ConvertArgumentValue(field.Key, field.Value);
         }
