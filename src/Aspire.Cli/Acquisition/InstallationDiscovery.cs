@@ -93,7 +93,7 @@ internal sealed class InstallationDiscovery : IInstallationDiscovery
             "Discovery: starting walk. self.Path='{SelfPath}', self.Canonical='{SelfCanonical}', HOME='{Home}'.",
             self.Path,
             self.CanonicalPath ?? "(null)",
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
+            GetUserHomeDirectory());
 
         var results = new List<InstallationInfo> { self };
         // Deduplicate by canonical path (case-insensitive on Windows). The
@@ -290,6 +290,18 @@ internal sealed class InstallationDiscovery : IInstallationDiscovery
         return label;
     }
 
+    private static string GetUserHomeDirectory()
+    {
+        var primaryEnvironmentVariable = OperatingSystem.IsWindows() ? "USERPROFILE" : "HOME";
+        var home = Environment.GetEnvironmentVariable(primaryEnvironmentVariable);
+        if (!string.IsNullOrEmpty(home))
+        {
+            return home;
+        }
+
+        return Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+    }
+
     /// <summary>
     /// Resolves any symlinks in <paramref name="processPath"/> so that two
     /// PATH entries pointing at the same backing file produce the same
@@ -400,7 +412,7 @@ internal sealed class InstallationDiscovery : IInstallationDiscovery
             yield return new DiscoveryCandidate(pathHit.OriginalPath, "$PATH");
         }
 
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var home = GetUserHomeDirectory();
         if (string.IsNullOrEmpty(home))
         {
             _logger.LogDebug("Discovery: no user home directory available; skipping well-known prefix walk and dotnet-tool store probe.");
@@ -527,4 +539,3 @@ internal sealed class InstallationDiscovery : IInstallationDiscovery
 
     private sealed record DiscoveryCandidate(string BinaryPath, string Origin);
 }
-
