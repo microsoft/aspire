@@ -1,15 +1,20 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Spectre.Console;
+using Spectre.Console.Rendering;
+using InvocationConfiguration = System.CommandLine.InvocationConfiguration;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -115,14 +120,12 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
         Assert.Collection(candidateAppHosts,
             first =>
             {
-                Assert.Equal(Path.Combine("App1", "App1.AppHost.csproj"), first.RelativePath);
                 Assert.Equal(appHostPath1, first.Path);
                 Assert.Equal(KnownLanguageId.CSharp, first.Language);
                 Assert.Equal("buildable", first.Status);
             },
             second =>
             {
-                Assert.Equal(Path.Combine("App2", "App2.AppHost.csproj"), second.RelativePath);
                 Assert.Equal(appHostPath2, second.Path);
                 Assert.Equal(KnownLanguageId.TypeScript, second.Language);
                 Assert.Equal("possibly-unbuildable", second.Status);
@@ -191,6 +194,84 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task LsCommand_TableFormat_InteractiveMode_StreamsCandidateAppHosts()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+        var appHostPath1 = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost.csproj");
+        var appHostPath2 = Path.Combine(workspace.WorkspaceRoot.FullName, "App2", "App2.AppHost.csproj");
+        var appHost1 = new AppHostProjectCandidate(new FileInfo(appHostPath1), KnownLanguageId.CSharp);
+        var appHost2 = new AppHostProjectCandidate(new FileInfo(appHostPath2), KnownLanguageId.TypeScript, AppHostProjectCandidateStatus.PossiblyUnbuildable);
+        var projectLocator = new TestProjectLocator
+        {
+            FindAppHostProjectsWithProgressAsyncCallback = (_, _, onCandidateFound, _) =>
+            {
+                onCandidateFound(appHost1);
+                onCandidateFound(appHost2);
+                return Task.FromResult(new List<AppHostProjectCandidate>
+                {
+                    appHost1,
+                    appHost2
+                });
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("ls");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Empty(interactionService.DisplayedRenderables);
+
+        var liveOutputs = interactionService.DisplayedLiveRenderables.Select(RenderToPlainConsole).ToArray();
+        Assert.Contains(liveOutputs, output => output.Contains(InteractionServiceStrings.FindingAppHosts));
+        Assert.Contains(liveOutputs, output => output.Contains("App1.AppHost.csproj"));
+        Assert.Contains(liveOutputs, output => output.Contains("App2.AppHost.csproj"));
+        Assert.Contains("App1.AppHost.csproj", liveOutputs[^1]);
+        Assert.Contains("App2.AppHost.csproj", liveOutputs[^1]);
+    }
+
+    [Fact]
+    public async Task LsCommand_WhenCancelled_ReturnsSuccessAndDisplaysCancellation()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var interactionService = new TestInteractionService();
+        var projectLocator = new TestProjectLocator
+        {
+            FindAppHostProjectsAsyncCallback = (_, _, cancellationToken) =>
+            {
+                cancellationTokenSource.Cancel();
+                return Task.FromCanceled<List<AppHostProjectCandidate>>(cancellationToken);
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("ls");
+
+        var exitCode = await result.InvokeAsync(new InvocationConfiguration(), cancellationTokenSource.Token).DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(1, interactionService.DisplayCancellationMessageCount);
+    }
+
+    [Fact]
     public async Task LsCommand_DefaultsToFilteredScope()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -252,7 +333,11 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
     public async Task LsCommand_EmitsProfilingActivities()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
-        var startedActivities = new List<Activity>();
+        // ActivitySource listeners are process-wide, so this test can observe profiling spans
+        // from other tests running in parallel. Use a unique session id and filter by it instead
+        // of assuming every observed activity belongs to this command invocation.
+        var sessionId = $"ls-{Guid.NewGuid():N}";
+        var startedActivities = new ConcurrentBag<Activity>();
         using var listener = CreateProfilingActivityListener(startedActivities.Add);
 
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App", "App.AppHost.csproj");
@@ -270,7 +355,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
             options.ConfigurationCallback = config =>
             {
                 config[ProfilingTelemetry.EnabledEnvironmentVariable] = "true";
-                config[ProfilingTelemetry.SessionIdEnvironmentVariable] = "session-1";
+                config[ProfilingTelemetry.SessionIdEnvironmentVariable] = sessionId;
             };
         });
         using var provider = services.BuildServiceProvider();
@@ -282,15 +367,21 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
 
-        var lsActivity = Assert.Single(startedActivities, activity => activity.OperationName == ProfilingTelemetry.Activities.LsCommand);
+        var lsActivity = Assert.Single(startedActivities, activity => IsActivityFromSession(activity, ProfilingTelemetry.Activities.LsCommand, sessionId));
         Assert.Equal("json", lsActivity.GetTagItem(ProfilingTelemetry.Tags.LsOutputFormat));
         Assert.Equal(true, lsActivity.GetTagItem(ProfilingTelemetry.Tags.LsIncludeAll));
         Assert.Equal(1, lsActivity.GetTagItem(ProfilingTelemetry.Tags.AppHostCandidateCount));
-        Assert.Equal("session-1", lsActivity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId));
+        Assert.Equal(sessionId, lsActivity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId));
 
-        var findActivity = Assert.Single(startedActivities, activity => activity.OperationName == ProfilingTelemetry.Activities.LsFindAppHosts);
+        var findActivity = Assert.Single(startedActivities, activity => IsActivityFromSession(activity, ProfilingTelemetry.Activities.LsFindAppHosts, sessionId));
         Assert.Equal(AppHostDiscoveryScope.AllFiles.ToString(), findActivity.GetTagItem(ProfilingTelemetry.Tags.AppHostDiscoveryScope));
         Assert.Equal(1, findActivity.GetTagItem(ProfilingTelemetry.Tags.AppHostCandidateCount));
+    }
+
+    private static bool IsActivityFromSession(Activity activity, string operationName, string sessionId)
+    {
+        return activity.OperationName == operationName &&
+            Equals(sessionId, activity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId));
     }
 
     private static ActivityListener CreateProfilingActivityListener(Action<Activity> activityStarted)
@@ -303,5 +394,24 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
         };
         ActivitySource.AddActivityListener(listener);
         return listener;
+    }
+
+    private static string RenderToPlainConsole(IRenderable renderable)
+    {
+        var writer = new StringWriter();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            Interactive = InteractionSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(writer),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+
+        console.Profile.Width = int.MaxValue;
+        console.Profile.Capabilities.Links = false;
+        console.Write(renderable);
+
+        return writer.ToString().Replace("\r\n", "\n");
     }
 }

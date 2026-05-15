@@ -371,10 +371,7 @@ internal sealed class DashboardRunCommand : BaseCommand
                     readyTcs.TrySetResult();
                 }
             },
-            StandardErrorCallback = line =>
-            {
-                outputCollector.AppendError(line);
-            },
+            StandardErrorCallback = outputCollector.AppendError,
         };
 
         IProcessExecution process;

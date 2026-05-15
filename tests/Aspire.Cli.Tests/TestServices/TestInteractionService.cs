@@ -47,8 +47,11 @@ internal sealed class TestInteractionService : IInteractionService
     public List<(KnownEmoji Emoji, string Message)> DisplayedMessages { get; } = [];
     public List<string> DisplayedPlainText { get; } = [];
     public List<(string Text, ConsoleOutput? ConsoleOverride)> DisplayedRawText { get; } = [];
+    public List<IRenderable> DisplayedRenderables { get; } = [];
+    public List<IRenderable> DisplayedLiveRenderables { get; } = [];
     public List<string> DisplayedSuccess { get; } = [];
     public int DisplayEmptyLineCount { get; private set; }
+    public int DisplayCancellationMessageCount { get; private set; }
 
     // Response queue setup methods
     public void SetupStringPromptResponse(string response) => _responses.Enqueue((response, ResponseType.String));
@@ -208,6 +211,10 @@ internal sealed class TestInteractionService : IInteractionService
 
     public void DisplayCancellationMessage()
     {
+        lock (_displayLock)
+        {
+            DisplayCancellationMessageCount++;
+        }
     }
 
     public Task<bool> PromptConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default)
@@ -294,11 +301,26 @@ internal sealed class TestInteractionService : IInteractionService
 
     public void DisplayRenderable(IRenderable renderable)
     {
+        lock (_displayLock)
+        {
+            DisplayedRenderables.Add(renderable);
+        }
     }
 
     public Task DisplayLiveAsync(IRenderable initialRenderable, Func<Action<IRenderable>, Task> callback)
     {
-        return callback(_ => { });
+        lock (_displayLock)
+        {
+            DisplayedLiveRenderables.Add(initialRenderable);
+        }
+
+        return callback(renderable =>
+        {
+            lock (_displayLock)
+            {
+                DisplayedLiveRenderables.Add(renderable);
+            }
+        });
     }
 }
 

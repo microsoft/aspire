@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using Aspire.Cli.Git;
 using Aspire.Cli.Telemetry;
@@ -119,18 +120,22 @@ public class GitRepositoryTests(ITestOutputHelper outputHelper)
         await GitTestHelper.RunGitAsync(workspace.WorkspaceRoot.FullName, "add", "AppHost.csproj");
         await GitTestHelper.RunGitAsync(workspace.WorkspaceRoot.FullName, "commit", "-m", "init");
 
-        Activity? startedActivity = null;
-        using var listener = CreateProfilingActivityListener(activity => startedActivity = activity);
+        // ActivitySource listeners are process-wide, so this test can observe profiling spans
+        // from other tests running in parallel. Use a unique session id and filter by it instead
+        // of assuming every observed activity belongs to this git invocation.
+        var sessionId = $"git-{Guid.NewGuid():N}";
+        var startedActivities = new ConcurrentBag<Activity>();
+        using var listener = CreateProfilingActivityListener(startedActivities.Add);
         using var profilingTelemetry = CreateProfilingTelemetry(
             (ProfilingTelemetry.EnabledEnvironmentVariable, "true"),
-            (ProfilingTelemetry.SessionIdEnvironmentVariable, "session-1"));
+            (ProfilingTelemetry.SessionIdEnvironmentVariable, sessionId));
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var repo = new GitRepository(executionContext, NullLogger<GitRepository>.Instance, profilingTelemetry);
 
         var result = await repo.GetIncludedFilesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout();
 
         Assert.NotNull(result);
-        Assert.NotNull(startedActivity);
+        var startedActivity = Assert.Single(startedActivities, activity => IsActivityFromSession(activity, ProfilingTelemetry.Activities.GitCommand, sessionId));
         Assert.Equal(ProfilingTelemetry.Activities.GitCommand, startedActivity.OperationName);
         Assert.Equal("ls-files", startedActivity.GetTagItem(ProfilingTelemetry.Tags.GitCommand));
         Assert.Equal(workspace.WorkspaceRoot.FullName, startedActivity.GetTagItem(ProfilingTelemetry.Tags.GitWorkingDirectory));
@@ -139,7 +144,13 @@ public class GitRepositoryTests(ITestOutputHelper outputHelper)
         Assert.Equal(0, startedActivity.GetTagItem(TelemetryConstants.Tags.ProcessExitCode));
         Assert.True((int)startedActivity.GetTagItem(TelemetryConstants.Tags.ProcessPid)! > 0);
         Assert.True((int)startedActivity.GetTagItem(ProfilingTelemetry.Tags.GitStdoutLength)! > 0);
-        Assert.Equal("session-1", startedActivity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId));
+        Assert.Equal(sessionId, startedActivity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId));
+    }
+
+    private static bool IsActivityFromSession(Activity activity, string operationName, string sessionId)
+    {
+        return activity.OperationName == operationName &&
+            Equals(sessionId, activity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId));
     }
 
     private static ProfilingTelemetry CreateProfilingTelemetry(params (string Key, string? Value)[] values)

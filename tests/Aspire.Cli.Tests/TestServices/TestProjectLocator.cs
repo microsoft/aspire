@@ -16,13 +16,33 @@ internal sealed class TestProjectLocator : IProjectLocator
 
     public Func<DirectoryInfo, AppHostDiscoveryScope, CancellationToken, Task<List<AppHostProjectCandidate>>>? FindAppHostProjectsAsyncCallback { get; set; }
 
+    public Func<DirectoryInfo, AppHostDiscoveryScope, Action<AppHostProjectCandidate>, CancellationToken, Task<List<AppHostProjectCandidate>>>? FindAppHostProjectsWithProgressAsyncCallback { get; set; }
+
     public Func<DirectoryInfo, AppHostDiscoveryScope, CancellationToken, Task<List<FileInfo>>>? FindAppHostProjectFilesAsyncCallback { get; set; }
 
-    public async Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+    public async Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(
+        DirectoryInfo searchDirectory,
+        AppHostDiscoveryScope scope,
+        CancellationToken cancellationToken,
+        Action<AppHostProjectCandidate>? onCandidateFound = null)
     {
+        if (onCandidateFound is not null && FindAppHostProjectsWithProgressAsyncCallback != null)
+        {
+            return await FindAppHostProjectsWithProgressAsyncCallback(searchDirectory, scope, onCandidateFound, cancellationToken);
+        }
+
         if (FindAppHostProjectsAsyncCallback != null)
         {
-            return await FindAppHostProjectsAsyncCallback(searchDirectory, scope, cancellationToken);
+            var candidates = await FindAppHostProjectsAsyncCallback(searchDirectory, scope, cancellationToken);
+            if (onCandidateFound is not null)
+            {
+                foreach (var candidate in candidates)
+                {
+                    onCandidateFound(candidate);
+                }
+            }
+
+            return candidates;
         }
 
         return [];

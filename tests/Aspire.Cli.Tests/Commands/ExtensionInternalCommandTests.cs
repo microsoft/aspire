@@ -208,7 +208,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
             return Task.FromResult(result);
         }
 
-        public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken, Action<AppHostProjectCandidate>? onCandidateFound = null)
         {
             return Task.FromResult<List<AppHostProjectCandidate>>([new(_projectFile, "test")]);
         }
@@ -273,7 +273,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
             return Task.FromResult(result);
         }
 
-        public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken, Action<AppHostProjectCandidate>? onCandidateFound = null)
         {
             return Task.FromResult(_projectFiles.Select(projectFile => new AppHostProjectCandidate(projectFile, "test")).ToList());
         }
@@ -321,7 +321,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
 
     private sealed class NoProjectFileProjectLocator : IProjectLocator
     {
-        public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken, Action<AppHostProjectCandidate>? onCandidateFound = null)
         {
             throw new ProjectLocatorException("No AppHost project found.", ProjectLocatorFailureReason.NoProjectFileFound);
         }
@@ -378,7 +378,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
 
     private sealed class ThrowingProjectLocator : IProjectLocator
     {
-        public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken, Action<AppHostProjectCandidate>? onCandidateFound = null)
         {
             throw new InvalidOperationException("Something went wrong");
         }

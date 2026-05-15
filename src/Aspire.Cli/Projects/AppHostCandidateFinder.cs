@@ -82,6 +82,12 @@ internal sealed class AppHostCandidateFinder(
         CancellationToken cancellationToken)
     {
         using var discoveryActivity = profilingTelemetry.StartAppHostCandidateDiscovery(searchDirectory, scope, patterns.Count, nugetCachePath is not null);
+
+        // This method often starts from the Ctrl+C path in `aspire ls`. Check before doing any
+        // discovery work so a cancellation observed after telemetry setup does not continue into
+        // git or filesystem enumeration.
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (patterns.Count == 0)
         {
             discoveryActivity.SetAppHostDiscoverySource(ProfilingTelemetry.Values.AppHostDiscoverySourceNone);
@@ -110,6 +116,10 @@ internal sealed class AppHostCandidateFinder(
 
             logger.LogDebug("Git enumeration unavailable for {SearchDirectory}; falling back to filesystem walk.", searchDirectory.FullName);
         }
+
+        // If cancellation happened while the external git command was failing or being torn down,
+        // don't immediately start the slower fallback filesystem walk over a large repository.
+        cancellationToken.ThrowIfCancellationRequested();
 
         var skipList = scope == AppHostDiscoveryScope.AllFiles
             ? null

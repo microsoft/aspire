@@ -23,8 +23,13 @@ internal interface IProjectLocator
     /// <param name="searchDirectory">The directory to search recursively.</param>
     /// <param name="scope">Controls which files are considered. See <see cref="AppHostDiscoveryScope"/>.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
+    /// <param name="onCandidateFound">Optional callback called when a candidate AppHost has been validated.</param>
     /// <returns>A list of candidate AppHost projects with language metadata sorted by full path.</returns>
-    Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken);
+    Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(
+        DirectoryInfo searchDirectory,
+        AppHostDiscoveryScope scope,
+        CancellationToken cancellationToken,
+        Action<AppHostProjectCandidate>? onCandidateFound = null);
 
     /// <summary>
     /// Finds all candidate AppHost project files in the specified search directory, without language metadata.
@@ -71,10 +76,15 @@ internal sealed class ProjectLocator(
     /// <param name="searchDirectory">The directory to search recursively.</param>
     /// <param name="scope">Controls which files are considered. See <see cref="AppHostDiscoveryScope"/>.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
+    /// <param name="onCandidateFound">Optional callback called when a candidate AppHost has been validated.</param>
     /// <returns>A list of candidate AppHost projects with language metadata sorted by full path.</returns>
-    public async Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+    public async Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(
+        DirectoryInfo searchDirectory,
+        AppHostDiscoveryScope scope,
+        CancellationToken cancellationToken,
+        Action<AppHostProjectCandidate>? onCandidateFound = null)
     {
-        var allCandidates = await FindAppHostProjectFilesAsync(searchDirectory, stopAfterMultipleBuildableAppHosts: false, displayProgress: false, scope, cancellationToken);
+        var allCandidates = await FindAppHostProjectFilesAsync(searchDirectory, stopAfterMultipleBuildableAppHosts: false, displayProgress: false, scope, cancellationToken, onCandidateFound);
         var candidates = allCandidates.BuildableAppHost.Concat(allCandidates.UnbuildableSuspectedAppHostProjects).ToList();
         candidates.Sort((x, y) => x.AppHostFile.FullName.CompareTo(y.AppHostFile.FullName));
         return candidates;
@@ -113,7 +123,7 @@ internal sealed class ProjectLocator(
         return await FindAppHostProjectFilesAsync(searchDirectory, stopAfterMultipleBuildableAppHosts, displayProgress: true, scope, cancellationToken);
     }
 
-    private async Task<(List<AppHostProjectCandidate> BuildableAppHost, List<AppHostProjectCandidate> UnbuildableSuspectedAppHostProjects, bool HasUnsupportedProjects)> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, bool stopAfterMultipleBuildableAppHosts, bool displayProgress, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+    private async Task<(List<AppHostProjectCandidate> BuildableAppHost, List<AppHostProjectCandidate> UnbuildableSuspectedAppHostProjects, bool HasUnsupportedProjects)> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, bool stopAfterMultipleBuildableAppHosts, bool displayProgress, AppHostDiscoveryScope scope, CancellationToken cancellationToken, Action<AppHostProjectCandidate>? onCandidateFound = null)
     {
         using var activity = telemetry.StartDiagnosticActivity();
 
@@ -124,6 +134,14 @@ internal sealed class ProjectLocator(
             var hasUnsupportedProjects = false;
             var lockObject = new object();
             logger.LogDebug("Searching for project files in {SearchDirectory}", searchDirectory.FullName);
+
+            void ReportCandidateFound(AppHostProjectCandidate appHostProject)
+            {
+                // The progress callback is allowed to update UI (aspire ls uses it to refresh a live
+                // Spectre table). Invoke it outside the validation lock so terminal rendering cannot
+                // serialize unrelated validation workers or re-enter state protected by lockObject.
+                onCandidateFound?.Invoke(appHostProject);
+            }
 
             using var validationCancellationTokenSource = stopAfterMultipleBuildableAppHosts
                 ? CancellationTokenSource.CreateLinkedTokenSource(cancellationToken)
@@ -203,19 +221,22 @@ internal sealed class ProjectLocator(
                     {
                         logger.LogDebug("Found {Language} apphost {CandidateFile}", handler.DisplayName, candidateFile.FullName);
                         var relativePath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, candidateFile.FullName);
+                        AppHostProjectCandidate appHostProject;
                         if (displayProgress)
                         {
                             interactionService.DisplaySubtleMessage(relativePath);
                         }
                         lock (lockObject)
                         {
-                            appHostProjects.Add(new(candidateFile, handler.LanguageId));
+                            appHostProject = new AppHostProjectCandidate(candidateFile, handler.LanguageId);
+                            appHostProjects.Add(appHostProject);
 
                             if (stopAfterMultipleBuildableAppHosts && appHostProjects.Count >= 2)
                             {
                                 validationCancellationTokenSource?.Cancel();
                             }
                         }
+                        ReportCandidateFound(appHostProject);
                     }
                     else if (validationResult.IsUnsupported)
                     {
@@ -233,14 +254,17 @@ internal sealed class ProjectLocator(
                     else if (validationResult.IsPossiblyUnbuildable)
                     {
                         var relativePath = Path.GetRelativePath(executionContext.WorkingDirectory.FullName, candidateFile.FullName);
+                        AppHostProjectCandidate appHostProject;
                         if (displayProgress)
                         {
                             interactionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, ErrorStrings.ProjectFileMayBeUnbuildableAppHost, relativePath));
                         }
                         lock (lockObject)
                         {
-                            unbuildableSuspectedAppHostProjects.Add(new(candidateFile, handler.LanguageId, AppHostProjectCandidateStatus.PossiblyUnbuildable));
+                            appHostProject = new AppHostProjectCandidate(candidateFile, handler.LanguageId, AppHostProjectCandidateStatus.PossiblyUnbuildable);
+                            unbuildableSuspectedAppHostProjects.Add(appHostProject);
                         }
+                        ReportCandidateFound(appHostProject);
                     }
                     else
                     {

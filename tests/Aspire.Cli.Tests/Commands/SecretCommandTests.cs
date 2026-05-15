@@ -86,7 +86,7 @@ public class SecretCommandTests(ITestOutputHelper outputHelper)
 
     private sealed class TestProjectLocator(FileInfo appHostFile) : IProjectLocator
     {
-        public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+        public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken, Action<AppHostProjectCandidate>? onCandidateFound = null)
             => Task.FromResult<List<AppHostProjectCandidate>>([new(appHostFile, "test")]);
 
         public Task<List<FileInfo>> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)

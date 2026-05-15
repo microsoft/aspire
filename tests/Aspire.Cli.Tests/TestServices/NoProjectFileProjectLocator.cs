@@ -7,7 +7,7 @@ namespace Aspire.Cli.Tests.TestServices;
 
 internal sealed class NoProjectFileProjectLocator : IProjectLocator
 {
-    public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
+    public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken, Action<AppHostProjectCandidate>? onCandidateFound = null)
     {
         throw new ProjectLocatorException("No project file found.", ProjectLocatorFailureReason.NoProjectFileFound);
     }
