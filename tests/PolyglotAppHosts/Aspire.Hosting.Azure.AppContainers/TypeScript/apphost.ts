@@ -51,7 +51,9 @@ await worker.publishAsAzureContainerAppJob();
 // Test publishAsAzureContainerAppJob (with callback)
 const processor = await builder.addContainer("processor", "myregistry/processor:latest");
 await processor.publishAsAzureContainerAppJob({
-    configure: async (_infrastructure, _job) => {}
+    configure: async (_infrastructure, job) => {
+        await job.bicepIdentifier.set("processorJob");
+    }
 });
 
 // Test publishAsScheduledAzureContainerAppJob (simple - no callback)
@@ -61,7 +63,9 @@ await scheduler.publishAsScheduledAzureContainerAppJob("0 0 * * *");
 // Test publishAsScheduledAzureContainerAppJob (with callback)
 const reporter = await builder.addContainer("reporter", "myregistry/reporter:latest");
 await reporter.publishAsScheduledAzureContainerAppJob("0 */6 * * *", {
-    configure: async (_infrastructure, _job) => {}
+    configure: async (_infrastructure, job) => {
+        await job.bicepIdentifier.set("reporterJob");
+    }
 });
 
 await builder.build().run();
