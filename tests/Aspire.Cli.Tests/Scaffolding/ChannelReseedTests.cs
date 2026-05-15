@@ -14,13 +14,18 @@ namespace Aspire.Cli.Tests.Scaffolding;
 /// Behavioral regression tests for channel reseed in <see cref="ScaffoldingService.ScaffoldAsync"/>.
 /// Verifies that the channel written to <c>aspire.config.json</c> is sourced from
 /// <see cref="CliExecutionContext.IdentityChannel"/> when no explicit channel is given, and from the
-/// caller-supplied value when one is.
+/// caller-supplied value when one is. This covers the <c>aspire init</c> polyglot path, which
+/// passes <c>ScaffoldContext.Channel = null</c> and relies on the identity-channel fallback to
+/// pin the project against the matching feed.
 /// <para>
-/// <b>Coverage gap:</b> The heavyweight DI reseed sites —
-/// <c>CliTemplateFactory.PythonStarterTemplate</c>, <c>CliTemplateFactory.GoStarterTemplate</c>,
-/// and <c>GuestAppHostProject</c> — are NOT covered at this unit-test layer because they sit behind
-/// template extraction, project factory, and codegen RPC that this layer cannot reasonably stand up.
-/// Reseed regressions at those sites must be caught by integration tests or dogfood.
+/// The three CLI starter template factories
+/// (<c>CliTemplateFactory.{TypeScript,Python,Go}StarterTemplate</c>) intentionally do NOT have
+/// this fallback — they only persist <c>aspire.config.json#channel</c> when their
+/// <c>TemplateInputs.Channel</c> input is set, because <c>NewCommand</c> upstream already
+/// resolves the channel (and pins it iff the selected channel is Explicit). Channel selection
+/// for those paths is covered by <c>NewCommandChannelResolutionTests</c>; the end-to-end
+/// consistency between resolved channel and persisted SDK version is covered by
+/// <c>TypeScriptStarterSmokeTests</c> on the daily smoke workflow.
 /// </para>
 /// </summary>
 public class ChannelReseedTests(ITestOutputHelper outputHelper)
