@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using PlatformDetection = Aspire.TestUtilities.PlatformDetection;
 
 namespace Aspire.Hosting.Tests;
 
@@ -421,7 +422,7 @@ public class WithUrlsTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    [ActiveIssue("https://github.com/microsoft/aspire/issues/17136", typeof(global::Aspire.TestUtilities.PlatformDetection), nameof(global::Aspire.TestUtilities.PlatformDetection.IsWindows))]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/17136", typeof(PlatformDetection), nameof(PlatformDetection.IsWindows))]
     public async Task ExpectedNumberOfUrlsForReplicatedResource()
     {
         // This test creates a single project resource with a custom URL and
