@@ -28,6 +28,7 @@ public class AtsMarshallerTests
                 new AtsDtoTypeInfo { TypeId = "test/DtoWithJsonPropertyName", Name = "DtoWithJsonPropertyName", ClrType = typeof(DtoWithJsonPropertyName), Properties = [] },
                 new AtsDtoTypeInfo { TypeId = "test/DtoWithJsonIgnore", Name = "DtoWithJsonIgnore", ClrType = typeof(DtoWithJsonIgnore), Properties = [] },
                 new AtsDtoTypeInfo { TypeId = "test/DtoWithReadOnlyProperty", Name = "DtoWithReadOnlyProperty", ClrType = typeof(DtoWithReadOnlyProperty), Properties = [] },
+                new AtsDtoTypeInfo { TypeId = "test/DtoWithReadOnlyListProperties", Name = "DtoWithReadOnlyListProperties", ClrType = typeof(DtoWithReadOnlyListProperties), Properties = [] },
             ],
             EnumTypes = []
         };
@@ -713,6 +714,35 @@ public class AtsMarshallerTests
     }
 
     [Fact]
+    public async Task UnmarshalFromJson_UnmarshalsDtoReadOnlyListProperties()
+    {
+        var (marshaller, context) = CreateMarshallerWithContext();
+        var json = new JsonObject
+        {
+            ["name"] = "test",
+            ["addressPrefixes"] = new JsonArray("203.0.113.0/24", "198.51.100.0/24"),
+            ["addressPrefixReferences"] = new JsonArray
+            {
+                new JsonObject
+                {
+                    ["$expr"] = new JsonObject
+                    {
+                        ["format"] = "10.0.0.0/24"
+                    }
+                }
+            }
+        };
+
+        var result = marshaller.UnmarshalFromJson(json, typeof(DtoWithReadOnlyListProperties), context);
+
+        var dto = Assert.IsType<DtoWithReadOnlyListProperties>(result);
+        Assert.Equal("test", dto.Name);
+        Assert.Equal(["203.0.113.0/24", "198.51.100.0/24"], dto.AddressPrefixes);
+        var reference = Assert.Single(dto.AddressPrefixReferences);
+        Assert.Equal("10.0.0.0/24", await reference.GetValueAsync(default));
+    }
+
+    [Fact]
     public void MarshalToJson_MarshalsDto()
     {
         var marshaller = CreateMarshaller();
@@ -1076,6 +1106,16 @@ public class AtsMarshallerTests
     {
         public string? Name { get; set; }
         public string Computed { get; } = "read-only";
+    }
+
+    [AspireDto]
+    private sealed class DtoWithReadOnlyListProperties
+    {
+        public string? Name { get; set; }
+
+        public List<string> AddressPrefixes { get; } = ["default"];
+
+        public List<ReferenceExpression> AddressPrefixReferences { get; } = [];
     }
 
     [Fact]

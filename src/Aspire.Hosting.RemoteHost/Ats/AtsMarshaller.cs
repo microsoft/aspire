@@ -233,7 +233,13 @@ internal sealed class AtsMarshaller
     {
         if (!HasPopulatedDelegateProperty(jsonObj, targetType))
         {
-            return JsonSerializer.Deserialize(jsonObj.ToJsonString(), targetType, s_jsonOptions);
+            var dto = JsonSerializer.Deserialize(jsonObj.ToJsonString(), targetType, s_jsonOptions);
+            if (dto is not null)
+            {
+                PopulateReadOnlyCollectionProperties(jsonObj, dto, targetType, context);
+            }
+
+            return dto;
         }
 
         var instance = Activator.CreateInstance(targetType)
@@ -263,7 +269,94 @@ internal sealed class AtsMarshaller
             prop.Set(instance, UnmarshalFromJson(jsonValue, prop.PropertyType, propContext));
         }
 
+        PopulateReadOnlyCollectionProperties(jsonObj, instance, targetType, context);
+
         return instance;
+    }
+
+    private void PopulateReadOnlyCollectionProperties(JsonObject jsonObj, object instance, Type targetType, UnmarshalContext context)
+    {
+        var typeInfo = s_jsonOptions.GetTypeInfo(targetType);
+        foreach (var prop in typeInfo.Properties)
+        {
+            if (prop.Set is not null || prop.Get is null)
+            {
+                continue;
+            }
+
+            if (!TryGetJsonProperty(jsonObj, prop.Name, out var jsonValue) || jsonValue is not JsonArray jsonArray)
+            {
+                continue;
+            }
+
+            var collection = prop.Get(instance);
+            if (!TryGetMutableCollectionInfo(prop.PropertyType, collection, out var collectionType, out var elementType))
+            {
+                continue;
+            }
+
+            // System.Text.Json ignores get-only collection DTO properties by default.
+            // Populate the existing collection so TypeScript/Python/Java/Go DTO arrays
+            // reach provisioning code as the same initialized List<T> shape used by C#.
+            collectionType.GetMethod(nameof(ICollection<object>.Clear), Type.EmptyTypes)!.Invoke(collection, null);
+            var addMethod = collectionType.GetMethod(nameof(ICollection<object>.Add), [elementType])!;
+            for (var i = 0; i < jsonArray.Count; i++)
+            {
+                var elementContext = new UnmarshalContext
+                {
+                    CapabilityId = context.CapabilityId,
+                    ParameterName = $"{context.ParameterName ?? targetType.Name}.{prop.Name}[{i}]"
+                };
+                addMethod.Invoke(collection, [UnmarshalFromJson(jsonArray[i], elementType, elementContext)]);
+            }
+        }
+    }
+
+    private static bool TryGetMutableCollectionInfo(
+        Type declaredType,
+        object? collection,
+        out Type collectionType,
+        out Type elementType)
+    {
+        collectionType = null!;
+        elementType = null!;
+
+        if (collection is null || declaredType == typeof(string))
+        {
+            return false;
+        }
+
+        foreach (var candidateType in GetCandidateCollectionTypes(declaredType, collection.GetType()))
+        {
+            if (candidateType.IsGenericType && candidateType.GetGenericTypeDefinition() == typeof(ICollection<>))
+            {
+                collectionType = candidateType;
+                elementType = candidateType.GetGenericArguments()[0];
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static IEnumerable<Type> GetCandidateCollectionTypes(Type declaredType, Type runtimeType)
+    {
+        yield return declaredType;
+
+        foreach (var declaredInterface in declaredType.GetInterfaces())
+        {
+            yield return declaredInterface;
+        }
+
+        if (runtimeType != declaredType)
+        {
+            yield return runtimeType;
+        }
+
+        foreach (var runtimeInterface in runtimeType.GetInterfaces())
+        {
+            yield return runtimeInterface;
+        }
     }
 
     private static bool HasPopulatedDelegateProperty(JsonObject jsonObj, Type targetType)
