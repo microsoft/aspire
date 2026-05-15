@@ -8,8 +8,10 @@ Two cross-platform helper scripts are available:
 
 They download the correct build artifacts for your OS/architecture and support two CLI install modes:
 
-- **Archive mode** (default): installs the native CLI archive into an isolated PR-specific directory and populates a PR-scoped NuGet "hive" with the matching packages. This is the best option for dogfooding app-model/package changes from a PR.
-- **Tool mode**: installs the `Aspire.Cli` .NET tool from the PR's RID-specific NuGet artifact. This is the best option for dogfooding dotnet-tool packaging and acquisition behavior.
+- **Archive mode** (default): installs the native CLI archive into an isolated PR-specific directory and populates a PR-scoped NuGet "hive" with the matching packages.
+- **Tool mode**: installs the `Aspire.Cli` .NET tool from the PR's RID-specific NuGet artifact and populates the same PR-scoped NuGet hive. Use this when you also want to dogfood the dotnet-tool packaging or acquisition route.
+
+Both modes give `aspire new`, `aspire add`, and `aspire run` access to the PR's NuGet packages via the hive at `~/.aspire/hives/pr-<PR_NUMBER>/packages`. The difference is only how the CLI binary itself is acquired.
 
 ## Prerequisites
 
@@ -39,9 +41,9 @@ Use archive mode when you want the CLI and project/package operations such as `a
 
 ### Tool mode
 
-Tool mode installs from the PR's `built-nugets-for-<rid>` artifact using `dotnet tool install`.
+Tool mode installs the `Aspire.Cli` package as a .NET tool from the PR's `built-nugets-for-<rid>` artifact and also populates the PR-scoped NuGet hive from the cross-platform `built-nugets` artifact (just like archive mode), so `aspire new`, `aspire add`, and `aspire run` resolve against the PR build.
 
-Use tool mode when you specifically want to dogfood the `Aspire.Cli` dotnet-tool package layout or install route. Tool mode does not download the native CLI archive and does not populate the PR NuGet hive. By default it installs as a global .NET tool:
+Use tool mode when you also want to dogfood the `Aspire.Cli` dotnet-tool package layout / install route in addition to the rest of the PR. By default it installs as a global .NET tool:
 
 ```bash
 ./eng/scripts/get-aspire-cli-pr.sh 1234 --install-mode tool
@@ -63,15 +65,16 @@ To avoid changing the global .NET tool installation, pass a custom install path.
 ./eng/scripts/get-aspire-cli-pr.ps1 1234 -InstallMode Tool -InstallPath $HOME/.aspire-pr
 ```
 
-## What gets installed in archive mode
+## What gets installed
 
-- Aspire CLI:
-  - Default PR location: `~/.aspire/dogfood/pr-<PR_NUMBER>/bin/aspire` (or `aspire.exe` on Windows)
+- Aspire CLI binary:
+  - **Archive mode** default location: `~/.aspire/dogfood/pr-<PR_NUMBER>/bin/aspire` (or `aspire.exe` on Windows).
+  - **Tool mode** default location: `dotnet tool install --global` puts the tool on the PATH per the .NET SDK's global-tools convention. When tool mode is combined with `--install-path`, the scripts pass that path to `dotnet tool --tool-path` using the PR-specific `bin` directory under the prefix.
   - Important: If you already have an Aspire CLI installed for the same PR under the same prefix, running this script will overwrite that PR installation. Other PR installs and the regular script install under `~/.aspire/bin` are isolated from this path.
 
 - PR-scoped NuGet packages "hive":
   - Default location: `~/.aspire/hives/pr-<PR_NUMBER>/packages`
-  - This local, PR-specific hive is isolated, making it easy to create new projects with just the packages produced by the PR build without affecting your global NuGet caches or other projects.
+  - Populated in both archive and tool mode. This local, PR-specific hive is isolated, making it easy to create new projects with just the packages produced by the PR build without affecting your global NuGet caches or other projects.
 
 In archive mode, the scripts attempt to add the PR-specific `bin` directory to your shell/profile PATH so you can invoke `aspire` directly in new terminals. If PATH isn't updated automatically, add it manually per the script's message.
 
@@ -89,7 +92,7 @@ Every Aspire CLI binary is built for a specific channel. The channel name contro
 | `local` | Locally built from source. Uses `~/.aspire/hives/local/packages/` as the package feed. This is the default channel for developer builds with no explicit `/p:AspireCliChannel=` override. |
 | `pr-<N>` | A single PR's CI build (for example `pr-16820`). Uses `~/.aspire/hives/pr-<N>/packages/` as the package feed. |
 
-Archive-mode PR dogfooding installs a `pr-<N>` CLI and populates the matching hive directory automatically — you do not need to set the channel manually.
+PR dogfooding installs a `pr-<N>` CLI and populates the matching hive directory automatically — you do not need to set the channel manually. This is true for both archive and tool install modes.
 
 ## Quickstart
 

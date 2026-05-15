@@ -1274,28 +1274,6 @@ function Get-BuiltNugets {
     return $downloadDir
 }
 
-function Get-RidSpecificBuiltNugets {
-    [CmdletBinding(SupportsShouldProcess)]
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$RunId,
-
-        [Parameter(Mandatory = $true)]
-        [string]$RID,
-
-        [Parameter(Mandatory = $true)]
-        [string]$TempDir
-    )
-
-    $downloadDir = Join-Path $TempDir $Script:BuiltNugetsArtifactName
-    $builtNugetRidName = "$($Script:BuiltNugetsRidArtifactName)-$RID"
-    Write-Message "Downloading rid specific built nugets artifact - $builtNugetRidName ..." -Level Info
-    Invoke-ArtifactDownload -RunId $RunId -ArtifactName $builtNugetRidName -DownloadDirectory $downloadDir
-
-    return $downloadDir
-}
-
-# Function to install built-nugets artifact
 function Install-BuiltNugets {
     [CmdletBinding(SupportsShouldProcess)]
     param(
@@ -1597,14 +1575,10 @@ function Start-InstallFromLocalDir {
         }
     }
 
-    $toolPackageSource = $nugetHiveDir
-
-    if ($InstallMode -eq 'Tool') {
-        $toolPackageSource = $LocalDirPath
-    }
-    else {
-        Install-BuiltNugets -DownloadDir $LocalDirPath -NugetHiveDir $nugetHiveDir
-    }
+    # Populate the hive from the local directory. In tool mode this gives `aspire
+    # new` the PR/local Aspire.AppHost.Sdk + Aspire.Hosting + Aspire.ProjectTemplates
+    # so the generated project can build against the dogfood build.
+    Install-BuiltNugets -DownloadDir $LocalDirPath -NugetHiveDir $nugetHiveDir
 
     # Extract and print the version suffix from packages
     try {
@@ -1615,10 +1589,11 @@ function Start-InstallFromLocalDir {
         Write-Message "Could not extract version suffix from local packages: $($_.Exception.Message)" -Level Warning
     }
 
-    # In tool mode, install/update the dotnet tool from the local package source.
+    # In tool mode, install/update the dotnet tool from the populated hive (durable
+    # `--add-source` for any future `dotnet tool update`).
     if (-not $HiveOnly -and $InstallMode -eq 'Tool') {
         $toolPath = if ($script:InstallPathExplicit) { $cliBinDir } else { $null }
-        Install-AspireCliTool -HiveDir $toolPackageSource -ToolPath $toolPath
+        Install-AspireCliTool -HiveDir $nugetHiveDir -ToolPath $toolPath
     }
 
     # PR installs from archives get a sidecar; --local-dir installs are unmanaged,
@@ -1682,8 +1657,6 @@ function Start-DownloadAndInstall {
         $HiveLabel
     } elseif ($PRNumber -gt 0) {
         "pr-$PRNumber"
-    } elseif ($InstallMode -eq 'Tool') {
-        $null
     } else {
         # The installed CLI's identity (CliExecutionContext.Channel) is baked at build
         # time via AspireCliChannel — one of pr-<N>/staging/daily/local. There is no
@@ -1692,11 +1665,7 @@ function Start-DownloadAndInstall {
         # silently producing an unusable layout.
         throw "Cannot determine hive label from -WorkflowRunId alone. The installed CLI's package channel is baked at build time (pr-<N>/staging/daily/local) and will not look in a 'run-<id>' hive. Re-run with -PRNumber <N> (preferred) or -HiveLabel <label> matching the CLI's baked AspireCliChannel."
     }
-    $nugetHiveDir = if ($resolvedHiveLabel) {
-        Join-Path $resolvedInstallPrefix "hives" $resolvedHiveLabel "packages"
-    } else {
-        $null
-    }
+    $nugetHiveDir = Join-Path $resolvedInstallPrefix "hives" $resolvedHiveLabel "packages"
 
     $rid = Get-RuntimeIdentifier $OS $Architecture
 
@@ -1708,12 +1677,11 @@ function Start-DownloadAndInstall {
     } else {
         $cliDownloadDir = Get-AspireCliFromArtifact -RunId $runId -RID $rid -TempDir $TempDir
     }
-    if ($InstallMode -eq 'Tool') {
-        $nugetDownloadDir = Get-RidSpecificBuiltNugets -RunId $runId -RID $rid -TempDir $TempDir
-    }
-    else {
-        $nugetDownloadDir = Get-BuiltNugets -RunId $runId -RID $rid -TempDir $TempDir
-    }
+    # Both modes need the cross-platform built-nugets (for the hive: Aspire.Hosting,
+    # Aspire.AppHost.Sdk, Aspire.ProjectTemplates, ...) and the RID-specific one
+    # (CLI archive in archive mode, or Aspire.Cli.<rid> tool pack in tool mode).
+    # Get-BuiltNugets fetches both into the same temp directory.
+    $nugetDownloadDir = Get-BuiltNugets -RunId $runId -RID $rid -TempDir $TempDir
 
     # Extract and print the version suffix from downloaded packages
     try {
@@ -1741,19 +1709,18 @@ function Start-DownloadAndInstall {
     } else {
         Install-AspireCliFromDownload -DownloadDir $cliDownloadDir -CliBinDir $cliBinDir
     }
-    $toolPackageSource = $nugetHiveDir
+    # Populate the PR hive with both cross-platform and RID-specific nupkgs.
+    # In tool mode the hive is what `aspire new` discovers so it picks the PR
+    # version of Aspire.AppHost.Sdk / Aspire.Hosting / Aspire.ProjectTemplates.
+    Install-BuiltNugets -DownloadDir $nugetDownloadDir -NugetHiveDir $nugetHiveDir
 
-    if ($InstallMode -eq 'Tool') {
-        $toolPackageSource = $nugetDownloadDir
-    }
-    else {
-        Install-BuiltNugets -DownloadDir $nugetDownloadDir -NugetHiveDir $nugetHiveDir
-    }
-
-    # In tool mode, install/update the dotnet tool from the RID-specific package source.
+    # In tool mode, install/update the dotnet tool from the populated hive.
+    # Using the hive directory (rather than the temp download dir) gives `dotnet
+    # tool install --add-source` a durable source, which matters if the user later
+    # runs `dotnet tool update Aspire.Cli` against the same `-ToolPath`.
     if (-not $HiveOnly -and $InstallMode -eq 'Tool') {
         $toolPath = if ($script:InstallPathExplicit) { $cliBinDir } else { $null }
-        Install-AspireCliTool -HiveDir $toolPackageSource -ToolPath $toolPath
+        Install-AspireCliTool -HiveDir $nugetHiveDir -ToolPath $toolPath
     }
 
     # Install VS Code extension if downloaded
@@ -1847,8 +1814,8 @@ OPTIONS:
     $script:HostOS = Get-OperatingSystem
 
     if ($InstallMode -eq 'Tool' -and $HiveOnly) {
-        Write-Message "Error: -HiveOnly cannot be combined with -InstallMode Tool because tool mode installs Aspire.Cli from a package source." -Level Error
-        Write-Message "Use -InstallMode Archive with -HiveOnly to populate only the hive, or omit -HiveOnly to install the dotnet tool." -Level Info
+        Write-Message "Error: -HiveOnly cannot be combined with -InstallMode Tool: -HiveOnly skips the CLI install, but -InstallMode Tool installs Aspire.Cli as a .NET tool." -Level Error
+        Write-Message "Drop one of the two flags. Both archive and tool modes populate the hive." -Level Info
         if ($InvokedFromFile) { exit 1 } else { return 1 }
     }
 

@@ -967,39 +967,6 @@ download_built_nugets() {
     return 0
 }
 
-download_rid_specific_built_nugets() {
-    # Parameters:
-    #   $1 - workflow_run_id
-    #   $2 - rid (e.g. osx-arm64)
-    #   $3 - temp_dir
-    local workflow_run_id="$1"
-    local rid="$2"
-    local temp_dir="$3"
-
-    local download_dir="${temp_dir}/built-nugets"
-    local nugets_rid_filename="$BUILT_NUGETS_RID_ARTIFACT_NAME-${rid}"
-    local nugets_rid_download_command=(gh run download "$workflow_run_id" -R "$REPO" --name "$nugets_rid_filename" -D "$download_dir")
-
-    if [[ "$DRY_RUN" == true ]]; then
-        say_info "[DRY RUN] Would download rid specific built nugets with: ${nugets_rid_download_command[*]}"
-        printf "%s" "$download_dir"
-        return 0
-    fi
-
-    say_info "Downloading rid specific built nugets artifact - $nugets_rid_filename ..."
-    say_verbose "Downloading with: ${nugets_rid_download_command[*]}"
-
-    if ! "${nugets_rid_download_command[@]}"; then
-        say_verbose "gh run download command failed. Command: ${nugets_rid_download_command[*]}"
-    say_error "Failed to download artifact '$nugets_rid_filename' from run: $workflow_run_id . If the workflow is still running then the artifact named '$nugets_rid_filename' may not be available yet. Check at https://github.com/${REPO}/actions/runs/$workflow_run_id#artifacts"
-        return 1
-    fi
-
-    say_verbose "Successfully downloaded RID-specific nuget packages to: $download_dir"
-    printf "%s" "$download_dir"
-    return 0
-}
-
 # Function to install built-nugets
 install_built_nugets() {
     local download_dir="$1"
@@ -1395,15 +1362,12 @@ install_from_local_dir() {
         fi
     fi
 
-    local tool_package_source="$nuget_hive_dir"
-
-    if [[ "$INSTALL_MODE" == "tool" ]]; then
-        tool_package_source="$local_dir"
-    else
-        if ! install_built_nugets "$local_dir" "$nuget_hive_dir"; then
-            say_error "Failed to install nuget packages from local directory"
-            return 1
-        fi
+    # Populate the hive from the local directory. In tool mode this gives `aspire
+    # new` the PR/local Aspire.AppHost.Sdk + Aspire.Hosting + Aspire.ProjectTemplates
+    # so the generated project can build against the dogfood build.
+    if ! install_built_nugets "$local_dir" "$nuget_hive_dir"; then
+        say_error "Failed to install nuget packages from local directory"
+        return 1
     fi
 
     # Extract and print the version suffix from packages
@@ -1414,13 +1378,14 @@ install_from_local_dir() {
         say_warn "Could not extract version suffix from local packages"
     fi
 
-    # In tool mode, install/update the dotnet tool from the populated hive.
+    # In tool mode, install/update the dotnet tool from the populated hive (durable
+    # `--add-source` for any future `dotnet tool update`).
     if [[ "$HIVE_ONLY" != true && "$INSTALL_MODE" == "tool" ]]; then
         local tool_path=""
         if [[ "$INSTALL_PREFIX_EXPLICIT" == true ]]; then
             tool_path="$cli_install_dir"
         fi
-        if ! install_or_update_aspire_cli_tool "$tool_package_source" "$tool_path"; then
+        if ! install_or_update_aspire_cli_tool "$nuget_hive_dir" "$tool_path"; then
             return 1
         fi
     fi
@@ -1479,8 +1444,6 @@ download_and_install_from_pr() {
         hive_label="$HIVE_LABEL"
     elif [[ -n "$PR_NUMBER" ]]; then
         hive_label="pr-$PR_NUMBER"
-    elif [[ "$INSTALL_MODE" == "tool" ]]; then
-        hive_label=""
     else
         # The installed CLI's identity (CliExecutionContext.Channel) is baked at build
         # time via AspireCliChannel — one of pr-<N>/staging/daily/local. There is no
@@ -1493,10 +1456,7 @@ download_and_install_from_pr() {
         say_error "--hive-label <label> matching the CLI's baked AspireCliChannel."
         return 1
     fi
-    local nuget_hive_dir=""
-    if [[ -n "$hive_label" ]]; then
-        nuget_hive_dir="$INSTALL_PREFIX/hives/$hive_label/packages"
-    fi
+    local nuget_hive_dir="$INSTALL_PREFIX/hives/$hive_label/packages"
 
     # First, download both artifacts
     local cli_archive_path nuget_download_dir
@@ -1515,12 +1475,11 @@ download_and_install_from_pr() {
         fi
     fi
 
-    if [[ "$INSTALL_MODE" == "tool" ]]; then
-        if ! nuget_download_dir=$(download_rid_specific_built_nugets "$workflow_run_id" "$rid" "$temp_dir"); then
-            say_error "Failed to download RID-specific nuget packages"
-            return 1
-        fi
-    elif ! nuget_download_dir=$(download_built_nugets "$workflow_run_id" "$rid" "$temp_dir"); then
+    # Both modes need the cross-platform built-nugets (for the hive: Aspire.Hosting,
+    # Aspire.AppHost.Sdk, Aspire.ProjectTemplates, ...) and the RID-specific one
+    # (CLI archive in archive mode, or Aspire.Cli.<rid> tool pack in tool mode).
+    # download_built_nugets fetches both into the same temp directory.
+    if ! nuget_download_dir=$(download_built_nugets "$workflow_run_id" "$rid" "$temp_dir"); then
         say_error "Failed to download nuget packages"
         return 1
     fi
@@ -1558,24 +1517,24 @@ download_and_install_from_pr() {
         fi
     fi
 
-    local tool_package_source="$nuget_hive_dir"
-
-    if [[ "$INSTALL_MODE" == "tool" ]]; then
-        tool_package_source="$nuget_download_dir"
-    else
-        if ! install_built_nugets "$nuget_download_dir" "$nuget_hive_dir"; then
-            say_error "Failed to install nuget packages"
-            return 1
-        fi
+    # Populate the PR hive with both cross-platform and RID-specific nupkgs.
+    # In tool mode the hive is what `aspire new` discovers so it picks the PR
+    # version of Aspire.AppHost.Sdk / Aspire.Hosting / Aspire.ProjectTemplates.
+    if ! install_built_nugets "$nuget_download_dir" "$nuget_hive_dir"; then
+        say_error "Failed to install nuget packages"
+        return 1
     fi
 
-    # In tool mode, install/update the dotnet tool from the RID-specific package source.
+    # In tool mode, install/update the dotnet tool from the populated hive.
+    # Using the hive directory (rather than the temp download dir) gives `dotnet
+    # tool install --add-source` a durable source, which matters if the user later
+    # runs `dotnet tool update Aspire.Cli` against the same `--tool-path`.
     if [[ "$HIVE_ONLY" != true && "$INSTALL_MODE" == "tool" ]]; then
         local tool_path=""
         if [[ "$INSTALL_PREFIX_EXPLICIT" == true ]]; then
             tool_path="$cli_install_dir"
         fi
-        if ! install_or_update_aspire_cli_tool "$tool_package_source" "$tool_path"; then
+        if ! install_or_update_aspire_cli_tool "$nuget_hive_dir" "$tool_path"; then
             return 1
         fi
     fi
@@ -1623,8 +1582,8 @@ main() {
     fi
 
     if [[ "$INSTALL_MODE" == "tool" && "$HIVE_ONLY" == true ]]; then
-        say_error "--hive-only cannot be combined with --install-mode tool because tool mode installs Aspire.Cli from a package source."
-        say_info "Use --install-mode archive with --hive-only to populate only the hive, or omit --hive-only to install the dotnet tool."
+        say_error "--hive-only cannot be combined with --install-mode tool: --hive-only skips the CLI install, but --install-mode tool installs Aspire.Cli as a .NET tool."
+        say_info "Drop one of the two flags. Both archive and tool modes populate the hive."
         exit 1
     fi
 

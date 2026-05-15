@@ -182,7 +182,9 @@ public class PRScriptToolModeTests(ITestOutputHelper testOutput)
         Assert.DoesNotContain("cli-native-archives", result.Output);
         Assert.Contains("dotnet tool install --global Aspire.Cli", result.Output);
         Assert.Contains("--add-source", result.Output);
-        Assert.DoesNotContain("Would copy nugets", result.Output);
+        // Tool mode now populates the hive so `aspire new` can discover the PR
+        // version of Aspire.AppHost.Sdk / Aspire.Hosting / Aspire.ProjectTemplates.
+        Assert.Contains("Would copy nugets", result.Output);
         Assert.DoesNotContain("config set channel", result.Output);
     }
 
@@ -242,7 +244,9 @@ public class PRScriptToolModeTests(ITestOutputHelper testOutput)
         result.EnsureSuccessful();
         // Tool mode must NOT download the cli-native-archives artifact.
         Assert.DoesNotContain("cli-native-archives", result.Output);
-        Assert.DoesNotContain("--name built-nugets -D", result.Output);
+        // Tool mode DOES download the cross-platform built-nugets artifact so the
+        // hive contains Aspire.Hosting / Aspire.AppHost.Sdk / Aspire.ProjectTemplates.
+        Assert.Contains("--name built-nugets -D", result.Output);
         Assert.Contains("built-nugets-for-", result.Output);
         Assert.Contains("dotnet tool install --global Aspire.Cli", result.Output);
         Assert.DoesNotContain("config set channel", result.Output);
@@ -253,7 +257,7 @@ public class PRScriptToolModeTests(ITestOutputHelper testOutput)
 
     [Fact]
     [SkipOnPlatform(TestPlatforms.Windows, "Bash script tests require bash shell")]
-    public async Task Bash_ToolMode_RunIdDryRun_DoesNotRequireHiveLabel()
+    public async Task Bash_ToolMode_RunIdAloneRequiresHiveLabel()
     {
         using var env = new TestEnvironment();
         using var cmd = await CreateBashCommandWithMockGhAsync(env);
@@ -265,9 +269,32 @@ public class PRScriptToolModeTests(ITestOutputHelper testOutput)
             "--skip-path",
             "--verbose");
 
+        // Tool mode now populates the hive like archive mode, so it requires
+        // either --pr-number or --hive-label (the installed CLI's package
+        // channel is baked at build time and won't look in a run-<id> hive).
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("Cannot determine hive label", result.Output);
+    }
+
+    [Fact]
+    [SkipOnPlatform(TestPlatforms.Windows, "Bash script tests require bash shell")]
+    public async Task Bash_ToolMode_RunIdWithHiveLabel_DryRun_PopulatesHive()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = await CreateBashCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync(
+            "--run-id", "987654321",
+            "--hive-label", "pr-99999",
+            "--install-mode", "tool",
+            "--dry-run",
+            "--skip-path",
+            "--verbose");
+
         result.EnsureSuccessful();
-        Assert.DoesNotContain("Cannot determine hive label", result.Output);
+        Assert.Contains("--name built-nugets -D", result.Output);
         Assert.Contains("built-nugets-for-", result.Output);
+        Assert.Contains("hives/pr-99999/packages", result.Output);
         Assert.Contains("dotnet tool install --global Aspire.Cli", result.Output);
     }
 
@@ -388,9 +415,16 @@ public class PRScriptToolModeTests(ITestOutputHelper testOutput)
 
         var dotnetCommands = await File.ReadAllTextAsync(dotnetCommandsPath, TestContext.Current.CancellationToken);
         Assert.Contains("tool update --global Aspire.Cli --version 13.3.0-pr.5678.deadbeef", dotnetCommands);
-        Assert.Contains($"--add-source {localDir}", dotnetCommands);
+        // The hive is populated from --local-dir and the tool is installed from the
+        // hive directory (not the raw --local-dir), giving --add-source a durable
+        // location for any later `dotnet tool update` invocations. The hive label
+        // is auto-detected from the pr-flavored package version suffix (pr-5678).
+        var prHive = Path.Combine(env.MockHome, ".aspire", "hives", "pr-5678", "packages");
+        Assert.Contains($"--add-source {prHive}", dotnetCommands);
         Assert.Contains("--allow-downgrade", dotnetCommands);
-        Assert.False(Directory.Exists(Path.Combine(env.MockHome, ".aspire", "hives", "local", "packages")));
+        Assert.True(Directory.Exists(prHive), $"Hive should be populated at {prHive}.");
+        Assert.True(File.Exists(Path.Combine(prHive, "Aspire.Hosting.13.3.0-pr.5678.deadbeef.nupkg")),
+            "Cross-platform Aspire.Hosting nupkg should be copied to the hive.");
     }
 
     [Fact]
@@ -451,11 +485,16 @@ public class PRScriptToolModeTests(ITestOutputHelper testOutput)
 
         var sidecarPath = Path.Combine(env.MockHome, ".aspire", "dogfood", "pr-12345", "bin", ".aspire-install.json");
         Assert.False(File.Exists(sidecarPath), $"Tool mode must not write the PR-route sidecar at {sidecarPath}.");
-        Assert.False(Directory.Exists(Path.Combine(env.MockHome, ".aspire", "hives", "pr-12345", "packages")));
+        // Tool mode now populates the PR hive so `aspire new`/`aspire run` can
+        // resolve the PR version of Aspire.AppHost.Sdk and friends.
+        var prHive = Path.Combine(env.MockHome, ".aspire", "hives", "pr-12345", "packages");
+        Assert.True(Directory.Exists(prHive), $"Hive should be populated at {prHive}.");
+        Assert.True(File.Exists(Path.Combine(prHive, "Aspire.Hosting.13.3.0-pr.5678.deadbeef.nupkg")),
+            "Cross-platform Aspire.Hosting nupkg should be copied to the hive.");
 
         var dotnetCommands = await File.ReadAllTextAsync(dotnetCommandsPath, TestContext.Current.CancellationToken);
         Assert.Contains("tool install --global Aspire.Cli --version 13.3.0-pr.5678.deadbeef", dotnetCommands);
-        Assert.Contains("built-nugets", dotnetCommands);
+        Assert.Contains($"--add-source {prHive}", dotnetCommands);
     }
 
     [Fact]
@@ -702,7 +741,9 @@ public class PRScriptToolModeTests(ITestOutputHelper testOutput)
         result.EnsureSuccessful();
         Assert.Contains("dotnet tool install --global Aspire.Cli", result.Output);
         Assert.Contains("--add-source", result.Output);
-        Assert.DoesNotContain("Copying built nugets", result.Output);
+        // Tool mode now populates the hive so `aspire new` can discover the PR
+        // version of Aspire.AppHost.Sdk / Aspire.Hosting / Aspire.ProjectTemplates.
+        Assert.Contains("Copying built nugets", result.Output);
         Assert.DoesNotContain("config set channel", result.Output);
         Assert.DoesNotContain("aspire-cli-linux-", result.Output);
         Assert.DoesNotContain(".tar.gz", result.Output);
@@ -762,7 +803,9 @@ public class PRScriptToolModeTests(ITestOutputHelper testOutput)
 
         result.EnsureSuccessful();
         Assert.DoesNotContain("cli-native-archives", result.Output);
-        Assert.DoesNotContain("--name built-nugets -D", result.Output);
+        // Tool mode DOES download the cross-platform built-nugets artifact so the
+        // hive contains Aspire.Hosting / Aspire.AppHost.Sdk / Aspire.ProjectTemplates.
+        Assert.Contains("--name built-nugets -D", result.Output);
         Assert.Contains("built-nugets-for-", result.Output);
         Assert.Contains("dotnet tool install --global Aspire.Cli", result.Output);
         Assert.DoesNotContain("config set channel", result.Output);
@@ -773,7 +816,7 @@ public class PRScriptToolModeTests(ITestOutputHelper testOutput)
 
     [Fact]
     [RequiresTools(["pwsh"])]
-    public async Task Ps_ToolMode_RunIdWhatIf_DoesNotRequireHiveLabel()
+    public async Task Ps_ToolMode_RunIdAloneRequiresHiveLabel()
     {
         using var env = new TestEnvironment();
         using var cmd = await CreatePsCommandWithMockGhAsync(env);
@@ -785,9 +828,30 @@ public class PRScriptToolModeTests(ITestOutputHelper testOutput)
             "-WhatIf",
             "-Verbose");
 
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("Cannot determine hive label", result.Output);
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
+    public async Task Ps_ToolMode_RunIdWithHiveLabel_WhatIf_PopulatesHive()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = await CreatePsCommandWithMockGhAsync(env);
+
+        var result = await cmd.ExecuteAsync(
+            "-WorkflowRunId", "987654321",
+            "-HiveLabel", "pr-99999",
+            "-InstallMode", "Tool",
+            "-SkipPath",
+            "-WhatIf",
+            "-Verbose");
+
         result.EnsureSuccessful();
-        Assert.DoesNotContain("Cannot determine hive label", result.Output);
+        Assert.Contains("--name built-nugets -D", result.Output);
         Assert.Contains("built-nugets-for-", result.Output);
+        // Path separator differs across platforms; use Path.Combine for portability.
+        Assert.Contains(Path.Combine("hives", "pr-99999", "packages"), result.Output);
         Assert.Contains("dotnet tool install --global Aspire.Cli", result.Output);
     }
 
@@ -907,9 +971,16 @@ public class PRScriptToolModeTests(ITestOutputHelper testOutput)
 
         var dotnetCommands = await File.ReadAllTextAsync(dotnetCommandsPath, TestContext.Current.CancellationToken);
         Assert.Contains("tool update --global Aspire.Cli --version 13.3.0-pr.5678.deadbeef", dotnetCommands);
-        Assert.Contains($"--add-source {localDir}", dotnetCommands);
+        // The hive is populated from -LocalDir and the tool is installed from the
+        // hive directory (not the raw -LocalDir), giving --add-source a durable
+        // location for any later `dotnet tool update` invocations. The hive label
+        // is auto-detected from the pr-flavored package version suffix (pr-5678).
+        var prHive = Path.Combine(env.MockHome, ".aspire", "hives", "pr-5678", "packages");
+        Assert.Contains($"--add-source {prHive}", dotnetCommands);
         Assert.Contains("--allow-downgrade", dotnetCommands);
-        Assert.False(Directory.Exists(Path.Combine(env.MockHome, ".aspire", "hives", "local", "packages")));
+        Assert.True(Directory.Exists(prHive), $"Hive should be populated at {prHive}.");
+        Assert.True(File.Exists(Path.Combine(prHive, "Aspire.Hosting.13.3.0-pr.5678.deadbeef.nupkg")),
+            "Cross-platform Aspire.Hosting nupkg should be copied to the hive.");
     }
 
     [Fact]
@@ -938,11 +1009,16 @@ public class PRScriptToolModeTests(ITestOutputHelper testOutput)
 
         var sidecarPath = Path.Combine(env.MockHome, ".aspire", "dogfood", "pr-12345", "bin", ".aspire-install.json");
         Assert.False(File.Exists(sidecarPath), $"Tool mode must not write the PR-route sidecar at {sidecarPath}.");
-        Assert.False(Directory.Exists(Path.Combine(env.MockHome, ".aspire", "hives", "pr-12345", "packages")));
+        // Tool mode now populates the PR hive so `aspire new`/`aspire run` can
+        // resolve the PR version of Aspire.AppHost.Sdk and friends.
+        var prHive = Path.Combine(env.MockHome, ".aspire", "hives", "pr-12345", "packages");
+        Assert.True(Directory.Exists(prHive), $"Hive should be populated at {prHive}.");
+        Assert.True(File.Exists(Path.Combine(prHive, "Aspire.Hosting.13.3.0-pr.5678.deadbeef.nupkg")),
+            "Cross-platform Aspire.Hosting nupkg should be copied to the hive.");
 
         var dotnetCommands = await File.ReadAllTextAsync(dotnetCommandsPath, TestContext.Current.CancellationToken);
         Assert.Contains("tool install --global Aspire.Cli --version 13.3.0-pr.5678.deadbeef", dotnetCommands);
-        Assert.Contains("built-nugets", dotnetCommands);
+        Assert.Contains($"--add-source {prHive}", dotnetCommands);
     }
 
     [Fact]
