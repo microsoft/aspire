@@ -228,11 +228,13 @@ public sealed class AcaCompactNamingUpgradeDeploymentTests(ITestOutputHelper out
 builder.AddAzureContainerAppEnvironment("env");
 
 // Use the Azure Container Instances "hello world" sample as a generic linux container.
-// We previously used mcr.microsoft.com/dotnet/samples:aspnetapp, but the .NET samples team
-// republishes that tag without guaranteeing a linux/amd64 manifest, which broke ACA
-// provisioning here. azuredocs/aci-helloworld is a purpose-built Azure container demo image
-// (different team, multi-arch) so it's a more reliable choice for a deployment smoke test.
+// We previously used mcr.microsoft.com/dotnet/samples:aspnetapp, but per
+// https://github.com/dotnet/dotnet-docker/blob/main/README.samples.md#support those images
+// are not stable and can break at any time (see dotnet/dotnet-docker#7191). The Azure
+// container demo image is owned by a different team and has stable multi-arch manifests.
+// Also pin the image digest so the test cannot break if the tag is republished.
 builder.AddContainer("worker", "mcr.microsoft.com/azuredocs/aci-helloworld", "latest")
+       .WithImageSHA256("456a1150aa41340a14c7be1342deda2cde9e6e7df9fde6b8a69de0ae04f92fad")
        .WithVolume("data", "/app/data");
 
 builder.Build().Run();
