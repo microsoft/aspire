@@ -262,6 +262,9 @@ internal sealed class AtsMarshaller
                 prop.Get(instance) is IList list &&
                 TryGetListElementType(prop.PropertyType, out var elementType))
             {
+                // The remote DTO JSON is the complete value for this property, not a
+                // patch over C# initializer defaults.
+                list.Clear();
                 for (var i = 0; i < jsonArray.Count; i++)
                 {
                     var elementContext = new UnmarshalContext

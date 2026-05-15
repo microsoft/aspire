@@ -737,7 +737,7 @@ public class AtsMarshallerTests
 
         var dto = Assert.IsType<DtoWithReadOnlyListProperties>(result);
         Assert.Equal("test", dto.Name);
-        Assert.Equal(["default", "203.0.113.0/24", "198.51.100.0/24"], dto.AddressPrefixes);
+        Assert.Equal(["203.0.113.0/24", "198.51.100.0/24"], dto.AddressPrefixes);
         var reference = Assert.Single(dto.AddressPrefixReferences);
         Assert.Equal("10.0.0.0/24", await reference.GetValueAsync(default));
     }
