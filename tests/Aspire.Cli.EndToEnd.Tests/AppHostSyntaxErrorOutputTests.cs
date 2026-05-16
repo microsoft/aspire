@@ -45,8 +45,8 @@ public sealed class AppHostSyntaxErrorOutputTests(ITestOutputHelper output)
             var outputsDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "outputs");
             Directory.CreateDirectory(outputsDirectory);
 
-            await RunAspireCommandToOutputFileAsync(auto, counter, "BrokenDotNetApp", "aspire run", "dotnet-run", timeout: TimeSpan.FromMinutes(2));
-            await RunAspireCommandToOutputFileAsync(auto, counter, "BrokenDotNetApp", "aspire start", "dotnet-start", timeout: TimeSpan.FromMinutes(2));
+            await RunAspireCommandToOutputFileAsync(auto, counter, "BrokenDotNetApp", "aspire run --apphost BrokenDotNetApp.csproj", "dotnet-run", timeout: TimeSpan.FromMinutes(2));
+            await RunAspireCommandToOutputFileAsync(auto, counter, "BrokenDotNetApp", "aspire start --apphost BrokenDotNetApp.csproj", "dotnet-start", timeout: TimeSpan.FromMinutes(2));
             await RunAspireCommandToOutputFileAsync(auto, counter, "BrokenTypeScriptApp", "aspire run", "typescript-run", timeout: TimeSpan.FromMinutes(3));
             await RunAspireCommandToOutputFileAsync(auto, counter, "BrokenTypeScriptApp", "aspire start", "typescript-start", timeout: TimeSpan.FromMinutes(3));
 
@@ -90,11 +90,12 @@ public sealed class AppHostSyntaxErrorOutputTests(ITestOutputHelper output)
         var quotedWorkingDirectory = AspireCliShellCommandHelpers.QuoteBashArg(workingDirectory);
         var quotedOutputPath = AspireCliShellCommandHelpers.QuoteBashArg($"../outputs/{outputName}.out");
         var quotedExitCodePath = AspireCliShellCommandHelpers.QuoteBashArg($"../outputs/{outputName}.exit");
+        var timeoutSeconds = (int)Math.Ceiling(timeout.TotalSeconds);
 
         await auto.RunCommandAsync(
-            $"(cd {quotedWorkingDirectory} && {command} > {quotedOutputPath} 2>&1; printf '%s\\n' \"$?\" > {quotedExitCodePath})",
+            $"(cd {quotedWorkingDirectory} && timeout --kill-after=5s {timeoutSeconds}s {command} > {quotedOutputPath} 2>&1; printf '%s\\n' \"$?\" > {quotedExitCodePath})",
             counter,
-            timeout);
+            timeout + TimeSpan.FromSeconds(10));
     }
 
     private static CommandOutput ReadCommandOutput(string outputsDirectory, string outputName)
@@ -146,7 +147,21 @@ public sealed class AppHostSyntaxErrorOutputTests(ITestOutputHelper output)
 
     private static void WriteBrokenDotNetAppHost(string projectDirectory)
     {
-        File.WriteAllText(Path.Combine(projectDirectory, "Program.cs"), """
+        var appHostPath = Path.Combine(projectDirectory, "apphost.cs");
+        var aspireSdkVersion = GetAspireSdkVersion(appHostPath);
+
+        File.WriteAllText(Path.Combine(projectDirectory, "BrokenDotNetApp.csproj"), $$"""
+            <Project Sdk="Aspire.AppHost.Sdk/{{aspireSdkVersion}}">
+              <PropertyGroup>
+                <OutputType>Exe</OutputType>
+                <TargetFramework>net10.0</TargetFramework>
+                <ImplicitUsings>enable</ImplicitUsings>
+                <Nullable>enable</Nullable>
+              </PropertyGroup>
+            </Project>
+            """);
+
+        File.WriteAllText(appHostPath, """
             var builder = DistributedApplication.CreateBuilder(args);
 
             builder.AddParameter("example", "value")
@@ -154,6 +169,16 @@ public sealed class AppHostSyntaxErrorOutputTests(ITestOutputHelper output)
             var app = builder.Build();
             await app.RunAsync();
             """);
+    }
+
+    private static string GetAspireSdkVersion(string appHostPath)
+    {
+        var firstLine = File.ReadLines(appHostPath).First();
+        const string versionMarker = "Aspire.AppHost.Sdk@";
+        var markerIndex = firstLine.IndexOf(versionMarker, StringComparison.Ordinal);
+        Assert.True(markerIndex >= 0, $"Expected {appHostPath} to start with an Aspire.AppHost.Sdk directive.");
+
+        return firstLine[(markerIndex + versionMarker.Length)..].Trim();
     }
 
     private static void WriteBrokenTypeScriptAppHost(string projectDirectory)
