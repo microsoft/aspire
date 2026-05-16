@@ -254,15 +254,20 @@ jobs:
                 # Look up test outcome from TRX data.
                 # .cast files are named after the test method name (via [CallerMemberName] in CreateTestTerminal),
                 # so the filename matches the method name key in the outcomes JSON.
+                # Per-link label carries the outcome too, so a recording URL copied out of
+                # the table still tells reviewers whether it represents a pass or a failure.
                 TEST_OUTCOME=$(jq -r --arg name "$filename" '.[$name] // "Unknown"' test_outcomes.json)
                 if [ "$TEST_OUTCOME" = "Passed" ]; then
                   STATUS_EMOJI="✅"
+                  LINK_LABEL="✅ ▶️ View recording"
                   TEST_PASS_COUNT=$((TEST_PASS_COUNT + 1))
                 elif [ "$TEST_OUTCOME" = "Failed" ]; then
                   STATUS_EMOJI="❌"
+                  LINK_LABEL="❌ ▶️ View failure recording"
                   TEST_FAIL_COUNT=$((TEST_FAIL_COUNT + 1))
                 else
                   STATUS_EMOJI="❔"
+                  LINK_LABEL="❔ ▶️ View recording"
                   TEST_UNKNOWN_COUNT=$((TEST_UNKNOWN_COUNT + 1))
                 fi
 
@@ -283,14 +288,14 @@ jobs:
 
                 if [ -n "$ASCIINEMA_URL" ]; then
                   TABLE_BODY="${TABLE_BODY}
-          | ${STATUS_EMOJI} | ${safe_filename} | [▶️ View Recording](${ASCIINEMA_URL}) |"
+          | ${STATUS_EMOJI} | ${safe_filename} | [${LINK_LABEL}](${ASCIINEMA_URL}) |"
                   echo "Uploaded: $ASCIINEMA_URL"
                   UPLOAD_COUNT=$((UPLOAD_COUNT + 1))
 
                   # Track failed tests for the prominent section
                   if [ "$TEST_OUTCOME" = "Failed" ]; then
                     FAILED_TESTS_BODY="${FAILED_TESTS_BODY}
-          - ❌ **${safe_filename}** — [▶️ View Recording](${ASCIINEMA_URL})"
+          - ❌ **${safe_filename}** — [${LINK_LABEL}](${ASCIINEMA_URL})"
                   fi
                 else
                   TABLE_BODY="${TABLE_BODY}
