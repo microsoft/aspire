@@ -9,7 +9,6 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
-using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -730,25 +729,5 @@ public class GuestAppHostProjectTests : IDisposable
             logger: NullLogger<GuestAppHostProject>.Instance,
             fileLoggerProvider: new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()),
             profilingTelemetry: _profilingTelemetry);
-    }
-
-    private sealed class FakeFailingAppHostServerProject(string appDirectoryPath) : IAppHostServerProject
-    {
-        public string AppDirectoryPath { get; } = appDirectoryPath;
-
-        public string GetInstanceIdentifier() => AppDirectoryPath;
-
-        public Task<AppHostServerPrepareResult> PrepareAsync(
-            string sdkVersion,
-            IEnumerable<IntegrationReference> integrations,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(new AppHostServerPrepareResult(Success: false, Output: null));
-
-        public (string SocketPath, System.Diagnostics.Process Process, OutputCollector OutputCollector) Run(
-            int hostPid,
-            IReadOnlyDictionary<string, string>? environmentVariables = null,
-            string[]? additionalArgs = null,
-            bool debug = false) =>
-            throw new NotSupportedException("Run should not be invoked when PrepareAsync fails.");
     }
 }

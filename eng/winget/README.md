@@ -8,16 +8,14 @@ Aspire CLI is distributed via [WinGet](https://learn.microsoft.com/windows/packa
 
 ```powershell
 winget install Microsoft.Aspire              # stable
-# winget install Microsoft.Aspire.Prerelease   # preview (not yet supported)
 ```
 
 ## Contents
 
-| Directory / File               | Description                                                                      |
-|--------------------------------|----------------------------------------------------------------------------------|
-| `microsoft.aspire/`            | Manifest templates for stable releases                                           |
-| `microsoft.aspire.prerelease/` | Manifest templates for prerelease builds                                         |
-| `generate-manifests.ps1`       | Downloads installers, computes SHA256 hashes, generates manifests from templates |
+| Directory / File         | Description                                                                      |
+|--------------------------|----------------------------------------------------------------------------------|
+| `microsoft.aspire/`      | Manifest templates for stable releases                                           |
+| `generate-manifests.ps1` | Downloads installers, computes SHA256 hashes, generates manifests from templates |
 
 Each manifest set contains three YAML files following the [WinGet manifest schema v1.10](https://learn.microsoft.com/windows/package-manager/package/manifest):
 

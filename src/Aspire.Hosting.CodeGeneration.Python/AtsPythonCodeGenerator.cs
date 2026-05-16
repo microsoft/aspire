@@ -347,6 +347,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
                         IsCallback = p.IsCallback,
                         CallbackParameters = p.CallbackParameters,
                         CallbackReturnType = p.CallbackReturnType,
+                        Documentation = p.Documentation,
                         DefaultValue = p.DefaultValue
                     });
                 }
@@ -369,6 +370,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
                 MethodName = shortest.MethodName,
                 OwningTypeName = shortest.OwningTypeName,
                 Description = shortest.Description ?? items.FirstOrDefault(c => c.Description is not null)?.Description,
+                Documentation = shortest.Documentation ?? items.FirstOrDefault(c => c.Documentation is not null)?.Documentation,
                 Parameters = mergedParams,
                 ReturnType = shortest.ReturnType,
                 TargetTypeId = shortest.TargetTypeId,

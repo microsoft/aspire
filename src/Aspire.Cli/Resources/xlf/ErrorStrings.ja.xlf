@@ -102,6 +102,11 @@
         <target state="translated">ASPIRE_EXTENSION_ENDPOINT が設定されている場合、Aspire 拡張機能トークンを設定する必要があります。ASPIRE_EXTENSION_TOKEN が設定されていることを確認してください</target>
         <note>Do not localize ASPIRE_EXTENSION_TOKEN and ASPIRE_EXTENSION_ENDPOINT</note>
       </trans-unit>
+      <trans-unit id="FailedToParsePackageSearchResults">
+        <source>Failed to parse package search results.</source>
+        <target state="new">Failed to parse package search results.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="FailedToParseTemplateVersionFromStdout">
         <source>Failed to parse template version from stdout.</source>
         <target state="translated">stdout からのテンプレート バージョンの解析に失敗しました。</target>

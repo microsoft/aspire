@@ -235,6 +235,27 @@ internal sealed class InitCommand : BaseCommand
 
     private async Task<int> DropCSharpSingleFileSkeletonAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
+        // Ensure the workspace has a NuGet.config that exposes the running CLI binary's
+        // identity-channel package sources (CliExecutionContext.IdentityChannel — stable,
+        // staging, daily, pr-<N>, or local). Run this BEFORE the apphost.cs-already-exists
+        // early return so re-running `aspire init` against a workspace produced by a
+        // previous broken CLI (which left apphost.cs without a workspace NuGet.config)
+        // recovers cleanly. The config is also required so MSBuild can resolve
+        // `#:sdk Aspire.AppHost.Sdk@<version>` from the SDK directive — both for
+        // `aspire add` (`dotnet package add --file apphost.cs`) and for
+        // `dotnet run --file apphost.cs`. Without it, any non-stable channel (PR/run
+        // hives, locally-built `local-*`/`dev-*` hives, the staging channel, etc.) is
+        // invisible and SDK resolution fails. `NuGetConfigMerger` underneath creates a
+        // new file or merges missing sources into an existing one.
+        var createdNuGetConfig = await _templateNuGetConfigService.CreateOrUpdateNuGetConfigWithoutPromptAsync(
+            channelName: _executionContext.IdentityChannel,
+            outputPath: workingDirectory.FullName,
+            cancellationToken).ConfigureAwait(false);
+        if (createdNuGetConfig)
+        {
+            InteractionService.DisplayMessage(KnownEmojis.Package, TemplatingStrings.NuGetConfigCreatedOrUpdatedConfirmationMessage);
+        }
+
         var appHostPath = Path.Combine(workingDirectory.FullName, "apphost.cs");
         if (File.Exists(appHostPath))
         {
@@ -257,29 +278,6 @@ internal sealed class InitCommand : BaseCommand
             """;
         File.WriteAllText(appHostPath, appHostContent);
         InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, "Created apphost.cs");
-
-        // Ensure the workspace has a NuGet.config that exposes the running CLI binary's
-        // identity-channel package sources (CliExecutionContext.IdentityChannel — stable,
-        // staging, daily, pr-<N>, or local). This is required so MSBuild can resolve
-        // `#:sdk Aspire.AppHost.Sdk@<version>` from the apphost.cs SDK directive — both
-        // for `aspire add` (`dotnet package add --file apphost.cs`) and for
-        // `dotnet run --file apphost.cs`. Without it, any non-stable channel (PR/run
-        // hives, locally-built `local-*`/`dev-*` hives, the staging channel, etc.)
-        // is invisible and SDK resolution fails. Mirrors how `aspire new` handles
-        // template output via the same shared service; `NuGetConfigMerger` underneath
-        // creates a new file or merges missing sources into an existing one, so adding
-        // hives later is handled the same way as for templates.
-        var createdNuGetConfig = await _templateNuGetConfigService.CreateOrUpdateNuGetConfigWithoutPromptAsync(
-            channelName: _executionContext.IdentityChannel,
-            outputPath: workingDirectory.FullName,
-            cancellationToken).ConfigureAwait(false);
-        if (createdNuGetConfig)
-        {
-            // Use a confirmation message that does NOT contain the literal substring
-            // "NuGet.config" — the AspireInitAsync E2E helper false-matches that
-            // substring as a Y/n prompt and gets out of sync with the real prompts.
-            InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, "Created package sources file");
-        }
 
         // Generate one set of ports so aspire.config.json (used by `aspire run`) and
         // apphost.run.json (used by `dotnet run apphost.cs`) agree on the dashboard /
@@ -313,6 +311,33 @@ internal sealed class InitCommand : BaseCommand
         var solutionName = Path.GetFileNameWithoutExtension(solutionFile.Name);
         var appHostDirName = $"{solutionName}.AppHost";
         var appHostDirPath = Path.Combine(solutionDir.FullName, appHostDirName);
+
+        // Drop the solution-directory NuGet.config BEFORE the AppHost-dir-already-exists
+        // early return so re-running `aspire init` against a workspace produced by a
+        // previous broken CLI (which left a `<sln>.AppHost/` without a workspace
+        // NuGet.config) recovers cleanly. Writing here is also required BEFORE
+        // `_runner.NewProjectAsync` so the aspire-apphost template's built-in `restore`
+        // post-action (template.json post-action id "restore", conditioned on
+        // !skipRestore which defaults to false) can resolve the
+        // `Aspire.AppHost.Sdk/<version>` reference from the channel-matched hive. The
+        // post-action currently runs with continueOnError=true so a missing nuget.config
+        // wouldn't fail init, but its restore would still emit confusing errors and waste
+        // work — and a future template change that drops continueOnError would break init
+        // outright.
+        //
+        // Source: CliExecutionContext.IdentityChannel (stable / staging / daily / pr-<N> /
+        // local). NuGetConfigMerger underneath creates a new file or merges missing
+        // sources into an existing one, so adding hives later is handled the same way as
+        // for templates. Mirrors what DropCSharpSingleFileSkeletonAsync already does for
+        // the apphost.cs path on every channel.
+        var createdNuGetConfig = await _templateNuGetConfigService.CreateOrUpdateNuGetConfigWithoutPromptAsync(
+            channelName: _executionContext.IdentityChannel,
+            outputPath: solutionDir.FullName,
+            cancellationToken).ConfigureAwait(false);
+        if (createdNuGetConfig)
+        {
+            InteractionService.DisplayMessage(KnownEmojis.Package, TemplatingStrings.NuGetConfigCreatedOrUpdatedConfirmationMessage);
+        }
 
         if (Directory.Exists(appHostDirPath))
         {

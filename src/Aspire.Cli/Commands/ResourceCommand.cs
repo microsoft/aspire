@@ -51,13 +51,24 @@ internal sealed class ResourceCommand : BaseCommand
 
     /// <summary>
     /// Well-known commands with their display metadata.
-    /// The command name is used directly (no mapping needed since the user-facing names match the actual command names).
+    /// The command names are passed through unchanged; entries only customize progress, success, and error text.
     /// </summary>
     private static readonly Dictionary<string, (string ProgressVerb, string BaseVerb, string PastTenseVerb)> s_wellKnownCommands = new(StringComparers.CommandName)
     {
         ["start"] = ("Starting", "start", "started"),
         ["stop"] = ("Stopping", "stop", "stopped"),
         ["restart"] = ("Restarting", "restart", "restarted"),
+        ["rebuild"] = ("Rebuilding", "rebuild", "rebuilt"),
+        ["set-parameter"] = ("Setting parameter for", "set parameter for", "set"),
+        ["delete-parameter"] = ("Deleting parameter for", "delete parameter for", "deleted"),
+        ["parameter-set"] = ("Setting parameter for", "set parameter for", "set"),
+        ["parameter-delete"] = ("Deleting parameter for", "delete parameter for", "deleted"),
+    };
+
+    private static readonly Dictionary<string, string> s_legacyCommandNameMap = new(StringComparers.CommandName)
+    {
+        ["parameter-set"] = "set-parameter",
+        ["parameter-delete"] = "delete-parameter",
     };
 
     public ResourceCommand(
@@ -131,7 +142,7 @@ internal sealed class ResourceCommand : BaseCommand
 
         var commandArguments = commandArgumentsResult.Arguments;
 
-        // Map well-known friendly names (start/stop/restart) to their display metadata
+        // Use display metadata for well-known command names.
         if (s_wellKnownCommands.TryGetValue(commandName, out var knownCommand))
         {
             return CommandResult.FromExitCode(await ResourceCommandHelper.ExecuteResourceCommandAsync(
@@ -161,10 +172,11 @@ internal sealed class ResourceCommand : BaseCommand
     {
         var snapshots = await connection.GetResourceSnapshotsAsync(includeHidden, cancellationToken).ConfigureAwait(false);
         var resources = ResourceSnapshotMapper.ResolveResources(resourceName, snapshots);
+        var lookupCommandName = s_legacyCommandNameMap.GetValueOrDefault(commandName, commandName);
 
         return resources
             .SelectMany(static resource => resource.Commands)
-            .FirstOrDefault(command => string.Equals(command.Name, commandName, StringComparisons.CommandName));
+            .FirstOrDefault(command => string.Equals(command.Name, lookupCommandName, StringComparisons.CommandName));
     }
 
     private static async Task<(string Name, string Description)[]> GetAvailableCommandMetadataAsync(IAppHostAuxiliaryBackchannel connection, string resourceName, bool includeHidden, CancellationToken cancellationToken)
@@ -359,6 +371,17 @@ internal sealed class ResourceCommand : BaseCommand
                 if (value is not null && !options.ContainsKey(value))
                 {
                     result.AddError($"Option '--{optionName}' only accepts the following values: {string.Join(", ", options.Keys)}.");
+                }
+            });
+        }
+
+        if (argument.Disabled)
+        {
+            option.Validators.Add(result =>
+            {
+                if (result is { Implicit: false })
+                {
+                    result.AddError($"Option '--{optionName}' is disabled.");
                 }
             });
         }
