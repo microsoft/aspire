@@ -75,8 +75,10 @@ public class ClusterDefaultsTests
         var gateway = model.Resources.OfType<KubernetesGatewayResource>().Single();
         await app.RunAsync();
 
-        // BeforePublishEvent should have populated a route for the api container under /api.
-        Assert.Contains(gateway.Routes, r => r.Path == "/api" && r.Endpoint.Resource.Name == "api");
+        // Single external frontend is promoted to "/" so the bare gateway URL works.
+        var route = Assert.Single(gateway.Routes);
+        Assert.Equal("/", route.Path);
+        Assert.Equal("api", route.Endpoint.Resource.Name);
     }
 
     [Fact]
@@ -172,7 +174,7 @@ public class ClusterDefaultsTests
     }
 
     [Fact]
-    public async Task WithClusterDefaults_MultiExternalEndpoints_AppendEndpointNameToPath()
+    public async Task WithClusterDefaults_MultipleExternalResources_FallBackToPerResourcePaths()
     {
         using var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish);
@@ -182,7 +184,9 @@ public class ClusterDefaultsTests
 
         builder.AddContainer("api", "myimage")
                .WithHttpEndpoint(targetPort: 8080, name: "http")
-               .WithHttpEndpoint(targetPort: 9090, name: "grpc")
+               .WithExternalHttpEndpoints();
+        builder.AddContainer("web", "myimage")
+               .WithHttpEndpoint(targetPort: 8081, name: "http")
                .WithExternalHttpEndpoints();
 
         using var app = builder.Build();
@@ -190,8 +194,39 @@ public class ClusterDefaultsTests
         var gateway = model.Resources.OfType<KubernetesGatewayResource>().Single();
         await app.RunAsync();
 
-        Assert.Contains(gateway.Routes, r => r.Path == "/api-http");
-        Assert.Contains(gateway.Routes, r => r.Path == "/api-grpc");
+        // With more than one external resource the auto-router falls back to per-resource
+        // path prefixes; root-promotion only applies to the single-frontend case.
+        Assert.Contains(gateway.Routes, r => r.Path == "/api" && r.Endpoint.Resource.Name == "api");
+        Assert.Contains(gateway.Routes, r => r.Path == "/web" && r.Endpoint.Resource.Name == "web");
+        Assert.DoesNotContain(gateway.Routes, r => r.Path == "/");
+    }
+
+    [Fact]
+    public async Task WithClusterDefaults_MultiEndpointSingleResource_CollapsesToOneRoute()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish);
+
+        var acmeEmail = builder.AddParameter("acme-email", "ops@contoso.com");
+        builder.AddAzureKubernetesEnvironment("aks").WithClusterDefaults(acmeEmail);
+
+        // A project with WithExternalHttpEndpoints annotates BOTH http and https
+        // endpoints, but they front the same backend Kestrel — emit one route, not two.
+        builder.AddContainer("api", "myimage")
+               .WithHttpEndpoint(targetPort: 8080, name: "http")
+               .WithHttpsEndpoint(targetPort: 8443, name: "https")
+               .WithExternalHttpEndpoints();
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var gateway = model.Resources.OfType<KubernetesGatewayResource>().Single();
+        await app.RunAsync();
+
+        var route = Assert.Single(gateway.Routes);
+        Assert.Equal("/", route.Path);
+        // Prefer the plaintext endpoint because TLS terminates at the gateway and the
+        // in-cluster Service typically listens http.
+        Assert.Equal("http", route.Endpoint.EndpointName);
     }
 
     [Fact]

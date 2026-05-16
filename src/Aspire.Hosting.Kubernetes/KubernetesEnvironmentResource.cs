@@ -783,43 +783,50 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             .Select(r => new
             {
                 Resource = r,
-                ExternalHttpEndpoints = r.Annotations
+                // Collapse multiple external endpoints down to a single representative
+                // endpoint per resource. WithExternalHttpEndpoints() annotates BOTH the
+                // "http" and "https" endpoints on a project, but the backing k8s Service
+                // typically exposes one port that fronts the same Kestrel — so emitting
+                // two routes that point at the same backend is just noise. Prefer "http"
+                // because TLS terminates at the gateway and the in-cluster Service
+                // listens plaintext; fall back to whichever endpoint exists otherwise.
+                Endpoint = r.Annotations
                     .OfType<EndpointAnnotation>()
                     .Where(e => e.IsExternal && IsHttpScheme(e.UriScheme))
-                    .ToList(),
+                    .OrderBy(e => string.Equals(e.UriScheme, "http", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+                    .FirstOrDefault(),
             })
-            .Where(x => x.ExternalHttpEndpoints.Count > 0)
+            .Where(x => x.Endpoint is not null)
             .ToList();
+
+        // Pit-of-success behavior: when exactly one resource is auto-routed, mount it at
+        // "/" so the bare gateway URL just works. With multiple frontends we fall back to
+        // the per-resource path template ("/{name}") for disambiguation.
+        var promoteToRoot = candidates.Count == 1;
 
         foreach (var entry in candidates)
         {
-            var multipleEndpoints = entry.ExternalHttpEndpoints.Count > 1;
+            var path = promoteToRoot
+                ? "/"
+                : autoRoute.PathTemplate.Replace("{name}", entry.Resource.Name, StringComparison.Ordinal);
 
-            foreach (var endpoint in entry.ExternalHttpEndpoints)
+            if (!usedPaths.Add(path))
             {
-                var path = autoRoute.PathTemplate.Replace("{name}", entry.Resource.Name, StringComparison.Ordinal);
-                if (multipleEndpoints)
-                {
-                    path = $"{path}-{endpoint.Name}";
-                }
-
-                if (!usedPaths.Add(path))
-                {
-                    continue;
-                }
-
-                var endpointRef = new EndpointReference(entry.Resource, endpoint.Name);
-                gatewayResource.Routes.Add(new GatewayRouteConfig(
-                    Host: null,
-                    Path: path,
-                    PathType: IngressPathType.Prefix,
-                    Endpoint: endpointRef)
-                {
-                    // Strip the synthetic per-resource prefix before forwarding so the
-                    // backend, which only knows about "/", doesn't 404 on every request.
-                    RewritePrefix = true,
-                });
+                continue;
             }
+
+            var endpointRef = new EndpointReference(entry.Resource, entry.Endpoint!.Name);
+            gatewayResource.Routes.Add(new GatewayRouteConfig(
+                Host: null,
+                Path: path,
+                PathType: IngressPathType.Prefix,
+                Endpoint: endpointRef)
+            {
+                // Strip the synthetic per-resource prefix before forwarding so the
+                // backend, which only knows about "/", doesn't 404 on every request.
+                // Skipped when we mount at "/" since there's nothing to strip.
+                RewritePrefix = !promoteToRoot,
+            });
         }
     }
 
