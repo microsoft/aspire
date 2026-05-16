@@ -32,8 +32,19 @@
 
 .PARAMETER InstallPath
     Directory prefix to install (default: $HOME/.aspire on Unix, %USERPROFILE%\.aspire on Windows)
-    CLI will be installed to InstallPath\bin (or InstallPath/bin on Unix)
-    NuGet packages will be installed to InstallPath\hives\pr-PRNUMBER\packages
+    CLI will be installed to InstallPath\bin (or InstallPath/bin on Unix) when installing from archives
+    or as a dotnet tool with --tool-path.
+    NuGet packages will be installed to InstallPath\hives\pr-PRNUMBER\packages.
+    Alias: -i
+
+.PARAMETER InstallMode
+    How to install the CLI: 'Archive' (default) installs from the cli-native-archives-<rid>
+    artifact, 'Tool' installs the Aspire.Cli dotnet tool from the PR's RID-specific NuGet artifact.
+    Alias: -m
+
+.PARAMETER Force
+    Tool mode only: run dotnet tool update instead of install to move an existing Aspire.Cli tool
+    to the exact PR package version (allows downgrades).
 
 .PARAMETER OS
     Override OS detection (win, linux, linux-musl, osx)
@@ -42,7 +53,7 @@
     Override architecture detection (x64, arm64)
 
 .PARAMETER HiveOnly
-    Only install NuGet packages to the hive, skip CLI download
+    For installs from archives only: only install NuGet packages to the hive, skip CLI download
 
 .PARAMETER SkipPath
     Do not add the install path to PATH environment variable (useful for portable installs)
@@ -90,6 +101,15 @@
     .\get-aspire-cli-pr.ps1 1234 -SkipPath
 
 .EXAMPLE
+    .\get-aspire-cli-pr.ps1 1234 -InstallMode Tool
+
+.EXAMPLE
+    .\get-aspire-cli-pr.ps1 1234 -InstallMode Tool -Force
+
+.EXAMPLE
+    .\get-aspire-cli-pr.ps1 -LocalDir "C:\path\to\artifacts" -InstallMode Tool
+
+.EXAMPLE
     Piped execution
     iex "& { $(irm https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.ps1) } <PR_NUMBER>
 
@@ -120,7 +140,16 @@ param(
     [string]$HiveLabel = "",
 
     [Parameter(HelpMessage = "Directory prefix to install")]
+    [Alias("i")]
     [string]$InstallPath = "",
+
+    [Parameter(HelpMessage = "How to install the CLI: 'Archive' (default) or 'Tool' (install Aspire.Cli dotnet tool from the PR package source)")]
+    [Alias("m")]
+    [ValidateSet("Archive", "Tool")]
+    [string]$InstallMode = "Archive",
+
+    [Parameter(HelpMessage = "Tool mode only: when Aspire.Cli is already installed globally, update it to the PR's exact package version (allows downgrades)")]
+    [switch]$Force,
 
     [Parameter(HelpMessage = "Override OS detection")]
     [ValidateSet("", "win", "linux", "linux-musl", "osx")]
@@ -130,7 +159,7 @@ param(
     [ValidateSet("", "x64", "arm64")]
     [string]$Architecture = "",
 
-    [Parameter(HelpMessage = "Only install NuGet packages to the hive, skip CLI download")]
+    [Parameter(HelpMessage = "For installs from archives only: only install NuGet packages to the hive, skip CLI download")]
     [switch]$HiveOnly,
 
     [Parameter(HelpMessage = "Skip VS Code extension download and installation")]
@@ -421,11 +450,11 @@ function Backup-ExistingCliExecutable {
         [Parameter(Mandatory = $true)]
         [string]$TargetExePath
     )
-    
+
     if (Test-Path $TargetExePath) {
         $unixTimestamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
         $backupPath = "$TargetExePath.old.$unixTimestamp"
-        
+
         if ($PSCmdlet.ShouldProcess($TargetExePath, "Backup to $backupPath")) {
             Write-Message "Backing up existing CLI: $TargetExePath -> $backupPath" -Level Verbose
 
@@ -441,7 +470,7 @@ function Backup-ExistingCliExecutable {
             return $backupPath
         }
     }
-    
+
     return $null
 }
 
@@ -451,18 +480,18 @@ function Restore-CliExecutableFromBackup {
     param(
         [Parameter(Mandatory = $true)]
         [string]$BackupPath,
-        
+
         [Parameter(Mandatory = $true)]
         [string]$TargetExePath
     )
-    
+
     if ($PSCmdlet.ShouldProcess($BackupPath, "Restore to $TargetExePath")) {
         Write-Message "Restoring CLI from backup: $BackupPath -> $TargetExePath" -Level Warning
-        
+
         if (Test-Path $TargetExePath) {
             Remove-Item -Path $TargetExePath -Force -ErrorAction SilentlyContinue
         }
-        
+
         Move-Item -Path $BackupPath -Destination $TargetExePath -Force -ErrorAction Stop
     }
 }
@@ -474,15 +503,15 @@ function Remove-OldCliBackupFiles {
         [Parameter(Mandatory = $true)]
         [string]$TargetExePath
     )
-    
+
     $directory = Split-Path -Parent $TargetExePath
     if ([string]::IsNullOrEmpty($directory)) {
         return
     }
-    
+
     $exeName = Split-Path -Leaf $TargetExePath
     $searchPattern = "$exeName.old.*"
-    
+
     $oldBackupFiles = Get-ChildItem -Path $directory -Filter $searchPattern -ErrorAction SilentlyContinue
     foreach ($backupFile in $oldBackupFiles) {
         if ($PSCmdlet.ShouldProcess($backupFile.FullName, "Delete old backup")) {
@@ -623,6 +652,24 @@ function Get-DefaultInstallPrefix {
 }
 
 # Simplified PATH environment update
+function Test-PathContainsDirectory {
+    [CmdletBinding()]
+    [OutputType([bool])]
+    param(
+        [AllowEmptyString()]
+        [string]$PathValue,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Directory
+    )
+
+    if ([string]::IsNullOrEmpty($PathValue)) {
+        return $false
+    }
+
+    return $PathValue.Split([System.IO.Path]::PathSeparator, [StringSplitOptions]::RemoveEmptyEntries) -contains $Directory
+}
+
 function Update-PathEnvironment {
     [CmdletBinding(SupportsShouldProcess)]
     param(
@@ -633,13 +680,16 @@ function Update-PathEnvironment {
 
     $pathSeparator = [System.IO.Path]::PathSeparator
 
+    if (Test-PathContainsDirectory -PathValue $env:PATH -Directory $CliBinDir) {
+        Write-Message "Path $CliBinDir already exists in PATH, skipping addition" -Level Info
+        return
+    }
+
     # Update current session PATH
     $currentPathArray = $env:PATH.Split($pathSeparator, [StringSplitOptions]::RemoveEmptyEntries)
-    if ($currentPathArray -notcontains $CliBinDir) {
-        if ($PSCmdlet.ShouldProcess("PATH environment variable", "Add $CliBinDir to current session")) {
-            $env:PATH = (@($CliBinDir) + $currentPathArray) -join $pathSeparator
-            Write-Message "Added $CliBinDir to PATH for current session" -Level Info
-        }
+    if ($PSCmdlet.ShouldProcess("PATH environment variable", "Add $CliBinDir to current session")) {
+        $env:PATH = (@($CliBinDir) + $currentPathArray) -join $pathSeparator
+        Write-Message "Added $CliBinDir to PATH for current session" -Level Info
     }
 
     # Update persistent PATH for Windows
@@ -915,8 +965,8 @@ function Get-VersionSuffixFromPackages {
         [Parameter(Mandatory = $true)]
         [string]$DownloadDir
     )
-    
-    if ($PSCmdlet.ShouldProcess("packages", "Extract version suffix from packages") -and $WhatIfPreference) {
+
+    if ($WhatIfPreference) {
         # Return a non-PR-shaped sentinel so the -LocalDir auto-detect regex at the
         # call site (^pr\.(\d+)\.[0-9a-g]+$) does NOT match and the caller falls
         # through to hive_label="local". A "pr.<N>.gSHA"-shaped mock would always
@@ -924,27 +974,27 @@ function Get-VersionSuffixFromPackages {
         # what is actually in -LocalDir.
         return "local"
     }
-    
+
     # Look for any .nupkg file and extract version from its name
     $nupkgFiles = Get-ChildItem -Path $DownloadDir -Filter "*.nupkg" -Recurse | Select-Object -First 1
-    
+
     if (-not $nupkgFiles) {
         Write-Message "No .nupkg files found to extract version from" -Level Verbose
         throw "No NuGet packages found to extract version information from"
     }
-    
+
     $filename = $nupkgFiles.Name
     Write-Message "Extracting version from package: $filename" -Level Verbose
-    
+
     # Extract version from package name using a more robust approach
     # Remove .nupkg extension first, then look for the specific version pattern
     $baseName = $filename -replace '\.nupkg$', ''
-    
+
     # Look for semantic version pattern with PR suffix (more specific and robust)
     if ($baseName -match '.*\.(\d+\.\d+\.\d+-pr\.\d+\.[0-9a-g]+)$') {
         $version = $Matches[1]
         Write-Message "Extracted version: $version" -Level Verbose
-        
+
         # Extract just the PR suffix part using more specific regex
         if ($version -match '(pr\.[0-9]+\.[0-9a-g]+)') {
             $versionSuffix = $Matches[1]
@@ -957,6 +1007,133 @@ function Get-VersionSuffixFromPackages {
     } else {
         Write-Message "Could not extract version from package name: $filename" -Level Verbose
         throw "Could not extract version from package name: $filename"
+    }
+}
+
+# =============================================================================
+# Tool-mode helpers (installing the Aspire.Cli dotnet tool)
+# =============================================================================
+
+# Verify that 'dotnet' is available in PATH (required for tool mode).
+function Test-DotnetDependency {
+    [CmdletBinding()]
+    param()
+
+    if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
+        Write-Message "The .NET SDK 'dotnet' command is required for -InstallMode Tool but was not found in PATH." -Level Error
+        Write-Message "Install the .NET SDK from https://dotnet.microsoft.com/download and ensure 'dotnet' is on your PATH." -Level Info
+        throw ".NET SDK 'dotnet' dependency not met"
+    }
+
+    Write-Message "dotnet found: $((& dotnet --version 2>&1 | Select-Object -First 1))" -Level Verbose
+}
+
+# Find the unique Aspire.Cli.<version>.nupkg in the given directory and return its exact version.
+# Throws if zero or more than one matching package is present.
+function Find-AspireCliPackageVersion {
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$SearchDir
+    )
+
+    if ($WhatIfPreference -and -not (Test-Path $SearchDir)) {
+        Write-Message "[WhatIf] Would discover Aspire.Cli package version under: $SearchDir" -Level Info
+        return "13.3.0-pr.1234.a1b2c3d4"
+    }
+
+    if (-not (Test-Path $SearchDir -PathType Container)) {
+        throw "Cannot find Aspire.Cli package: directory does not exist: $SearchDir"
+    }
+
+    $packageMatches = @(
+        Get-ChildItem -Path $SearchDir -Filter "Aspire.Cli.*.nupkg" -Recurse -File |
+            Where-Object {
+                $_.Name -notmatch '\.symbols\.nupkg$' -and
+                $_.Name -notmatch '\.snupkg$' -and
+                $_.Name -notmatch '^Aspire\.Cli\.(win|linux|linux-musl|osx)-(x64|arm64)\.' -and
+                $_.Name -match '^Aspire\.Cli\.([0-9A-Za-z.-]+)\.nupkg$'
+            }
+    )
+
+    if ($packageMatches.Count -eq 0) {
+        throw "No Aspire.Cli.<version>.nupkg package found under: $SearchDir. Tool mode requires the Aspire.Cli dotnet tool package to be present in the package source."
+    }
+    if ($packageMatches.Count -gt 1) {
+        $listing = ($packageMatches | ForEach-Object { "  $($_.FullName)" }) -join [Environment]::NewLine
+        throw "Multiple Aspire.Cli.<version>.nupkg packages found (expected exactly one):`n$listing"
+    }
+
+    $name = $packageMatches[0].Name
+    if ($name -notmatch '^Aspire\.Cli\.(.+)\.nupkg$') {
+        throw "Failed to parse version from Aspire.Cli package filename: $name"
+    }
+    return $Matches[1]
+}
+
+# Install or update the Aspire.Cli dotnet tool from the populated hive.
+function Install-AspireCliTool {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$HiveDir,
+
+        [Parameter()]
+        [string]$ToolPath
+    )
+
+    $version = Find-AspireCliPackageVersion -SearchDir $HiveDir
+
+    $installLocationArgs = if ([string]::IsNullOrWhiteSpace($ToolPath)) {
+        @("--global")
+    } else {
+        @("--tool-path", $ToolPath)
+    }
+
+    $cmdArgs = if ($Force) {
+        @("tool", "update") + $installLocationArgs + @("Aspire.Cli", "--version", $version, "--add-source", $HiveDir, "--allow-downgrade")
+    } else {
+        @("tool", "install") + $installLocationArgs + @("Aspire.Cli", "--version", $version, "--add-source", $HiveDir)
+    }
+
+    $description = "$($cmdArgs[1]) Aspire.Cli dotnet tool from $HiveDir (version $version)"
+    if (-not $PSCmdlet.ShouldProcess("Aspire.Cli", $description)) {
+        Write-Message "[WhatIf] Would run: dotnet $($cmdArgs -join ' ')" -Level Info
+        return
+    }
+
+    Write-Message "Installing Aspire.Cli dotnet tool (version $version) from $HiveDir" -Level Info
+    Write-Message "Running: dotnet $($cmdArgs -join ' ')" -Level Verbose
+
+    & dotnet @cmdArgs
+    if ($LASTEXITCODE -ne 0) {
+        if (-not $Force) {
+            Write-Message "If Aspire.Cli is already installed or this PR version needs to replace an existing install, re-run with -Force." -Level Info
+        }
+        throw "Failed to $($cmdArgs[1]) Aspire.Cli dotnet tool from $HiveDir (exit code: $LASTEXITCODE)"
+    }
+
+    Write-Message "Aspire.Cli dotnet tool installed (version $version)" -Level Success
+}
+
+function Test-ToolModeRuntimeIdentifier {
+    [CmdletBinding()]
+    param()
+
+    $targetOS = if ([string]::IsNullOrWhiteSpace($OS)) { $Script:HostOS } else { $OS }
+    $targetArch = if ([string]::IsNullOrWhiteSpace($Architecture)) { Get-CLIArchitectureFromArchitecture "<auto>" } else { Get-CLIArchitectureFromArchitecture $Architecture }
+    $hostArch = Get-CLIArchitectureFromArchitecture "<auto>"
+
+    if ($targetOS -ne $Script:HostOS -or $targetArch -ne $hostArch) {
+        # Split the message across Write-Message + throw so the second sentence isn't
+        # truncated by PowerShell 7's ConciseView when the exception is rendered. See
+        # the parallel Bash twin in get-aspire-cli-pr.sh which uses say_error + say_info,
+        # and the same pattern used elsewhere in this script (e.g. -HiveOnly + -InstallMode Tool).
+        Write-Message "-InstallMode Tool cannot target $targetOS-$targetArch from this $($Script:HostOS)-$hostArch host." -Level Error
+        Write-Message "dotnet tool install resolves RID-specific packages for the current host. Run tool mode on the target machine, or use archive mode for cross-RID downloads." -Level Info
+        throw "-InstallMode Tool cannot target $targetOS-$targetArch from this $($Script:HostOS)-$hostArch host."
     }
 }
 
@@ -1103,7 +1280,6 @@ function Get-BuiltNugets {
     return $downloadDir
 }
 
-# Function to install built-nugets artifact
 function Install-BuiltNugets {
     [CmdletBinding(SupportsShouldProcess)]
     param(
@@ -1173,9 +1349,37 @@ function Get-AspireCliFromArtifact {
     $cliArchiveName = "$($Script:CliArchiveArtifactNamePrefix)-$RID"
     $downloadDir = Join-Path $TempDir "cli"
     Write-Message "Downloading CLI from GitHub - $cliArchiveName ..." -Level Info
+
     Invoke-ArtifactDownload -RunId $RunId -ArtifactName $cliArchiveName -DownloadDirectory $downloadDir
 
     return $downloadDir
+}
+
+# Writes the PR-route install-source sidecar (.aspire-install.json) next to
+# the installed binary. Under -WhatIf, prints the target path and skips the
+# write so a real user's sidecar is never overwritten by a describe pass.
+# Authorship contract: docs/specs/install-routes.md.
+function Write-PRRouteSidecar {
+    [CmdletBinding(SupportsShouldProcess)]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$InstallPrefix,
+
+        [Parameter(Mandatory = $true)]
+        [int]$PRNumber
+    )
+
+    $sidecarDir = Join-Path (Join-Path (Join-Path $InstallPrefix "dogfood") "pr-$PRNumber") "bin"
+    $sidecarPath = Join-Path $sidecarDir '.aspire-install.json'
+    $sidecarContent = "{""source"":""pr""}`n"
+
+    if ($PSCmdlet.ShouldProcess($sidecarPath, "Write route sidecar")) {
+        [System.IO.Directory]::CreateDirectory($sidecarDir) | Out-Null
+        [System.IO.File]::WriteAllText($sidecarPath, $sidecarContent)
+    }
+    else {
+        Write-Host "What if: Route sidecar would be written to: $sidecarPath"
+    }
 }
 
 # Function to install downloaded Aspire CLI
@@ -1190,6 +1394,12 @@ function Install-AspireCliFromDownload {
     )
 
     if (!$PSCmdlet.ShouldProcess($CliBinDir, "Installing Aspire CLI to $CliBinDir")) {
+        # Honor the -WhatIf / dry-run contract: describe-but-do-not-do. Emit the
+        # install path as an informational message that tests can parse, instead of
+        # touching the filesystem.
+        $binaryName = if ($Script:HostOS -eq 'win') { 'aspire.exe' } else { 'aspire' }
+        $binaryPath = Join-Path $CliBinDir $binaryName
+        Write-Host "What if: Aspire CLI binary would be installed to: $binaryPath"
         return
     }
 
@@ -1306,8 +1516,15 @@ function Start-InstallFromLocalDir {
 
     Write-Message "Installing from local directory: $LocalDirPath" -Level Info
 
-    # Set installation paths
-    $cliBinDir = Join-Path $resolvedInstallPrefix "bin"
+    # Set installation paths.
+    # PR-route installs are isolated under <prefix>/dogfood/pr-<N>/bin so they don't
+    # collide with the script-route prefix or with other PR installs. Hives remain shared
+    # under <prefix>/hives/<label>/packages.
+    $cliBinDir = if ($PRNumber -gt 0) {
+        Join-Path (Join-Path (Join-Path $resolvedInstallPrefix "dogfood") "pr-$PRNumber") "bin"
+    } else {
+        Join-Path $resolvedInstallPrefix "bin"
+    }
     $resolvedHiveLabel = if ($HiveLabel) {
         $HiveLabel
     } else {
@@ -1335,6 +1552,8 @@ function Start-InstallFromLocalDir {
     # Install CLI from local directory: auto-detect archive vs. raw 'dotnet build'/'dotnet publish' output.
     if ($HiveOnly) {
         Write-Message "Skipping CLI installation due to -HiveOnly flag" -Level Info
+    } elseif ($InstallMode -eq 'Tool') {
+        Write-Message "Skipping CLI archive lookup in local directory (install mode: Tool)" -Level Verbose
     } else {
         $archiveMatch = Get-ChildItem -Path $LocalDirPath -File -Recurse -ErrorAction SilentlyContinue |
             Where-Object { $_.Name -match "^$Script:AspireCliArtifactNamePrefix-.*\.(tar\.gz|zip)$" } |
@@ -1362,7 +1581,9 @@ function Start-InstallFromLocalDir {
         }
     }
 
-    # Install NuGet packages from local directory
+    # Populate the hive from the local directory. In tool mode this gives `aspire
+    # new` the PR/local Aspire.AppHost.Sdk + Aspire.Hosting + Aspire.ProjectTemplates
+    # so the generated project can build against the dogfood build.
     Install-BuiltNugets -DownloadDir $LocalDirPath -NugetHiveDir $nugetHiveDir
 
     # Extract and print the version suffix from packages
@@ -1374,12 +1595,27 @@ function Start-InstallFromLocalDir {
         Write-Message "Could not extract version suffix from local packages: $($_.Exception.Message)" -Level Warning
     }
 
+    # In tool mode, install/update the dotnet tool from the populated hive (durable
+    # `--add-source` for any future `dotnet tool update`).
+    if (-not $HiveOnly -and $InstallMode -eq 'Tool') {
+        $toolPath = if ($script:InstallPathExplicit) { $cliBinDir } else { $null }
+        Install-AspireCliTool -HiveDir $nugetHiveDir -ToolPath $toolPath
+    }
+
+    # PR installs from archives get a sidecar; --local-dir installs are unmanaged,
+    # and dotnet-tool packages embed their own source=dotnet-tool sidecar.
+    if (-not $HiveOnly -and $InstallMode -eq 'Archive' -and $PRNumber -gt 0) {
+        Write-PRRouteSidecar -InstallPrefix $resolvedInstallPrefix -PRNumber $PRNumber
+    }
+
     # Update PATH environment variables
     if (-not $HiveOnly) {
-        if ($SkipPath) {
-            Write-Message "Skipping PATH configuration due to -SkipPath flag" -Level Info
-        } else {
-            Update-PathEnvironment -CliBinDir $cliBinDir
+        if ($InstallMode -ne 'Tool' -or $script:InstallPathExplicit) {
+            if ($SkipPath) {
+                Write-Message "Skipping PATH configuration due to -SkipPath flag" -Level Info
+            } else {
+                Update-PathEnvironment -CliBinDir $cliBinDir
+            }
         }
     }
 }
@@ -1414,8 +1650,15 @@ function Start-DownloadAndInstall {
 
     Write-Message "Using workflow run https://github.com/$Script:Repository/actions/runs/$runId" -Level Info
 
-    # Set installation paths
-    $cliBinDir = Join-Path $resolvedInstallPrefix "bin"
+    # Set installation paths.
+    # PR-route installs are isolated under <prefix>/dogfood/pr-<N>/bin so they don't
+    # collide with the script-route prefix or with other PR installs. Hives remain shared
+    # under <prefix>/hives/<label>/packages.
+    $cliBinDir = if ($PRNumber -gt 0) {
+        Join-Path (Join-Path (Join-Path $resolvedInstallPrefix "dogfood") "pr-$PRNumber") "bin"
+    } else {
+        Join-Path $resolvedInstallPrefix "bin"
+    }
     $resolvedHiveLabel = if ($HiveLabel) {
         $HiveLabel
     } elseif ($PRNumber -gt 0) {
@@ -1435,9 +1678,15 @@ function Start-DownloadAndInstall {
     # First, download artifacts
     if ($HiveOnly) {
         Write-Message "Skipping CLI download due to -HiveOnly flag" -Level Info
+    } elseif ($InstallMode -eq 'Tool') {
+        Write-Message "Skipping CLI native archive download (install mode: Tool)" -Level Verbose
     } else {
         $cliDownloadDir = Get-AspireCliFromArtifact -RunId $runId -RID $rid -TempDir $TempDir
     }
+    # Both modes need the cross-platform built-nugets (for the hive: Aspire.Hosting,
+    # Aspire.AppHost.Sdk, Aspire.ProjectTemplates, ...) and the RID-specific one
+    # (CLI archive in archive mode, or Aspire.Cli.<rid> tool pack in tool mode).
+    # Get-BuiltNugets fetches both into the same temp directory.
     $nugetDownloadDir = Get-BuiltNugets -RunId $runId -RID $rid -TempDir $TempDir
 
     # Extract and print the version suffix from downloaded packages
@@ -1461,10 +1710,24 @@ function Start-DownloadAndInstall {
     Write-Message "Installing artifacts..." -Level Info
     if ($HiveOnly) {
         Write-Message "Skipping CLI installation due to -HiveOnly flag" -Level Info
+    } elseif ($InstallMode -eq 'Tool') {
+        Write-Message "Skipping CLI archive installation (install mode: Tool)" -Level Verbose
     } else {
         Install-AspireCliFromDownload -DownloadDir $cliDownloadDir -CliBinDir $cliBinDir
     }
+    # Populate the PR hive with both cross-platform and RID-specific nupkgs.
+    # In tool mode the hive is what `aspire new` discovers so it picks the PR
+    # version of Aspire.AppHost.Sdk / Aspire.Hosting / Aspire.ProjectTemplates.
     Install-BuiltNugets -DownloadDir $nugetDownloadDir -NugetHiveDir $nugetHiveDir
+
+    # In tool mode, install/update the dotnet tool from the populated hive.
+    # Using the hive directory (rather than the temp download dir) gives `dotnet
+    # tool install --add-source` a durable source, which matters if the user later
+    # runs `dotnet tool update Aspire.Cli` against the same `-ToolPath`.
+    if (-not $HiveOnly -and $InstallMode -eq 'Tool') {
+        $toolPath = if ($script:InstallPathExplicit) { $cliBinDir } else { $null }
+        Install-AspireCliTool -HiveDir $nugetHiveDir -ToolPath $toolPath
+    }
 
     # Install VS Code extension if downloaded
     if ($extensionDownloadDir -and -not $SkipExtension) {
@@ -1473,13 +1736,31 @@ function Start-DownloadAndInstall {
         }
     }
 
+    if (-not $HiveOnly -and $InstallMode -eq 'Archive' -and $PRNumber -gt 0) {
+        Write-PRRouteSidecar -InstallPrefix $resolvedInstallPrefix -PRNumber $PRNumber
+    }
+
     # Update PATH environment variables
     if (-not $HiveOnly) {
-        if ($SkipPath) {
-            Write-Message "Skipping PATH configuration due to -SkipPath flag" -Level Info
-        } else {
-            Update-PathEnvironment -CliBinDir $cliBinDir
+        if ($InstallMode -ne 'Tool' -or $script:InstallPathExplicit) {
+            if ($SkipPath) {
+                Write-Message "Skipping PATH configuration due to -SkipPath flag" -Level Info
+            } else {
+                Update-PathEnvironment -CliBinDir $cliBinDir
+            }
         }
+    }
+
+    # Print PATH activation hint for PR installs.
+    # Uses Write-Host so the hint is visible on the host stream (not stderr) in normal output.
+    # Printed in success path (after install completes) and also under -WhatIf.
+    # The OS path separator is used so the line is valid on both Windows (;) and Unix (:).
+    # The new-PATH expression is emitted with double quotes so PowerShell expands `$env:PATH`
+    # when the user pastes the line into their profile — single quotes would assign the literal
+    # text "$env:PATH" and clobber the existing PATH.
+    if (-not $HiveOnly -and $PRNumber -gt 0 -and ($InstallMode -eq 'Archive' -or $script:InstallPathExplicit)) {
+        $pathSep = [System.IO.Path]::PathSeparator
+        Write-Host "Add to your shell profile: `$env:PATH = `"$cliBinDir$pathSep`$env:PATH`";"
     }
 }
 
@@ -1509,9 +1790,11 @@ OPTIONS:
     -LocalDir <string>      Use pre-downloaded artifacts from a local directory
     -HiveLabel <string>     Override the NuGet hive label
     -InstallPath <string>   Directory prefix to install
+    -InstallMode <string>   How to install the CLI: 'Archive' (default) or 'Tool'
+    -Force                  Tool mode only: run dotnet tool update for the PR's exact version
     -OS <string>            Override OS detection (win, linux, linux-musl, osx)
     -Architecture <string>  Override architecture detection (x64, arm64)
-    -HiveOnly               Only install NuGet packages to the hive, skip CLI download
+    -HiveOnly               For installs from archives only: only install NuGet packages to the hive, skip CLI download
     -SkipExtension          Skip VS Code extension download and installation
     -UseInsiders            Install extension to VS Code Insiders instead of VS Code
     -SkipPath               Do not add the install path to PATH environment variable
@@ -1535,6 +1818,18 @@ OPTIONS:
 
     # Set host OS for PATH environment updates
     $script:HostOS = Get-OperatingSystem
+
+    if ($InstallMode -eq 'Tool' -and $HiveOnly) {
+        Write-Message "Error: -HiveOnly cannot be combined with -InstallMode Tool: -HiveOnly skips the CLI install, but -InstallMode Tool installs Aspire.Cli as a .NET tool." -Level Error
+        Write-Message "Drop one of the two flags. Both archive and tool modes populate the hive." -Level Info
+        if ($InvokedFromFile) { exit 1 } else { return 1 }
+    }
+
+    $script:InstallPathExplicit = $PSBoundParameters.ContainsKey('InstallPath') -and -not [string]::IsNullOrWhiteSpace($InstallPath)
+    if ($InstallMode -eq 'Tool') {
+        Test-ToolModeRuntimeIdentifier
+        Test-DotnetDependency
+    }
 
     # Check gh dependency (not needed for -LocalDir mode)
     if (-not $LocalDir) {

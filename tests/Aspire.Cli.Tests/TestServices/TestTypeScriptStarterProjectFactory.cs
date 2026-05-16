@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Projects;
+using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Tests.TestServices;
 
@@ -70,6 +71,11 @@ internal sealed class TestTypeScriptStarterProject(Func<DirectoryInfo, Cancellat
     public Task<AppHostValidationResult> ValidateAppHostAsync(FileInfo appHostFile, CancellationToken cancellationToken)
     {
         return Task.FromResult(new AppHostValidationResult(IsValid: CanHandle(appHostFile)));
+    }
+
+    public Task<string?> GetAspireHostingVersionAsync(FileInfo appHostFile, CancellationToken cancellationToken)
+    {
+        return Task.FromResult<string?>(VersionHelper.GetDefaultTemplateVersion());
     }
 
     public Task<bool> AddPackageAsync(AddPackageContext context, CancellationToken cancellationToken)

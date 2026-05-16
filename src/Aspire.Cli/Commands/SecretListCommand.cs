@@ -41,7 +41,7 @@ internal sealed class SecretListCommand : BaseCommand
         Options.Add(s_formatOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var projectFile = parseResult.GetValue(SecretCommand.s_appHostOption);
         var format = parseResult.GetValue(s_formatOption);
@@ -49,8 +49,7 @@ internal sealed class SecretListCommand : BaseCommand
         var result = await _secretStoreResolver.ResolveAsync(projectFile, autoInit: false, cancellationToken);
         if (result is null)
         {
-            InteractionService.DisplayError(SecretCommandStrings.CouldNotFindAppHost);
-            return ExitCodeConstants.FailedToFindProject;
+            return CommandResult.Failure(ExitCodeConstants.FailedToFindProject, SecretCommandStrings.CouldNotFindAppHost);
         }
 
         var secrets = result.Store.ToList();
@@ -89,6 +88,6 @@ internal sealed class SecretListCommand : BaseCommand
             }
         }
 
-        return ExitCodeConstants.Success;
+        return CommandResult.Success();
     }
 }

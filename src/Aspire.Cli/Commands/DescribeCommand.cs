@@ -120,7 +120,7 @@ internal sealed class DescribeCommand : BaseCommand
         Options.Add(s_includeHiddenOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
@@ -139,7 +139,7 @@ internal sealed class DescribeCommand : BaseCommand
 
         if (!result.Success)
         {
-            return AppHostConnectionResultHandler.DisplayFailureAsInformation(result, _interactionService);
+            return CommandResult.FromExitCode(AppHostConnectionResultHandler.DisplayFailureAsInformation(result, _interactionService));
         }
 
         var connection = result.Connection!;
@@ -163,17 +163,17 @@ internal sealed class DescribeCommand : BaseCommand
         {
             try
             {
-                return await ExecuteWatchAsync(connection, resourceWatcher, dashboardBaseUrl, resourceName, format, cancellationToken);
+                return CommandResult.FromExitCode(await ExecuteWatchAsync(connection, resourceWatcher, dashboardBaseUrl, resourceName, format, cancellationToken));
             }
             catch (OperationCanceledException ex) when (ex.CancellationToken == cancellationToken || cancellationToken.IsCancellationRequested)
             {
-                return ExitCodeConstants.Success;
+                return CommandResult.Success();
             }
             catch (Exception ex) when (AppHostFollowDisconnectHelpers.IsExpectedDisconnect(ex))
             {
                 if (cancellationToken.IsCancellationRequested)
                 {
-                    return ExitCodeConstants.Success;
+                    return CommandResult.Success();
                 }
 
                 // Stopping or restarting the AppHost can tear down the JSON-RPC stream while
@@ -182,12 +182,12 @@ internal sealed class DescribeCommand : BaseCommand
                 // message on stderr so JSON output on stdout remains parseable.
                 AppHostFollowDisconnectHelpers.WriteStatusMessage(_interactionService, connection);
 
-                return ExitCodeConstants.Success;
+                return CommandResult.Success();
             }
         }
         else
         {
-            return ExecuteSnapshot(resourceWatcher.GetResources().ToList(), dashboardBaseUrl, resourceName, format);
+            return CommandResult.FromExitCode(ExecuteSnapshot(resourceWatcher.GetResources().ToList(), dashboardBaseUrl, resourceName, format));
         }
     }
 

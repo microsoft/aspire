@@ -12,9 +12,9 @@ namespace Aspire.Cli.Commands;
 
 internal sealed class TemplateCommand : BaseCommand
 {
-    private readonly Func<ParseResult, CancellationToken, Task<int>> _executeCallback;
+    private readonly Func<ParseResult, CancellationToken, Task<CommandResult>> _executeCallback;
 
-    public TemplateCommand(ITemplate template, Func<ParseResult, CancellationToken, Task<int>> executeCallback, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, IInteractionService interactionService, AspireCliTelemetry telemetry)
+    public TemplateCommand(ITemplate template, Func<ParseResult, CancellationToken, Task<CommandResult>> executeCallback, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, IInteractionService interactionService, AspireCliTelemetry telemetry)
         : base(template.Name, template.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         ArgumentNullException.ThrowIfNull(template);
@@ -24,7 +24,7 @@ internal sealed class TemplateCommand : BaseCommand
         _executeCallback = executeCallback;
     }
 
-    protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         return _executeCallback(parseResult, cancellationToken);
     }

@@ -664,8 +664,13 @@ internal static class Hex1bAutomatorTestHelpers
         this Hex1bTerminalAutomator auto,
         SequenceCounter counter)
     {
+        // Match the actual prompt text shape — the trailing '?' avoids false-matching
+        // informational confirmation messages like "Created NuGet.config..." which contain
+        // the same substring but are not Y/n prompts. The two real prompts are
+        // "Create NuGet.config for selected channels?" and "Update NuGet.config to add
+        // missing package sources for the selected channel?" — both end in '?'.
         var waitingForNuGetConfigPrompt = new CellPatternSearcher()
-            .Find("NuGet.config");
+            .Find("NuGet.config?");
 
         var waitingForUrlsPrompt = new CellPatternSearcher()
             .Find("Use *.dev.localhost URLs");

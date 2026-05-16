@@ -4,6 +4,7 @@
 # Handle Types
 Aspire.Hosting.Azure.Kubernetes/Aspire.Hosting.Azure.Kubernetes.AksNodePoolResource
 Aspire.Hosting.Azure.Kubernetes/Aspire.Hosting.Azure.Kubernetes.AzureKubernetesEnvironmentResource
+Aspire.Hosting.Azure.Kubernetes/Aspire.Hosting.Azure.Kubernetes.AzureKubernetesLoadBalancerResource
 
 # Exported Values
 AksNodeVmSizes.StandardAv2.StandardA2V2: string = "Standard_A2_v2"
@@ -1360,11 +1361,15 @@ AksNodeVmSizes.StandardXEISv4.StandardE80isV4: string = "Standard_E80is_v4"
 
 # Capabilities
 Aspire.Hosting.Azure.Kubernetes/addAzureKubernetesEnvironment(name: string) -> Aspire.Hosting.Azure.Kubernetes/Aspire.Hosting.Azure.Kubernetes.AzureKubernetesEnvironmentResource
+Aspire.Hosting.Azure.Kubernetes/addCertManager(name: string, chartVersion?: string) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.CertManagerResource
 Aspire.Hosting.Azure.Kubernetes/addGateway(name: string) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesGatewayResource
 Aspire.Hosting.Azure.Kubernetes/addHelmChart(name: string, chartReference: string, chartVersion: string) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesHelmChartResource
 Aspire.Hosting.Azure.Kubernetes/addIngress(name: string) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesIngressResource
+Aspire.Hosting.Azure.Kubernetes/addLoadBalancer(name: string, subnet: Aspire.Hosting.Azure.Network/Aspire.Hosting.Azure.AzureSubnetResource) -> Aspire.Hosting.Azure.Kubernetes/Aspire.Hosting.Azure.Kubernetes.AzureKubernetesLoadBalancerResource
 Aspire.Hosting.Azure.Kubernetes/addNodePool(name: string, vmSize?: string, minCount?: number, maxCount?: number) -> Aspire.Hosting.Azure.Kubernetes/Aspire.Hosting.Azure.Kubernetes.AksNodePoolResource
 Aspire.Hosting.Azure.Kubernetes/withContainerRegistry(registry: Aspire.Hosting.Azure.ContainerRegistry/Aspire.Hosting.Azure.AzureContainerRegistryResource) -> Aspire.Hosting.Azure.Kubernetes/Aspire.Hosting.Azure.Kubernetes.AzureKubernetesEnvironmentResource
+Aspire.Hosting.Azure.Kubernetes/withLoadBalancer(loadBalancer: Aspire.Hosting.Azure.Kubernetes/Aspire.Hosting.Azure.Kubernetes.AzureKubernetesLoadBalancerResource) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesGatewayResource
+Aspire.Hosting.Azure.Kubernetes/withLoadBalancerOnIngress(loadBalancer: Aspire.Hosting.Azure.Kubernetes/Aspire.Hosting.Azure.Kubernetes.AzureKubernetesLoadBalancerResource) -> Aspire.Hosting.Kubernetes/Aspire.Hosting.Kubernetes.KubernetesIngressResource
 Aspire.Hosting.Azure.Kubernetes/withNodePoolSubnet(subnet: Aspire.Hosting.Azure.Network/Aspire.Hosting.Azure.AzureSubnetResource) -> Aspire.Hosting.Azure.Kubernetes/Aspire.Hosting.Azure.Kubernetes.AksNodePoolResource
 Aspire.Hosting.Azure.Kubernetes/withSubnet(subnet: Aspire.Hosting.Azure.Network/Aspire.Hosting.Azure.AzureSubnetResource) -> Aspire.Hosting.Azure.Kubernetes/Aspire.Hosting.Azure.Kubernetes.AzureKubernetesEnvironmentResource
 Aspire.Hosting.Azure.Kubernetes/withSystemNodePool(vmSize?: string, minCount?: number, maxCount?: number) -> Aspire.Hosting.Azure.Kubernetes/Aspire.Hosting.Azure.Kubernetes.AzureKubernetesEnvironmentResource

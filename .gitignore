@@ -173,6 +173,8 @@ tests/PolyglotAppHosts/**/Java/**/*.class
 
 # Publisher Outputs
 playground/**/publish/
+playground/**/aspire-output/
+playground/**/aspire-manifest.json
 
 # TypeScript AppHost
 playground/**/dist/

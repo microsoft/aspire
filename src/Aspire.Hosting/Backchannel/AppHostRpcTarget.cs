@@ -3,6 +3,7 @@
 
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -15,6 +16,7 @@ internal class AppHostRpcTarget(
     ILogger<AppHostRpcTarget> logger,
     ResourceNotificationService resourceNotificationService,
     IServiceProvider serviceProvider,
+    ProfilingTelemetry profilingTelemetry,
     PipelineActivityReporter activityReporter,
     IHostApplicationLifetime lifetime,
     DistributedApplicationOptions options)
@@ -23,6 +25,12 @@ internal class AppHostRpcTarget(
 
     public async IAsyncEnumerable<BackchannelLogEntry> GetAppHostLogEntriesAsync([EnumeratorCancellation] CancellationToken cancellationToken)
     {
+        // Complete the stream immediately if shutdown has already been requested.
+        if (_shutdownCts.IsCancellationRequested)
+        {
+            yield break;
+        }
+
         // Create a linked token source that will be cancelled when shutdown is requested
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token);
         var linkedToken = linkedCts.Token;
@@ -59,6 +67,12 @@ internal class AppHostRpcTarget(
 
     public async IAsyncEnumerable<PublishingActivity> GetPublishingActivitiesAsync([EnumeratorCancellation] CancellationToken cancellationToken)
     {
+        // Complete the stream immediately if shutdown has already been requested.
+        if (_shutdownCts.IsCancellationRequested)
+        {
+            yield break;
+        }
+
         // Create a linked token source that will be cancelled when shutdown is requested
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token);
         var linkedToken = linkedCts.Token;
@@ -66,7 +80,7 @@ internal class AppHostRpcTarget(
         while (!linkedToken.IsCancellationRequested)
         {
             PublishingActivity? publishingActivity = null;
-            
+
             try
             {
                 publishingActivity = await activityReporter.ActivityItemUpdated.Reader.ReadAsync(linkedToken).ConfigureAwait(false);
@@ -90,6 +104,12 @@ internal class AppHostRpcTarget(
 
     public async IAsyncEnumerable<RpcResourceState> GetResourceStatesAsync([EnumeratorCancellation] CancellationToken cancellationToken)
     {
+        // Complete the stream immediately if shutdown has already been requested.
+        if (_shutdownCts.IsCancellationRequested)
+        {
+            yield break;
+        }
+
         // Create a linked token source that will be cancelled when shutdown is requested
         using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token);
         var linkedToken = linkedCts.Token;
@@ -100,7 +120,7 @@ internal class AppHostRpcTarget(
         // since yield return cannot appear in a try/catch block.
         await foreach (var resourceEvent in AsyncEnumerableUtils.ReadUntilCancelledAsync(resourceEvents, linkedToken).ConfigureAwait(false))
         {
-            if (resourceEvent.Resource.Name == "aspire-dashboard")
+            if (string.Equals(resourceEvent.Resource.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName))
             {
                 // Skip the dashboard resource, as it is handled separately.
                 continue;
@@ -134,10 +154,10 @@ internal class AppHostRpcTarget(
     public Task RequestStopAsync(CancellationToken cancellationToken)
     {
         _ = cancellationToken;
-        
+
         // Cancel inflight streaming RPC calls before stopping the application
         _shutdownCts.Cancel();
-        
+
         lifetime.StopApplication();
         return Task.CompletedTask;
     }
@@ -202,6 +222,7 @@ internal class AppHostRpcTarget(
 
     public async Task<GetPipelineStepsResponse> GetPipelineStepsAsync(GetPipelineStepsRequest? request = null, CancellationToken cancellationToken = default)
     {
+        using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(GetPipelineStepsAsync), streaming: false, request?.TraceContext);
         logger.LogDebug("Resolving pipeline steps for list-steps request.");
 
 #pragma warning disable ASPIREPIPELINES001

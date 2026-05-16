@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
-using System.CommandLine.Help;
 using System.Diagnostics;
 using System.Globalization;
 using Aspire.Cli.Configuration;
@@ -44,12 +43,11 @@ internal sealed class ConfigCommand : BaseCommand
 
     protected override bool UpdateNotificationsEnabled => false;
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         if (_configuration[KnownConfigNames.ExtensionPromptEnabled] is not "true")
         {
-            new HelpAction().Invoke(parseResult);
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.DisplayHelp();
         }
 
         // Prompt for the action that the user wants to perform
@@ -63,7 +61,7 @@ internal sealed class ConfigCommand : BaseCommand
             },
             cancellationToken: cancellationToken);
 
-        return await subcommand.InteractiveExecuteAsync(cancellationToken);
+        return CommandResult.FromExitCode(await subcommand.InteractiveExecuteAsync(cancellationToken));
     }
 
     private sealed class GetCommand : BaseConfigSubCommand
@@ -81,16 +79,15 @@ internal sealed class ConfigCommand : BaseCommand
 
         protected override bool UpdateNotificationsEnabled => false;
 
-        protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+        protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
         {
             var key = parseResult.GetValue(s_keyArgument);
             if (key is null)
             {
-                InteractionService.DisplayError(ErrorStrings.ConfigurationKeyRequired);
-                return Task.FromResult(ExitCodeConstants.InvalidCommand);
+                return CommandResult.Failure(ExitCodeConstants.InvalidCommand, ErrorStrings.ConfigurationKeyRequired);
             }
 
-            return ExecuteAsync(key, cancellationToken);
+            return CommandResult.FromExitCode(await ExecuteAsync(key, cancellationToken));
         }
 
         public override async Task<int> InteractiveExecuteAsync(CancellationToken cancellationToken)
@@ -141,7 +138,7 @@ internal sealed class ConfigCommand : BaseCommand
 
         protected override bool UpdateNotificationsEnabled => false;
 
-        protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+        protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
         {
             var key = parseResult.GetValue(s_keyArgument);
             var value = parseResult.GetValue(s_valueArgument);
@@ -149,17 +146,15 @@ internal sealed class ConfigCommand : BaseCommand
 
             if (key is null)
             {
-                InteractionService.DisplayError(ErrorStrings.ConfigurationKeyRequired);
-                return Task.FromResult(ExitCodeConstants.InvalidCommand);
+                return CommandResult.Failure(ExitCodeConstants.InvalidCommand, ErrorStrings.ConfigurationKeyRequired);
             }
 
             if (value is null)
             {
-                InteractionService.DisplayError(ErrorStrings.ConfigurationValueRequired);
-                return Task.FromResult(ExitCodeConstants.InvalidCommand);
+                return CommandResult.Failure(ExitCodeConstants.InvalidCommand, ErrorStrings.ConfigurationValueRequired);
             }
 
-            return ExecuteAsync(key, value, isGlobal, cancellationToken);
+            return CommandResult.FromExitCode(await ExecuteAsync(key, value, isGlobal, cancellationToken));
         }
 
         public override async Task<int> InteractiveExecuteAsync(CancellationToken cancellationToken)
@@ -225,10 +220,10 @@ internal sealed class ConfigCommand : BaseCommand
 
         protected override bool UpdateNotificationsEnabled => false;
 
-        protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+        protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
         {
             var showAll = parseResult.GetValue(s_allOption);
-            return ExecuteAsync(showAll, cancellationToken);
+            return CommandResult.FromExitCode(await ExecuteAsync(showAll, cancellationToken));
         }
 
         public override Task<int> InteractiveExecuteAsync(CancellationToken cancellationToken)
@@ -383,18 +378,17 @@ internal sealed class ConfigCommand : BaseCommand
 
         protected override bool UpdateNotificationsEnabled => false;
 
-        protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+        protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
         {
             var key = parseResult.GetValue(s_keyArgument);
             var isGlobal = parseResult.GetValue(s_globalOption);
 
             if (key is null)
             {
-                InteractionService.DisplayError(ErrorStrings.ConfigurationKeyRequired);
-                return Task.FromResult(ExitCodeConstants.InvalidCommand);
+                return CommandResult.Failure(ExitCodeConstants.InvalidCommand, ErrorStrings.ConfigurationKeyRequired);
             }
 
-            return ExecuteAsync(key, isGlobal, cancellationToken);
+            return CommandResult.FromExitCode(await ExecuteAsync(key, isGlobal, cancellationToken));
         }
 
         public override async Task<int> InteractiveExecuteAsync(CancellationToken cancellationToken)
@@ -469,10 +463,10 @@ internal sealed class ConfigCommand : BaseCommand
 
         protected override bool UpdateNotificationsEnabled => false;
 
-        protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+        protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
         {
             var useJson = parseResult.GetValue<bool>("--json");
-            return ExecuteAsync(useJson);
+            return CommandResult.FromExitCode(await ExecuteAsync(useJson));
         }
 
         public override Task<int> InteractiveExecuteAsync(CancellationToken cancellationToken)

@@ -2,9 +2,54 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="de" original="../DoctorCommandStrings.resx">
     <body>
+      <trans-unit id="AppHostCategoryHeader">
+        <source>AppHost</source>
+        <target state="new">AppHost</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AppHostVersionCheckFailedMessage">
+        <source>Could not determine AppHost version</source>
+        <target state="new">Could not determine AppHost version</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AppHostVersionMessageFormat">
+        <source>AppHost version {0} ({1})</source>
+        <target state="new">AppHost version {0} ({1})</target>
+        <note>{0} is the AppHost Aspire.Hosting version. {1} is the AppHost project path.</note>
+      </trans-unit>
+      <trans-unit id="AppHostVersionUnknownMessageFormat">
+        <source>Could not determine AppHost version ({0})</source>
+        <target state="new">Could not determine AppHost version ({0})</target>
+        <note>{0} is the AppHost project path.</note>
+      </trans-unit>
+      <trans-unit id="AspireCategoryHeader">
+        <source>Aspire</source>
+        <target state="new">Aspire</target>
+        <note />
+      </trans-unit>
       <trans-unit id="CheckingPrerequisites">
         <source>Checking Aspire environment...</source>
         <target state="translated">Aspire-Umgebung wird überprüft …</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CliVersionMessageFormat">
+        <source>Aspire CLI version {0}</source>
+        <target state="new">Aspire CLI version {0}</target>
+        <note>{0} is the current Aspire CLI version.</note>
+      </trans-unit>
+      <trans-unit id="CliVersionOutOfDateFixFormat">
+        <source>Run '{0}' to update Aspire CLI.</source>
+        <target state="new">Run '{0}' to update Aspire CLI.</target>
+        <note>{0} is the command to update Aspire CLI.</note>
+      </trans-unit>
+      <trans-unit id="CliVersionOutOfDateMessageFormat">
+        <source>Aspire CLI version {0} is out of date. Latest version is {1}</source>
+        <target state="new">Aspire CLI version {0} is out of date. Latest version is {1}</target>
+        <note>{0} is the current Aspire CLI version. {1} is the latest available Aspire CLI version.</note>
+      </trans-unit>
+      <trans-unit id="CliVersionUpdateCheckFailedMessage">
+        <source>Could not check for Aspire CLI updates</source>
+        <target state="new">Could not check for Aspire CLI updates</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerCategoryHeader">
@@ -135,6 +180,11 @@
       <trans-unit id="SummaryFormat">
         <source>Summary: {0} passed, {1} warnings, {2} failed</source>
         <target state="translated">Zusammenfassung: {0} erfolgreich, {1} Warnungen, {2} fehlgeschlagen</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VersionUnknown">
+        <source>unknown</source>
+        <target state="new">unknown</target>
         <note />
       </trans-unit>
     </body>

@@ -43,16 +43,19 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void GetDefaultExtractDir_ReturnsParentOfParent()
+    public void ComputeDefaultExtractDir_NoSidecar_ReturnsParentOfBinaryDirectory()
     {
+        // Legacy no-sidecar fallback: a sidecar-less install still walks one level up
+        // from the binary's directory to preserve the historical
+        // ~/.aspire/bin/aspire → ~/.aspire/ mapping that pre-dates the sidecar.
         if (OperatingSystem.IsWindows())
         {
-            var result = BundleService.GetDefaultExtractDir(@"C:\Users\test\.aspire\bin\aspire.exe");
+            var result = BundleService.ComputeDefaultExtractDir(@"C:\Users\test\.aspire\bin\aspire.exe");
             Assert.Equal(@"C:\Users\test\.aspire", result);
         }
         else
         {
-            var result = BundleService.GetDefaultExtractDir("/home/test/.aspire/bin/aspire");
+            var result = BundleService.ComputeDefaultExtractDir("/home/test/.aspire/bin/aspire");
             Assert.Equal("/home/test/.aspire", result);
         }
     }

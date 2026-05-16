@@ -66,6 +66,12 @@ public class EFMigrationCommandsTests
 
         Assert.NotNull(addCommand);
         Assert.Contains("Add Migration", addCommand.DisplayName);
+
+#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to describe resource command arguments.
+        var nameArgument = Assert.Single(addCommand.Arguments);
+#pragma warning restore ASPIREINTERACTION001
+        Assert.Equal("name", nameArgument.Name);
+        Assert.True(nameArgument.Required);
     }
 
     [Fact]

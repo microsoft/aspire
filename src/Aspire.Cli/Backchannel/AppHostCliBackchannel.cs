@@ -61,7 +61,9 @@ internal sealed class AppHostCliBackchannel(
 
         logger.LogDebug("Requesting stop");
 
-        await rpc.InvokeWithCancellationAsync(
+        await rpc.InvokeWithProfilingAsync(
+            profilingTelemetry,
+            "apphost",
             "RequestStopAsync",
             [],
             cancellationToken);
@@ -77,7 +79,9 @@ internal sealed class AppHostCliBackchannel(
         logger.LogDebug("Requesting dashboard URL");
 
         activity.AddBackchannelGetDashboardUrlsInvokeEvent();
-        var state = await rpc.InvokeWithCancellationAsync<DashboardUrlsState>(
+        var state = await rpc.InvokeWithProfilingAsync<DashboardUrlsState>(
+            profilingTelemetry,
+            "apphost",
             "GetDashboardUrlsAsync",
             [],
             cancellationToken);
@@ -86,79 +90,79 @@ internal sealed class AppHostCliBackchannel(
         return state;
     }
 
-    public async IAsyncEnumerable<BackchannelLogEntry> GetAppHostLogEntriesAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+    public IAsyncEnumerable<BackchannelLogEntry> GetAppHostLogEntriesAsync(CancellationToken cancellationToken)
+    {
+        return InvokeStreamingRpcAsync<BackchannelLogEntry>(
+            (rpc, ct) => rpc.InvokeStreamingWithProfilingAsync<BackchannelLogEntry>(
+                profilingTelemetry, "apphost", "GetAppHostLogEntriesAsync", [], ct),
+            "AppHost log entries",
+            cancellationToken);
+    }
+
+    public IAsyncEnumerable<RpcResourceState> GetResourceStatesAsync(CancellationToken cancellationToken)
+    {
+        return InvokeStreamingRpcAsync<RpcResourceState>(
+            (rpc, ct) => rpc.InvokeStreamingWithProfilingAsync<RpcResourceState>(
+                profilingTelemetry, "apphost", "GetResourceStatesAsync", [], ct),
+            "resource states",
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Invokes a streaming RPC method, handling reconnection when auto-reconnect is enabled.
+    /// </summary>
+    private async IAsyncEnumerable<T> InvokeStreamingRpcAsync<T>(
+        Func<JsonRpc, CancellationToken, Task<IAsyncEnumerable<T>>> startStream,
+        string operationName,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         while (!cancellationToken.IsCancellationRequested)
         {
-            IAsyncEnumerable<BackchannelLogEntry>? logEntries = null;
+            IAsyncEnumerable<T>? items = null;
             try
             {
                 using var activity = telemetry.StartDiagnosticActivity();
                 var rpc = await GetRpcTaskAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
 
-                logger.LogDebug("Requesting AppHost log entries");
+                logger.LogDebug("Requesting {OperationName}", operationName);
 
-                logEntries = await rpc.InvokeWithCancellationAsync<IAsyncEnumerable<BackchannelLogEntry>>(
-                    "GetAppHostLogEntriesAsync",
-                    [],
-                    cancellationToken);
+                items = await startStream(rpc, cancellationToken).ConfigureAwait(false);
 
-                logger.LogDebug("Received AppHost log entries async enumerable");
+                logger.LogDebug("Received {OperationName} async enumerable", operationName);
             }
             catch (Exception ex) when (_autoReconnect && !cancellationToken.IsCancellationRequested && IsConnectionLostException(ex))
             {
-                logger.LogDebug("Connection lost while getting log entries, waiting for reconnect...");
+                logger.LogDebug("Connection lost while getting {OperationName}, waiting for reconnect...", operationName);
                 await WaitForReconnectionAsync(cancellationToken).ConfigureAwait(false);
                 continue;
             }
 
-            if (logEntries is not null)
+            var reportingEnumerable = new ReportingAsyncEnumerable<T>(items);
+            await foreach (var item in EnumerateWithReconnect(reportingEnumerable, cancellationToken))
             {
-                await foreach (var entry in EnumerateWithReconnect(logEntries, cancellationToken))
-                {
-                    yield return entry;
-                }
+                yield return item;
+            }
+
+            // If we exit the enumeration loop because of a connection loss, the reporting enumerable will indicate that we should retry.
+            // If not then the enumerable ended with no more data. We can exit the method.
+            if (!reportingEnumerable.RetryBecauseConnectionLost)
+            {
+                yield break;
             }
         }
     }
 
-    public async IAsyncEnumerable<RpcResourceState> GetResourceStatesAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+    private sealed class ReportingAsyncEnumerable<T>(IAsyncEnumerable<T> source) : IAsyncEnumerable<T>
     {
-        while (!cancellationToken.IsCancellationRequested)
+        public bool RetryBecauseConnectionLost { get; set; }
+
+        public IAsyncEnumerator<T> GetAsyncEnumerator(CancellationToken cancellationToken = default)
         {
-            IAsyncEnumerable<RpcResourceState>? resourceStates = null;
-            try
-            {
-                using var activity = telemetry.StartDiagnosticActivity();
-                var rpc = await GetRpcTaskAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
-
-                logger.LogDebug("Requesting resource states");
-
-                resourceStates = await rpc.InvokeWithCancellationAsync<IAsyncEnumerable<RpcResourceState>>(
-                    "GetResourceStatesAsync",
-                    [],
-                    cancellationToken);
-
-                logger.LogDebug("Received resource states async enumerable");
-            }
-            catch (Exception ex) when (_autoReconnect && !cancellationToken.IsCancellationRequested && IsConnectionLostException(ex))
-            {
-                logger.LogDebug("Connection lost while getting resource states, waiting for reconnect...");
-                await WaitForReconnectionAsync(cancellationToken).ConfigureAwait(false);
-                continue;
-            }
-
-            if (resourceStates is not null)
-            {
-                await foreach (var state in EnumerateWithReconnect(resourceStates, cancellationToken))
-                {
-                    yield return state;
-                }
-            }
+            return source.GetAsyncEnumerator(cancellationToken);
         }
     }
 
-    private async IAsyncEnumerable<T> EnumerateWithReconnect<T>(IAsyncEnumerable<T> source, [EnumeratorCancellation] CancellationToken cancellationToken)
+    private async IAsyncEnumerable<T> EnumerateWithReconnect<T>(ReportingAsyncEnumerable<T> source, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         var enumerator = source.GetAsyncEnumerator(cancellationToken);
         try
@@ -178,6 +182,8 @@ internal sealed class AppHostCliBackchannel(
                 }
                 catch (Exception ex) when (_autoReconnect && !cancellationToken.IsCancellationRequested && IsConnectionLostException(ex))
                 {
+                    source.RetryBecauseConnectionLost = true;
+
                     logger.LogDebug("Connection lost during enumeration, will restart after reconnect");
                     yield break; // Exit this enumeration, outer loop will restart
                 }
@@ -287,12 +293,17 @@ internal sealed class AppHostCliBackchannel(
             JsonRpc? rpc = null;
             try
             {
-                rpc = new JsonRpc(new HeaderDelimitedMessageHandler(stream, stream, BackchannelJsonSerializerContext.CreateRpcMessageFormatter()));
+                rpc = new JsonRpc(new HeaderDelimitedMessageHandler(stream, stream, BackchannelJsonSerializerContext.CreateRpcMessageFormatter()))
+                {
+                    ActivityTracingStrategy = new ActivityTracingStrategy()
+                };
                 rpc.StartListening();
                 activity.AddBackchannelRpcListeningEvent();
 
                 activity.AddBackchannelGetCapabilitiesStartEvent();
-                var capabilities = await rpc.InvokeWithCancellationAsync<string[]>(
+                var capabilities = await rpc.InvokeWithProfilingAsync<string[]>(
+                    profilingTelemetry,
+                    "apphost",
                     "GetCapabilitiesAsync",
                     [],
                     cancellationToken);
@@ -415,24 +426,13 @@ internal sealed class AppHostCliBackchannel(
         logger.LogWarning("Timed out waiting for backchannel reconnection");
     }
 
-    public async IAsyncEnumerable<PublishingActivity> GetPublishingActivitiesAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+    public IAsyncEnumerable<PublishingActivity> GetPublishingActivitiesAsync(CancellationToken cancellationToken)
     {
-        using var activity = telemetry.StartDiagnosticActivity();
-        var rpc = await GetRpcTaskAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
-
-        logger.LogDebug("Requesting publishing activities.");
-
-        var publishingActivities = await rpc.InvokeWithCancellationAsync<IAsyncEnumerable<PublishingActivity>>(
-            "GetPublishingActivitiesAsync",
-            [],
+        return InvokeStreamingRpcAsync<PublishingActivity>(
+            (rpc, ct) => rpc.InvokeStreamingWithProfilingAsync<PublishingActivity>(
+                profilingTelemetry, "apphost", "GetPublishingActivitiesAsync", [], ct),
+            "publishing activities",
             cancellationToken);
-
-        logger.LogDebug("Received publishing activities.");
-
-        await foreach (var state in publishingActivities.WithCancellation(cancellationToken))
-        {
-            yield return state;
-        }
     }
 
     public async Task<string[]> GetCapabilitiesAsync(CancellationToken cancellationToken)
@@ -442,7 +442,9 @@ internal sealed class AppHostCliBackchannel(
 
         logger.LogDebug("Requesting capabilities");
 
-        var capabilities = await rpc.InvokeWithCancellationAsync<string[]>(
+        var capabilities = await rpc.InvokeWithProfilingAsync<string[]>(
+            profilingTelemetry,
+            "apphost",
             "GetCapabilitiesAsync",
             [],
             cancellationToken).ConfigureAwait(false);
@@ -457,7 +459,9 @@ internal sealed class AppHostCliBackchannel(
 
         logger.LogDebug("Providing prompt responses for prompt ID {PromptId}", promptId);
 
-        await rpc.InvokeWithCancellationAsync(
+        await rpc.InvokeWithProfilingAsync(
+            profilingTelemetry,
+            "apphost",
             "CompletePromptResponseAsync",
             [promptId, answers],
             cancellationToken).ConfigureAwait(false);
@@ -470,7 +474,9 @@ internal sealed class AppHostCliBackchannel(
 
         logger.LogDebug("Providing prompt responses for prompt ID {PromptId}", promptId);
 
-        await rpc.InvokeWithCancellationAsync(
+        await rpc.InvokeWithProfilingAsync(
+            profilingTelemetry,
+            "apphost",
             "UpdatePromptResponseAsync",
             [promptId, answers],
             cancellationToken).ConfigureAwait(false);
@@ -483,7 +489,9 @@ internal sealed class AppHostCliBackchannel(
 
         logger.LogDebug("Requesting pipeline steps.");
 
-        var response = await rpc.InvokeWithCancellationAsync<GetPipelineStepsResponse>(
+        var response = await rpc.InvokeWithProfilingAsync<GetPipelineStepsResponse>(
+            profilingTelemetry,
+            "apphost",
             "GetPipelineStepsAsync",
             [new GetPipelineStepsRequest { Step = step }],
             cancellationToken).ConfigureAwait(false);

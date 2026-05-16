@@ -90,6 +90,36 @@ public class KubernetesIngressTests
     }
 
     [Fact]
+    public async Task AddIngress_WithTls_BeforeWithHostname_HostnameIncludedInTlsHosts()
+    {
+        // Regression test: WithTls() must not snapshot the hostname list at call time.
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var ingress = k8s.AddIngress("public");
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        ingress
+            .WithRoute("api.example.com", "/", api.GetEndpoint("http"))
+            .WithTls("my-tls-secret")
+            .WithHostname("api.example.com");
+
+        var app = builder.Build();
+        app.Run();
+
+        var ingressPath = Path.Combine(tempDir.Path, "templates", "public", "public.yaml");
+        var content = await File.ReadAllTextAsync(ingressPath);
+
+        Assert.Contains("my-tls-secret", content);
+        Assert.Contains("api.example.com", content);
+        // The TLS section should list the hostname under hosts.
+        Assert.Matches(@"tls:[\s\S]*?hosts:[\s\S]*?api\.example\.com", content);
+    }
+
+    [Fact]
     public async Task AddIngress_WithMultipleRoutes_GroupsByHost()
     {
         using var tempDir = new TestTempDirectory();

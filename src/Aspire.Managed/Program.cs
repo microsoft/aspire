@@ -37,6 +37,7 @@ static async Task<int> RunNuGet(string[] args)
     rootCommand.Subcommands.Add(SearchCommand.Create());
     rootCommand.Subcommands.Add(RestoreCommand.Create());
     rootCommand.Subcommands.Add(LayoutCommand.Create());
+    rootCommand.Subcommands.Add(ManifestCommand.Create());
     return await rootCommand.Parse(args).InvokeAsync().ConfigureAwait(false);
 }
 
