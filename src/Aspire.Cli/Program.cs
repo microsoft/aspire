@@ -722,7 +722,6 @@ public class Program
         // Setup handling of CTRL-C and SIGTERM as early as possible so that if
         // we get a signal anywhere that is not handled by Spectre Console
         // already that we know to trigger cancellation.
-        // Using declaration ensures cleanup even if BuildApplicationAsync/StartAsync fails early.
         using var cancellationManager = new ConsoleCancellationManager();
 
         Console.OutputEncoding = Encoding.UTF8;
