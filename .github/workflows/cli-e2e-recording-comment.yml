@@ -355,6 +355,11 @@ jobs:
             # "<emoji> **CLI E2E Tests <status>** — X passed, Y failed[, Z unknown]"
             # Status reflects test outcomes; recording-upload failures are a secondary concern
             # surfaced in the table rather than the headline status.
+            # Choose headline emoji + status word from the tallied outcomes.
+            # We never let unknowns suppress a real failure, but we do flag
+            # unknowns explicitly when the rest of the run was clean so
+            # reviewers don't read a misleading 'passed'.
+            FALLBACK_TEXT=""
             if [ "$TEST_FAIL_COUNT" -gt 0 ]; then
               SUMMARY_EMOJI="❌"
               SUMMARY_STATUS="failed"
@@ -362,17 +367,24 @@ jobs:
               SUMMARY_EMOJI="✅"
               SUMMARY_STATUS="passed"
             elif [ "$TEST_PASS_COUNT" -eq 0 ] && [ "$TEST_FAIL_COUNT" -eq 0 ]; then
-              # No TRX outcomes available — fall back to a recording-only summary
+              # No TRX outcomes matched any recording — describe the run by
+              # recording count rather than zero pass/fail counts, which would
+              # read as 'no tests ran' instead of 'outcome data unavailable'.
               SUMMARY_EMOJI="🎬"
               SUMMARY_STATUS="completed"
+              FALLBACK_TEXT="${TOTAL_COUNT} recording(s), outcomes unavailable"
             else
               SUMMARY_EMOJI="❓"
               SUMMARY_STATUS="unknown"
             fi
 
-            SUMMARY_TEXT="${TEST_PASS_COUNT} passed, ${TEST_FAIL_COUNT} failed"
-            if [ "$TEST_UNKNOWN_COUNT" -gt 0 ]; then
-              SUMMARY_TEXT="${SUMMARY_TEXT}, ${TEST_UNKNOWN_COUNT} unknown"
+            if [ -n "$FALLBACK_TEXT" ]; then
+              SUMMARY_TEXT="$FALLBACK_TEXT"
+            else
+              SUMMARY_TEXT="${TEST_PASS_COUNT} passed, ${TEST_FAIL_COUNT} failed"
+              if [ "$TEST_UNKNOWN_COUNT" -gt 0 ]; then
+                SUMMARY_TEXT="${SUMMARY_TEXT}, ${TEST_UNKNOWN_COUNT} unknown"
+              fi
             fi
             if [ "$FAIL_COUNT" -gt 0 ]; then
               SUMMARY_TEXT="${SUMMARY_TEXT} (${UPLOAD_COUNT}/${TOTAL_COUNT} recordings uploaded, ${FAIL_COUNT} upload(s) failed)"
