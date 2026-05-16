@@ -256,11 +256,11 @@ public sealed class TestEnvironment : IDisposable
 
                     # Workflow run lookup: repos/.../actions/workflows/...
                     if echo "$endpoint" | grep -q "/actions/workflows/"; then
-                        if [ -n "$jq_filter" ]; then
-                            echo "987654321"
-                        else
-                            echo '{"workflow_runs":[{"id":987654321,"conclusion":"success"}]}'
+                        if [ -z "$jq_filter" ]; then
+                            echo '{"_mock_missing_jq":true}'
+                            exit 1
                         fi
+                        echo "987654321"
                         exit 0
                     fi
 
