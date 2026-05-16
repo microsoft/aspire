@@ -74,37 +74,22 @@ public sealed class TestEnvironment : IDisposable
                 exit 0
 
                 :api
-                rem Parse endpoint and --jq flag to return realistic responses
+                rem The scripts only use these mocked API calls with --jq, so return the scalar
+                rem values directly. Avoid parsing the jq expression because it can contain cmd
+                rem metacharacters such as pipes.
                 set "ENDPOINT=%~2"
-                set "JQ_FILTER="
-                set "IDX=2"
-                :api_parse
-                shift
-                if "%~2"=="" goto :api_dispatch
-                if "%~2"=="--jq" (
-                    set "JQ_FILTER=%~3"
-                    shift
-                    goto :api_parse
-                )
-                goto :api_parse
-
-                :api_dispatch
-                echo %ENDPOINT% | findstr /C:"/pulls/" >nul 2>&1
-                if not errorlevel 1 (
-                    if defined JQ_FILTER (
-                        echo abc123def456789012345678901234567890abcd
-                    ) else (
-                        echo {"head":{"sha":"abc123def456789012345678901234567890abcd"}}
-                    )
+                if "%ENDPOINT%"=="graphql" (
+                    echo abc123def456789012345678901234567890abcd
                     exit 0
                 )
-                echo %ENDPOINT% | findstr /C:"/actions/workflows/" >nul 2>&1
+                echo "%ENDPOINT%" | findstr /C:"/pulls/" >nul 2>&1
                 if not errorlevel 1 (
-                    if defined JQ_FILTER (
-                        echo 987654321
-                    ) else (
-                        echo {"workflow_runs":[{"id":987654321,"conclusion":"success"}]}
-                    )
+                    echo abc123def456789012345678901234567890abcd
+                    exit 0
+                )
+                echo "%ENDPOINT%" | findstr /C:"/actions/workflows/" >nul 2>&1
+                if not errorlevel 1 (
+                    echo 987654321
                     exit 0
                 )
                 echo {}
@@ -151,6 +136,9 @@ public sealed class TestEnvironment : IDisposable
                     if not exist "%DLDIR%" mkdir "%DLDIR%"
                     if defined MOCK_GH_DOWNLOAD_ARCHIVE_SOURCE (
                         copy /Y "%MOCK_GH_DOWNLOAD_ARCHIVE_SOURCE%" "%DLDIR%\" >nul
+                    ) else if defined MOCK_GH_DOWNLOAD_FILES (
+                        set "MOCK_GH_DOWNLOAD_DIR=%DLDIR%"
+                        powershell -NoLogo -NoProfile -Command "$downloadDir = $env:MOCK_GH_DOWNLOAD_DIR; $lines = $env:MOCK_GH_DOWNLOAD_FILES -split '\r?\n'; foreach ($line in $lines) { if (-not [string]::IsNullOrWhiteSpace($line)) { Set-Content -LiteralPath (Join-Path $downloadDir $line.Trim()) -Value 'fake-archive' } }"
                     ) else (
                         echo fake-archive> "%DLDIR%\fake-archive.tar.gz"
                     )

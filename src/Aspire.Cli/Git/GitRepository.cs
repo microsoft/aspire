@@ -34,7 +34,7 @@ internal sealed class GitRepository(CliExecutionContext executionContext, ILogge
             startInfo.ArgumentList.Add("--show-toplevel");
 
             using var process = new Process { StartInfo = startInfo };
-            using var activity = profilingTelemetry.StartGitCommand("rev-parse", startInfo.ArgumentList.Count, executionContext.WorkingDirectory);
+            using var activity = profilingTelemetry.StartGitCommand("rev-parse", startInfo.FileName, startInfo.ArgumentList, executionContext.WorkingDirectory);
 
             process.Start();
             activity.SetProcessId(process.Id);
@@ -117,7 +117,7 @@ internal sealed class GitRepository(CliExecutionContext executionContext, ILogge
             startInfo.ArgumentList.Add("-z");
 
             using var process = new Process { StartInfo = startInfo };
-            using var activity = profilingTelemetry.StartGitCommand("ls-files", startInfo.ArgumentList.Count, searchRoot);
+            using var activity = profilingTelemetry.StartGitCommand("ls-files", startInfo.FileName, startInfo.ArgumentList, searchRoot);
 
             process.Start();
             activity.SetProcessId(process.Id);

@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using Aspire.Cli.DotNet;
 using Aspire.Cli.Telemetry;
 using Microsoft.Extensions.Configuration;
 
@@ -42,6 +43,75 @@ public class ProfilingTelemetryTests
     }
 
     [Fact]
+    public void ProcessSpansUseConsistentExecutableAndArgumentTags()
+    {
+        var startedActivities = new List<Activity>();
+        using var listener = CreateProfilingActivityListener(startedActivities.Add);
+        using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
+            (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
+            (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1")));
+        var aspirePath = Path.Combine("tools", "aspire");
+        var npmPath = Path.Combine("node", "npm");
+        var workingDirectory = Directory.GetCurrentDirectory();
+
+        using (profilingTelemetry.StartDetachedSpawnChild(aspirePath, ["run", "--project", "AppHost"], childCommand: "run"))
+        {
+        }
+
+        using (profilingTelemetry.StartNpmCommand(npmPath, ["exec", "--", "tsx", "apphost.ts"], workingDirectory))
+        {
+        }
+
+        using (var dotnetActivity = profilingTelemetry.StartDotNetProcess("run", null, new DirectoryInfo(workingDirectory), new ProcessInvocationOptions()))
+        {
+            dotnetActivity.SetDotNetResolvedExecutable("dotnet", ["run", "--project", "AppHost"], msBuildServer: null);
+        }
+
+        using (profilingTelemetry.StartGitCommand("ls-files", "git", ["ls-files", "--cached"], new DirectoryInfo(workingDirectory)))
+        {
+        }
+
+        Assert.Collection(
+            startedActivities,
+            spawnActivity =>
+            {
+                Assert.Equal(ProfilingTelemetry.Activities.Process, spawnActivity.OperationName);
+                Assert.Equal("process aspire", spawnActivity.DisplayName);
+                Assert.Equal("aspire", spawnActivity.GetTagItem(TelemetryConstants.Tags.ProcessExecutableName));
+                Assert.Equal(aspirePath, spawnActivity.GetTagItem(TelemetryConstants.Tags.ProcessExecutablePath));
+                Assert.Equal(new[] { "run", "--project", "AppHost" }, Assert.IsType<string[]>(spawnActivity.GetTagItem(ProfilingTelemetry.Tags.ProcessCommandArgs)));
+                Assert.Equal(3, spawnActivity.GetTagItem(ProfilingTelemetry.Tags.ProcessCommandArgsCount));
+            },
+            npmActivity =>
+            {
+                Assert.Equal(ProfilingTelemetry.Activities.Process, npmActivity.OperationName);
+                Assert.Equal("process npm", npmActivity.DisplayName);
+                Assert.Equal("npm", npmActivity.GetTagItem(TelemetryConstants.Tags.ProcessExecutableName));
+                Assert.Equal(npmPath, npmActivity.GetTagItem(TelemetryConstants.Tags.ProcessExecutablePath));
+                Assert.Equal(new[] { "exec", "--", "tsx", "apphost.ts" }, Assert.IsType<string[]>(npmActivity.GetTagItem(ProfilingTelemetry.Tags.ProcessCommandArgs)));
+                Assert.Equal(4, npmActivity.GetTagItem(ProfilingTelemetry.Tags.ProcessCommandArgsCount));
+            },
+            dotnetActivity =>
+            {
+                Assert.Equal(ProfilingTelemetry.Activities.Process, dotnetActivity.OperationName);
+                Assert.Equal("process dotnet", dotnetActivity.DisplayName);
+                Assert.Equal("dotnet", dotnetActivity.GetTagItem(TelemetryConstants.Tags.ProcessExecutableName));
+                Assert.Equal("dotnet", dotnetActivity.GetTagItem(TelemetryConstants.Tags.ProcessExecutablePath));
+                Assert.Equal(new[] { "run", "--project", "AppHost" }, Assert.IsType<string[]>(dotnetActivity.GetTagItem(ProfilingTelemetry.Tags.ProcessCommandArgs)));
+                Assert.Equal(3, dotnetActivity.GetTagItem(ProfilingTelemetry.Tags.ProcessCommandArgsCount));
+            },
+            gitActivity =>
+            {
+                Assert.Equal(ProfilingTelemetry.Activities.Process, gitActivity.OperationName);
+                Assert.Equal("process git", gitActivity.DisplayName);
+                Assert.Equal("git", gitActivity.GetTagItem(TelemetryConstants.Tags.ProcessExecutableName));
+                Assert.Equal("git", gitActivity.GetTagItem(TelemetryConstants.Tags.ProcessExecutablePath));
+                Assert.Equal(new[] { "ls-files", "--cached" }, Assert.IsType<string[]>(gitActivity.GetTagItem(ProfilingTelemetry.Tags.ProcessCommandArgs)));
+                Assert.Equal(2, gitActivity.GetTagItem(ProfilingTelemetry.Tags.ProcessCommandArgsCount));
+            });
+    }
+
+    [Fact]
     public void ProfilingSpansReuseSessionFromAmbientActivityBaggage()
     {
         var startedActivities = new List<Activity>();
@@ -55,7 +125,7 @@ public class ProfilingTelemetryTests
 
         parentActivity.SetBaggage(ProfilingTelemetry.Baggage.SessionId, "session-1");
 
-        using (profilingTelemetry.StartDetachedSpawnChild("aspire", argsCount: 1, childCommand: "start"))
+        using (profilingTelemetry.StartDetachedSpawnChild("aspire", ["run"], childCommand: "start"))
         {
         }
 
@@ -87,7 +157,7 @@ public class ProfilingTelemetryTests
 
         using (diagnosticSource.StartActivity("diagnostic"))
         {
-            using (profilingTelemetry.StartDetachedSpawnChild("aspire", argsCount: 1, childCommand: "start"))
+            using (profilingTelemetry.StartDetachedSpawnChild("aspire", ["run"], childCommand: "start"))
             {
             }
         }
