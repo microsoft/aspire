@@ -211,6 +211,31 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain($"_{Environment.ProcessId}", fileName, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task WaitForAppHostReadyAsync_TreatsUnavailableReadinessAsReady()
+    {
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            WaitForAppHostReadyResponse = null
+        };
+
+        var ready = await AppHostLauncher.WaitForAppHostReadyAsync(connection, CancellationToken.None);
+
+        Assert.True(ready);
+    }
+
+    [Fact]
+    public async Task WaitForAppHostReadyAsync_PropagatesReadinessFailures()
+    {
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            WaitForAppHostReadyHandler = _ => throw new IOException("connection lost")
+        };
+
+        var exception = await Assert.ThrowsAsync<IOException>(() => AppHostLauncher.WaitForAppHostReadyAsync(connection, CancellationToken.None));
+        Assert.Equal("connection lost", exception.Message);
+    }
+
     private sealed class ProjectFileDoesNotExistLocator : Aspire.Cli.Projects.IProjectLocator
     {
         public Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, CancellationToken cancellationToken)

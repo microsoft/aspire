@@ -32,6 +32,7 @@ internal sealed class AppHostLauncher(
     AspireCliTelemetry telemetry,
     ProfilingTelemetry profilingTelemetry,
     FileLoggerProvider fileLoggerProvider,
+    ProcessShutdownService processShutdownService,
     ILogger<AppHostLauncher> logger,
     TimeProvider timeProvider)
 {
@@ -306,6 +307,7 @@ internal sealed class AppHostLauncher(
         var scanCount = 0;
         IAppHostAuxiliaryBackchannel? connection = null;
         DashboardUrlsState? dashboardUrls = null;
+        string? launchFailureMessage = null;
 
         try
         {
@@ -360,7 +362,24 @@ internal sealed class AppHostLauncher(
                     cancellationToken.ThrowIfCancellationRequested();
                     if (completedTask == readinessTask)
                     {
-                        if (await readinessTask.ConfigureAwait(false))
+                        bool appHostReady;
+                        try
+                        {
+                            appHostReady = await readinessTask.ConfigureAwait(false);
+                        }
+                        catch (Exception ex) when (ex is not OperationCanceledException)
+                        {
+                            launchFailureMessage = "Failed while waiting for AppHost startup readiness.";
+                            logger.LogDebug(ex, "Failed while waiting for AppHost startup readiness from auxiliary backchannel.");
+                            if (childProcess.HasExited)
+                            {
+                                return CreateChildExitedLaunchResult(childProcess, waitForBackchannelActivity, childStartedAt);
+                            }
+
+                            break;
+                        }
+
+                        if (appHostReady)
                         {
                             return new LaunchResult(childProcess, connection, dashboardUrls, false, 0, childStartedAt);
                         }
@@ -392,14 +411,23 @@ internal sealed class AppHostLauncher(
         }
         catch (OperationCanceledException)
         {
-            await ProcessSignaler.RequestGracefulShutdownThenForceKillAsync(childProcess.Id, childStartedAt, logger, CancellationToken.None).ConfigureAwait(false);
+            await RequestGracefulShutdownThenForceKillAsync(childProcess, childStartedAt).ConfigureAwait(false);
             throw;
         }
 
         waitForBackchannelActivity.SetBackchannelScanCount(scanCount);
-        waitForBackchannelActivity.SetError("Timed out waiting for AppHost startup readiness.");
-        await ProcessSignaler.RequestGracefulShutdownThenForceKillAsync(childProcess.Id, childStartedAt, logger, CancellationToken.None).ConfigureAwait(false);
+        waitForBackchannelActivity.SetError(launchFailureMessage ?? "Timed out waiting for AppHost startup readiness.");
+        await RequestGracefulShutdownThenForceKillAsync(childProcess, childStartedAt).ConfigureAwait(false);
         return new LaunchResult(childProcess, null, dashboardUrls, false, 0, childStartedAt);
+    }
+
+    private Task RequestGracefulShutdownThenForceKillAsync(Process childProcess, DateTimeOffset childStartedAt)
+    {
+        return processShutdownService.StopProcessTreeAsync(
+            childProcess.Id,
+            childStartedAt,
+            includeStartTimeForDcp: true,
+            CancellationToken.None);
     }
 
     private LaunchResult CreateChildExitedLaunchResult(Process childProcess, ProfilingTelemetry.ActivityScope waitForBackchannelActivity, DateTimeOffset childStartedAt)
@@ -419,18 +447,10 @@ internal sealed class AppHostLauncher(
         return new LaunchResult(childProcess, null, null, true, exitCode, ChildStartedAt: childStartedAt);
     }
 
-    private async Task<bool> WaitForAppHostReadyAsync(IAppHostAuxiliaryBackchannel connection, CancellationToken cancellationToken)
+    internal static async Task<bool> WaitForAppHostReadyAsync(IAppHostAuxiliaryBackchannel connection, CancellationToken cancellationToken)
     {
-        try
-        {
-            var startupState = await connection.WaitForAppHostReadyAsync(cancellationToken).ConfigureAwait(false);
-            return startupState?.IsReady ?? true;
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            logger.LogDebug(ex, "Failed to wait for AppHost startup readiness from auxiliary backchannel. Treating the AppHost as ready for compatibility.");
-            return true;
-        }
+        var startupState = await connection.WaitForAppHostReadyAsync(cancellationToken).ConfigureAwait(false);
+        return startupState?.IsReady ?? true;
     }
 
     private static void ObserveFaults(Task task)

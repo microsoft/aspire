@@ -17,6 +17,7 @@ using Aspire.Cli.Layout;
 using Aspire.Cli.Mcp;
 using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.NuGet;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Secrets;
@@ -151,6 +152,7 @@ internal static class CliTestHelper
         // This ensures backward compatibility: no layout found = use legacy SDK mode
         services.AddSingleton(options.LayoutDiscoveryFactory);
         services.AddTransient<LayoutProcessRunner>();
+        services.AddTransient<ProcessShutdownService>();
         services.AddSingleton(options.BundlePayloadProviderFactory);
         services.AddSingleton(options.BundleServiceFactory);
         services.AddSingleton<BundleNuGetService>();

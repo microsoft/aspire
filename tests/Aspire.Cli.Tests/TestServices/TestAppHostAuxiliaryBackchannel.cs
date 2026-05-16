@@ -39,6 +39,7 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
     public GetAppHostInfoResponse? AppHostInfoResponse { get; set; }
 
     public WaitForAppHostReadyResponse? WaitForAppHostReadyResponse { get; set; }
+    public Func<CancellationToken, Task<WaitForAppHostReadyResponse?>>? WaitForAppHostReadyHandler { get; set; }
 
     /// <summary>
     /// Gets or sets the log lines to return from GetResourceLogsAsync.
@@ -116,6 +117,11 @@ internal sealed class TestAppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackcha
 
     public Task<WaitForAppHostReadyResponse?> WaitForAppHostReadyAsync(CancellationToken cancellationToken = default)
     {
+        if (WaitForAppHostReadyHandler is not null)
+        {
+            return WaitForAppHostReadyHandler(cancellationToken);
+        }
+
         return Task.FromResult(WaitForAppHostReadyResponse);
     }
 
