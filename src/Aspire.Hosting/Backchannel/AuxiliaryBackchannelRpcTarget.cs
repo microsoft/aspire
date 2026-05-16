@@ -69,16 +69,11 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         return new GetAppHostInfoResponse
         {
             Pid = legacyInfo.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            AspireHostVersion = GetAspireHostVersion(),
+            AspireHostVersion = AssemblyVersionHelper.GetDisplayVersion(typeof(AuxiliaryBackchannelRpcTarget).Assembly) ?? "unknown",
             AppHostPath = legacyInfo.AppHostPath,
             CliProcessId = legacyInfo.CliProcessId,
             StartedAt = legacyInfo.StartedAt
         };
-    }
-
-    private static string GetAspireHostVersion()
-    {
-        return AssemblyVersionHelper.GetDisplayVersion(typeof(AuxiliaryBackchannelRpcTarget).Assembly) ?? "unknown";
     }
 
     /// <summary>
