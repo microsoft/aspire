@@ -4,7 +4,6 @@
 using System.CommandLine;
 using System.Diagnostics;
 using System.Globalization;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using Aspire.Cli.Acquisition;
@@ -720,24 +719,11 @@ public class Program
 
     public static async Task<int> Main(string[] args)
     {
-        // Setup handling of CTRL-C as early as possible so that if
-        // we get a CTRL-C anywhere that is not handled by Spectre Console
+        // Setup handling of CTRL-C and SIGTERM as early as possible so that if
+        // we get a signal anywhere that is not handled by Spectre Console
         // already that we know to trigger cancellation.
-        var cts = new CancellationTokenSource();
-        ConsoleCancelEventHandler cancelKeyPressHandler = (sender, eventArgs) =>
-        {
-            TryCancel(cts);
-            eventArgs.Cancel = true;
-        };
-        Console.CancelKeyPress += cancelKeyPressHandler;
-
-        var sigTermRegistration = OperatingSystem.IsWindows()
-            ? null
-            : PosixSignalRegistration.Create(PosixSignal.SIGTERM, context =>
-            {
-                TryCancel(cts);
-                context.Cancel = true;
-            });
+        // Using declaration ensures cleanup even if BuildApplicationAsync/StartAsync fails early.
+        using var cancellationManager = new ConsoleCancellationManager();
 
         Console.OutputEncoding = Encoding.UTF8;
 
@@ -781,7 +767,7 @@ public class Program
         app.Services.GetRequiredService<IFeatures>().LogFeatureState();
 
         // Display first run experience if this is the first time the CLI is run on this machine
-        await DisplayFirstTimeUseNoticeIfNeededAsync(app.Services, args, cts.Token);
+        await DisplayFirstTimeUseNoticeIfNeededAsync(app.Services, args, cancellationManager.Token);
 
         var rootCommand = app.Services.GetRequiredService<RootCommand>();
         var invokeConfig = new InvocationConfiguration()
@@ -815,7 +801,7 @@ public class Program
 
             mainActivity?.SetTag(TelemetryConstants.Tags.CommandName, commandName);
 
-            var exitCode = await parseResult.InvokeAsync(invokeConfig, cts.Token);
+            var exitCode = await parseResult.InvokeAsync(invokeConfig, cancellationManager.Token);
 
             // Log exit code for debugging
             logger.LogInformation("Exit code: {ExitCode}", exitCode);
@@ -832,9 +818,9 @@ public class Program
             // Allows logging of exceptions to telemetry.
 
             // Don't log or display cancellation exceptions.
-            // Check both Ctrl+C cancellation (cts.IsCancellationRequested) and
+            // Check both Ctrl+C cancellation (cancellationManager.IsCancellationRequested) and
             // extension prompt cancellation (ExtensionOperationCanceledException).
-            if (!(ex is OperationCanceledException && cts.IsCancellationRequested) && ex is not ExtensionOperationCanceledException)
+            if (!(ex is OperationCanceledException && cancellationManager.IsCancellationRequested) && ex is not ExtensionOperationCanceledException)
             {
                 logger.LogError(ex, "An unexpected error occurred.");
 
@@ -859,22 +845,6 @@ public class Program
 
             await app.StopAsync().ConfigureAwait(false);
             await shutdownTelemetryTask;
-
-            Console.CancelKeyPress -= cancelKeyPressHandler;
-            sigTermRegistration?.Dispose();
-            cts.Dispose();
-        }
-
-        static void TryCancel(CancellationTokenSource source)
-        {
-            try
-            {
-                source.Cancel();
-            }
-            catch (ObjectDisposedException)
-            {
-                // A signal can race with process shutdown after cancellation resources are disposed.
-            }
         }
     }
 
