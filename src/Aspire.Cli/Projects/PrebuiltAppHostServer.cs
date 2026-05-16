@@ -237,7 +237,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
 
         var useExactPackageVersions = !string.IsNullOrWhiteSpace(packageSourceOverride);
         var packages = packageRefs
-            .Select(r => (r.Name, Version: GetRestoreVersion(r.Version!, useExactPackageVersions)))
+            .Select(r => (r.Name, Version: GetRestoreVersion(r.Name, r.Version!, useExactPackageVersions)))
             .ToList();
         using var temporaryNuGetConfig = await TryCreateTemporaryNuGetConfigAsync(requestedChannel, packageSourceOverride, cancellationToken);
         var sources = await GetNuGetSourcesAsync(requestedChannel, packageSourceOverride, cancellationToken);
@@ -267,13 +267,17 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         var restoreDir = Path.Combine(_workingDirectory, "integration-restore");
         Directory.CreateDirectory(restoreDir);
 
-        var channelSources = await GetNuGetSourcesAsync(requestedChannel, packageSourceOverride, cancellationToken);
+        using var temporaryNuGetConfig = await TryCreateTemporaryNuGetConfigAsync(requestedChannel, packageSourceOverride, cancellationToken);
+        var channelSources = temporaryNuGetConfig is null
+            ? await GetNuGetSourcesAsync(requestedChannel, packageSourceOverride, cancellationToken)
+            : null;
         var projectContent = GenerateIntegrationProjectFile(
             packageRefs,
             projectRefs,
             restoreDir,
             channelSources,
-            useExactPackageVersions: !string.IsNullOrWhiteSpace(packageSourceOverride));
+            useExactPackageVersions: !string.IsNullOrWhiteSpace(packageSourceOverride),
+            restoreConfigFile: temporaryNuGetConfig?.ConfigFile.FullName);
         var projectFilePath = Path.Combine(restoreDir, IntegrationProjectFileName);
         await File.WriteAllTextAsync(projectFilePath, projectContent, cancellationToken);
 
@@ -369,7 +373,8 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         List<IntegrationReference> projectRefs,
         string restoreDir,
         IEnumerable<string>? additionalSources = null,
-        bool useExactPackageVersions = false)
+        bool useExactPackageVersions = false,
+        string? restoreConfigFile = null)
     {
         var propertyGroup = new XElement("PropertyGroup",
             new XElement("TargetFramework", DotNetBasedAppHostServerProject.TargetFramework),
@@ -383,8 +388,12 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             new XElement("AspireClosureTargetsFile", Path.Combine(restoreDir, ClosureTargetsFileName)),
             new XElement("AspireProjectRefAssemblyNamesFile", Path.Combine(restoreDir, ProjectRefAssemblyNamesFileName)));
 
-        // Add channel sources without replacing the user's nuget.config
-        if (additionalSources is not null)
+        if (!string.IsNullOrWhiteSpace(restoreConfigFile))
+        {
+            propertyGroup.Add(new XElement("RestoreConfigFile", restoreConfigFile));
+        }
+        // Add channel sources without replacing the user's nuget.config.
+        else if (additionalSources is not null)
         {
             var sourceList = string.Join(";", additionalSources);
             if (sourceList.Length > 0)
@@ -409,7 +418,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
                     }
                     return new XElement("PackageReference",
                         new XAttribute("Include", p.Name),
-                        new XAttribute("Version", GetRestoreVersion(p.Version, useExactPackageVersions)));
+                        new XAttribute("Version", GetRestoreVersion(p.Name, p.Version, useExactPackageVersions)));
                 })));
         }
 
@@ -601,14 +610,19 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         return channels.Where(c => c.Type == PackageChannelType.Explicit).ToArray();
     }
 
-    private static string GetRestoreVersion(string version, bool useExactPackageVersions)
+    private static string GetRestoreVersion(string packageName, string version, bool useExactPackageVersions)
     {
-        if (!useExactPackageVersions || version.Length == 0 || version[0] is '[' or '(')
+        if (!ShouldUseExactPackageVersion(packageName, useExactPackageVersions) || version.Length == 0 || version[0] is '[' or '(')
         {
             return version;
         }
 
         return $"[{version}]";
+    }
+
+    private static bool ShouldUseExactPackageVersion(string packageName, bool useExactPackageVersions)
+    {
+        return useExactPackageVersions && packageName.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <inheritdoc />
