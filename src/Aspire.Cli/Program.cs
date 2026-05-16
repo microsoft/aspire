@@ -53,7 +53,7 @@ namespace Aspire.Cli;
 
 public class Program
 {
-    internal const string RootLoggerName = "CLI";
+    internal const string RootLoggerName = "Aspire.Cli";
 
     private static string GetUsersAspirePath()
     {
