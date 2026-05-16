@@ -191,6 +191,16 @@ jobs:
             yq -p xml -o json '.' trx_files/*.trx \
               | jq -s '
                   def attr(o; k): o["+@" + k] // o["@" + k];
+                  # Best-effort: also key by the bare method name (with theory
+                  # parameter data stripped) so a .cast file named after the
+                  # CallerMemberName matches a TRX entry like
+                  # "Namespace.Class.Method(toolchain: "pnpm")".
+                  def bare_method(name):
+                    (name | split(".") | last) | sub("\\(.*$"; "");
+                  def fqn_no_params(name):
+                    name | sub("\\(.*$"; "");
+                  def merge(map; key; outcome):
+                    if map[key] == "Failed" then map else map + {(key): outcome} end;
                   reduce (
                     .[]
                     | .TestRun.Results.UnitTestResult
@@ -200,10 +210,9 @@ jobs:
                     attr($r; "outcome") as $outcome |
                     if $name == null or $outcome == null then .
                     else
-                      ($name | split(".") | last) as $method |
-                      # Prefer "Failed" over any other outcome
-                      (if .[$method] == "Failed" then . else .[$method] = $outcome end)
-                      | (if .[$name] == "Failed" then . else .[$name] = $outcome end)
+                      merge(.; bare_method($name); $outcome)
+                      | merge(.; fqn_no_params($name); $outcome)
+                      | merge(.; $name; $outcome)
                     end
                   )
                 ' > test_outcomes.json
