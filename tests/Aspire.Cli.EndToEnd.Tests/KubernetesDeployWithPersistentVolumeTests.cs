@@ -78,8 +78,14 @@ public sealed class KubernetesDeployWithPersistentVolumeTests(ITestOutputHelper 
                     .WithCapacity("1Gi")
                     .WithAccessMode(PersistentVolumeAccessMode.ReadWriteOnce);
 
+                // Pass an explicit volume name to WithDataVolume so the auto-generated
+                // "{AppHost}.{hash}-pg-data" form is not used. The auto-generated name
+                // contains a dot ('.'), which the Kubernetes publisher currently
+                // propagates verbatim into the StatefulSet podSpec volumes[].name slot;
+                // K8s rejects dots there ("DNS_LABEL"). Tracked as a follow-up bug
+                // against the WithPersistentVolume name-match binding.
                 var postgres = builder.AddPostgres("pg")
-                    .WithDataVolume()
+                    .WithDataVolume("pg-data")
                     .WithPersistentVolume(pgData);
 
                 builder.AddProject<Projects.{{ProjectName}}_ApiService>("server")
@@ -259,14 +265,20 @@ public sealed class KubernetesDeployWithPersistentVolumeTests(ITestOutputHelper 
         // Retry up to 30 times (~150s) — Postgres needs a few seconds after pod
         // restart for the listener to come back, and the server's connection pool
         // takes a beat to retry.
+        //
+        // Use a sentinel that the shell only produces at runtime via command
+        // substitution: the typed text contains "DUR$(echo AB)_OK_PASS" while
+        // the executed echo emits "DURAB_OK_PASS". This prevents WaitUntilTextAsync
+        // from matching the typed echo of the for-loop itself (which would race
+        // ahead of the curl loop actually completing).
         await auto.TypeAsync(
             $"for i in $(seq 1 30); do " +
             $"result=$(curl -s -w '\\nHTTP_%{{http_code}}' '{url}' 2>/dev/null); " +
-            $"if echo \"$result\" | grep -q '{expectedToken}'; then echo \"VERIFY_OK: $result\"; break; fi; " +
+            $"if echo \"$result\" | grep -q '{expectedToken}'; then echo \"DUR$(echo AB)_OK_PASS: $result\"; break; fi; " +
             $"echo \"Attempt $i: got $result, retrying...\"; sleep 5; done");
         await auto.EnterAsync();
 
-        await auto.WaitUntilTextAsync("VERIFY_OK", timeout: TimeSpan.FromMinutes(4));
+        await auto.WaitUntilTextAsync("DURAB_OK_PASS", timeout: TimeSpan.FromMinutes(4));
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
     }
 
