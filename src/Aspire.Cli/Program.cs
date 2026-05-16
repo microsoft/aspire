@@ -723,17 +723,19 @@ public class Program
         // Setup handling of CTRL-C as early as possible so that if
         // we get a CTRL-C anywhere that is not handled by Spectre Console
         // already that we know to trigger cancellation.
-        using var cts = new CancellationTokenSource();
-        Console.CancelKeyPress += (sender, eventArgs) =>
+        var cts = new CancellationTokenSource();
+        ConsoleCancelEventHandler cancelKeyPressHandler = (sender, eventArgs) =>
         {
-            cts.Cancel();
+            TryCancel(cts);
             eventArgs.Cancel = true;
         };
-        using var sigTermRegistration = OperatingSystem.IsWindows()
+        Console.CancelKeyPress += cancelKeyPressHandler;
+
+        var sigTermRegistration = OperatingSystem.IsWindows()
             ? null
             : PosixSignalRegistration.Create(PosixSignal.SIGTERM, context =>
             {
-                cts.Cancel();
+                TryCancel(cts);
                 context.Cancel = true;
             });
 
@@ -857,6 +859,22 @@ public class Program
 
             await app.StopAsync().ConfigureAwait(false);
             await shutdownTelemetryTask;
+
+            Console.CancelKeyPress -= cancelKeyPressHandler;
+            sigTermRegistration?.Dispose();
+            cts.Dispose();
+        }
+
+        static void TryCancel(CancellationTokenSource source)
+        {
+            try
+            {
+                source.Cancel();
+            }
+            catch (ObjectDisposedException)
+            {
+                // A signal can race with process shutdown after cancellation resources are disposed.
+            }
         }
     }
 
