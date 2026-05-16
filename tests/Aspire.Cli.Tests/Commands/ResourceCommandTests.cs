@@ -1991,6 +1991,48 @@ public class ResourceCommandTests(ITestOutputHelper outputHelper)
         await Verify(helpWriter.ToString(), extension: "txt");
     }
 
+    //* Reproduces https://github.com/dotnet/aspire/issues/16907
+    [Fact]
+    public async Task ResourceCommand_ReturnsInvalidCommandForInvalidDependentChoiceCommandOption()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+
+        var backchannel = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true },
+            ResourceSnapshots =
+            [
+                CreateResourceSnapshot(
+                    "web-browser-automation",
+                    CreateCommand(
+                        "configure",
+                        CreateArgument(
+                            "region",
+                            inputType: "Choice",
+                            options: new Dictionary<string, string?>
+                            {
+                                ["us"] = "United States",
+                                ["eu"] = "Europe"
+                            }),
+                        CreateArgument(
+                            "zone",
+                            inputType: "Choice",
+                            options: null)))
+            ]
+        };
+        await using var provider = CreateServiceProvider(workspace, outputHelper, backchannel, interactionService);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse(
+            """resource web-browser-automation configure --region us --zone definitely-not-a-zone""");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+        Assert.Equal(0, backchannel.ExecuteResourceCommandCallCount);
+    }
+
     private static void AssertJsonObject(JsonNode? actual, params (string Name, string? Value)[] expected)
     {
         Assert.NotNull(actual);
