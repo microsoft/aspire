@@ -1733,6 +1733,83 @@ public class DcpExecutorTests
     }
 
     [Fact]
+    public async Task ProjectLaunchConfiguration_PopulatesDefaultVSCodeServerReadyAction_InDebugSession()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddProject<Projects.ServiceA>("proj")
+            .WithVSCodeServerReadyAction();
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var kubernetes = new TestKubernetesService();
+        var configBuilder = new ConfigurationBuilder();
+        configBuilder.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            [KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = "http://localhost",
+            ["AppHost:BrowserToken"] = "token",
+            ["AppHost:OtlpApiKey"] = "otlp-key",
+            [DcpExecutor.DebugSessionPortVar] = "12345"
+        });
+        var configuration = configBuilder.Build();
+
+        var executor = CreateAppExecutor(model, configuration: configuration, kubernetesService: kubernetes);
+
+        await executor.RunApplicationAsync();
+
+        var exe = Assert.Single(kubernetes.CreatedResources.OfType<Executable>());
+        Assert.True(exe.TryGetProjectLaunchConfiguration(out var plc));
+        Assert.NotNull(plc);
+        Assert.NotNull(plc!.ServerReadyAction);
+        Assert.True(plc.ServerReadyAction!.Action.HasValue);
+        Assert.Equal(ServerReadyActionAction.OpenExternally, plc.ServerReadyAction.Action.Value);
+        Assert.Equal(@"\bNow listening on:\s+(https?://\S+)", plc.ServerReadyAction.Pattern);
+        Assert.Equal("%s", plc.ServerReadyAction.UriFormat);
+    }
+
+    [Fact]
+    public async Task ProjectLaunchConfiguration_PopulatesCustomVSCodeServerReadyAction_InDebugSession()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddProject<Projects.ServiceA>("proj")
+            .WithVSCodeServerReadyAction(new VSCodeServerReadyAction
+            {
+                Action = "startDebugging",
+                Pattern = "listening on port ([0-9]+)",
+                Name = "FollowUp",
+                KillOnServerStop = true
+            });
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var kubernetes = new TestKubernetesService();
+        var configBuilder = new ConfigurationBuilder();
+        configBuilder.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            [KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = "http://localhost",
+            ["AppHost:BrowserToken"] = "token",
+            ["AppHost:OtlpApiKey"] = "otlp-key",
+            [DcpExecutor.DebugSessionPortVar] = "12345"
+        });
+        var configuration = configBuilder.Build();
+
+        var executor = CreateAppExecutor(model, configuration: configuration, kubernetesService: kubernetes);
+
+        await executor.RunApplicationAsync();
+
+        var exe = Assert.Single(kubernetes.CreatedResources.OfType<Executable>());
+        Assert.True(exe.TryGetProjectLaunchConfiguration(out var plc));
+        Assert.NotNull(plc);
+        Assert.NotNull(plc!.ServerReadyAction);
+        Assert.True(plc.ServerReadyAction!.Action.HasValue);
+        Assert.Equal(ServerReadyActionAction.StartDebugging, plc.ServerReadyAction.Action.Value);
+        Assert.Equal("listening on port ([0-9]+)", plc.ServerReadyAction.Pattern);
+        Assert.Equal("FollowUp", plc.ServerReadyAction.Name);
+        Assert.True(plc.ServerReadyAction.KillOnServerStop);
+    }
+
+    [Fact]
     public async Task ProjectLaunchConfiguration_Disabled_WhenLaunchProfileExcluded_InDebugSession()
     {
         // Arrange
