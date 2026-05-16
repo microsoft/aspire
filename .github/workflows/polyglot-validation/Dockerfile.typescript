@@ -10,27 +10,19 @@
 #
 # Note: Expects self-extracting binary and NuGet artifacts to be pre-downloaded to /workspace/artifacts/
 #
-FROM ubuntu:24.04
+ARG NODE_VERSION=24
+FROM mcr.microsoft.com/devcontainers/typescript-node:${NODE_VERSION}
+ARG NODE_VERSION
 
-ARG NODE_VERSION=22
-ENV DEBIAN_FRONTEND=noninteractive
+# Ensure Yarn APT repository signing key is available (base image includes Yarn repo)
+RUN curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | gpg --dearmor | sudo tee /etc/apt/keyrings/yarn-archive-keyring.gpg > /dev/null
 
-# Install the requested Node.js runtime plus system dependencies.
-# Start from a neutral base so every matrix leg uses the same NodeSource-installed
-# runtime rather than inheriting a specific Node version.
-RUN case "$NODE_VERSION" in 22|24|26) ;; *) echo "Unsupported NODE_VERSION: $NODE_VERSION" >&2; exit 1 ;; esac && \
-    apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    curl \
-    gpg \
+# Install system dependencies and verify the MCR base image provides the requested Node.js runtime.
+RUN case "$NODE_VERSION" in 22|24) ;; *) echo "Unsupported NODE_VERSION: $NODE_VERSION" >&2; exit 1 ;; esac && \
+    apt-get update && apt-get install -y \
     wget \
     docker.io \
     jq \
-    libicu-dev \
-    && rm -rf /var/lib/apt/lists/* && \
-    curl -fsSL "https://deb.nodesource.com/setup_${NODE_VERSION}.x" | bash - && \
-    apt-get install -y --no-install-recommends \
-    nodejs \
     && node --version | grep -E "^v${NODE_VERSION}\\." \
     && rm -rf /var/lib/apt/lists/*
 

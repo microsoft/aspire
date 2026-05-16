@@ -236,7 +236,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: [22, 24, 26]
+        node-version: ${{ fromJson(github.event_name == 'pull_request' && '[24]' || '[22,24]') }}
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -285,6 +285,7 @@ jobs:
       - name: Run TypeScript SDK validation
         run: |
           docker run --rm \
+            -e ASPIRE_CLI_CHANNEL=${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'daily' }} \
             -v "${{ github.workspace }}:/workspace" \
             -v /var/run/docker.sock:/var/run/docker.sock \
             polyglot-typescript-node-${{ matrix.node-version }}

@@ -44,13 +44,8 @@ fi
 
 # Auto-detect PR identity from .nupkg filenames (e.g. "Aspire.Hosting.AppHost.13.4.0-pr.16820.g3703c5c4.nupkg")
 # so PR-built packages land in the same hive the CLI's CliExecutionContext.Channel
-# resolves to ("pr-<N>").
-#
-# Polyglot validation is PR-only (gated in .github/workflows/tests.yml on
-# github.event_name == 'pull_request'). On non-PR builds the CLI archive is baked
-# with channel=daily/staging, the .nupkg filenames lack the -pr.<N>.gSHA suffix, and
-# this script has no way to derive a hive label that the CLI will look in — so we
-# fail loud instead of silently writing to hives/local/ where the CLI won't read.
+# resolves to ("pr-<N>"). Main branch validation passes ASPIRE_CLI_CHANNEL=daily
+# because main-built packages do not carry a PR suffix.
 #
 # Anchor on Aspire.Hosting.AppHost because:
 #   - It is the core MSBuild SDK package every AppHost references; removing/renaming it
@@ -73,11 +68,12 @@ fi
 SUFFIX=$(basename "$SAMPLE_NUPKG" | sed -nE 's/.*-(pr\.[0-9]+\.[0-9a-g]+).*\.nupkg$/\1/p')
 if [[ "$SUFFIX" =~ ^pr\.([0-9]+)\.[0-9a-g]+$ ]]; then
     HIVE_LABEL="pr-${BASH_REMATCH[1]}"
+elif [[ "${ASPIRE_CLI_CHANNEL:-}" =~ ^(daily|staging|local)$ ]]; then
+    HIVE_LABEL="$ASPIRE_CLI_CHANNEL"
 else
     echo "ERROR: Could not derive PR identity from $(basename "$SAMPLE_NUPKG")." >&2
-    echo "       Polyglot validation is PR-only and expects a '-pr.<N>.g<sha>' suffix on the built nupkgs." >&2
-    echo "       If you are seeing this on a non-PR build, the polyglot_validation job in tests.yml is" >&2
-    echo "       running outside its 'github.event_name == pull_request' guard." >&2
+    echo "       PR validation expects a '-pr.<N>.g<sha>' suffix on the built nupkgs." >&2
+    echo "       Non-PR validation must set ASPIRE_CLI_CHANNEL to daily, staging, or local." >&2
     exit 1
 fi
 HIVE_DIR="$ASPIRE_HOME/hives/$HIVE_LABEL/packages"
