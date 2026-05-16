@@ -112,18 +112,6 @@ The `WithReference` method configures a connection in the `MyService` project na
 builder.AddRabbitMQClient("messaging");
 ```
 
-## Queue declaration requirements (RabbitMQ 4.3+)
-
-Starting with RabbitMQ 4.3 — the default image used by the Aspire `AddRabbitMQ` hosting integration — the deprecated `transient_nonexcl_queues` feature is disabled by default. Calls like `channel.QueueDeclareAsync(name, durable: false, exclusive: false, ...)` are rejected by the broker with AMQP error 541 (`INTERNAL_ERROR - Feature 'transient_nonexcl_queues' is deprecated.`).
-
-Declare queues as one of the following instead:
-
-- **Durable** (`durable: true`) — queue and its definition survive broker restarts.
-- **Transient exclusive** (`exclusive: true`) — queue is auto-deleted when the declaring connection closes; suited to per-connection ephemeral queues.
-- **Durable with a queue TTL** — for short-lived queues whose definition survives restart but whose contents expire.
-
-See the [RabbitMQ 4.3.0 release notes](https://github.com/rabbitmq/rabbitmq-server/releases/tag/v4.3.0) for upstream guidance.
-
 ## Additional documentation
 
 * https://rabbitmq.github.io/rabbitmq-dotnet-client/
