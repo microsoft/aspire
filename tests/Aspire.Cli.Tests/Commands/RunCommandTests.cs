@@ -1944,6 +1944,43 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void DetachedChildEnvironment_IncludesProfilingTelemetryContextFromActiveProfilingSpan()
+    {
+        using var listener = CreateActivityListener(ProfilingTelemetry.ActivitySourceName);
+        using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
+            (ProfilingTelemetry.EnvironmentVariables.Enabled, "true")));
+
+        using var activity = profilingTelemetry.StartDetachedSpawnChild("aspire", ["run"], childCommand: "run");
+        Assert.True(activity.IsRunning);
+
+        var environment = AppHostLauncher.CreateDetachedChildEnvironment(Activity.Current);
+
+        Assert.Equal("true", environment[KnownConfigNames.CliRunDetached]);
+        Assert.Equal("true", environment[ProfilingTelemetry.EnvironmentVariables.Enabled]);
+        var sessionId = environment[ProfilingTelemetry.EnvironmentVariables.SessionId];
+        Assert.False(string.IsNullOrWhiteSpace(sessionId));
+        Assert.Equal(sessionId, environment[KnownConfigNames.Legacy.StartupOperationId]);
+        Assert.Equal(Activity.Current?.Id, environment[ProfilingTelemetry.EnvironmentVariables.TraceParent]);
+    }
+
+    [Fact]
+    public void DetachedChildEnvironment_DoesNotEnableProfilingForNonProfilingActivity()
+    {
+        using var listener = CreateActivityListener("test-detached-child-environment");
+        using var source = new ActivitySource("test-detached-child-environment");
+        using var activity = source.StartActivity("parent");
+        Assert.NotNull(activity);
+
+        var environment = AppHostLauncher.CreateDetachedChildEnvironment(activity);
+
+        Assert.Equal("true", environment[KnownConfigNames.CliRunDetached]);
+        Assert.False(environment.ContainsKey(ProfilingTelemetry.EnvironmentVariables.Enabled));
+        Assert.False(environment.ContainsKey(ProfilingTelemetry.EnvironmentVariables.SessionId));
+        Assert.False(environment.ContainsKey(ProfilingTelemetry.EnvironmentVariables.TraceParent));
+        Assert.False(environment.ContainsKey(ProfilingTelemetry.EnvironmentVariables.TraceState));
+    }
+
+    [Fact]
     public void DetachedChildEnvironment_AllowsMissingProfilingTelemetryContext()
     {
         var environment = AppHostLauncher.CreateDetachedChildEnvironment(null);
@@ -2016,5 +2053,12 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         };
         ActivitySource.AddActivityListener(listener);
         return listener;
+    }
+
+    private static IConfiguration CreateConfiguration(params (string Key, string? Value)[] values)
+    {
+        return new ConfigurationBuilder()
+            .AddInMemoryCollection(values.Select(value => new KeyValuePair<string, string?>(value.Key, value.Value)))
+            .Build();
     }
 }

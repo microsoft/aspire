@@ -71,6 +71,7 @@ Before starting a release:
    | `SkipHomebrewPublish` | Set `true` if re-running after Homebrew success | `false` |
    | `SkipGitHubTasks` | Set `true` to skip dispatching the GH workflow | `false` |
    | `SkipReleaseAssets` | Set `true` to skip uploading aspire-cli-* assets to the GitHub release | `false` |
+   | `GitHubTasksWorkflowRef` | Ref to load `release-github-tasks.yml` from when dispatching. Only affects the workflow source — the release branch/commit are passed via inputs. Override only when testing pipeline changes on a topic branch. | `main` |
 
 5. Click "Run" and monitor the pipeline. The final stage (`GitHubTasks`)
    dispatches `release-github-tasks.yml`, waits for it to complete, and

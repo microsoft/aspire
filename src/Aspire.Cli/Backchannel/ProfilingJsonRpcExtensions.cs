@@ -64,7 +64,7 @@ internal static class ProfilingJsonRpcExtensions
         }
     }
 
-    public static async Task<IAsyncEnumerable<T>?> InvokeStreamingWithProfilingAsync<T>(
+    public static async Task<IAsyncEnumerable<T>> InvokeStreamingWithProfilingAsync<T>(
         this JsonRpc rpc,
         ProfilingTelemetry? profilingTelemetry,
         string connectionName,
@@ -82,11 +82,6 @@ internal static class ProfilingJsonRpcExtensions
         {
             var response = await rpc.InvokeWithCancellationAsync<IAsyncEnumerable<T>>(methodName, arguments, cancellationToken).ConfigureAwait(false);
             activity.AddJsonRpcResponseReceivedEvent();
-            if (response is null)
-            {
-                activity.Dispose();
-                return null;
-            }
 
             return EnumerateWithProfiling(response, activity, cancellationToken);
         }

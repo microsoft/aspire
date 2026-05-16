@@ -11,8 +11,20 @@ namespace Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes;
 public static class TestExtensions
 {
     /// <summary>
-    /// Adds a test Redis resource.
+    /// Adds a test Redis resource from XML documentation.
     /// </summary>
+    /// <ats-summary>Adds a test Redis resource from ATS documentation.</ats-summary>
+    /// <param name="builder">The distributed application builder.</param>
+    /// <param name="name">The resource name.</param>
+    /// <ats-param name="name">The ATS resource name.</ats-param>
+    /// <param name="port">The optional Redis port.</param>
+    /// <ats-param name="port"></ats-param>
+    /// <returns>The test Redis resource builder.</returns>
+    /// <ats-returns>The ATS test Redis resource builder.</ats-returns>
+    /// <remarks>
+    /// Uses XML documentation instead of the attribute description when both are present.
+    /// </remarks>
+    /// <ats-remarks></ats-remarks>
     [AspireExport(Description = "Adds a test Redis resource")]
     public static IResourceBuilder<TestRedisResource> AddTestRedis(
         this IDistributedApplicationBuilder builder,
