@@ -37,7 +37,7 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
 
         // Cannot use HiveDirectory.Exists here because it blows up on the
         // intermediate directory structure which may not exist in some
-        // contexts (e.g. in our Codespace where we have the CLI on the
+        // contexts (e.g. in our Codespace where we have the CLI on the 
         // path but not in the $HOME/.aspire/bin folder).
         if (executionContext.HivesDirectory.Exists)
         {
