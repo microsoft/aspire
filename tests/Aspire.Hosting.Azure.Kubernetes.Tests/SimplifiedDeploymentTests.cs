@@ -376,27 +376,98 @@ public class SimplifiedDeploymentTests
     }
 
     [Fact]
-    public async Task WithSimplifiedDeployment_HostnameParameter_TakesPrecedenceOverString()
+    public void WithSimplifiedDeployment_HostnameAndHostnameParameter_BothSet_Throws()
     {
         using var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish);
 
         var acmeEmail = builder.AddParameter("acme-email", "ops@contoso.com");
-        var hostnameParam = builder.AddParameter("hostname", "param-wins.contoso.com");
-        builder.AddAzureKubernetesEnvironment("aks").WithSimplifiedDeployment(acmeEmail, o =>
+        var hostnameParam = builder.AddParameter("hostname", "param.contoso.com");
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+
+        // Both set => ambiguous intent. Fail eagerly with a message that names both
+        // properties so the user can see which pair conflicts without diffing options.
+        var ex = Assert.Throws<ArgumentException>(() => aks.WithSimplifiedDeployment(acmeEmail, o =>
         {
-            // Both supplied — parameter overload wins so per-environment overrides via
-            // `aspire deploy -p hostname=...` aren't shadowed by a hardcoded default.
-            o.Hostname = "string-loses.contoso.com";
+            o.Hostname = "string.contoso.com";
             o.HostnameParameter = hostnameParam;
+        }));
+        Assert.Contains(nameof(SimplifiedDeploymentOptions.Hostname), ex.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(SimplifiedDeploymentOptions.HostnameParameter), ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WithSimplifiedDeployment_SystemNodePoolVmSizeAndParameter_BothSet_Throws()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish);
+
+        var acmeEmail = builder.AddParameter("acme-email", "ops@contoso.com");
+        var systemSku = builder.AddParameter("systemVmSize", "Standard_E2s_v5");
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+
+        var ex = Assert.Throws<ArgumentException>(() => aks.WithSimplifiedDeployment(acmeEmail, o =>
+        {
+            o.SystemNodePoolVmSize = "Standard_D4as_v5";
+            o.SystemNodePoolVmSizeParameter = systemSku;
+        }));
+        Assert.Contains(nameof(SimplifiedDeploymentOptions.SystemNodePoolVmSize), ex.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(SimplifiedDeploymentOptions.SystemNodePoolVmSizeParameter), ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WithSimplifiedDeployment_UserNodePoolVmSizeAndParameter_BothSet_Throws()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish);
+
+        var acmeEmail = builder.AddParameter("acme-email", "ops@contoso.com");
+        var userSku = builder.AddParameter("userVmSize", "Standard_E4s_v5");
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+
+        var ex = Assert.Throws<ArgumentException>(() => aks.WithSimplifiedDeployment(acmeEmail, o =>
+        {
+            o.UserNodePoolVmSize = "Standard_D4as_v5";
+            o.UserNodePoolVmSizeParameter = userSku;
+        }));
+        Assert.Contains(nameof(SimplifiedDeploymentOptions.UserNodePoolVmSize), ex.Message, StringComparison.Ordinal);
+        Assert.Contains(nameof(SimplifiedDeploymentOptions.UserNodePoolVmSizeParameter), ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WithSimplifiedDeployment_VmSizeString_AppliedWhenParameterNotSet()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish);
+
+        var acmeEmail = builder.AddParameter("acme-email", "ops@contoso.com");
+        var aks = builder.AddAzureKubernetesEnvironment("aks").WithSimplifiedDeployment(acmeEmail, o =>
+        {
+            o.SystemNodePoolVmSize = "Standard_D4as_v5";
+            o.UserNodePoolVmSize = "Standard_E4s_v5";
         });
 
-        using var app = builder.Build();
-        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var gateway = model.Resources.OfType<KubernetesGatewayResource>().Single();
+        var systemPool = Assert.Single(aks.Resource.NodePools, p => p.Mode == AksNodePoolMode.System);
+        var userPool = Assert.Single(aks.Resource.NodePools, p => p.Mode == AksNodePoolMode.User);
+        Assert.Equal("Standard_D4as_v5", systemPool.VmSize);
+        Assert.Equal("Standard_E4s_v5", userPool.VmSize);
+    }
 
-        var hostname = Assert.Single(gateway.Hostnames);
-        var resolved = await hostname.GetValueAsync(default);
-        Assert.Equal("param-wins.contoso.com", resolved);
+    [Fact]
+    public void WithSimplifiedDeployment_VmSizeDefaults_AppliedWhenNeitherSet()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish);
+
+        var acmeEmail = builder.AddParameter("acme-email", "ops@contoso.com");
+        var aks = builder.AddAzureKubernetesEnvironment("aks").WithSimplifiedDeployment(acmeEmail);
+
+        // No string, no parameter => both pools fall back to the same shared default
+        // (Standard_D2as_v5) — the smallest size that fits cert-manager + ALB controller
+        // + kube-system on the system pool without scheduling pressure.
+        var systemPool = Assert.Single(aks.Resource.NodePools, p => p.Mode == AksNodePoolMode.System);
+        var userPool = Assert.Single(aks.Resource.NodePools, p => p.Mode == AksNodePoolMode.User);
+        Assert.Equal("Standard_D2as_v5", systemPool.VmSize);
+        Assert.Equal("Standard_D2as_v5", userPool.VmSize);
     }
 }

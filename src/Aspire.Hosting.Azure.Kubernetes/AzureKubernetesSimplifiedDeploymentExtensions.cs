@@ -94,6 +94,14 @@ public static class AzureKubernetesSimplifiedDeploymentExtensions
         var options = new SimplifiedDeploymentOptions();
         configure?.Invoke(options);
 
+        // Reject ambiguous string + parameter overrides up front. We could pick a
+        // precedence and silently drop the loser, but that turns a config bug into a
+        // mystery (the AppHost runs fine, just with the "wrong" value) — exactly the
+        // class of footgun WithSimplifiedDeployment is here to remove. Validate now,
+        // before any resources are added, so the message clearly identifies the
+        // conflicting pair instead of surfacing later as a confusing infra error.
+        ValidateOptions(options);
+
         var appBuilder = builder.ApplicationBuilder;
         var aksName = builder.Resource.Name;
 
@@ -110,7 +118,7 @@ public static class AzureKubernetesSimplifiedDeploymentExtensions
         //    takes a plain string, so we resolve the parameter synchronously here. That's
         //    fine because parameter values are sourced from configuration/env at AppHost
         //    startup and don't depend on any other resource being up.
-        var systemVmSize = ResolveVmSize(options.SystemNodePoolVmSizeParameter, options.SystemNodePoolVmSize);
+        var systemVmSize = ResolveVmSize(options.SystemNodePoolVmSize, options.SystemNodePoolVmSizeParameter);
 
         builder.WithSubnet(aksSubnet)
                .WithSystemNodePool(
@@ -120,7 +128,7 @@ public static class AzureKubernetesSimplifiedDeploymentExtensions
 
         if (options.IncludeUserNodePool)
         {
-            var userVmSize = ResolveVmSize(options.UserNodePoolVmSizeParameter, options.UserNodePoolVmSize);
+            var userVmSize = ResolveVmSize(options.UserNodePoolVmSize, options.UserNodePoolVmSizeParameter);
 
             builder.AddNodePool(
                 options.UserNodePoolName,
@@ -142,11 +150,9 @@ public static class AzureKubernetesSimplifiedDeploymentExtensions
         // Optional custom hostname. When set, the HTTPS listener binds to this name
         // (cert-manager will issue an LE cert for it) instead of the ALB-assigned
         // *.alb.azure.com hostname that the tls-fqdn-discovery step would otherwise
-        // discover post-deploy. The HostnameParameter overload wins so the value can be
-        // supplied per-environment via `aspire deploy -p hostname=...` without editing
-        // the AppHost; the plain string is a convenience for the hardcoded case. Both
-        // ultimately set Gateway.Hostnames, which short-circuits the FQDN discovery
-        // step (it only runs for gateways with no hostname).
+        // discover post-deploy. Both forms set Gateway.Hostnames, which short-circuits
+        // the FQDN discovery step (it only runs for gateways with no hostname). The
+        // string/parameter pair is validated mutually exclusive up top.
         if (options.HostnameParameter is not null)
         {
             gateway.WithHostname(options.HostnameParameter);
@@ -210,19 +216,63 @@ public static class AzureKubernetesSimplifiedDeploymentExtensions
         return builder;
     }
 
-    // The underlying AKS node-pool API takes a plain string for VM size, so when the
-    // caller supplies a ParameterResource override we resolve it synchronously here.
-    // ParameterResource sources its value from configuration/env at AppHost startup and
-    // doesn't depend on any other resource, so the blocking GetAwaiter().GetResult() is
-    // safe in this context (we're running on the AppHost build thread, not in a hot path).
-    private static string ResolveVmSize(IResourceBuilder<ParameterResource>? parameterOverride, string fallback)
+    // Default VM size for both node pools. The smallest AKS will accept for the
+    // system pool that still leaves room for cert-manager, AGC's ALB controller,
+    // kube-system, and CoreDNS without scheduling pressure. Reused for the user
+    // pool so both pools have matching SKUs out of the box.
+    private const string DefaultNodePoolVmSize = "Standard_D2as_v5";
+
+    // Catch ambiguous "I set the string AND the parameter" calls up front so the
+    // user sees one clear failure naming the conflicting pair, instead of getting
+    // a silent "the other one won" surprise at deploy time.
+    private static void ValidateOptions(SimplifiedDeploymentOptions options)
     {
-        if (parameterOverride is null)
+        ValidatePair(
+            nameof(SimplifiedDeploymentOptions.Hostname),
+            options.Hostname is not null,
+            nameof(SimplifiedDeploymentOptions.HostnameParameter),
+            options.HostnameParameter is not null);
+
+        ValidatePair(
+            nameof(SimplifiedDeploymentOptions.SystemNodePoolVmSize),
+            options.SystemNodePoolVmSize is not null,
+            nameof(SimplifiedDeploymentOptions.SystemNodePoolVmSizeParameter),
+            options.SystemNodePoolVmSizeParameter is not null);
+
+        ValidatePair(
+            nameof(SimplifiedDeploymentOptions.UserNodePoolVmSize),
+            options.UserNodePoolVmSize is not null,
+            nameof(SimplifiedDeploymentOptions.UserNodePoolVmSizeParameter),
+            options.UserNodePoolVmSizeParameter is not null);
+    }
+
+    private static void ValidatePair(string stringName, bool stringSet, string parameterName, bool parameterSet)
+    {
+        if (stringSet && parameterSet)
         {
-            return fallback;
+            throw new ArgumentException(
+                $"Both {stringName} and {parameterName} were set on {nameof(SimplifiedDeploymentOptions)}. " +
+                $"These options are mutually exclusive — use {stringName} for a hardcoded value or " +
+                $"{parameterName} to bind the value to a deploy-time parameter, but not both.");
+        }
+    }
+
+    // The underlying AKS node-pool API takes a plain string for VM size. When the
+    // caller supplied a ParameterResource we resolve it synchronously here:
+    // ParameterResource sources its value from configuration/env at AppHost startup
+    // and doesn't depend on any other resource, so the blocking GetAwaiter().GetResult()
+    // is safe (we're on the AppHost build thread, not a hot path).
+    private static string ResolveVmSize(string? explicitSize, IResourceBuilder<ParameterResource>? parameterOverride)
+    {
+        if (parameterOverride is not null)
+        {
+            var value = parameterOverride.Resource.GetValueAsync(default).AsTask().GetAwaiter().GetResult();
+            if (!string.IsNullOrEmpty(value))
+            {
+                return value;
+            }
         }
 
-        var value = parameterOverride.Resource.GetValueAsync(default).AsTask().GetAwaiter().GetResult();
-        return string.IsNullOrEmpty(value) ? fallback : value;
+        return explicitSize ?? DefaultNodePoolVmSize;
     }
 }

@@ -58,26 +58,30 @@ public sealed class SimplifiedDeploymentOptions
     public string LoadBalancerSubnetCidr { get; set; } = "10.100.4.0/24";
 
     /// <summary>
-    /// VM size used for the AKS system node pool. Defaults to
-    /// <c>Standard_D2as_v5</c> — the smallest size AKS will accept for the system
-    /// pool that still leaves room for cert-manager, AGC's ALB controller, kube-system,
-    /// and CoreDNS without scheduling pressure.
+    /// VM size used for the AKS system node pool. When <see langword="null"/>
+    /// (the default), <c>WithSimplifiedDeployment</c> uses <c>Standard_D2as_v5</c>
+    /// — the smallest size AKS will accept for the system pool that still leaves
+    /// room for cert-manager, AGC's ALB controller, kube-system, and CoreDNS
+    /// without scheduling pressure.
     /// </summary>
     /// <remarks>
-    /// Override this — or set <see cref="SystemNodePoolVmSizeParameter"/> for a
+    /// Set this — or set <see cref="SystemNodePoolVmSizeParameter"/> for a
     /// deploy-time parameter — when the default SKU is not available in the target
     /// region or the subscription has insufficient vCPU quota for it. <c>az vm
     /// list-skus --location &lt;region&gt; --resource-type virtualMachines --output table</c>
-    /// shows what's available in a region.
+    /// shows what's available in a region. Setting both this and
+    /// <see cref="SystemNodePoolVmSizeParameter"/> throws because the intent is
+    /// ambiguous — pick one.
     /// </remarks>
-    public string SystemNodePoolVmSize { get; set; } = "Standard_D2as_v5";
+    public string? SystemNodePoolVmSize { get; set; }
 
     /// <summary>
-    /// Optional parameter that, when set, overrides <see cref="SystemNodePoolVmSize"/>
-    /// at <c>WithSimplifiedDeployment</c> time. Lets the system pool SKU be swapped per
+    /// Optional parameter that, when set, supplies the system pool VM size at
+    /// <c>WithSimplifiedDeployment</c> time. Lets the system pool SKU be swapped per
     /// environment via <c>aspire deploy -p systemVmSize=Standard_E2s_v5</c> without
     /// editing the AppHost — useful when a region runs out of quota for the default
     /// SKU and you need to fall back to whatever your subscription has headroom for.
+    /// Setting both this and <see cref="SystemNodePoolVmSize"/> throws.
     /// </summary>
     [AspireExportIgnore(Reason = "Polyglot app hosts express parameter overrides differently.")]
     public IResourceBuilder<ParameterResource>? SystemNodePoolVmSizeParameter { get; set; }
@@ -107,21 +111,24 @@ public sealed class SimplifiedDeploymentOptions
     public string UserNodePoolName { get; set; } = "workload";
 
     /// <summary>
-    /// VM size for the auto-created user node pool. Defaults to <c>Standard_D2as_v5</c>.
+    /// VM size for the auto-created user node pool. When <see langword="null"/>
+    /// (the default), <c>WithSimplifiedDeployment</c> uses <c>Standard_D2as_v5</c>.
     /// </summary>
     /// <remarks>
-    /// Override this — or set <see cref="UserNodePoolVmSizeParameter"/> — when the
+    /// Set this — or set <see cref="UserNodePoolVmSizeParameter"/> — when the
     /// default SKU is not available in the target region or the subscription has
     /// insufficient vCPU quota for it. The user pool is typically what bumps into
-    /// regional quota first since it scales with workload count.
+    /// regional quota first since it scales with workload count. Setting both
+    /// this and <see cref="UserNodePoolVmSizeParameter"/> throws because the
+    /// intent is ambiguous — pick one.
     /// </remarks>
-    public string UserNodePoolVmSize { get; set; } = "Standard_D2as_v5";
+    public string? UserNodePoolVmSize { get; set; }
 
     /// <summary>
-    /// Optional parameter that, when set, overrides <see cref="UserNodePoolVmSize"/>
-    /// at <c>WithSimplifiedDeployment</c> time. Lets the workload pool SKU be swapped per
+    /// Optional parameter that, when set, supplies the user pool VM size at
+    /// <c>WithSimplifiedDeployment</c> time. Lets the workload pool SKU be swapped per
     /// environment via <c>aspire deploy -p userVmSize=Standard_E2s_v5</c> without
-    /// editing the AppHost.
+    /// editing the AppHost. Setting both this and <see cref="UserNodePoolVmSize"/> throws.
     /// </summary>
     [AspireExportIgnore(Reason = "Polyglot app hosts express parameter overrides differently.")]
     public IResourceBuilder<ParameterResource>? UserNodePoolVmSizeParameter { get; set; }
@@ -226,17 +233,18 @@ public sealed class SimplifiedDeploymentOptions
     /// Once the CNAME is in place subsequent deploys are uneventful.
     /// </para>
     /// <para>
-    /// If <see cref="HostnameParameter"/> is also set it takes precedence over
-    /// this property so the hostname can be supplied per environment via
-    /// <c>aspire deploy -p hostname=app.contoso.com</c>.
+    /// Setting both this and <see cref="HostnameParameter"/> throws because the
+    /// intent is ambiguous — pick one. Use the parameter form when the hostname
+    /// must vary by environment (<c>aspire deploy -p hostname=app.contoso.com</c>).
     /// </para>
     /// </remarks>
     public string? Hostname { get; set; }
 
     /// <summary>
-    /// Optional parameter that, when set, overrides <see cref="Hostname"/> at
+    /// Optional parameter that, when set, supplies the gateway hostname at
     /// <c>WithSimplifiedDeployment</c> time. Use this to keep the hostname out
     /// of source and pass it in via <c>aspire deploy -p hostname=app.contoso.com</c>.
+    /// Setting both this and <see cref="Hostname"/> throws.
     /// </summary>
     /// <remarks>
     /// See <see cref="Hostname"/> for the DNS chicken-and-egg flow on first
