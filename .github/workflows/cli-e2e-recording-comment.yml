@@ -14,6 +14,10 @@ on:
         description: 'Workflow run ID to download artifacts from'
         required: true
         type: number
+      pr_number:
+        description: 'Optional PR number to comment on (skips the head-SHA lookup; useful for testing against merged PRs)'
+        required: false
+        type: number
 
 jobs:
   add-recording-comment:
@@ -50,14 +54,21 @@ jobs:
               });
               headSha = run.data.head_sha;
 
-              // Find PR by head SHA
-              const prs = await github.rest.pulls.list({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                state: 'open',
-                head: `${context.repo.owner}:${run.data.head_branch}`
-              });
-              prNumber = prs.data.length > 0 ? prs.data[0].number : null;
+              // Allow explicit PR override so we can dry-run against a merged PR's
+              // artifacts without depending on the open-PR head-SHA lookup below.
+              const overridePr = context.payload.inputs.pr_number;
+              if (overridePr) {
+                prNumber = Number(overridePr);
+              } else {
+                // Find PR by head SHA
+                const prs = await github.rest.pulls.list({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  state: 'open',
+                  head: `${context.repo.owner}:${run.data.head_branch}`
+                });
+                prNumber = prs.data.length > 0 ? prs.data[0].number : null;
+              }
             } else {
               // Triggered by workflow_run
               runId = context.payload.workflow_run.id;
