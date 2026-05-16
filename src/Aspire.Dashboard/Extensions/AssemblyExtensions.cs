@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Reflection;
+using Aspire.Shared;
 
 namespace Aspire.Dashboard.Extensions;
 
@@ -13,9 +14,9 @@ internal static class AssemblyExtensions
         // the commit hash, e.g.:
         // [assembly: AssemblyInformationalVersion("8.0.0-preview.2.23604.7+e7762a46d31842884a0bc72c92e07ba700c99bf5")]
 
-        var version = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        var version = AssemblyVersionHelper.GetInformationalVersion(assembly);
 
-        if (version is not null)
+        if (version.Length > 0)
         {
             var plusIndex = version.IndexOf('+');
 
@@ -29,9 +30,12 @@ internal static class AssemblyExtensions
 
         // Fallback to the file version, which is based on the CI build number, and then fallback to the assembly version, which is
         // product stable version, e.g. 8.0.0.0
-        version = assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version
-            ?? assembly.GetCustomAttribute<AssemblyVersionAttribute>()?.Version;
+        version = AssemblyVersionHelper.GetFileVersion(assembly);
+        if (version.Length > 0)
+        {
+            return version;
+        }
 
-        return version;
+        return assembly.GetCustomAttribute<AssemblyVersionAttribute>()?.Version;
     }
 }
