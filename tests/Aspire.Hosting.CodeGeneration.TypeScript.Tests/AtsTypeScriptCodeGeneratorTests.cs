@@ -173,7 +173,7 @@ public class AtsTypeScriptCodeGeneratorTests
         var context = CreateContextFromTestAssembly();
 
         var files = _generator.GenerateDistributedApplication(context);
-        var aspireTs = files["aspire.ts"];
+        var aspireTs = files["aspire.mts"];
 
         Assert.Contains("Adds a test Redis resource from ATS documentation.", aspireTs);
         Assert.Contains("@param name The ATS resource name.", aspireTs);
@@ -198,7 +198,7 @@ public class AtsTypeScriptCodeGeneratorTests
         context = WithAdditionalCapabilities(context, capability);
 
         var files = _generator.GenerateDistributedApplication(context);
-        var aspireTs = files["aspire.ts"];
+        var aspireTs = files["aspire.mts"];
 
         Assert.Contains("withSuppressedSummary()", aspireTs);
         Assert.DoesNotContain("Description fallback should not be emitted.", aspireTs);
@@ -220,7 +220,7 @@ public class AtsTypeScriptCodeGeneratorTests
         context = WithAdditionalCapabilities(context, capability);
 
         var files = _generator.GenerateDistributedApplication(context);
-        var aspireTs = files["aspire.ts"];
+        var aspireTs = files["aspire.mts"];
 
         Assert.Contains("Runs a void capability.", aspireTs);
         Assert.DoesNotContain("Void return documentation should not be emitted.", aspireTs);
@@ -241,7 +241,7 @@ public class AtsTypeScriptCodeGeneratorTests
         context = WithAdditionalCapabilities(context, capability);
 
         var files = _generator.GenerateDistributedApplication(context);
-        var aspireTs = files["aspire.ts"];
+        var aspireTs = files["aspire.mts"];
 
         Assert.Contains("Configures {@link TestRedisResource} from ATS documentation.", aspireTs);
         Assert.DoesNotContain("{@ats-ref", aspireTs);
