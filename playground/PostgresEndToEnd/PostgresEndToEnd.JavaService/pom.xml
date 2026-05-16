@@ -31,54 +31,60 @@
 
     <dependencyManagement>
         <dependencies>
-            <dependency>
-                <groupId>org.eclipse.jetty</groupId>
-                <artifactId>jetty-server</artifactId>
-                <version>9.4.57.v20241219</version>
-            </dependency>
+            <!--
+                These overrides pin transitive versions brought in by azure-identity (via azure-core,
+                msal4j, reactor-netty, etc.) and the PostgreSQL JDBC driver. They exist so Component
+                Governance sees the patched versions rather than whatever older versions the upstream
+                BOMs would otherwise resolve.
+            -->
             <dependency>
                 <groupId>org.postgresql</groupId>
                 <artifactId>postgresql</artifactId>
-                <version>42.7.2</version>
+                <version>42.7.11</version>
             </dependency>
             <dependency>
                 <groupId>io.netty</groupId>
                 <artifactId>netty-codec-http2</artifactId>
-                <version>4.1.124.Final</version>
+                <version>4.1.133.Final</version>
             </dependency>
             <dependency>
                 <groupId>com.nimbusds</groupId>
                 <artifactId>nimbus-jose-jwt</artifactId>
-                <version>9.37.2</version>
+                <version>9.48</version>
             </dependency>
             <dependency>
                 <groupId>io.projectreactor.netty</groupId>
                 <artifactId>reactor-netty-core</artifactId>
-                <version>1.0.39</version>
+                <version>1.0.48</version>
             </dependency>
             <dependency>
                 <groupId>io.projectreactor.netty</groupId>
                 <artifactId>reactor-netty-http</artifactId>
-                <version>1.0.39</version>
+                <version>1.0.48</version>
             </dependency>
             <dependency>
                 <groupId>io.netty</groupId>
                 <artifactId>netty-handler</artifactId>
-                <version>4.1.118.Final</version>
+                <version>4.1.133.Final</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
 
     <dependencies>
+        <!--
+            Javalin gives us a tiny Sinatra-style HTTP framework with a modern Jetty 12 (Jakarta
+            EE 10) transitive stack, which avoids the Jetty 9.4.x components that Component
+            Governance flagged on the previous Spark-based service.
+        -->
         <dependency>
-            <groupId>com.sparkjava</groupId>
-            <artifactId>spark-core</artifactId>
-            <version>2.9.4</version>
+            <groupId>io.javalin</groupId>
+            <artifactId>javalin</artifactId>
+            <version>7.2.2</version>
         </dependency>
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
-            <version>42.7.2</version>
+            <version>42.7.11</version>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>
@@ -88,7 +94,7 @@
         <dependency>
             <groupId>com.azure</groupId>
             <artifactId>azure-identity</artifactId>
-            <version>1.11.0</version>
+            <version>1.18.3</version>
         </dependency>
         <dependency>
             <groupId>com.azure</groupId>
@@ -98,7 +104,7 @@
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>2.15.3</version>
+            <version>2.21.3</version>
         </dependency>
     </dependencies>
 

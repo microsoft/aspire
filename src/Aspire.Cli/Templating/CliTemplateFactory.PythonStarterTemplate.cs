@@ -71,22 +71,11 @@ internal sealed partial class CliTemplateFactory
                         AddRedisPackageToConfig(outputPath, aspireVersion);
                     }
 
-                    // Seed the channel into settings.json before restore so package resolution
-                    // uses the correct channel. Explicit input wins; otherwise default to the
-                    // channel baked into the running CLI (CliExecutionContext.IdentityChannel).
-                    var seedChannel = string.IsNullOrEmpty(inputs.Channel)
-                        ? _executionContext.IdentityChannel
-                        : inputs.Channel;
-                    if (!string.IsNullOrEmpty(seedChannel))
-                    {
-                        var config = AspireJsonConfiguration.Load(outputPath);
-                        if (config is not null)
-                        {
-                            config.Channel = seedChannel;
-                            config.Save(outputPath);
-                        }
-                    }
-
+                    // No per-project channel is written here. The Python starter template ships
+                    // an aspire.config.json without a channel pin, and PrebuiltAppHostServer
+                    // aggregates package sources from every registered channel when the project
+                    // doesn't pin one — so daily-feed packages remain reachable on a daily CLI
+                    // without each project carrying a stale channel name across machines.
                     var appHostProject = _projectFactory.TryGetProject(new FileInfo(Path.Combine(outputPath, "apphost.ts")));
                     if (appHostProject is not IGuestAppHostSdkGenerator guestProject)
                     {

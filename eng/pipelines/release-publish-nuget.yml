@@ -71,6 +71,17 @@ parameters:
     type: boolean
     default: false
 
+  # Ref used when invoking `workflow_dispatch` against release-github-tasks.yml.
+  # GitHub loads the workflow file *from this ref*, so it controls which version
+  # of the workflow runs. The branch/commit being released is passed separately
+  # via the `release_branch` and `commit_sha` workflow inputs, so this ref only
+  # affects the workflow source — not what gets tagged or released. Defaults to
+  # 'main' so workflow fixes don't require backporting to every release branch.
+  - name: GitHubTasksWorkflowRef
+    displayName: 'Ref to dispatch release-github-tasks.yml from (workflow source only)'
+    type: string
+    default: 'main'
+
 variables:
   - template: /eng/pipelines/common-variables.yml@self
   - template: /eng/common/templates-official/variables/pool-providers.yml@self
@@ -712,7 +723,7 @@ extends:
                     -Owner         'microsoft' `
                     -Repo          'aspire' `
                     -WorkflowFile  'release-github-tasks.yml' `
-                    -Ref           "$(ReleaseBranchDerived)" `
+                    -Ref           '${{ parameters.GitHubTasksWorkflowRef }}' `
                     -Inputs        $inputs
                 displayName: 'Dispatch release-github-tasks and wait'
                 env:

@@ -456,9 +456,8 @@ internal sealed class CliServiceCollectionTestOptions
         var appHostServerProjectFactory = serviceProvider.GetRequiredService<IAppHostServerProjectFactory>();
         var languageDiscovery = serviceProvider.GetRequiredService<ILanguageDiscovery>();
         var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
-        var cliExecutionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
         var logger = serviceProvider.GetRequiredService<ILogger<ScaffoldingService>>();
-        return new ScaffoldingService(appHostServerProjectFactory, languageDiscovery, interactionService, cliExecutionContext, logger);
+        return new ScaffoldingService(appHostServerProjectFactory, languageDiscovery, interactionService, logger);
     };
 
     public Func<IServiceProvider, IProcessExecutionFactory> DotNetCliExecutionFactoryFactory { get; set; } = (IServiceProvider serviceProvider) =>

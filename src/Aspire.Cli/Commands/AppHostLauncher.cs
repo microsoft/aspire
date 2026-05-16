@@ -264,7 +264,7 @@ internal sealed class AppHostLauncher(
     {
         Process childProcess;
 
-        using (var spawnActivity = profilingTelemetry.StartDetachedSpawnChild(executablePath, childArgs.Count, "run"))
+        using (var spawnActivity = profilingTelemetry.StartDetachedSpawnChild(executablePath, childArgs, "run"))
         {
             try
             {
