@@ -239,13 +239,20 @@ builder.Build().Run();
             // frontend to the gateway root ("/") so the bare gateway URL just works,
             // i.e. /weatherforecast (not /apiservice/weatherforecast).
             output.WriteLine("Step 17: Verifying HTTPS /weatherforecast returns 200 (auto-routed at root)...");
+            // On failure, dump gateway + httproute + service state so we can diagnose without re-deploying.
             await auto.TypeAsync(
                 "FQDN=$(kubectl get gateway public-gw -n $NS -o jsonpath='{.status.addresses[0].value}') && " +
                 "OK=0; for i in $(seq 1 30); do sleep 5; " +
                 "S=$(curl -kso /dev/null -w '%{http_code}' -m 10 https://$FQDN/weatherforecast 2>/dev/null); " +
                 "[ \"$S\" = \"200\" ] && echo \"HTTPS $S OK (auto-routed)\" && OK=1 && break; " +
                 "echo \"Attempt $i: HTTPS $S\"; done; " +
-                "[ \"$OK\" = \"1\" ] || { echo 'FAIL: auto-routed HTTPS endpoint never returned 200'; exit 1; }");
+                "[ \"$OK\" = \"1\" ] || { " +
+                "echo '=== Gateway describe ==='; kubectl describe gateway public-gw -n $NS; " +
+                "echo '=== Gateway YAML ==='; kubectl get gateway public-gw -n $NS -o yaml; " +
+                "echo '=== HTTPRoutes ==='; kubectl get httproute -n $NS -o yaml; " +
+                "echo '=== Services ==='; kubectl get svc -n $NS; " +
+                "echo '=== Pods ==='; kubectl get pods -n $NS; " +
+                "echo 'FAIL: auto-routed HTTPS endpoint never returned 200'; exit 1; }");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(4));
 
