@@ -6,6 +6,7 @@ using System.Reflection.Emit;
 using System.Text.Json;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Utils;
+using Aspire.Shared;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -30,7 +31,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     {
         var assembly = CreateAssembly(CreateAttribute<AssemblyInformationalVersionAttribute>(informationalVersion));
 
-        var actualDisplayVersion = AuxiliaryBackchannelRpcTarget.GetDisplayVersion(assembly);
+        var actualDisplayVersion = AssemblyVersionHelper.GetDisplayVersion(assembly);
 
         Assert.Equal(expectedDisplayVersion, actualDisplayVersion);
     }
@@ -42,7 +43,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
             CreateAttribute<AssemblyFileVersionAttribute>("42.42.42.42424"),
             CreateAttribute<AssemblyVersionAttribute>("8.0.0.0"));
 
-        var actualDisplayVersion = AuxiliaryBackchannelRpcTarget.GetDisplayVersion(assembly);
+        var actualDisplayVersion = AssemblyVersionHelper.GetDisplayVersion(assembly);
 
         Assert.Equal("42.42.42.42424", actualDisplayVersion);
     }
@@ -52,7 +53,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     {
         var assembly = CreateAssembly(CreateAttribute<AssemblyVersionAttribute>("8.0.0.0"));
 
-        var actualDisplayVersion = AuxiliaryBackchannelRpcTarget.GetDisplayVersion(assembly);
+        var actualDisplayVersion = AssemblyVersionHelper.GetDisplayVersion(assembly);
 
         Assert.Equal("8.0.0.0", actualDisplayVersion);
     }
@@ -62,7 +63,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     {
         var assembly = CreateAssembly();
 
-        var actualDisplayVersion = AuxiliaryBackchannelRpcTarget.GetDisplayVersion(assembly);
+        var actualDisplayVersion = AssemblyVersionHelper.GetDisplayVersion(assembly);
 
         Assert.Null(actualDisplayVersion);
     }

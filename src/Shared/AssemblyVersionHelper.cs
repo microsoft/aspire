@@ -25,4 +25,39 @@ internal static class AssemblyVersionHelper
     {
         return assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version ?? string.Empty;
     }
+
+    /// <summary>
+    /// Gets a user-friendly display version from an assembly, stripping the commit hash suffix.
+    /// Falls back to file version, then assembly version.
+    /// </summary>
+    internal static string? GetDisplayVersion(Assembly assembly)
+    {
+        // The package version is stamped into the assembly's AssemblyInformationalVersionAttribute at build time, followed by a '+' and
+        // the commit hash, e.g.:
+        // [assembly: AssemblyInformationalVersion("8.0.0-preview.2.23604.7+e7762a46d31842884a0bc72c92e07ba700c99bf5")]
+
+        var version = GetInformationalVersion(assembly);
+
+        if (version.Length > 0)
+        {
+            var plusIndex = version.IndexOf('+');
+
+            if (plusIndex > 0)
+            {
+                return version[..plusIndex];
+            }
+
+            return version;
+        }
+
+        // Fallback to the file version, which is based on the CI build number, and then fallback to the assembly version, which is
+        // product stable version, e.g. 8.0.0.0
+        version = GetFileVersion(assembly);
+        if (version.Length > 0)
+        {
+            return version;
+        }
+
+        return assembly.GetCustomAttribute<AssemblyVersionAttribute>()?.Version;
+    }
 }
