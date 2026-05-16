@@ -209,8 +209,12 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
             return _endpointAnnotation;
         }
 
-        _endpointAnnotation ??= Resource.Annotations.OfType<EndpointAnnotation>()
-            .SingleOrDefault(a => string.Equals(a.Name, EndpointName, StringComparisons.EndpointAnnotationName));
+        lock (Resource.Annotations)
+        {
+            _endpointAnnotation ??= Resource.Annotations.OfType<EndpointAnnotation>()
+                .SingleOrDefault(a => string.Equals(a.Name, EndpointName, StringComparisons.EndpointAnnotationName));
+        }
+
         return _endpointAnnotation;
     }
 

@@ -129,6 +129,9 @@ internal static class DcpModelUtilities
         }
 
         serviceResource.Service.ApplyAddressInfoFrom(observedService);
+        var isDynamicProxylessContainerEndpoint = appResources.OfType<RenderedModelResource<Container>>()
+            .Any(resource => ReferenceEquals(resource.ModelResource, serviceResource.ModelResource) &&
+                IsDynamicProxylessContainerEndpoint(resource, serviceResource));
         if (!TryAddLocalhostAllocatedEndpoint(serviceResource, allowPending: true))
         {
             modelResource = null;
@@ -142,7 +145,7 @@ internal static class DcpModelUtilities
         }
 
         modelResource = serviceResource.ModelResource;
-        return AreResourceEndpointsAllocated(modelResource);
+        return isDynamicProxylessContainerEndpoint && AreResourceEndpointsAllocated(modelResource);
     }
 
     private static bool TryAddLocalhostAllocatedEndpoint(ServiceWithModelResource sp, bool allowPending)

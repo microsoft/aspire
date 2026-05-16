@@ -1621,6 +1621,37 @@ public class DcpExecutorTests
     }
 
     [Fact]
+    public async Task ResourceEndpointsAllocatedEventSubscribersDoNotBlockDcpStartup()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddContainer("database", "image")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        var subscriberEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseSubscriber = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var eventing = new Hosting.Eventing.DistributedApplicationEventing();
+        eventing.Subscribe<ResourceEndpointsAllocatedEvent>(async (@event, ct) =>
+        {
+            if (@event.Resource.Name == "database")
+            {
+                subscriberEntered.TrySetResult();
+                await releaseSubscriber.Task.WaitAsync(ct).ConfigureAwait(false);
+            }
+        });
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService, distributedApplicationEventing: eventing);
+
+        await appExecutor.RunApplicationAsync().DefaultTimeout();
+        await subscriberEntered.Task.DefaultTimeout();
+
+        releaseSubscriber.SetResult();
+    }
+
+    [Fact]
     public async Task EndpointPortsContainerProxylessPortAndTargetPortSet()
     {
         var builder = DistributedApplication.CreateBuilder();
@@ -3971,15 +4002,7 @@ public class DcpExecutorTests
         await appExecutor.RunApplicationAsync();
 
         // Assert
-        List<Executable> dcpExes = [];
-        var haveExes = RetryTillTrueOrTimeout(() =>
-        {
-            dcpExes.Clear();
-            dcpExes.AddRange(kubernetesService.CreatedResources.OfType<Executable>());
-            return dcpExes.Count == 1;
-        }, TestConstants.DefaultOrchestratorTestTimeout);
-        Assert.True(haveExes, $"Expected one executable but instead got {dcpExes.Count}");
-
+        var dcpExes = kubernetesService.CreatedResources.OfType<Executable>();
         var exe = Assert.Single(dcpExes, e => e.AppModelResourceName == "proj");
         Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
 
@@ -4026,15 +4049,7 @@ public class DcpExecutorTests
         await appExecutor.RunApplicationAsync();
 
         // Assert
-        List<Executable> dcpExes = [];
-        var haveExes = RetryTillTrueOrTimeout(() =>
-        {
-            dcpExes.Clear();
-            dcpExes.AddRange(kubernetesService.CreatedResources.OfType<Executable>());
-            return dcpExes.Count == 1;
-        }, TestConstants.DefaultOrchestratorTestTimeout);
-        Assert.True(haveExes, $"Expected one executable but instead got {dcpExes.Count}");
-
+        var dcpExes = kubernetesService.CreatedResources.OfType<Executable>();
         var exe = Assert.Single(dcpExes, e => e.AppModelResourceName == "proj");
         // Should fall back to Process execution when the launch configuration producer throws
         Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
@@ -4075,15 +4090,7 @@ public class DcpExecutorTests
         await appExecutor.RunApplicationAsync();
 
         // Assert
-        List<Executable> dcpExes = [];
-        var haveExes = RetryTillTrueOrTimeout(() =>
-        {
-            dcpExes.Clear();
-            dcpExes.AddRange(kubernetesService.CreatedResources.OfType<Executable>());
-            return dcpExes.Count == 1;
-        }, TestConstants.DefaultOrchestratorTestTimeout);
-        Assert.True(haveExes, $"Expected one executable but instead got {dcpExes.Count}");
-
+        var dcpExes = kubernetesService.CreatedResources.OfType<Executable>();
         var exe = Assert.Single(dcpExes, e => e.AppModelResourceName == "proj");
         Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
     }

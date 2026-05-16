@@ -27,7 +27,13 @@ public static class ResourceExtensions
     [AspireExportIgnore(Reason = "Generic annotation inspection helper — not part of the ATS surface.")]
     public static bool TryGetLastAnnotation<T>(this IResource resource, [NotNullWhen(true)] out T? annotation) where T : IResourceAnnotation
     {
-        if (resource.Annotations.OfType<T>().LastOrDefault() is { } lastAnnotation)
+        T? lastAnnotation;
+        lock (resource.Annotations)
+        {
+            lastAnnotation = resource.Annotations.OfType<T>().LastOrDefault();
+        }
+
+        if (lastAnnotation is not null)
         {
             annotation = lastAnnotation;
             return true;
@@ -49,11 +55,15 @@ public static class ResourceExtensions
     [AspireExportIgnore(Reason = "Generic annotation inspection helper — not part of the ATS surface.")]
     public static bool TryGetAnnotationsOfType<T>(this IResource resource, [NotNullWhen(true)] out IEnumerable<T>? result) where T : IResourceAnnotation
     {
-        var matchingTypeAnnotations = resource.Annotations.OfType<T>();
-
-        if (matchingTypeAnnotations.Any())
+        T[] matchingTypeAnnotations;
+        lock (resource.Annotations)
         {
-            result = matchingTypeAnnotations.ToArray();
+            matchingTypeAnnotations = resource.Annotations.OfType<T>().ToArray();
+        }
+
+        if (matchingTypeAnnotations.Length > 0)
+        {
+            result = matchingTypeAnnotations;
             return true;
         }
         else

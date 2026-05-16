@@ -881,12 +881,10 @@ public class WithEndpointTests
     }
 
     [Fact]
-    public void WithEndpointUpdateDoesNotChangeIsProxiedBackToTrue()
+    public void WithEndpointUpdateCanSetIsProxiedToTrue()
     {
         var builder = DistributedApplication.CreateBuilder();
 
-        // isProxied defaults to true in the method signature, so passing true
-        // on update can't be distinguished from the default — it's a no-op.
         builder.AddContainer("mycontainer", "myimage")
             .WithHttpEndpoint(port: 8080, isProxied: false)
             .WithHttpEndpoint(port: 9090, isProxied: true);
@@ -896,7 +894,7 @@ public class WithEndpointTests
         var resource = Assert.Single(builder.Resources.OfType<ContainerResource>());
         var endpoint = Assert.Single(resource.Annotations.OfType<EndpointAnnotation>(), e => e.Name == "http");
         Assert.Equal(9090, endpoint.Port);
-        Assert.False(endpoint.IsProxied);
+        Assert.True(endpoint.IsProxied);
     }
 
     [Fact]
