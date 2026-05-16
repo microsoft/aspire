@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
+using System.CommandLine.Help;
 using System.Globalization;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
@@ -49,15 +50,42 @@ internal abstract class BaseCommand : Command
 
             // TODO: SDK install goes here in the future.
 
-            int exitCode;
+            CommandResult result;
             try
             {
-                exitCode = await ExecuteAsync(parseResult, cancellationToken);
+                result = await ExecuteAsync(parseResult, cancellationToken);
             }
             catch (NonInteractiveException)
             {
                 // Error messages have already been displayed by the interaction service.
-                exitCode = ExitCodeConstants.MissingRequiredArgument;
+                result = CommandResult.Failure(ExitCodeConstants.MissingRequiredArgument);
+            }
+
+            if (result.ErrorMessage is not null)
+            {
+                interactionService.DisplayError(result.ErrorMessage);
+            }
+
+            if (result.ShouldDisplayHelp)
+            {
+                new HelpAction().Invoke(parseResult);
+                return result.ExitCode;
+            }
+
+            if (result.ShouldDisplayCancellationMessage)
+            {
+                interactionService.DisplayCancellationMessage();
+            }
+
+            // Display the CLI log file path on non-zero exit codes so the user knows
+            // where to find diagnostic details. Suppress for user-input errors where
+            // the log wouldn't contain useful context (e.g., missing required arguments).
+            if (result.ExitCode != ExitCodeConstants.Success && result.ExitCode != ExitCodeConstants.MissingRequiredArgument)
+            {
+                interactionService.DisplayMessage(
+                    KnownEmojis.PageFacingUp,
+                    string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, MarkupHelpers.SafeFileLink(interactionService, executionContext.LogFilePath)),
+                    allowMarkup: true);
             }
 
             if (UpdateNotificationsEnabled && features.IsFeatureEnabled(KnownFeatures.UpdateNotificationsEnabled, true))
@@ -72,11 +100,11 @@ internal abstract class BaseCommand : Command
                 }
             }
 
-            return exitCode;
+            return result.ExitCode;
         });
     }
 
-    protected abstract Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken);
+    protected abstract Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken);
 
     /// <summary>
     /// Checks whether this command has a --format option whose parsed value is <see cref="OutputFormat.Json"/>.
@@ -94,7 +122,7 @@ internal abstract class BaseCommand : Command
         return false;
     }
 
-    internal static int HandleProjectLocatorException(ProjectLocatorException ex, IInteractionService interactionService, AspireCliTelemetry telemetry)
+    internal static CommandResult HandleProjectLocatorException(ProjectLocatorException ex, IInteractionService interactionService, AspireCliTelemetry telemetry)
     {
         ArgumentNullException.ThrowIfNull(ex);
         ArgumentNullException.ThrowIfNull(interactionService);
@@ -102,8 +130,7 @@ internal abstract class BaseCommand : Command
         var (exitCode, errorMessage) = ProjectLocatorErrorHelper.GetExitCodeAndMessage(ex);
 
         telemetry.RecordError(errorMessage, ex);
-        interactionService.DisplayError(errorMessage);
-        return exitCode;
+        return CommandResult.Failure(exitCode, errorMessage);
     }
 
     internal static void AddNonInteractiveRequiresYesValidator(Command command, Option<bool> yesOption)

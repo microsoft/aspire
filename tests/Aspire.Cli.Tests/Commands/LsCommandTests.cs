@@ -269,8 +269,8 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
             options.ProjectLocatorFactory = _ => projectLocator;
             options.ConfigurationCallback = config =>
             {
-                config[ProfilingTelemetry.EnabledEnvironmentVariable] = "true";
-                config[ProfilingTelemetry.SessionIdEnvironmentVariable] = "session-1";
+                config[ProfilingTelemetry.EnvironmentVariables.Enabled] = "true";
+                config[ProfilingTelemetry.EnvironmentVariables.SessionId] = "session-1";
             };
         });
         using var provider = services.BuildServiceProvider();

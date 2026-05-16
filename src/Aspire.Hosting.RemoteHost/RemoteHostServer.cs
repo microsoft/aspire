@@ -4,8 +4,10 @@
 using Aspire.Hosting.RemoteHost.Ats;
 using Aspire.Hosting.RemoteHost.CodeGeneration;
 using Aspire.Hosting.RemoteHost.Language;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.RemoteHost;
 
@@ -27,12 +29,30 @@ public static class RemoteHostServer
     /// <returns>A task that completes when the server has stopped.</returns>
     public static Task RunAsync(string[] args)
     {
-        var builder = Host.CreateApplicationBuilder(args);
-        ConfigureServices(builder.Services);
-
+        var builder = CreateBuilder(args);
         var host = builder.Build();
 
         return host.RunAsync();
+    }
+
+    internal static HostApplicationBuilder CreateBuilder(string[] args)
+    {
+        var builder = Host.CreateApplicationBuilder(args);
+        ConfigureAppHostLogLevel(builder.Logging, builder.Configuration);
+        ConfigureServices(builder.Services);
+
+        return builder;
+    }
+
+    private static void ConfigureAppHostLogLevel(ILoggingBuilder logging, IConfiguration configuration)
+    {
+        var appHostLogLevelValue = configuration[KnownConfigNames.AppHostLogLevel];
+        if (appHostLogLevelValue is not null && Enum.TryParse<LogLevel>(appHostLogLevelValue, ignoreCase: true, out var appHostLogLevel))
+        {
+            // Add a default filter rule after configuration binding so this setting has the
+            // same precedence as Logging__LogLevel__Default without being inherited by child processes.
+            logging.AddFilter((_, logLevel) => logLevel >= appHostLogLevel);
+        }
     }
 
     private static void ConfigureServices(IServiceCollection services)

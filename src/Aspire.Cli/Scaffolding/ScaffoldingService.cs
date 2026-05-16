@@ -22,20 +22,17 @@ internal sealed class ScaffoldingService : IScaffoldingService
     private readonly IAppHostServerProjectFactory _appHostServerProjectFactory;
     private readonly ILanguageDiscovery _languageDiscovery;
     private readonly IInteractionService _interactionService;
-    private readonly CliExecutionContext _cliExecutionContext;
     private readonly ILogger<ScaffoldingService> _logger;
 
     public ScaffoldingService(
         IAppHostServerProjectFactory appHostServerProjectFactory,
         ILanguageDiscovery languageDiscovery,
         IInteractionService interactionService,
-        CliExecutionContext cliExecutionContext,
         ILogger<ScaffoldingService> logger)
     {
         _appHostServerProjectFactory = appHostServerProjectFactory;
         _languageDiscovery = languageDiscovery;
         _interactionService = interactionService;
-        _cliExecutionContext = cliExecutionContext;
         _logger = logger;
     }
 
@@ -65,19 +62,23 @@ internal sealed class ScaffoldingService : IScaffoldingService
             config.SdkVersion = context.SdkVersion;
         }
 
-        // Seed the project channel: explicit user input wins; otherwise default to the channel
-        // baked into the running CLI (CliExecutionContext.IdentityChannel). Silent default — no prompt.
-        var seedChannel = string.IsNullOrWhiteSpace(context.Channel)
-            ? _cliExecutionContext.IdentityChannel
-            : context.Channel;
-        if (!string.IsNullOrEmpty(seedChannel))
+        // Persist the channel only when the caller explicitly resolved one (Explicit `--channel`,
+        // or NewCommand's identity-match against a registered Explicit channel — see
+        // `CliTemplateFactory.EmptyTemplate.cs` for how `ScaffoldContext.Channel` is sourced).
+        // Do NOT fall back to `CliExecutionContext.IdentityChannel`: an identity that isn't a
+        // registered channel (e.g. `daily` on a CLI without the staging feature flag, or `pr-<N>`
+        // on a machine without the matching hive) would otherwise pin a channel name that no
+        // PSM rule can satisfy. When unset, `PrebuiltAppHostServer` aggregates sources from
+        // every registered channel so `aspire add` / `aspire restore` still find the right
+        // packages without a per-project pin.
+        if (!string.IsNullOrEmpty(context.Channel))
         {
-            config.Channel = seedChannel;
+            config.Channel = context.Channel;
         }
 
         PreAddJavaScriptHostingForBrownfieldTypeScript(config, directory, language, sdkVersion);
         if (!string.IsNullOrWhiteSpace(context.SdkVersion) ||
-            !string.IsNullOrEmpty(seedChannel))
+            !string.IsNullOrEmpty(context.Channel))
         {
             config.Save(directory.FullName);
         }

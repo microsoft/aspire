@@ -46,7 +46,7 @@ FoundryModels.BlackForestLabs.Flux11Pro: Aspire.Hosting.Foundry/Aspire.Hosting.F
 FoundryModels.BlackForestLabs.Flux1KontextPro: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"FLUX.1-Kontext-pro","Version":"1","Format":"Black Forest Labs"}
 FoundryModels.BlackForestLabs.Flux2Flex: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"FLUX.2-flex","Version":"1","Format":"Black Forest Labs"}
 FoundryModels.BlackForestLabs.Flux2Pro: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"FLUX.2-pro","Version":"1","Format":"Black Forest Labs"}
-FoundryModels.Cohere.CohereCommandA: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"cohere-command-a","Version":"4","Format":"Cohere"}
+FoundryModels.Cohere.CohereCommandA: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"COHERE-COMMAND-A","Version":"4","Format":"Cohere"}
 FoundryModels.Cohere.CohereCommandR: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"Cohere-command-r","Version":"1","Format":"Cohere"}
 FoundryModels.Cohere.CohereCommandR082024: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"Cohere-command-r-08-2024","Version":"1","Format":"Cohere"}
 FoundryModels.Cohere.CohereCommandRPlus: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"Cohere-command-r-plus","Version":"1","Format":"Cohere"}
@@ -117,6 +117,7 @@ FoundryModels.Microsoft.AzureContentUnderstandingRead: Aspire.Hosting.Foundry/As
 FoundryModels.Microsoft.AzureLanguageConversationalPiiRedaction: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"Azure-Language-Conversational-PII-redaction","Version":"1","Format":"Microsoft"}
 FoundryModels.Microsoft.AzureLanguageDocumentPiiRedaction: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"Azure-Language-Document-PII-redaction","Version":"1","Format":"Microsoft"}
 FoundryModels.Microsoft.AzureLanguageLanguageDetection: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"Azure-Language-Language-detection","Version":"1","Format":"Microsoft"}
+FoundryModels.Microsoft.AzureLanguageTextAnalyticsForHealth: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"Azure-Language-Text-Analytics-for-Health","Version":"1","Format":"Microsoft"}
 FoundryModels.Microsoft.AzureLanguageTextPiiRedaction: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"Azure-Language-Text-PII-redaction","Version":"1","Format":"Microsoft"}
 FoundryModels.Microsoft.AzureSpeechSpeechToText: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"Azure-Speech-Speech-to-text","Version":"1","Format":"Microsoft"}
 FoundryModels.Microsoft.AzureSpeechSpeechTranslation: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"Azure-Speech-Speech-Translation","Version":"1","Format":"Microsoft"}
@@ -211,6 +212,8 @@ FoundryModels.OpenAI.GptOss20b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.Fo
 FoundryModels.OpenAI.GptRealtime: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-realtime","Version":"2025-08-28","Format":"OpenAI"}
 FoundryModels.OpenAI.GptRealtime15: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-realtime-1.5","Version":"2026-02-23","Format":"OpenAI"}
 FoundryModels.OpenAI.GptRealtimeMini: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-realtime-mini","Version":"2025-12-15","Format":"OpenAI"}
+FoundryModels.OpenAI.GptRealtimeTranslate: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-realtime-translate","Version":"2026-05-07","Format":"OpenAI"}
+FoundryModels.OpenAI.GptRealtimeWhisper: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-realtime-whisper","Version":"2026-05-07","Format":"OpenAI"}
 FoundryModels.OpenAI.O1: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"o1","Version":"2024-12-17","Format":"OpenAI"}
 FoundryModels.OpenAI.O1Mini: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"o1-mini","Version":"2024-09-12","Format":"OpenAI"}
 FoundryModels.OpenAI.O1Preview: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"o1-preview","Version":"1","Format":"OpenAI"}

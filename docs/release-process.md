@@ -9,12 +9,17 @@ The Aspire release process involves two main automation components:
 1. **Azure DevOps Pipeline** (`eng/pipelines/release-publish-nuget.yml`)
    - Publishes NuGet packages to NuGet.org
    - Promotes the build to the GA channel via darc
+   - Submits WinGet and Homebrew installer PRs
+   - Dispatches the GitHub Actions workflow below as the `aspire-repo-bot`
+     GitHub App and waits for it to complete
 
 2. **GitHub Actions Workflow** (`.github/workflows/release-github-tasks.yml`)
    - Creates Git tags
    - Creates GitHub Releases
    - Creates merge-back PRs
    - Creates baseline version update PRs
+   - Normally dispatched automatically by the AzDO pipeline above; can also
+     be run manually as a fallback for partial-failure re-runs
 
 ## Prerequisites
 
@@ -28,11 +33,24 @@ Before starting a release:
 
 3. **Permissions**:
    - Access to run Azure DevOps pipelines with the publishing pool
-   - GitHub write access for creating tags/releases/PRs
+   - GitHub write access for creating tags/releases/PRs (only required for manual GH workflow runs)
+
+4. **AzDO secrets** (already configured for chained dispatch):
+   - `aspire-bot-app-id` — `aspire-repo-bot` GitHub App ID
+   - `aspire-bot-private-key` — `aspire-repo-bot` GitHub App PEM private key
+
+   Both live in the **`Aspire-Release-Secrets`** variable group (AzDO →
+   Pipelines → Library) and are marked as secret. To rotate the private key:
+   generate a new one from the App settings page
+   (github.com/organizations/dotnet/settings/apps/aspire-repo-bot →
+   "Private keys" → "Generate a private key"), paste the full PEM (including
+   the `-----BEGIN/END-----` lines) into the `aspire-bot-private-key`
+   variable, save, then revoke the old key from the same App settings page.
+   The App ID does not change on rotation.
 
 ## Step-by-Step Release Process
 
-### Step 1: Publish NuGet Packages (Azure DevOps)
+### Step 1: Run the AzDO release pipeline (one click for everything)
 
 1. Navigate to the Azure DevOps pipeline: `release-publish-nuget`
 2. Click "Run pipeline"
@@ -44,22 +62,51 @@ Before starting a release:
    | Parameter | Description | Example |
    |-----------|-------------|---------|
    | `GaChannelName` | Target GA channel | `Aspire 9.x GA` |
-   | `DryRun` | Set `true` to test without publishing | `false` |
+   | `ReleaseVersion` | Release version (used as `v<version>` tag) | `13.0.0` |
+   | `IsPrerelease` | `true` for preview releases | `false` |
+   | `DryRun` | Set `true` to test without publishing or tagging | `false` |
    | `SkipNuGetPublish` | Set `true` if re-running after NuGet success | `false` |
    | `SkipChannelPromotion` | Set `true` if re-running after darc success | `false` |
+   | `SkipWinGetPublish` | Set `true` if re-running after WinGet success | `false` |
+   | `SkipHomebrewPublish` | Set `true` if re-running after Homebrew success | `false` |
+   | `SkipGitHubTasks` | Set `true` to skip dispatching the GH workflow | `false` |
+   | `SkipReleaseAssets` | Set `true` to skip uploading aspire-cli-* assets to the GitHub release | `false` |
+   | `GitHubTasksWorkflowRef` | Ref to load `release-github-tasks.yml` from when dispatching. Only affects the workflow source — the release branch/commit are passed via inputs. Override only when testing pipeline changes on a topic branch. | `main` |
 
-5. Click "Run" and monitor the pipeline
-6. Verify packages appear on NuGet.org
+5. Click "Run" and monitor the pipeline. The final stage (`GitHubTasks`)
+   dispatches `release-github-tasks.yml`, waits for it to complete, and
+   then uploads the `aspire-cli-*` archives from the source build's
+   `BlobArtifacts` onto the newly-created GitHub release — the AzDO
+   pipeline only succeeds if both pieces succeed.
+6. Verify packages appear on NuGet.org and that the `aspire-cli-*`
+   archives are attached to the GitHub release.
 
-### Step 2: GitHub Tasks (GitHub Actions)
+`commit_sha` and `release_branch` for the GitHub workflow are derived
+automatically from the source build resource — no need to copy them by hand.
 
-1. Navigate to Actions → "Release GitHub Tasks"
-2. Click "Run workflow"
-3. Fill in the parameters:
+> **Tip**: Use `DryRun: true` to test end-to-end without publishing,
+> promoting, tagging, or creating PRs. The dry-run state is propagated to
+> the GitHub workflow as `dry_run: true`.
+
+### Step 2 (fallback): Manually re-run the GitHub workflow
+
+The GitHub workflow is normally dispatched by the AzDO pipeline as the
+`aspire-repo-bot` GitHub App, with its `authorize` job bypassed for the
+bot. If a GitHub-side step fails partway through and you need to re-run
+only the GitHub work, you can:
+
+1. Re-run the AzDO pipeline with `SkipNuGetPublish`, `SkipChannelPromotion`,
+   `SkipWinGetPublish`, `SkipHomebrewPublish` all set to `true` (and the
+   appropriate other skips), keeping `SkipGitHubTasks: false`. The
+   `GitHubTasks` stage will dispatch the workflow again with the right
+   inputs, and the workflow's own `skip_*` idempotency makes the
+   completed steps no-ops.
+2. Or, navigate to Actions → "Release GitHub Tasks", click "Run workflow",
+   and fill in the parameters manually:
 
    | Parameter | Description | Example |
    |-----------|-------------|---------|
-   | `release_version` | The version being released | `13.2.0` |
+   | `release_version` | The version being released | `13.0.0` |
    | `commit_sha` | Full 40-char commit SHA from the build | `abc123...` |
    | `release_branch` | Release branch name | `release/9.2` |
    | `is_prerelease` | `true` for preview releases | `false` |
@@ -69,9 +116,8 @@ Before starting a release:
    | `skip_merge_pr` | Skip if PR already created | `false` |
    | `skip_baseline_pr` | Skip if PR already created | `false` |
 
-4. Click "Run workflow" and monitor progress
-
-> **Tip**: Use `dry_run: true` to test the workflow without creating any tags, releases, or PRs. This is useful for validating inputs and checking what actions would be taken.
+   Manual runs go through the normal `authorize` check (admin/maintain
+   permission required).
 
 ### Step 3: Post-Release Tasks (Manual)
 

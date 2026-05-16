@@ -40,7 +40,7 @@ internal sealed class SecretGetCommand : BaseCommand
         Options.Add(SecretCommand.s_appHostOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         // Argument arity guarantees non-null
         var key = parseResult.GetValue(s_keyArgument)!;
@@ -49,19 +49,17 @@ internal sealed class SecretGetCommand : BaseCommand
         var result = await _secretStoreResolver.ResolveAsync(projectFile, autoInit: false, cancellationToken);
         if (result is null)
         {
-            InteractionService.DisplayError(SecretCommandStrings.CouldNotFindAppHost);
-            return ExitCodeConstants.FailedToFindProject;
+            return CommandResult.Failure(ExitCodeConstants.FailedToFindProject, SecretCommandStrings.CouldNotFindAppHost);
         }
 
         var value = result.Store.Get(key);
         if (value is null)
         {
-            InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, SecretCommandStrings.SecretNotFound, key.EscapeMarkup()));
-            return ExitCodeConstants.ConfigNotFound;
+            return CommandResult.Failure(ExitCodeConstants.ConfigNotFound, string.Format(CultureInfo.CurrentCulture, SecretCommandStrings.SecretNotFound, key.EscapeMarkup()));
         }
 
         // Write value to stdout (machine-readable)
         InteractionService.DisplayRawText(value, consoleOverride: ConsoleOutput.Standard);
-        return ExitCodeConstants.Success;
+        return CommandResult.Success();
     }
 }

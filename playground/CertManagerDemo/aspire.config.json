@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "CertManagerDemo.AppHost/CertManagerDemo.AppHost.csproj"
+  }
+}

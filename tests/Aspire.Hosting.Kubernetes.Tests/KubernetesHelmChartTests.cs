@@ -347,6 +347,48 @@ public class KubernetesHelmChartTests
     }
 
     [Fact]
+    public void WithForceConflicts_DefaultsToFalse()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var k8s = builder.AddKubernetesEnvironment("env");
+
+        var chart = k8s.AddHelmChart("test", "oci://example.com/chart", "1.0.0");
+
+        Assert.False(chart.Resource.ForceConflicts);
+    }
+
+    [Fact]
+    public void WithForceConflicts_OptsIn()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var k8s = builder.AddKubernetesEnvironment("env");
+
+        var chart = k8s.AddHelmChart("test", "oci://example.com/chart", "1.0.0")
+            .WithForceConflicts();
+
+        Assert.True(chart.Resource.ForceConflicts);
+    }
+
+    [Fact]
+    public void WithForceConflicts_ReturnsBuilderForChaining()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var k8s = builder.AddKubernetesEnvironment("env");
+
+        var chart = k8s.AddHelmChart("test", "oci://example.com/chart", "1.0.0");
+        var returned = chart.WithForceConflicts();
+
+        Assert.Same(chart, returned);
+    }
+
+    [Fact]
+    public void WithForceConflicts_ThrowsOnNullBuilder()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            ((IResourceBuilder<KubernetesHelmChartResource>)null!).WithForceConflicts());
+    }
+
+    [Fact]
     public async Task PipelineStepFactory_WithoutDestroy_ProducesOnlyInstallStep()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

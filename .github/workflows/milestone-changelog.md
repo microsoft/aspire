@@ -749,7 +749,7 @@ Then determine whether either of these optional flags applies:
 | Flag | Emoji | When to set |
 |------|-------|-------------|
 | **Breaking change** | ⚠️ | Removed or renamed API, changed default behavior, migration required |
-| **Docs required** | 📝 | Change needs documentation (new feature, changed behavior, new config options) |
+| **Docs required** | 📝 | Change needs documentation (new feature, changed behavior, new config options, new public API). Always set this for breaking changes. |
 | **Community contribution** | 🌍 | PR's `authorAssociation` (from the batch data) is not `MEMBER` or `OWNER`, **and** the PR's `author.is_bot` (from the batch data) is not `true` — i.e., the author is a human external community contributor. For **backport PRs** (Step 3a), use the original PR author's `authorAssociation` and ignore the backport bot's `is_bot` flag. |
 
 The `authorAssociation` field is pre-populated in the batch data by the fetch-data
@@ -955,7 +955,7 @@ Field definitions:
   external community contributors. Empty array if none.
 - **description**: User-facing description (one to two sentences)
 - **docsPrs**: Array of PR numbers from `${DOCS_REPO}` that document this change. Empty array if none.
-- **docsRequired**: `true` if documentation is needed, `false` otherwise
+- **docsRequired**: `true` if documentation is needed or `breaking` is `true`, `false` otherwise
 - **emoji**: A single emoji representing the change
 - **firstMergedAt**: ISO 8601 UTC timestamp of the earliest PR's merge date
 - **lastMergedAt**: ISO 8601 UTC timestamp of the most recent PR's merge date

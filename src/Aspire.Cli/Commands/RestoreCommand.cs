@@ -59,7 +59,7 @@ internal sealed class RestoreCommand : BaseCommand
         Options.Add(s_appHostOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
 
@@ -106,30 +106,29 @@ internal sealed class RestoreCommand : BaseCommand
                 {
                     _interactionService.DisplaySuccess(
                         string.Format(CultureInfo.CurrentCulture, RestoreCommandStrings.RestoreSucceeded, AspireConfigFile.FileName));
-                    return ExitCodeConstants.Success;
+                    return CommandResult.Success();
                 }
 
-                return ExitCodeConstants.FailedToBuildArtifacts;
+                return CommandResult.Failure(ExitCodeConstants.FailedToBuildArtifacts);
             }
 
             if (effectiveAppHostFile is null)
             {
-                return ExitCodeConstants.FailedToFindProject;
+                return CommandResult.Failure(ExitCodeConstants.FailedToFindProject);
             }
 
             var project = _projectFactory.TryGetProject(effectiveAppHostFile);
 
             if (project is null)
             {
-                InteractionService.DisplayError(RestoreCommandStrings.UnrecognizedAppHostType);
-                return ExitCodeConstants.FailedToFindProject;
+                return CommandResult.Failure(ExitCodeConstants.FailedToFindProject, RestoreCommandStrings.UnrecognizedAppHostType);
             }
 
             if (project is DotNetAppHostProject)
             {
                 if (!await SdkInstallHelper.EnsureSdkInstalledAsync(_sdkInstaller, InteractionService, Telemetry, cancellationToken: cancellationToken))
                 {
-                    return ExitCodeConstants.SdkNotInstalled;
+                    return CommandResult.Failure(ExitCodeConstants.SdkNotInstalled);
                 }
 
                 var appHostDirectory = effectiveAppHostFile.Directory!;
@@ -144,10 +143,10 @@ internal sealed class RestoreCommand : BaseCommand
                 {
                     _interactionService.DisplaySuccess(
                         string.Format(CultureInfo.CurrentCulture, RestoreCommandStrings.RestoreSucceeded, effectiveAppHostFile.Name));
-                    return ExitCodeConstants.Success;
+                    return CommandResult.Success();
                 }
 
-                return ExitCodeConstants.FailedToBuildArtifacts;
+                return CommandResult.Failure(ExitCodeConstants.FailedToBuildArtifacts);
             }
 
             if (project is GuestAppHostProject guestProject)
@@ -164,19 +163,17 @@ internal sealed class RestoreCommand : BaseCommand
                 {
                     _interactionService.DisplaySuccess(
                         string.Format(CultureInfo.CurrentCulture, RestoreCommandStrings.RestoreSucceeded, effectiveAppHostFile.Name));
-                    return ExitCodeConstants.Success;
+                    return CommandResult.Success();
                 }
 
-                return ExitCodeConstants.FailedToBuildArtifacts;
+                return CommandResult.Failure(ExitCodeConstants.FailedToBuildArtifacts);
             }
 
-            InteractionService.DisplayError(RestoreCommandStrings.UnrecognizedAppHostType);
-            return ExitCodeConstants.FailedToFindProject;
+            return CommandResult.Failure(ExitCodeConstants.FailedToFindProject, RestoreCommandStrings.UnrecognizedAppHostType);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            InteractionService.DisplayCancellationMessage();
-            return ExitCodeConstants.Success;
+            return CommandResult.Cancelled();
         }
         catch (ProjectLocatorException ex)
         {
@@ -186,8 +183,7 @@ internal sealed class RestoreCommand : BaseCommand
         {
             var errorMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.UnexpectedErrorOccurred, ex.Message);
             Telemetry.RecordError(errorMessage, ex);
-            InteractionService.DisplayError(errorMessage);
-            return ExitCodeConstants.FailedToBuildArtifacts;
+            return CommandResult.Failure(ExitCodeConstants.FailedToBuildArtifacts, errorMessage);
         }
     }
 

@@ -132,4 +132,77 @@ public static class AzureKubernetesIngressExtensions
         var k8sEnvBuilder = builder.ApplicationBuilder.CreateResourceBuilder(builder.Resource.KubernetesEnvironment);
         return k8sEnvBuilder.AddHelmChart(name, chartReference, chartVersion);
     }
+
+    /// <summary>
+    /// Routes a Kubernetes <see cref="KubernetesGatewayResource"/> through the supplied
+    /// Azure Application Gateway for Containers (AGC) <see cref="AzureKubernetesLoadBalancerResource"/>.
+    /// </summary>
+    /// <param name="builder">The gateway resource builder.</param>
+    /// <param name="loadBalancer">The AGC load balancer to route through.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
+    /// <remarks>
+    /// Writes the AGC routing annotations (<c>alb.networking.azure.io/alb-name</c> and
+    /// <c>alb.networking.azure.io/alb-namespace</c>) onto the rendered Gateway and defaults
+    /// the GatewayClass to <c>azure-alb-external</c> when one has not already been set via
+    /// <c>WithGatewayClass(...)</c>.
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// var lb = aks.AddLoadBalancer("lb", albSubnet);
+    /// var gateway = aks.AddGateway("public").WithLoadBalancer(lb);
+    /// </code>
+    /// </example>
+    [AspireExport(Description = "Routes a Kubernetes Gateway through an AGC ApplicationLoadBalancer")]
+    public static IResourceBuilder<KubernetesGatewayResource> WithLoadBalancer(
+        this IResourceBuilder<KubernetesGatewayResource> builder,
+        IResourceBuilder<AzureKubernetesLoadBalancerResource> loadBalancer)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(loadBalancer);
+
+        var lb = loadBalancer.Resource;
+        // AGC discovers the target ApplicationLoadBalancer via these two annotations on
+        // the Gateway. See:
+        // https://learn.microsoft.com/azure/application-gateway/for-containers/quickstart-deploy-application-gateway-for-containers
+        builder.Resource.GatewayAnnotations["alb.networking.azure.io/alb-name"] =
+            ReferenceExpression.Create($"{lb.AlbName}");
+        builder.Resource.GatewayAnnotations["alb.networking.azure.io/alb-namespace"] =
+            ReferenceExpression.Create($"{AzureKubernetesLoadBalancerResource.AlbNamespace}");
+
+        // Default to the AGC GatewayClass only when one isn't already set so an explicit
+        // WithGatewayClass(...) call before WithLoadBalancer(...) wins.
+        builder.Resource.GatewayClassName ??= ReferenceExpression.Create($"azure-alb-external");
+        return builder;
+    }
+
+    /// <summary>
+    /// Routes a Kubernetes <see cref="KubernetesIngressResource"/> through the supplied
+    /// Azure Application Gateway for Containers (AGC) <see cref="AzureKubernetesLoadBalancerResource"/>.
+    /// </summary>
+    /// <param name="builder">The ingress resource builder.</param>
+    /// <param name="loadBalancer">The AGC load balancer to route through.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
+    /// <remarks>
+    /// Writes the AGC routing annotations (<c>alb.networking.azure.io/alb-name</c> and
+    /// <c>alb.networking.azure.io/alb-namespace</c>) onto the rendered Ingress and defaults
+    /// the IngressClass to <c>azure-alb-external</c> when one has not already been set via
+    /// <c>WithIngressClass(...)</c>.
+    /// </remarks>
+    [AspireExport("withLoadBalancerOnIngress", MethodName = "withLoadBalancer", Description = "Routes a Kubernetes Ingress through an AGC ApplicationLoadBalancer")]
+    public static IResourceBuilder<KubernetesIngressResource> WithLoadBalancer(
+        this IResourceBuilder<KubernetesIngressResource> builder,
+        IResourceBuilder<AzureKubernetesLoadBalancerResource> loadBalancer)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(loadBalancer);
+
+        var lb = loadBalancer.Resource;
+        builder.Resource.IngressAnnotations["alb.networking.azure.io/alb-name"] =
+            ReferenceExpression.Create($"{lb.AlbName}");
+        builder.Resource.IngressAnnotations["alb.networking.azure.io/alb-namespace"] =
+            ReferenceExpression.Create($"{AzureKubernetesLoadBalancerResource.AlbNamespace}");
+
+        builder.Resource.IngressClassName ??= ReferenceExpression.Create($"azure-alb-external");
+        return builder;
+    }
 }

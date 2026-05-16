@@ -23,13 +23,15 @@ internal interface IAppHostCandidateFinder
     /// <param name="nugetCachePath">The NuGet package cache path to exclude, if known.</param>
     /// <param name="scope">Controls which files are considered. See <see cref="AppHostDiscoveryScope"/>.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
+    /// <param name="maxDepth">The maximum subdirectory depth to search, where 0 only considers files in <paramref name="searchDirectory"/>.</param>
     /// <returns>A search result with matching files and one count entry for every requested pattern.</returns>
     Task<AppHostCandidateFileSearchResult> FindCandidateFilesAsync(
         DirectoryInfo searchDirectory,
         IReadOnlyList<string> patterns,
         string? nugetCachePath,
         AppHostDiscoveryScope scope,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        int? maxDepth = null);
 }
 
 /// <summary>
@@ -79,7 +81,8 @@ internal sealed class AppHostCandidateFinder(
         IReadOnlyList<string> patterns,
         string? nugetCachePath,
         AppHostDiscoveryScope scope,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        int? maxDepth = null)
     {
         using var discoveryActivity = profilingTelemetry.StartAppHostCandidateDiscovery(searchDirectory, scope, patterns.Count, nugetCachePath is not null);
         if (patterns.Count == 0)
@@ -100,7 +103,7 @@ internal sealed class AppHostCandidateFinder(
             {
                 logger.LogDebug("Using git-included file list ({Count} entries) as discovery source.", includedPaths.Count);
                 using var matchActivity = profilingTelemetry.StartAppHostCandidateGitMatch(includedPaths.Count, patterns.Count);
-                var result = MatchFromIncludedPaths(searchDirectory, patterns, includedPaths, nugetCachePath, cancellationToken);
+                var result = MatchFromIncludedPaths(searchDirectory, patterns, includedPaths, nugetCachePath, maxDepth, cancellationToken);
                 matchActivity.SetAppHostCandidateCount(result.Files.Length);
                 discoveryActivity.SetAppHostDiscoverySource(ProfilingTelemetry.Values.AppHostDiscoverySourceGit);
                 discoveryActivity.SetAppHostDiscoveryIncludedFileCount(includedPaths.Count);
@@ -121,7 +124,7 @@ internal sealed class AppHostCandidateFinder(
         };
 
         using var walkActivity = profilingTelemetry.StartAppHostCandidateFilesystemWalk(searchDirectory, patterns.Count, skipList is not null, nugetCachePath is not null);
-        var searchResult = FindMatchingFiles(searchDirectory, patterns, enumerationOptions, nugetCachePath, skipList, walkActivity, cancellationToken);
+        var searchResult = FindMatchingFiles(searchDirectory, patterns, enumerationOptions, nugetCachePath, skipList, maxDepth, walkActivity, cancellationToken);
         walkActivity.SetAppHostCandidateCount(searchResult.Files.Length);
         discoveryActivity.SetAppHostDiscoverySource(ProfilingTelemetry.Values.AppHostDiscoverySourceFilesystem);
         discoveryActivity.SetAppHostCandidateCount(searchResult.Files.Length);
@@ -133,6 +136,7 @@ internal sealed class AppHostCandidateFinder(
         IReadOnlyList<string> patterns,
         IReadOnlySet<string> includedPaths,
         string? nugetCachePath,
+        int? maxDepth,
         CancellationToken cancellationToken)
     {
         var pathComparison = GetPathComparison();
@@ -183,6 +187,10 @@ internal sealed class AppHostCandidateFinder(
             }
 
             var relativeNative = Path.GetRelativePath(rootFullName, absolutePath);
+            if (!IsWithinDepth(relativeNative, maxDepth))
+            {
+                continue;
+            }
 
             // Microsoft.Extensions.FileSystemGlobbing matchers operate on forward-slash
             // paths even on Windows. Convert "src\\AppHost\\AppHost.csproj" to
@@ -260,6 +268,7 @@ internal sealed class AppHostCandidateFinder(
         EnumerationOptions options,
         string? excludePath,
         FrozenSet<string>? excludedDirectoryNames,
+        int? maxDepth,
         ProfilingTelemetry.ActivityScope walkActivity,
         CancellationToken cancellationToken)
     {
@@ -278,7 +287,7 @@ internal sealed class AppHostCandidateFinder(
         // "**/*.csproj" and let the matcher walk once instead of enumerating once per
         // language detection pattern.
         var counters = new DiscoveryCounters();
-        var directory = new MatcherDirectoryInfo(searchDirectory, options, excludePath, excludedDirectoryNames, pathComparison, counters, cancellationToken);
+        var directory = new MatcherDirectoryInfo(searchDirectory, options, excludePath, excludedDirectoryNames, pathComparison, counters, depth: 0, maxDepth, cancellationToken);
         var matchedFilePaths = matcher.Execute(directory).Files.Select(match => match.Path).ToArray();
         walkActivity.SetAppHostDiscoveryWalkCounts(counters.FilesEnumerated, counters.DirectoriesEnumerated, counters.DirectoriesSkipped);
 
@@ -327,6 +336,23 @@ internal sealed class AppHostCandidateFinder(
             : $"**/{normalizedPattern}";
     }
 
+    private static bool IsWithinDepth(string relativePath, int? maxDepth)
+    {
+        if (maxDepth is null)
+        {
+            return true;
+        }
+
+        var relativeDirectory = Path.GetDirectoryName(relativePath);
+        if (string.IsNullOrEmpty(relativeDirectory))
+        {
+            return true;
+        }
+
+        var depth = relativeDirectory.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries).Length;
+        return depth <= maxDepth;
+    }
+
     private static Matcher CreateMatcher(IEnumerable<string> patterns)
     {
         var matcher = new Matcher(StringComparison.OrdinalIgnoreCase);
@@ -367,7 +393,7 @@ internal sealed class AppHostCandidateFinder(
         public int DirectoriesSkipped { get; set; }
     }
 
-    private sealed class MatcherDirectoryInfo(DirectoryInfo directory, EnumerationOptions options, string? excludePath, FrozenSet<string>? excludedDirectoryNames, StringComparison pathComparison, DiscoveryCounters counters, CancellationToken cancellationToken) : DirectoryInfoBase
+    private sealed class MatcherDirectoryInfo(DirectoryInfo directory, EnumerationOptions options, string? excludePath, FrozenSet<string>? excludedDirectoryNames, StringComparison pathComparison, DiscoveryCounters counters, int depth, int? maxDepth, CancellationToken cancellationToken) : DirectoryInfoBase
     {
         private readonly DirectoryInfo _directory = directory;
         private readonly EnumerationOptions _options = options;
@@ -375,6 +401,8 @@ internal sealed class AppHostCandidateFinder(
         private readonly FrozenSet<string>? _excludedDirectoryNames = excludedDirectoryNames;
         private readonly StringComparison _pathComparison = pathComparison;
         private readonly DiscoveryCounters _counters = counters;
+        private readonly int _depth = depth;
+        private readonly int? _maxDepth = maxDepth;
         private readonly CancellationToken _cancellationToken = cancellationToken;
 
         public override string Name => _directory.Name;
@@ -382,7 +410,7 @@ internal sealed class AppHostCandidateFinder(
         public override string FullName => _directory.FullName;
 
         public override DirectoryInfoBase ParentDirectory => _directory.Parent is { } parent
-            ? new MatcherDirectoryInfo(parent, _options, _excludePath, _excludedDirectoryNames, _pathComparison, _counters, _cancellationToken)
+            ? new MatcherDirectoryInfo(parent, _options, _excludePath, _excludedDirectoryNames, _pathComparison, _counters, _depth - 1, _maxDepth, _cancellationToken)
             : null!;
 
         public override IEnumerable<FileSystemInfoBase> EnumerateFileSystemInfos()
@@ -394,9 +422,9 @@ internal sealed class AppHostCandidateFinder(
                 if (entry is DirectoryInfo childDirectory)
                 {
                     _counters.DirectoriesEnumerated++;
-                    if (!ShouldExcludeDirectory(childDirectory))
+                    if (CanRecurse && !ShouldExcludeDirectory(childDirectory))
                     {
-                        yield return new MatcherDirectoryInfo(childDirectory, _options, _excludePath, _excludedDirectoryNames, _pathComparison, _counters, _cancellationToken);
+                        yield return new MatcherDirectoryInfo(childDirectory, _options, _excludePath, _excludedDirectoryNames, _pathComparison, _counters, _depth + 1, _maxDepth, _cancellationToken);
                     }
                     else
                     {
@@ -406,19 +434,22 @@ internal sealed class AppHostCandidateFinder(
                 else if (entry is FileInfo childFile)
                 {
                     _counters.FilesEnumerated++;
-                    yield return new MatcherFileInfo(childFile, _options, _excludePath, _excludedDirectoryNames, _pathComparison, _counters, _cancellationToken);
+                    if (CanIncludeFiles)
+                    {
+                        yield return new MatcherFileInfo(childFile, _options, _excludePath, _excludedDirectoryNames, _pathComparison, _counters, _depth, _maxDepth, _cancellationToken);
+                    }
                 }
             }
         }
 
         public override DirectoryInfoBase GetDirectory(string path)
         {
-            return new MatcherDirectoryInfo(new DirectoryInfo(Path.Combine(_directory.FullName, path)), _options, _excludePath, _excludedDirectoryNames, _pathComparison, _counters, _cancellationToken);
+            return new MatcherDirectoryInfo(new DirectoryInfo(Path.Combine(_directory.FullName, path)), _options, _excludePath, _excludedDirectoryNames, _pathComparison, _counters, _depth + 1, _maxDepth, _cancellationToken);
         }
 
         public override FileInfoBase GetFile(string path)
         {
-            return new MatcherFileInfo(new FileInfo(Path.Combine(_directory.FullName, path)), _options, _excludePath, _excludedDirectoryNames, _pathComparison, _counters, _cancellationToken);
+            return new MatcherFileInfo(new FileInfo(Path.Combine(_directory.FullName, path)), _options, _excludePath, _excludedDirectoryNames, _pathComparison, _counters, _depth, _maxDepth, _cancellationToken);
         }
 
         private bool ShouldExcludeDirectory(DirectoryInfo directory)
@@ -437,9 +468,13 @@ internal sealed class AppHostCandidateFinder(
             return directoryPath.Equals(_excludePath, _pathComparison)
                 || directoryPath.StartsWith(_excludePath + Path.DirectorySeparatorChar, _pathComparison);
         }
+
+        private bool CanRecurse => _maxDepth is null || _depth < _maxDepth;
+
+        private bool CanIncludeFiles => _maxDepth is null || _depth <= _maxDepth;
     }
 
-    private sealed class MatcherFileInfo(FileInfo file, EnumerationOptions options, string? excludePath, FrozenSet<string>? excludedDirectoryNames, StringComparison pathComparison, DiscoveryCounters counters, CancellationToken cancellationToken) : FileInfoBase
+    private sealed class MatcherFileInfo(FileInfo file, EnumerationOptions options, string? excludePath, FrozenSet<string>? excludedDirectoryNames, StringComparison pathComparison, DiscoveryCounters counters, int depth, int? maxDepth, CancellationToken cancellationToken) : FileInfoBase
     {
         private readonly FileInfo _file = file;
         private readonly EnumerationOptions _options = options;
@@ -447,6 +482,8 @@ internal sealed class AppHostCandidateFinder(
         private readonly FrozenSet<string>? _excludedDirectoryNames = excludedDirectoryNames;
         private readonly StringComparison _pathComparison = pathComparison;
         private readonly DiscoveryCounters _counters = counters;
+        private readonly int _depth = depth;
+        private readonly int? _maxDepth = maxDepth;
         private readonly CancellationToken _cancellationToken = cancellationToken;
 
         public override string Name => _file.Name;
@@ -454,7 +491,7 @@ internal sealed class AppHostCandidateFinder(
         public override string FullName => _file.FullName;
 
         public override DirectoryInfoBase ParentDirectory => _file.Directory is { } parent
-            ? new MatcherDirectoryInfo(parent, _options, _excludePath, _excludedDirectoryNames, _pathComparison, _counters, _cancellationToken)
+            ? new MatcherDirectoryInfo(parent, _options, _excludePath, _excludedDirectoryNames, _pathComparison, _counters, _depth, _maxDepth, _cancellationToken)
             : null!;
     }
 

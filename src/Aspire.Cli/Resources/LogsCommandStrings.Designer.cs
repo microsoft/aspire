@@ -128,5 +128,11 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SearchOptionDescription", resourceCulture);
             }
         }
+
+        public static string NoLogsFound {
+            get {
+                return ResourceManager.GetString("NoLogsFound", resourceCulture);
+            }
+        }
     }
 }

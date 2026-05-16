@@ -81,6 +81,9 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     /// <inheritdoc />
     public bool SupportsV2 => _capabilities.Contains(AuxiliaryBackchannelCapabilities.V2);
 
+    /// <inheritdoc />
+    public bool SupportsV3 => _capabilities.Contains(AuxiliaryBackchannelCapabilities.V3);
+
     /// <summary>
     /// Gets the JSON-RPC proxy for communicating with the AppHost.
     /// </summary>
@@ -157,14 +160,22 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
         // Create JSON-RPC connection with proper formatter
         var stream = new NetworkStream(socket, ownsSocket: true);
-        var rpc = new JsonRpc(new HeaderDelimitedMessageHandler(stream, stream, BackchannelJsonSerializerContext.CreateRpcMessageFormatter()));
+        var rpc = new JsonRpc(new HeaderDelimitedMessageHandler(stream, stream, BackchannelJsonSerializerContext.CreateRpcMessageFormatter()))
+        {
+            ActivityTracingStrategy = new ActivityTracingStrategy()
+        };
         rpc.StartListening();
 
         logger.LogDebug("Connected to auxiliary backchannel at {SocketPath}", socketPath);
 
         // Fetch all connection info
-        var appHostInfo = await rpc.InvokeAsync<AppHostInformation?>("GetAppHostInformationAsync").ConfigureAwait(false);
-        var capabilities = await FetchCapabilitiesAsync(rpc, logger).ConfigureAwait(false);
+        var appHostInfo = await rpc.InvokeWithProfilingAsync<AppHostInformation?>(
+            profilingTelemetry,
+            "auxiliary",
+            "GetAppHostInformationAsync",
+            [],
+            cancellationToken).ConfigureAwait(false);
+        var capabilities = await FetchCapabilitiesAsync(rpc, logger, profilingTelemetry, cancellationToken).ConfigureAwait(false);
 
         var capabilitiesSet = capabilities?.ToImmutableHashSet() ?? ImmutableHashSet.Create(AuxiliaryBackchannelCapabilities.V1);
 
@@ -176,14 +187,21 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     /// </summary>
     /// <param name="rpc">The JSON-RPC connection.</param>
     /// <param name="logger">Optional logger.</param>
+    /// <param name="profilingTelemetry">Optional profiling service.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The capabilities array, or null if not supported.</returns>
-    private static async Task<string[]?> FetchCapabilitiesAsync(JsonRpc rpc, ILogger logger)
+    private static async Task<string[]?> FetchCapabilitiesAsync(JsonRpc rpc, ILogger logger, ProfilingTelemetry? profilingTelemetry, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(logger);
 
         try
         {
-            var response = await rpc.InvokeAsync<GetCapabilitiesResponse?>("GetCapabilitiesAsync", [null]).ConfigureAwait(false);
+            var response = await rpc.InvokeWithProfilingAsync<GetCapabilitiesResponse?>(
+                profilingTelemetry,
+                "auxiliary",
+                "GetCapabilitiesAsync",
+                [new GetCapabilitiesRequest()],
+                cancellationToken).ConfigureAwait(false);
             var capabilities = response?.Capabilities;
             logger.LogDebug("AppHost capabilities: {Capabilities}", capabilities is not null ? string.Join(", ", capabilities) : "null");
             return capabilities;
@@ -213,7 +231,9 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
         _logger.LogDebug("Requesting AppHost information");
 
-        var appHostInfo = await rpc.InvokeWithCancellationAsync<AppHostInformation?>(
+        var appHostInfo = await rpc.InvokeWithProfilingAsync<AppHostInformation?>(
+            _profilingTelemetry,
+            "auxiliary",
             "GetAppHostInformationAsync",
             [],
             cancellationToken).ConfigureAwait(false);
@@ -230,7 +250,9 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
         try
         {
-            await rpc.InvokeWithCancellationAsync(
+            await rpc.InvokeWithProfilingAsync(
+                _profilingTelemetry,
+                "auxiliary",
                 "StopAppHostAsync",
                 [],
                 cancellationToken).ConfigureAwait(false);
@@ -258,7 +280,9 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
         try
         {
-            var dashboardUrls = await rpc.InvokeWithCancellationAsync<DashboardUrlsState?>(
+            var dashboardUrls = await rpc.InvokeWithProfilingAsync<DashboardUrlsState?>(
+                _profilingTelemetry,
+                "auxiliary",
                 "GetDashboardUrlsAsync",
                 [],
                 cancellationToken).ConfigureAwait(false);
@@ -286,7 +310,9 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
         try
         {
-            var snapshots = await rpc.InvokeWithCancellationAsync<List<ResourceSnapshot>>(
+            var snapshots = await rpc.InvokeWithProfilingAsync<List<ResourceSnapshot>>(
+                _profilingTelemetry,
+                "auxiliary",
                 "GetResourceSnapshotsAsync",
                 [],
                 cancellationToken).ConfigureAwait(false) ?? [];
@@ -316,7 +342,9 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         IAsyncEnumerable<ResourceSnapshot>? snapshots;
         try
         {
-            snapshots = await rpc.InvokeWithCancellationAsync<IAsyncEnumerable<ResourceSnapshot>>(
+            snapshots = await rpc.InvokeStreamingWithProfilingAsync<ResourceSnapshot>(
+                _profilingTelemetry,
+                "auxiliary",
                 "WatchResourceSnapshotsAsync",
                 [],
                 cancellationToken).ConfigureAwait(false);
@@ -356,7 +384,9 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         IAsyncEnumerable<ResourceLogLine>? logLines;
         try
         {
-            logLines = await rpc.InvokeWithCancellationAsync<IAsyncEnumerable<ResourceLogLine>>(
+            logLines = await rpc.InvokeStreamingWithProfilingAsync<ResourceLogLine>(
+                _profilingTelemetry,
+                "auxiliary",
                 "GetResourceLogsAsync",
                 [resourceName, follow],
                 cancellationToken).ConfigureAwait(false);
@@ -394,7 +424,9 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
         _logger.LogDebug("Requesting AppHost to call MCP tool {ToolName} on resource {ResourceName}", toolName, resourceName);
 
-        return await rpc.InvokeWithCancellationAsync<CallToolResult>(
+        return await rpc.InvokeWithProfilingAsync<CallToolResult>(
+            _profilingTelemetry,
+            "auxiliary",
             "CallResourceMcpToolAsync",
             [resourceName, toolName, arguments],
             cancellationToken).ConfigureAwait(false);
@@ -433,9 +465,11 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
         _logger.LogDebug("Getting AppHost info (v2)");
 
-        return await rpc.InvokeWithCancellationAsync<GetAppHostInfoResponse>(
+        return await rpc.InvokeWithProfilingAsync<GetAppHostInfoResponse>(
+            _profilingTelemetry,
+            "auxiliary",
             "GetAppHostInfoAsync",
-            [null],
+            [new GetAppHostInfoRequest()],
             cancellationToken).ConfigureAwait(false);
     }
 
@@ -475,9 +509,11 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
         _logger.LogDebug("Getting Dashboard info (v2)");
 
-        return await rpc.InvokeWithCancellationAsync<GetDashboardInfoResponse>(
+        return await rpc.InvokeWithProfilingAsync<GetDashboardInfoResponse>(
+            _profilingTelemetry,
+            "auxiliary",
             "GetDashboardInfoAsync",
-            [null],
+            [new GetDashboardInfoRequest()],
             cancellationToken).ConfigureAwait(false);
     }
 
@@ -512,7 +548,9 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
         _logger.LogDebug("Getting resources (v2)");
 
-        return await rpc.InvokeWithCancellationAsync<GetResourcesResponse>(
+        return await rpc.InvokeWithProfilingAsync<GetResourcesResponse>(
+            _profilingTelemetry,
+            "auxiliary",
             "GetResourcesAsync",
             [request],
             cancellationToken).ConfigureAwait(false) ?? new GetResourcesResponse { Resources = [] };
@@ -551,7 +589,9 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         IAsyncEnumerable<ResourceSnapshot>? snapshots;
         try
         {
-            snapshots = await rpc.InvokeWithCancellationAsync<IAsyncEnumerable<ResourceSnapshot>>(
+            snapshots = await rpc.InvokeStreamingWithProfilingAsync<ResourceSnapshot>(
+                _profilingTelemetry,
+                "auxiliary",
                 "WatchResourcesAsync",
                 [request],
                 cancellationToken).ConfigureAwait(false);
@@ -579,7 +619,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     /// <param name="request">The request specifying resource and options.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>An async enumerable of log lines.</returns>
-    public IAsyncEnumerable<ResourceLogLine> GetConsoleLogsV2Async(
+    public IAsyncEnumerable<ResourceLogLine> GetConsoleLogsAsync(
         GetConsoleLogsRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -594,6 +634,79 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         return GetConsoleLogsV2InternalAsync(request, cancellationToken);
     }
 
+    /// <inheritdoc />
+    public IAsyncEnumerable<ResourceLogBatch> GetConsoleLogBatchesAsync(
+        GetConsoleLogsRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (SupportsV3)
+        {
+            return GetConsoleLogBatchesV3InternalAsync(request, cancellationToken);
+        }
+
+        // Older aux.v2 AppHosts required ResourceName on GetConsoleLogsRequest. Keep all-resource
+        // fallback on the legacy RPC; LogsCommand still applies client-side search/tail/hidden
+        // filters so output remains correct even when the AppHost cannot filter server-side.
+        var logLines = request.ResourceName is null
+            ? GetResourceLogsAsync(resourceName: null, follow: request.Follow, cancellationToken: cancellationToken)
+            : GetConsoleLogsAsync(request, cancellationToken);
+
+        return BatchLogLinesAsync(logLines, request.Follow, cancellationToken);
+    }
+
+    private async IAsyncEnumerable<ResourceLogBatch> GetConsoleLogBatchesV3InternalAsync(
+        GetConsoleLogsRequest request,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var rpc = EnsureConnected();
+
+        _logger.LogDebug("Getting console log batches (v3) for {ResourceName}", request.ResourceName);
+
+        IAsyncEnumerable<ResourceLogBatch>? logBatches;
+        try
+        {
+            logBatches = await rpc.InvokeStreamingWithProfilingAsync<ResourceLogBatch>(
+                _profilingTelemetry,
+                "auxiliary",
+                "GetConsoleLogBatchesAsync",
+                [request],
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (RemoteMethodNotFoundException ex)
+        {
+            _logger.LogDebug(ex, "GetConsoleLogBatchesAsync RPC method not available on the remote AppHost. Falling back to log-line streaming.");
+            var logLines = request.ResourceName is null
+                ? GetResourceLogsAsync(resourceName: null, follow: request.Follow, cancellationToken: cancellationToken)
+                : GetConsoleLogsAsync(request, cancellationToken);
+            logBatches = BatchLogLinesAsync(logLines, request.Follow, cancellationToken);
+        }
+
+        if (logBatches is null)
+        {
+            yield break;
+        }
+
+        await foreach (var logBatch in logBatches.WithCancellation(cancellationToken).ConfigureAwait(false))
+        {
+            yield return logBatch;
+        }
+    }
+
+    private static async IAsyncEnumerable<ResourceLogBatch> BatchLogLinesAsync(
+        IAsyncEnumerable<ResourceLogLine> logLines,
+        bool follow,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        var maxBatchSize = follow ? 1 : 256;
+
+        await foreach (var batch in logLines.GetBatchesAsync(maxBatchSize, cancellationToken).ConfigureAwait(false))
+        {
+            yield return new ResourceLogBatch { Lines = batch };
+        }
+    }
+
     private async IAsyncEnumerable<ResourceLogLine> GetConsoleLogsV2InternalAsync(
         GetConsoleLogsRequest request,
         [EnumeratorCancellation] CancellationToken cancellationToken)
@@ -605,14 +718,20 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         IAsyncEnumerable<ResourceLogLine>? logLines;
         try
         {
-            logLines = await rpc.InvokeWithCancellationAsync<IAsyncEnumerable<ResourceLogLine>>(
+            logLines = await rpc.InvokeStreamingWithProfilingAsync<ResourceLogLine>(
+                _profilingTelemetry,
+                "auxiliary",
                 "GetConsoleLogsAsync",
                 [request],
                 cancellationToken).ConfigureAwait(false);
         }
-        catch (RemoteMethodNotFoundException)
+        catch (RemoteMethodNotFoundException ex)
         {
-            yield break;
+            _logger.LogDebug(ex, "GetConsoleLogsAsync RPC method not available on the remote AppHost. Falling back to GetResourceLogsAsync.");
+            // Older AppHosts only expose the legacy stream and cannot apply server-side
+            // search/tail. The LogsCommand keeps its client-side filters so output stays
+            // correct even though this fallback has to transfer the full log stream.
+            logLines = GetResourceLogsAsync(request.ResourceName, request.Follow, cancellationToken);
         }
 
         if (logLines is null)
@@ -669,7 +788,9 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
         _logger.LogDebug("Calling MCP tool (v2) {ToolName} on {ResourceName}", request.ToolName, request.ResourceName);
 
-        return await rpc.InvokeWithCancellationAsync<CallMcpToolResponse>(
+        return await rpc.InvokeWithProfilingAsync<CallMcpToolResponse>(
+            _profilingTelemetry,
+            "auxiliary",
             "CallMcpToolAsync",
             [request],
             cancellationToken).ConfigureAwait(false);
@@ -696,9 +817,11 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
         try
         {
-            await rpc.InvokeWithCancellationAsync<StopAppHostResponse>(
+            await rpc.InvokeWithProfilingAsync<StopAppHostResponse>(
+                _profilingTelemetry,
+                "auxiliary",
                 "StopAsync",
-                [request],
+                [request ?? new StopAppHostRequest()],
                 cancellationToken).ConfigureAwait(false);
             return true;
         }
@@ -733,7 +856,9 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
             NonInteractive = options.NonInteractive
         };
 
-        var response = await rpc.InvokeWithCancellationAsync<ExecuteResourceCommandResponse>(
+        var response = await rpc.InvokeWithProfilingAsync<ExecuteResourceCommandResponse>(
+            _profilingTelemetry,
+            "auxiliary",
             "ExecuteResourceCommandAsync",
             [request],
             cancellationToken).ConfigureAwait(false);
@@ -770,7 +895,9 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
             TimeoutSeconds = timeoutSeconds
         };
 
-        var response = await rpc.InvokeWithCancellationAsync<WaitForResourceResponse>(
+        var response = await rpc.InvokeWithProfilingAsync<WaitForResourceResponse>(
+            _profilingTelemetry,
+            "auxiliary",
             "WaitForResourceAsync",
             [request],
             cancellationToken).ConfigureAwait(false);
