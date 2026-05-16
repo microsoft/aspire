@@ -5,7 +5,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 using Aspire.Shared;
 
-namespace Aspire.Hosting.Backchannel;
+namespace Aspire.Hosting.Tests;
 
 [Trait("Partition", "4")]
 public class AssemblyVersionHelperTests
@@ -17,7 +17,7 @@ public class AssemblyVersionHelperTests
     [InlineData("+asdlkjfdijee", "+asdlkjfdijee")]
     [InlineData("Plain old text", "Plain old text")]
     [InlineData("", "")]
-    public void GetDisplayVersionUsesDashboardDisplayVersionImplementation(string informationalVersion, string expectedDisplayVersion)
+    public void GetDisplayVersionStripsCommitHash(string informationalVersion, string expectedDisplayVersion)
     {
         var assembly = CreateAssembly(CreateAttribute<AssemblyInformationalVersionAttribute>(informationalVersion));
 
