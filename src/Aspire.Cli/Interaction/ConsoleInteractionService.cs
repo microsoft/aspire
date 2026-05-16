@@ -362,7 +362,7 @@ internal class ConsoleInteractionService : IInteractionService
         MessageConsole.MarkupLine($"\t[bold]{InteractionServiceStrings.AspireCLIVersion}[/]: {cliInformationalVersion.EscapeMarkup()}");
         MessageConsole.MarkupLine($"\t[bold]{InteractionServiceStrings.RequiredCapability}[/]: {ex.RequiredCapability.EscapeMarkup()}");
         MessageConsole.WriteLine();
-        return ExitCodeConstants.AppHostIncompatible;
+        return CliExitCodes.AppHostIncompatible;
     }
 
     public void DisplayError(string errorMessage, bool allowMarkup = false)

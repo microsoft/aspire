@@ -49,13 +49,13 @@ internal sealed class SecretGetCommand : BaseCommand
         var result = await _secretStoreResolver.ResolveAsync(projectFile, autoInit: false, cancellationToken);
         if (result is null)
         {
-            return CommandResult.Failure(ExitCodeConstants.FailedToFindProject, SecretCommandStrings.CouldNotFindAppHost);
+            return CommandResult.Failure(CliExitCodes.FailedToFindProject, SecretCommandStrings.CouldNotFindAppHost);
         }
 
         var value = result.Store.Get(key);
         if (value is null)
         {
-            return CommandResult.Failure(ExitCodeConstants.ConfigNotFound, string.Format(CultureInfo.CurrentCulture, SecretCommandStrings.SecretNotFound, key.EscapeMarkup()));
+            return CommandResult.Failure(CliExitCodes.ConfigNotFound, string.Format(CultureInfo.CurrentCulture, SecretCommandStrings.SecretNotFound, key.EscapeMarkup()));
         }
 
         // Write value to stdout (machine-readable)

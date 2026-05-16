@@ -60,7 +60,7 @@ internal sealed class DoctorCommand : BaseCommand
 
         // Exit code: 0 if no failures (warnings are OK), 1 (InvalidCommand) if any failures
         var hasFailures = results.Any(r => r.Status == EnvironmentCheckStatus.Fail);
-        return CommandResult.FromExitCode(hasFailures ? ExitCodeConstants.InvalidCommand : ExitCodeConstants.Success);
+        return CommandResult.FromExitCode(hasFailures ? CliExitCodes.InvalidCommand : CliExitCodes.Success);
     }
 
     private void OutputJson(IReadOnlyList<EnvironmentCheckResult> results)

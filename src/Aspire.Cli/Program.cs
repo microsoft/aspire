@@ -754,7 +754,7 @@ public class Program
 
             logger.LogError(ex, "Failed to load configuration or start CLI.");
             errorWriter.WriteLine(ex.Message);
-            return ExitCodeConstants.FailedToStartCli;
+            return CliExitCodes.FailedToStartCli;
         }
 
         // Ensure dispose of app when Main exits.

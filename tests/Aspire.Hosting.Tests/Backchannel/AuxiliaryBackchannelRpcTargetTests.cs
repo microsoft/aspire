@@ -1400,6 +1400,62 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
         await app.StopAsync().DefaultTimeout();
     }
+
+    [Fact]
+    public async Task GetAppHostInformationAsync_ReturnsCliLogFilePath_WhenConfigured()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AppHost:Path"] = "/path/to/apphost.csproj",
+                [KnownConfigNames.CliProcessId] = "5678",
+                [KnownConfigNames.CliLogFilePath] = "/logs/cli_20260516T120000_abcd1234.log"
+            })
+            .Build();
+
+        using var services = new ServiceCollection()
+            .AddSingleton<IConfiguration>(configuration)
+            .AddSingleton<ProfilingTelemetry>()
+            .BuildServiceProvider();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            configuration,
+            services.GetRequiredService<ProfilingTelemetry>(),
+            services);
+
+        var result = await target.GetAppHostInformationAsync().DefaultTimeout();
+
+        Assert.Equal("/logs/cli_20260516T120000_abcd1234.log", result.CliLogFilePath);
+        Assert.Equal(5678, result.CliProcessId);
+    }
+
+    [Fact]
+    public async Task GetAppHostInfoAsync_IncludesCliLogFilePath()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AppHost:Path"] = "/path/to/apphost.csproj",
+                [KnownConfigNames.CliLogFilePath] = "/logs/cli_session.log"
+            })
+            .Build();
+
+        using var services = new ServiceCollection()
+            .AddSingleton<IConfiguration>(configuration)
+            .AddSingleton<ProfilingTelemetry>()
+            .BuildServiceProvider();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            configuration,
+            services.GetRequiredService<ProfilingTelemetry>(),
+            services);
+
+        var result = await target.GetAppHostInfoAsync().DefaultTimeout();
+
+        Assert.Equal("/logs/cli_session.log", result.CliLogFilePath);
+    }
 }
 
 #pragma warning restore ASPIREINTERACTION001

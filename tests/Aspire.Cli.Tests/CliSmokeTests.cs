@@ -14,10 +14,10 @@ public class CliSmokeTests(ITestOutputHelper outputHelper)
     };
 
     [Theory]
-    [InlineData(new string[] { }, ExitCodeConstants.InvalidCommand)]
-    [InlineData(new[] { "-d", "--help" }, ExitCodeConstants.Success)]
-    [InlineData(new[] { "--help" }, ExitCodeConstants.Success)]
-    [InlineData(new[] { "--version" }, ExitCodeConstants.Success)]
+    [InlineData(new string[] { }, CliExitCodes.InvalidCommand)]
+    [InlineData(new[] { "-d", "--help" }, CliExitCodes.Success)]
+    [InlineData(new[] { "--help" }, CliExitCodes.Success)]
+    [InlineData(new[] { "--version" }, CliExitCodes.Success)]
     public async Task MainReturnsExpectedExitCode(string[] args, int expectedExitCode)
     {
         var exitCode = await Program.Main(args).DefaultTimeout();
@@ -126,7 +126,7 @@ public class CliSmokeTests(ITestOutputHelper outputHelper)
     [Fact]
     public void RenderScenarioOutputsPublishSummaryStressCase()
     {
-        using var result = RemoteExecutor.Invoke(async () =>
+        using var result = RemoteExecutor.Invoke((Func<Task>)(async () =>
         {
             await using var outputWriter = new StringWriter();
             await using var errorWriter = new StringWriter();
@@ -147,13 +147,13 @@ public class CliSmokeTests(ITestOutputHelper outputHelper)
 
             Console.WriteLine(combinedOutput);
 
-            Assert.Equal(ExitCodeConstants.Success, exitCode);
+            Assert.Equal((int)CliExitCodes.Success, exitCode);
             Assert.Contains("=== Duration extremes ===", combinedOutput);
             Assert.Contains("Steps Summary:", combinedOutput);
             Assert.Contains("Tiny 0.2ms event", combinedOutput);
             Assert.Contains("Zero event", combinedOutput);
             Assert.Contains('╴', combinedOutput);
-        }, options: s_remoteInvokeOptions);
+        }), options: s_remoteInvokeOptions);
 
         outputHelper.WriteLine(result.Process.StandardOutput.ReadToEnd());
     }

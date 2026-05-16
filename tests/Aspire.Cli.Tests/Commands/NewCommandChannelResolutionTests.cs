@@ -106,7 +106,7 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
         var parseResult = newCommand.Parse("new aspire-starter --name TestApp --output ./output --use-redis-cache --test-framework None");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         // The template version came from the Implicit channel's package cache. If the tripwire
         // had been triggered, the run would have failed before reaching install.
         Assert.Equal("13.3.0", capturedTemplateVersion);
@@ -253,7 +253,7 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
                 capturedInputs.Channel = inputs.Channel;
                 var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "captured");
                 Directory.CreateDirectory(outputPath);
-                return Task.FromResult(new TemplateResult(ExitCodeConstants.Success, outputPath));
+                return Task.FromResult(new TemplateResult(CliExitCodes.Success, outputPath));
             },
             runtime: TemplateRuntime.Cli,
             languageId: KnownLanguageId.TypeScript);
@@ -274,7 +274,7 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
         var parseResult = newCommand.Parse($"new fake-cli-template --name TestApp --output ./captured{channelArg}");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         return capturedInputs;
     }
 

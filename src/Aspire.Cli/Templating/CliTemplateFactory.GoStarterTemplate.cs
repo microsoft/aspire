@@ -22,14 +22,14 @@ internal sealed partial class CliTemplateFactory
         if (string.IsNullOrWhiteSpace(inputs.Version))
         {
             _interactionService.DisplayError("Unable to determine Aspire version for the Go starter template.");
-            return new TemplateResult(ExitCodeConstants.InvalidCommand);
+            return new TemplateResult(CliExitCodes.InvalidCommand);
         }
 
         var aspireVersion = inputs.Version;
         var outputPath = await ResolveOutputPathAsync(inputs, template.PathDeriver, projectName, parseResult, cancellationToken);
         if (outputPath is null)
         {
-            return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
         }
 
         _logger.LogDebug("Applying Go starter template. ProjectName: {ProjectName}, OutputPath: {OutputPath}, AspireVersion: {AspireVersion}.", projectName, outputPath, aspireVersion);
@@ -46,7 +46,7 @@ internal sealed partial class CliTemplateFactory
 
             templateResult = await _interactionService.ShowStatusAsync(
                 "Creating new Aspire Go project...",
-                async () =>
+                (Func<Task<TemplateResult>>)(async () =>
                 {
                     var projectNameLower = projectName.ToLowerInvariant();
                     var ports = GenerateRandomPorts();
@@ -65,7 +65,7 @@ internal sealed partial class CliTemplateFactory
                     if (appHostProject is not IGuestAppHostSdkGenerator guestProject)
                     {
                         _interactionService.DisplayError("Automatic 'aspire restore' is unavailable for the new Go starter project because no Go AppHost SDK generator was found.");
-                        return new TemplateResult(ExitCodeConstants.FailedToBuildArtifacts, outputPath);
+                        return new TemplateResult((int)CliExitCodes.FailedToBuildArtifacts, outputPath);
                     }
 
                     _logger.LogDebug("Generating SDK code for Go starter in '{OutputPath}'.", outputPath);
@@ -73,13 +73,13 @@ internal sealed partial class CliTemplateFactory
                     if (!restoreSucceeded)
                     {
                         _interactionService.DisplayError("Automatic 'aspire restore' failed for the new Go starter project. Run 'aspire restore' in the project directory for more details.");
-                        return new TemplateResult(ExitCodeConstants.FailedToBuildArtifacts, outputPath);
+                        return new TemplateResult((int)CliExitCodes.FailedToBuildArtifacts, outputPath);
                     }
 
-                    return new TemplateResult(ExitCodeConstants.Success, outputPath);
-                }, emoji: KnownEmojis.Rocket);
+                    return new TemplateResult((int)CliExitCodes.Success, outputPath);
+                }), emoji: KnownEmojis.Rocket);
 
-            if (templateResult.ExitCode != ExitCodeConstants.Success)
+            if (templateResult.ExitCode != CliExitCodes.Success)
             {
                 return templateResult;
             }
@@ -87,7 +87,7 @@ internal sealed partial class CliTemplateFactory
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _interactionService.DisplayError($"Failed to create project files: {ex.Message}");
-            return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
         }
 
         _interactionService.DisplaySuccess($"Created Go starter project at {outputPath.EscapeMarkup()}");

@@ -57,7 +57,7 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
         var result = new AppHostConnectionResult
         {
             ErrorMessage = "failed",
-            ExitCode = ExitCodeConstants.FailedToCreateNewProject
+            ExitCode = CliExitCodes.FailedToCreateNewProject
         };
 
         Assert.False(result.IsProjectResolutionError);
@@ -91,7 +91,7 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
 
         Assert.False(result.Success);
         Assert.True(result.IsProjectResolutionError);
-        Assert.Equal(ExitCodeConstants.FailedToFindProject, result.ExitCode);
+        Assert.Equal(CliExitCodes.FailedToFindProject, result.ExitCode);
         Assert.Equal(InteractionServiceStrings.ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts, result.ErrorMessage);
     }
 
@@ -123,7 +123,7 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
 
         Assert.False(result.Success);
         Assert.True(result.IsProjectResolutionError);
-        Assert.Equal(ExitCodeConstants.FailedToFindProject, result.ExitCode);
+        Assert.Equal(CliExitCodes.FailedToFindProject, result.ExitCode);
         Assert.Equal(InteractionServiceStrings.ProjectOptionSpecifiedDirectoryContainsNoAppHosts, result.ErrorMessage);
     }
 

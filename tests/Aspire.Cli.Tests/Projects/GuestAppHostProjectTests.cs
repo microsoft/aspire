@@ -678,7 +678,7 @@ public class GuestAppHostProjectTests : IDisposable
         };
 
         var exitCode = await project.RunAsync(context, CancellationToken.None);
-        Assert.Equal(ExitCodeConstants.FailedToBuildArtifacts, exitCode);
+        Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode);
 
         var reloaded = AspireConfigFile.Load(_workspace.WorkspaceRoot.FullName);
         Assert.NotNull(reloaded);

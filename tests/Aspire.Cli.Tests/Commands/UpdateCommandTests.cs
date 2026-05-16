@@ -33,7 +33,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("update --help");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Theory]
@@ -50,7 +50,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse(commandLine);
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         var error = Assert.Single(result.Errors);
         Assert.Equal(string.Format(System.Globalization.CultureInfo.CurrentCulture, SharedCommandStrings.NonInteractiveRequiresYesFormat, "update"), error.Message);
     }
@@ -98,7 +98,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(projectLocatorInvoked);
         Assert.NotNull(capturedProjectFile);
         Assert.Equal("AppHost.csproj", capturedProjectFile.Name);
@@ -214,7 +214,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         Assert.True(confirmCallbackInvoked, "Confirm prompt should have been shown");
         Assert.NotNull(confirmPrompt);
         Assert.Contains("Would you like to update the Aspire CLI", confirmPrompt);
-        Assert.Equal(ExitCodeConstants.FailedToFindProject, exitCode);
+        Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
     }
 
     [Fact]
@@ -289,7 +289,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         Assert.True(confirmCallbackInvoked, "Confirm prompt should have been shown after successful project update");
         Assert.NotNull(confirmPrompt);
         Assert.Contains("An update is available for the Aspire CLI", confirmPrompt);
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -360,7 +360,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(downloaderInvoked, "Archive self-update should not be used for dotnet tool installs.");
         Assert.Contains(interactionService.DisplayedPlainText, text => text.Contains("dotnet tool update -g Aspire.Cli", StringComparison.Ordinal));
     }
@@ -435,7 +435,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(downloaderInvoked, "Archive self-update should not be used for dotnet tool installs.");
         Assert.Contains(interactionService.DisplayedPlainText, text => text.Contains($"dotnet tool update --tool-path \"{toolPath}\" Aspire.Cli", StringComparison.Ordinal));
     }
@@ -477,7 +477,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(updateProjectInvoked);
         Assert.False(confirmBindingResolved);
         Assert.False(confirmBindingValue);
@@ -520,7 +520,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(updateProjectInvoked);
         Assert.True(confirmBindingResolved);
         Assert.True(confirmBindingValue);
@@ -594,7 +594,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
         // Assert
         Assert.False(confirmCallbackInvoked, "Confirm prompt should NOT have been shown for channels without CLI download support");
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -615,7 +615,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Contains(interactionService.DisplayedPlainText, text => text.Contains("dotnet tool update -g Aspire.Cli", StringComparison.Ordinal));
     }
 
@@ -639,7 +639,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Contains(interactionService.DisplayedPlainText, text => text.Contains($"dotnet tool update --tool-path \"{toolPath}\" Aspire.Cli", StringComparison.Ordinal));
     }
 
@@ -677,7 +677,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.False(confirmCallbackInvoked, "Archive self-update prompt should not be shown for dotnet tool installs.");
-        Assert.Equal(ExitCodeConstants.FailedToFindProject, exitCode);
+        Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
     }
 
     [Fact]
@@ -873,7 +873,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         Assert.False(promptForSelectionInvoked, "Channel prompt should not be shown when --channel is provided");
         Assert.NotNull(capturedChannel);
         Assert.Equal("daily", capturedChannel.Name);
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -938,7 +938,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         Assert.False(promptForSelectionInvoked, "Channel prompt should not be shown when --quality is provided");
         Assert.NotNull(capturedChannel);
         Assert.Equal("daily", capturedChannel.Name);
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -995,7 +995,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains("invalid", errorMessage);
         Assert.Contains("stable", errorMessage);
         Assert.Contains("daily", errorMessage);
-        Assert.Equal(ExitCodeConstants.FailedToUpgradeProject, exitCode);
+        Assert.Equal(CliExitCodes.FailedToUpgradeProject, exitCode);
     }
 
     [Fact]
@@ -1059,7 +1059,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         Assert.False(promptForSelectionInvoked, "Channel prompt should not be shown");
         Assert.NotNull(capturedChannel);
         Assert.Equal("stable", capturedChannel.Name);
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -1117,7 +1117,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
         // Assert
         Assert.True(cancellationMessageDisplayed, "Cancellation message should have been displayed");
-        Assert.Equal(ExitCodeConstants.Cancelled, exitCode);
+        Assert.Equal(CliExitCodes.Cancelled, exitCode);
     }
 
     [Fact]
@@ -1178,7 +1178,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(promptForSelectionInvoked, "Channel selection prompt should not be shown when there are no hives");
         Assert.Equal("default", updatedWithChannel); // Implicit channel is named "default"
     }
@@ -1197,7 +1197,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             workspace,
             updateArgs: "update");
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(promptInvoked, "Channel selection prompt should not be shown when channel is configured locally");
         Assert.Equal("staging", updatedWithChannel);
     }
@@ -1218,7 +1218,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             workspace,
             updateArgs: "update");
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(promptInvoked, "Channel selection prompt should not be shown when channel is configured globally");
         Assert.Equal("staging", updatedWithChannel);
     }
@@ -1236,7 +1236,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             workspace,
             updateArgs: "update --channel daily");
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(promptInvoked, "Channel selection prompt should not be shown when --channel is specified");
         Assert.Equal("daily", updatedWithChannel);
     }
@@ -1258,7 +1258,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             workspace,
             updateArgs: "update");
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(promptInvoked, "Channel selection prompt should not be shown when channel is configured");
         Assert.Equal("staging", updatedWithChannel);
     }
@@ -1279,7 +1279,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             workspace,
             updateArgs: "update");
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(promptInvoked, "Channel selection prompt should not be shown when channel is configured");
         Assert.NotEqual("default", updatedWithChannel);
         Assert.Equal("staging", updatedWithChannel);
@@ -1331,7 +1331,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.FailedToUpgradeProject, exitCode);
+        Assert.Equal(CliExitCodes.FailedToUpgradeProject, exitCode);
     }
 
     [Fact]
@@ -1351,7 +1351,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             updateArgs: $"update --apphost {Path.Combine(projectDirectory.FullName, "AppHost.csproj")}",
             projectDirectory: projectDirectory);
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(promptInvoked, "Channel selection prompt should not be shown when channel is configured locally to the project");
         Assert.Equal("staging", updatedWithChannel);
     }
@@ -1378,7 +1378,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             updateArgs: $"update --apphost {Path.Combine(projectDirectory.FullName, "AppHost.csproj")}",
             projectDirectory: projectDirectory);
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(promptInvoked, "Channel selection prompt should not be shown when channel is configured locally to the project");
         Assert.Equal("staging", updatedWithChannel);
     }
@@ -1408,7 +1408,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             updateArgs: $"update --apphost {Path.Combine(projectDirectory.FullName, "AppHost.csproj")}",
             projectDirectory: projectDirectory);
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(promptInvoked, "Channel selection prompt should not be shown when channel is configured globally");
         Assert.Equal("staging", updatedWithChannel);
     }
@@ -1431,7 +1431,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             workspace,
             updateArgs: "update --channel daily");
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(promptInvoked, "Channel selection prompt should not be shown when --channel is specified even if hives are present");
         Assert.Equal("daily", updatedWithChannel);
     }
@@ -1455,7 +1455,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
             workspace,
             updateArgs: "update");
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(promptInvoked, "Channel selection prompt should not be shown when channel is configured locally, even with hives present");
         Assert.Equal("staging", updatedWithChannel);
     }
@@ -1529,7 +1529,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("update");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.NotNull(capturedChoices);
         Assert.NotNull(capturedFormatter);
 
@@ -1654,7 +1654,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
         // Assert
         Assert.True(cancellationMessageDisplayed, "Cancellation message should have been displayed");
-        Assert.Equal(ExitCodeConstants.Cancelled, exitCode);
+        Assert.Equal(CliExitCodes.Cancelled, exitCode);
     }
 
     [Fact]
@@ -1838,7 +1838,7 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(promptForSelectionInvoked, "No selection prompt should be shown in non-interactive mode with --channel");
         Assert.False(confirmCallbackInvoked, "No confirm prompt should be shown in non-interactive mode with --yes");
         Assert.NotNull(capturedChannel);

@@ -72,7 +72,8 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             AspireHostVersion = AssemblyVersionHelper.GetDisplayVersion(typeof(AuxiliaryBackchannelRpcTarget).Assembly) ?? "unknown",
             AppHostPath = legacyInfo.AppHostPath,
             CliProcessId = legacyInfo.CliProcessId,
-            StartedAt = legacyInfo.StartedAt
+            StartedAt = legacyInfo.StartedAt,
+            CliLogFilePath = legacyInfo.CliLogFilePath
         };
     }
 
@@ -662,7 +663,8 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             ProcessId = Environment.ProcessId,
             CliProcessId = cliProcessId,
             StartedAt = new DateTimeOffset(Process.GetCurrentProcess().StartTime),
-            CliStartedAt = cliStartedAt
+            CliStartedAt = cliStartedAt,
+            CliLogFilePath = configuration[KnownConfigNames.CliLogFilePath]
         });
     }
 

@@ -52,7 +52,7 @@ internal sealed class SetupCommand : BaseCommand
         var processPath = Environment.ProcessPath;
         if (string.IsNullOrEmpty(processPath))
         {
-            return CommandResult.Failure(ExitCodeConstants.FailedToBuildArtifacts, "Could not determine the CLI executable path.");
+            return CommandResult.Failure(CliExitCodes.FailedToBuildArtifacts, "Could not determine the CLI executable path.");
         }
 
         // `aspire setup` uses a route-independent default (parent of the binary's dir).
@@ -65,7 +65,7 @@ internal sealed class SetupCommand : BaseCommand
 
         if (string.IsNullOrEmpty(installPath))
         {
-            return CommandResult.Failure(ExitCodeConstants.FailedToBuildArtifacts, "Could not determine the installation path.");
+            return CommandResult.Failure(CliExitCodes.FailedToBuildArtifacts, "Could not determine the installation path.");
         }
 
         // Extract with spinner
@@ -93,7 +93,7 @@ internal sealed class SetupCommand : BaseCommand
                 break;
 
             case BundleExtractResult.ExtractionFailed:
-                return CommandResult.Failure(ExitCodeConstants.FailedToBuildArtifacts, $"Bundle was extracted to {installPath} but layout validation failed.");
+                return CommandResult.Failure(CliExitCodes.FailedToBuildArtifacts, $"Bundle was extracted to {installPath} but layout validation failed.");
         }
 
         return exitCode;

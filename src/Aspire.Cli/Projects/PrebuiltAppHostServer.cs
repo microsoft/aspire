@@ -611,6 +611,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         startInfo.Environment["REMOTE_APP_HOST_SOCKET_PATH"] = _socketPath;
         startInfo.Environment["REMOTE_APP_HOST_PID"] = hostPid.ToString(System.Globalization.CultureInfo.InvariantCulture);
         startInfo.Environment[KnownConfigNames.CliProcessId] = hostPid.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        startInfo.Environment[KnownConfigNames.CliLogFilePath] = _executionContext.LogFilePath;
 
         if (_integrationLibsPath is not null)
         {

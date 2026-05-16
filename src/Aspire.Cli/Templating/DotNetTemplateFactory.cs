@@ -438,7 +438,7 @@ internal class DotNetTemplateFactory(
     {
         if (!await SdkInstallHelper.EnsureSdkInstalledAsync(sdkInstaller, interactionService, telemetry, cancellationToken: cancellationToken))
         {
-            return new TemplateResult(ExitCodeConstants.SdkNotInstalled);
+            return new TemplateResult(CliExitCodes.SdkNotInstalled);
         }
 
         var name = await GetProjectNameAsync(inputs, template.Name, parseResult, cancellationToken);
@@ -446,7 +446,7 @@ internal class DotNetTemplateFactory(
 
         if (outputPath is null)
         {
-            return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
         }
 
         return await ApplyTemplateAsync(template, inputs, name, outputPath, parseResult, extraArgsCallback, cancellationToken);
@@ -482,7 +482,7 @@ internal class DotNetTemplateFactory(
             {
                 interactionService.DisplayLines(installOutcome.OutputLines);
                 interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.TemplateInstallationFailed, installOutcome.ExitCode));
-                return new TemplateResult(ExitCodeConstants.FailedToInstallTemplates);
+                return new TemplateResult(CliExitCodes.FailedToInstallTemplates);
             }
 
             interactionService.DisplayMessage(KnownEmojis.Package, string.Format(CultureInfo.CurrentCulture, TemplatingStrings.UsingProjectTemplatesVersion, installOutcome.TemplateVersion));
@@ -516,12 +516,12 @@ internal class DotNetTemplateFactory(
                 if (newProjectExitCode == 73)
                 {
                     interactionService.DisplayError(TemplatingStrings.ProjectAlreadyExists);
-                    return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+                    return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
                 }
 
                 interactionService.DisplayLines(newProjectCollector.GetLines());
                 interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.ProjectCreationFailed, newProjectExitCode));
-                return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+                return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
             }
 
             // Trust certificates (result not used since we're not launching an AppHost)
@@ -533,26 +533,26 @@ internal class DotNetTemplateFactory(
 
             interactionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.ProjectCreatedSuccessfully, outputPath));
 
-            return new TemplateResult(ExitCodeConstants.Success, outputPath);
+            return new TemplateResult(CliExitCodes.Success, outputPath);
         }
         catch (OperationCanceledException)
         {
-            return new TemplateResult(ExitCodeConstants.Cancelled);
+            return new TemplateResult(CliExitCodes.Cancelled);
         }
         catch (CertificateServiceException ex)
         {
             interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.CertificateTrustError, ex.Message));
-            return new TemplateResult(ExitCodeConstants.FailedToTrustCertificates);
+            return new TemplateResult(CliExitCodes.FailedToTrustCertificates);
         }
         catch (Exceptions.ChannelNotFoundException ex)
         {
             interactionService.DisplayError(ex.Message);
-            return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
         }
         catch (EmptyChoicesException ex)
         {
             interactionService.DisplayError(ex.Message);
-            return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
         }
         catch (NuGetPackageCacheException ex)
         {
@@ -561,7 +561,7 @@ internal class DotNetTemplateFactory(
             // init code went straight to `dotnet new install` and never invoked a NuGet search, so this catch
             // restores parity with the prior init failure mode for these scenarios.
             interactionService.DisplayError(ex.Message);
-            return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
         }
     }
 
