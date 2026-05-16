@@ -562,6 +562,11 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             projectLaunchConfiguration.LaunchProfile = namedLaunchProfile.Name;
         }
 
+        if (project.TryGetLastAnnotation<VSCodeServerReadyActionAnnotation>(out var serverReadyActionAnnotation))
+        {
+            projectLaunchConfiguration.ServerReadyAction = serverReadyActionAnnotation.ServerReadyAction.ToDcpServerReadyAction();
+        }
+
         return projectLaunchConfiguration;
     }
 
