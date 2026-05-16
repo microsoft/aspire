@@ -555,7 +555,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         {
             // Write version at info level so it's written to the console by default. Help us debug user issues.
             // Display version and commit like 8.0.0-preview.2.23619.3+17dd83f67c6822954ec9a918ef2d048a78ad4697
-            logger.LogInformation("Aspire version: {Version}", informationalVersion);
+            logger.LogInformation("Aspire dashboard version: {Version}", informationalVersion);
         }
     }
 
