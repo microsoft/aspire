@@ -76,17 +76,15 @@ Use the shell that matches the host:
 
 ##### macOS/Linux/WSL
 
-Create a temporary working directory, point `HOME` at it, and run the bash dogfood command unchanged:
+Create a temporary working directory and use `--install-path` and `--skip-path` to keep the install isolated. **Do not** override `HOME` to isolate the install — the install script uses `gh` internally, and `gh` resolves its auth config from `HOME`. Overriding `HOME` to an empty directory makes `gh` appear unauthenticated:
 
 ```bash
 testDir="$(mktemp -d -t aspire-pr-test-XXXXXX)"
-homeDir="$testDir/home"
-mkdir -p "$homeDir"
 
-HOME="$homeDir" bash -lc 'curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.sh | bash -s -- '"$prNumber"
+curl -fsSL https://raw.githubusercontent.com/microsoft/aspire/main/eng/scripts/get-aspire-cli-pr.sh | bash -s -- "$prNumber" --install-path "$testDir" --skip-path --skip-extension
 
-cliPath="$homeDir/.aspire/bin/aspire"
-hivePath="$homeDir/.aspire/hives/pr-$prNumber/packages"
+cliPath="$testDir/bin/aspire"
+hivePath="$testDir/hives/pr-$prNumber/packages"
 cliVersion="$("$cliPath" --version)"
 ```
 
@@ -515,7 +513,7 @@ If the install script fails with `Failed to get HEAD SHA for PR` or `To get star
 
 1. **Do not override `HOME`, `USERPROFILE`, or `APPDATA`** in the same shell session where you run the install script. The `gh` CLI resolves its auth config from `APPDATA` (Windows) or `HOME` (Unix), and overriding these to an isolated directory makes `gh` appear unauthenticated.
 2. On Windows, use `-InstallPath`, `-SkipPath`, and `-SkipExtension` flags instead of environment variable overrides to isolate the install.
-3. On Unix, if you must override `HOME`, either run `gh` commands in a separate subshell with the original `HOME`, or copy `~/.config/gh/` into the new home directory before running the install script.
+3. On Unix, use `--install-path`, `--skip-path`, and `--skip-extension` flags instead of overriding `HOME`.
 4. Verify with `gh auth status` in the same terminal before running the install script.
 
 ### AppHost selection prompt / no running AppHosts found
