@@ -51,6 +51,35 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         Assert.False(dailyChannel.ConfigureGlobalPackagesFolder);
     }
 
+    [Fact]
+    public async Task GetChannelsAsync_WhenIdentityChannelIsStaging_IncludesStagingChannel()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", identityChannel: PackageChannelNames.Staging);
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["overrideStagingFeed"] = "https://example.com/nuget/v3/index.json"
+            })
+            .Build();
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), configuration, NullLogger<PackagingService>.Instance);
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        var channelNames = channels.Select(c => c.Name).ToList();
+        Assert.Contains(PackageChannelNames.Staging, channelNames);
+        Assert.Equal(
+            channelNames.IndexOf(PackageChannelNames.Stable),
+            channelNames.IndexOf(PackageChannelNames.Staging) - 1);
+        Assert.Equal(
+            channelNames.IndexOf(PackageChannelNames.Daily),
+            channelNames.IndexOf(PackageChannelNames.Staging) + 1);
+    }
+
     /// <summary>
     /// Locks in the structural invariant that <c>aspire init</c> and <c>aspire new</c> depend
     /// on: the <c>stable</c> channel is always <see cref="PackageChannelType.Explicit"/> with a

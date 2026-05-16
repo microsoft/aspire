@@ -62,8 +62,11 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
 
         var channels = new List<PackageChannel>([defaultChannel, stableChannel]);
 
-        // Add staging channel if feature is enabled (after stable, before daily)
-        if (KnownFeatures.IsStagingChannelEnabled(features, configuration))
+        // Add staging channel if feature is enabled (after stable, before daily).
+        // Staging CLI builds should dogfood staging packages even before a
+        // project-level channel pin exists.
+        if (KnownFeatures.IsStagingChannelEnabled(features, configuration) ||
+            string.Equals(executionContext.IdentityChannel, PackageChannelNames.Staging, StringComparison.OrdinalIgnoreCase))
         {
             var stagingChannel = CreateStagingChannel();
             if (stagingChannel is not null)

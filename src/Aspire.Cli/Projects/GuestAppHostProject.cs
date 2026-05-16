@@ -1192,10 +1192,19 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 return packageUpdates;
             });
 
+        var explicitChannelName = context.Channel.Type == Packaging.PackageChannelType.Explicit ? context.Channel.Name : null;
+        var explicitChannelChanged = explicitChannelName is not null && !string.Equals(config.Channel, explicitChannelName, StringComparisons.CliInputOrOutput);
+
         if (updates.Count == 0 && newSdkVersion is null)
         {
+            if (explicitChannelChanged)
+            {
+                config.Channel = explicitChannelName;
+                SaveConfiguration(config, directory);
+            }
+
             _interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, UpdateCommandStrings.ProjectUpToDateMessage);
-            return new UpdatePackagesResult { UpdatesApplied = false };
+            return new UpdatePackagesResult { UpdatesApplied = explicitChannelChanged };
         }
 
         // Display pending updates
@@ -1229,9 +1238,9 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         // build-time paths intentionally do auto-pin identity (see GuestAppHostProject.cs:354
         // and ScaffoldingService.cs:208) — but `aspire update` is a no-pin path: the user
         // is updating, not initialising, and we should not change the channel pin state.
-        if (context.Channel.Type == Packaging.PackageChannelType.Explicit)
+        if (explicitChannelName is not null)
         {
-            config.Channel = context.Channel.Name;
+            config.Channel = explicitChannelName;
         }
         foreach (var (packageId, _, newVersion) in updates)
         {
