@@ -102,16 +102,17 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task GetIntegrationPackagesAsync_WithPinnedLocalSource_ReturnsOnlyPinnedLocalPackages()
+    public async Task GetIntegrationPackagesAsync_WithLocalHiveSource_ReturnsOnlyPinnedLocalIntegrationPackages()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var packagesDirectory = workspace.CreateDirectory("packages");
         const string pinnedVersion = "13.4.0-pr.16820.gabcdef";
 
-        File.WriteAllText(Path.Combine(packagesDirectory.FullName, $"Aspire.Hosting.Redis.{pinnedVersion}.nupkg"), string.Empty);
-        File.WriteAllText(Path.Combine(packagesDirectory.FullName, $"Aspire.Hosting.PostgreSQL.{pinnedVersion}.nupkg"), string.Empty);
-        File.WriteAllText(Path.Combine(packagesDirectory.FullName, "Aspire.Hosting.SqlServer.13.3.0.nupkg"), string.Empty);
-        File.WriteAllText(Path.Combine(packagesDirectory.FullName, $"Aspire.ProjectTemplates.{pinnedVersion}.nupkg"), string.Empty);
+        CreatePackageFile(packagesDirectory, "Aspire.Hosting.Redis", pinnedVersion);
+        CreatePackageFile(packagesDirectory, "Aspire.Hosting.PostgreSQL", pinnedVersion);
+        CreatePackageFile(packagesDirectory, "Aspire.Hosting.SqlServer", "13.3.0");
+        CreatePackageFile(packagesDirectory, "Aspire.Hosting.Testing", pinnedVersion);
+        CreatePackageFile(packagesDirectory, "Aspire.ProjectTemplates", pinnedVersion);
 
         var cache = new FakeNuGetPackageCache
         {
@@ -123,7 +124,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
             new PackageMapping("Aspire*", packageSource),
             new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
         };
-        var channel = PackageChannel.CreateExplicitChannel("local", PackageChannelQuality.Both, mappings, cache, pinnedVersion: pinnedVersion);
+        var channel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Local, PackageChannelQuality.Both, mappings, cache, pinnedVersion: pinnedVersion);
 
         var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).ToArray();
 
@@ -141,5 +142,60 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
                 Assert.Equal(pinnedVersion, package.Version);
                 Assert.Equal(packageSource, package.Source);
             });
+    }
+
+    [Fact]
+    public async Task GetIntegrationPackagesAsync_WithUnpinnedLocalHiveSource_ReturnsLatestLocalIntegrationPackages()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var packagesDirectory = workspace.CreateDirectory("packages");
+        const string oldVersion = "13.4.0-local.1";
+        const string newVersion = "13.4.0-local.2";
+
+        CreatePackageFile(packagesDirectory, "Aspire.Hosting.Redis", oldVersion);
+        CreatePackageFile(packagesDirectory, "Aspire.Hosting.Redis", newVersion);
+        CreatePackageFile(packagesDirectory, "Aspire.Hosting.PostgreSQL", oldVersion);
+        CreatePackageFile(packagesDirectory, "CommunityToolkit.Aspire.Hosting.Dapr", newVersion);
+        CreatePackageFile(packagesDirectory, "Aspire.Hosting.AppHost", newVersion);
+
+        var cache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => throw new InvalidOperationException("Local package sources should be enumerated directly.")
+        };
+        var packageSource = packagesDirectory.FullName.Replace('\\', '/');
+        var mappings = new[]
+        {
+            new PackageMapping("Aspire*", packageSource),
+            new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
+        };
+        var channel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Local, PackageChannelQuality.Both, mappings, cache);
+
+        var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).ToArray();
+
+        Assert.Collection(
+            packages,
+            package =>
+            {
+                Assert.Equal("Aspire.Hosting.PostgreSQL", package.Id);
+                Assert.Equal(oldVersion, package.Version);
+                Assert.Equal(packageSource, package.Source);
+            },
+            package =>
+            {
+                Assert.Equal("Aspire.Hosting.Redis", package.Id);
+                Assert.Equal(newVersion, package.Version);
+                Assert.Equal(packageSource, package.Source);
+            },
+            package =>
+            {
+                Assert.Equal("CommunityToolkit.Aspire.Hosting.Dapr", package.Id);
+                Assert.Equal(newVersion, package.Version);
+                Assert.Equal(packageSource, package.Source);
+            });
+    }
+
+    private static void CreatePackageFile(DirectoryInfo directory, string packageId, string version)
+    {
+        File.WriteAllText(Path.Combine(directory.FullName, $"{packageId}.{version}.nupkg"), string.Empty);
     }
 }
