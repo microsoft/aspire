@@ -373,6 +373,9 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
         var sdksDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "sdks"));
         var logsDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "logs"));
         var logFilePath = Path.Combine(logsDirectory.FullName, "test.log");
+        // Use a workspace-scoped home directory so concurrent tests don't collide
+        // when installing user-level agent skills to ~/.agents/skills/.
+        var homeDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, "fake-home"));
         return new CliExecutionContext(
             workingDirectory,
             hivesDirectory,
@@ -380,6 +383,7 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
             sdksDirectory,
             logsDirectory,
             logFilePath,
+            homeDirectory: homeDirectory,
             identityChannel: identityChannel);
     }
 
