@@ -115,7 +115,7 @@ resources:
       # AzDO defaults to the absolute latest build (often from `main`),
       # which has to be manually changed every run.
       # TODO: bump this when a new release/* branch is snapped.
-      branch: refs/heads/release/13.3
+      branch: release/13.3
       trigger: none          # Manual trigger only - no automatic releases
 
 extends:
