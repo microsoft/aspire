@@ -42,6 +42,8 @@ public sealed class AtsTypeRef
     /// Nullability is attached to the type reference as it appears in a capability or DTO property.
     /// Nested element, key, and value type nullability is only represented when those nested
     /// references were scanned from member metadata that exposes nullability information.
+    /// For example, a DTO property declared as <code>string?</code> produces a nullable string
+    /// type reference, while the same CLR <see cref="string" /> type on a non-nullable property does not.
     /// </remarks>
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool? IsNullable { get; init; }
