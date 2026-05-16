@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json.Serialization;
 
 namespace Aspire.TypeSystem;
 
@@ -33,6 +34,17 @@ public sealed class AtsTypeRef
     /// Only meaningful for Handle category types.
     /// </summary>
     public bool IsInterface { get; init; }
+
+    /// <summary>
+    /// Gets or sets whether this type reference accepts a JSON null value at its current use site.
+    /// </summary>
+    /// <remarks>
+    /// Nullability is attached to the type reference as it appears in a capability or DTO property.
+    /// Nested element, key, and value type nullability is only represented when those nested
+    /// references were scanned from member metadata that exposes nullability information.
+    /// </remarks>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool? IsNullable { get; init; }
 
     /// <summary>
     /// Gets or sets the element type reference for Array/List types.
@@ -370,6 +382,7 @@ public sealed class AtsParameterInfo
     /// <summary>
     /// Gets or sets whether this parameter is nullable.
     /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool IsNullable { get; init; }
 
     /// <summary>

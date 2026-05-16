@@ -688,7 +688,7 @@ export interface AddContainerOptions {
     /** The container image name. */
     image?: string;
     /** The container image tag. */
-    tag?: string;
+    tag?: string | null;
 }
 
 /** Context for configuring certificate trust configuration properties. */
@@ -716,7 +716,7 @@ export interface CertificateTrustExecutionConfigurationExportData {
 /** Optional configuration for resource commands added with `WithCommand``1`. */
 export interface CommandOptions {
     /** Optional description of the command, to be shown in the UI. Could be used as a tooltip. May be localized. */
-    description?: string;
+    description?: string | null;
     /** Obsolete optional parameter that configures the command in some way. Clients must return any value provided by the server when invoking the command. */
     parameter?: any;
     /**
@@ -746,11 +746,11 @@ export interface CommandOptions {
      */
     visibility?: ResourceCommandVisibility;
     /** When a confirmation message is specified, the UI will prompt with an OK/Cancel dialog and the confirmation message before starting the command. */
-    confirmationMessage?: string;
+    confirmationMessage?: string | null;
     /** The icon name for the command. The name should be a valid FluentUI icon name from . */
-    iconName?: string;
+    iconName?: string | null;
     /** The icon variant. */
-    iconVariant?: IconVariant;
+    iconVariant?: IconVariant | null;
     /** A flag indicating whether the command is highlighted in the UI. */
     isHighlighted?: boolean;
     /** A callback that is used to update the command state. The callback is executed when the command's resource snapshot is updated. If a callback isn't specified, the command is always enabled. */
@@ -772,15 +772,15 @@ export interface CreateBuilderOptions {
     /** The command line arguments. */
     args?: string[];
     /** The directory containing the AppHost project file. */
-    projectDirectory?: string;
+    projectDirectory?: string | null;
     /** The full path to the AppHost file (e.g., apphost.ts, apphost.py). Used for consistent socket path computation across CLI and AppHost. */
-    appHostFilePath?: string;
+    appHostFilePath?: string | null;
     /** When containers are used, use this value to override the container registry. */
-    containerRegistryOverride?: string;
+    containerRegistryOverride?: string | null;
     /** Determines whether the dashboard is disabled. */
     disableDashboard?: boolean;
     /** The application name to display in the dashboard. */
-    dashboardApplicationName?: string;
+    dashboardApplicationName?: string | null;
     /** Allows the use of HTTP urls for the AppHost resource endpoint. */
     allowUnsecuredTransport?: boolean;
     /** Enables resource logging. */
@@ -796,9 +796,9 @@ export interface ExecuteCommandResult {
     /** A flag that indicates whether the command was canceled by the user. */
     canceled?: boolean;
     /** An optional error message that can be set when the command is unsuccessful. */
-    errorMessage?: string;
+    errorMessage?: string | null;
     /** An optional message associated with the command result. */
-    message?: string;
+    message?: string | null;
     /** An optional value produced by the command. */
     data?: CommandResultData;
 }
@@ -853,21 +853,21 @@ export interface GenerateParameterDefault {
 /** ATS-friendly configuration for resource HTTP commands. */
 export interface HttpCommandExportOptions {
     /** Optional description of the command, to be shown in the UI. */
-    description?: string;
+    description?: string | null;
     /** When a confirmation message is specified, the UI will prompt with an OK/Cancel dialog before starting the command. */
-    confirmationMessage?: string;
+    confirmationMessage?: string | null;
     /** The icon name for the command. */
-    iconName?: string;
+    iconName?: string | null;
     /** The icon variant. */
-    iconVariant?: IconVariant;
+    iconVariant?: IconVariant | null;
     /** A flag indicating whether the command is highlighted in the UI. */
     isHighlighted?: boolean;
     /** Gets or sets the command name. */
-    commandName?: string;
+    commandName?: string | null;
     /** Gets or sets the HTTP endpoint name to send the request to when the command is invoked. */
-    endpointName?: string;
+    endpointName?: string | null;
     /** Gets or sets the HTTP method name to use when sending the request. */
-    methodName?: string;
+    methodName?: string | null;
     /** Gets or sets how the HTTP response content should be returned as command result data. */
     resultMode?: HttpCommandResultMode;
 }
@@ -887,7 +887,7 @@ export interface HttpsCertificateExecutionConfigurationExportData {
     /** The certificate subject. */
     subject?: string;
     /** The certificate thumbprint. */
-    thumbprint?: string;
+    thumbprint?: string | null;
     /** The expression for the key path reference. */
     keyPathExpression?: string;
     /** The expression for the PFX path reference. */
@@ -897,7 +897,7 @@ export interface HttpsCertificateExecutionConfigurationExportData {
     /** Indicates whether the PFX path was referenced. */
     isPfxPathReferenced?: boolean;
     /** The certificate password, if any. */
-    password?: string;
+    password?: string | null;
 }
 
 /** ATS-friendly certificate metadata supplied to HTTPS certificate configuration callbacks. */
@@ -907,31 +907,31 @@ export interface HttpsCertificateInfo {
     /** The certificate issuer. */
     issuer?: string;
     /** The certificate thumbprint. */
-    thumbprint?: string;
+    thumbprint?: string | null;
 }
 
 /** ATS-friendly configuration for resource process commands. */
 export interface ProcessCommandExportOptions {
     /** The executable path or command name to start. */
-    executablePath?: string;
+    executablePath?: string | null;
     /** The command-line arguments for the process. */
     arguments?: string[];
     /** The working directory for the process. */
-    workingDirectory?: string;
+    workingDirectory?: string | null;
     /** The environment variables to set for the process. */
     environmentVariables?: Record<string, string>;
     /** A value indicating whether the process should inherit the current environment variables. */
-    inheritEnvironmentVariables?: boolean;
+    inheritEnvironmentVariables?: boolean | null;
     /** Standard input content to write to the process after it starts. */
-    standardInputContent?: string;
+    standardInputContent?: string | null;
     /** A value indicating whether the entire process tree should be killed when the process is disposed. */
-    killEntireProcessTree?: boolean;
+    killEntireProcessTree?: boolean | null;
     /** Optional command configuration. */
     commandOptions?: CommandOptions;
     /** The maximum number of stdout and stderr output lines returned as command result data. */
-    maxOutputLineCount?: number;
+    maxOutputLineCount?: number | null;
     /** A value indicating whether returned command output should be displayed immediately in the dashboard. */
-    displayImmediately?: boolean;
+    displayImmediately?: boolean | null;
     /** The exit codes that are treated as a successful command invocation. */
     successExitCodes?: number[];
 }
@@ -941,9 +941,9 @@ export interface ProcessCommandResultExportOptions {
     /** Optional command configuration. */
     commandOptions?: CommandOptions;
     /** The maximum number of stdout and stderr output lines returned as command result data. */
-    maxOutputLineCount?: number;
+    maxOutputLineCount?: number | null;
     /** A value indicating whether returned command output should be displayed immediately in the dashboard. */
-    displayImmediately?: boolean;
+    displayImmediately?: boolean | null;
     /** The exit codes that are treated as a successful command invocation. */
     successExitCodes?: number[];
 }
@@ -951,19 +951,19 @@ export interface ProcessCommandResultExportOptions {
 /** ATS-friendly process specification for resource process command callbacks. */
 export interface ProcessCommandSpecExportData {
     /** The executable path or command name to start. */
-    executablePath?: string;
+    executablePath?: string | null;
     /** The command-line arguments for the process. */
     arguments?: string[];
     /** The working directory for the process. */
-    workingDirectory?: string;
+    workingDirectory?: string | null;
     /** The environment variables to set for the process. */
     environmentVariables?: Record<string, string>;
     /** A value indicating whether the process should inherit the current environment variables. */
-    inheritEnvironmentVariables?: boolean;
+    inheritEnvironmentVariables?: boolean | null;
     /** Standard input content to write to the process after it starts. */
-    standardInputContent?: string;
+    standardInputContent?: string | null;
     /** A value indicating whether the entire process tree should be killed when the process is disposed. */
-    killEntireProcessTree?: boolean;
+    killEntireProcessTree?: boolean | null;
 }
 
 /** Options that control which reference information is injected into environment variables. */
@@ -985,13 +985,13 @@ export interface ResourceEventDto {
     /** The unique resource ID. */
     resourceId?: string;
     /** The current state text. */
-    state?: string;
+    state?: string | null;
     /** The state style (e.g., "success", "warn", "error"). */
-    stateStyle?: string;
+    stateStyle?: string | null;
     /** The health status of the resource. */
-    healthStatus?: string;
+    healthStatus?: string | null;
     /** The exit code if the resource has exited. */
-    exitCode?: number;
+    exitCode?: number | null;
 }
 
 /** A URL that should be displayed for a resource. */
@@ -999,7 +999,7 @@ export interface ResourceUrlAnnotation {
     /** The URL. When rendered as a link this will be used as the link target. */
     url?: string;
     /** The name of the URL. When rendered as a link this will be used as the linked text. */
-    displayText?: string;
+    displayText?: string | null;
     /** The endpoint associated with this URL. Can be `null` if this URL is not associated with an endpoint. */
     endpoint?: EndpointReference;
     /** Locations where this URL should be shown on the dashboard. Defaults to `SummaryAndDetails`. */
@@ -1015,7 +1015,7 @@ export interface TestConfigDto {
     /** A value indicating whether the test config is enabled. */
     enabled?: boolean;
     /** An optional test config field. */
-    optionalField?: string;
+    optionalField?: string | null;
 }
 
 /** Test DTO with deeply nested generic types. */
@@ -1286,6 +1286,39 @@ export interface RunOptions {
 export interface SaveStateJsonOptions {
     /** The cancellation token. */
     cancellationToken?: AbortSignal | CancellationToken;
+}
+
+export interface SetDescriptionOptions {
+    value?: string | null;
+}
+
+export interface SetLaunchProfileNameOptions {
+    /** The launch profile to use. If `null` then the default launch profile will be used. */
+    value?: string | null;
+}
+
+export interface SetNameOptions {
+    value?: string | null;
+}
+
+export interface SetPortOptions {
+    /** Gets or sets the desired host port. */
+    value?: number | null;
+}
+
+export interface SetRemoteImageNameOptions {
+    /** Gets or sets the remote image name (repository path without registry endpoint or tag). */
+    value?: string | null;
+}
+
+export interface SetRemoteImageTagOptions {
+    /** Gets or sets the remote image tag. */
+    value?: string | null;
+}
+
+export interface SetTargetPortOptions {
+    /** Gets or sets the target port. */
+    value?: number | null;
 }
 
 export interface UpdateTaskMarkdownOptions {
@@ -2015,13 +2048,13 @@ export interface ContainerImagePushOptions {
     toJSON(): MarshalledHandle;
     /** Gets or sets the remote image name (repository path without registry endpoint or tag). */
     remoteImageName: {
-        get: () => Promise<string>;
-        set: (value: string) => Promise<void>;
+        get: () => Promise<string | null>;
+        set: (value: string | null) => Promise<void>;
     };
     /** Gets or sets the remote image tag. */
     remoteImageTag: {
-        get: () => Promise<string>;
-        set: (value: string) => Promise<void>;
+        get: () => Promise<string | null>;
+        set: (value: string | null) => Promise<void>;
     };
 }
 
@@ -2044,13 +2077,13 @@ class ContainerImagePushOptionsImpl implements ContainerImagePushOptions {
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
     remoteImageName = {
-        get: async (): Promise<string> => {
-            return await this._client.invokeCapability<string>(
+        get: async (): Promise<string | null> => {
+            return await this._client.invokeCapability<string | null>(
                 'Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.remoteImageName',
                 { context: this._handle }
             );
         },
-        set: async (value: string): Promise<void> => {
+        set: async (value: string | null): Promise<void> => {
             await this._client.invokeCapability<void>(
                 'Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.setRemoteImageName',
                 { context: this._handle, value }
@@ -2059,13 +2092,13 @@ class ContainerImagePushOptionsImpl implements ContainerImagePushOptions {
     };
 
     remoteImageTag = {
-        get: async (): Promise<string> => {
-            return await this._client.invokeCapability<string>(
+        get: async (): Promise<string | null> => {
+            return await this._client.invokeCapability<string | null>(
                 'Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.remoteImageTag',
                 { context: this._handle }
             );
         },
-        set: async (value: string): Promise<void> => {
+        set: async (value: string | null): Promise<void> => {
             await this._client.invokeCapability<void>(
                 'Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.setRemoteImageTag',
                 { context: this._handle, value }
@@ -3263,7 +3296,7 @@ export interface EndpointReference {
     /** Gets the name of the endpoint associated with the endpoint reference. */
     endpointName(): Promise<string>;
     /** Gets or sets a custom error message to be thrown when the endpoint annotation is not found. */
-    errorMessage(): Promise<string>;
+    errorMessage(): Promise<string | null>;
     /** Gets a value indicating whether the endpoint is allocated. */
     isAllocated(): Promise<boolean>;
     /** Gets a value indicating whether the endpoint exists. */
@@ -3291,7 +3324,7 @@ export interface EndpointReference {
     /** Gets the port for this endpoint. */
     port(): Promise<number>;
     /** Gets the target port for this endpoint. If the port is dynamically allocated, this will return `null`. */
-    targetPort(): Promise<number>;
+    targetPort(): Promise<number | null>;
     /** Gets the host for this endpoint. */
     host(): Promise<string>;
     /** Gets the scheme for this endpoint. */
@@ -3330,7 +3363,7 @@ export interface EndpointReferencePromise extends PromiseLike<EndpointReference>
     /** Gets the name of the endpoint associated with the endpoint reference. */
     endpointName(): Promise<string>;
     /** Gets or sets a custom error message to be thrown when the endpoint annotation is not found. */
-    errorMessage(): Promise<string>;
+    errorMessage(): Promise<string | null>;
     /** Gets a value indicating whether the endpoint is allocated. */
     isAllocated(): Promise<boolean>;
     /** Gets a value indicating whether the endpoint exists. */
@@ -3358,7 +3391,7 @@ export interface EndpointReferencePromise extends PromiseLike<EndpointReference>
     /** Gets the port for this endpoint. */
     port(): Promise<number>;
     /** Gets the target port for this endpoint. If the port is dynamically allocated, this will return `null`. */
-    targetPort(): Promise<number>;
+    targetPort(): Promise<number | null>;
     /** Gets the host for this endpoint. */
     host(): Promise<string>;
     /** Gets the scheme for this endpoint. */
@@ -3420,8 +3453,8 @@ class EndpointReferenceImpl implements EndpointReference {
         );
     }
 
-    async errorMessage(): Promise<string> {
-        return await this._client.invokeCapability<string>(
+    async errorMessage(): Promise<string | null> {
+        return await this._client.invokeCapability<string | null>(
             'Aspire.Hosting.ApplicationModel/EndpointReference.errorMessage',
             { context: this._handle }
         );
@@ -3483,8 +3516,8 @@ class EndpointReferenceImpl implements EndpointReference {
         );
     }
 
-    async targetPort(): Promise<number> {
-        return await this._client.invokeCapability<number>(
+    async targetPort(): Promise<number | null> {
+        return await this._client.invokeCapability<number | null>(
             'Aspire.Hosting.ApplicationModel/EndpointReference.targetPort',
             { context: this._handle }
         );
@@ -3583,7 +3616,7 @@ class EndpointReferencePromiseImpl implements EndpointReferencePromise {
         return this._promise.then(obj => obj.endpointName());
     }
 
-    errorMessage(): Promise<string> {
+    errorMessage(): Promise<string | null> {
         return this._promise.then(obj => obj.errorMessage());
     }
 
@@ -3619,7 +3652,7 @@ class EndpointReferencePromiseImpl implements EndpointReferencePromise {
         return this._promise.then(obj => obj.port());
     }
 
-    targetPort(): Promise<number> {
+    targetPort(): Promise<number | null> {
         return this._promise.then(obj => obj.targetPort());
     }
 
@@ -3718,13 +3751,13 @@ export interface EndpointUpdateContext {
     };
     /** Gets or sets the desired host port. */
     port: {
-        get: () => Promise<number>;
-        set: (value: number) => Promise<void>;
+        get: () => Promise<number | null>;
+        set: (value: number | null) => Promise<void>;
     };
     /** Gets or sets the target port. */
     targetPort: {
-        get: () => Promise<number>;
-        set: (value: number) => Promise<void>;
+        get: () => Promise<number | null>;
+        set: (value: number | null) => Promise<void>;
     };
     /** Gets or sets the URI scheme. */
     uriScheme: {
@@ -3797,13 +3830,13 @@ class EndpointUpdateContextImpl implements EndpointUpdateContext {
     };
 
     port = {
-        get: async (): Promise<number> => {
-            return await this._client.invokeCapability<number>(
+        get: async (): Promise<number | null> => {
+            return await this._client.invokeCapability<number | null>(
                 'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.port',
                 { context: this._handle }
             );
         },
-        set: async (value: number): Promise<void> => {
+        set: async (value: number | null): Promise<void> => {
             await this._client.invokeCapability<void>(
                 'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setPort',
                 { context: this._handle, value }
@@ -3812,13 +3845,13 @@ class EndpointUpdateContextImpl implements EndpointUpdateContext {
     };
 
     targetPort = {
-        get: async (): Promise<number> => {
-            return await this._client.invokeCapability<number>(
+        get: async (): Promise<number | null> => {
+            return await this._client.invokeCapability<number | null>(
                 'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.targetPort',
                 { context: this._handle }
             );
         },
-        set: async (value: number): Promise<void> => {
+        set: async (value: number | null): Promise<void> => {
             await this._client.invokeCapability<void>(
                 'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setTargetPort',
                 { context: this._handle, value }
@@ -5087,7 +5120,7 @@ export interface PipelineStep {
      *
      * This projection avoids exporting an ATS setter for the public init-only `Description` property.
      */
-    description(): Promise<string>;
+    description(): Promise<string | null>;
     /**
      * Adds a dependency on another step.
      * @param stepName The name of the step to depend on.
@@ -5117,7 +5150,7 @@ export interface PipelineStepPromise extends PromiseLike<PipelineStep> {
      *
      * This projection avoids exporting an ATS setter for the public init-only `Description` property.
      */
-    description(): Promise<string>;
+    description(): Promise<string | null>;
     /**
      * Adds a dependency on another step.
      * @param stepName The name of the step to depend on.
@@ -5153,8 +5186,8 @@ class PipelineStepImpl implements PipelineStep {
         );
     }
 
-    async description(): Promise<string> {
-        return await this._client.invokeCapability<string>(
+    async description(): Promise<string | null> {
+        return await this._client.invokeCapability<string | null>(
             'Aspire.Hosting.Pipelines/PipelineStep.description',
             { context: this._handle }
         );
@@ -5235,7 +5268,7 @@ class PipelineStepPromiseImpl implements PipelineStepPromise {
         return this._promise.then(obj => obj.name());
     }
 
-    description(): Promise<string> {
+    description(): Promise<string | null> {
         return this._promise.then(obj => obj.description());
     }
 
@@ -5573,8 +5606,8 @@ export interface ProjectResourceOptions {
     toJSON(): MarshalledHandle;
     /** The launch profile to use. If `null` then the default launch profile will be used. */
     launchProfileName: {
-        get: () => Promise<string>;
-        set: (value: string) => Promise<void>;
+        get: () => Promise<string | null>;
+        set: (value: string | null) => Promise<void>;
     };
     /** If set, no launch profile will be used, and LaunchProfileName will be ignored. */
     excludeLaunchProfile: {
@@ -5600,13 +5633,13 @@ class ProjectResourceOptionsImpl implements ProjectResourceOptions {
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
     launchProfileName = {
-        get: async (): Promise<string> => {
-            return await this._client.invokeCapability<string>(
+        get: async (): Promise<string | null> => {
+            return await this._client.invokeCapability<string | null>(
                 'Aspire.Hosting/ProjectResourceOptions.launchProfileName',
                 { context: this._handle }
             );
         },
-        set: async (value: string): Promise<void> => {
+        set: async (value: string | null): Promise<void> => {
             await this._client.invokeCapability<void>(
                 'Aspire.Hosting/ProjectResourceOptions.setLaunchProfileName',
                 { context: this._handle, value }
@@ -6563,8 +6596,8 @@ export interface TestCallbackContext {
     toJSON(): MarshalledHandle;
     /** Gets the Name property */
     name: {
-        get: () => Promise<string>;
-        set: (value: string) => Promise<void>;
+        get: () => Promise<string | null>;
+        set: (value: string | null) => Promise<void>;
     };
     /** Gets the Value property */
     value: {
@@ -6590,13 +6623,13 @@ class TestCallbackContextImpl implements TestCallbackContext {
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
     name = {
-        get: async (): Promise<string> => {
-            return await this._client.invokeCapability<string>(
+        get: async (): Promise<string | null> => {
+            return await this._client.invokeCapability<string | null>(
                 'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.name',
                 { context: this._handle }
             );
         },
-        set: async (value: string): Promise<void> => {
+        set: async (value: string | null): Promise<void> => {
             await this._client.invokeCapability<void>(
                 'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.setName',
                 { context: this._handle, value }
@@ -6703,8 +6736,8 @@ export interface TestEnvironmentContext {
     };
     /** Gets the Description property */
     description: {
-        get: () => Promise<string>;
-        set: (value: string) => Promise<void>;
+        get: () => Promise<string | null>;
+        set: (value: string | null) => Promise<void>;
     };
     /** Gets the Priority property */
     priority: {
@@ -6740,13 +6773,13 @@ class TestEnvironmentContextImpl implements TestEnvironmentContext {
     };
 
     description = {
-        get: async (): Promise<string> => {
-            return await this._client.invokeCapability<string>(
+        get: async (): Promise<string | null> => {
+            return await this._client.invokeCapability<string | null>(
                 'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.description',
                 { context: this._handle }
             );
         },
-        set: async (value: string): Promise<void> => {
+        set: async (value: string | null): Promise<void> => {
             await this._client.invokeCapability<void>(
                 'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.setDescription',
                 { context: this._handle, value }

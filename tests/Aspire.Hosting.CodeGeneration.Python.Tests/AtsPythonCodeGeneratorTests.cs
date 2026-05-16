@@ -294,6 +294,22 @@ public class AtsPythonCodeGeneratorTests
     }
 
     [Fact]
+    public void GeneratedCode_NullableScalarProperties_GenerateNullableTypes()
+    {
+        var atsContext = CreateContextFromBothAssemblies();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspirePy = files["aspire_app.py"];
+
+        Assert.Contains("OptionalField: str | None", aspirePy);
+        Assert.Contains("def description(self) -> str | None:", aspirePy);
+        Assert.Contains("def description(self, value: str | None) -> None:", aspirePy);
+        Assert.Contains("Name: str", aspirePy);
+        Assert.Contains("def name(self) -> str:", aspirePy);
+        Assert.Contains("def name(self, value: str) -> None:", aspirePy);
+    }
+
+    [Fact]
     public void GeneratedCode_SanitizesPythonKeywordIdentifiers()
     {
         var files = _generator.GenerateDistributedApplication(CreateContextWithKeywordParameter());

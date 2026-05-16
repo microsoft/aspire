@@ -1713,7 +1713,7 @@ class DataVolumeParameters(typing.TypedDict, total=False):
 
 class AddContainerOptions(typing.TypedDict, total=False):
     Image: str
-    Tag: str
+    Tag: str | None
 
 class CertificateTrustExecutionConfigurationContext(typing.TypedDict, total=False):
     CertificateBundlePath: ReferenceExpression
@@ -1727,14 +1727,14 @@ class CertificateTrustExecutionConfigurationExportData(typing.TypedDict, total=F
     CustomBundlePaths: typing.Iterable[str]
 
 class CommandOptions(typing.TypedDict, total=False):
-    Description: str
+    Description: str | None
     Parameter: typing.Any
     Arguments: typing.Iterable[InteractionInput]
     ValidateArguments: typing.Callable
     Visibility: ResourceCommandVisibility
-    ConfirmationMessage: str
-    IconName: str
-    IconVariant: IconVariant
+    ConfirmationMessage: str | None
+    IconName: str | None
+    IconVariant: IconVariant | None
     IsHighlighted: bool
     UpdateState: typing.Callable
 
@@ -1745,19 +1745,19 @@ class CommandResultData(typing.TypedDict, total=False):
 
 class CreateBuilderOptions(typing.TypedDict, total=False):
     Args: typing.Iterable[str]
-    ProjectDirectory: str
-    AppHostFilePath: str
-    ContainerRegistryOverride: str
+    ProjectDirectory: str | None
+    AppHostFilePath: str | None
+    ContainerRegistryOverride: str | None
     DisableDashboard: bool
-    DashboardApplicationName: str
+    DashboardApplicationName: str | None
     AllowUnsecuredTransport: bool
     EnableResourceLogging: bool
 
 class ExecuteCommandResult(typing.TypedDict, total=False):
     Success: bool
     Canceled: bool
-    ErrorMessage: str
-    Message: str
+    ErrorMessage: str | None
+    Message: str | None
     Data: CommandResultData
 
 class GenerateParameterDefault(typing.TypedDict, total=False):
@@ -1772,14 +1772,14 @@ class GenerateParameterDefault(typing.TypedDict, total=False):
     MinSpecial: int
 
 class HttpCommandExportOptions(typing.TypedDict, total=False):
-    Description: str
-    ConfirmationMessage: str
-    IconName: str
-    IconVariant: IconVariant
+    Description: str | None
+    ConfirmationMessage: str | None
+    IconName: str | None
+    IconVariant: IconVariant | None
     IsHighlighted: bool
-    CommandName: str
-    EndpointName: str
-    MethodName: str
+    CommandName: str | None
+    EndpointName: str | None
+    MethodName: str | None
     ResultMode: HttpCommandResultMode
 
 class HttpsCertificateExecutionConfigurationContext(typing.TypedDict, total=False):
@@ -1789,60 +1789,60 @@ class HttpsCertificateExecutionConfigurationContext(typing.TypedDict, total=Fals
 
 class HttpsCertificateExecutionConfigurationExportData(typing.TypedDict, total=False):
     Subject: str
-    Thumbprint: str
+    Thumbprint: str | None
     KeyPathExpression: str
     PfxPathExpression: str
     IsKeyPathReferenced: bool
     IsPfxPathReferenced: bool
-    Password: str
+    Password: str | None
 
 class HttpsCertificateInfo(typing.TypedDict, total=False):
     Subject: str
     Issuer: str
-    Thumbprint: str
+    Thumbprint: str | None
 
 class InteractionInput(typing.TypedDict, total=False):
     Name: str
-    Label: str
-    Description: str
+    Label: str | None
+    Description: str | None
     EnableDescriptionMarkdown: bool
     InputType: InputType
     Required: bool
     Options: typing.Iterable[typing.Any]
     DynamicLoading: typing.Any
-    Value: str
-    Placeholder: str
+    Value: str | None
+    Placeholder: str | None
     AllowCustomChoice: bool
     Disabled: bool
-    MaxLength: int
+    MaxLength: int | None
 
 class ProcessCommandExportOptions(typing.TypedDict, total=False):
-    ExecutablePath: str
+    ExecutablePath: str | None
     Arguments: typing.Iterable[str]
-    WorkingDirectory: str
+    WorkingDirectory: str | None
     EnvironmentVariables: typing.Mapping[str, str]
-    InheritEnvironmentVariables: bool
-    StandardInputContent: str
-    KillEntireProcessTree: bool
+    InheritEnvironmentVariables: bool | None
+    StandardInputContent: str | None
+    KillEntireProcessTree: bool | None
     CommandOptions: CommandOptions
-    MaxOutputLineCount: int
-    DisplayImmediately: bool
+    MaxOutputLineCount: int | None
+    DisplayImmediately: bool | None
     SuccessExitCodes: typing.Iterable[int]
 
 class ProcessCommandResultExportOptions(typing.TypedDict, total=False):
     CommandOptions: CommandOptions
-    MaxOutputLineCount: int
-    DisplayImmediately: bool
+    MaxOutputLineCount: int | None
+    DisplayImmediately: bool | None
     SuccessExitCodes: typing.Iterable[int]
 
 class ProcessCommandSpecExportData(typing.TypedDict, total=False):
-    ExecutablePath: str
+    ExecutablePath: str | None
     Arguments: typing.Iterable[str]
-    WorkingDirectory: str
+    WorkingDirectory: str | None
     EnvironmentVariables: typing.Mapping[str, str]
-    InheritEnvironmentVariables: bool
-    StandardInputContent: str
-    KillEntireProcessTree: bool
+    InheritEnvironmentVariables: bool | None
+    StandardInputContent: str | None
+    KillEntireProcessTree: bool | None
 
 class ReferenceEnvironmentInjectionOptions(typing.TypedDict, total=False):
     ConnectionString: bool
@@ -1853,14 +1853,14 @@ class ReferenceEnvironmentInjectionOptions(typing.TypedDict, total=False):
 class ResourceEventDto(typing.TypedDict, total=False):
     ResourceName: str
     ResourceId: str
-    State: str
-    StateStyle: str
-    HealthStatus: str
-    ExitCode: int
+    State: str | None
+    StateStyle: str | None
+    HealthStatus: str | None
+    ExitCode: int | None
 
 class ResourceUrlAnnotation(typing.TypedDict, total=False):
     Url: str
-    DisplayText: str
+    DisplayText: str | None
     Endpoint: EndpointReference
     DisplayLocation: UrlDisplayLocation
 
@@ -1868,7 +1868,7 @@ class TestConfigDto(typing.TypedDict, total=False):
     Name: str
     Port: int
     Enabled: bool
-    OptionalField: str
+    OptionalField: str | None
 
 class TestDeeplyNestedDto(typing.TypedDict, total=False):
     NestedData: AspireDict[str, AspireList[TestConfigDto]]
@@ -3465,16 +3465,16 @@ class ContainerImagePushOptions:
         return self._handle
 
     @_uncached_property
-    def remote_image_name(self) -> str:
+    def remote_image_name(self) -> str | None:
         """Gets the RemoteImageName property"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.remoteImageName',
             {'context': self._handle}
         )
-        return typing.cast(str, result)
+        return typing.cast(str | None, result)
 
     @remote_image_name.setter
-    def remote_image_name(self, value: str) -> None:
+    def remote_image_name(self, value: str | None) -> None:
         """Sets the RemoteImageName property"""
         self._client.invoke_capability(
             'Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.setRemoteImageName',
@@ -3482,16 +3482,16 @@ class ContainerImagePushOptions:
         )
 
     @_uncached_property
-    def remote_image_tag(self) -> str:
+    def remote_image_tag(self) -> str | None:
         """Gets the RemoteImageTag property"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.remoteImageTag',
             {'context': self._handle}
         )
-        return typing.cast(str, result)
+        return typing.cast(str | None, result)
 
     @remote_image_tag.setter
-    def remote_image_tag(self, value: str) -> None:
+    def remote_image_tag(self, value: str | None) -> None:
         """Sets the RemoteImageTag property"""
         self._client.invoke_capability(
             'Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.setRemoteImageTag',
@@ -4113,13 +4113,13 @@ class EndpointReference:
         return typing.cast(str, result)
 
     @_cached_property
-    def error_message(self) -> str:
+    def error_message(self) -> str | None:
         """Gets the ErrorMessage property"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.ApplicationModel/EndpointReference.errorMessage',
             {'context': self._handle}
         )
-        return typing.cast(str, result)
+        return typing.cast(str | None, result)
 
     @_cached_property
     def is_allocated(self) -> bool:
@@ -4194,13 +4194,13 @@ class EndpointReference:
         return typing.cast(int, result)
 
     @_cached_property
-    def target_port(self) -> int:
+    def target_port(self) -> int | None:
         """Gets the TargetPort property"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.ApplicationModel/EndpointReference.targetPort',
             {'context': self._handle}
         )
-        return typing.cast(int, result)
+        return typing.cast(int | None, result)
 
     @_cached_property
     def host(self) -> str:
@@ -4347,16 +4347,16 @@ class EndpointUpdateContext:
         )
 
     @_uncached_property
-    def port(self) -> int:
+    def port(self) -> int | None:
         """Gets the Port property"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.port',
             {'context': self._handle}
         )
-        return typing.cast(int, result)
+        return typing.cast(int | None, result)
 
     @port.setter
-    def port(self, value: int) -> None:
+    def port(self, value: int | None) -> None:
         """Sets the Port property"""
         self._client.invoke_capability(
             'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setPort',
@@ -4364,16 +4364,16 @@ class EndpointUpdateContext:
         )
 
     @_uncached_property
-    def target_port(self) -> int:
+    def target_port(self) -> int | None:
         """Gets the TargetPort property"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.targetPort',
             {'context': self._handle}
         )
-        return typing.cast(int, result)
+        return typing.cast(int | None, result)
 
     @target_port.setter
-    def target_port(self, value: int) -> None:
+    def target_port(self, value: int | None) -> None:
         """Sets the TargetPort property"""
         self._client.invoke_capability(
             'Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setTargetPort',
@@ -5065,13 +5065,13 @@ class PipelineStep:
         return typing.cast(str, result)
 
     @_cached_property
-    def description(self) -> str:
+    def description(self) -> str | None:
         """Gets the human-readable description of the step"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.Pipelines/PipelineStep.description',
             {'context': self._handle}
         )
-        return typing.cast(str, result)
+        return typing.cast(str | None, result)
 
     def depends_on(self, step_name: str) -> None:
         """Adds a dependency on another step by name"""
@@ -5274,16 +5274,16 @@ class ProjectResourceOptions:
         return self._handle
 
     @_uncached_property
-    def launch_profile_name(self) -> str:
+    def launch_profile_name(self) -> str | None:
         """Gets the LaunchProfileName property"""
         result = self._client.invoke_capability(
             'Aspire.Hosting/ProjectResourceOptions.launchProfileName',
             {'context': self._handle}
         )
-        return typing.cast(str, result)
+        return typing.cast(str | None, result)
 
     @launch_profile_name.setter
-    def launch_profile_name(self, value: str) -> None:
+    def launch_profile_name(self, value: str | None) -> None:
         """Sets the LaunchProfileName property"""
         self._client.invoke_capability(
             'Aspire.Hosting/ProjectResourceOptions.setLaunchProfileName',
@@ -5732,16 +5732,16 @@ class TestCallbackContext:
         return self._handle
 
     @_uncached_property
-    def name(self) -> str:
+    def name(self) -> str | None:
         """Gets the Name property"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.name',
             {'context': self._handle}
         )
-        return typing.cast(str, result)
+        return typing.cast(str | None, result)
 
     @name.setter
-    def name(self, value: str) -> None:
+    def name(self, value: str | None) -> None:
         """Sets the Name property"""
         self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.setName',
@@ -5841,16 +5841,16 @@ class TestEnvironmentContext:
         )
 
     @_uncached_property
-    def description(self) -> str:
+    def description(self) -> str | None:
         """Gets the Description property"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.description',
             {'context': self._handle}
         )
-        return typing.cast(str, result)
+        return typing.cast(str | None, result)
 
     @description.setter
-    def description(self, value: str) -> None:
+    def description(self, value: str | None) -> None:
         """Sets the Description property"""
         self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.setDescription',
