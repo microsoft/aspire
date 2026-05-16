@@ -236,10 +236,14 @@ app.get("/health", (_req, res) => {
             output.WriteLine("Phase 6: write marker file to /srv/data/marker.txt via kubectl exec");
             await auto.TypeAsync(
                 $"kubectl exec app-statefulset-0 -n {k8sNamespace} -- sh -c " +
-                "\"echo wrote-42 > /srv/data/marker.txt && echo WROTE_OK_$(cat /srv/data/marker.txt)\"");
+                "'echo wrote-42 > /srv/data/marker.txt && echo WROTE_OK_$(cat /srv/data/marker.txt)'");
             await auto.EnterAsync();
-            // Runtime-only sentinel: typed text has "WROTE_OK_$(cat ...)", emitted line
-            // has "WROTE_OK_wrote-42". Avoids matching the typed echo of the command.
+            // Single quotes around the sh -c arg are intentional: with double quotes, the
+            // outer bash on the test runner expands $(cat ...) locally (producing empty,
+            // since the marker file doesn't exist on the host) before the command ever
+            // reaches the pod. Runtime-only sentinel "WROTE_OK_wrote-42" also avoids
+            // racing against the typed echo, which only contains the literal
+            // "WROTE_OK_$(cat ...)" substring.
             await auto.WaitUntilTextAsync("WROTE_OK_wrote-42", timeout: TimeSpan.FromMinutes(2));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
@@ -267,7 +271,7 @@ app.get("/health", (_req, res) => {
             output.WriteLine("Phase 8: read marker file from new pod — proves data survived pod restart");
             await auto.TypeAsync(
                 $"kubectl exec app-statefulset-0 -n {k8sNamespace} -- sh -c " +
-                "\"echo READ_OK_$(cat /srv/data/marker.txt)\"");
+                "'echo READ_OK_$(cat /srv/data/marker.txt)'");
             await auto.EnterAsync();
             await auto.WaitUntilTextAsync("READ_OK_wrote-42", timeout: TimeSpan.FromMinutes(2));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
