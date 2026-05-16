@@ -8,7 +8,6 @@ using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 #if DEBUG
 using Microsoft.AspNetCore.InternalTesting;
 #endif
