@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes;
 
 namespace Aspire.Hosting.Azure.Kubernetes;
@@ -62,7 +63,24 @@ public sealed class ClusterDefaultsOptions
     /// pool that still leaves room for cert-manager, AGC's ALB controller, kube-system,
     /// and CoreDNS without scheduling pressure.
     /// </summary>
+    /// <remarks>
+    /// Override this — or set <see cref="SystemNodePoolVmSizeParameter"/> for a
+    /// deploy-time parameter — when the default SKU is not available in the target
+    /// region or the subscription has insufficient vCPU quota for it. <c>az vm
+    /// list-skus --location &lt;region&gt; --resource-type virtualMachines --output table</c>
+    /// shows what's available in a region.
+    /// </remarks>
     public string SystemNodePoolVmSize { get; set; } = "Standard_D2as_v5";
+
+    /// <summary>
+    /// Optional parameter that, when set, overrides <see cref="SystemNodePoolVmSize"/>
+    /// at <c>WithClusterDefaults</c> time. Lets the system pool SKU be swapped per
+    /// environment via <c>aspire deploy -p systemVmSize=Standard_E2s_v5</c> without
+    /// editing the AppHost — useful when a region runs out of quota for the default
+    /// SKU and you need to fall back to whatever your subscription has headroom for.
+    /// </summary>
+    [AspireExportIgnore(Reason = "Polyglot app hosts express parameter overrides differently.")]
+    public IResourceBuilder<ParameterResource>? SystemNodePoolVmSizeParameter { get; set; }
 
     /// <summary>
     /// Minimum node count for the system node pool autoscaler. Defaults to 1.
@@ -73,6 +91,50 @@ public sealed class ClusterDefaultsOptions
     /// Maximum node count for the system node pool autoscaler. Defaults to 3.
     /// </summary>
     public int SystemNodePoolMaxCount { get; set; } = 3;
+
+    /// <summary>
+    /// When <see langword="true"/> (the default), <c>WithClusterDefaults</c> also
+    /// provisions a dedicated user node pool for application workloads so the system
+    /// pool stays reserved for AKS system pods (cert-manager, CoreDNS, the AGC ALB
+    /// controller). Set to <see langword="false"/> for the rare "tiny dev cluster"
+    /// case where you want everything to schedule on the system pool.
+    /// </summary>
+    public bool IncludeUserNodePool { get; set; } = true;
+
+    /// <summary>
+    /// Name of the auto-created user node pool. Defaults to <c>"workload"</c>.
+    /// </summary>
+    public string UserNodePoolName { get; set; } = "workload";
+
+    /// <summary>
+    /// VM size for the auto-created user node pool. Defaults to <c>Standard_D2as_v5</c>.
+    /// </summary>
+    /// <remarks>
+    /// Override this — or set <see cref="UserNodePoolVmSizeParameter"/> — when the
+    /// default SKU is not available in the target region or the subscription has
+    /// insufficient vCPU quota for it. The user pool is typically what bumps into
+    /// regional quota first since it scales with workload count.
+    /// </remarks>
+    public string UserNodePoolVmSize { get; set; } = "Standard_D2as_v5";
+
+    /// <summary>
+    /// Optional parameter that, when set, overrides <see cref="UserNodePoolVmSize"/>
+    /// at <c>WithClusterDefaults</c> time. Lets the workload pool SKU be swapped per
+    /// environment via <c>aspire deploy -p userVmSize=Standard_E2s_v5</c> without
+    /// editing the AppHost.
+    /// </summary>
+    [AspireExportIgnore(Reason = "Polyglot app hosts express parameter overrides differently.")]
+    public IResourceBuilder<ParameterResource>? UserNodePoolVmSizeParameter { get; set; }
+
+    /// <summary>
+    /// Minimum node count for the user node pool autoscaler. Defaults to 1.
+    /// </summary>
+    public int UserNodePoolMinCount { get; set; } = 1;
+
+    /// <summary>
+    /// Maximum node count for the user node pool autoscaler. Defaults to 3.
+    /// </summary>
+    public int UserNodePoolMaxCount { get; set; } = 3;
 
     /// <summary>
     /// Name of the auto-created <see cref="AzureKubernetesLoadBalancerResource"/>.

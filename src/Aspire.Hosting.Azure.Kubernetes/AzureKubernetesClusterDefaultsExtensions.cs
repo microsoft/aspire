@@ -95,13 +95,31 @@ public static class AzureKubernetesClusterDefaultsExtensions
         var aksSubnet = vnet.AddSubnet("aks-nodes", options.AksSubnetCidr);
         var albSubnet = vnet.AddSubnet("alb-public", options.LoadBalancerSubnetCidr);
 
-        // 2. Wire the AKS env to the node subnet and configure the system pool. These two
-        //    calls produce the same effect as the manual AppHost; we just hide them.
+        // 2. Wire the AKS env to the node subnet and configure the system and (by default)
+        //    user node pools. VM sizes can be overridden by ParameterResource so callers
+        //    can swap SKUs at deploy time without editing the AppHost — common when a
+        //    region runs out of quota for the default SKU. The underlying node-pool config
+        //    takes a plain string, so we resolve the parameter synchronously here. That's
+        //    fine because parameter values are sourced from configuration/env at AppHost
+        //    startup and don't depend on any other resource being up.
+        var systemVmSize = ResolveVmSize(options.SystemNodePoolVmSizeParameter, options.SystemNodePoolVmSize);
+
         builder.WithSubnet(aksSubnet)
                .WithSystemNodePool(
-                   options.SystemNodePoolVmSize,
+                   systemVmSize,
                    minCount: options.SystemNodePoolMinCount,
                    maxCount: options.SystemNodePoolMaxCount);
+
+        if (options.IncludeUserNodePool)
+        {
+            var userVmSize = ResolveVmSize(options.UserNodePoolVmSizeParameter, options.UserNodePoolVmSize);
+
+            builder.AddNodePool(
+                options.UserNodePoolName,
+                userVmSize,
+                minCount: options.UserNodePoolMinCount,
+                maxCount: options.UserNodePoolMaxCount);
+        }
 
         // 3. Public AGC load balancer. AddLoadBalancer handles the AGC subnet delegation
         //    to Microsoft.ServiceNetworking/trafficControllers idempotently, including the
@@ -275,7 +293,28 @@ public static class AzureKubernetesClusterDefaultsExtensions
     /// HTTPS endpoints are included because the gateway terminates TLS in front of them
     /// — the route still uses the cluster-internal scheme to talk to the backend.
     /// </summary>
+    /// <summary>
+    /// True when the endpoint's URI scheme is one we'd want to attach to an HTTPRoute.
+    /// HTTPS endpoints are included because the gateway terminates TLS in front of them
+    /// — the route still uses the cluster-internal scheme to talk to the backend.
+    /// </summary>
     private static bool IsHttpScheme(string uriScheme)
         => string.Equals(uriScheme, "http", StringComparison.OrdinalIgnoreCase)
         || string.Equals(uriScheme, "https", StringComparison.OrdinalIgnoreCase);
+
+    // The underlying AKS node-pool API takes a plain string for VM size, so when the
+    // caller supplies a ParameterResource override we resolve it synchronously here.
+    // ParameterResource sources its value from configuration/env at AppHost startup and
+    // doesn't depend on any other resource, so the blocking GetAwaiter().GetResult() is
+    // safe in this context (we're running on the AppHost build thread, not in a hot path).
+    private static string ResolveVmSize(IResourceBuilder<ParameterResource>? parameterOverride, string fallback)
+    {
+        if (parameterOverride is null)
+        {
+            return fallback;
+        }
+
+        var value = parameterOverride.Resource.GetValueAsync(default).AsTask().GetAwaiter().GetResult();
+        return string.IsNullOrEmpty(value) ? fallback : value;
+    }
 }

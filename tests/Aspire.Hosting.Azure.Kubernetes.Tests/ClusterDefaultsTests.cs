@@ -193,4 +193,86 @@ public class ClusterDefaultsTests
         Assert.Contains(gateway.Routes, r => r.Path == "/api-http");
         Assert.Contains(gateway.Routes, r => r.Path == "/api-grpc");
     }
+
+    [Fact]
+    public void WithClusterDefaults_AddsSystemAndUserNodePoolsByDefault()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish);
+
+        var acmeEmail = builder.AddParameter("acme-email", "ops@contoso.com");
+        var aks = builder.AddAzureKubernetesEnvironment("aks").WithClusterDefaults(acmeEmail);
+
+        // Default options should provision a workload pool alongside the system pool so
+        // workloads don't have to share the system pool with cert-manager / kube-system.
+        var systemPool = Assert.Single(aks.Resource.NodePools, p => p.Mode == AksNodePoolMode.System);
+        var userPool = Assert.Single(aks.Resource.NodePools, p => p.Mode == AksNodePoolMode.User);
+        Assert.Equal("workload", userPool.Name);
+        Assert.Equal("Standard_D2as_v5", systemPool.VmSize);
+        Assert.Equal("Standard_D2as_v5", userPool.VmSize);
+    }
+
+    [Fact]
+    public void WithClusterDefaults_IncludeUserNodePoolFalse_OmitsUserPool()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish);
+
+        var acmeEmail = builder.AddParameter("acme-email", "ops@contoso.com");
+        var aks = builder.AddAzureKubernetesEnvironment("aks").WithClusterDefaults(acmeEmail, o =>
+        {
+            o.IncludeUserNodePool = false;
+        });
+
+        Assert.DoesNotContain(aks.Resource.NodePools, p => p.Mode == AksNodePoolMode.User);
+        Assert.Single(aks.Resource.NodePools, p => p.Mode == AksNodePoolMode.System);
+    }
+
+    [Fact]
+    public void WithClusterDefaults_VmSizeParameter_OverridesStringDefault()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish);
+
+        var acmeEmail = builder.AddParameter("acme-email", "ops@contoso.com");
+        // Parameter values resolve from configuration at AppHost startup, so a hardcoded
+        // default here stands in for a `aspire deploy -p systemVmSize=...` override.
+        var systemSku = builder.AddParameter("systemVmSize", "Standard_E2s_v5");
+        var userSku = builder.AddParameter("userVmSize", "Standard_E4s_v5");
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks").WithClusterDefaults(acmeEmail, o =>
+        {
+            o.SystemNodePoolVmSizeParameter = systemSku;
+            o.UserNodePoolVmSizeParameter = userSku;
+        });
+
+        var systemPool = Assert.Single(aks.Resource.NodePools, p => p.Mode == AksNodePoolMode.System);
+        var userPool = Assert.Single(aks.Resource.NodePools, p => p.Mode == AksNodePoolMode.User);
+        Assert.Equal("Standard_E2s_v5", systemPool.VmSize);
+        Assert.Equal("Standard_E4s_v5", userPool.VmSize);
+    }
+
+    [Fact]
+    public void WithClusterDefaults_NodePoolCounts_AppliedToConfig()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish);
+
+        var acmeEmail = builder.AddParameter("acme-email", "ops@contoso.com");
+        var aks = builder.AddAzureKubernetesEnvironment("aks").WithClusterDefaults(acmeEmail, o =>
+        {
+            o.SystemNodePoolMinCount = 2;
+            o.SystemNodePoolMaxCount = 5;
+            o.UserNodePoolMinCount = 3;
+            o.UserNodePoolMaxCount = 10;
+            o.UserNodePoolName = "apps";
+        });
+
+        var systemPool = Assert.Single(aks.Resource.NodePools, p => p.Mode == AksNodePoolMode.System);
+        var userPool = Assert.Single(aks.Resource.NodePools, p => p.Name == "apps");
+        Assert.Equal(2, systemPool.MinCount);
+        Assert.Equal(5, systemPool.MaxCount);
+        Assert.Equal(3, userPool.MinCount);
+        Assert.Equal(10, userPool.MaxCount);
+    }
 }
