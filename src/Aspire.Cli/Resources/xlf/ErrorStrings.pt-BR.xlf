@@ -102,6 +102,11 @@
         <target state="translated">O token de extensão Doam deve ser definido se ASPIRE_EXTENSION_ENDPOINT estiver definido. Verifique se o ASPIRE_EXTENSION_TOKEN está definido</target>
         <note>Do not localize ASPIRE_EXTENSION_TOKEN and ASPIRE_EXTENSION_ENDPOINT</note>
       </trans-unit>
+      <trans-unit id="FailedToParsePackageSearchResults">
+        <source>Failed to parse package search results.</source>
+        <target state="new">Failed to parse package search results.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="FailedToParseTemplateVersionFromStdout">
         <source>Failed to parse template version from stdout.</source>
         <target state="translated">Falha ao analisar a versão do modelo de stdout.</target>

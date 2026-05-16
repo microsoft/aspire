@@ -158,6 +158,9 @@
     <value>Failed to search for packages. Exit code: {0}.</value>
     <comment>{0} is a number</comment>
   </data>
+  <data name="FailedToParsePackageSearchResults" xml:space="preserve">
+    <value>Failed to parse package search results.</value>
+  </data>
   <data name="AppHostWasSpecifiedButDoesntExist" xml:space="preserve">
     <value>AppHost file was specified in '{0}' but it does not exist at '{1}'.</value>
     <comment>{0} is a path</comment>

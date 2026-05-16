@@ -5,6 +5,7 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
@@ -98,12 +99,20 @@ public static class AtsCapabilityScanner
             if (!_enums.ContainsKey(typeId))
             {
                 var values = Enum.GetNames(enumType).ToList();
+                var valueInfos = values.Select(value => new AtsEnumValueInfo
+                {
+                    Name = value,
+                    Documentation = GetXmlDocumentation(enumType.GetField(value))
+                }).ToList();
+
                 _enums[typeId] = new AtsEnumTypeInfo
                 {
                     TypeId = typeId,
                     Name = enumType.Name,
                     ClrType = enumType,
-                    Values = values
+                    Values = values,
+                    ValueInfos = valueInfos,
+                    Documentation = GetXmlDocumentation(enumType)
                 };
             }
         }
@@ -566,13 +575,20 @@ public static class AtsCapabilityScanner
         {
             var typeId = kvp.Key;
             var enumType = kvp.Value;
+            var values = Enum.GetNames(enumType).ToList();
 
             result.Add(new AtsEnumTypeInfo
             {
                 TypeId = typeId,
                 Name = enumType.Name,
                 ClrType = enumType,
-                Values = Enum.GetNames(enumType).ToList()
+                Values = values,
+                ValueInfos = values.Select(value => new AtsEnumValueInfo
+                {
+                    Name = value,
+                    Documentation = GetXmlDocumentation(enumType.GetField(value))
+                }).ToList(),
+                Documentation = GetXmlDocumentation(enumType)
             });
         }
 
@@ -1032,7 +1048,8 @@ public static class AtsCapabilityScanner
             ImplementedInterfaces = implementedInterfaces,
             BaseTypeHierarchy = baseTypeHierarchy,
             HasExposeProperties = exportAttr.ExposeProperties,
-            HasExposeMethods = exportAttr.ExposeMethods
+            HasExposeMethods = exportAttr.ExposeMethods,
+            Documentation = GetXmlDocumentation(type, exportAttr.Description)
         };
     }
 
@@ -1046,9 +1063,8 @@ public static class AtsCapabilityScanner
         var typeId = AtsTypeMapping.DeriveTypeId(type);
         var typeName = type.Name;
 
-        // Load XML documentation for descriptions
-        var xmlDoc = LoadXmlDocumentation(type.Assembly);
-        var typeDescription = GetXmlDocSummary(xmlDoc, $"T:{type.FullName}");
+        var typeDocumentation = GetXmlDocumentation(type);
+        var typeDescription = typeDocumentation?.Summary;
 
         // Collect public properties for the DTO interface
         var properties = new List<AtsDtoPropertyInfo>();
@@ -1082,7 +1098,8 @@ public static class AtsCapabilityScanner
                 (callbackParameters, callbackReturnType) = ExtractCallbackSignature(prop.PropertyType, assemblyExportedTypeCache);
             }
 
-            var propDescription = GetXmlDocSummary(xmlDoc, $"P:{type.FullName}.{prop.Name}");
+            var propDocumentation = GetXmlDocumentation(prop);
+            var propDescription = propDocumentation?.Summary;
             var isOptional = !prop.CanWrite || Nullable.GetUnderlyingType(prop.PropertyType) is not null;
 
             properties.Add(new AtsDtoPropertyInfo
@@ -1093,7 +1110,8 @@ public static class AtsCapabilityScanner
                 CallbackParameters = callbackParameters,
                 CallbackReturnType = callbackReturnType,
                 IsOptional = isOptional,
-                Description = propDescription
+                Description = propDescription,
+                Documentation = propDocumentation
             });
         }
 
@@ -1103,6 +1121,7 @@ public static class AtsCapabilityScanner
             Name = typeName,
             ClrType = type,
             Description = typeDescription,
+            Documentation = typeDocumentation,
             Properties = properties
         };
     }
@@ -1220,7 +1239,8 @@ public static class AtsCapabilityScanner
                 PathSegments = pathSegments,
                 Type = typeRef!,
                 Value = SerializeExportedValue(getValue(), memberType),
-                Description = GetXmlDocSummary(xmlDoc, docMemberName)
+                Description = GetXmlDocSummary(xmlDoc, docMemberName),
+                Documentation = GetXmlDocumentation(xmlDoc, docMemberName)
             });
         }
         catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
@@ -1599,6 +1619,7 @@ public static class AtsCapabilityScanner
                 var customMethodName = memberExportAttr?.Id;
                 var methodNameOverride = memberExportAttr?.MethodName;
                 var propertyDescription = memberExportAttr?.Description ?? $"Gets the {property.Name} property";
+                var propertyDocumentation = GetXmlDocumentation(property);
 
                 // Generate getter capability if property is readable
                 // Naming: {TypeName}.{propertyName} (camelCase, no "get" prefix)
@@ -1615,8 +1636,9 @@ public static class AtsCapabilityScanner
                         MethodName = getterMethodName,
                         OwningTypeName = typeName,
                         Description = propertyDescription,
+                        Documentation = propertyDocumentation,
                         Parameters = [
-                           new AtsParameterInfo
+                            new AtsParameterInfo
                             {
                                 Name = "context",
                                 Type = contextTypeRef,
@@ -1625,7 +1647,7 @@ public static class AtsCapabilityScanner
                                 IsCallback = false,
                                 DefaultValue = null
                             }
-                       ],
+                        ],
                         ReturnType = propertyTypeRef!,
                         TargetTypeId = typeId,
                         TargetType = contextTypeRef,
@@ -1656,8 +1678,9 @@ public static class AtsCapabilityScanner
                         MethodName = setMethodName,
                         OwningTypeName = typeName,
                         Description = $"Sets the {property.Name} property",
+                        Documentation = propertyDocumentation,
                         Parameters = [
-                           new AtsParameterInfo
+                            new AtsParameterInfo
                             {
                                 Name = "context",
                                 Type = contextTypeRef,
@@ -1673,9 +1696,10 @@ public static class AtsCapabilityScanner
                                 IsOptional = false,
                                 IsNullable = false,
                                 IsCallback = false,
+                                Documentation = propertyDocumentation,
                                 DefaultValue = null
                             }
-                       ],
+                        ],
                         ReturnType = contextTypeRef,
                         TargetTypeId = typeId,
                         TargetType = contextTypeRef,
@@ -1789,11 +1813,15 @@ public static class AtsCapabilityScanner
                     }
                 };
 
+                // The method documentation contains all <param> entries, so load it once and
+                // project each parameter's documentation from the shared parsed member element.
+                var description = memberExportAttr?.Description ?? $"Invokes the {method.Name} method";
+                var methodDocumentation = GetXmlDocumentation(method, description);
                 var paramIndex = 0;
                 var hasUnmappedRequiredParam = false;
                 foreach (var param in method.GetParameters())
                 {
-                    var paramInfo = CreateParameterInfo(param, paramIndex, assemblyExportedTypeCache);
+                    var paramInfo = CreateParameterInfo(param, paramIndex, assemblyExportedTypeCache, GetParameterDocumentation(methodDocumentation, param.Name));
                     if (paramInfo is null)
                     {
                         // Parameter type couldn't be mapped - skip if required
@@ -1818,8 +1846,6 @@ public static class AtsCapabilityScanner
                 // Get return type
                 var returnTypeRef = CreateTypeRef(method.ReturnType, enumCollector: null, assemblyExportedTypeCache);
 
-                // Get description from attribute if specified
-                var description = memberExportAttr?.Description ?? $"Invokes the {method.Name} method";
                 var obsoleteData = AttributeDataReader.GetObsoleteData(method);
 
                 // Get simple method name (without type prefix)
@@ -1831,6 +1857,7 @@ public static class AtsCapabilityScanner
                     MethodName = simpleMethodName,
                     OwningTypeName = typeName,
                     Description = description,
+                    Documentation = methodDocumentation,
                     IsObsolete = obsoleteData is not null,
                     ObsoleteMessage = obsoleteData?.Message,
                     Parameters = paramInfos,
@@ -1966,10 +1993,12 @@ public static class AtsCapabilityScanner
         var skipFirst = extendsTypeId != null;
         var paramList = skipFirst ? parameters.Skip(1) : parameters;
 
+        var methodDocumentation = GetXmlDocumentation(method, description);
         var paramIndex = 0;
         foreach (var param in paramList)
         {
-            var paramInfo = CreateParameterInfo(param, paramIndex, assemblyExportedTypeCache);
+            var parameterDocumentation = GetParameterDocumentation(methodDocumentation, param.Name);
+            var paramInfo = CreateParameterInfo(param, paramIndex, assemblyExportedTypeCache, parameterDocumentation);
             if (paramInfo is null)
             {
                 // Parameter type couldn't be mapped - skip if required
@@ -2000,6 +2029,7 @@ public static class AtsCapabilityScanner
             CapabilityId = capabilityId,
             MethodName = methodName,
             Description = description,
+            Documentation = methodDocumentation,
             IsObsolete = obsoleteData is not null,
             ObsoleteMessage = obsoleteData?.Message,
             Parameters = paramInfos,
@@ -2017,7 +2047,8 @@ public static class AtsCapabilityScanner
     private static AtsParameterInfo? CreateParameterInfo(
         ParameterInfo param,
         int paramIndex,
-        AssemblyExportedTypeCache assemblyExportedTypeCache)
+        AssemblyExportedTypeCache assemblyExportedTypeCache,
+        AtsDocumentationInfo? documentation = null)
     {
         var paramType = param.ParameterType;
         var paramName = string.IsNullOrEmpty(param.Name) ? $"arg{paramIndex}" : param.Name;
@@ -2035,6 +2066,7 @@ public static class AtsCapabilityScanner
                 IsOptional = param.IsOptional,
                 IsNullable = false,
                 IsCallback = false,
+                Documentation = documentation,
                 DefaultValue = param.HasDefaultValue ? param.DefaultValue : null
             };
         }
@@ -2079,6 +2111,7 @@ public static class AtsCapabilityScanner
             IsCallback = isCallback,
             CallbackParameters = callbackParameters,
             CallbackReturnType = callbackReturnType,
+            Documentation = documentation,
             DefaultValue = param.HasDefaultValue ? param.DefaultValue : null
         };
     }
@@ -2101,6 +2134,7 @@ public static class AtsCapabilityScanner
 
         // Extract parameters
         var parameters = new List<AtsCallbackParameterInfo>();
+        var invokeDocumentation = GetXmlDocumentation(invokeMethod);
         foreach (var param in invokeMethod.GetParameters())
         {
             var paramType = param.ParameterType;
@@ -2110,7 +2144,8 @@ public static class AtsCapabilityScanner
                 parameters.Add(new AtsCallbackParameterInfo
                 {
                     Name = param.Name ?? $"arg{param.Position}",
-                    Type = paramTypeRef
+                    Type = paramTypeRef,
+                    Documentation = GetParameterDocumentation(invokeDocumentation, param.Name)
                 });
             }
         }
@@ -3301,27 +3336,464 @@ public static class AtsCapabilityScanner
     /// <param name="memberName">The documentation member name (e.g., "T:Namespace.TypeName" or "P:Namespace.TypeName.Property").</param>
     public static string? GetXmlDocSummary(XDocument? xmlDoc, string memberName)
     {
+        var memberElement = FindXmlDocumentationMember(xmlDoc, memberName);
+        return FormatXmlDocumentationElement(memberElement?.Element("summary"));
+    }
+
+    private static AtsDocumentationInfo? GetXmlDocumentation(MemberInfo? member, string? fallbackSummary = null)
+    {
+        if (member is null)
+        {
+            return CreateFallbackDocumentation(fallbackSummary);
+        }
+
+        var memberName = GetXmlDocumentationMemberName(member);
+        if (memberName is null)
+        {
+            return CreateFallbackDocumentation(fallbackSummary);
+        }
+
+        return GetXmlDocumentation(LoadXmlDocumentation(GetMemberAssembly(member)), memberName, fallbackSummary);
+    }
+
+    private static AtsDocumentationInfo? GetXmlDocumentation(XDocument? xmlDoc, string memberName, string? fallbackSummary = null)
+    {
+        var memberElement = FindXmlDocumentationMember(xmlDoc, memberName);
+        var documentation = CreateDocumentation(memberElement, fallbackSummary);
+        if (documentation is not null)
+        {
+            return documentation;
+        }
+
+        return CreateFallbackDocumentation(fallbackSummary);
+    }
+
+    private static XElement? FindXmlDocumentationMember(XDocument? xmlDoc, string memberName)
+    {
         if (xmlDoc is null)
         {
             return null;
         }
 
-        var memberElement = xmlDoc.Descendants("member")
-            .FirstOrDefault(m => m.Attribute("name")?.Value == memberName);
+        return xmlDoc.Descendants("member")
+            .FirstOrDefault(m => string.Equals(m.Attribute("name")?.Value, memberName, StringComparison.Ordinal));
+    }
 
-        var summary = memberElement?.Element("summary");
-        if (summary is null)
+    private static AtsDocumentationInfo? CreateDocumentation(XElement? memberElement, string? fallbackSummary)
+    {
+        if (memberElement is null)
         {
             return null;
         }
 
-        // Normalize whitespace: collapse inner whitespace from multiline XML doc comments
-        var text = string.Join(" ", summary.Value
-            .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries)
-            .Select(line => line.Trim())
-            .Where(line => line.Length > 0));
+        var summary = FormatXmlDocumentationElement(GetDocumentationElement(memberElement, "summary", out var hasAtsSummary));
+        if (!hasAtsSummary)
+        {
+            summary ??= NormalizeDocumentationText(fallbackSummary);
+        }
 
-        return text.Length > 0 ? text : null;
+        var remarks = FormatXmlDocumentationElement(GetDocumentationElement(memberElement, "remarks", out var hasAtsRemarks), preserveLineBreaks: true);
+        var returns = FormatXmlDocumentationElement(GetDocumentationElement(memberElement, "returns", out var hasAtsReturns));
+        var standardParameters = CreateParameterDocumentation(memberElement.Elements("param"));
+        var atsParameterElements = memberElement.Elements("ats-param").ToList();
+        var atsParameterNames = atsParameterElements
+            .Select(param => param.Attribute("name")?.Value)
+            .Where(static name => !string.IsNullOrEmpty(name))
+            .ToHashSet(StringComparer.Ordinal);
+        var parameters = standardParameters
+            .Where(param => !atsParameterNames.Contains(param.Name))
+            .Concat(CreateParameterDocumentation(atsParameterElements))
+            .ToList();
+
+        var hasAtsDocumentation =
+            hasAtsSummary ||
+            hasAtsRemarks ||
+            hasAtsReturns ||
+            atsParameterNames.Count > 0;
+
+        if (!hasAtsDocumentation &&
+            summary is null &&
+            remarks is null &&
+            returns is null &&
+            parameters.Count == 0)
+        {
+            return null;
+        }
+
+        return new AtsDocumentationInfo
+        {
+            Summary = summary,
+            Remarks = remarks,
+            Returns = returns,
+            Parameters = parameters
+        };
+    }
+
+    private static XElement? GetDocumentationElement(XElement memberElement, string tagName, out bool hasAtsOverride)
+    {
+        var atsElement = memberElement.Element($"ats-{tagName}");
+        hasAtsOverride = atsElement is not null;
+        return atsElement ?? memberElement.Element(tagName);
+    }
+
+    private static List<AtsParameterDocumentationInfo> CreateParameterDocumentation(IEnumerable<XElement> parameters)
+    {
+        return parameters
+            .Select(param => new AtsParameterDocumentationInfo
+            {
+                Name = param.Attribute("name")?.Value ?? string.Empty,
+                Description = FormatXmlDocumentationElement(param) ?? string.Empty
+            })
+            .Where(static param => param.Name.Length > 0 && param.Description.Length > 0)
+            .ToList();
+    }
+
+    private static AtsDocumentationInfo? CreateFallbackDocumentation(string? fallbackSummary)
+    {
+        var summary = NormalizeDocumentationText(fallbackSummary);
+        return summary is null ? null : new AtsDocumentationInfo { Summary = summary };
+    }
+
+    private static AtsDocumentationInfo? GetParameterDocumentation(AtsDocumentationInfo? documentation, string? parameterName)
+    {
+        if (documentation is null || string.IsNullOrEmpty(parameterName))
+        {
+            return null;
+        }
+
+        var parameter = documentation.Parameters.FirstOrDefault(p => string.Equals(p.Name, parameterName, StringComparison.Ordinal));
+        return string.IsNullOrWhiteSpace(parameter?.Description)
+            ? null
+            : new AtsDocumentationInfo { Summary = parameter.Description };
+    }
+
+    private static string? FormatXmlDocumentationElement(XElement? element, bool preserveLineBreaks = false)
+    {
+        if (element is null)
+        {
+            return null;
+        }
+
+        var builder = new StringBuilder();
+        AppendXmlDocumentationNodes(builder, element.Nodes());
+        return NormalizeDocumentationText(builder.ToString(), preserveLineBreaks);
+    }
+
+    private static void AppendXmlDocumentationNodes(StringBuilder builder, IEnumerable<XNode> nodes)
+    {
+        foreach (var node in nodes)
+        {
+            switch (node)
+            {
+                case XText text:
+                    builder.Append(text.Value);
+                    break;
+
+                case XElement element:
+                    AppendXmlDocumentationElement(builder, element);
+                    break;
+            }
+        }
+    }
+
+    private static void AppendXmlDocumentationElement(StringBuilder builder, XElement element)
+    {
+        switch (element.Name.LocalName)
+        {
+            case "c":
+                builder.Append('`');
+                AppendXmlDocumentationNodes(builder, element.Nodes());
+                builder.Append('`');
+                break;
+
+            case "code":
+                builder.AppendLine();
+                builder.AppendLine("```");
+                builder.Append(element.Value.Trim('\r', '\n'));
+                builder.AppendLine();
+                builder.Append("```");
+                builder.AppendLine();
+                break;
+
+            case "para":
+                builder.AppendLine();
+                AppendXmlDocumentationNodes(builder, element.Nodes());
+                builder.AppendLine();
+                break;
+
+            case "paramref":
+            case "typeparamref":
+                builder.Append('`');
+                builder.Append(element.Attribute("name")?.Value);
+                builder.Append('`');
+                break;
+
+            case "see":
+            case "seealso":
+                AppendSeeDocumentationElement(builder, element);
+                break;
+
+            case "ats-see":
+            case "ats-seealso":
+                AppendAtsReferenceDocumentationElement(builder, element);
+                break;
+
+            case "list":
+                AppendListDocumentationElement(builder, element);
+                break;
+
+            default:
+                AppendXmlDocumentationNodes(builder, element.Nodes());
+                break;
+        }
+    }
+
+    private static void AppendAtsReferenceDocumentationElement(StringBuilder builder, XElement element)
+    {
+        var cref = element.Attribute("cref")?.Value;
+        if (string.IsNullOrWhiteSpace(cref))
+        {
+            AppendXmlDocumentationNodes(builder, element.Nodes());
+            return;
+        }
+
+        if (!TryParseAtsDocumentationReference(cref, out var kind, out var target))
+        {
+            var fallbackText = NormalizeDocumentationText(element.Value);
+            builder.Append(string.IsNullOrWhiteSpace(fallbackText) ? cref : fallbackText);
+            return;
+        }
+
+        var explicitText = NormalizeDocumentationText(element.Value);
+        builder.Append("{@ats-ref ").Append(kind).Append(':').Append(target);
+        if (!string.IsNullOrWhiteSpace(explicitText))
+        {
+            builder.Append('|').Append(explicitText);
+        }
+
+        builder.Append('}');
+    }
+
+    private static bool TryParseAtsDocumentationReference(string value, out string kind, out string target)
+    {
+        var separatorIndex = value.IndexOf(':', StringComparison.Ordinal);
+        if (separatorIndex < 1 || separatorIndex == value.Length - 1)
+        {
+            kind = string.Empty;
+            target = string.Empty;
+            return false;
+        }
+
+        kind = value[..separatorIndex];
+        target = value[(separatorIndex + 1)..];
+
+        return kind is "type" or "method" or "field" && IsValidAtsDocumentationReferenceTarget(target);
+    }
+
+    private static bool IsValidAtsDocumentationReferenceTarget(string target)
+    {
+        var segmentStart = true;
+
+        foreach (var c in target)
+        {
+            if (c == '.')
+            {
+                if (segmentStart)
+                {
+                    return false;
+                }
+
+                segmentStart = true;
+                continue;
+            }
+
+            if (segmentStart)
+            {
+                if (!(char.IsAsciiLetter(c) || c == '_'))
+                {
+                    return false;
+                }
+
+                segmentStart = false;
+                continue;
+            }
+
+            if (!(char.IsAsciiLetterOrDigit(c) || c == '_'))
+            {
+                return false;
+            }
+        }
+
+        return !segmentStart;
+    }
+
+    private static void AppendSeeDocumentationElement(StringBuilder builder, XElement element)
+    {
+        var langword = element.Attribute("langword")?.Value;
+        if (!string.IsNullOrWhiteSpace(langword))
+        {
+            builder.Append('`').Append(langword).Append('`');
+            return;
+        }
+
+        var explicitText = NormalizeDocumentationText(element.Value);
+        if (!string.IsNullOrWhiteSpace(explicitText))
+        {
+            builder.Append(explicitText);
+            return;
+        }
+
+        var cref = element.Attribute("cref")?.Value;
+        if (!string.IsNullOrWhiteSpace(cref))
+        {
+            builder.Append('`').Append(GetFriendlyCrefName(cref)).Append('`');
+        }
+    }
+
+    private static void AppendListDocumentationElement(StringBuilder builder, XElement element)
+    {
+        foreach (var item in element.Elements("item"))
+        {
+            var term = FormatXmlDocumentationElement(item.Element("term"));
+            var description = FormatXmlDocumentationElement(item.Element("description"));
+
+            builder.AppendLine();
+            builder.Append("- ");
+            if (!string.IsNullOrWhiteSpace(term))
+            {
+                builder.Append(term);
+                if (!string.IsNullOrWhiteSpace(description))
+                {
+                    builder.Append(": ");
+                }
+            }
+
+            builder.Append(description);
+        }
+    }
+
+    private static string GetFriendlyCrefName(string cref)
+    {
+        var value = cref.Length > 2 && cref[1] == ':' ? cref[2..] : cref;
+        var parenIndex = value.IndexOf('(', StringComparison.Ordinal);
+        if (parenIndex >= 0)
+        {
+            value = value[..parenIndex];
+        }
+
+        var lastSeparatorIndex = Math.Max(value.LastIndexOf('.'), value.LastIndexOf('#'));
+        return lastSeparatorIndex >= 0 ? value[(lastSeparatorIndex + 1)..] : value;
+    }
+
+    private static string? NormalizeDocumentationText(string? text, bool preserveLineBreaks = false)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        var normalizedLines = text
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace('\r', '\n')
+            .Split('\n')
+            .Select(static line => string.Join(' ', line.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries)))
+            .Where(static line => line.Length > 0);
+
+        var normalized = string.Join(preserveLineBreaks ? '\n' : ' ', normalizedLines);
+
+        return normalized.Length == 0 ? null : normalized.Replace("*/", "* /", StringComparison.Ordinal);
+    }
+
+    private static Assembly GetMemberAssembly(MemberInfo member)
+    {
+        return member switch
+        {
+            Type type => type.Assembly,
+            _ => member.Module.Assembly
+        };
+    }
+
+    private static string? GetXmlDocumentationMemberName(MemberInfo member)
+    {
+        return member switch
+        {
+            Type type => $"T:{GetXmlDocumentationTypeName(type)}",
+            FieldInfo field when field.DeclaringType is not null => $"F:{GetXmlDocumentationTypeName(field.DeclaringType)}.{field.Name}",
+            PropertyInfo property when property.DeclaringType is not null => $"P:{GetXmlDocumentationTypeName(property.DeclaringType)}.{property.Name}",
+            MethodBase method when method.DeclaringType is not null => GetXmlDocumentationMethodName(method),
+            _ => null
+        };
+    }
+
+    private static string GetXmlDocumentationMethodName(MethodBase method)
+    {
+        var builder = new StringBuilder("M:");
+        builder.Append(GetXmlDocumentationTypeName(method.DeclaringType!));
+        builder.Append('.');
+        builder.Append(method.IsConstructor ? "#ctor" : method.Name);
+
+        if (method.IsGenericMethod)
+        {
+            builder.Append("``");
+            builder.Append(method.GetGenericArguments().Length);
+        }
+
+        var parameters = method.GetParameters();
+        if (parameters.Length > 0)
+        {
+            builder.Append('(');
+            builder.AppendJoin(",", parameters.Select(parameter => GetXmlDocumentationParameterTypeName(parameter.ParameterType)));
+            builder.Append(')');
+        }
+
+        return builder.ToString();
+    }
+
+    private static string GetXmlDocumentationTypeName(Type type)
+    {
+        if (type.IsGenericParameter)
+        {
+            return type.DeclaringMethod is not null ? $"``{type.GenericParameterPosition}" : $"`{type.GenericParameterPosition}";
+        }
+
+        if (type.IsByRef)
+        {
+            return $"{GetXmlDocumentationTypeName(type.GetElementType()!)}@";
+        }
+
+        if (type.IsPointer)
+        {
+            return $"{GetXmlDocumentationTypeName(type.GetElementType()!)}*";
+        }
+
+        if (type.IsArray)
+        {
+            return $"{GetXmlDocumentationTypeName(type.GetElementType()!)}[]";
+        }
+
+        if (type.IsGenericType && !type.IsGenericTypeDefinition)
+        {
+            var typeDefinitionName = GetXmlDocumentationTypeName(type.GetGenericTypeDefinition());
+            var tickIndex = typeDefinitionName.IndexOf('`', StringComparison.Ordinal);
+            if (tickIndex >= 0)
+            {
+                typeDefinitionName = typeDefinitionName[..tickIndex];
+            }
+
+            return $"{typeDefinitionName}{{{string.Join(",", type.GetGenericArguments().Select(GetXmlDocumentationTypeName))}}}";
+        }
+
+        return (type.FullName ?? type.Name).Replace('+', '.');
+    }
+
+    private static string GetXmlDocumentationParameterTypeName(Type type)
+    {
+        if (Nullable.GetUnderlyingType(type) is { } nullableUnderlyingType)
+        {
+            return $"System.Nullable{{{GetXmlDocumentationTypeName(nullableUnderlyingType)}}}";
+        }
+
+        return GetXmlDocumentationTypeName(type);
     }
 
     private static bool IsAssemblyExportedType(Type type, AssemblyExportedTypeCache? assemblyExportedTypeCache)

@@ -324,11 +324,21 @@ public class Program
         // Configure OpenTelemetry tracing. TelemetryManager reads configuration and creates
         // separate TracerProvider instances:
         // - Azure Monitor provider with filtering (only exports activities with EXTERNAL_TELEMETRY=true)
-        // - Diagnostic provider for OTLP/console exporters (exports all activities, DEBUG only)
+        // - Profiling provider for explicit startup profiling OTLP export
+        // - Diagnostic provider for DEBUG-only diagnostics
         builder.Services.AddSingleton(sp => new TelemetryManager(sp.GetRequiredService<IConfiguration>(), args));
 
         // Shared services.
         builder.Services.AddSingleton<IIdentityChannelReader>(_ => new IdentityChannelReader(typeof(Program).Assembly));
+        if (OperatingSystem.IsWindows())
+        {
+            builder.Services.AddSingleton<IWindowsRegistryReader, WindowsRegistryReader>();
+        }
+        else
+        {
+            builder.Services.AddSingleton<IWindowsRegistryReader, NullWindowsRegistryReader>();
+        }
+        builder.Services.AddSingleton<WingetFirstRunProbe>();
         builder.Services.AddSingleton(sp =>
         {
             var channelReader = sp.GetRequiredService<IIdentityChannelReader>();

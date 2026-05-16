@@ -107,11 +107,11 @@ internal sealed class DotNetCliRunner(
 
         // Resolve the dotnet executable path, preferring the private SDK installation if available.
         var dotnetPath = ResolveDotNetPath(finalEnv);
+        var effectiveArgs = AddBinlogArgumentIfConfigured(args, dotnetCommand, projectFile, workingDirectory, processActivity);
         processActivity.SetDotNetResolvedExecutable(
             dotnetPath,
+            effectiveArgs,
             finalEnv.TryGetValue("DOTNET_CLI_USE_MSBUILD_SERVER", out var msBuildServerValue) ? msBuildServerValue : null);
-
-        var effectiveArgs = AddBinlogArgumentIfConfigured(args, dotnetCommand, projectFile, workingDirectory, processActivity);
         processActivity.SetDotNetArgsCount(effectiveArgs.Length);
 
         var outputCounters = new ProcessOutputCounters();

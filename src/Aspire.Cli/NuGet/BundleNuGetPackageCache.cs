@@ -1,11 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Layout;
+using Aspire.Cli.Resources;
 using Microsoft.Extensions.Logging;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
@@ -200,7 +202,7 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
             _logger.LogError("NuGet search failed with exit code {ExitCode}", exitCode);
             _logger.LogError("NuGet search stderr: {Error}", error);
             _logger.LogError("NuGet search stdout: {Output}", output);
-            throw new NuGetPackageCacheException($"Package search failed: {error}");
+            throw new NuGetPackageCacheException(string.Format(CultureInfo.CurrentCulture, ErrorStrings.FailedToSearchForPackages, exitCode));
         }
 
         _logger.LogDebug("NuGet search returned {Length} bytes", output?.Length ?? 0);
@@ -248,7 +250,7 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
         catch (JsonException ex)
         {
             _logger.LogError(ex, "Failed to parse search results");
-            throw new NuGetPackageCacheException($"Failed to parse search results: {ex.Message}");
+            throw new NuGetPackageCacheException(ErrorStrings.FailedToParsePackageSearchResults);
         }
     }
 

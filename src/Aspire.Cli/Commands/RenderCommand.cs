@@ -48,6 +48,7 @@ internal sealed class RenderCommand : BaseCommand
         ["markdown-interactive"] = "Render markdown with DisplayMarkdown (interactive)",
         ["markdown-plain"] = "Render markdown as plain text with DisplayRawText (non-interactive)",
         ["markdown-renderable"] = "Render markdown via ConvertToRenderable with ANSI disabled",
+        ["links"] = "Render terminal links with SafeLink and SafeFileLink",
         ["debug-activities"] = "Debug pipeline activities (calls ProcessPublishingActivitiesDebugAsync)",
         ["pipeline-activities"] = "Pipeline activities with spinner (calls ProcessAndDisplayPublishingActivitiesAsync)",
         ["publish-summary-all"] = "Publish summary timeline (stress scenarios)",
@@ -124,8 +125,14 @@ internal sealed class RenderCommand : BaseCommand
             return CommandResult.FromExitCode(await ExecuteChoiceAsync(requestedScenario, parseResult.GetValue(s_consoleWidthOption), cancellationToken));
         }
 
+        var renderedPreviousChoice = false;
         while (true)
         {
+            if (renderedPreviousChoice)
+            {
+                InteractionService.DisplayEmptyLine();
+            }
+
             var choice = await InteractionService.PromptForSelectionAsync(
                 "What do you want to test?",
                 s_choices.Keys,
@@ -137,6 +144,8 @@ internal sealed class RenderCommand : BaseCommand
             {
                 return CommandResult.FromExitCode(exitCode);
             }
+
+            renderedPreviousChoice = true;
         }
     }
 
@@ -176,6 +185,8 @@ internal sealed class RenderCommand : BaseCommand
                     return TestMarkdownRenderPlainText();
                 case "markdown-renderable":
                     return TestMarkdownRenderRenderable();
+                case "links":
+                    return await TestLinksAsync(cancellationToken);
                 case "debug-activities":
                     return await RenderDebugActivitiesAsync(cancellationToken);
                 case "pipeline-activities":
@@ -369,6 +380,20 @@ internal sealed class RenderCommand : BaseCommand
 
         InteractionService.DisplayEmptyLine();
         InteractionService.DisplayMessage(KnownEmojis.StopSign, "Mixed methods test complete.");
+    }
+
+    private async Task<int> TestLinksAsync(CancellationToken cancellationToken)
+    {
+        var tempDirectory = Directory.CreateTempSubdirectory("aspire-render-links-");
+        var filePath = Path.Combine(tempDirectory.FullName, "safe file link sample.txt");
+        await File.WriteAllTextAsync(filePath, "This file is used to smoke test SafeFileLink rendering.", cancellationToken).ConfigureAwait(false);
+        InteractionService.DisplaySubtleMessage($"Temporary file created at {filePath}", allowMarkup: false);
+
+        InteractionService.DisplayPlainText($"Supports links: {InteractionService.SupportsLinks}");
+        InteractionService.DisplayMarkupLine($"SafeLink: {MarkupHelpers.SafeLink(InteractionService, "https://www.aspire.dev/", "Aspire documentation")}");
+        InteractionService.DisplayMarkupLine($"SafeFileLink: {MarkupHelpers.SafeFileLink(InteractionService, filePath)}");
+
+        return ExitCodeConstants.Success;
     }
 
     private int RenderPublishSummaryScenarios(IEnumerable<string> scenarioKeys)
