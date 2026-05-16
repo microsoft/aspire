@@ -36,9 +36,9 @@ internal static class AssemblyVersionHelper
         // the commit hash, e.g.:
         // [assembly: AssemblyInformationalVersion("8.0.0-preview.2.23604.7+e7762a46d31842884a0bc72c92e07ba700c99bf5")]
 
-        var version = GetInformationalVersion(assembly);
+        var version = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
 
-        if (version.Length > 0)
+        if (version is not null)
         {
             var plusIndex = version.IndexOf('+');
 
@@ -52,12 +52,9 @@ internal static class AssemblyVersionHelper
 
         // Fallback to the file version, which is based on the CI build number, and then fallback to the assembly version, which is
         // product stable version, e.g. 8.0.0.0
-        version = GetFileVersion(assembly);
-        if (version.Length > 0)
-        {
-            return version;
-        }
+        version = assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version
+            ?? assembly.GetCustomAttribute<AssemblyVersionAttribute>()?.Version;
 
-        return assembly.GetCustomAttribute<AssemblyVersionAttribute>()?.Version;
+        return version;
     }
 }
