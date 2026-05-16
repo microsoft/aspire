@@ -18,6 +18,8 @@ namespace Aspire.Cli.Tests.Projects;
 
 public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 {
+    private const string NuGetOrgSource = "https://api.nuget.org/v3/index.json";
+
     [Fact]
     public void GenerateIntegrationProjectFile_WithPackagesOnly_ProducesPackageReferences()
     {
@@ -484,7 +486,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
         Assert.NotNull(method);
 
-        var task = (Task<TemporaryNuGetConfig?>)method.Invoke(server, [requestedChannel, CancellationToken.None])!;
+        var task = (Task<TemporaryNuGetConfig?>)method.Invoke(server, [requestedChannel, null, CancellationToken.None])!;
         return await task;
     }
 
@@ -582,6 +584,43 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             var startInfo = server.CreateStartInfo(123);
             Assert.Equal(manifestPath, startInfo.Environment[KnownConfigNames.IntegrationProbeManifestPath]);
             Assert.False(startInfo.Environment.ContainsKey(KnownConfigNames.IntegrationLibsPath));
+        }
+        finally
+        {
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task PrepareAsync_WithPackageReferences_UsesPackageSourceOverride()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string packageSourceOverride = "/tmp/aspire-pr-hive/packages";
+        List<string>? restoreArgs = null;
+
+        var (server, executionFactory) = CreatePackageReferenceServer(workspace);
+        executionFactory.AssertionCallback = (args, _, _, _) =>
+        {
+            if (args is ["nuget", "restore", ..])
+            {
+                restoreArgs = [.. args];
+            }
+        };
+
+        var workingDirectory = GetWorkingDirectory(server);
+
+        try
+        {
+            var result = await server.PrepareAsync(
+                "13.4.0-pr.17141.gf142085f",
+                [IntegrationReference.FromPackage("Aspire.Hosting.CodeGeneration.TypeScript", "13.4.0-pr.17141.gf142085f")],
+                packageSourceOverride: packageSourceOverride);
+
+            Assert.True(result.Success);
+            Assert.NotNull(restoreArgs);
+            Assert.Equal([packageSourceOverride, NuGetOrgSource], GetSourceArguments(restoreArgs!));
+            Assert.Contains("Aspire.Hosting.CodeGeneration.TypeScript,[13.4.0-pr.17141.gf142085f]", restoreArgs!);
+            Assert.Contains("--nuget-config", restoreArgs!);
         }
         finally
         {
@@ -1175,6 +1214,20 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             typeof(PrebuiltAppHostServer)
                 .GetField("_workingDirectory", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
                 .GetValue(server));
+    }
+
+    private static string[] GetSourceArguments(IReadOnlyList<string> args)
+    {
+        var sources = new List<string>();
+        for (var i = 0; i < args.Count - 1; i++)
+        {
+            if (args[i] == "--source")
+            {
+                sources.Add(args[i + 1]);
+            }
+        }
+
+        return [.. sources];
     }
 
     private static void DeleteWorkingDirectory(string workingDirectory)

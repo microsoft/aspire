@@ -26,6 +26,8 @@ namespace Aspire.Cli.Projects;
 /// </summary>
 internal sealed class PrebuiltAppHostServer : IAppHostServerProject
 {
+    private const string NuGetOrgSource = "https://api.nuget.org/v3/index.json";
+
     internal const string ClosureMetadataFileName = "closure-metadata.txt";
     internal const string ClosureSourcesFileName = "closure-sources.txt";
     internal const string ClosureTargetsFileName = "closure-targets.txt";
@@ -123,7 +125,8 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
     public async Task<AppHostServerPrepareResult> PrepareAsync(
         string sdkVersion,
         IEnumerable<IntegrationReference> integrations,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? packageSourceOverride = null)
     {
         var integrationList = integrations.ToList();
         var packageRefs = integrationList.Where(r => r.IsPackageReference).ToList();
@@ -160,6 +163,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
                     packageRefs,
                     projectRefs,
                     requestedChannel,
+                    packageSourceOverride,
                     cancellationToken).ConfigureAwait(false);
 
                 if (closureManifest.Entries.Any(static entry => entry.IsPackageBacked))
@@ -185,7 +189,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
                 {
                     // NuGet-only — use the bundled NuGet service (no SDK required)
                     _integrationProbeManifestPath = await RestoreNuGetPackagesAsync(
-                        packageRefs, requestedChannel, cancellationToken);
+                        packageRefs, requestedChannel, packageSourceOverride, cancellationToken);
                 }
 
                 var appSettingsContent = CreateAppSettingsContent(packageRefs, []);
@@ -226,13 +230,17 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
     private async Task<string> RestoreNuGetPackagesAsync(
         List<IntegrationReference> packageRefs,
         string? requestedChannel,
+        string? packageSourceOverride,
         CancellationToken cancellationToken)
     {
         _logger.LogDebug("Restoring {Count} integration packages via bundled NuGet", packageRefs.Count);
 
-        var packages = packageRefs.Select(r => (r.Name, r.Version!)).ToList();
-        using var temporaryNuGetConfig = await TryCreateTemporaryNuGetConfigAsync(requestedChannel, cancellationToken);
-        var sources = await GetNuGetSourcesAsync(requestedChannel, cancellationToken);
+        var useExactPackageVersions = !string.IsNullOrWhiteSpace(packageSourceOverride);
+        var packages = packageRefs
+            .Select(r => (r.Name, Version: GetRestoreVersion(r.Version!, useExactPackageVersions)))
+            .ToList();
+        using var temporaryNuGetConfig = await TryCreateTemporaryNuGetConfigAsync(requestedChannel, packageSourceOverride, cancellationToken);
+        var sources = await GetNuGetSourcesAsync(requestedChannel, packageSourceOverride, cancellationToken);
 
         return await _nugetService.RestorePackagesAsync(
             packages,
@@ -253,13 +261,19 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         List<IntegrationReference> packageRefs,
         List<IntegrationReference> projectRefs,
         string? requestedChannel,
+        string? packageSourceOverride,
         CancellationToken cancellationToken)
     {
         var restoreDir = Path.Combine(_workingDirectory, "integration-restore");
         Directory.CreateDirectory(restoreDir);
 
-        var channelSources = await GetNuGetSourcesAsync(requestedChannel, cancellationToken);
-        var projectContent = GenerateIntegrationProjectFile(packageRefs, projectRefs, restoreDir, channelSources);
+        var channelSources = await GetNuGetSourcesAsync(requestedChannel, packageSourceOverride, cancellationToken);
+        var projectContent = GenerateIntegrationProjectFile(
+            packageRefs,
+            projectRefs,
+            restoreDir,
+            channelSources,
+            useExactPackageVersions: !string.IsNullOrWhiteSpace(packageSourceOverride));
         var projectFilePath = Path.Combine(restoreDir, IntegrationProjectFileName);
         await File.WriteAllTextAsync(projectFilePath, projectContent, cancellationToken);
 
@@ -354,7 +368,8 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         List<IntegrationReference> packageRefs,
         List<IntegrationReference> projectRefs,
         string restoreDir,
-        IEnumerable<string>? additionalSources = null)
+        IEnumerable<string>? additionalSources = null,
+        bool useExactPackageVersions = false)
     {
         var propertyGroup = new XElement("PropertyGroup",
             new XElement("TargetFramework", DotNetBasedAppHostServerProject.TargetFramework),
@@ -394,7 +409,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
                     }
                     return new XElement("PackageReference",
                         new XAttribute("Include", p.Name),
-                        new XAttribute("Version", p.Version));
+                        new XAttribute("Version", GetRestoreVersion(p.Version, useExactPackageVersions)));
                 })));
         }
 
@@ -461,26 +476,18 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
     /// <summary>
     /// Gets NuGet sources from the resolved channel for bundled restore.
     /// </summary>
-    private async Task<IEnumerable<string>?> GetNuGetSourcesAsync(string? requestedChannel, CancellationToken cancellationToken)
+    private async Task<IEnumerable<string>?> GetNuGetSourcesAsync(string? requestedChannel, string? packageSourceOverride, CancellationToken cancellationToken)
     {
         var sources = new List<string>();
 
+        if (!string.IsNullOrWhiteSpace(packageSourceOverride))
+        {
+            sources.Add(packageSourceOverride);
+        }
+
         try
         {
-            var channels = await _packagingService.GetChannelsAsync(cancellationToken);
-
-            IEnumerable<PackageChannel> explicitChannels;
-            if (!string.IsNullOrEmpty(requestedChannel))
-            {
-                var matchingChannel = channels.FirstOrDefault(c => string.Equals(c.Name, requestedChannel, StringComparison.OrdinalIgnoreCase));
-                explicitChannels = matchingChannel is not null ? [matchingChannel] : channels.Where(c => c.Type == PackageChannelType.Explicit);
-            }
-            else
-            {
-                explicitChannels = channels.Where(c => c.Type == PackageChannelType.Explicit);
-            }
-
-            foreach (var channel in explicitChannels)
+            foreach (var channel in await GetExplicitRestoreChannelsAsync(requestedChannel, cancellationToken))
             {
                 if (channel.Mappings is null)
                 {
@@ -501,11 +508,52 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             _logger.LogWarning(ex, "Failed to get package channels, relying on nuget.config and nuget.org fallback");
         }
 
+        if (!string.IsNullOrWhiteSpace(packageSourceOverride) && sources.Count == 1)
+        {
+            sources.Add(NuGetOrgSource);
+        }
+
         return sources.Count > 0 ? sources : null;
     }
 
-    private async Task<TemporaryNuGetConfig?> TryCreateTemporaryNuGetConfigAsync(string? requestedChannel, CancellationToken cancellationToken)
+    private async Task<TemporaryNuGetConfig?> TryCreateTemporaryNuGetConfigAsync(string? requestedChannel, string? packageSourceOverride, CancellationToken cancellationToken)
     {
+        if (!string.IsNullOrWhiteSpace(packageSourceOverride))
+        {
+            var mappings = new List<PackageMapping>
+            {
+                new("Aspire*", packageSourceOverride)
+            };
+            var configureGlobalPackagesFolder = false;
+
+            try
+            {
+                foreach (var restoreChannel in await GetExplicitRestoreChannelsAsync(requestedChannel, cancellationToken))
+                {
+                    if (restoreChannel.Mappings is null)
+                    {
+                        continue;
+                    }
+
+                    mappings.AddRange(restoreChannel.Mappings);
+                    configureGlobalPackagesFolder |= restoreChannel.ConfigureGlobalPackagesFolder;
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to get package channels while creating source override NuGet.config");
+            }
+
+            if (!mappings.Any(static mapping => mapping.PackageFilter == PackageMapping.AllPackages))
+            {
+                mappings.Add(new PackageMapping(PackageMapping.AllPackages, NuGetOrgSource));
+            }
+
+            return await TemporaryNuGetConfig.CreateAsync(
+                [.. mappings.DistinctBy(static mapping => $"{mapping.PackageFilter}\0{mapping.Source}")],
+                configureGlobalPackagesFolder);
+        }
+
         if (string.IsNullOrEmpty(requestedChannel))
         {
             return null;
@@ -539,6 +587,28 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         // surface instead of silently falling back to the caller's unmapped sources,
         // which could otherwise restore from an unintended feed.
         return await TemporaryNuGetConfig.CreateAsync(channel.Mappings, channel.ConfigureGlobalPackagesFolder);
+    }
+
+    private async Task<IEnumerable<PackageChannel>> GetExplicitRestoreChannelsAsync(string? requestedChannel, CancellationToken cancellationToken)
+    {
+        var channels = await _packagingService.GetChannelsAsync(cancellationToken);
+        if (!string.IsNullOrEmpty(requestedChannel))
+        {
+            var matchingChannel = channels.FirstOrDefault(c => string.Equals(c.Name, requestedChannel, StringComparison.OrdinalIgnoreCase));
+            return matchingChannel is not null ? [matchingChannel] : channels.Where(c => c.Type == PackageChannelType.Explicit).ToArray();
+        }
+
+        return channels.Where(c => c.Type == PackageChannelType.Explicit).ToArray();
+    }
+
+    private static string GetRestoreVersion(string version, bool useExactPackageVersions)
+    {
+        if (!useExactPackageVersions || version.Length == 0 || version[0] is '[' or '(')
+        {
+            return version;
+        }
+
+        return $"[{version}]";
     }
 
     /// <inheritdoc />
