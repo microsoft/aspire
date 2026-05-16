@@ -175,28 +175,46 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          # Parse TRX (XML) files to extract test method outcomes using yq (pre-installed on ubuntu-latest).
-          # Produces a JSON map of testMethodName -> outcome for the bash comment step to consume.
-          # When the same test appears in multiple TRX files (e.g. retries), "Failed" wins over other outcomes.
+          # Parse TRX (XML) files to extract test method outcomes using yq + jq
+          # (both pre-installed on ubuntu-latest). Produces a JSON map of
+          # testMethodName -> outcome for the bash comment step to consume.
+          # When the same test appears in multiple TRX files (e.g. retries),
+          # "Failed" wins over other outcomes.
           if compgen -G trx_files/*.trx > /dev/null 2>&1; then
             echo "Parsing TRX files with yq..."
-            # yq can read XML natively; extract testName+outcome from each UnitTestResult.
-            # -s merges all files, producing a combined JSON array of results.
-            # Prefer "Failed" over other outcomes when duplicates exist.
-            yq -p xml -o json '.TestRun.Results.UnitTestResult | (if type == "!!seq" then .[] else . end) | {(."@testName" // ."+@testName"): (."@outcome" // ."+@outcome")}' trx_files/*.trx \
+            # Convert each TRX to JSON with yq (Go yq's expression language is
+            # limited, so do all reshaping in jq). The resulting documents look like:
+            #   { "TestRun": { "Results": { "UnitTestResult": <object|array> } } }
+            # Attribute keys are exposed by yq as "+@<attr>" (newer yq) or
+            # "@<attr>" (older yq), and a single result is emitted as an object
+            # rather than an array, so jq must handle both shapes.
+            yq -p xml -o json '.' trx_files/*.trx \
               | jq -s '
-                  reduce (.[] | to_entries[]) as {$key, $value} ({};
-                    # Extract simple method name (last segment after dot) for .cast file matching
-                    ($key | split(".") | last) as $method |
-                    # Prefer "Failed" over any other outcome
-                    if .[$method] == "Failed" then . else .[$method] = $value end |
-                    if .[$key] == "Failed" then . else .[$key] = $value end
+                  def attr(o; k): o["+@" + k] // o["@" + k];
+                  reduce (
+                    .[]
+                    | .TestRun.Results.UnitTestResult
+                    | (if type == "array" then .[] else . end)
+                  ) as $r ({};
+                    attr($r; "testName") as $name |
+                    attr($r; "outcome") as $outcome |
+                    if $name == null or $outcome == null then .
+                    else
+                      ($name | split(".") | last) as $method |
+                      # Prefer "Failed" over any other outcome
+                      (if .[$method] == "Failed" then . else .[$method] = $outcome end)
+                      | (if .[$name] == "Failed" then . else .[$name] = $outcome end)
+                    end
                   )
                 ' > test_outcomes.json
 
             OUTCOME_COUNT=$(jq 'length' test_outcomes.json)
             echo "Parsed $OUTCOME_COUNT test outcome(s)"
-            echo "has_outcomes=true" >> "$GITHUB_OUTPUT"
+            if [ "$OUTCOME_COUNT" -gt 0 ]; then
+              echo "has_outcomes=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "has_outcomes=false" >> "$GITHUB_OUTPUT"
+            fi
           else
             echo "No TRX files found"
             echo '{}' > test_outcomes.json
