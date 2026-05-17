@@ -8,6 +8,8 @@ namespace Aspire.Cli.Tests.Agents;
 
 public class CommonAgentApplicatorsTests
 {
+    private const int MaxSkillDescriptionLength = 1024;
+
     [Fact]
     public void SkillLocation_All_ContainsAllLocations()
     {
@@ -117,6 +119,26 @@ public class CommonAgentApplicatorsTests
     }
 
     [Fact]
+    public async Task SkillDefinition_InstallableSkillDescriptionsFitAgentHostLimits()
+    {
+        var installableSkills = SkillDefinition.All
+            .Where(static skill => skill.SkillContent is not null || skill.EmbeddedResourceRoot is not null);
+
+        foreach (var skill in installableSkills)
+        {
+            var skillFiles = await GetInstallableSkillFilesAsync(skill);
+            var skillFile = Assert.Single(skillFiles, static file => file.RelativePath == "SKILL.md");
+            var description = GetFrontmatterValue(skillFile.Content, "description");
+
+            Assert.NotNull(description);
+            Assert.False(string.IsNullOrWhiteSpace(description), $"Skill '{skill.Name}' should define a frontmatter description.");
+            Assert.True(
+                description.Length <= MaxSkillDescriptionLength,
+                $"Skill '{skill.Name}' description is {description.Length} characters; agent hosts such as Codex and Copilot CLI accept at most {MaxSkillDescriptionLength}.");
+        }
+    }
+
+    [Fact]
     public void SkillDefinition_Aspire_ExcludesEvalsFromInstall()
     {
         Assert.Contains(SkillDefinition.Aspire.InstallExcludedRelativePaths, path => path == Path.Combine("evals"));
@@ -130,5 +152,58 @@ public class CommonAgentApplicatorsTests
         Assert.NotNull(SkillDefinition.DotnetInspect.SkillContent);
         Assert.Null(SkillDefinition.DotnetInspect.EmbeddedResourceRoot);
         Assert.Contains("# dotnet-inspect", SkillDefinition.DotnetInspect.SkillContent);
+    }
+
+    private static async Task<IReadOnlyList<SkillAssetFile>> GetInstallableSkillFilesAsync(SkillDefinition skill)
+    {
+        if (skill.SkillContent is not null)
+        {
+            return [new SkillAssetFile("SKILL.md", skill.SkillContent)];
+        }
+
+        if (skill.EmbeddedResourceRoot is not null)
+        {
+            return await EmbeddedSkillResourceLoader.LoadTextFilesAsync(skill.EmbeddedResourceRoot, skill.ShouldInstallFile, CancellationToken.None);
+        }
+
+        throw new InvalidOperationException($"Skill '{skill.Name}' does not define installable files.");
+    }
+
+    private static string? GetFrontmatterValue(string content, string key)
+    {
+        var normalizedContent = content.ReplaceLineEndings("\n");
+        if (!normalizedContent.StartsWith("---\n", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var frontmatterEndIndex = normalizedContent.IndexOf("\n---\n", 4, StringComparison.Ordinal);
+        if (frontmatterEndIndex < 0)
+        {
+            return null;
+        }
+
+        // Skill files use YAML frontmatter:
+        //   ---
+        //   name: aspire
+        //   description: "Use when..."
+        //   ---
+        var frontmatter = normalizedContent[4..frontmatterEndIndex];
+        var keyPrefix = $"{key}:";
+
+        foreach (var line in frontmatter.Split('\n'))
+        {
+            if (!line.StartsWith(keyPrefix, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var value = line[keyPrefix.Length..].Trim();
+            return value.Length >= 2 && value[0] == '"' && value[^1] == '"'
+                ? value[1..^1]
+                : value;
+        }
+
+        return null;
     }
 }
