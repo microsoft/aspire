@@ -288,6 +288,209 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains("\"你好\"", output);
     }
 
+    [Fact]
+    public void FormatCi_TreatsExplicitNullCapabilityCollectionsAsEmpty()
+    {
+        var json =
+            """
+            {
+              "Diagnostics": null,
+              "HandleTypes": null,
+              "DtoTypes": [
+                {
+                  "TypeId": "test/dto",
+                  "Name": "TestDto",
+                  "Properties": null
+                }
+              ],
+              "EnumTypes": [
+                {
+                  "TypeId": "test/enum",
+                  "Name": "TestEnum",
+                  "Values": null
+                }
+              ],
+              "ExportedValues": [
+                {
+                  "PathSegments": null,
+                  "Type": {
+                    "TypeId": "test/string",
+                    "Category": "Primitive"
+                  },
+                  "Value": "value"
+                }
+              ],
+              "Capabilities": [
+                {
+                  "CapabilityId": "test.capability",
+                  "MethodName": "Test",
+                  "Parameters": null
+                }
+              ]
+            }
+            """;
+        var capabilities = JsonSerializer.Deserialize(json, CapabilitiesJsonContext.Default.CapabilitiesInfo);
+
+        Assert.NotNull(capabilities);
+        var output = InvokeFormatter("FormatCi", capabilities);
+
+        Assert.Contains("# DTO Types", output);
+        Assert.Contains("test/dto", output);
+        Assert.Contains("# Enum Types", output);
+        Assert.Contains("test/enum = ", output);
+        Assert.Contains(": test/string = \"value\"", output);
+        Assert.Contains("test.capability() -> void", output);
+    }
+
+    [Theory]
+    [InlineData("FormatCi")]
+    [InlineData("FormatPretty")]
+    public void Formatters_TolerateExplicitNullCapabilityScalars(string formatter)
+    {
+        var json =
+            """
+            {
+              "Diagnostics": [
+                {
+                  "Severity": null,
+                  "Message": null,
+                  "Location": null
+                }
+              ],
+              "HandleTypes": [
+                {
+                  "AtsTypeId": null,
+                  "ImplementedInterfaces": null,
+                  "BaseTypeHierarchy": null
+                }
+              ],
+              "DtoTypes": [
+                {
+                  "TypeId": null,
+                  "Name": null,
+                  "Properties": [
+                    {
+                      "Name": null,
+                      "Type": {
+                        "TypeId": null,
+                        "Category": null
+                      }
+                    }
+                  ]
+                }
+              ],
+              "EnumTypes": [
+                {
+                  "TypeId": null,
+                  "Name": null,
+                  "Values": [null, "Known"]
+                }
+              ],
+              "Capabilities": [
+                {
+                  "CapabilityId": null,
+                  "MethodName": null,
+                  "Parameters": [
+                    {
+                      "Name": null,
+                      "Type": {
+                        "TypeId": null
+                      }
+                    }
+                  ],
+                  "ReturnType": {
+                    "TypeId": null
+                  }
+                }
+              ]
+            }
+            """;
+        var capabilities = JsonSerializer.Deserialize(json, CapabilitiesJsonContext.Default.CapabilitiesInfo);
+
+        Assert.NotNull(capabilities);
+        var output = InvokeFormatter(formatter, capabilities);
+
+        Assert.NotEmpty(output);
+        Assert.Contains("unknown", output);
+    }
+
+    [Theory]
+    [InlineData("FormatCi")]
+    [InlineData("FormatPretty")]
+    public void Formatters_TolerateNullCapabilityCollectionItems(string formatter)
+    {
+        var capabilities = new CapabilitiesInfo
+        {
+            Diagnostics = [null!, new DiagnosticInfo { Severity = "Warning", Message = "Careful" }],
+            HandleTypes = [null!, new HandleTypeInfo { AtsTypeId = "test/handle" }],
+            DtoTypes =
+            [
+                null!,
+                new DtoTypeInfo
+                {
+                    TypeId = "test/dto",
+                    Name = "TestDto",
+                    Properties = [null!, new DtoPropertyInfo { Name = "Value" }]
+                }
+            ],
+            EnumTypes =
+            [
+                null!,
+                new EnumTypeInfo
+                {
+                    TypeId = "test/enum",
+                    Name = "TestEnum",
+                    Values = [null!, "Known"]
+                }
+            ],
+            ExportedValues =
+            [
+                null!,
+                new ExportedValueInfo
+                {
+                    PathSegments = [null!, "Value"],
+                    Type = new TypeRefInfo { TypeId = "test/string" },
+                    Value = JsonValue.Create("value")
+                }
+            ],
+            Capabilities =
+            [
+                null!,
+                new CapabilityInfo
+                {
+                    CapabilityId = "test.capability",
+                    MethodName = "Test",
+                    Parameters = [null!, new Aspire.Cli.Commands.Sdk.ParameterInfo { Name = "name" }]
+                }
+            ]
+        };
+
+        var output = InvokeFormatter(formatter, capabilities);
+
+        Assert.NotEmpty(output);
+        Assert.Contains("Known", output);
+    }
+
+    [Fact]
+    public void FormatPretty_ThrowsClearExceptionWhenExportedValueTypeIsNull()
+    {
+        var capabilities = new CapabilitiesInfo
+        {
+            ExportedValues =
+            [
+                new ExportedValueInfo
+                {
+                    PathSegments = ["TestCatalog", "Default"],
+                    Type = null
+                }
+            ]
+        };
+
+        var exception = Assert.Throws<TargetInvocationException>(() => InvokeFormatter("FormatPretty", capabilities));
+        var invalidOperationException = Assert.IsType<InvalidOperationException>(exception.InnerException);
+        Assert.Contains("Exported value 'TestCatalog.Default' is missing required type metadata.", invalidOperationException.Message);
+    }
+
     private static string InvokeFormatter(string methodName, CapabilitiesInfo capabilities)
     {
         var method = typeof(SdkDumpCommand).GetMethod(methodName, BindingFlags.Static | BindingFlags.NonPublic);

@@ -572,6 +572,7 @@ public class PublishingActivityReporterTests
         var promptId = activity.Data.Id;
         Assert.NotNull(activity.Data.Inputs);
         var input = Assert.Single(activity.Data.Inputs);
+        Assert.NotNull(input);
         Assert.Equal("text-label", input.Label);
         Assert.Equal("Text", input.InputType);
 
@@ -599,6 +600,7 @@ public class PublishingActivityReporterTests
         var promptId = activity.Data.Id;
         Assert.NotNull(activity.Data.Inputs);
         var input = Assert.Single(activity.Data.Inputs);
+        Assert.NotNull(input);
         Assert.Equal("text-label", input.Label);
         Assert.Equal("Text", input.InputType);
 
@@ -628,6 +630,7 @@ public class PublishingActivityReporterTests
         var promptId = activity.Data.Id;
         Assert.NotNull(activity.Data.Inputs);
         var input = Assert.Single(activity.Data.Inputs);
+        Assert.NotNull(input);
         Assert.Equal("text-label", input.Label);
         Assert.Equal("Text", input.InputType);
 
@@ -668,6 +671,7 @@ public class PublishingActivityReporterTests
         Assert.Equal(CompletionStates.InProgress, activity.Data.CompletionState);
         Assert.NotNull(activity.Data.Inputs);
         var input = Assert.Single(activity.Data.Inputs);
+        Assert.NotNull(input);
         Assert.Equal("Confirm", input.Label);
         Assert.Equal("Boolean", input.InputType);
         Assert.True(input.Required);
@@ -917,14 +921,18 @@ public class PublishingActivityReporterTests
         Assert.Equal(PublishingActivityTypes.PublishComplete, activity.Type);
         Assert.NotNull(activity.Data.PipelineSummary);
         Assert.Equal(4, activity.Data.PipelineSummary.Count);
-        Assert.Equal("Target", activity.Data.PipelineSummary[0].Key);
-        Assert.Equal("TestTarget", activity.Data.PipelineSummary[0].Value);
-        Assert.Equal("Environment", activity.Data.PipelineSummary[1].Key);
-        Assert.Equal("test-env", activity.Data.PipelineSummary[1].Value);
-        Assert.Equal("Identifier", activity.Data.PipelineSummary[2].Key);
-        Assert.Equal("test-123", activity.Data.PipelineSummary[2].Value);
-        Assert.Equal("Region", activity.Data.PipelineSummary[3].Key);
-        Assert.Equal("test-region", activity.Data.PipelineSummary[3].Value);
+        var target = Assert.IsType<BackchannelPipelineSummaryItem>(activity.Data.PipelineSummary[0]);
+        Assert.Equal("Target", target.Key);
+        Assert.Equal("TestTarget", target.Value);
+        var environment = Assert.IsType<BackchannelPipelineSummaryItem>(activity.Data.PipelineSummary[1]);
+        Assert.Equal("Environment", environment.Key);
+        Assert.Equal("test-env", environment.Value);
+        var identifier = Assert.IsType<BackchannelPipelineSummaryItem>(activity.Data.PipelineSummary[2]);
+        Assert.Equal("Identifier", identifier.Key);
+        Assert.Equal("test-123", identifier.Value);
+        var region = Assert.IsType<BackchannelPipelineSummaryItem>(activity.Data.PipelineSummary[3]);
+        Assert.Equal("Region", region.Key);
+        Assert.Equal("test-region", region.Value);
         Assert.True(activity.Data.IsComplete);
         Assert.False(activity.Data.IsError);
     }

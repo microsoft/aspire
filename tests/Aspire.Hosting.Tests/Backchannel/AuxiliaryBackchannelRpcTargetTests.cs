@@ -55,6 +55,64 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void V2RequestValidatorsRejectMalformedRequiredMembers()
+    {
+        AssertMalformed(
+            () => AuxiliaryBackchannelRpcTarget.RequireGetConsoleLogsRequest(null, "GetConsoleLogsAsync"),
+            "GetConsoleLogsAsync");
+
+        AssertMalformed(
+            () => AuxiliaryBackchannelRpcTarget.RequireCallMcpToolRequest(
+                Deserialize<CallMcpToolRequest>("""{"ResourceName":null,"ToolName":"query"}"""),
+                "CallMcpToolAsync"),
+            "CallMcpToolAsync.ResourceName");
+        AssertMalformed(
+            () => AuxiliaryBackchannelRpcTarget.RequireCallMcpToolRequest(
+                Deserialize<CallMcpToolRequest>("""{"ResourceName":"api","ToolName":null}"""),
+                "CallMcpToolAsync"),
+            "CallMcpToolAsync.ToolName");
+        AssertMalformed(
+            () => AuxiliaryBackchannelRpcTarget.RequireCallMcpToolRequest(
+                Deserialize<CallMcpToolRequest>("""{"ResourceName":"api","ToolName":"query","Arguments":"bad"}"""),
+                "CallMcpToolAsync"),
+            "CallMcpToolAsync.Arguments");
+
+        AssertMalformed(
+            () => AuxiliaryBackchannelRpcTarget.RequireExecuteResourceCommandRequest(
+                Deserialize<ExecuteResourceCommandRequest>("""{"ResourceName":null,"CommandName":"start"}"""),
+                "ExecuteResourceCommandAsync"),
+            "ExecuteResourceCommandAsync.ResourceName");
+        AssertMalformed(
+            () => AuxiliaryBackchannelRpcTarget.RequireExecuteResourceCommandRequest(
+                Deserialize<ExecuteResourceCommandRequest>("""{"ResourceName":"api","CommandName":null}"""),
+                "ExecuteResourceCommandAsync"),
+            "ExecuteResourceCommandAsync.CommandName");
+
+        AssertMalformed(
+            () => AuxiliaryBackchannelRpcTarget.RequireWaitForResourceRequest(
+                Deserialize<WaitForResourceRequest>("""{"ResourceName":null,"Status":"up"}"""),
+                "WaitForResourceAsync"),
+            "WaitForResourceAsync.ResourceName");
+        AssertMalformed(
+            () => AuxiliaryBackchannelRpcTarget.RequireWaitForResourceRequest(
+                Deserialize<WaitForResourceRequest>("""{"ResourceName":"api","Status":null}"""),
+                "WaitForResourceAsync"),
+            "WaitForResourceAsync.Status");
+
+        static void AssertMalformed(Action action, string expectedMemberName)
+        {
+            var exception = Assert.Throws<InvalidOperationException>(action);
+
+            Assert.Contains(expectedMemberName, exception.Message);
+        }
+    }
+
+    private static T Deserialize<T>(string json)
+    {
+        return JsonSerializer.Deserialize<T>(json) ?? throw new InvalidOperationException("Test payload deserialized to null.");
+    }
+
+    [Fact]
     public async Task GetResourceSnapshotsAsync_EnumeratesResources()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);

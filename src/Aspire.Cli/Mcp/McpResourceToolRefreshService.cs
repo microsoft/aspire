@@ -87,7 +87,7 @@ internal sealed class McpResourceToolRefreshService : IMcpResourceToolRefreshSer
                 selectedAppHostPath = connection.AppHostInfo?.AppHostPath;
 
                 var allResources = await connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false);
-                var resourcesWithTools = allResources.Where(r => r.McpServer is not null).ToList();
+                var resourcesWithTools = allResources.Where(static r => r.McpServer?.Tools.Length > 0).ToList();
 
                 _logger.LogDebug("Resources with MCP tools received: {Count}", resourcesWithTools.Count);
 
@@ -99,6 +99,11 @@ internal sealed class McpResourceToolRefreshService : IMcpResourceToolRefreshSer
                     // (the DCP runtime ID, e.g. "db1-mcp-ypnvhwvw") because the AppHost resolves
                     // resources by their app-model name in CallResourceMcpToolAsync.
                     var routedResourceName = resource.DisplayName ?? resource.Name;
+                    if (routedResourceName.Length == 0)
+                    {
+                        _logger.LogDebug("Skipping MCP tools for a resource with no routeable name.");
+                        continue;
+                    }
 
                     foreach (var tool in resource.McpServer.Tools)
                     {

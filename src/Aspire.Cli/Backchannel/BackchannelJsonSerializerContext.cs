@@ -61,6 +61,7 @@ namespace Aspire.Cli.Backchannel;
 [JsonSerializable(typeof(CapabilitiesInfo))]
 [JsonSerializable(typeof(CommonErrorData))]
 // V2 API request/response types
+[JsonSerializable(typeof(BackchannelTraceContext))]
 [JsonSerializable(typeof(GetCapabilitiesRequest))]
 [JsonSerializable(typeof(GetCapabilitiesResponse))]
 [JsonSerializable(typeof(GetAppHostInfoRequest))]
@@ -79,7 +80,10 @@ namespace Aspire.Cli.Backchannel;
 [JsonSerializable(typeof(StopAppHostResponse))]
 [JsonSerializable(typeof(ExecuteResourceCommandRequest))]
 [JsonSerializable(typeof(ExecuteResourceCommandResponse))]
+[JsonSerializable(typeof(ExecuteResourceCommandResult))]
+[JsonSerializable(typeof(CommandResultFormat))]
 [JsonSerializable(typeof(ResourceCommandArgumentValidationError))]
+[JsonSerializable(typeof(ResourceCommandArgumentValidationError[]))]
 [JsonSerializable(typeof(WaitForResourceRequest))]
 [JsonSerializable(typeof(WaitForResourceResponse))]
 [JsonSerializable(typeof(PipelineStepInfo))]

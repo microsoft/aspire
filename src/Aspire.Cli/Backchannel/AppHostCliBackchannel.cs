@@ -96,6 +96,7 @@ internal sealed class AppHostCliBackchannel(
             (rpc, ct) => rpc.InvokeStreamingWithProfilingAsync<BackchannelLogEntry>(
                 profilingTelemetry, "apphost", "GetAppHostLogEntriesAsync", [], ct),
             "AppHost log entries",
+            entry => TryValidateLogEntry(entry, logger, nameof(GetAppHostLogEntriesAsync)) ? entry : null,
             cancellationToken);
     }
 
@@ -105,6 +106,7 @@ internal sealed class AppHostCliBackchannel(
             (rpc, ct) => rpc.InvokeStreamingWithProfilingAsync<RpcResourceState>(
                 profilingTelemetry, "apphost", "GetResourceStatesAsync", [], ct),
             "resource states",
+            state => RequireResourceState(state, nameof(GetResourceStatesAsync)),
             cancellationToken);
     }
 
@@ -114,7 +116,9 @@ internal sealed class AppHostCliBackchannel(
     private async IAsyncEnumerable<T> InvokeStreamingRpcAsync<T>(
         Func<JsonRpc, CancellationToken, Task<IAsyncEnumerable<T>>> startStream,
         string operationName,
+        Func<T?, T?> normalizeItem,
         [EnumeratorCancellation] CancellationToken cancellationToken)
+        where T : class
     {
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -137,10 +141,19 @@ internal sealed class AppHostCliBackchannel(
                 continue;
             }
 
+            if (items is null)
+            {
+                throw new InvalidOperationException($"Malformed AppHost backchannel payload: {operationName} returned null.");
+            }
+
             var reportingEnumerable = new ReportingAsyncEnumerable<T>(items);
             await foreach (var item in EnumerateWithReconnect(reportingEnumerable, cancellationToken))
             {
-                yield return item;
+                var normalizedItem = normalizeItem(item);
+                if (normalizedItem is not null)
+                {
+                    yield return normalizedItem;
+                }
             }
 
             // If we exit the enumeration loop because of a connection loss, the reporting enumerable will indicate that we should retry.
@@ -307,6 +320,7 @@ internal sealed class AppHostCliBackchannel(
                     "GetCapabilitiesAsync",
                     [],
                     cancellationToken);
+                capabilities ??= [];
                 activity.SetBackchannelCapabilitySummary(capabilities, BaselineCapability);
                 activity.AddBackchannelGetCapabilitiesResponseEvent();
 
@@ -432,6 +446,7 @@ internal sealed class AppHostCliBackchannel(
             (rpc, ct) => rpc.InvokeStreamingWithProfilingAsync<PublishingActivity>(
                 profilingTelemetry, "apphost", "GetPublishingActivitiesAsync", [], ct),
             "publishing activities",
+            activity => RequirePublishingActivity(activity, nameof(GetPublishingActivitiesAsync)),
             cancellationToken);
     }
 
@@ -449,7 +464,7 @@ internal sealed class AppHostCliBackchannel(
             [],
             cancellationToken).ConfigureAwait(false);
 
-        return capabilities;
+        return capabilities ?? [];
     }
 
     public async Task CompletePromptResponseAsync(string promptId, PublishingPromptInputAnswer[] answers, CancellationToken cancellationToken)
@@ -494,11 +509,90 @@ internal sealed class AppHostCliBackchannel(
             "apphost",
             "GetPipelineStepsAsync",
             [new GetPipelineStepsRequest { Step = step }],
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken).ConfigureAwait(false) ?? new GetPipelineStepsResponse { Steps = [] };
 
-        logger.LogDebug("Received {StepCount} pipeline steps.", response.Steps.Length);
+        var steps = NormalizePipelineSteps(response.Steps, logger, nameof(GetPipelineStepsAsync));
 
-        return response;
+        logger.LogDebug("Received {StepCount} pipeline steps.", steps.Length);
+
+        return new GetPipelineStepsResponse { Steps = steps };
     }
 
+    internal static PublishingActivity RequirePublishingActivity(PublishingActivity? publishingActivity, string context)
+    {
+        return publishingActivity switch
+        {
+            null => throw CreateInvalidOperationException(context),
+            { Type.Length: 0 } => throw CreateInvalidOperationException($"{context}.Type"),
+            { HasData: false } => throw CreateInvalidOperationException($"{context}.Data"),
+            { Data.Id.Length: 0 } => throw CreateInvalidOperationException($"{context}.Data.Id"),
+            { Data.StatusText.Length: 0 } => throw CreateInvalidOperationException($"{context}.Data.StatusText"),
+            _ => publishingActivity
+        };
+    }
+
+    internal static bool TryValidateLogEntry(BackchannelLogEntry? entry, ILogger logger, string context)
+    {
+        if (entry is null)
+        {
+            logger.LogWarning("Skipping malformed AppHost log entry from {Context}: entry was null.", context);
+            return false;
+        }
+
+        if (!entry.HasMessage)
+        {
+            logger.LogWarning("Skipping malformed AppHost log entry from {Context}: Message was null or missing.", context);
+            return false;
+        }
+
+        if (entry.CategoryName.Length == 0)
+        {
+            logger.LogWarning("Skipping malformed AppHost log entry from {Context}: CategoryName was null or missing.", context);
+            return false;
+        }
+
+        return true;
+    }
+
+    internal static RpcResourceState RequireResourceState(RpcResourceState? state, string context)
+    {
+        return state switch
+        {
+            null => throw CreateInvalidOperationException(context),
+            { Resource.Length: 0 } => throw CreateInvalidOperationException($"{context}.Resource"),
+            { Type.Length: 0 } => throw CreateInvalidOperationException($"{context}.Type"),
+            { State.Length: 0 } => throw CreateInvalidOperationException($"{context}.State"),
+            _ => state
+        };
+    }
+
+    internal static PipelineStepInfo[] NormalizePipelineSteps(PipelineStepInfo[] steps, ILogger logger, string context)
+    {
+        var normalized = new List<PipelineStepInfo>(steps.Length);
+
+        foreach (var step in steps.WhereNotNull())
+        {
+            if (step.Name.Length == 0)
+            {
+                logger.LogWarning("Skipping malformed pipeline step from {Context}: Name was null or missing.", context);
+                continue;
+            }
+
+            normalized.Add(new PipelineStepInfo
+            {
+                Name = step.Name,
+                Description = step.Description,
+                DependsOn = step.DependsOn.Where(static d => !string.IsNullOrEmpty(d)).ToArray(),
+                Tags = step.Tags.Where(static t => !string.IsNullOrEmpty(t)).ToArray(),
+                ResourceName = step.ResourceName
+            });
+        }
+
+        return [.. normalized];
+    }
+
+    private static InvalidOperationException CreateInvalidOperationException(string name)
+    {
+        return new InvalidOperationException($"Malformed AppHost backchannel payload: required member '{name}' was null or missing.");
+    }
 }

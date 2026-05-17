@@ -26,7 +26,7 @@ internal static class McpToolHelpers
             throw new McpProtocolException(McpErrorMessages.DashboardNotAvailable, McpErrorCode.InternalError);
         }
 
-        var dashboardBaseUrl = StripLoginPath(dashboardInfo.DashboardUrls.FirstOrDefault());
+        var dashboardBaseUrl = StripLoginPath(dashboardInfo.DashboardUrls?.FirstOrDefault());
 
         return (dashboardInfo.ApiToken, dashboardInfo.ApiBaseUrl, dashboardBaseUrl);
     }

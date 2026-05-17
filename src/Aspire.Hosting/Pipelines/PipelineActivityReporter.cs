@@ -341,7 +341,7 @@ internal sealed class PipelineActivityReporter : IPipelineActivityReporter, IAsy
                     Label = input.EffectiveLabel,
                     InputType = input.InputType.ToString(),
                     Required = input.Required,
-                    Options = input.Options,
+                    Options = input.Options?.Select(static option => (KeyValuePair<string, string>?)option).ToArray(),
                     Value = input.Value,
                     ValidationErrors = input.ValidationErrors,
                     AllowCustomChoice = input.AllowCustomChoice,

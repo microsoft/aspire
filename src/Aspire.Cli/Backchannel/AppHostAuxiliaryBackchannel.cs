@@ -169,12 +169,14 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
         logger.LogDebug("Connected to auxiliary backchannel at {SocketPath}", socketPath);
 
         // Fetch all connection info
-        var appHostInfo = await rpc.InvokeWithProfilingAsync<AppHostInformation?>(
-            profilingTelemetry,
-            "auxiliary",
-            "GetAppHostInformationAsync",
-            [],
-            cancellationToken).ConfigureAwait(false);
+        var appHostInfo = ValidateAppHostInformation(
+            await rpc.InvokeWithProfilingAsync<AppHostInformation?>(
+                profilingTelemetry,
+                "auxiliary",
+                "GetAppHostInformationAsync",
+                [],
+                cancellationToken).ConfigureAwait(false),
+            nameof(GetAppHostInformationAsync));
         var capabilities = await FetchCapabilitiesAsync(rpc, logger, profilingTelemetry, cancellationToken).ConfigureAwait(false);
 
         var capabilitiesSet = capabilities?.ToImmutableHashSet() ?? ImmutableHashSet.Create(AuxiliaryBackchannelCapabilities.V1);
@@ -238,7 +240,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
             [],
             cancellationToken).ConfigureAwait(false);
 
-        return appHostInfo;
+        return ValidateAppHostInformation(appHostInfo, nameof(GetAppHostInformationAsync));
     }
 
     /// <inheritdoc />
@@ -317,6 +319,10 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
                 [],
                 cancellationToken).ConfigureAwait(false) ?? [];
 
+            snapshots = snapshots
+                .Where(snapshot => TryValidateResourceSnapshot(snapshot, nameof(GetResourceSnapshotsAsync)))
+                .ToList();
+
             if (!includeHidden)
             {
                 snapshots = snapshots.Where(s => !ResourceSnapshotMapper.IsHiddenResource(s)).ToList();
@@ -362,6 +368,11 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
         await foreach (var snapshot in snapshots.WithCancellation(cancellationToken).ConfigureAwait(false))
         {
+            if (!TryValidateResourceSnapshot(snapshot, nameof(WatchResourceSnapshotsAsync)))
+            {
+                continue;
+            }
+
             if (!includeHidden && ResourceSnapshotMapper.IsHiddenResource(snapshot))
             {
                 continue;
@@ -409,7 +420,10 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
         await foreach (var logLine in logLines.WithCancellation(cancellationToken).ConfigureAwait(false))
         {
-            yield return logLine;
+            if (TryValidateResourceLogLine(logLine, _logger, nameof(GetResourceLogsAsync)))
+            {
+                yield return logLine;
+            }
         }
     }
 
@@ -465,12 +479,14 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
         _logger.LogDebug("Getting AppHost info (v2)");
 
-        return await rpc.InvokeWithProfilingAsync<GetAppHostInfoResponse>(
-            _profilingTelemetry,
-            "auxiliary",
-            "GetAppHostInfoAsync",
-            [new GetAppHostInfoRequest()],
-            cancellationToken).ConfigureAwait(false);
+        return RequireGetAppHostInfoResponse(
+            await rpc.InvokeWithProfilingAsync<GetAppHostInfoResponse?>(
+                _profilingTelemetry,
+                "auxiliary",
+                "GetAppHostInfoAsync",
+                [new GetAppHostInfoRequest()],
+                cancellationToken).ConfigureAwait(false),
+            "GetAppHostInfoAsync");
     }
 
     /// <summary>
@@ -509,7 +525,7 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
         _logger.LogDebug("Getting Dashboard info (v2)");
 
-        return await rpc.InvokeWithProfilingAsync<GetDashboardInfoResponse>(
+        return await rpc.InvokeWithProfilingAsync<GetDashboardInfoResponse?>(
             _profilingTelemetry,
             "auxiliary",
             "GetDashboardInfoAsync",
@@ -548,12 +564,19 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
         _logger.LogDebug("Getting resources (v2)");
 
-        return await rpc.InvokeWithProfilingAsync<GetResourcesResponse>(
+        var response = await rpc.InvokeWithProfilingAsync<GetResourcesResponse?>(
             _profilingTelemetry,
             "auxiliary",
             "GetResourcesAsync",
             [request],
             cancellationToken).ConfigureAwait(false) ?? new GetResourcesResponse { Resources = [] };
+
+        return new GetResourcesResponse
+        {
+            Resources = response.Resources
+                .Where(snapshot => TryValidateResourceSnapshot(snapshot, "GetResourcesAsync"))
+                .ToArray()
+        };
     }
 
     /// <summary>
@@ -608,7 +631,10 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
         await foreach (var snapshot in snapshots.WithCancellation(cancellationToken).ConfigureAwait(false))
         {
-            yield return snapshot;
+            if (TryValidateResourceSnapshot(snapshot, "WatchResourcesAsync"))
+            {
+                yield return snapshot;
+            }
         }
     }
 
@@ -741,7 +767,10 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
         await foreach (var logLine in logLines.WithCancellation(cancellationToken).ConfigureAwait(false))
         {
-            yield return logLine;
+            if (TryValidateResourceLogLine(logLine, _logger, "GetConsoleLogsAsync"))
+            {
+                yield return logLine;
+            }
         }
     }
 
@@ -788,12 +817,100 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
         _logger.LogDebug("Calling MCP tool (v2) {ToolName} on {ResourceName}", request.ToolName, request.ResourceName);
 
-        return await rpc.InvokeWithProfilingAsync<CallMcpToolResponse>(
+        var response = await rpc.InvokeWithProfilingAsync<CallMcpToolResponse?>(
             _profilingTelemetry,
             "auxiliary",
             "CallMcpToolAsync",
             [request],
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Malformed AppHost backchannel payload: CallMcpToolAsync returned null.");
+
+        return NormalizeCallMcpToolResponse(response);
+    }
+
+    internal static CallMcpToolResponse NormalizeCallMcpToolResponse(CallMcpToolResponse response)
+    {
+        return new CallMcpToolResponse
+        {
+            IsError = response.IsError,
+            Content = response.Content
+                .WhereNotNull()
+                .Where(static c => c.Type.Length > 0)
+                .ToArray()
+        };
+    }
+
+    internal static AppHostInformation? ValidateAppHostInformation(AppHostInformation? appHostInfo, string context)
+    {
+        if (appHostInfo is null)
+        {
+            return null;
+        }
+
+        if (string.IsNullOrEmpty(appHostInfo.AppHostPath))
+        {
+            throw CreateInvalidOperationException($"{context}.{nameof(AppHostInformation.AppHostPath)}");
+        }
+
+        if (appHostInfo.ProcessId <= 0)
+        {
+            throw CreateInvalidOperationException($"{context}.{nameof(AppHostInformation.ProcessId)}");
+        }
+
+        return appHostInfo;
+    }
+
+    internal static GetAppHostInfoResponse RequireGetAppHostInfoResponse(GetAppHostInfoResponse? response, string context)
+    {
+        if (response is null)
+        {
+            throw CreateInvalidOperationException(context);
+        }
+
+        if (string.IsNullOrEmpty(response.Pid))
+        {
+            throw CreateInvalidOperationException($"{context}.{nameof(GetAppHostInfoResponse.Pid)}");
+        }
+
+        if (string.IsNullOrEmpty(response.AspireHostVersion))
+        {
+            throw CreateInvalidOperationException($"{context}.{nameof(GetAppHostInfoResponse.AspireHostVersion)}");
+        }
+
+        if (string.IsNullOrEmpty(response.AppHostPath))
+        {
+            throw CreateInvalidOperationException($"{context}.{nameof(GetAppHostInfoResponse.AppHostPath)}");
+        }
+
+        return response;
+    }
+
+    internal static ExecuteResourceCommandResponse RequireExecuteResourceCommandResponse(ExecuteResourceCommandResponse? response, string context)
+    {
+        if (response is null)
+        {
+            throw CreateInvalidOperationException(context);
+        }
+
+        return new ExecuteResourceCommandResponse
+        {
+            Success = response.Success,
+            Canceled = response.Canceled,
+#pragma warning disable CS0618 // Type or member is obsolete
+            ErrorMessage = response.ErrorMessage,
+#pragma warning restore CS0618 // Type or member is obsolete
+            Message = response.Message,
+            Value = response.Value,
+            ValidationErrors = response.ValidationErrors
+                .WhereNotNull()
+                .Where(static error => error.ArgumentName.Length > 0 || error.ErrorMessage.Length > 0)
+                .ToArray()
+        };
+    }
+
+    internal static WaitForResourceResponse RequireWaitForResourceResponse(WaitForResourceResponse? response, string context)
+    {
+        return response ?? throw CreateInvalidOperationException(context);
     }
 
     /// <summary>
@@ -856,12 +973,14 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
             NonInteractive = options.NonInteractive
         };
 
-        var response = await rpc.InvokeWithProfilingAsync<ExecuteResourceCommandResponse>(
-            _profilingTelemetry,
-            "auxiliary",
-            "ExecuteResourceCommandAsync",
-            [request],
-            cancellationToken).ConfigureAwait(false);
+        var response = RequireExecuteResourceCommandResponse(
+            await rpc.InvokeWithProfilingAsync<ExecuteResourceCommandResponse?>(
+                _profilingTelemetry,
+                "auxiliary",
+                "ExecuteResourceCommandAsync",
+                [request],
+                cancellationToken).ConfigureAwait(false),
+            "ExecuteResourceCommandAsync");
 
         _logger.LogDebug("Command '{CommandName}' on resource '{ResourceName}' completed with success={Success} and message='{Message}'", commandName, resourceName, response.Success, response.Message);
 
@@ -895,12 +1014,14 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
             TimeoutSeconds = timeoutSeconds
         };
 
-        var response = await rpc.InvokeWithProfilingAsync<WaitForResourceResponse>(
-            _profilingTelemetry,
-            "auxiliary",
-            "WaitForResourceAsync",
-            [request],
-            cancellationToken).ConfigureAwait(false);
+        var response = RequireWaitForResourceResponse(
+            await rpc.InvokeWithProfilingAsync<WaitForResourceResponse?>(
+                _profilingTelemetry,
+                "auxiliary",
+                "WaitForResourceAsync",
+                [request],
+                cancellationToken).ConfigureAwait(false),
+            "WaitForResourceAsync");
 
         _logger.LogDebug("Wait for resource '{ResourceName}' completed: success={Success}, state={State}", resourceName, response.Success, response.State);
 
@@ -908,6 +1029,51 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     }
 
     #endregion
+
+    private bool TryValidateResourceSnapshot(ResourceSnapshot? snapshot, string context)
+    {
+        if (snapshot is null)
+        {
+            _logger?.LogWarning("Skipping malformed resource snapshot from {Context}: snapshot was null.", context);
+            return false;
+        }
+
+        if (snapshot.Name.Length == 0)
+        {
+            _logger?.LogWarning("Skipping malformed resource snapshot from {Context}: Name was null or missing.", context);
+            return false;
+        }
+
+        return true;
+    }
+
+    internal static bool TryValidateResourceLogLine(ResourceLogLine? logLine, ILogger? logger, string context)
+    {
+        if (logLine is null)
+        {
+            logger?.LogWarning("Skipping malformed resource log line from {Context}: line was null.", context);
+            return false;
+        }
+
+        if (logLine.ResourceName.Length == 0)
+        {
+            logger?.LogWarning("Skipping malformed resource log line from {Context}: ResourceName was null or missing.", context);
+            return false;
+        }
+
+        if (!logLine.HasContent)
+        {
+            logger?.LogWarning("Skipping malformed resource log line from {Context}: Content was null or missing.", context);
+            return false;
+        }
+
+        return true;
+    }
+
+    private static InvalidOperationException CreateInvalidOperationException(string name)
+    {
+        return new InvalidOperationException($"Malformed AppHost auxiliary backchannel payload: required member '{name}' was null or missing.");
+    }
 
     /// <summary>
     /// Disposes the auxiliary backchannel connection.

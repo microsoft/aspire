@@ -558,7 +558,7 @@ internal abstract class PipelineCommandBase : BaseCommand
 
                 InteractionService.DisplaySubtleMessage(formattedMessage, allowMarkup: true);
             }
-            else
+            else if (activity.Type == PublishingActivityTypes.Task)
             {
                 // Task activity - log it
                 var stepId = activity.Data.StepId;
@@ -579,6 +579,10 @@ internal abstract class PipelineCommandBase : BaseCommand
                     var statusText = ConvertTextWithMarkdownFlag(activity.Data.StatusText, activity.Data);
                     InteractionService.DisplaySubtleMessage($"[[DEBUG]] Task {activity.Data.Id} ({stepId}): {statusText}", allowMarkup: true);
                 }
+            }
+            else
+            {
+                _logger.LogDebug("Skipping unknown publishing activity type '{ActivityType}'.", activity.Type);
             }
         }
 
@@ -695,7 +699,7 @@ internal abstract class PipelineCommandBase : BaseCommand
                         }
                     }
                 }
-                else
+                else if (activity.Type == PublishingActivityTypes.Task)
                 {
                     var stepId = activity.Data.StepId;
                     Debug.Assert(stepId != null, "Activity data should have a StepId for task activities.");
@@ -758,6 +762,10 @@ internal abstract class PipelineCommandBase : BaseCommand
                         }
                     }
                 }
+                else
+                {
+                    _logger.LogDebug("Skipping unknown publishing activity type '{ActivityType}'.", activity.Type);
+                }
             }
 
             if (publishingActivity is not null)
@@ -810,7 +818,7 @@ internal abstract class PipelineCommandBase : BaseCommand
 
                 // Provide final result to logger and print its structured summary.
                 // Pass the pipeline summary if available for successful pipelines
-                var pipelineSummary = !hasErrors ? publishingActivity.Data.PipelineSummary : null;
+                var pipelineSummary = !hasErrors ? NormalizePipelineSummary(publishingActivity.Data.PipelineSummary) : null;
                 logger.SetFinalResult(!hasErrors, pipelineSummary);
                 logger.WriteSummary();
 
@@ -862,13 +870,14 @@ internal abstract class PipelineCommandBase : BaseCommand
         }
 
         // Check if we have input information
-        if (activity.Data.Inputs is not { Count: > 0 } inputs)
+        var inputs = NormalizePromptInputs(activity.Data.Inputs);
+        if (inputs.Count == 0)
         {
             throw new InvalidOperationException("Prompt provided without input data.");
         }
 
         // Check for validation errors. If there are errors then this isn't the first time the user has been prompted.
-        var hasValidationErrors = inputs.Any(input => input.ValidationErrors is { Count: > 0 });
+        var hasValidationErrors = inputs.Any(HasValidationErrors);
 
         // For multiple inputs, display the activity status text as a header.
         // Don't display if there are validation errors. Validation errors means the header has already been displayed.
@@ -888,7 +897,7 @@ internal abstract class PipelineCommandBase : BaseCommand
 
             // Get prompt for input if there are no validation errors (first time we've asked)
             // or there are validation errors and this input has an error.
-            if (!hasValidationErrors || input.ValidationErrors is { Count: > 0 })
+            if (!hasValidationErrors || HasValidationErrors(input))
             {
                 // Build the prompt text based on number of inputs
                 var promptText = BuildPromptText(input, inputs.Count, activity.Data.StatusText, activity.Data);
@@ -919,7 +928,8 @@ internal abstract class PipelineCommandBase : BaseCommand
         }
 
         // Display any validation errors.
-        if (input.ValidationErrors is { Count: > 0 } errors)
+        var errors = NormalizeValidationErrors(input.ValidationErrors);
+        if (errors.Count > 0)
         {
             foreach (var error in errors)
             {
@@ -954,7 +964,8 @@ internal abstract class PipelineCommandBase : BaseCommand
 
     private async Task<string?> HandleSelectInputAsync(PublishingPromptInput input, string promptText, CancellationToken cancellationToken)
     {
-        if (input.Options is null || input.Options.Count == 0)
+        var options = NormalizePromptOptions(input.Options);
+        if (options.Count == 0)
         {
             return await InteractionService.PromptForStringAsync(promptText, binding: PromptBinding.CreateDefault(input.Value), required: input.Required, cancellationToken: cancellationToken);
         }
@@ -962,7 +973,6 @@ internal abstract class PipelineCommandBase : BaseCommand
         // If AllowCustomChoice is enabled then add an "Other" option to the list.
         // CLI doesn't support custom values directly in selection prompts. Instead an "Other" option is added.
         // If "Other" is selected then the user is prompted to enter a custom value as text.
-        var options = input.Options.ToList();
         if (input.AllowCustomChoice)
         {
             options.Add(KeyValuePair.Create(CustomChoiceValue, InteractionServiceStrings.CustomChoiceLabel));
@@ -1009,6 +1019,37 @@ internal abstract class PipelineCommandBase : BaseCommand
     private static bool ParseBooleanValue(string? value)
     {
         return bool.TryParse(value, out var result) && result;
+    }
+
+    internal static IReadOnlyList<PublishingPromptInput> NormalizePromptInputs(IEnumerable<PublishingPromptInput?>? inputs)
+    {
+        return inputs?.WhereNotNull().ToArray() ?? [];
+    }
+
+    internal static IReadOnlyList<string> NormalizeValidationErrors(IEnumerable<string?>? errors)
+    {
+        return errors?.WhereNotNull().Where(static error => error.Length > 0).ToArray() ?? [];
+    }
+
+    internal static List<KeyValuePair<string, string>> NormalizePromptOptions(IEnumerable<KeyValuePair<string, string>?>? options)
+    {
+        return options?
+            .Where(static option => !string.IsNullOrEmpty(option?.Key) && !string.IsNullOrEmpty(option?.Value))
+            .Select(static option => option.GetValueOrDefault())
+            .ToList() ?? [];
+    }
+
+    internal static IReadOnlyList<BackchannelPipelineSummaryItem> NormalizePipelineSummary(IEnumerable<BackchannelPipelineSummaryItem?>? items)
+    {
+        return items?
+            .WhereNotNull()
+            .Where(static item => item.Key.Length > 0 && item.Value.Length > 0)
+            .ToArray() ?? [];
+    }
+
+    private static bool HasValidationErrors(PublishingPromptInput input)
+    {
+        return NormalizeValidationErrors(input.ValidationErrors).Count > 0;
     }
 
     private static (LogLevel Level, string Prefix) ParseLogLevel(string? logLevel) => logLevel?.ToUpperInvariant() switch

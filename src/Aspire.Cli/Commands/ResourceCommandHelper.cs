@@ -104,7 +104,7 @@ internal static class ResourceCommandHelper
             interactionService.DisplayError($"Failed to execute command '{commandName}' on resource '{resourceName}': {errorMessage}");
         }
 
-        if (response.Value is not null)
+        if (response.Value?.Value is not null)
         {
             DisplayCommandResult(interactionService, response.Value);
         }
@@ -138,7 +138,7 @@ internal static class ResourceCommandHelper
             interactionService.DisplayError($"Failed to {baseVerb} resource '{resourceName}': {errorMessage}");
         }
 
-        if (response.Value is not null)
+        if (response.Value?.Value is not null)
         {
             DisplayCommandResult(interactionService, response.Value);
         }
@@ -148,13 +148,18 @@ internal static class ResourceCommandHelper
 
     private static void DisplayCommandResult(IInteractionService interactionService, ExecuteResourceCommandResult result)
     {
+        if (result.Value is not { } value)
+        {
+            return;
+        }
+
         if (result.Format is CommandResultFormat.Markdown)
         {
-            interactionService.DisplayMarkdown(result.Value, ConsoleOutput.Standard, maxWidth: 100);
+            interactionService.DisplayMarkdown(value, ConsoleOutput.Standard, maxWidth: 100);
         }
         else
         {
-            interactionService.DisplayRawText(result.Value, ConsoleOutput.Standard);
+            interactionService.DisplayRawText(value, ConsoleOutput.Standard);
         }
     }
 

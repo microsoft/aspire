@@ -465,6 +465,82 @@ public class DeployCommandTests(ITestOutputHelper outputHelper)
             };
         }
     }
+
+    [Fact]
+    public async Task DeployCommandIgnoresUnknownPublishingActivityTypes()
+    {
+        using var tempRepo = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(tempRepo, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = (sp) => new TestProjectLocator();
+
+            options.DotNetCliRunnerFactory = (sp) =>
+            {
+                return new TestDotNetCliRunner
+                {
+                    BuildAsyncCallback = (projectFile, noRestore, options, cancellationToken) => 0,
+                    GetAppHostInformationAsyncCallback = (projectFile, options, cancellationToken) =>
+                    {
+                        return (0, true, VersionHelper.GetDefaultTemplateVersion());
+                    },
+                    RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, cancellationToken) =>
+                    {
+                        var deployModeCompleted = new TaskCompletionSource();
+                        var backchannel = new TestAppHostBackchannel
+                        {
+                            RequestStopAsyncCalled = deployModeCompleted,
+                            GetPublishingActivitiesAsyncCallback = GetActivities
+                        };
+                        backchannelCompletionSource?.SetResult(backchannel);
+                        await deployModeCompleted.Task.DefaultTimeout();
+                        return 0;
+                    }
+                };
+            };
+
+            options.PublishCommandPrompterFactory = (sp) =>
+            {
+                var interactionService = sp.GetRequiredService<IInteractionService>();
+                return new TestDeployCommandPrompter(interactionService);
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("deploy");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        static async IAsyncEnumerable<PublishingActivity> GetActivities([EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            yield return new PublishingActivity
+            {
+                Type = "future-activity",
+                Data = new PublishingActivityData
+                {
+                    Id = "future",
+                    StatusText = "Future activity",
+                    CompletionState = CompletionStates.InProgress
+                }
+            };
+
+            yield return new PublishingActivity
+            {
+                Type = PublishingActivityTypes.PublishComplete,
+                Data = new PublishingActivityData
+                {
+                    Id = "publish-complete",
+                    StatusText = "Deployment completed",
+                    CompletionState = CompletionStates.Completed
+                }
+            };
+
+            await Task.CompletedTask;
+        }
+    }
 }
 
 internal sealed class TestDeployCommandPrompter(IInteractionService interactionService) : PublishCommandPrompter(interactionService)

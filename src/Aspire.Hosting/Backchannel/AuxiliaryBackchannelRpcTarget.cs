@@ -178,7 +178,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// <returns>An async enumerable of log lines.</returns>
     public IAsyncEnumerable<ResourceLogLine> GetConsoleLogsAsync(GetConsoleLogsRequest request, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(request);
+        request = RequireGetConsoleLogsRequest(request, nameof(GetConsoleLogsAsync));
         return GetResourceLogsAsync(
             "GetConsoleLogsAsync",
             request.TraceContext,
@@ -198,7 +198,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// <returns>An async enumerable of log batches.</returns>
     public IAsyncEnumerable<ResourceLogBatch> GetConsoleLogBatchesAsync(GetConsoleLogsRequest request, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(request);
+        request = RequireGetConsoleLogsRequest(request, nameof(GetConsoleLogBatchesAsync));
         return GetResourceLogBatchesAsync(
             "GetConsoleLogBatchesAsync",
             request.TraceContext,
@@ -218,7 +218,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// <returns>The tool call response.</returns>
     public async Task<CallMcpToolResponse> CallMcpToolAsync(CallMcpToolRequest request, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(request);
+        request = RequireCallMcpToolRequest(request, nameof(CallMcpToolAsync));
         using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(CallMcpToolAsync), streaming: false, request.TraceContext);
 
         // Convert JsonElement arguments to Dictionary<string, object?> with proper value conversion
@@ -265,7 +265,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// <returns>The response indicating success or failure.</returns>
     public async Task<ExecuteResourceCommandResponse> ExecuteResourceCommandAsync(ExecuteResourceCommandRequest request, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(request);
+        request = RequireExecuteResourceCommandRequest(request, nameof(ExecuteResourceCommandAsync));
         using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(ExecuteResourceCommandAsync), streaming: false, request.TraceContext);
 
         var resourceCommandService = serviceProvider.GetRequiredService<ResourceCommandService>();
@@ -408,7 +408,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// </summary>
     public async Task<WaitForResourceResponse> WaitForResourceAsync(WaitForResourceRequest request, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(request);
+        request = RequireWaitForResourceRequest(request, nameof(WaitForResourceAsync));
         using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(WaitForResourceAsync), streaming: false, request.TraceContext);
 
         var notificationService = serviceProvider.GetRequiredService<ResourceNotificationService>();
@@ -446,6 +446,87 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         {
             return new WaitForResourceResponse { Success = false, ErrorMessage = ex.Message };
         }
+    }
+
+    internal static GetConsoleLogsRequest RequireGetConsoleLogsRequest(GetConsoleLogsRequest? request, string context)
+    {
+        if (request is null)
+        {
+            throw CreateInvalidOperationException(context);
+        }
+
+        return request;
+    }
+
+    internal static CallMcpToolRequest RequireCallMcpToolRequest(CallMcpToolRequest? request, string context)
+    {
+        if (request is null)
+        {
+            throw CreateInvalidOperationException(context);
+        }
+
+        if (string.IsNullOrEmpty(request.ResourceName))
+        {
+            throw CreateInvalidOperationException($"{context}.{nameof(CallMcpToolRequest.ResourceName)}");
+        }
+
+        if (string.IsNullOrEmpty(request.ToolName))
+        {
+            throw CreateInvalidOperationException($"{context}.{nameof(CallMcpToolRequest.ToolName)}");
+        }
+
+        if (request.Arguments is { } arguments &&
+            arguments.ValueKind is not JsonValueKind.Object and not JsonValueKind.Null and not JsonValueKind.Undefined)
+        {
+            throw CreateInvalidOperationException($"{context}.{nameof(CallMcpToolRequest.Arguments)}");
+        }
+
+        return request;
+    }
+
+    internal static ExecuteResourceCommandRequest RequireExecuteResourceCommandRequest(ExecuteResourceCommandRequest? request, string context)
+    {
+        if (request is null)
+        {
+            throw CreateInvalidOperationException(context);
+        }
+
+        if (string.IsNullOrEmpty(request.ResourceName))
+        {
+            throw CreateInvalidOperationException($"{context}.{nameof(ExecuteResourceCommandRequest.ResourceName)}");
+        }
+
+        if (string.IsNullOrEmpty(request.CommandName))
+        {
+            throw CreateInvalidOperationException($"{context}.{nameof(ExecuteResourceCommandRequest.CommandName)}");
+        }
+
+        return request;
+    }
+
+    internal static WaitForResourceRequest RequireWaitForResourceRequest(WaitForResourceRequest? request, string context)
+    {
+        if (request is null)
+        {
+            throw CreateInvalidOperationException(context);
+        }
+
+        if (string.IsNullOrEmpty(request.ResourceName))
+        {
+            throw CreateInvalidOperationException($"{context}.{nameof(WaitForResourceRequest.ResourceName)}");
+        }
+
+        if (string.IsNullOrEmpty(request.Status))
+        {
+            throw CreateInvalidOperationException($"{context}.{nameof(WaitForResourceRequest.Status)}");
+        }
+
+        return request;
+    }
+
+    private static InvalidOperationException CreateInvalidOperationException(string name)
+    {
+        return new InvalidOperationException($"Malformed AppHost auxiliary backchannel payload: required member '{name}' was null or missing.");
     }
 
     private static async Task<WaitForResourceResponse> WaitForHealthyAsync(ResourceNotificationService notificationService, WaitResourceTarget target, CancellationToken cancellationToken)

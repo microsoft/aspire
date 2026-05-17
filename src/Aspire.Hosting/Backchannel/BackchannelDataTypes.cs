@@ -22,10 +22,12 @@ using ModelContextProtocol.Protocol;
 // 1. All methods take a single request object (nullable where sensible)
 // 2. All methods return a response object (or IAsyncEnumerable<T> for streaming)
 // 3. Request types derive from BackchannelRequest; request/response types are sealed classes with { get; init; } properties
-// 4. Required properties use 'required' keyword
+// 4. Required properties are reserved for fields present since the method shipped
+//    and are validated immediately after deserialization at the RPC boundary
 // 5. Optional properties are nullable (T?) - can be added without breaking
-// 6. Empty request classes are allowed (for future expansion)
-// 7. Method names: Get*Async, Watch*Async (streaming), Call*Async (actions)
+// 6. Optional collections use backing fields so missing/null wire values mean empty
+// 7. Empty request classes are allowed (for future expansion)
+// 8. Method names: Get*Async, Watch*Async (streaming), Call*Async (actions)
 // =============================================================================
 
 #region Capability Constants
@@ -71,10 +73,16 @@ internal static class KnownCommandVisibility
 /// </summary>
 internal sealed class BackchannelTraceContext
 {
+    private Dictionary<string, string> _baggage = [];
+
     /// <summary>
     /// Gets the baggage values associated with the trace.
     /// </summary>
-    public Dictionary<string, string> Baggage { get; init; } = [];
+    public Dictionary<string, string> Baggage
+    {
+        get => _baggage;
+        init => _baggage = value ?? [];
+    }
 }
 
 /// <summary>
@@ -114,10 +122,16 @@ internal sealed class GetCapabilitiesRequest : BackchannelRequest
 /// </summary>
 internal sealed class GetCapabilitiesResponse
 {
+    private string[] _capabilities = [];
+
     /// <summary>
     /// Gets the list of supported capability versions (e.g., "aux.v1", "aux.v2").
     /// </summary>
-    public required string[] Capabilities { get; init; }
+    public string[] Capabilities
+    {
+        get => _capabilities;
+        init => _capabilities = value ?? [];
+    }
 }
 
 /// <summary>
@@ -188,7 +202,7 @@ internal sealed class GetDashboardInfoResponse
     /// <summary>
     /// Gets the Dashboard URLs with login tokens.
     /// </summary>
-    public required string[] DashboardUrls { get; init; }
+    public string[]? DashboardUrls { get; init; }
 
     /// <summary>
     /// Gets whether the Dashboard is healthy.
@@ -219,10 +233,16 @@ internal sealed class GetResourcesRequest : BackchannelRequest
 /// </summary>
 internal sealed class GetResourcesResponse
 {
+    private ResourceSnapshot[] _resources = [];
+
     /// <summary>
     /// Gets the resource snapshots.
     /// </summary>
-    public required ResourceSnapshot[] Resources { get; init; }
+    public ResourceSnapshot[] Resources
+    {
+        get => _resources;
+        init => _resources = value ?? [];
+    }
 }
 
 /// <summary>
@@ -320,15 +340,21 @@ internal sealed class CallMcpToolRequest : BackchannelRequest
 /// </summary>
 internal sealed class CallMcpToolResponse
 {
+    private McpToolContentItem[] _content = [];
+
     /// <summary>
     /// Gets whether the tool call resulted in an error.
     /// </summary>
-    public required bool IsError { get; init; }
+    public bool IsError { get; init; }
 
     /// <summary>
     /// Gets the content items returned by the tool.
     /// </summary>
-    public required McpToolContentItem[] Content { get; init; }
+    public McpToolContentItem[] Content
+    {
+        get => _content;
+        init => _content = value ?? [];
+    }
 }
 
 /// <summary>
@@ -336,10 +362,16 @@ internal sealed class CallMcpToolResponse
 /// </summary>
 internal sealed class McpToolContentItem
 {
+    private string _type = string.Empty;
+
     /// <summary>
     /// Gets the content type (e.g., "text").
     /// </summary>
-    public required string Type { get; init; }
+    public string Type
+    {
+        get => _type;
+        init => _type = value ?? string.Empty;
+    }
 
     /// <summary>
     /// Gets the text content.
@@ -440,10 +472,17 @@ internal sealed class ExecuteResourceCommandOptions
 /// </summary>
 internal sealed class ExecuteResourceCommandResponse
 {
+    private ResourceCommandArgumentValidationError[] _validationErrors = [];
+
+    // Retired JSON properties:
+    // - "ErrorMessage": legacy name for "Message"; keep reading it for old AppHost payloads.
+
     /// <summary>
     /// Gets whether the command executed successfully.
+    /// Missing values from older payloads default to false so consumers handle the
+    /// response as a failure instead of failing during deserialization.
     /// </summary>
-    public required bool Success { get; init; }
+    public bool Success { get; init; }
 
     /// <summary>
     /// Gets whether the command was canceled.
@@ -469,7 +508,11 @@ internal sealed class ExecuteResourceCommandResponse
     /// <summary>
     /// Gets validation errors for submitted command arguments.
     /// </summary>
-    public ResourceCommandArgumentValidationError[] ValidationErrors { get; init; } = [];
+    public ResourceCommandArgumentValidationError[] ValidationErrors
+    {
+        get => _validationErrors;
+        init => _validationErrors = value ?? [];
+    }
 }
 
 /// <summary>
@@ -477,15 +520,26 @@ internal sealed class ExecuteResourceCommandResponse
 /// </summary>
 internal sealed class ResourceCommandArgumentValidationError
 {
+    private string _argumentName = string.Empty;
+    private string _errorMessage = string.Empty;
+
     /// <summary>
     /// Gets the argument name.
     /// </summary>
-    public required string ArgumentName { get; init; }
+    public string ArgumentName
+    {
+        get => _argumentName;
+        init => _argumentName = value ?? string.Empty;
+    }
 
     /// <summary>
     /// Gets the validation error message.
     /// </summary>
-    public required string ErrorMessage { get; init; }
+    public string ErrorMessage
+    {
+        get => _errorMessage;
+        init => _errorMessage = value ?? string.Empty;
+    }
 }
 
 /// <summary>
@@ -493,15 +547,22 @@ internal sealed class ResourceCommandArgumentValidationError
 /// </summary>
 internal sealed class ExecuteResourceCommandResult
 {
+    private CommandResultFormat _format = CommandResultFormat.None;
+
     /// <summary>
     /// Gets the value data.
     /// </summary>
-    public required string Value { get; init; }
+    public string? Value { get; init; }
 
     /// <summary>
     /// Gets the format of the value data.
     /// </summary>
-    public CommandResultFormat Format { get; init; }
+    [JsonConverter(typeof(CommandResultFormatJsonConverter))]
+    public CommandResultFormat Format
+    {
+        get => _format;
+        init => _format = value;
+    }
 
     /// <summary>
     /// Gets whether to immediately display the value in the dashboard.
@@ -512,26 +573,86 @@ internal sealed class ExecuteResourceCommandResult
 /// <summary>
 /// Specifies the format of a command result.
 /// </summary>
-[JsonConverter(typeof(JsonStringEnumConverter<CommandResultFormat>))]
+[JsonConverter(typeof(CommandResultFormatJsonConverter))]
 internal enum CommandResultFormat
 {
+    /// <summary>
+    /// No specific result format was supplied by the remote peer.
+    /// </summary>
+    [JsonStringEnumMemberName("none")]
+    None = 0,
+
     /// <summary>
     /// Plain text result.
     /// </summary>
     [JsonStringEnumMemberName("text")]
-    Text,
+    Text = 1,
 
     /// <summary>
     /// JSON result.
     /// </summary>
     [JsonStringEnumMemberName("json")]
-    Json,
+    Json = 2,
 
     /// <summary>
     /// Markdown result.
     /// </summary>
     [JsonStringEnumMemberName("markdown")]
-    Markdown
+    Markdown = 3
+}
+
+internal sealed class CommandResultFormatJsonConverter : JsonConverter<CommandResultFormat>
+{
+    public override bool HandleNull => true;
+
+    public override CommandResultFormat Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        return reader.TokenType switch
+        {
+            JsonTokenType.Null => CommandResultFormat.None,
+            JsonTokenType.String => ReadStringValue(reader.GetString()),
+            JsonTokenType.Number when reader.TryGetInt32(out var value) => value switch
+            {
+                // Numeric values are legacy wire values from before the "none" sentinel existed.
+                0 => CommandResultFormat.Text,
+                1 => CommandResultFormat.Json,
+                2 => CommandResultFormat.Markdown,
+                _ => CommandResultFormat.None
+            },
+            _ => throw new JsonException($"The JSON token '{reader.TokenType}' cannot be converted to {nameof(CommandResultFormat)}.")
+        };
+    }
+
+    public override void Write(Utf8JsonWriter writer, CommandResultFormat value, JsonSerializerOptions options)
+    {
+        writer.WriteStringValue(value switch
+        {
+            CommandResultFormat.Text => "text",
+            CommandResultFormat.Json => "json",
+            CommandResultFormat.Markdown => "markdown",
+            _ => "none"
+        });
+    }
+
+    private static CommandResultFormat ReadStringValue(string? value)
+    {
+        if (string.Equals(value, "text", StringComparison.OrdinalIgnoreCase))
+        {
+            return CommandResultFormat.Text;
+        }
+
+        if (string.Equals(value, "json", StringComparison.OrdinalIgnoreCase))
+        {
+            return CommandResultFormat.Json;
+        }
+
+        if (string.Equals(value, "markdown", StringComparison.OrdinalIgnoreCase))
+        {
+            return CommandResultFormat.Markdown;
+        }
+
+        return CommandResultFormat.None;
+    }
 }
 
 #endregion
@@ -575,8 +696,9 @@ internal sealed class WaitForResourceResponse
 {
     /// <summary>
     /// Gets whether the resource reached the target status.
+    /// Missing values from older payloads default to false so the wait fails cleanly.
     /// </summary>
-    public required bool Success { get; init; }
+    public bool Success { get; init; }
 
     /// <summary>
     /// Gets the current state of the resource.
@@ -611,25 +733,46 @@ internal sealed class WaitForResourceResponse
 /// </summary>
 internal sealed class RpcResourceState
 {
+    private string[] _endpoints = [];
+    private string _resource = string.Empty;
+    private string _type = string.Empty;
+    private string _state = string.Empty;
+
     /// <summary>
     /// Gets the name of the resource.
     /// </summary>
-    public required string Resource { get; init; }
+    public string Resource
+    {
+        get => _resource;
+        init => _resource = value ?? string.Empty;
+    }
 
     /// <summary>
     /// Gets the type of the resource.
     /// </summary>
-    public required string Type { get; init; }
+    public string Type
+    {
+        get => _type;
+        init => _type = value ?? string.Empty;
+    }
 
     /// <summary>
     /// Gets the state of the resource.
     /// </summary>
-    public required string State { get; init; }
+    public string State
+    {
+        get => _state;
+        init => _state = value ?? string.Empty;
+    }
 
     /// <summary>
     /// Gets the endpoints associated with the resource.
     /// </summary>
-    public required string[] Endpoints { get; init; }
+    public string[] Endpoints
+    {
+        get => _endpoints;
+        init => _endpoints = value ?? [];
+    }
 
     /// <summary>
     /// Gets the health status of the resource.
@@ -662,15 +805,33 @@ internal sealed class DashboardUrlsState
 /// </summary>
 internal sealed class PublishingActivity
 {
+    private string _type = string.Empty;
+    private PublishingActivityData _data = new();
+    private bool _hasData;
+
     /// <summary>
     /// Gets the type discriminator for the publishing activity.
     /// </summary>
-    public required string Type { get; init; }
+    public string Type
+    {
+        get => _type;
+        init => _type = value ?? string.Empty;
+    }
 
     /// <summary>
     /// Gets the data containing all properties for the publishing activity.
     /// </summary>
-    public required PublishingActivityData Data { get; init; }
+    public PublishingActivityData Data
+    {
+        get => _data;
+        init
+        {
+            _data = value ?? new PublishingActivityData();
+            _hasData = value is not null;
+        }
+    }
+
+    internal bool HasData => _hasData;
 }
 
 /// <summary>
@@ -678,20 +839,36 @@ internal sealed class PublishingActivity
 /// </summary>
 internal sealed class PublishingActivityData
 {
+    private string _completionState = CompletionStates.InProgress;
+    private string _id = string.Empty;
+    private string _statusText = string.Empty;
+
     /// <summary>
     /// Gets the unique identifier for the publishing activity.
     /// </summary>
-    public required string Id { get; init; }
+    public string Id
+    {
+        get => _id;
+        init => _id = value ?? string.Empty;
+    }
 
     /// <summary>
     /// Gets the status text describing the publishing activity.
     /// </summary>
-    public required string StatusText { get; init; }
+    public string StatusText
+    {
+        get => _statusText;
+        init => _statusText = value ?? string.Empty;
+    }
 
     /// <summary>
     /// Gets the completion state of the publishing activity.
     /// </summary>
-    public string CompletionState { get; init; } = CompletionStates.InProgress;
+    public string CompletionState
+    {
+        get => _completionState;
+        init => _completionState = value ?? CompletionStates.InProgress;
+    }
 
     /// <summary>
     /// Gets a value indicating whether the publishing activity is complete.
@@ -734,12 +911,12 @@ internal sealed class PublishingActivityData
     /// Each item carries its own key, value, and Markdown formatting flag.
     /// The list preserves the order items were added.
     /// </summary>
-    public IReadOnlyList<BackchannelPipelineSummaryItem>? PipelineSummary { get; init; }
+    public IReadOnlyList<BackchannelPipelineSummaryItem?>? PipelineSummary { get; init; }
 
     /// <summary>
     /// Gets the input information for prompt activities, if available.
     /// </summary>
-    public IReadOnlyList<PublishingPromptInput>? Inputs { get; init; }
+    public IReadOnlyList<PublishingPromptInput?>? Inputs { get; init; }
 
     /// <summary>
     /// Gets the log level for log activities, if available.
@@ -762,15 +939,26 @@ internal sealed class PublishingActivityData
 /// </summary>
 internal sealed class BackchannelPipelineSummaryItem
 {
+    private string _key = string.Empty;
+    private string _value = string.Empty;
+
     /// <summary>
     /// Gets the key or label for the summary item.
     /// </summary>
-    public required string Key { get; init; }
+    public string Key
+    {
+        get => _key;
+        init => _key = value ?? string.Empty;
+    }
 
     /// <summary>
     /// Gets the string value for the summary item.
     /// </summary>
-    public required string Value { get; init; }
+    public string Value
+    {
+        get => _value;
+        init => _value = value ?? string.Empty;
+    }
 
     /// <summary>
     /// Gets a value indicating whether the value contains Markdown formatting.
@@ -783,6 +971,9 @@ internal sealed class BackchannelPipelineSummaryItem
 /// </summary>
 internal sealed class PublishingPromptInput
 {
+    private string _label = string.Empty;
+    private string _inputType = string.Empty;
+
     /// <summary>
     /// Gets the name for the input.
     /// Nullable for backwards compatibility with Aspire 9.5 and older app hosts.
@@ -792,12 +983,20 @@ internal sealed class PublishingPromptInput
     /// <summary>
     /// Gets the label for the input.
     /// </summary>
-    public required string Label { get; init; }
+    public string Label
+    {
+        get => _label;
+        init => _label = value ?? string.Empty;
+    }
 
     /// <summary>
     /// Gets the type of the input.
     /// </summary>
-    public required string InputType { get; init; }
+    public string InputType
+    {
+        get => _inputType;
+        init => _inputType = value ?? string.Empty;
+    }
 
     /// <summary>
     /// Gets a value indicating whether the input is required.
@@ -807,7 +1006,7 @@ internal sealed class PublishingPromptInput
     /// <summary>
     /// Gets the options for the input. Only used by select inputs.
     /// </summary>
-    public IReadOnlyList<KeyValuePair<string, string>>? Options { get; init; }
+    public IReadOnlyList<KeyValuePair<string, string>?>? Options { get; init; }
 
     /// <summary>
     /// Gets the default value for the input.
@@ -817,7 +1016,7 @@ internal sealed class PublishingPromptInput
     /// <summary>
     /// Gets the validation errors for the input.
     /// </summary>
-    public IReadOnlyList<string>? ValidationErrors { get; init; }
+    public IReadOnlyList<string?>? ValidationErrors { get; init; }
 
     /// <summary>
     /// Gets or sets a value indicating whether a custom choice is allowed.
@@ -857,19 +1056,41 @@ internal static class CompletionStates
     public const string CompletedWithError = "CompletedWithError";
 }
 
-internal class BackchannelLogEntry
+internal sealed class BackchannelLogEntry
 {
-    public required EventId EventId { get; set; }
-    public required LogLevel LogLevel { get; set; }
-    public required string Message { get; set; }
-    public required DateTimeOffset Timestamp { get; set; }
-    public required string CategoryName { get; set; }
+    private string _message = string.Empty;
+    private string _categoryName = string.Empty;
+    private bool _hasMessage;
+
+    public required EventId EventId { get; init; }
+    public required LogLevel LogLevel { get; init; }
+    public string Message
+    {
+        get => _message;
+        init
+        {
+            _hasMessage = value is not null;
+            _message = value ?? string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// Gets whether <see cref="Message"/> was present on the wire; empty log messages are still valid.
+    /// </summary>
+    public bool HasMessage => _hasMessage;
+
+    public required DateTimeOffset Timestamp { get; init; }
+    public string CategoryName
+    {
+        get => _categoryName;
+        init => _categoryName = value ?? string.Empty;
+    }
 }
 
-internal class PublishingPromptInputAnswer
+internal sealed class PublishingPromptInputAnswer
 {
-    public string? Name { get; set; }
-    public string? Value { get; set; }
+    public string? Name { get; init; }
+    public string? Value { get; init; }
 }
 
 /// <summary>
@@ -877,10 +1098,18 @@ internal class PublishingPromptInputAnswer
 /// </summary>
 internal sealed class PipelineStepInfo
 {
+    private string[] _dependsOn = [];
+    private string[] _tags = [];
+    private string _name = string.Empty;
+
     /// <summary>
     /// Gets the unique name of the step.
     /// </summary>
-    public required string Name { get; init; }
+    public string Name
+    {
+        get => _name;
+        init => _name = value ?? string.Empty;
+    }
 
     /// <summary>
     /// Gets the description of the step.
@@ -890,12 +1119,20 @@ internal sealed class PipelineStepInfo
     /// <summary>
     /// Gets the names of steps that this step depends on.
     /// </summary>
-    public string[] DependsOn { get; init; } = [];
+    public string[] DependsOn
+    {
+        get => _dependsOn;
+        init => _dependsOn = value ?? [];
+    }
 
     /// <summary>
     /// Gets the tags that categorize this step.
     /// </summary>
-    public string[] Tags { get; init; } = [];
+    public string[] Tags
+    {
+        get => _tags;
+        init => _tags = value ?? [];
+    }
 
     /// <summary>
     /// Gets the name of the resource this step is associated with, if any.
@@ -927,10 +1164,16 @@ internal sealed class GetPipelineStepsRequest : BackchannelRequest
 /// </summary>
 internal sealed class GetPipelineStepsResponse
 {
+    private PipelineStepInfo[] _steps = [];
+
     /// <summary>
     /// Gets the pipeline steps in topological (execution) order.
     /// </summary>
-    public required PipelineStepInfo[] Steps { get; init; }
+    public PipelineStepInfo[] Steps
+    {
+        get => _steps;
+        init => _steps = value ?? [];
+    }
 }
 
 /// <summary>
@@ -956,10 +1199,26 @@ internal sealed class DashboardMcpConnectionInfo
 [DebuggerDisplay("Name = {Name}, ResourceType = {ResourceType}, State = {State}, Properties = {Properties.Count}")]
 internal sealed class ResourceSnapshot
 {
+    private ResourceSnapshotUrl[] _urls = [];
+    private ResourceSnapshotRelationship[] _relationships = [];
+    private ResourceSnapshotHealthReport[] _healthReports = [];
+    private ResourceSnapshotVolume[] _volumes = [];
+    private ResourceSnapshotEnvironmentVariable[] _environmentVariables = [];
+    private Dictionary<string, string?> _properties = [];
+    private ResourceSnapshotCommand[] _commands = [];
+    private string _name = string.Empty;
+
+    // Retired JSON properties:
+    // - "Type": legacy name for "ResourceType"; keep the obsolete alias for old AppHost payloads.
+
     /// <summary>
     /// Gets the unique name of the resource.
     /// </summary>
-    public required string Name { get; init; }
+    public string Name
+    {
+        get => _name;
+        init => _name = value ?? string.Empty;
+    }
 
     /// <summary>
     /// Gets the display name of the resource.
@@ -1020,33 +1279,57 @@ internal sealed class ResourceSnapshot
     /// <summary>
     /// Gets the URLs exposed by this resource.
     /// </summary>
-    public ResourceSnapshotUrl[] Urls { get; init; } = [];
+    public ResourceSnapshotUrl[] Urls
+    {
+        get => _urls;
+        init => _urls = value ?? [];
+    }
 
     /// <summary>
     /// Gets the relationships to other resources.
     /// </summary>
-    public ResourceSnapshotRelationship[] Relationships { get; init; } = [];
+    public ResourceSnapshotRelationship[] Relationships
+    {
+        get => _relationships;
+        init => _relationships = value ?? [];
+    }
 
     /// <summary>
     /// Gets the health reports for this resource.
     /// </summary>
-    public ResourceSnapshotHealthReport[] HealthReports { get; init; } = [];
+    public ResourceSnapshotHealthReport[] HealthReports
+    {
+        get => _healthReports;
+        init => _healthReports = value ?? [];
+    }
 
     /// <summary>
     /// Gets the volumes mounted to this resource.
     /// </summary>
-    public ResourceSnapshotVolume[] Volumes { get; init; } = [];
+    public ResourceSnapshotVolume[] Volumes
+    {
+        get => _volumes;
+        init => _volumes = value ?? [];
+    }
 
     /// <summary>
     /// Gets the environment variables for this resource.
     /// </summary>
-    public ResourceSnapshotEnvironmentVariable[] EnvironmentVariables { get; init; } = [];
+    public ResourceSnapshotEnvironmentVariable[] EnvironmentVariables
+    {
+        get => _environmentVariables;
+        init => _environmentVariables = value ?? [];
+    }
 
     /// <summary>
     /// Gets additional properties as key-value pairs.
     /// This allows for extensibility without changing the schema.
     /// </summary>
-    public Dictionary<string, string?> Properties { get; init; } = [];
+    public Dictionary<string, string?> Properties
+    {
+        get => _properties;
+        init => _properties = value ?? [];
+    }
 
     /// <summary>
     /// Gets a value indicating whether this resource is hidden.
@@ -1061,7 +1344,11 @@ internal sealed class ResourceSnapshot
     /// <summary>
     /// Gets the commands available for this resource.
     /// </summary>
-    public ResourceSnapshotCommand[] Commands { get; init; } = [];
+    public ResourceSnapshotCommand[] Commands
+    {
+        get => _commands;
+        init => _commands = value ?? [];
+    }
 }
 
 /// <summary>
@@ -1070,10 +1357,19 @@ internal sealed class ResourceSnapshot
 [DebuggerDisplay("Name = {Name}, State = {State}")]
 internal sealed class ResourceSnapshotCommand
 {
+    private ResourceSnapshotCommandArgument[] _argumentInputs = [];
+    private string _visibility = KnownCommandVisibility.Default;
+    private string _name = string.Empty;
+    private string _state = string.Empty;
+
     /// <summary>
     /// Gets the command name (e.g., "start", "stop", "restart").
     /// </summary>
-    public required string Name { get; init; }
+    public string Name
+    {
+        get => _name;
+        init => _name = value ?? string.Empty;
+    }
 
     /// <summary>
     /// Gets the display name of the command.
@@ -1088,17 +1384,29 @@ internal sealed class ResourceSnapshotCommand
     /// <summary>
     /// Gets the ordered inputs that describe the invocation arguments accepted by the command.
     /// </summary>
-    public ResourceSnapshotCommandArgument[] ArgumentInputs { get; init; } = [];
+    public ResourceSnapshotCommandArgument[] ArgumentInputs
+    {
+        get => _argumentInputs;
+        init => _argumentInputs = value ?? [];
+    }
 
     /// <summary>
     /// Gets where the command is visible to users and clients.
     /// </summary>
-    public string Visibility { get; init; } = KnownCommandVisibility.Default;
+    public string Visibility
+    {
+        get => _visibility;
+        init => _visibility = value ?? KnownCommandVisibility.Default;
+    }
 
     /// <summary>
     /// Gets the state of the command (e.g., "Enabled", "Disabled", "Hidden").
     /// </summary>
-    public required string State { get; init; }
+    public string State
+    {
+        get => _state;
+        init => _state = value ?? string.Empty;
+    }
 }
 
 /// <summary>
@@ -1106,10 +1414,17 @@ internal sealed class ResourceSnapshotCommand
 /// </summary>
 internal sealed class ResourceSnapshotCommandArgument
 {
+    private string _name = string.Empty;
+    private string _inputType = string.Empty;
+
     /// <summary>
     /// Gets the argument name.
     /// </summary>
-    public required string Name { get; init; }
+    public string Name
+    {
+        get => _name;
+        init => _name = value ?? string.Empty;
+    }
 
     /// <summary>
     /// Gets the display label.
@@ -1129,7 +1444,11 @@ internal sealed class ResourceSnapshotCommandArgument
     /// <summary>
     /// Gets the input type.
     /// </summary>
-    public required string InputType { get; init; }
+    public string InputType
+    {
+        get => _inputType;
+        init => _inputType = value ?? string.Empty;
+    }
 
     /// <summary>
     /// Gets a value indicating whether the argument is required.
@@ -1173,15 +1492,26 @@ internal sealed class ResourceSnapshotCommandArgument
 [DebuggerDisplay("Name = {Name}, Url = {Url}")]
 internal sealed class ResourceSnapshotUrl
 {
+    private string _name = string.Empty;
+    private string _url = string.Empty;
+
     /// <summary>
     /// Gets the URL name (e.g., "http", "https", "tcp").
     /// </summary>
-    public required string Name { get; init; }
+    public string Name
+    {
+        get => _name;
+        init => _name = value ?? string.Empty;
+    }
 
     /// <summary>
     /// Gets the full URL including scheme, host, and port.
     /// </summary>
-    public required string Url { get; init; }
+    public string Url
+    {
+        get => _url;
+        init => _url = value ?? string.Empty;
+    }
 
     /// <summary>
     /// Gets whether this is an internal URL.
@@ -1217,15 +1547,26 @@ internal sealed class ResourceSnapshotUrlDisplayProperties
 [DebuggerDisplay("ResourceName = {ResourceName}, Type = {Type}")]
 internal sealed class ResourceSnapshotRelationship
 {
+    private string _resourceName = string.Empty;
+    private string _type = string.Empty;
+
     /// <summary>
     /// Gets the name of the related resource.
     /// </summary>
-    public required string ResourceName { get; init; }
+    public string ResourceName
+    {
+        get => _resourceName;
+        init => _resourceName = value ?? string.Empty;
+    }
 
     /// <summary>
     /// Gets the relationship type (e.g., "Parent", "Reference").
     /// </summary>
-    public required string Type { get; init; }
+    public string Type
+    {
+        get => _type;
+        init => _type = value ?? string.Empty;
+    }
 }
 
 /// <summary>
@@ -1234,10 +1575,16 @@ internal sealed class ResourceSnapshotRelationship
 [DebuggerDisplay("Name = {Name}, Status = {Status}")]
 internal sealed class ResourceSnapshotHealthReport
 {
+    private string _name = string.Empty;
+
     /// <summary>
     /// Gets the name of the health check.
     /// </summary>
-    public required string Name { get; init; }
+    public string Name
+    {
+        get => _name;
+        init => _name = value ?? string.Empty;
+    }
 
     /// <summary>
     /// Gets the status (e.g., "Healthy", "Unhealthy", "Degraded").
@@ -1261,6 +1608,9 @@ internal sealed class ResourceSnapshotHealthReport
 [DebuggerDisplay("Source = {Source}, Target = {Target}")]
 internal sealed class ResourceSnapshotVolume
 {
+    private string _target = string.Empty;
+    private string _mountType = string.Empty;
+
     /// <summary>
     /// Gets the source path or volume name.
     /// </summary>
@@ -1269,12 +1619,20 @@ internal sealed class ResourceSnapshotVolume
     /// <summary>
     /// Gets the target path in the container.
     /// </summary>
-    public required string Target { get; init; }
+    public string Target
+    {
+        get => _target;
+        init => _target = value ?? string.Empty;
+    }
 
     /// <summary>
     /// Gets the mount type (e.g., "bind", "volume").
     /// </summary>
-    public required string MountType { get; init; }
+    public string MountType
+    {
+        get => _mountType;
+        init => _mountType = value ?? string.Empty;
+    }
 
     /// <summary>
     /// Gets whether the volume is read-only.
@@ -1288,10 +1646,16 @@ internal sealed class ResourceSnapshotVolume
 [DebuggerDisplay("Name = {Name}, Value = {Value}")]
 internal sealed class ResourceSnapshotEnvironmentVariable
 {
+    private string _name = string.Empty;
+
     /// <summary>
     /// Gets the name of the environment variable.
     /// </summary>
-    public required string Name { get; init; }
+    public string Name
+    {
+        get => _name;
+        init => _name = value ?? string.Empty;
+    }
 
     /// <summary>
     /// Gets the value of the environment variable.
@@ -1310,15 +1674,26 @@ internal sealed class ResourceSnapshotEnvironmentVariable
 [DebuggerDisplay("EndpointUrl = {EndpointUrl}")]
 internal sealed class ResourceSnapshotMcpServer
 {
+    private Tool[] _tools = [];
+    private string _endpointUrl = string.Empty;
+
     /// <summary>
     /// Gets the MCP endpoint URL.
     /// </summary>
-    public required string EndpointUrl { get; init; }
+    public string EndpointUrl
+    {
+        get => _endpointUrl;
+        init => _endpointUrl = value ?? string.Empty;
+    }
 
     /// <summary>
     /// Gets the tools exposed by the MCP server.
     /// </summary>
-    public required Tool[] Tools { get; init; }
+    public Tool[] Tools
+    {
+        get => _tools;
+        init => _tools = value ?? [];
+    }
 }
 
 /// <summary>
@@ -1359,10 +1734,18 @@ internal sealed class AppHostInformation
 /// </summary>
 internal sealed class ResourceLogLine
 {
+    private string _resourceName = string.Empty;
+    private string _content = string.Empty;
+    private bool _hasContent;
+
     /// <summary>
     /// Gets the name of the resource that produced this log line.
     /// </summary>
-    public required string ResourceName { get; init; }
+    public string ResourceName
+    {
+        get => _resourceName;
+        init => _resourceName = value ?? string.Empty;
+    }
 
     /// <summary>
     /// Gets the line number within the log stream.
@@ -1372,7 +1755,20 @@ internal sealed class ResourceLogLine
     /// <summary>
     /// Gets the content of the log line.
     /// </summary>
-    public required string Content { get; init; }
+    public string Content
+    {
+        get => _content;
+        init
+        {
+            _hasContent = value is not null;
+            _content = value ?? string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// Gets whether <see cref="Content"/> was present on the wire; empty resource log lines are still valid.
+    /// </summary>
+    public bool HasContent => _hasContent;
 
     /// <summary>
     /// Gets whether this log line is from stderr (error output).

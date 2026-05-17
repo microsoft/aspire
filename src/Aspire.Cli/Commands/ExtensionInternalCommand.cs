@@ -60,11 +60,17 @@ internal sealed class ExtensionInternalCommand : BaseCommand
     }
 }
 
-internal class AppHostProjectSearchResultPoco
+internal sealed class AppHostProjectSearchResultPoco
 {
+    private List<string> _allProjectFileCandidates = [];
+
     [JsonPropertyName("selected_project_file")]
     public string? SelectedProjectFile { get; init; }
 
     [JsonPropertyName("all_project_file_candidates")]
-    public required List<string> AllProjectFileCandidates { get; init; }
+    public List<string> AllProjectFileCandidates
+    {
+        get => _allProjectFileCandidates;
+        init => _allProjectFileCandidates = value ?? [];
+    }
 }
