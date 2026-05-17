@@ -3,6 +3,7 @@
 
 using Azure;
 using Azure.Core;
+using Azure.ResourceManager;
 using Azure.ResourceManager.Resources;
 
 namespace Aspire.Hosting.Azure.Provisioning.Internal;
@@ -20,10 +21,8 @@ internal sealed class DefaultResourceGroupResource(ResourceGroupResource resourc
         return new DefaultArmDeploymentCollection(resourceGroupResource.GetArmDeployments());
     }
 
-    public async Task DeleteAsync(WaitUntil waitUntil, CancellationToken cancellationToken = default)
-    {
-        await resourceGroupResource.DeleteAsync(waitUntil, cancellationToken: cancellationToken).ConfigureAwait(false);
-    }
+    public Task<ArmOperation> DeleteAsync(WaitUntil waitUntil, CancellationToken cancellationToken = default) =>
+        resourceGroupResource.DeleteAsync(waitUntil, cancellationToken: cancellationToken);
 
     public async IAsyncEnumerable<(string Name, string ResourceType)> GetResourcesAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
     {

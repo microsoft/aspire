@@ -42,6 +42,8 @@ public sealed class AzureEnvironmentResource : Resource
     /// </summary>
     public const string ProvisionInfrastructureStepName = "provision-azure-bicep-resources";
 
+    internal const string RunModeProvisionStepName = "run-mode-azure-provision";
+
     /// <summary>
     /// Gets or sets the Azure location that the resources will be deployed to.
     /// </summary>
@@ -95,7 +97,7 @@ public sealed class AzureEnvironmentResource : Resource
             {
                 var runModeProvisionStep = new PipelineStep
                 {
-                    Name = "run-mode-azure-provision",
+                    Name = RunModeProvisionStepName,
                     Description = $"Provisions the Azure resources for {Name}.",
                     Action = static async context =>
                     {
