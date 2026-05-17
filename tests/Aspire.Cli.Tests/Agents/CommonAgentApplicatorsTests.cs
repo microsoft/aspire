@@ -46,8 +46,9 @@ public class CommonAgentApplicatorsTests
     [Fact]
     public void SkillDefinition_All_ContainsExpectedSkills()
     {
-        Assert.Equal(4, SkillDefinition.All.Count);
+        Assert.Equal(5, SkillDefinition.All.Count);
         Assert.Contains(SkillDefinition.All, s => s == SkillDefinition.Aspire);
+        Assert.Contains(SkillDefinition.All, s => s == SkillDefinition.AspireDeployment);
         Assert.Contains(SkillDefinition.All, s => s == SkillDefinition.Aspireify);
         Assert.Contains(SkillDefinition.All, s => s == SkillDefinition.PlaywrightCli);
         Assert.Contains(SkillDefinition.All, s => s == SkillDefinition.DotnetInspect);
@@ -57,6 +58,7 @@ public class CommonAgentApplicatorsTests
     public void SkillDefinition_DefaultSkills()
     {
         Assert.True(SkillDefinition.Aspire.IsDefault);
+        Assert.True(SkillDefinition.AspireDeployment.IsDefault);
         Assert.True(SkillDefinition.Aspireify.IsDefault);
         Assert.False(SkillDefinition.PlaywrightCli.IsDefault);
         Assert.False(SkillDefinition.DotnetInspect.IsDefault);
@@ -67,6 +69,7 @@ public class CommonAgentApplicatorsTests
     {
         Assert.Equal([KnownLanguageId.CSharp], SkillDefinition.DotnetInspect.ApplicableLanguages);
         Assert.Empty(SkillDefinition.Aspire.ApplicableLanguages);
+        Assert.Empty(SkillDefinition.AspireDeployment.ApplicableLanguages);
         Assert.Empty(SkillDefinition.Aspireify.ApplicableLanguages);
         Assert.Empty(SkillDefinition.PlaywrightCli.ApplicableLanguages);
     }
@@ -77,6 +80,9 @@ public class CommonAgentApplicatorsTests
         Assert.True(SkillDefinition.Aspire.IsApplicableToLanguage(null));
         Assert.True(SkillDefinition.Aspire.IsApplicableToLanguage(new LanguageId(KnownLanguageId.CSharp)));
         Assert.True(SkillDefinition.Aspire.IsApplicableToLanguage(new LanguageId(KnownLanguageId.TypeScript)));
+        Assert.True(SkillDefinition.AspireDeployment.IsApplicableToLanguage(null));
+        Assert.True(SkillDefinition.AspireDeployment.IsApplicableToLanguage(new LanguageId(KnownLanguageId.CSharp)));
+        Assert.True(SkillDefinition.AspireDeployment.IsApplicableToLanguage(new LanguageId(KnownLanguageId.TypeScript)));
     }
 
     [Fact]
@@ -114,6 +120,26 @@ public class CommonAgentApplicatorsTests
         Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "tools-and-configuration.md"));
         Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "typescript-apphosts.md"));
         Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "playwright-handoff.md"));
+    }
+
+    [Fact]
+    public async Task SkillDefinition_AspireDeployment_HasEmbeddedSkillAssets()
+    {
+        Assert.Null(SkillDefinition.AspireDeployment.SkillContent);
+        Assert.Equal(CommonAgentApplicators.AspireDeploymentSkillResourceRoot, SkillDefinition.AspireDeployment.EmbeddedResourceRoot);
+
+        var skillFiles = await EmbeddedSkillResourceLoader.LoadTextFilesAsync(SkillDefinition.AspireDeployment.EmbeddedResourceRoot!, CancellationToken.None);
+
+        Assert.Contains(skillFiles, file => file.RelativePath == "SKILL.md");
+        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "preflight.md"));
+        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "docker-compose.md"));
+        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "kubernetes.md"));
+        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "azure.md"));
+        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "aws.md"));
+        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "javascript.md"));
+        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "cicd.md"));
+        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "github-actions-azure-csharp.yml"));
+        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "github-actions-azure-typescript.yml"));
     }
 
     [Fact]

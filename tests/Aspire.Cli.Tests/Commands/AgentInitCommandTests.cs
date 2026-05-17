@@ -103,11 +103,15 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         // Exit code is InvalidCommand because FakeNpmRunner cannot resolve Playwright CLI in tests.
         Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
 
-        // Verify that the aspire skill was installed to all locations
+        // Verify that the Aspire skills were installed to all locations
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire", "SKILL.md")));
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire-deployment", "SKILL.md")));
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".claude", "skills", "aspire", "SKILL.md")));
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".claude", "skills", "aspire-deployment", "SKILL.md")));
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".github", "skills", "aspire", "SKILL.md")));
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".github", "skills", "aspire-deployment", "SKILL.md")));
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".opencode", "skill", "aspire", "SKILL.md")));
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".opencode", "skill", "aspire-deployment", "SKILL.md")));
     }
 
     [Fact]
@@ -159,12 +163,14 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        // Default skill is Aspire, which gets installed. Playwright is not default so not selected.
+        // Default static skills are installed. Playwright is not default so it is not selected.
         Assert.Equal(ExitCodeConstants.Success, exitCode);
 
-        // Verify the default aspire skill was installed
+        // Verify the default Aspire skills were installed
         var aspireSkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire", "SKILL.md");
         Assert.True(File.Exists(aspireSkillPath), $"Expected skill file at {aspireSkillPath}");
+        var deploymentSkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire-deployment", "SKILL.md");
+        Assert.True(File.Exists(deploymentSkillPath), $"Expected skill file at {deploymentSkillPath}");
     }
 
     [Fact]
@@ -198,9 +204,11 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
 
-        // Verify that the default aspire skill was installed under the working directory
+        // Verify that the default Aspire skills were installed under the working directory
         var aspireSkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire", "SKILL.md");
         Assert.True(File.Exists(aspireSkillPath), $"Expected skill file at {aspireSkillPath}");
+        var deploymentSkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire-deployment", "SKILL.md");
+        Assert.True(File.Exists(deploymentSkillPath), $"Expected skill file at {deploymentSkillPath}");
     }
 
     [Fact]

@@ -25,6 +25,17 @@ internal sealed class SkillDefinition
         isDefault: true);
 
     /// <summary>
+    /// The Aspire deployment skill for target selection, preflight, publish, and deploy workflows.
+    /// </summary>
+    public static readonly SkillDefinition AspireDeployment = new(
+        CommonAgentApplicators.AspireDeploymentSkillName,
+        AgentCommandStrings.SkillDescription_AspireDeployment,
+        skillContent: null,
+        embeddedResourceRoot: CommonAgentApplicators.AspireDeploymentSkillResourceRoot,
+        installExcludedRelativePaths: [],
+        isDefault: true);
+
+    /// <summary>
     /// The Playwright CLI skill for browser automation.
     /// </summary>
     public static readonly SkillDefinition PlaywrightCli = new(
@@ -164,7 +175,7 @@ internal sealed class SkillDefinition
     /// <summary>
     /// Gets all available skill definitions.
     /// </summary>
-    public static IReadOnlyList<SkillDefinition> All { get; } = [Aspire, Aspireify, PlaywrightCli, DotnetInspect];
+    public static IReadOnlyList<SkillDefinition> All { get; } = [Aspire, Aspireify, AspireDeployment, PlaywrightCli, DotnetInspect];
 
     /// <inheritdoc />
     public override string ToString() => Name;
