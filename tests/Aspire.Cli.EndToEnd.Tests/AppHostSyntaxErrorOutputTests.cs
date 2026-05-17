@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Text;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Aspire.Cli.Resources;
@@ -18,13 +19,81 @@ public sealed class AppHostSyntaxErrorOutputTests(ITestOutputHelper output)
 {
     [Fact]
     [CaptureWorkspaceOnFailure]
-    public async Task RunAndStartReportSyntaxErrorsForDotNetAndTypeScriptAppHosts()
+    public Task RunReportsSyntaxErrorsForDotNetAppHost()
+    {
+        return RunSyntaxErrorScenarioAsync(
+            projectName: "BrokenDotNetApp",
+            template: AspireTemplate.EmptyAppHost,
+            configureProject: WriteBrokenDotNetAppHost,
+            command: "aspire run --apphost BrokenDotNetApp.csproj",
+            expectedExitCode: 6,
+            assertOutput: AssertDotNetRunOutput,
+            timeout: TimeSpan.FromMinutes(2));
+    }
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public Task StartReportsSyntaxErrorsForDotNetAppHost()
+    {
+        return RunSyntaxErrorScenarioAsync(
+            projectName: "BrokenDotNetApp",
+            template: AspireTemplate.EmptyAppHost,
+            configureProject: WriteBrokenDotNetAppHost,
+            command: "aspire start --apphost BrokenDotNetApp.csproj",
+            expectedExitCode: 2,
+            assertOutput: AssertDotNetStartOutput,
+            timeout: TimeSpan.FromMinutes(2));
+    }
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public Task RunReportsSyntaxErrorsForTypeScriptAppHost()
+    {
+        return RunSyntaxErrorScenarioAsync(
+            projectName: "BrokenTypeScriptApp",
+            template: AspireTemplate.TypeScriptEmptyAppHost,
+            configureProject: WriteBrokenTypeScriptAppHost,
+            command: "aspire run",
+            expectedExitCode: 2,
+            assertOutput: AssertTypeScriptRunOutput,
+            timeout: TimeSpan.FromMinutes(3));
+    }
+
+    [Fact]
+    [CaptureWorkspaceOnFailure]
+    public Task StartReportsSyntaxErrorsForTypeScriptAppHost()
+    {
+        return RunSyntaxErrorScenarioAsync(
+            projectName: "BrokenTypeScriptApp",
+            template: AspireTemplate.TypeScriptEmptyAppHost,
+            configureProject: WriteBrokenTypeScriptAppHost,
+            command: "aspire start",
+            expectedExitCode: 2,
+            assertOutput: AssertTypeScriptStartOutput,
+            timeout: TimeSpan.FromMinutes(3));
+    }
+
+    private async Task RunSyntaxErrorScenarioAsync(
+        string projectName,
+        AspireTemplate template,
+        Action<string> configureProject,
+        string command,
+        int expectedExitCode,
+        Action<string> assertOutput,
+        TimeSpan timeout,
+        [CallerMemberName] string testName = "")
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
         var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace, height: 160);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(
+            repoRoot,
+            strategy,
+            output,
+            workspace: workspace,
+            height: 160,
+            testName: testName);
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
@@ -37,44 +106,17 @@ public sealed class AppHostSyntaxErrorOutputTests(ITestOutputHelper output)
             await auto.PrepareDockerEnvironmentAsync(counter, workspace);
             await auto.InstallAspireCliAsync(strategy, counter);
 
-            await auto.AspireNewAsync("BrokenDotNetApp", counter, template: AspireTemplate.EmptyAppHost);
-            await auto.AspireNewAsync("BrokenTypeScriptApp", counter, template: AspireTemplate.TypeScriptEmptyAppHost);
-
-            WriteBrokenDotNetAppHost(Path.Combine(workspace.WorkspaceRoot.FullName, "BrokenDotNetApp"));
-            WriteBrokenTypeScriptAppHost(Path.Combine(workspace.WorkspaceRoot.FullName, "BrokenTypeScriptApp"));
+            await auto.AspireNewAsync(projectName, counter, template: template);
+            configureProject(Path.Combine(workspace.WorkspaceRoot.FullName, projectName));
 
             await AssertAspireCommandOutputAsync(
                 auto,
                 counter,
-                "BrokenDotNetApp",
-                "aspire run --apphost BrokenDotNetApp.csproj",
-                expectedExitCode: 6,
-                AssertDotNetRunOutput,
-                timeout: TimeSpan.FromMinutes(2));
-            await AssertAspireCommandOutputAsync(
-                auto,
-                counter,
-                "BrokenDotNetApp",
-                "aspire start --apphost BrokenDotNetApp.csproj",
-                expectedExitCode: 2,
-                AssertDotNetStartOutput,
-                timeout: TimeSpan.FromMinutes(2));
-            await AssertAspireCommandOutputAsync(
-                auto,
-                counter,
-                "BrokenTypeScriptApp",
-                "aspire run",
-                expectedExitCode: 2,
-                AssertTypeScriptRunOutput,
-                timeout: TimeSpan.FromMinutes(3));
-            await AssertAspireCommandOutputAsync(
-                auto,
-                counter,
-                "BrokenTypeScriptApp",
-                "aspire start",
-                expectedExitCode: 2,
-                AssertTypeScriptStartOutput,
-                timeout: TimeSpan.FromMinutes(3));
+                projectName,
+                command,
+                expectedExitCode,
+                assertOutput,
+                timeout);
         }
         catch
         {
@@ -97,7 +139,6 @@ public sealed class AppHostSyntaxErrorOutputTests(ITestOutputHelper output)
                 }
             }
         }
-
     }
 
     private static async Task AssertAspireCommandOutputAsync(
