@@ -2,10 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Globalization;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using Aspire.Hosting.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using StreamJsonRpc;
@@ -45,10 +48,25 @@ public class BackchannelContractTests
         typeof(CallMcpToolResponse),
         typeof(McpToolContentItem),
         typeof(StopAppHostResponse),
+        typeof(ExecuteResourceCommandOptions),
         typeof(ExecuteResourceCommandResponse),
+        typeof(ResourceCommandArgumentValidationError),
+        typeof(ExecuteResourceCommandResult),
         typeof(WaitForResourceResponse),
+        typeof(RpcResourceState),
+        typeof(DashboardUrlsState),
+        typeof(PublishingActivity),
+        typeof(PublishingActivityData),
+        typeof(BackchannelPipelineSummaryItem),
+        typeof(PublishingPromptInput),
+        typeof(BackchannelLogEntry),
+        typeof(PublishingPromptInputAnswer),
+        typeof(PipelineStepInfo),
         typeof(GetPipelineStepsResponse),
+        typeof(DashboardMcpConnectionInfo),
         typeof(ResourceSnapshot),
+        typeof(ResourceSnapshotCommand),
+        typeof(ResourceSnapshotCommandArgument),
         typeof(ResourceSnapshotUrl),
         typeof(ResourceSnapshotUrlDisplayProperties),
         typeof(ResourceSnapshotRelationship),
@@ -56,9 +74,30 @@ public class BackchannelContractTests
         typeof(ResourceSnapshotVolume),
         typeof(ResourceSnapshotEnvironmentVariable),
         typeof(ResourceSnapshotMcpServer),
+        typeof(AppHostInformation),
         typeof(ResourceLogLine),
         typeof(ResourceLogBatch),
     ];
+
+    private static readonly Type[] s_contractEnumTypes =
+    [
+        typeof(CommandResultFormat),
+    ];
+
+    private static readonly Dictionary<string, (Type RequestType, Type ResponseType)> s_auxiliaryV2Contracts = new(StringComparer.Ordinal)
+    {
+        [nameof(AuxiliaryBackchannelRpcTarget.GetCapabilitiesAsync)] = (typeof(GetCapabilitiesRequest), typeof(GetCapabilitiesResponse)),
+        [nameof(AuxiliaryBackchannelRpcTarget.GetAppHostInfoAsync)] = (typeof(GetAppHostInfoRequest), typeof(GetAppHostInfoResponse)),
+        [nameof(AuxiliaryBackchannelRpcTarget.GetDashboardInfoAsync)] = (typeof(GetDashboardInfoRequest), typeof(GetDashboardInfoResponse)),
+        [nameof(AuxiliaryBackchannelRpcTarget.GetResourcesAsync)] = (typeof(GetResourcesRequest), typeof(GetResourcesResponse)),
+        [nameof(AuxiliaryBackchannelRpcTarget.WatchResourcesAsync)] = (typeof(WatchResourcesRequest), typeof(ResourceSnapshot)),
+        [nameof(AuxiliaryBackchannelRpcTarget.GetConsoleLogsAsync)] = (typeof(GetConsoleLogsRequest), typeof(ResourceLogLine)),
+        [nameof(AuxiliaryBackchannelRpcTarget.GetConsoleLogBatchesAsync)] = (typeof(GetConsoleLogsRequest), typeof(ResourceLogBatch)),
+        [nameof(AuxiliaryBackchannelRpcTarget.CallMcpToolAsync)] = (typeof(CallMcpToolRequest), typeof(CallMcpToolResponse)),
+        [nameof(AuxiliaryBackchannelRpcTarget.StopAsync)] = (typeof(StopAppHostRequest), typeof(StopAppHostResponse)),
+        [nameof(AuxiliaryBackchannelRpcTarget.ExecuteResourceCommandAsync)] = (typeof(ExecuteResourceCommandRequest), typeof(ExecuteResourceCommandResponse)),
+        [nameof(AuxiliaryBackchannelRpcTarget.WaitForResourceAsync)] = (typeof(WaitForResourceRequest), typeof(WaitForResourceResponse)),
+    };
 
     /// <summary>
     /// Validates all backchannel contract rules:
@@ -92,17 +131,13 @@ public class BackchannelContractTests
                 errors.AppendLine($"❌ {type.Name}.{field.Name}: Public fields not allowed, use properties");
             }
 
-            // Rule 6: Naming convention (skip helper types)
-            if (!type.Name.StartsWith("ResourceSnapshot") &&
-                type != typeof(BackchannelTraceContext) &&
-                type.Name != "McpToolContentItem" &&
-                type.Name != "ResourceLogLine" &&
-                type.Name != "ResourceLogBatch")
+            // Rule 6: Naming convention (skip shared payload/helper types)
+            if (IsRequestResponseType(type) &&
+                !type.Name.EndsWith("Request") &&
+                !type.Name.EndsWith("Response") &&
+                !type.Name.EndsWith("Options"))
             {
-                if (!type.Name.EndsWith("Request") && !type.Name.EndsWith("Response"))
-                {
-                    errors.AppendLine($"❌ {type.Name}: Name should end with 'Request' or 'Response'");
-                }
+                errors.AppendLine($"❌ {type.Name}: Name should end with 'Request', 'Response', or 'Options'");
             }
 
             foreach (var prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
@@ -125,7 +160,7 @@ public class BackchannelContractTests
                     errors.AppendLine($"❌ {type.Name}.{prop.Name}: Must use {{ get; init; }} not {{ get; set; }}");
                 }
 
-                var isRequired = prop.GetCustomAttribute<System.Runtime.CompilerServices.RequiredMemberAttribute>() is not null;
+                var isRequired = prop.GetCustomAttribute<RequiredMemberAttribute>() is not null;
                 var nullabilityContext = new NullabilityInfoContext();
                 var nullabilityInfo = nullabilityContext.Create(prop);
 
@@ -147,10 +182,14 @@ public class BackchannelContractTests
                     if (!prop.PropertyType.IsValueType)
                     {
                         var isNullable = nullabilityInfo.WriteState == NullabilityState.Nullable;
-                        var isCollectionWithDefault = prop.PropertyType.IsArray ||
-                            (prop.PropertyType.IsGenericType && IsAllowedCollectionType(prop.PropertyType));
+                        var hasExplicitDefaultBackingField = HasExplicitDefaultBackingField(type, prop);
+                        var isCollection = IsSupportedCollectionType(prop.PropertyType);
 
-                        if (!isNullable && !isCollectionWithDefault)
+                        if (!isNullable && isCollection && !hasExplicitDefaultBackingField)
+                        {
+                            errors.AppendLine($"❌ {type.Name}.{prop.Name}: Optional collection properties should use an explicit backing field so explicit JSON null values deserialize as empty");
+                        }
+                        else if (!isNullable && !hasExplicitDefaultBackingField)
                         {
                             errors.AppendLine($"❌ {type.Name}.{prop.Name}: Optional properties should be nullable (T?) or have a default");
                         }
@@ -283,8 +322,135 @@ public class BackchannelContractTests
         Assert.Equal("session-1", startedActivity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId));
     }
 
-    private static bool IsAllowedCollectionType(Type type)
+    [Fact]
+    public void AuxiliaryBackchannelV2Methods_UseRequestAndResponseContracts()
     {
+        var methods = GetAuxiliaryV2Methods();
+
+        Assert.Equal(s_auxiliaryV2Contracts.Keys.Order(StringComparer.Ordinal), methods.Keys.Order(StringComparer.Ordinal));
+
+        foreach (var (methodName, contract) in s_auxiliaryV2Contracts)
+        {
+            var method = methods[methodName];
+            var parameters = method.GetParameters()
+                .Where(parameter => parameter.ParameterType != typeof(CancellationToken))
+                .ToArray();
+
+            var parameter = Assert.Single(parameters);
+            Assert.Equal(contract.RequestType, parameter.ParameterType);
+            Assert.Contains(contract.RequestType, s_contractTypes);
+
+            var responseType = GetResponseContractType(method.ReturnType);
+            Assert.Equal(contract.ResponseType, responseType);
+            Assert.Contains(contract.ResponseType, s_contractTypes);
+        }
+    }
+
+    [Fact]
+    public void BackchannelTypes_IncludeNestedBackchannelPayloadTypes()
+    {
+        var contractTypeSet = s_contractTypes.Concat(s_contractEnumTypes).ToHashSet();
+        var errors = new StringBuilder();
+
+        foreach (var type in s_contractTypes)
+        {
+            foreach (var referencedType in EnumerateBackchannelPayloadTypes(type))
+            {
+                if (!contractTypeSet.Contains(referencedType))
+                {
+                    errors.AppendLine($"❌ {type.Name}: Referenced backchannel payload type '{referencedType.Name}' must be added to the contract inventory.");
+                }
+            }
+        }
+
+        Assert.True(errors.Length == 0, $"Contract inventory violations found:\n{errors}");
+    }
+
+    [Fact]
+    public void BackchannelEnums_HaveSafeDefaultAndJsonConverter()
+    {
+        var errors = new StringBuilder();
+
+        foreach (var type in s_contractEnumTypes)
+        {
+            var defaultName = Enum.GetName(type, 0);
+            if (defaultName is not ("None" or "Unknown" or "Unspecified"))
+            {
+                errors.AppendLine($"❌ {type.Name}: Boundary enums must define a safe 0 value named None, Unknown, or Unspecified.");
+            }
+
+            if (type.GetCustomAttribute<JsonConverterAttribute>() is null)
+            {
+                errors.AppendLine($"❌ {type.Name}: Boundary enums must declare a JSON converter that handles unknown and null wire values.");
+            }
+
+            AssertDeserializesToDefaultEnumValue(type, "null");
+            AssertDeserializesToDefaultEnumValue(type, """
+                "__unknown__"
+                """);
+            AssertDeserializesToDefaultEnumValue(type, "2147483647");
+        }
+
+        Assert.True(errors.Length == 0, $"Enum contract violations found:\n{errors}");
+    }
+
+    [Fact]
+    public void AuxiliaryBackchannelV2OptionalRequests_AcceptMissingRequestObject()
+    {
+        var optionalRequestMethods = new HashSet<string>(StringComparer.Ordinal)
+        {
+            nameof(AuxiliaryBackchannelRpcTarget.GetCapabilitiesAsync),
+            nameof(AuxiliaryBackchannelRpcTarget.GetAppHostInfoAsync),
+            nameof(AuxiliaryBackchannelRpcTarget.GetDashboardInfoAsync),
+            nameof(AuxiliaryBackchannelRpcTarget.GetResourcesAsync),
+            nameof(AuxiliaryBackchannelRpcTarget.WatchResourcesAsync),
+            nameof(AuxiliaryBackchannelRpcTarget.StopAsync),
+        };
+
+        var nullabilityContext = new NullabilityInfoContext();
+
+        foreach (var methodName in s_auxiliaryV2Contracts.Keys)
+        {
+            var method = typeof(AuxiliaryBackchannelRpcTarget).GetMethod(methodName, BindingFlags.Instance | BindingFlags.Public)
+                ?? throw new InvalidOperationException($"Could not find method '{methodName}'.");
+            var requestParameter = method.GetParameters()
+                .Single(parameter => parameter.ParameterType != typeof(CancellationToken));
+            var requestNullability = nullabilityContext.Create(requestParameter);
+
+            if (optionalRequestMethods.Contains(methodName))
+            {
+                Assert.True(requestParameter.HasDefaultValue, $"{methodName} should allow a missing request object.");
+                Assert.Null(requestParameter.DefaultValue);
+                Assert.Equal(NullabilityState.Nullable, requestNullability.WriteState);
+            }
+            else
+            {
+                Assert.False(requestParameter.HasDefaultValue, $"{methodName} should require its request object.");
+                Assert.NotEqual(NullabilityState.Nullable, requestNullability.WriteState);
+            }
+        }
+    }
+
+    [Fact]
+    public void AuxiliaryBackchannelCapabilities_AreStable()
+    {
+        Assert.Equal("aux.v1", AuxiliaryBackchannelCapabilities.V1);
+        Assert.Equal("aux.v2", AuxiliaryBackchannelCapabilities.V2);
+        Assert.Equal("aux.v3", AuxiliaryBackchannelCapabilities.V3);
+    }
+
+    private static bool IsSupportedCollectionType(Type type)
+    {
+        if (type.IsArray)
+        {
+            return true;
+        }
+
+        if (!type.IsGenericType)
+        {
+            return false;
+        }
+
         var genericDef = type.GetGenericTypeDefinition();
         return genericDef == typeof(Dictionary<,>) ||
                genericDef == typeof(List<>) ||
@@ -380,5 +546,123 @@ public class BackchannelContractTests
         return new ConfigurationBuilder()
             .AddInMemoryCollection(values.Select(value => new KeyValuePair<string, string?>(value.Key, value.Value)))
             .Build();
+    }
+
+    private static bool HasExplicitDefaultBackingField(Type type, PropertyInfo property)
+    {
+        var backingFieldName = "_" + char.ToLowerInvariant(property.Name[0]) + property.Name[1..];
+        var backingField = type.GetField(backingFieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+
+        return backingField is not null && property.PropertyType.IsAssignableFrom(backingField.FieldType);
+    }
+
+    private static IReadOnlyDictionary<string, MethodInfo> GetAuxiliaryV2Methods()
+    {
+        return typeof(AuxiliaryBackchannelRpcTarget)
+            .GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly)
+            .Where(IsAuxiliaryV2ContractMethod)
+            .ToDictionary(method => method.Name, StringComparer.Ordinal);
+    }
+
+    private static bool IsAuxiliaryV2ContractMethod(MethodInfo method)
+    {
+        var parameters = method.GetParameters()
+            .Where(parameter => parameter.ParameterType != typeof(CancellationToken))
+            .ToArray();
+
+        return parameters is [{ ParameterType.Name: { } requestTypeName }] &&
+            requestTypeName.EndsWith("Request", StringComparison.Ordinal);
+    }
+
+    private static IEnumerable<Type> EnumerateBackchannelPayloadTypes(Type type)
+    {
+        return type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .SelectMany(property => EnumeratePayloadTypes(property.PropertyType))
+            .Where(IsBackchannelPayloadType);
+    }
+
+    private static IEnumerable<Type> EnumeratePayloadTypes(Type type)
+    {
+        if (type.IsArray)
+        {
+            yield return type.GetElementType()!;
+            yield break;
+        }
+
+        var nullableType = Nullable.GetUnderlyingType(type);
+        if (nullableType is not null)
+        {
+            yield return nullableType;
+            yield break;
+        }
+
+        if (type.IsGenericType)
+        {
+            foreach (var argument in type.GetGenericArguments())
+            {
+                foreach (var payloadType in EnumeratePayloadTypes(argument))
+                {
+                    yield return payloadType;
+                }
+            }
+            yield break;
+        }
+
+        yield return type;
+    }
+
+    private static bool IsBackchannelPayloadType(Type type)
+    {
+        return type.Namespace == typeof(GetCapabilitiesRequest).Namespace &&
+            !type.IsPrimitive &&
+            type != typeof(string);
+    }
+
+    private static void AssertDeserializesToDefaultEnumValue(Type enumType, string json)
+    {
+        var value = JsonSerializer.Deserialize(json, enumType);
+
+        Assert.NotNull(value);
+        Assert.Equal(0, Convert.ToInt32(value, CultureInfo.InvariantCulture));
+    }
+
+    private static bool IsRequestResponseType(Type type)
+    {
+        return type == typeof(GetCapabilitiesRequest) ||
+            type == typeof(GetCapabilitiesResponse) ||
+            type == typeof(GetAppHostInfoRequest) ||
+            type == typeof(GetAppHostInfoResponse) ||
+            type == typeof(GetDashboardInfoRequest) ||
+            type == typeof(GetDashboardInfoResponse) ||
+            type == typeof(GetResourcesRequest) ||
+            type == typeof(GetResourcesResponse) ||
+            type == typeof(WatchResourcesRequest) ||
+            type == typeof(GetConsoleLogsRequest) ||
+            type == typeof(CallMcpToolRequest) ||
+            type == typeof(CallMcpToolResponse) ||
+            type == typeof(StopAppHostRequest) ||
+            type == typeof(StopAppHostResponse) ||
+            type == typeof(ExecuteResourceCommandRequest) ||
+            type == typeof(ExecuteResourceCommandOptions) ||
+            type == typeof(ExecuteResourceCommandResponse) ||
+            type == typeof(WaitForResourceRequest) ||
+            type == typeof(WaitForResourceResponse) ||
+            type == typeof(GetPipelineStepsRequest) ||
+            type == typeof(GetPipelineStepsResponse);
+    }
+
+    private static Type GetResponseContractType(Type returnType)
+    {
+        if (returnType.IsGenericType && returnType.GetGenericTypeDefinition() == typeof(Task<>))
+        {
+            return returnType.GenericTypeArguments[0];
+        }
+
+        if (returnType.IsGenericType && returnType.GetGenericTypeDefinition() == typeof(IAsyncEnumerable<>))
+        {
+            return returnType.GenericTypeArguments[0];
+        }
+
+        throw new InvalidOperationException($"Unsupported RPC return type '{returnType}'.");
     }
 }

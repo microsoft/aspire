@@ -13,12 +13,12 @@ internal sealed class DisplayLineState(string stream, string line)
     /// <summary>
     /// Gets the name of the stream the line belongs to (e.g., "stdout", "stderr").
     /// </summary>
-    public string Stream { get; } = stream;
+    public string Stream { get; } = stream ?? throw new ArgumentNullException(nameof(stream));
 
     /// <summary>
     /// Gets the content of the line to be displayed.
     /// </summary>
-    public string Line { get; } = line;
+    public string Line { get; } = line ?? throw new ArgumentNullException(nameof(line));
 }
 
 /// <summary>

@@ -215,10 +215,10 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
                 AddLocalRpcTarget(rpc, _target);
                 rpc.StartListening();
 
-                var capabilities = await rpc.InvokeWithCancellationAsync<string[]>(
+                var capabilities = NormalizeCapabilities(await rpc.InvokeWithCancellationAsync<string[]?>(
                     "getCapabilities",
                     [_token],
-                    cancellationToken);
+                    cancellationToken));
 
                 if (!capabilities.Any(s => s == KnownCapabilities.Baseline))
                 {
@@ -367,12 +367,13 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
         using var activity = _activitySource.StartActivity();
 
         var rpc = await _rpcTaskCompletionSource.Task;
+        var normalizedLines = NormalizeDisplayLines(lines);
 
         _logger.LogDebug("Sent lines for display");
 
         await rpc.InvokeWithCancellationAsync(
             "displayLines",
-            [_token, lines],
+            [_token, normalizedLines],
             cancellationToken);
     }
 
@@ -435,7 +436,9 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
             throw new ExtensionOperationCanceledException(string.Format(CultureInfo.CurrentCulture, ErrorStrings.NoSelectionMade, promptText));
         }
 
-        return choicesByFormattedValue[result];
+        return choicesByFormattedValue.TryGetValue(result, out var selectedChoice)
+            ? selectedChoice
+            : throw CreateMalformedResponseException("promptForSelection", result);
     }
 
     public async Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter,
@@ -465,7 +468,18 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
             throw new ExtensionOperationCanceledException(string.Format(CultureInfo.CurrentCulture, ErrorStrings.NoSelectionMade, promptText));
         }
 
-        return result.Select(r => choicesByFormattedValue[r]).ToList();
+        var selectedChoices = new List<T>(result.Length);
+        foreach (var selectedValue in result)
+        {
+            if (selectedValue is null || !choicesByFormattedValue.TryGetValue(selectedValue, out var selectedChoice))
+            {
+                throw CreateMalformedResponseException("promptForSelections", selectedValue);
+            }
+
+            selectedChoices.Add(selectedChoice);
+        }
+
+        return selectedChoices;
     }
 
     public async Task<bool> ConfirmAsync(string promptText, bool defaultValue, CancellationToken cancellationToken)
@@ -645,12 +659,10 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 
         _logger.LogDebug("Requesting capabilities from the extension");
 
-        var capabilities = await rpc.InvokeWithCancellationAsync<string[]>(
+        return NormalizeCapabilities(await rpc.InvokeWithCancellationAsync<string[]?>(
             "getCapabilities",
             [_token],
-            cancellationToken);
-
-        return capabilities;
+            cancellationToken));
     }
 
     public async Task LaunchAppHostAsync(string projectFile, List<string> arguments, List<EnvVar> environment, bool debug, CancellationToken cancellationToken)
@@ -660,12 +672,14 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
         using var activity = _activitySource.StartActivity();
 
         var rpc = await _rpcTaskCompletionSource.Task;
+        var normalizedArguments = NormalizeStringList(arguments, nameof(arguments));
+        var normalizedEnvironment = NormalizeEnvironment(environment);
 
-        _logger.LogDebug("Running project at {ProjectFile} with arguments: {Arguments}", projectFile, string.Join(" ", arguments));
+        _logger.LogDebug("Running project at {ProjectFile} with arguments: {Arguments}", projectFile, string.Join(" ", normalizedArguments));
 
         await rpc.InvokeWithCancellationAsync(
             "launchAppHost",
-            [_token, projectFile, arguments, environment, debug],
+            [_token, projectFile, normalizedArguments, normalizedEnvironment, debug],
             cancellationToken);
     }
 
@@ -693,13 +707,14 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
         using var activity = _activitySource.StartActivity();
 
         var rpc = await _rpcTaskCompletionSource.Task;
+        var normalizedOptions = NormalizeDebugSessionOptions(options);
 
         _logger.LogDebug("Starting extension debugging session in directory {WorkingDirectory} for project file {ProjectFile} with command={Command} debug={Debug}",
-            workingDirectory, projectFile ?? "<none>", options?.Command ?? "<none>", debug);
+            workingDirectory, projectFile ?? "<none>", normalizedOptions?.Command ?? "<none>", debug);
 
         await rpc.InvokeWithCancellationAsync(
             "startDebugSession",
-            [_token, workingDirectory, projectFile, debug, options],
+            [_token, workingDirectory, projectFile, debug, normalizedOptions],
             cancellationToken);
     }
 
@@ -729,5 +744,112 @@ internal sealed class ExtensionBackchannel : IExtensionBackchannel
 #else
         return new X509Certificate2(data);
 #endif
+    }
+
+    private static InvalidOperationException CreateMalformedResponseException(string methodName, string? selectedValue)
+    {
+        return new InvalidOperationException($"Malformed Aspire extension response: {methodName} returned unknown selection '{selectedValue ?? "<null>"}'.");
+    }
+
+    internal static string[] NormalizeCapabilities(string[]? capabilities)
+    {
+        return capabilities?
+            .Where(static capability => !string.IsNullOrEmpty(capability))
+            .ToArray() ?? [];
+    }
+
+    internal static DisplayLineState[] NormalizeDisplayLines(IEnumerable<DisplayLineState>? lines)
+    {
+        if (lines is null)
+        {
+            return [];
+        }
+
+        var normalizedLines = new List<DisplayLineState>();
+        foreach (var line in lines)
+        {
+            if (line is null)
+            {
+                throw CreateMalformedRequestException("displayLines contained a null line.");
+            }
+
+            if (string.IsNullOrEmpty(line.Stream))
+            {
+                throw CreateMalformedRequestException("displayLines contained a line with no stream.");
+            }
+
+            normalizedLines.Add(line);
+        }
+
+        return [.. normalizedLines];
+    }
+
+    internal static List<string> NormalizeStringList(List<string>? values, string memberName)
+    {
+        if (values is null)
+        {
+            return [];
+        }
+
+        foreach (var value in values)
+        {
+            if (value is null)
+            {
+                throw CreateMalformedRequestException($"{memberName} contained a null value.");
+            }
+        }
+
+        return values;
+    }
+
+    internal static List<EnvVar> NormalizeEnvironment(List<EnvVar>? environment)
+    {
+        if (environment is null)
+        {
+            return [];
+        }
+
+        foreach (var envVar in environment)
+        {
+            if (envVar is null)
+            {
+                throw CreateMalformedRequestException("launchAppHost environment contained a null entry.");
+            }
+
+            if (string.IsNullOrEmpty(envVar.Name))
+            {
+                throw CreateMalformedRequestException("launchAppHost environment contained a variable with no name.");
+            }
+
+            if (envVar.Value is null)
+            {
+                throw CreateMalformedRequestException($"launchAppHost environment variable '{envVar.Name}' had a null value.");
+            }
+        }
+
+        return environment;
+    }
+
+    internal static DebugSessionOptions? NormalizeDebugSessionOptions(DebugSessionOptions? options)
+    {
+        if (options?.Args is null)
+        {
+            return options;
+        }
+
+        foreach (var arg in options.Args)
+        {
+            if (arg is null)
+            {
+                throw CreateMalformedRequestException("startDebugSession args contained a null value.");
+            }
+        }
+
+        return options;
+    }
+
+    private static InvalidOperationException CreateMalformedRequestException(string message)
+    {
+        return new InvalidOperationException($"Malformed Aspire extension request: {message}");
     }
 }

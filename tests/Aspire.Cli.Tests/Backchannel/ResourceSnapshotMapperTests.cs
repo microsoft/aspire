@@ -2,11 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Backchannel;
+using System.Text.Json;
 
 namespace Aspire.Cli.Tests.Backchannel;
 
 public class ResourceSnapshotMapperTests
 {
+    private static readonly JsonSerializerOptions s_options = BackchannelJsonSerializerContext.CreateJsonSerializerOptions();
+
     [Fact]
     public void MapToResourceJson_WithPopulatedProperties_MapsCorrectly()
     {
@@ -68,11 +71,13 @@ public class ResourceSnapshotMapperTests
         Assert.Single(result.Urls!);
         Assert.Equal("http://localhost:5000", result.Urls![0].Url);
 
-        // Only enabled commands should be included
-        var command = Assert.Single(result.Commands!);
-        Assert.Equal("stop", command.Key);
-        Assert.Equal(KnownCommandVisibility.Api, command.Value.Visibility);
-        var argumentInput = Assert.Single(command.Value.ArgumentInputs!);
+        // Null visibility simulates old wire data. It normalizes to Default, which includes API visibility.
+        Assert.Equal(["missing-visibility", "stop"], result.Commands!.Keys.Order(StringComparer.Ordinal));
+        Assert.Null(result.Commands["missing-visibility"].Visibility);
+
+        var command = result.Commands["stop"];
+        Assert.Equal(KnownCommandVisibility.Api, command.Visibility);
+        var argumentInput = Assert.Single(command.ArgumentInputs!);
         Assert.Equal("selector", argumentInput.Name);
         Assert.Equal("Selector", argumentInput.Label);
         Assert.Equal("CSS selector to click.", argumentInput.Description);
@@ -92,6 +97,84 @@ public class ResourceSnapshotMapperTests
         // Dashboard URL should be generated
         Assert.NotNull(result.DashboardUrl);
         Assert.Contains("localhost:18080", result.DashboardUrl);
+    }
+
+    [Fact]
+    public void MapToResourceJson_SkipsMalformedWireChildItems()
+    {
+        var snapshot = JsonSerializer.Deserialize<ResourceSnapshot>(
+            """
+            {
+              "Name": "frontend",
+              "DisplayName": "frontend",
+              "ResourceType": "Project",
+              "Urls": [
+                null,
+                { "Name": null, "Url": "http://localhost:5001" },
+                { "Name": "http", "Url": "http://localhost:5000" }
+              ],
+              "Volumes": [
+                null,
+                { "Target": null, "MountType": "volume" },
+                { "Target": "/data", "MountType": "volume" }
+              ],
+              "HealthReports": [
+                null,
+                { "Status": "Healthy" },
+                { "Name": "live", "Status": "Healthy" }
+              ],
+              "EnvironmentVariables": [
+                null,
+                { "Value": "ignored", "IsFromSpec": true },
+                { "Name": "ASPNETCORE_ENVIRONMENT", "Value": "Development", "IsFromSpec": true }
+              ],
+              "Relationships": [
+                null,
+                { "ResourceName": null, "Type": "Reference" },
+                { "ResourceName": "database", "Type": "Reference" }
+              ],
+              "Commands": [
+                null,
+                { "Name": null, "State": "Enabled" },
+                {
+                  "Name": "click",
+                  "State": "Enabled",
+                  "Visibility": "Api",
+                  "ArgumentInputs": [
+                    null,
+                    { "Name": null, "InputType": "Text" },
+                    { "Name": "selector", "InputType": "Text" }
+                  ]
+                },
+                { "Name": "bad-state", "State": null },
+                { "Name": "stop", "State": "Enabled", "Visibility": "Api" }
+              ]
+            }
+            """,
+            s_options);
+        Assert.NotNull(snapshot);
+
+        var database = new ResourceSnapshot { Name = "database", DisplayName = "database", ResourceType = "Postgres" };
+        var result = ResourceSnapshotMapper.MapToResourceJson(snapshot, [snapshot, database]);
+
+        var url = Assert.Single(result.Urls!);
+        Assert.Equal("http", url.Name);
+
+        var volume = Assert.Single(result.Volumes!);
+        Assert.Equal("/data", volume.Target);
+
+        var healthReport = Assert.Single(result.HealthReports!);
+        Assert.Equal("live", healthReport.Key);
+
+        var environment = Assert.Single(result.Environment!);
+        Assert.Equal("ASPNETCORE_ENVIRONMENT", environment.Key);
+
+        var relationship = Assert.Single(result.Relationships!);
+        Assert.Equal("database", relationship.ResourceName);
+
+        Assert.Equal(["click", "stop"], result.Commands!.Keys.Order(StringComparer.Ordinal));
+        var argumentInput = Assert.Single(result.Commands["click"].ArgumentInputs!);
+        Assert.Equal("selector", argumentInput.Name);
     }
 
     [Fact]

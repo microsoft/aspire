@@ -69,7 +69,7 @@ internal sealed class McpToolsCommand : BaseCommand
 
         var connection = result.Connection!;
         var snapshots = await connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken);
-        var resourcesWithTools = snapshots.Where(r => r.McpServer is not null).ToList();
+        var resourcesWithTools = snapshots.Where(static r => r.McpServer?.Tools.Length > 0).ToList();
 
         if (resourcesWithTools.Count == 0)
         {
@@ -86,6 +86,11 @@ internal sealed class McpToolsCommand : BaseCommand
                 foreach (var r in resourcesWithTools)
                 {
                     var resourceName = r.DisplayName ?? r.Name;
+                    if (resourceName.Length == 0)
+                    {
+                        continue;
+                    }
+
                     foreach (var t in r.McpServer!.Tools)
                     {
                         writer.WriteStartObject();
@@ -112,6 +117,11 @@ internal sealed class McpToolsCommand : BaseCommand
             foreach (var resource in resourcesWithTools)
             {
                 var resourceName = resource.DisplayName ?? resource.Name;
+                if (resourceName.Length == 0)
+                {
+                    continue;
+                }
+
                 foreach (var tool in resource.McpServer!.Tools)
                 {
                     table.AddRow(

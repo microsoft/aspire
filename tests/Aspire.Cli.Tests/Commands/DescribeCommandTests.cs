@@ -444,6 +444,34 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("http://localhost:18888/?resource=redis", deserialized.Resources[0].DashboardUrl);
     }
 
+    [Theory]
+    [InlineData("\"Visibility\": null,")]
+    [InlineData("")]
+    public async Task DescribeCommand_JsonFormat_TreatsOldCommandSnapshotWithoutVisibilityAsDefault(string commandVisibilityProperty)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        using var provider = CreateDescribeTestServices(workspace, outputWriter, [
+            DeserializeOldCommandSnapshot(commandVisibilityProperty)
+        ]);
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("describe --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.Success, exitCode);
+
+        var jsonOutput = string.Join("", outputWriter.Logs);
+        var deserialized = JsonSerializer.Deserialize(jsonOutput, ResourcesCommandJsonContext.RelaxedEscaping.ResourcesOutput);
+
+        Assert.NotNull(deserialized);
+        var resource = Assert.Single(deserialized.Resources);
+        var resourceCommand = Assert.Single(resource.Commands!);
+        Assert.Equal("cdp-targets", resourceCommand.Key);
+        Assert.Null(resourceCommand.Value.Visibility);
+    }
+
     [Fact]
     public async Task DescribeCommand_Follow_JsonFormat_StripsLoginPathFromDashboardUrl()
     {
@@ -650,6 +678,31 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
             AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "TestAppHost", "TestAppHost.csproj"),
             ProcessId = processId
         };
+    }
+
+    private static ResourceSnapshot DeserializeOldCommandSnapshot(string commandVisibilityProperty)
+    {
+        var json =
+            $$"""
+            {
+              "Name": "desktop",
+              "DisplayName": "desktop",
+              "ResourceType": "Executable",
+              "State": "Running",
+              "Commands": [
+                {
+                  "Name": "cdp-targets",
+                  "DisplayName": "CDP targets",
+                  "Description": "List Chromium DevTools Protocol targets for the Electron renderer.",
+                  {{commandVisibilityProperty}}
+                  "State": "Enabled"
+                }
+              ]
+            }
+            """;
+
+        return JsonSerializer.Deserialize<ResourceSnapshot>(json, BackchannelJsonSerializerContext.CreateJsonSerializerOptions())
+            ?? throw new InvalidOperationException("Old resource command snapshot JSON did not deserialize.");
     }
 
     private static async IAsyncEnumerable<ResourceSnapshot> ThrowObjectDisposedAfterSnapshot([EnumeratorCancellation] CancellationToken cancellationToken = default)

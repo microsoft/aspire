@@ -1,7 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Backchannel;
 using Aspire.Cli.Mcp.Tools;
+using Aspire.Cli.Tests.TestServices;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Mcp;
 
@@ -42,5 +45,29 @@ public class McpToolHelpersTests
     {
         var result = McpToolHelpers.ExtractLoginToken(input);
         Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public async Task GetDashboardInfoAsync_ReturnsNullDashboardBaseUrl_WhenDashboardUrlsIsNull()
+    {
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("hash", "/tmp/apphost.sock", new TestAppHostAuxiliaryBackchannel
+        {
+            DashboardInfoResponse = new GetDashboardInfoResponse
+            {
+                ApiBaseUrl = "http://localhost:18888",
+                ApiToken = "token",
+                DashboardUrls = null
+            }
+        });
+
+        var (apiToken, apiBaseUrl, dashboardBaseUrl) = await McpToolHelpers.GetDashboardInfoAsync(
+            monitor,
+            NullLogger.Instance,
+            CancellationToken.None);
+
+        Assert.Equal("token", apiToken);
+        Assert.Equal("http://localhost:18888", apiBaseUrl);
+        Assert.Null(dashboardBaseUrl);
     }
 }

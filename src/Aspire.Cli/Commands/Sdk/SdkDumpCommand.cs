@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
@@ -181,7 +182,7 @@ internal sealed class SdkDumpCommand : BaseCommand
                 : await rpcClient.GetCapabilitiesAsync(cancellationToken);
 
             // Output Info-level diagnostics to stderr via logger (shown with -d flag)
-            var infoDiagnostics = capabilities.Diagnostics.Where(d => d.Severity == "Info").ToList();
+            var infoDiagnostics = capabilities.Diagnostics.WhereNotNull().Where(d => d.Severity == "Info").ToList();
             foreach (var diag in infoDiagnostics)
             {
                 var location = string.IsNullOrEmpty(diag.Location) ? "" : $" [{diag.Location}]";
@@ -189,7 +190,7 @@ internal sealed class SdkDumpCommand : BaseCommand
             }
 
             // Remove Info diagnostics from output (they go to stderr only)
-            capabilities.Diagnostics.RemoveAll(d => d.Severity == "Info");
+            capabilities.Diagnostics.RemoveAll(static d => d is { Severity: "Info" });
 
             // Stamp package versions for integrations that have them
             var packageVersions = integrations
@@ -227,7 +228,7 @@ internal sealed class SdkDumpCommand : BaseCommand
             }
 
             // Return error code if there are errors in diagnostics
-            var hasErrors = capabilities.Diagnostics.Exists(d => d.Severity == "Error");
+            var hasErrors = capabilities.Diagnostics.WhereNotNull().Any(d => d.Severity == "Error");
             return hasErrors ? ExitCodeConstants.InvalidCommand : ExitCodeConstants.Success;
         }
         finally
@@ -267,17 +268,17 @@ internal sealed class SdkDumpCommand : BaseCommand
         if (capabilities.Diagnostics.Count > 0)
         {
             sb.AppendLine("# Diagnostics");
-            foreach (var d in capabilities.Diagnostics.OrderBy(d => d.Severity).ThenBy(d => d.Location))
+            foreach (var d in capabilities.Diagnostics.WhereNotNull().OrderBy(d => d.Severity).ThenBy(d => d.Location))
             {
                 var loc = string.IsNullOrEmpty(d.Location) ? "" : string.Format(CultureInfo.InvariantCulture, " [{0}]", d.Location);
-                sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "{0}: {1}{2}", d.Severity.ToLowerInvariant(), d.Message, loc));
+                sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "{0}: {1}{2}", (d.Severity ?? string.Empty).ToLowerInvariant(), d.Message, loc));
             }
             sb.AppendLine();
         }
 
         // Handle Types
         sb.AppendLine("# Handle Types");
-        foreach (var t in capabilities.HandleTypes.OrderBy(t => t.AtsTypeId))
+        foreach (var t in capabilities.HandleTypes.WhereNotNull().OrderBy(t => t.AtsTypeId))
         {
             var flags = new List<string>();
             if (t.IsInterface)
@@ -301,7 +302,7 @@ internal sealed class SdkDumpCommand : BaseCommand
         if (capabilities.DtoTypes.Count > 0)
         {
             sb.AppendLine("# DTO Types");
-            foreach (var t in capabilities.DtoTypes.OrderBy(t => t.TypeId))
+            foreach (var t in capabilities.DtoTypes.WhereNotNull().OrderBy(t => t.TypeId))
             {
                 if (!string.IsNullOrEmpty(t.Description))
                 {
@@ -311,11 +312,11 @@ internal sealed class SdkDumpCommand : BaseCommand
                 {
                     sb.AppendLine(t.TypeId);
                 }
-                foreach (var p in t.Properties.OrderBy(p => p.Name))
+                foreach (var p in t.Properties.WhereNotNull().OrderBy(p => p.Name))
                 {
                     var optional = p.IsOptional ? "?" : "";
                     var desc = !string.IsNullOrEmpty(p.Description) ? string.Format(CultureInfo.InvariantCulture, " # {0}", p.Description) : "";
-                    sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  {0}{1}: {2}{3}", p.Name, optional, p.Type?.TypeId ?? "unknown", desc));
+                    sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "  {0}{1}: {2}{3}", p.Name, optional, FormatTypeId(p.Type), desc));
                 }
             }
             sb.AppendLine();
@@ -325,9 +326,9 @@ internal sealed class SdkDumpCommand : BaseCommand
         if (capabilities.EnumTypes.Count > 0)
         {
             sb.AppendLine("# Enum Types");
-            foreach (var t in capabilities.EnumTypes.OrderBy(t => t.TypeId))
+            foreach (var t in capabilities.EnumTypes.WhereNotNull().OrderBy(t => t.TypeId))
             {
-                sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "{0} = {1}", t.TypeId, string.Join(" | ", t.Values)));
+                sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "{0} = {1}", t.TypeId, string.Join(" | ", t.Values.WhereNotNull())));
             }
             sb.AppendLine();
         }
@@ -336,16 +337,18 @@ internal sealed class SdkDumpCommand : BaseCommand
         {
             sb.AppendLine("# Exported Values");
             foreach (var value in capabilities.ExportedValues
-                .OrderBy(value => string.Join(".", value.PathSegments), StringComparer.Ordinal))
+                .WhereNotNull()
+                .OrderBy(value => FormatPath(value.PathSegments), StringComparer.Ordinal))
             {
+                var type = GetRequiredExportedValueType(value);
                 var descriptionSuffix = string.IsNullOrEmpty(value.Description)
                     ? ""
                     : string.Format(CultureInfo.InvariantCulture, " # {0}", value.Description);
                 sb.AppendLine(string.Format(
                     CultureInfo.InvariantCulture,
                     "{0}: {1} = {2}{3}",
-                    string.Join(".", value.PathSegments),
-                    value.Type.TypeId,
+                    FormatPath(value.PathSegments),
+                    FormatTypeId(type),
                     value.Value?.ToRelaxedJsonString() ?? "null",
                     descriptionSuffix));
             }
@@ -354,12 +357,12 @@ internal sealed class SdkDumpCommand : BaseCommand
 
         // Capabilities
         sb.AppendLine("# Capabilities");
-        foreach (var c in capabilities.Capabilities.OrderBy(c => c.CapabilityId))
+        foreach (var c in capabilities.Capabilities.WhereNotNull().OrderBy(c => c.CapabilityId))
         {
-            var paramStr = string.Join(", ", c.Parameters.Select(p =>
+            var paramStr = string.Join(", ", c.Parameters.WhereNotNull().Select(p =>
             {
                 var optional = p.IsOptional ? "?" : "";
-                return string.Format(CultureInfo.InvariantCulture, "{0}{1}: {2}", p.Name, optional, p.Type?.TypeId ?? "unknown");
+                return string.Format(CultureInfo.InvariantCulture, "{0}{1}: {2}", p.Name, optional, FormatTypeId(p.Type));
             }));
             var returnStr = c.ReturnType?.TypeId ?? "void";
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "{0}({1}) -> {2}", c.CapabilityId, paramStr, returnStr));
@@ -379,14 +382,14 @@ internal sealed class SdkDumpCommand : BaseCommand
         sb.AppendLine();
 
         // Summary
-        var errorCount = capabilities.Diagnostics.Count(d => d.Severity == "Error");
-        var warningCount = capabilities.Diagnostics.Count(d => d.Severity == "Warning");
+        var errorCount = capabilities.Diagnostics.WhereNotNull().Count(d => d.Severity == "Error");
+        var warningCount = capabilities.Diagnostics.WhereNotNull().Count(d => d.Severity == "Warning");
         sb.AppendLine("Summary");
-        sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   Handle Types:  {0}", capabilities.HandleTypes.Count));
-        sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   DTO Types:     {0}", capabilities.DtoTypes.Count));
-        sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   Enum Types:    {0}", capabilities.EnumTypes.Count));
-        sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   Exported Values:  {0}", capabilities.ExportedValues.Count));
-        sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   Capabilities:  {0}", capabilities.Capabilities.Count));
+        sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   Handle Types:  {0}", capabilities.HandleTypes.WhereNotNull().Count()));
+        sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   DTO Types:     {0}", capabilities.DtoTypes.WhereNotNull().Count()));
+        sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   Enum Types:    {0}", capabilities.EnumTypes.WhereNotNull().Count()));
+        sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   Exported Values:  {0}", capabilities.ExportedValues.WhereNotNull().Count()));
+        sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   Capabilities:  {0}", capabilities.Capabilities.WhereNotNull().Count()));
         if (errorCount > 0 || warningCount > 0)
         {
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   Diagnostics:   {0} errors, {1} warnings", errorCount, warningCount));
@@ -398,7 +401,7 @@ internal sealed class SdkDumpCommand : BaseCommand
         {
             sb.AppendLine("Diagnostics");
             sb.AppendLine("--------------------------------------------------------------------------------");
-            foreach (var d in capabilities.Diagnostics.OrderBy(d => d.Severity).ThenBy(d => d.Location))
+            foreach (var d in capabilities.Diagnostics.WhereNotNull().OrderBy(d => d.Severity).ThenBy(d => d.Location))
             {
                 var icon = d.Severity == "Error" ? "[ERROR]" : "[WARN]";
                 sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   {0} {1}", icon, d.Message));
@@ -413,7 +416,7 @@ internal sealed class SdkDumpCommand : BaseCommand
         // Handle Types
         sb.AppendLine("Handle Types (passed by reference)");
         sb.AppendLine("--------------------------------------------------------------------------------");
-        foreach (var t in capabilities.HandleTypes.OrderBy(t => t.AtsTypeId))
+        foreach (var t in capabilities.HandleTypes.WhereNotNull().OrderBy(t => t.AtsTypeId))
         {
             var flags = new List<string>();
             if (t.IsInterface)
@@ -430,10 +433,7 @@ internal sealed class SdkDumpCommand : BaseCommand
             }
             var flagStr = flags.Count > 0 ? string.Format(CultureInfo.InvariantCulture, " ({0})", string.Join(", ", flags)) : "";
 
-            // Extract short name from AtsTypeId
-            var shortName = t.AtsTypeId.Contains('/')
-                ? t.AtsTypeId.Split('/')[1]
-                : t.AtsTypeId;
+            var shortName = SimplifyTypeName(t.AtsTypeId);
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   {0}{1}", shortName, flagStr));
         }
         sb.AppendLine();
@@ -443,17 +443,17 @@ internal sealed class SdkDumpCommand : BaseCommand
         {
             sb.AppendLine("DTO Types (serialized as JSON)");
             sb.AppendLine("--------------------------------------------------------------------------------");
-            foreach (var t in capabilities.DtoTypes.OrderBy(t => t.Name))
+            foreach (var t in capabilities.DtoTypes.WhereNotNull().OrderBy(t => t.Name))
             {
                 sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   {0}", t.Name));
                 if (!string.IsNullOrEmpty(t.Description))
                 {
                     sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "      {0}", t.Description));
                 }
-                foreach (var p in t.Properties.OrderBy(p => p.Name))
+                foreach (var p in t.Properties.WhereNotNull().OrderBy(p => p.Name))
                 {
                     var optional = p.IsOptional ? "?" : "";
-                    var typeId = p.Type?.TypeId ?? "unknown";
+                    var typeId = FormatTypeId(p.Type);
                     // Simplify type display
                     var simpleType = SimplifyTypeName(typeId);
                     sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "      - {0}{1}: {2}", p.Name, optional, simpleType));
@@ -471,10 +471,10 @@ internal sealed class SdkDumpCommand : BaseCommand
         {
             sb.AppendLine("Enum Types");
             sb.AppendLine("--------------------------------------------------------------------------------");
-            foreach (var t in capabilities.EnumTypes.OrderBy(t => t.Name))
+            foreach (var t in capabilities.EnumTypes.WhereNotNull().OrderBy(t => t.Name))
             {
                 sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   {0}", t.Name));
-                sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "      {0}", string.Join(" | ", t.Values)));
+                sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "      {0}", string.Join(" | ", t.Values.WhereNotNull())));
             }
             sb.AppendLine();
         }
@@ -484,13 +484,15 @@ internal sealed class SdkDumpCommand : BaseCommand
             sb.AppendLine("Exported Values (copied into guest SDKs)");
             sb.AppendLine("--------------------------------------------------------------------------------");
             foreach (var value in capabilities.ExportedValues
-                .OrderBy(value => string.Join(".", value.PathSegments), StringComparer.Ordinal))
+                .WhereNotNull()
+                .OrderBy(value => FormatPath(value.PathSegments), StringComparer.Ordinal))
             {
+                var type = GetRequiredExportedValueType(value);
                 sb.AppendLine(string.Format(
                     CultureInfo.InvariantCulture,
                     "   {0}: {1}",
-                    string.Join(".", value.PathSegments),
-                    SimplifyTypeName(value.Type.TypeId)));
+                    FormatPath(value.PathSegments),
+                    SimplifyTypeName(FormatTypeId(type))));
                 sb.AppendLine(string.Format(
                     CultureInfo.InvariantCulture,
                     "      {0}",
@@ -508,6 +510,7 @@ internal sealed class SdkDumpCommand : BaseCommand
         sb.AppendLine("--------------------------------------------------------------------------------");
 
         var capsByTarget = capabilities.Capabilities
+            .WhereNotNull()
             .GroupBy(c => c.OwningTypeName ?? "Extension Methods")
             .OrderBy(g => g.Key is null or "Extension Methods") // Sort nulls/extension methods last
             .ThenBy(g => g.Key);
@@ -517,10 +520,10 @@ internal sealed class SdkDumpCommand : BaseCommand
             sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   [{0}]", group.Key));
             foreach (var c in group.OrderBy(c => c.MethodName))
             {
-                var paramStr = string.Join(", ", c.Parameters.Select(p =>
+                var paramStr = string.Join(", ", c.Parameters.WhereNotNull().Select(p =>
                 {
                     var optional = p.IsOptional ? "?" : "";
-                    var simpleType = SimplifyTypeName(p.Type?.TypeId ?? "unknown");
+                    var simpleType = SimplifyTypeName(FormatTypeId(p.Type));
                     return string.Format(CultureInfo.InvariantCulture, "{0}{1}: {2}", p.Name, optional, simpleType);
                 }));
                 var returnType = SimplifyTypeName(c.ReturnType?.TypeId ?? "void");
@@ -535,8 +538,32 @@ internal sealed class SdkDumpCommand : BaseCommand
         return sb.ToString();
     }
 
-    private static string SimplifyTypeName(string typeId)
+    private static TypeRefInfo GetRequiredExportedValueType(ExportedValueInfo value)
     {
+        var path = FormatPath(value.PathSegments);
+        var name = string.IsNullOrEmpty(path) ? "(unnamed)" : path;
+
+        return value.Type ?? throw new InvalidOperationException(
+            string.Format(CultureInfo.InvariantCulture, "Exported value '{0}' is missing required type metadata.", name));
+    }
+
+    private static string FormatTypeId(TypeRefInfo? type)
+    {
+        return string.IsNullOrEmpty(type?.TypeId) ? "unknown" : type.TypeId;
+    }
+
+    private static string FormatPath(IEnumerable<string?> pathSegments)
+    {
+        return string.Join(".", pathSegments.Where(static segment => !string.IsNullOrEmpty(segment)));
+    }
+
+    private static string SimplifyTypeName(string? typeId)
+    {
+        if (string.IsNullOrEmpty(typeId))
+        {
+            return "unknown";
+        }
+
         // Remove assembly prefix
         if (typeId.Contains('/'))
         {
@@ -565,13 +592,55 @@ internal sealed class SdkDumpCommand : BaseCommand
 
 internal sealed class CapabilitiesInfo
 {
-    public List<PackageInfo> Packages { get; set; } = [];
-    public List<CapabilityInfo> Capabilities { get; set; } = [];
-    public List<HandleTypeInfo> HandleTypes { get; set; } = [];
-    public List<DtoTypeInfo> DtoTypes { get; set; } = [];
-    public List<EnumTypeInfo> EnumTypes { get; set; } = [];
-    public List<ExportedValueInfo> ExportedValues { get; set; } = [];
-    public List<DiagnosticInfo> Diagnostics { get; set; } = [];
+    private List<PackageInfo>? _packages;
+    private List<CapabilityInfo?>? _capabilities;
+    private List<HandleTypeInfo?>? _handleTypes;
+    private List<DtoTypeInfo?>? _dtoTypes;
+    private List<EnumTypeInfo?>? _enumTypes;
+    private List<ExportedValueInfo?>? _exportedValues;
+    private List<DiagnosticInfo?>? _diagnostics;
+
+    public List<PackageInfo> Packages
+    {
+        get => _packages ??= [];
+        set => _packages = value ?? [];
+    }
+
+    public List<CapabilityInfo?> Capabilities
+    {
+        get => _capabilities ??= [];
+        set => _capabilities = value ?? [];
+    }
+
+    public List<HandleTypeInfo?> HandleTypes
+    {
+        get => _handleTypes ??= [];
+        set => _handleTypes = value ?? [];
+    }
+
+    public List<DtoTypeInfo?> DtoTypes
+    {
+        get => _dtoTypes ??= [];
+        set => _dtoTypes = value ?? [];
+    }
+
+    public List<EnumTypeInfo?> EnumTypes
+    {
+        get => _enumTypes ??= [];
+        set => _enumTypes = value ?? [];
+    }
+
+    public List<ExportedValueInfo?> ExportedValues
+    {
+        get => _exportedValues ??= [];
+        set => _exportedValues = value ?? [];
+    }
+
+    public List<DiagnosticInfo?> Diagnostics
+    {
+        get => _diagnostics ??= [];
+        set => _diagnostics = value ?? [];
+    }
 }
 
 internal sealed class PackageInfo
@@ -582,6 +651,9 @@ internal sealed class PackageInfo
 
 internal sealed class CapabilityInfo
 {
+    private List<ParameterInfo?>? _parameters;
+    private List<TypeRefInfo?>? _expandedTargetTypes;
+
     public string CapabilityId { get; set; } = "";
     public string MethodName { get; set; } = "";
     public string? OwningTypeName { get; set; }
@@ -592,10 +664,18 @@ internal sealed class CapabilityInfo
     public string? TargetTypeId { get; set; }
     public string? TargetParameterName { get; set; }
     public bool ReturnsBuilder { get; set; }
-    public List<ParameterInfo> Parameters { get; set; } = [];
+    public List<ParameterInfo?> Parameters
+    {
+        get => _parameters ??= [];
+        set => _parameters = value ?? [];
+    }
     public TypeRefInfo? ReturnType { get; set; }
     public TypeRefInfo? TargetType { get; set; }
-    public List<TypeRefInfo> ExpandedTargetTypes { get; set; } = [];
+    public List<TypeRefInfo?> ExpandedTargetTypes
+    {
+        get => _expandedTargetTypes ??= [];
+        set => _expandedTargetTypes = value ?? [];
+    }
 }
 
 internal sealed class ParameterInfo
@@ -605,7 +685,7 @@ internal sealed class ParameterInfo
     public bool IsOptional { get; set; }
     public bool IsNullable { get; set; }
     public bool IsCallback { get; set; }
-    public List<CallbackParameterInfo>? CallbackParameters { get; set; }
+    public List<CallbackParameterInfo?>? CallbackParameters { get; set; }
     public TypeRefInfo? CallbackReturnType { get; set; }
     public string? DefaultValue { get; set; }
     public DocumentationInfo? Documentation { get; set; }
@@ -620,6 +700,8 @@ internal sealed class CallbackParameterInfo
 
 internal sealed class TypeRefInfo
 {
+    private List<TypeRefInfo?>? _unionTypes;
+
     public string TypeId { get; set; } = "";
     public string Category { get; set; } = "";
     public bool IsInterface { get; set; }
@@ -627,27 +709,48 @@ internal sealed class TypeRefInfo
     public TypeRefInfo? ElementType { get; set; }
     public TypeRefInfo? KeyType { get; set; }
     public TypeRefInfo? ValueType { get; set; }
-    public List<TypeRefInfo>? UnionTypes { get; set; }
+    public List<TypeRefInfo?> UnionTypes
+    {
+        get => _unionTypes ??= [];
+        set => _unionTypes = value ?? [];
+    }
 }
 
 internal sealed class HandleTypeInfo
 {
+    private List<TypeRefInfo?>? _implementedInterfaces;
+    private List<TypeRefInfo?>? _baseTypeHierarchy;
+
     public string AtsTypeId { get; set; } = "";
     public bool IsInterface { get; set; }
     public bool ExposeProperties { get; set; }
     public bool ExposeMethods { get; set; }
     public DocumentationInfo? Documentation { get; set; }
-    public List<TypeRefInfo> ImplementedInterfaces { get; set; } = [];
-    public List<TypeRefInfo> BaseTypeHierarchy { get; set; } = [];
+    public List<TypeRefInfo?> ImplementedInterfaces
+    {
+        get => _implementedInterfaces ??= [];
+        set => _implementedInterfaces = value ?? [];
+    }
+    public List<TypeRefInfo?> BaseTypeHierarchy
+    {
+        get => _baseTypeHierarchy ??= [];
+        set => _baseTypeHierarchy = value ?? [];
+    }
 }
 
 internal sealed class DtoTypeInfo
 {
+    private List<DtoPropertyInfo?>? _properties;
+
     public string TypeId { get; set; } = "";
     public string Name { get; set; } = "";
     public string? Description { get; set; }
     public DocumentationInfo? Documentation { get; set; }
-    public List<DtoPropertyInfo> Properties { get; set; } = [];
+    public List<DtoPropertyInfo?> Properties
+    {
+        get => _properties ??= [];
+        set => _properties = value ?? [];
+    }
 }
 
 internal sealed class DtoPropertyInfo
@@ -661,10 +764,21 @@ internal sealed class DtoPropertyInfo
 
 internal sealed class EnumTypeInfo
 {
+    private List<string?>? _values;
+    private List<EnumValueInfo?>? _valueInfos;
+
     public string TypeId { get; set; } = "";
     public string Name { get; set; } = "";
-    public List<string> Values { get; set; } = [];
-    public List<EnumValueInfo> ValueInfos { get; set; } = [];
+    public List<string?> Values
+    {
+        get => _values ??= [];
+        set => _values = value ?? [];
+    }
+    public List<EnumValueInfo?> ValueInfos
+    {
+        get => _valueInfos ??= [];
+        set => _valueInfos = value ?? [];
+    }
     public DocumentationInfo? Documentation { get; set; }
 }
 
@@ -676,8 +790,14 @@ internal sealed class EnumValueInfo
 
 internal sealed class ExportedValueInfo
 {
-    public List<string> PathSegments { get; set; } = [];
-    public TypeRefInfo Type { get; set; } = null!;
+    private List<string?>? _pathSegments;
+
+    public List<string?> PathSegments
+    {
+        get => _pathSegments ??= [];
+        set => _pathSegments = value ?? [];
+    }
+    public TypeRefInfo? Type { get; set; }
     public JsonNode? Value { get; set; }
     public string? Description { get; set; }
     public DocumentationInfo? Documentation { get; set; }
@@ -685,10 +805,16 @@ internal sealed class ExportedValueInfo
 
 internal sealed class DocumentationInfo
 {
+    private List<ParameterDocumentationInfo?>? _parameters;
+
     public string? Summary { get; set; }
     public string? Remarks { get; set; }
     public string? Returns { get; set; }
-    public List<ParameterDocumentationInfo> Parameters { get; set; } = [];
+    public List<ParameterDocumentationInfo?> Parameters
+    {
+        get => _parameters ??= [];
+        set => _parameters = value ?? [];
+    }
 }
 
 internal sealed class ParameterDocumentationInfo

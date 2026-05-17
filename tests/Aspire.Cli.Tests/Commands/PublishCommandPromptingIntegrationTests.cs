@@ -760,7 +760,7 @@ internal sealed class TestPromptBackchannel : IAppHostCliBackchannel
                 Label = input.Label,
                 InputType = input.InputType,
                 Required = input.IsRequired,
-                Options = input.Options,
+                Options = input.Options?.Select(static option => (KeyValuePair<string, string>?)option).ToArray(),
                 Value = input.Value,
                 ValidationErrors = input.ValidationErrors
             }).ToList();
