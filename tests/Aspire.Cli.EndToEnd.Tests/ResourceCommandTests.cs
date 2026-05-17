@@ -380,11 +380,6 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
                 counter,
                 TimeSpan.FromSeconds(10));
 
-            // Debug: dump the AppHost log content so we can see what's actually in it.
-            await auto.RunCommandAsync(
-                "echo '=== APPHOST_LOG content ===' && cat \"$APPHOST_LOG\" && echo '=== End APPHOST_LOG ===' || true",
-                counter);
-
             // Verify the log file contains the custom log entry written by the
             // command handler via ILogger before returning the failure result.
             await auto.RunCommandFailFastAsync(
