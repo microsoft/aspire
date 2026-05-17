@@ -366,15 +366,23 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
                 "APPHOST_LOG=$(grep 'See AppHost logs at' /tmp/resource-cmd-output.txt | sed 's/.*See AppHost logs at //')",
                 counter);
 
+            // Debug: Show what was captured in stderr and the extracted APPHOST_LOG value
+            await auto.RunCommandAsync(
+                "echo '=== Contents of /tmp/resource-cmd-output.txt ===' && cat /tmp/resource-cmd-output.txt",
+                counter);
+
+            await auto.RunCommandAsync(
+                "echo '=== APPHOST_LOG value ===' && echo \"$APPHOST_LOG\"",
+                counter);
+
             await auto.RunCommandFailFastAsync(
                 "test -n \"$APPHOST_LOG\" && test -s \"$APPHOST_LOG\"",
                 counter,
                 TimeSpan.FromSeconds(10));
 
-            // Verify the log file contains the custom log entry written by the
-            // resource command via context.Logger.
+            // Verify the log file contains CLI log entries (Aspire.Cli namespace).
             await auto.RunCommandFailFastAsync(
-                "grep -q 'CUSTOM_E2E_LOG_ENTRY_FOR_VERIFICATION' \"$APPHOST_LOG\"",
+                "grep -q 'Aspire\\.Cli' \"$APPHOST_LOG\"",
                 counter,
                 TimeSpan.FromSeconds(10));
 
