@@ -1501,19 +1501,8 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
     private static CliExecutionContext BuildExecutionContext(DirectoryInfo workingDirectory, string channel)
     {
-        var hivesDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "hives"));
-        var cacheDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "cache"));
-        var sdksDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "sdks"));
-        var logsDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "logs"));
-        var logFilePath = Path.Combine(logsDirectory.FullName, "test.log");
-
-        return new CliExecutionContext(
-            workingDirectory: workingDirectory,
-            hivesDirectory: hivesDirectory,
-            cacheDirectory: cacheDirectory,
-            sdksDirectory: sdksDirectory,
-            logsDirectory: logsDirectory,
-            logFilePath: logFilePath,
+        return TestExecutionContextHelper.CreateExecutionContext(
+            workingDirectory,
             identityChannel: channel);
     }
 

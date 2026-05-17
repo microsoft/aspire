@@ -23,12 +23,9 @@ public class ProjectLocatorTests(ITestOutputHelper outputHelper)
 {
     private static Aspire.Cli.CliExecutionContext CreateExecutionContext(DirectoryInfo workingDirectory, IReadOnlyDictionary<string, string?>? environmentVariables = null)
     {
-        // NOTE: This would normally be in the users home directory, but for tests we create
-        //       it in the temporary workspace directory.
-        var settingsDirectory = workingDirectory.CreateSubdirectory(".aspire");
-        var hivesDirectory = settingsDirectory.CreateSubdirectory("hives");
-        var cacheDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "cache"));
-        return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", environmentVariables: environmentVariables);
+        return TestExecutionContextHelper.CreateExecutionContext(
+            workingDirectory,
+            environmentVariables: environmentVariables);
     }
 
     [Fact]

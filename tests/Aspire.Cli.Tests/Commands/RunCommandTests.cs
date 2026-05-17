@@ -517,13 +517,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var logFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "cli [run].log");
-        var executionContext = new CliExecutionContext(
-            workingDirectory: workspace.WorkspaceRoot,
-            hivesDirectory: workspace.WorkspaceRoot,
-            cacheDirectory: workspace.WorkspaceRoot,
-            sdksDirectory: workspace.WorkspaceRoot,
-            logsDirectory: workspace.WorkspaceRoot,
-            logFilePath: logFilePath);
+        var executionContext = workspace.CreateExecutionContext(logFilePath: logFilePath);
 
         var interactionService = new ConsoleInteractionService(
             new ConsoleEnvironment(console, console),
@@ -1219,9 +1213,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         var options = new ProcessInvocationOptions();
 
-        var executionContext = new CliExecutionContext(
-            workingDirectory: workspace.WorkspaceRoot, hivesDirectory: workspace.WorkspaceRoot.CreateSubdirectory(".aspire").CreateSubdirectory("hives"), cacheDirectory: workspace.WorkspaceRoot.CreateSubdirectory(".aspire").CreateSubdirectory("cache"), sdksDirectory: new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-sdks")), logsDirectory: new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), logFilePath: "test.log"
-        );
+        var executionContext = workspace.CreateExecutionContext();
 
         var runner = DotNetCliRunnerTestHelper.Create(
             provider,
@@ -1269,9 +1261,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         var options = new ProcessInvocationOptions();
 
-        var executionContext = new CliExecutionContext(
-            workingDirectory: workspace.WorkspaceRoot, hivesDirectory: workspace.WorkspaceRoot.CreateSubdirectory(".aspire").CreateSubdirectory("hives"), cacheDirectory: workspace.WorkspaceRoot.CreateSubdirectory(".aspire").CreateSubdirectory("cache"), sdksDirectory: new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-sdks")), logsDirectory: new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), logFilePath: "test.log"
-        );
+        var executionContext = workspace.CreateExecutionContext();
 
         var runner = DotNetCliRunnerTestHelper.Create(
             provider,
@@ -1315,9 +1305,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         var options = new ProcessInvocationOptions { Debug = true };
 
-        var executionContext = new CliExecutionContext(
-            workingDirectory: workspace.WorkspaceRoot, hivesDirectory: workspace.WorkspaceRoot.CreateSubdirectory(".aspire").CreateSubdirectory("hives"), cacheDirectory: workspace.WorkspaceRoot.CreateSubdirectory(".aspire").CreateSubdirectory("cache"), sdksDirectory: new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-sdks")), logsDirectory: new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), logFilePath: "test.log"
-        );
+        var executionContext = workspace.CreateExecutionContext();
 
         var runner = DotNetCliRunnerTestHelper.Create(
             provider,
@@ -1365,9 +1353,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         var options = new ProcessInvocationOptions { Debug = false };
 
-        var executionContext = new CliExecutionContext(
-            workingDirectory: workspace.WorkspaceRoot, hivesDirectory: workspace.WorkspaceRoot.CreateSubdirectory(".aspire").CreateSubdirectory("hives"), cacheDirectory: workspace.WorkspaceRoot.CreateSubdirectory(".aspire").CreateSubdirectory("cache"), sdksDirectory: new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-sdks")), logsDirectory: new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), logFilePath: "test.log"
-        );
+        var executionContext = workspace.CreateExecutionContext();
 
         var runner = DotNetCliRunnerTestHelper.Create(
             provider,
@@ -1410,9 +1396,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         var options = new ProcessInvocationOptions { Debug = true };
 
-        var executionContext = new CliExecutionContext(
-            workingDirectory: workspace.WorkspaceRoot, hivesDirectory: workspace.WorkspaceRoot.CreateSubdirectory(".aspire").CreateSubdirectory("hives"), cacheDirectory: workspace.WorkspaceRoot.CreateSubdirectory(".aspire").CreateSubdirectory("cache"), sdksDirectory: new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-sdks")), logsDirectory: new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), logFilePath: "test.log"
-        );
+        var executionContext = workspace.CreateExecutionContext();
 
         var runner = DotNetCliRunnerTestHelper.Create(
             provider,
@@ -1456,9 +1440,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         var options = new ProcessInvocationOptions();
 
-        var executionContext = new CliExecutionContext(
-            workingDirectory: workspace.WorkspaceRoot, hivesDirectory: workspace.WorkspaceRoot.CreateSubdirectory(".aspire").CreateSubdirectory("hives"), cacheDirectory: workspace.WorkspaceRoot.CreateSubdirectory(".aspire").CreateSubdirectory("cache"), sdksDirectory: new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-sdks")), logsDirectory: new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), logFilePath: "test.log"
-        );
+        var executionContext = workspace.CreateExecutionContext();
 
         var runner = DotNetCliRunnerTestHelper.Create(
             provider,
@@ -1502,9 +1484,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         var options = new ProcessInvocationOptions();
 
-        var executionContext = new CliExecutionContext(
-            workingDirectory: workspace.WorkspaceRoot, hivesDirectory: workspace.WorkspaceRoot.CreateSubdirectory(".aspire").CreateSubdirectory("hives"), cacheDirectory: workspace.WorkspaceRoot.CreateSubdirectory(".aspire").CreateSubdirectory("cache"), sdksDirectory: new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-sdks")), logsDirectory: new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), logFilePath: "test.log"
-        );
+        var executionContext = workspace.CreateExecutionContext();
 
         var runner = DotNetCliRunnerTestHelper.Create(
             provider,

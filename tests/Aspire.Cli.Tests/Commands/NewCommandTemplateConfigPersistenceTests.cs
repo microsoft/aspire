@@ -317,19 +317,6 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
 
     private static CliExecutionContext BuildExecutionContextWithIdentity(TemporaryWorkspace workspace, string identityChannel)
     {
-        var workingDirectory = workspace.WorkspaceRoot;
-        var hivesDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "hives"));
-        var cacheDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "cache"));
-        var sdksDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "sdks"));
-        var logsDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "logs"));
-        var logFilePath = Path.Combine(logsDirectory.FullName, "test.log");
-        return new CliExecutionContext(
-            workingDirectory,
-            hivesDirectory,
-            cacheDirectory,
-            sdksDirectory,
-            logsDirectory,
-            logFilePath,
-            identityChannel: identityChannel);
+        return workspace.CreateExecutionContext(identityChannel: identityChannel);
     }
 }

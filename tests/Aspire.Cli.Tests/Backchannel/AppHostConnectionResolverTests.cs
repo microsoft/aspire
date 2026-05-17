@@ -129,20 +129,8 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
 
     private static CliExecutionContext CreateExecutionContext(DirectoryInfo workingDirectory)
     {
-        var settingsDirectory = workingDirectory.CreateSubdirectory(".aspire");
-        var hivesDirectory = settingsDirectory.CreateSubdirectory("hives");
-        var cacheDirectory = settingsDirectory.CreateSubdirectory("cache");
-        var sdksDirectory = workingDirectory.CreateSubdirectory("sdks");
-        var logsDirectory = workingDirectory.CreateSubdirectory("logs");
-        var logFilePath = Path.Combine(logsDirectory.FullName, "test.log");
-
-        return new CliExecutionContext(
+        return TestExecutionContextHelper.CreateExecutionContext(
             workingDirectory,
-            hivesDirectory,
-            cacheDirectory,
-            sdksDirectory,
-            logsDirectory,
-            logFilePath,
             homeDirectory: workingDirectory);
     }
 

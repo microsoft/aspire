@@ -704,15 +704,10 @@ public class GuestAppHostProjectTests : IDisposable
 
         var logFilePath = Path.Combine(_workspace.WorkspaceRoot.FullName, $"test-guest-{Guid.NewGuid()}.log");
 
-        var workspace = new DirectoryInfo(AppContext.BaseDirectory);
-        var executionContext = new CliExecutionContext(
-            workingDirectory: workspace,
-            hivesDirectory: workspace,
-            cacheDirectory: workspace,
-            sdksDirectory: workspace,
-            logsDirectory: workspace,
-            logFilePath: logFilePath,
-            identityChannel: identityChannel);
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
+            new DirectoryInfo(AppContext.BaseDirectory),
+            identityChannel: identityChannel,
+            logFilePath: logFilePath);
 
         return new GuestAppHostProject(
             language: language,

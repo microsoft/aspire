@@ -242,17 +242,8 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
     private static CliExecutionContext CreateExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo homeDirectory)
     {
-        var hivesDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "hives"));
-        var cacheDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "cache"));
-        var logsDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "logs"));
-        var logFilePath = Path.Combine(logsDirectory.FullName, "test.log");
-        return new CliExecutionContext(
+        return TestExecutionContextHelper.CreateExecutionContext(
             workingDirectory,
-            hivesDirectory,
-            cacheDirectory,
-            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-sdks")),
-            logsDirectory,
-            logFilePath,
             homeDirectory: homeDirectory);
     }
 }

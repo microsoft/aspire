@@ -2372,14 +2372,10 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         {
             options.CliExecutionContextFactory = _ =>
             {
-                var root = workspace.WorkspaceRoot.FullName;
-                return new CliExecutionContext(
-                    projectDir,
-                    new DirectoryInfo(Path.Combine(root, ".aspire", "hives")),
-                    new DirectoryInfo(Path.Combine(root, ".aspire", "cache")),
-                    new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-sdks")),
-                    new DirectoryInfo(Path.Combine(root, ".aspire", "logs")),
-                    Path.Combine(root, ".aspire", "logs", "test.log"));
+                // Use projectDir as the working directory but root the .aspire/*
+                // directories under the workspace so test infra doesn't pollute the project dir.
+                return TestExecutionContextHelper.CreateExecutionContext(
+                    projectDir);
             };
 
             options.DotNetCliRunnerFactory = _ =>
