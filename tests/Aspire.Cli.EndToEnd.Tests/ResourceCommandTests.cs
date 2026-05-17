@@ -349,9 +349,9 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
             await auto.WaitUntilTextAsync(RunCommandStrings.AppHostStartedSuccessfully, timeout: TimeSpan.FromMinutes(3));
             await auto.WaitForSuccessPromptAsync(counter);
 
-            // Run the failing resource command, capturing stderr so we can extract the
+            // Run the failing resource command, capturing stdout and stderr so we can extract the
             // AppHost log path from the "See AppHost logs at <path>" message.
-            await auto.TypeAsync("aspire resource cache fail-with-log 2> /tmp/resource-cmd-output.txt");
+            await auto.TypeAsync("aspire resource cache fail-with-log > /tmp/resource-cmd-output.txt 2>&1");
             await auto.EnterAsync();
             await auto.WaitForAnyPromptAsync(counter, timeout: TimeSpan.FromSeconds(30));
 
