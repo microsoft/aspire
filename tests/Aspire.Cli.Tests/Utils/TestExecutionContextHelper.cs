@@ -54,6 +54,10 @@ internal static class TestExecutionContextHelper
     {
         var root = rootDirectory.FullName;
         hivesDirectory ??= new DirectoryInfo(Path.Combine(root, ".aspire", "hives"));
+        // Always default homeDirectory to a workspace-scoped path so user-level agent
+        // skill installs go to an isolated directory instead of the real user profile,
+        // which causes file-locking conflicts when tests run concurrently.
+        homeDirectory ??= new DirectoryInfo(Path.Combine(root, ".home"));
         var cacheDirectory = new DirectoryInfo(Path.Combine(root, ".aspire", "cache"));
         var sdksDirectory = new DirectoryInfo(Path.Combine(root, ".aspire", "sdks"));
         var logsDirectory = new DirectoryInfo(Path.Combine(root, ".aspire", "logs"));

@@ -368,8 +368,7 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
     private static CliExecutionContext BuildExecutionContextWithIdentity(TemporaryWorkspace workspace, string identityChannel)
     {
         return workspace.CreateExecutionContext(
-            identityChannel: identityChannel,
-            homeDirectory: new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "fake-home")));
+            identityChannel: identityChannel);
     }
 
     private sealed class CapturedTemplateInputs
