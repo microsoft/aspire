@@ -73,7 +73,9 @@ export function buildResourceCommandCliArgs(values: readonly ResourceCommandArgu
             args.push(`${optionName}=${value === 'true' ? 'true' : 'false'}`);
         }
         else {
-            args.push(optionName, value);
+            // Use --name=value so that values starting with '-' or '--' are not parsed by
+            // System.CommandLine as another option on the resource command.
+            args.push(`${optionName}=${value}`);
         }
     }
 
@@ -196,6 +198,11 @@ async function promptForChoiceArgument(title: string, input: ResourceCommandArgu
         quickPick.placeholder = input.placeholder ?? getArgumentPrompt(input);
         quickPick.ignoreFocusOut = true;
         quickPick.matchOnDescription = true;
+        // Seed the QuickPick value so a custom default that is not among the predefined options
+        // surfaces as the "Use custom value" item and is preselected.
+        if (input.allowCustomChoice && input.value) {
+            quickPick.value = input.value;
+        }
         quickPick.items = createChoiceItems(input, quickPick.value);
 
         const activeItem = findChoiceItem(input, quickPick.items);
@@ -278,7 +285,17 @@ function shouldSubmitValue(input: ResourceCommandArgumentInputJson, value: strin
         return true;
     }
 
-    return value.length > 0;
+    if (value.length > 0) {
+        return true;
+    }
+
+    // Empty number values cannot be parsed by the CLI, so fall back to the snapshot default.
+    if (input.inputType === 'Number') {
+        return false;
+    }
+
+    // The user cleared a prefilled value, so submit the empty string to override the snapshot default.
+    return (input.value ?? '').length > 0;
 }
 
 function getArgumentPrompt(input: ResourceCommandArgumentInputJson): string {

@@ -31,10 +31,8 @@ suite('ResourceCommandArguments', () => {
 
         assert.deepStrictEqual(buildResourceCommandCliArgs(values), [
             '--',
-            '--LogLevel',
-            'Debug',
-            '--timeoutMilliseconds',
-            '1000',
+            '--LogLevel=Debug',
+            '--timeoutMilliseconds=1000',
         ]);
     });
 
@@ -60,7 +58,7 @@ suite('ResourceCommandArguments', () => {
             },
         ];
 
-        assert.deepStrictEqual(buildResourceCommandCliArgs(values), ['--', '--mode', 'dry-run']);
+        assert.deepStrictEqual(buildResourceCommandCliArgs(values), ['--', '--mode=dry-run']);
     });
 
     test('preserves spaces quotes and shell metacharacters as single argument values', () => {
@@ -69,7 +67,20 @@ suite('ResourceCommandArguments', () => {
             { input: makeInput({ name: 'message' }), value },
         ];
 
-        assert.deepStrictEqual(buildResourceCommandCliArgs(values), ['--', '--message', value]);
+        assert.deepStrictEqual(buildResourceCommandCliArgs(values), ['--', `--message=${value}`]);
+    });
+
+    test('preserves option-like values without splitting them off as new options', () => {
+        const values: ResourceCommandArgumentValue[] = [
+            { input: makeInput({ name: 'message' }), value: '--help' },
+            { input: makeInput({ name: 'flag', inputType: 'Choice' }), value: '-x' },
+        ];
+
+        assert.deepStrictEqual(buildResourceCommandCliArgs(values), [
+            '--',
+            '--message=--help',
+            '--flag=-x',
+        ]);
     });
 
     test('skips empty optional non-boolean inputs but submits booleans', () => {
@@ -81,6 +92,37 @@ suite('ResourceCommandArguments', () => {
         ];
 
         assert.deepStrictEqual(buildResourceCommandCliArgs(values), ['--', '--requireHealthy=false']);
+    });
+
+    test('submits empty value to clear a prefilled text or choice default', () => {
+        const values: ResourceCommandArgumentValue[] = [
+            { input: makeInput({ name: 'message', inputType: 'Text', value: 'previous' }), value: '' },
+            { input: makeInput({ name: 'token', inputType: 'SecretText', value: 'old-token' }), value: '' },
+            {
+                input: makeInput({
+                    name: 'mode',
+                    inputType: 'Choice',
+                    value: 'previous',
+                    allowCustomChoice: true,
+                }),
+                value: '',
+            },
+        ];
+
+        assert.deepStrictEqual(buildResourceCommandCliArgs(values), [
+            '--',
+            '--message=',
+            '--token=',
+            '--mode=',
+        ]);
+    });
+
+    test('skips empty number even when a default value was prefilled', () => {
+        const values: ResourceCommandArgumentValue[] = [
+            { input: makeInput({ name: 'timeout', inputType: 'Number', value: '42' }), value: '' },
+        ];
+
+        assert.deepStrictEqual(buildResourceCommandCliArgs(values), []);
     });
 
     test('omits delimiter when no values are submitted', () => {
