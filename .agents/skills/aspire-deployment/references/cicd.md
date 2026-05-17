@@ -97,7 +97,6 @@ TypeScript AppHost setup:
   uses: actions/setup-node@v4
   with:
     node-version: 22.x
-    cache: npm
 
 - name: Install and build TypeScript workspace
   run: |
@@ -289,7 +288,7 @@ Create a GitHub Environment named `production` and store deployment values there
 
 Adapt the example instead of copying it blindly:
 
-- Start from the external `.yml` reference that matches the AppHost language, then adjust paths, package manager commands, target branch, and parameter names.
+- Start from the external `.yml` reference that matches the AppHost language, then adjust paths, package manager commands, package-manager caching, target branch, and parameter names.
 - Use `--apphost <path>` when the workflow should pin a specific AppHost, such as a single-file `apphost.cs`, `apphost.ts`, or an AppHost project file.
 - For TypeScript AppHosts, replace the .NET setup with Node/package-manager setup, deploy with `--apphost <path-to-apphost.ts>`, and add .NET setup only if .NET project resources are part of the app graph.
 - Keep `id-token: write` for Azure OIDC login.
