@@ -74,7 +74,7 @@ internal sealed class StopCommand : BaseCommand
         // Validate mutual exclusivity of --all and --project
         if (stopAll && passedAppHostProjectFile is not null)
         {
-            return CommandResult.Failure(CompleteStopActivity(activity, ExitCodeConstants.FailedToFindProject), string.Format(CultureInfo.InvariantCulture, StopCommandStrings.AllAndProjectMutuallyExclusive, s_allOption.Name, s_appHostOption.Name));
+            return CommandResult.Failure(CompleteStopActivity(activity, CliExitCodes.FailedToFindProject), string.Format(CultureInfo.InvariantCulture, StopCommandStrings.AllAndProjectMutuallyExclusive, s_allOption.Name, s_appHostOption.Name));
         }
 
         // Handle --all: stop all running AppHosts
@@ -112,7 +112,7 @@ internal sealed class StopCommand : BaseCommand
         if (allConnections.Length == 0)
         {
             _interactionService.DisplayError(SharedCommandStrings.AppHostNotRunning);
-            return ExitCodeConstants.FailedToFindProject;
+            return CliExitCodes.FailedToFindProject;
         }
 
         // In non-interactive mode, only consider in-scope AppHosts (under current directory)
@@ -129,7 +129,7 @@ internal sealed class StopCommand : BaseCommand
 
         // Multiple in-scope AppHosts or none in scope: error with guidance
         _interactionService.DisplayError(string.Format(CultureInfo.InvariantCulture, StopCommandStrings.MultipleAppHostsNonInteractive, s_appHostOption.Name, s_allOption.Name));
-        return ExitCodeConstants.FailedToFindProject;
+        return CliExitCodes.FailedToFindProject;
     }
 
     /// <summary>
@@ -166,7 +166,7 @@ internal sealed class StopCommand : BaseCommand
         if (allConnections.Length == 0)
         {
             _interactionService.DisplayError(SharedCommandStrings.AppHostNotRunning);
-            return ExitCodeConstants.FailedToFindProject;
+            return CliExitCodes.FailedToFindProject;
         }
 
         _logger.LogDebug("Found {Count} running AppHost(s) to stop", allConnections.Length);
@@ -190,11 +190,11 @@ internal sealed class StopCommand : BaseCommand
         }).ToArray();
 
         var results = await Task.WhenAll(stopTasks);
-        var allStopped = results.All(exitCode => exitCode == ExitCodeConstants.Success);
+        var allStopped = results.All(exitCode => exitCode == CliExitCodes.Success);
 
         _logger.LogDebug("Stop all completed. All stopped: {AllStopped}", allStopped);
 
-        return allStopped ? ExitCodeConstants.Success : ExitCodeConstants.FailedToDotnetRunAppHost;
+        return allStopped ? CliExitCodes.Success : CliExitCodes.FailedToDotnetRunAppHost;
     }
 
     /// <summary>
@@ -276,7 +276,7 @@ internal sealed class StopCommand : BaseCommand
             else if (!rpcSucceeded)
             {
                 _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, StopCommandStrings.FailedToStopAppHost, appHostIdentifier));
-                return CompleteStopActivity(activity, ExitCodeConstants.FailedToDotnetRunAppHost);
+                return CompleteStopActivity(activity, CliExitCodes.FailedToDotnetRunAppHost);
             }
         }
 
@@ -325,19 +325,19 @@ internal sealed class StopCommand : BaseCommand
         if (stopped)
         {
             _interactionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, appHostIdentifier));
-            return CompleteStopActivity(activity, ExitCodeConstants.Success);
+            return CompleteStopActivity(activity, CliExitCodes.Success);
         }
         else
         {
             _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, StopCommandStrings.FailedToStopAppHost, appHostIdentifier));
-            return CompleteStopActivity(activity, ExitCodeConstants.FailedToDotnetRunAppHost);
+            return CompleteStopActivity(activity, CliExitCodes.FailedToDotnetRunAppHost);
         }
     }
 
     private static int CompleteStopActivity(ProfilingTelemetry.ActivityScope activity, int exitCode)
     {
         activity.SetProcessExitCode(exitCode);
-        if (exitCode != ExitCodeConstants.Success)
+        if (exitCode != CliExitCodes.Success)
         {
             activity.SetError($"Stop exited with code {exitCode}.");
         }

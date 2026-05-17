@@ -45,7 +45,8 @@ internal sealed class AppHostServerProjectFactory(
                 repoRoot,
                 dotNetCliRunner,
                 packagingService,
-                loggerFactory.CreateLogger<DotNetBasedAppHostServerProject>());
+                loggerFactory.CreateLogger<DotNetBasedAppHostServerProject>(),
+                logFilePath: executionContext.LogFilePath);
         }
 
         // Priority 2: Ensure bundle is extracted and check for layout

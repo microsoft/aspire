@@ -84,7 +84,7 @@ internal sealed class SdkDumpCommand : BaseCommand
                 var projectFile = new FileInfo(arg);
                 if (!projectFile.Exists)
                 {
-                    return CommandResult.Failure(ExitCodeConstants.FailedToFindProject, $"Integration project not found: {projectFile.FullName}");
+                    return CommandResult.Failure(CliExitCodes.FailedToFindProject, $"Integration project not found: {projectFile.FullName}");
                 }
 
                 integrations.Add(IntegrationReference.FromProject(
@@ -99,12 +99,12 @@ internal sealed class SdkDumpCommand : BaseCommand
 
                 if (string.IsNullOrWhiteSpace(packageName) || string.IsNullOrWhiteSpace(packageVersion) || packageName.Contains('@'))
                 {
-                    return CommandResult.Failure(ExitCodeConstants.InvalidCommand, $"Invalid package format '{arg}'. Expected PackageName@Version (e.g. Aspire.Hosting.Redis@9.2.0).");
+                    return CommandResult.Failure(CliExitCodes.InvalidCommand, $"Invalid package format '{arg}'. Expected PackageName@Version (e.g. Aspire.Hosting.Redis@9.2.0).");
                 }
 
                 if (!SemVersion.TryParse(packageVersion, SemVersionStyles.Any, out _))
                 {
-                    return CommandResult.Failure(ExitCodeConstants.InvalidCommand, $"Invalid version '{packageVersion}' in '{arg}'. Expected a valid NuGet version (e.g. 9.2.0).");
+                    return CommandResult.Failure(CliExitCodes.InvalidCommand, $"Invalid version '{packageVersion}' in '{arg}'. Expected a valid NuGet version (e.g. 9.2.0).");
                 }
 
                 _logger.LogDebug("Parsed package reference {PackageName} version {Version}", packageName, packageVersion);
@@ -112,7 +112,7 @@ internal sealed class SdkDumpCommand : BaseCommand
             }
             else
             {
-                return CommandResult.Failure(ExitCodeConstants.InvalidCommand, $"Invalid integration argument '{arg}'. Expected a .csproj path or PackageName@Version format.");
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, $"Invalid integration argument '{arg}'. Expected a .csproj path or PackageName@Version format.");
             }
         }
 
@@ -159,7 +159,7 @@ internal sealed class SdkDumpCommand : BaseCommand
                         InteractionService.DisplayMessage(KnownEmojis.Wrench, line);
                     }
                 }
-                return ExitCodeConstants.FailedToBuildArtifacts;
+                return CliExitCodes.FailedToBuildArtifacts;
             }
 
             await using var serverSession = AppHostServerSession.Start(
@@ -228,7 +228,7 @@ internal sealed class SdkDumpCommand : BaseCommand
 
             // Return error code if there are errors in diagnostics
             var hasErrors = capabilities.Diagnostics.Exists(d => d.Severity == "Error");
-            return hasErrors ? ExitCodeConstants.InvalidCommand : ExitCodeConstants.Success;
+            return hasErrors ? CliExitCodes.InvalidCommand : CliExitCodes.Success;
         }
         finally
         {

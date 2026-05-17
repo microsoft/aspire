@@ -151,7 +151,7 @@ internal sealed class RunCommand : BaseCommand
         // Validate that --format is only used with --detach
         if (format == OutputFormat.Json && !detach)
         {
-            return CommandResult.Failure(ExitCodeConstants.InvalidCommand, RunCommandStrings.FormatRequiresDetach);
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, RunCommandStrings.FormatRequiresDetach);
         }
 
         // Validate that --no-build is not used when watch mode would be enabled
@@ -159,7 +159,7 @@ internal sealed class RunCommand : BaseCommand
         var watchModeEnabled = _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false) || (isExtensionHost && !startDebugSession);
         if (noBuild && watchModeEnabled)
         {
-            return CommandResult.Failure(ExitCodeConstants.InvalidCommand, RunCommandStrings.NoBuildNotSupportedWithWatchMode);
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, RunCommandStrings.NoBuildNotSupportedWithWatchMode);
         }
 
         // Handle detached mode - spawn child process and exit
@@ -213,7 +213,7 @@ internal sealed class RunCommand : BaseCommand
             if (effectiveAppHostFile is null)
             {
                 runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "project_not_found");
-                return CommandResult.Failure(ExitCodeConstants.FailedToFindProject);
+                return CommandResult.Failure(CliExitCodes.FailedToFindProject);
             }
 
             // Resolve the language for this file and get the appropriate handler
@@ -221,7 +221,7 @@ internal sealed class RunCommand : BaseCommand
             if (project is null)
             {
                 runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "project_not_found");
-                return CommandResult.Failure(ExitCodeConstants.FailedToFindProject, "Unrecognized app host type.");
+                return CommandResult.Failure(CliExitCodes.FailedToFindProject, "Unrecognized app host type.");
             }
 
             runActivity?.SetTag(TelemetryConstants.Tags.AppHostLanguage, project.LanguageId);
@@ -437,8 +437,8 @@ internal sealed class RunCommand : BaseCommand
                 lifetimeActivity.SetProcessExitCode(exitCode);
 
                 // Cancelled by user (e.g., Ctrl+C) - treat as successful exit since the user intentionally stopped the AppHost.
-                return exitCode == ExitCodeConstants.Cancelled
-                    ? CommandResult.Cancelled(ExitCodeConstants.Success)
+                return exitCode == CliExitCodes.Cancelled
+                    ? CommandResult.Cancelled(CliExitCodes.Success)
                     : CommandResult.FromExitCode(exitCode);
             }
         }
@@ -448,7 +448,7 @@ internal sealed class RunCommand : BaseCommand
 
             // Command is designed to be cancellable by the user (e.g. Ctrl+C) at any time.
             // Treat cancellation as a successful exit since the user intentionally stopped the AppHost.
-            return CommandResult.Cancelled(ExitCodeConstants.Success);
+            return CommandResult.Cancelled(CliExitCodes.Success);
         }
         catch (ProjectLocatorException ex)
         {
@@ -466,14 +466,14 @@ internal sealed class RunCommand : BaseCommand
             runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "certificate_trust_failed");
             var errorMessage = string.Format(CultureInfo.CurrentCulture, TemplatingStrings.CertificateTrustError, ex.Message);
             Telemetry.RecordError(errorMessage, ex);
-            return CommandResult.Failure(ExitCodeConstants.FailedToTrustCertificates, errorMessage);
+            return CommandResult.Failure(CliExitCodes.FailedToTrustCertificates, errorMessage);
         }
         catch (FailedToConnectBackchannelConnection ex)
         {
             runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "backchannel_connection_failed");
             var errorMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ErrorConnectingToAppHost, ex.Message);
             Telemetry.RecordError(errorMessage, ex);
-            return CommandResult.Failure(ExitCodeConstants.FailedToDotnetRunAppHost, errorMessage);
+            return CommandResult.Failure(CliExitCodes.FailedToDotnetRunAppHost, errorMessage);
         }
         catch (ConnectionLostException) when (isExtensionHost)
         {
@@ -486,7 +486,7 @@ internal sealed class RunCommand : BaseCommand
             runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, ex.GetType().FullName);
             var errorMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.UnexpectedErrorOccurred, ex.Message);
             Telemetry.RecordError(errorMessage, ex);
-            return CommandResult.Failure(ExitCodeConstants.FailedToDotnetRunAppHost, errorMessage);
+            return CommandResult.Failure(CliExitCodes.FailedToDotnetRunAppHost, errorMessage);
         }
         finally
         {
@@ -695,16 +695,16 @@ internal sealed class RunCommand : BaseCommand
     /// <para><b>Failure Modes:</b></para>
     /// <list type="number">
     /// <item><b>Project not found</b>: No AppHost project found in the current directory or specified path.
-    /// Returns <see cref="ExitCodeConstants.FailedToFindProject"/>.</item>
+    /// Returns <see cref="CliExitCodes.FailedToFindProject"/>.</item>
     /// <item><b>Failed to spawn child process</b>: Process.Start fails (e.g., executable not found).
-    /// Returns <see cref="ExitCodeConstants.FailedToDotnetRunAppHost"/>.</item>
+    /// Returns <see cref="CliExitCodes.FailedToDotnetRunAppHost"/>.</item>
     /// <item><b>Child process exits early</b>: The child 'aspire run' process exits before the backchannel
     /// is established (e.g., build failure, configuration error). Detected via WaitForExitAsync racing
     /// with the poll delay. Shows exit code and log file path.
-    /// Returns <see cref="ExitCodeConstants.FailedToDotnetRunAppHost"/>.</item>
+    /// Returns <see cref="CliExitCodes.FailedToDotnetRunAppHost"/>.</item>
     /// <item><b>Timeout waiting for backchannel</b>: The auxiliary backchannel socket doesn't appear
     /// within 120 seconds. The child process is killed. Shows timeout message and log file path.
-    /// Returns <see cref="ExitCodeConstants.FailedToDotnetRunAppHost"/>.</item>
+    /// Returns <see cref="CliExitCodes.FailedToDotnetRunAppHost"/>.</item>
     /// </list>
     /// <para>On any failure, the log file path is displayed so the user can investigate.</para>
     /// </remarks>

@@ -129,7 +129,7 @@ internal sealed class UpdateCommand : BaseCommand
 
             if (_cliDownloader is null)
             {
-                return CommandResult.Failure(ExitCodeConstants.InvalidCommand, "CLI self-update is not available in this environment.");
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, "CLI self-update is not available in this environment.");
             }
 
             try
@@ -149,7 +149,7 @@ internal sealed class UpdateCommand : BaseCommand
             var projectFile = await _projectLocator.UseOrFindAppHostProjectFileAsync(passedAppHostProjectFile, createSettingsFile: true, cancellationToken);
             if (projectFile is null)
             {
-                return CommandResult.Failure(ExitCodeConstants.FailedToFindProject);
+                return CommandResult.Failure(CliExitCodes.FailedToFindProject);
             }
 
             var project = _projectFactory.GetProject(projectFile);
@@ -274,13 +274,13 @@ internal sealed class UpdateCommand : BaseCommand
         {
             var message = Markup.Escape(ex.Message);
             Telemetry.RecordError(message, ex);
-            return CommandResult.Failure(ExitCodeConstants.FailedToUpgradeProject, message);
+            return CommandResult.Failure(CliExitCodes.FailedToUpgradeProject, message);
         }
         catch (ChannelNotFoundException ex)
         {
             var message = Markup.Escape(ex.Message);
             Telemetry.RecordError(message, ex);
-            return CommandResult.Failure(ExitCodeConstants.FailedToUpgradeProject, message);
+            return CommandResult.Failure(CliExitCodes.FailedToUpgradeProject, message);
         }
         catch (ProjectLocatorException ex)
         {
@@ -341,7 +341,7 @@ internal sealed class UpdateCommand : BaseCommand
             var currentExePath = Environment.ProcessPath;
             if (string.IsNullOrEmpty(currentExePath))
             {
-                return CommandResult.Failure(ExitCodeConstants.InvalidCommand, "Unable to determine the current executable path.");
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, "Unable to determine the current executable path.");
             }
 
             InteractionService.DisplayMessage(KnownEmojis.Package, $"Current CLI location: {currentExePath}");
@@ -363,7 +363,7 @@ internal sealed class UpdateCommand : BaseCommand
         {
             Telemetry.RecordError("Failed to update CLI", ex);
             var errorMessage = $"Failed to update CLI: {ex.Message}";
-            return CommandResult.Failure(ExitCodeConstants.InvalidCommand, errorMessage);
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, errorMessage);
         }
     }
 

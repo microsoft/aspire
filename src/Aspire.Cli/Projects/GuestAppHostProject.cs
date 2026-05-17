@@ -369,7 +369,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 // Set OutputCollector so RunCommand can display errors
                 context.OutputCollector = buildResult.Output;
                 context.BuildCompletionSource?.TrySetResult(false);
-                return ExitCodeConstants.FailedToBuildArtifacts;
+                return CliExitCodes.FailedToBuildArtifacts;
             }
 
             // Store output collector in context for exception handling by RunCommand
@@ -430,7 +430,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             {
                 _interactionService.DisplayLines(appHostServerOutputCollector.GetLines());
                 _interactionService.DisplayError("App host exited unexpectedly.");
-                return ExitCodeConstants.FailedToDotnetRunAppHost;
+                return CliExitCodes.FailedToDotnetRunAppHost;
             }
 
             // Step 5: Connect to server for RPC calls
@@ -500,7 +500,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             if (_guestRuntime is null)
             {
                 _interactionService.DisplayError("GuestRuntime not initialized.");
-                return ExitCodeConstants.FailedToDotnetRunAppHost;
+                return CliExitCodes.FailedToDotnetRunAppHost;
             }
 
             IGuestProcessLauncher launcher;
@@ -588,7 +588,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         {
             // Signal that build/preparation failed so RunCommand doesn't hang waiting
             context.BuildCompletionSource?.TrySetResult(false);
-            return ExitCodeConstants.Cancelled;
+            return CliExitCodes.Cancelled;
         }
         catch (Exception ex)
         {
@@ -596,7 +596,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             context.BuildCompletionSource?.TrySetResult(false);
             _logger.LogError(ex, "Failed to run {Language} AppHost", DisplayName);
             _interactionService.DisplayError($"Failed to run {DisplayName} AppHost: {ex.Message}");
-            return ExitCodeConstants.FailedToDotnetRunAppHost;
+            return CliExitCodes.FailedToDotnetRunAppHost;
         }
     }
 
@@ -856,7 +856,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 // Signal the backchannel completion source so the caller doesn't wait forever
                 context.BackchannelCompletionSource?.TrySetException(
                     new InvalidOperationException("The app host preparation failed."));
-                return ExitCodeConstants.FailedToBuildArtifacts;
+                return CliExitCodes.FailedToBuildArtifacts;
             }
 
             // Store output collector in context for exception handling
@@ -904,7 +904,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             {
                 _interactionService.DisplayLines(appHostServerOutputCollector.GetLines());
                 _interactionService.DisplayError("App host exited unexpectedly.");
-                return ExitCodeConstants.FailedToDotnetRunAppHost;
+                return CliExitCodes.FailedToDotnetRunAppHost;
             }
 
             // Step 3: Connect to server for RPC calls
@@ -1016,13 +1016,13 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         }
         catch (OperationCanceledException)
         {
-            return ExitCodeConstants.Cancelled;
+            return CliExitCodes.Cancelled;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to publish {Language} AppHost", DisplayName);
             _interactionService.DisplayError($"Failed to publish {DisplayName} AppHost: {ex.Message}");
-            return ExitCodeConstants.FailedToDotnetRunAppHost;
+            return CliExitCodes.FailedToDotnetRunAppHost;
         }
     }
 
@@ -1427,7 +1427,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         if (_guestRuntime is null)
         {
             _interactionService.DisplayError("GuestRuntime not initialized. This is a bug.");
-            return ExitCodeConstants.FailedToBuildArtifacts;
+            return CliExitCodes.FailedToBuildArtifacts;
         }
 
         var (initResult, initOutput) = await _guestRuntime.InitializeAsync(directory, cancellationToken);
@@ -1485,7 +1485,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         if (_guestRuntime is null)
         {
             _interactionService.DisplayError("GuestRuntime not initialized. This is a bug.");
-            return (ExitCodeConstants.FailedToDotnetRunAppHost, new OutputCollector());
+            return (CliExitCodes.FailedToDotnetRunAppHost, new OutputCollector());
         }
 
         return await _guestRuntime.RunAsync(appHostFile, directory, environmentVariables, watchMode, launcher, cancellationToken);
@@ -1507,7 +1507,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         if (_guestRuntime is null)
         {
             _interactionService.DisplayError("GuestRuntime not initialized. This is a bug.");
-            return (ExitCodeConstants.FailedToDotnetRunAppHost, new OutputCollector());
+            return (CliExitCodes.FailedToDotnetRunAppHost, new OutputCollector());
         }
 
         return await _guestRuntime.PublishAsync(appHostFile, directory, environmentVariables, publishArgs, _guestRuntime.CreateDefaultLauncher(), cancellationToken);

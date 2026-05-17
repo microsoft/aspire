@@ -42,6 +42,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     private readonly IDotNetCliRunner _dotNetCliRunner;
     private readonly IPackagingService _packagingService;
     private readonly ILogger _logger;
+    private readonly string? _logFilePath;
 
     public DotNetBasedAppHostServerProject(
         string appPath,
@@ -50,7 +51,8 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         IDotNetCliRunner dotNetCliRunner,
         IPackagingService packagingService,
         ILogger<DotNetBasedAppHostServerProject> logger,
-        string? projectModelPath = null)
+        string? projectModelPath = null,
+        string? logFilePath = null)
     {
         _appPath = Path.GetFullPath(appPath);
         _appPath = new Uri(_appPath).LocalPath;
@@ -60,6 +62,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         _dotNetCliRunner = dotNetCliRunner;
         _packagingService = packagingService;
         _logger = logger;
+        _logFilePath = logFilePath;
 
         var pathHash = SHA256.HashData(Encoding.UTF8.GetBytes(_appPath));
 
@@ -85,6 +88,8 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     public string ProjectModelPath => _projectModelPath;
     public string UserSecretsId => _userSecretsId;
     public string BuildPath => Path.Combine(_projectModelPath, BuildFolder);
+
+    internal string? LogFilePath => _logFilePath;
 
     /// <summary>
     /// Gets the full path to the AppHost server project file.
@@ -473,6 +478,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         startInfo.Environment["REMOTE_APP_HOST_SOCKET_PATH"] = _socketPath;
         startInfo.Environment["REMOTE_APP_HOST_PID"] = hostPid.ToString(System.Globalization.CultureInfo.InvariantCulture);
         startInfo.Environment[KnownConfigNames.CliProcessId] = hostPid.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        startInfo.Environment[KnownConfigNames.CliLogFilePath] = _logFilePath;
 
         // Dev mode uses debug builds which require Development environment
         // for the dashboard to resolve static web assets correctly

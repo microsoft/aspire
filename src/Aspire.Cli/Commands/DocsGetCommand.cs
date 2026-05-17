@@ -74,7 +74,7 @@ internal sealed class DocsGetCommand : BaseCommand
 
         if (doc is null)
         {
-            return CommandResult.Failure(ExitCodeConstants.InvalidCommand, string.Format(CultureInfo.CurrentCulture, DocsCommandStrings.DocumentNotFound, slug));
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, string.Format(CultureInfo.CurrentCulture, DocsCommandStrings.DocumentNotFound, slug));
         }
 
         if (format is OutputFormat.Json)

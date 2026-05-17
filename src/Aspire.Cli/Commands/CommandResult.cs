@@ -24,7 +24,7 @@ internal sealed class CommandResult
         ShouldDisplayCancellationMessage = shouldDisplayCancellationMessage;
     }
 
-    public static CommandResult Success() => new(ExitCodeConstants.Success);
+    public static CommandResult Success() => new(CliExitCodes.Success);
 
     public static CommandResult Failure(int exitCode, string? errorMessage = null) => new(exitCode, errorMessage);
 
@@ -32,17 +32,17 @@ internal sealed class CommandResult
     /// Indicates the command was cancelled by the user (e.g. Ctrl+C).
     /// <see cref="BaseCommand"/> displays the cancellation message centrally.
     /// </summary>
-    public static CommandResult Cancelled(int exitCode = ExitCodeConstants.Cancelled) => new(exitCode, shouldDisplayCancellationMessage: true);
+    public static CommandResult Cancelled(int exitCode = CliExitCodes.Cancelled) => new(exitCode, shouldDisplayCancellationMessage: true);
 
     /// <summary>
     /// Indicates the command should display help and return an invalid-command exit code.
     /// </summary>
-    public static CommandResult DisplayHelp() => new(ExitCodeConstants.InvalidCommand, shouldDisplayHelp: true);
+    public static CommandResult DisplayHelp() => new(CliExitCodes.InvalidCommand, shouldDisplayHelp: true);
 
     /// <summary>
     /// Creates a result from a raw exit code with no error message.
     /// Useful when wrapping calls that return plain exit codes.
     /// </summary>
     public static CommandResult FromExitCode(int exitCode) =>
-        exitCode == ExitCodeConstants.Success ? Success() : Failure(exitCode);
+        exitCode == CliExitCodes.Success ? Success() : Failure(exitCode);
 }

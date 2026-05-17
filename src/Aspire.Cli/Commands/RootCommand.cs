@@ -182,21 +182,21 @@ internal sealed class RootCommand : BaseRootCommand
         Options.Add(CliWaitForDebuggerOption);
 
         // Handle standalone 'aspire' or 'aspire --banner' (no subcommand)
-        this.SetAction((context, cancellationToken) =>
+        this.SetAction((Func<ParseResult, CancellationToken, Task<int>>)((context, cancellationToken) =>
         {
             var bannerRequested = context.GetValue(BannerOption);
             if (bannerRequested)
             {
                 // If --banner was passed, we've already shown it in Main, just exit successfully
-                return Task.FromResult(ExitCodeConstants.Success);
+                return Task.FromResult((int)CliExitCodes.Success);
             }
 
             // No subcommand provided - show grouped help but return InvalidCommand to signal usage error
             var writer = _ansiConsole.Profile.Out.Writer;
             var consoleWidth = _ansiConsole.Profile.Width;
             GroupedHelpWriter.WriteHelp(this, writer, consoleWidth);
-            return Task.FromResult(ExitCodeConstants.InvalidCommand);
-        });
+            return Task.FromResult((int)CliExitCodes.InvalidCommand);
+        }));
 
         Subcommands.Add(newCommand);
         Subcommands.Add(initCommand);
