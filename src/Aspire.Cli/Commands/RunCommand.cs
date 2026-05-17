@@ -450,12 +450,15 @@ internal sealed class RunCommand : BaseCommand
 
                 // Capture mode intentionally turns a long-running AppHost startup into a finite command.
                 // Some AppHost implementations, including guest AppHosts, report the teardown exit code
-                // from the helper process that the CLI stops after the AppHost has already started. Once
-                // the profile stop request was sent successfully, preserve failures that completed before
-                // that point but treat the requested teardown itself as a successful capture.
+                // from a helper process that the CLI stops after the AppHost has already started; on
+                // Unix-like systems that surfaces as 128 + signal (e.g., 130 SIGINT, 137 SIGKILL, 143
+                // SIGTERM). Treat those known teardown codes as a successful capture, but propagate any
+                // other non-zero exit code so a genuine AppHost crash during shutdown is not masked.
                 if (profileStopRequested)
                 {
-                    return CommandResult.Success();
+                    return exitCode is 0 or ExitCodeConstants.Cancelled or 137 or 143
+                        ? CommandResult.Success()
+                        : CommandResult.FromExitCode(exitCode);
                 }
 
                 // Cancelled by user (e.g., Ctrl+C) - treat as successful exit since the user intentionally stopped the AppHost.

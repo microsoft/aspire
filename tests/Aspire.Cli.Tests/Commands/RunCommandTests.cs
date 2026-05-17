@@ -546,6 +546,57 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RunCommand_WithCaptureProfile_PropagatesFailureExitCodeAfterStop()
+    {
+        var appHostExitCode = new TaskCompletionSource<int>();
+        var requestStopCalled = new TaskCompletionSource();
+
+        var runnerFactory = (IServiceProvider sp) =>
+        {
+            var runner = new TestDotNetCliRunner();
+            runner.BuildAsyncCallback = (projectFile, noRestore, options, ct) => 0;
+            runner.GetAppHostInformationAsyncCallback = (projectFile, options, ct) => (0, true, VersionHelper.GetDefaultTemplateVersion());
+            runner.RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, ct) =>
+            {
+                var backchannel = sp.GetRequiredService<IAppHostCliBackchannel>();
+                backchannelCompletionSource!.SetResult(backchannel);
+
+                return await appHostExitCode.Task.WaitAsync(ct);
+            };
+
+            return runner;
+        };
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator();
+            options.AppHostBackchannelFactory = _ => new TestAppHostBackchannel
+            {
+                RequestStopAsyncCalled = requestStopCalled,
+                RequestStopAsyncCallback = () =>
+                {
+                    // Simulate an AppHost that crashes during shutdown rather than terminating
+                    // via a known teardown signal. Capture mode must surface that failure.
+                    appHostExitCode.SetResult(ExitCodeConstants.FailedToDotnetRunAppHost);
+                    return Task.CompletedTask;
+                },
+                GetAppHostLogEntriesAsyncCallback = EmptyLogEntriesAsync
+            };
+            options.DotNetCliRunnerFactory = runnerFactory;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("run --capture-profile");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout(TestConstants.LongTimeoutDuration);
+
+        Assert.Equal(ExitCodeConstants.FailedToDotnetRunAppHost, exitCode);
+        Assert.True(requestStopCalled.Task.IsCompleted, "Capture mode should stop the AppHost after startup.");
+    }
+
+    [Fact]
     public async Task RunCommand_WithNoResources_CompletesSuccessfully()
     {
         var getResourceStatesAsyncCalled = new TaskCompletionSource();

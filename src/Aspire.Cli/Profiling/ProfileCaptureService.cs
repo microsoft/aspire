@@ -39,6 +39,12 @@ internal sealed class ProfileCaptureService(
     private static readonly TimeSpan s_dashboardStartTimeout = TimeSpan.FromSeconds(90);
     private static readonly TimeSpan s_profileDataTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan s_pollInterval = TimeSpan.FromMilliseconds(250);
+    // Bound the wait for the dashboard process to exit during disposal. The underlying
+    // WaitForExitAsync task was started with CancellationToken.None so it survives the capture
+    // flow, which means a Kill that fails or a process that ignores termination would otherwise
+    // hang CLI shutdown forever. Five seconds is generous for a local child process to exit after
+    // Kill while still being short enough that interactive shutdown stays responsive.
+    private static readonly TimeSpan s_dashboardDisposeTimeout = TimeSpan.FromSeconds(5);
     private const int ProfileDataQuietPolls = 8;
 
     public async Task<ProfileCaptureSession> StartAsync(ProfileCaptureOptions options, CancellationToken cancellationToken)
@@ -344,10 +350,18 @@ internal sealed class ProfileCaptureService(
 
             try
             {
-                await _dashboardExitTask.ConfigureAwait(false);
+                // Bound the wait so a Kill that fails or a process that refuses to terminate cannot
+                // hang CLI shutdown. _dashboardExitTask was created with CancellationToken.None so
+                // it survives the capture flow; apply the timeout here via WaitAsync instead of
+                // tearing the underlying wait down.
+                await _dashboardExitTask.WaitAsync(s_dashboardDisposeTimeout, _timeProvider).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
+            }
+            catch (TimeoutException ex)
+            {
+                _logger.LogDebug(ex, "Profile dashboard process did not exit within the disposal timeout.");
             }
             finally
             {

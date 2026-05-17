@@ -272,6 +272,49 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DisposeAsync_StopsWaitingForExitAfterBoundedTimeout()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var hangingExit = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+        // Simulate a dashboard process that ignores Kill and never finishes WaitForExitAsync. Without
+        // a bounded disposal timeout the CLI would hang on shutdown waiting on this task.
+        var process = new TestProcessExecution(
+            fileName: "aspire-managed",
+            args: [],
+            env: null,
+            options: new ProcessInvocationOptions(),
+            attemptCallback: (_, _, _) => Task.FromResult((0, (string?)null)),
+            attemptCounter: () => 1)
+        {
+            WaitForExitAsyncCallback = (_, ct) => hangingExit.Task.WaitAsync(ct)
+        };
+        Assert.True(process.Start());
+
+        var timeProvider = new FakeTimeProvider();
+        var session = CreateSession(
+            CreateOptions(workspace),
+            new MockHttpMessageHandler(new HttpResponseMessage(HttpStatusCode.OK)),
+            process,
+            timeProvider: timeProvider);
+
+        var disposeTask = session.DisposeAsync().AsTask();
+
+        // Advance the fake clock until DisposeAsync's WaitAsync timer fires. The yield gives
+        // DisposeAsync a chance to register that timer with the FakeTimeProvider before each advance.
+        for (var attempt = 0; attempt < 100 && !disposeTask.IsCompleted; attempt++)
+        {
+            timeProvider.Advance(TimeSpan.FromSeconds(1));
+            await Task.Yield();
+        }
+
+        await disposeTask.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(1, process.KillCount);
+        Assert.Equal(1, process.DisposeCount);
+        hangingExit.TrySetResult(0);
+    }
+
+    [Fact]
     public async Task ExportAsync_WritesArchiveAfterSessionSpansReachSteadyState()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
