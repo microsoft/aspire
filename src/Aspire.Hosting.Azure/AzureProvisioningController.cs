@@ -637,12 +637,13 @@ internal sealed class AzureProvisioningController(
         {
             try
             {
-                using var periodic = new PeriodicTimer(DriftCheckInterval, timeProvider);
-
-                while (await periodic.WaitForNextTickAsync(stoppingToken).ConfigureAwait(false))
+                // Delay before each check so the gap between drift checks is constant regardless of how long
+                // the previous check ran. PeriodicTimer would fire back-to-back if a check exceeded the interval.
+                while (!stoppingToken.IsCancellationRequested)
                 {
                     try
                     {
+                        await Task.Delay(DriftCheckInterval, timeProvider, stoppingToken).ConfigureAwait(false);
                         await CheckForDriftAsync(model, stoppingToken).ConfigureAwait(false);
                     }
                     catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
