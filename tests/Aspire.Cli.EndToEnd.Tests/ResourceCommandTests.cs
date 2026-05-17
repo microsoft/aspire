@@ -366,13 +366,10 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
                 "APPHOST_LOG=$(grep 'See AppHost logs at' /tmp/resource-cmd-output.txt | sed 's/.*See AppHost logs at //')",
                 counter);
 
-            // Debug: Show what was captured in stderr and the extracted APPHOST_LOG value
+            // Debug: Show what was captured in stderr and the extracted APPHOST_LOG value.
+            // Run these in a single command with || true so they always complete even if one step fails.
             await auto.RunCommandAsync(
-                "echo '=== Contents of /tmp/resource-cmd-output.txt ===' && cat /tmp/resource-cmd-output.txt",
-                counter);
-
-            await auto.RunCommandAsync(
-                "echo '=== APPHOST_LOG value ===' && echo \"$APPHOST_LOG\"",
+                "echo '=== Contents of /tmp/resource-cmd-output.txt ===' && cat /tmp/resource-cmd-output.txt && echo && echo '=== APPHOST_LOG value ===' && echo \"$APPHOST_LOG\" && echo '=== End debug output ===' || true",
                 counter);
 
             await auto.RunCommandFailFastAsync(
