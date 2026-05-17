@@ -8,10 +8,11 @@ Find the AppHost before choosing commands:
 
 1. Run `aspire ls` first. It lists all AppHosts in the current scope and is the preferred discovery command.
 2. If `aspire ls` shows exactly one AppHost, use it.
-3. If `aspire ls` shows multiple AppHosts or discovery is still ambiguous, inspect `aspire.config.json`, `*.AppHost.csproj`, `apphost.cs`, or `apphost.ts`.
-4. For C# project AppHosts, confirm the project references Aspire AppHost support.
-5. For C# single-file AppHosts, look for the Aspire AppHost SDK directive.
-6. For TypeScript AppHosts, look for the AppHost file and generated module support.
+3. If `aspire ls` shows no AppHosts, stop deployment work and invoke the `aspireify` skill to initialize/wire the AppHost before continuing.
+4. If `aspire ls` shows multiple AppHosts or discovery is still ambiguous, inspect `aspire.config.json`, `*.AppHost.csproj`, `apphost.cs`, or `apphost.ts`.
+5. For C# project AppHosts, confirm the project references Aspire AppHost support.
+6. For C# single-file AppHosts, look for the Aspire AppHost SDK directive.
+7. For TypeScript AppHosts, look for the AppHost file and generated module support.
 
 Use `--apphost <path>` when discovery is ambiguous, multiple AppHosts exist, or CI/CD should pin a specific AppHost. The path can point to an AppHost project file or supported single-file AppHost, such as `apphost.cs`.
 

@@ -105,6 +105,7 @@ The Azure deployment path in this skill is `aspire add <azure-target>`, AppHost 
 
 1. **Orient to the Aspire workspace.**
    - Start with `aspire ls` to list AppHosts in the current scope, then use `aspire.config.json`, AppHost project files, or `aspire ps` if more context is needed.
+   - If no AppHost exists, stop deployment work and invoke the `aspireify` skill to initialize/wire the AppHost before continuing.
    - Identify C# vs TypeScript AppHost.
    - Prefer Aspire CLI commands for discovery and state inspection.
 2. **Clarify or infer the deployment target.**
