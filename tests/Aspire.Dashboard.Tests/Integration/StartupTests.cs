@@ -628,7 +628,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         Assert.Collection(l,
             w =>
             {
-                Assert.Equal("Aspire version: {Version}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
+                Assert.Equal("Aspire dashboard version: {Version}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
             },
             w =>
             {
@@ -686,7 +686,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         Assert.Collection(l,
             w =>
             {
-                Assert.Equal("Aspire version: {Version}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
+                Assert.Equal("Aspire dashboard version: {Version}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
             },
             w =>
             {
@@ -802,7 +802,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         Assert.Collection(l,
             w =>
             {
-                Assert.Equal("Aspire version: {Version}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
+                Assert.Equal("Aspire dashboard version: {Version}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
             },
             w =>
             {

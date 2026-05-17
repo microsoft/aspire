@@ -361,6 +361,26 @@ public class PRScriptToolModeTests(ITestOutputHelper testOutput)
 
     [Fact]
     [SkipOnPlatform(TestPlatforms.Windows, "Bash script tests require bash shell")]
+    public async Task Bash_ArchiveMode_RejectsForce()
+    {
+        using var env = new TestEnvironment();
+        var localDir = Path.Combine(env.TempDirectory, "artifacts");
+        await CreateLocalDirWithAspireCliPackageAsync(localDir);
+
+        using var cmd = new ScriptToolCommand(ScriptPaths.PRShell, env, _testOutput);
+        var result = await cmd.ExecuteAsync(
+            "--local-dir", localDir,
+            "--force",
+            "--dry-run", "--skip-path");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("--force can only be combined with --install-mode tool", result.Output);
+        Assert.DoesNotContain("dotnet tool install --", result.Output);
+        Assert.DoesNotContain("dotnet tool update --", result.Output);
+    }
+
+    [Fact]
+    [SkipOnPlatform(TestPlatforms.Windows, "Bash script tests require bash shell")]
     public async Task Bash_ToolMode_InstallFailureSuggestsForce()
     {
         using var env = new TestEnvironment();
@@ -914,6 +934,26 @@ public class PRScriptToolModeTests(ITestOutputHelper testOutput)
         Assert.Contains("-HiveOnly cannot be combined with -InstallMode Tool", result.Output);
         Assert.DoesNotContain("dotnet tool install", result.Output);
         Assert.DoesNotContain("dotnet tool update", result.Output);
+    }
+
+    [Fact]
+    [RequiresTools(["pwsh"])]
+    public async Task Ps_ArchiveMode_RejectsForce()
+    {
+        using var env = new TestEnvironment();
+        var localDir = Path.Combine(env.TempDirectory, "artifacts");
+        await CreateLocalDirWithAspireCliPackageAsync(localDir);
+
+        using var cmd = new ScriptToolCommand(ScriptPaths.PRPowerShell, env, _testOutput);
+        var result = await cmd.ExecuteAsync(
+            "-LocalDir", localDir,
+            "-Force",
+            "-SkipPath", "-WhatIf");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("-Force can only be combined with -InstallMode Tool", result.Output);
+        Assert.DoesNotContain("dotnet tool install --", result.Output);
+        Assert.DoesNotContain("dotnet tool update --", result.Output);
     }
 
     [Fact]

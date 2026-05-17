@@ -3,11 +3,34 @@
 
 using System.Reflection;
 
-namespace Aspire.Dashboard.Extensions;
+namespace Aspire.Shared;
 
-internal static class AssemblyExtensions
+/// <summary>
+/// Helpers for reading version information from assemblies.
+/// </summary>
+internal static class AssemblyVersionHelper
 {
-    public static string? GetDisplayVersion(this Assembly assembly)
+    /// <summary>
+    /// Gets the informational version (e.g. "8.0.0-preview.2.23619.3+commit") from an assembly.
+    /// </summary>
+    internal static string GetInformationalVersion(Assembly assembly)
+    {
+        return assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? string.Empty;
+    }
+
+    /// <summary>
+    /// Gets the file version (build ID) from an assembly.
+    /// </summary>
+    internal static string GetFileVersion(Assembly assembly)
+    {
+        return assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version ?? string.Empty;
+    }
+
+    /// <summary>
+    /// Gets a user-friendly display version from an assembly, stripping the commit hash suffix.
+    /// Falls back to file version, then assembly version.
+    /// </summary>
+    internal static string? GetDisplayVersion(Assembly assembly)
     {
         // The package version is stamped into the assembly's AssemblyInformationalVersionAttribute at build time, followed by a '+' and
         // the commit hash, e.g.:

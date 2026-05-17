@@ -1587,6 +1587,12 @@ main() {
         exit 1
     fi
 
+    if [[ "$INSTALL_MODE" != "tool" && "$FORCE" == true ]]; then
+        say_error "--force can only be combined with --install-mode tool: archive mode installs from downloaded binaries and does not use dotnet tool update."
+        say_info "Use --install-mode tool with --force, or drop --force."
+        exit 1
+    fi
+
     if [[ "$INSTALL_MODE" == "tool" ]]; then
         if ! validate_tool_mode_runtime_identifier; then
             exit 1

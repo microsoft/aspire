@@ -85,8 +85,9 @@ public class CliSmokeTests(ITestOutputHelper outputHelper)
             Console.WriteLine($"Error output: {errorOutput}");
 
             // Debug mode should write log output to stderr (SpectreConsoleLogger uses [HH:mm:ss] [level] Category: message format)
+            // The root logger category is "Aspire.Cli" which GetShortCategoryName shortens to "Cli".
             var lines = errorOutput.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
-            Assert.Contains(lines, line => line.EndsWith("[dbug] Program: Parsing arguments: -d --help"));
+            Assert.Contains(lines, line => line.EndsWith("[dbug] Cli: Parsing arguments: -d --help"));
         }, options: s_remoteInvokeOptions);
 
         outputHelper.WriteLine(result.Process.StandardOutput.ReadToEnd());
