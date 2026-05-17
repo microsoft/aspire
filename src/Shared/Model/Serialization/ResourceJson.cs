@@ -232,6 +232,8 @@ internal sealed class ResourceCommandJson
 
 /// <summary>
 /// Represents a command invocation argument input in JSON format.
+/// Keep this contract in sync with the VS Code extension's ResourceCommandArgumentInputJson
+/// in extension/src/views/AppHostDataRepository.ts.
 /// </summary>
 internal sealed class ResourceCommandArgumentJson
 {
