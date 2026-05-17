@@ -19,9 +19,9 @@ public class NuGetPackagePrefetcherTests
     {
         var workingDir = new DirectoryInfo(Environment.CurrentDirectory);
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(workingDir);
-        
+
         Assert.Null(executionContext.Command);
-        
+
         var testCommand = new TestCommand();
         executionContext.Command = testCommand;
         Assert.Same(testCommand, executionContext.Command);

@@ -19,21 +19,13 @@ internal static class TestExecutionContextHelper
     public static CliExecutionContext CreateExecutionContext(
         this TemporaryWorkspace workspace,
         string identityChannel = "local",
-        DirectoryInfo? homeDirectory = null,
-        DirectoryInfo? hivesDirectory = null,
         IReadOnlyDictionary<string, string?>? environmentVariables = null,
-        DirectoryInfo? packagesDirectory = null,
-        bool debugMode = false,
         string? logFilePath = null)
     {
         return CreateExecutionContext(
             workspace.WorkspaceRoot,
             identityChannel: identityChannel,
-            homeDirectory: homeDirectory,
-            hivesDirectory: hivesDirectory,
             environmentVariables: environmentVariables,
-            packagesDirectory: packagesDirectory,
-            debugMode: debugMode,
             logFilePath: logFilePath);
     }
 
@@ -54,9 +46,6 @@ internal static class TestExecutionContextHelper
     {
         var root = rootDirectory.FullName;
         hivesDirectory ??= new DirectoryInfo(Path.Combine(root, ".aspire", "hives"));
-        // Always default homeDirectory to a workspace-scoped path so user-level agent
-        // skill installs go to an isolated directory instead of the real user profile,
-        // which causes file-locking conflicts when tests run concurrently.
         homeDirectory ??= new DirectoryInfo(Path.Combine(root, ".home"));
         var cacheDirectory = new DirectoryInfo(Path.Combine(root, ".aspire", "cache"));
         var sdksDirectory = new DirectoryInfo(Path.Combine(root, ".aspire", "sdks"));
