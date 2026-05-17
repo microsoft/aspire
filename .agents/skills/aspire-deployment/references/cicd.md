@@ -179,7 +179,7 @@ Use deploy only when the workflow is intentionally allowed to modify infrastruct
   env:
     Parameters__registry_endpoint: ghcr.io
     Parameters__registry_repository: ${{ github.repository }}
-  run: aspire deploy --environment production
+  run: aspire deploy --environment production --non-interactive
 ```
 
 Add target-specific authentication before this step:
@@ -271,7 +271,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Deploy with Aspire
-        run: aspire deploy --apphost ./src/apphost.cs --environment Production
+        run: aspire deploy --apphost ./src/apphost.cs --environment Production --non-interactive
         env:
           Azure__SubscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           Azure__Location: ${{ vars.AZURE_LOCATION || 'eastus' }}
@@ -290,7 +290,7 @@ Adapt the example instead of copying it blindly:
 
 - Start from the external `.yml` reference that matches the AppHost language, then adjust paths, package manager commands, package-manager caching, target branch, and parameter names.
 - Use `--apphost <path>` when the workflow should pin a specific AppHost, such as a single-file `apphost.cs`, `apphost.ts`, or an AppHost project file.
-- For TypeScript AppHosts, replace the .NET setup with Node/package-manager setup, deploy with `--apphost <path-to-apphost.ts>`, and add .NET setup only if .NET project resources are part of the app graph.
+- For TypeScript AppHosts, replace the .NET setup with Node/package-manager setup, deploy with `--apphost <path-to-apphost.ts> --non-interactive`, and provide deployment settings and AppHost parameters through the deploy step's `env:`.
 - Keep `id-token: write` for Azure OIDC login.
 - Put non-secret deployment settings in GitHub Environment variables when possible, such as `AZURE_LOCATION` and `AZURE_RESOURCE_GROUP`.
 - Put secret AppHost parameters in GitHub Environment secrets and pass them as `Parameters__*`.

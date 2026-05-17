@@ -79,7 +79,7 @@ Azure deployment settings:
 | `Azure:ResourceGroup` | `Azure__ResourceGroup` | Resource group |
 | `Azure:CredentialSource` | `Azure__CredentialSource` | Credential source override |
 
-For local deployment, these can be stored as AppHost secrets:
+For local development, `aspire secret set` can store these values for the AppHost:
 
 ```bash
 aspire secret set "Azure:SubscriptionId" "<subscription-id>"
@@ -87,9 +87,21 @@ aspire secret set "Azure:Location" "<region>"
 aspire secret set "Azure:ResourceGroup" "<resource-group>"
 ```
 
+Do not use `aspire secret set` as the deployment parameter mechanism. It is a local/dev convenience today. For publish/deploy, TypeScript AppHosts, CI, and other non-interactive deploys, set deployment settings and AppHost parameters as environment variables on the `aspire deploy` process:
+
+```bash
+Azure__SubscriptionId="<subscription-id>" \
+Azure__Location="westus2" \
+Azure__ResourceGroup="my-app-rg" \
+Parameters__api_key="<secret-value>" \
+aspire deploy --apphost ./apphost.ts --environment Production --non-interactive
+```
+
 Do not print secret values. Subscription/resource group/location are not secrets, but still summarize them carefully.
 
-If `az account show` reports a tenant but `aspire deploy` later prompts during `fetch-tenant`, do not assume `aspire secret set "Azure:TenantId" ...` will answer that prompt. Tenant selection can still be a pipeline prompt. Run the deploy in a real interactive terminal/PTY, or make the Azure CLI login context unambiguous before deploying.
+If a parameter name contains `-`, use `_` in the environment variable name. For example, AppHost parameter `registry-endpoint` maps to `Parameters__registry_endpoint`.
+
+If `az account show` reports a tenant but `aspire deploy` later prompts during `fetch-tenant`, do not assume `aspire secret set "Azure:TenantId" ...` will answer that prompt. Tenant selection can still be a pipeline prompt. Run the deploy in a real interactive terminal/PTY, or make the Azure CLI login context unambiguous before deploying, for example with `az login --tenant <tenant-id>` or `azure/login`'s `tenant-id` input in GitHub Actions.
 
 ## Azure Container Apps
 
@@ -235,7 +247,7 @@ Deploy:
 aspire deploy
 ```
 
-For local Azure deploys, prefer a real interactive terminal for the first apply. Azure deployment can prompt for values that are not AppHost parameters, such as tenant selection when multiple tenants are available. Do not use `--non-interactive` for the first Azure apply unless you have already confirmed the deployment has no prompt-producing inputs.
+For local Azure deploys, prefer a real interactive terminal for the first apply. Azure deployment can prompt for values that are not AppHost parameters, such as tenant selection when multiple tenants are available. Use `--non-interactive` only after configuring deploy-time values with environment variables and confirming the Azure CLI login context is unambiguous.
 
 Do not pipe an interactive `aspire deploy` through `tee`, `tail`, or another command when prompts may appear. The pipe can make the current terminal non-interactive and selection prompts will fail. Use the attached terminal output and the Aspire CLI log path printed by the command instead of capturing the transcript with a pipe.
 
@@ -282,8 +294,8 @@ helm list --all-namespaces
 
 When troubleshooting generated Azure resources, match the live resource names and tags back to the Aspire deployment summary, AppHost environment resource name, and selected `--environment` value. Do not print secret values; for Key Vault or app settings, inspect key names and references rather than values.
 
-- Missing Azure settings: configure `Azure__SubscriptionId`, `Azure__Location`, and optionally `Azure__ResourceGroup`, or store them with `aspire secret`.
-- Wrong subscription: check `az account show` and compare to `Azure__SubscriptionId` or AppHost secret/config.
+- Missing Azure settings: configure `Azure__SubscriptionId`, `Azure__Location`, and optionally `Azure__ResourceGroup` on the deploy process.
+- Wrong subscription: check `az account show` and compare to `Azure__SubscriptionId` or AppHost config.
 - Failed resource group deployment: inspect the failed deployment with `az deployment group show --resource-group "<resource-group>" --name "<deployment-name>"` and then inspect operation errors with `az deployment operation group list --resource-group "<resource-group>" --name "<deployment-name>" --query "[?properties.provisioningState=='Failed']"`.
 - Parameter prompts in CI: provide `Parameters__*` environment variables through pipeline secrets/variables.
 - Secrets to Key Vault: use the Azure Key Vault hosting integration and secret APIs only after confirming docs and user intent.

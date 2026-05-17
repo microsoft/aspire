@@ -115,7 +115,14 @@ Use these conventions:
 - AppHost parameter config key: `Parameters:name`
 - Environment variable provider key: `Parameters__name`
 - Parameter names with dashes use underscores in environment variables, for example `registry-endpoint` becomes `Parameters__registry_endpoint`
-- AppHost local secret command: `aspire secret set "Parameters:name" "<value>"`
+- Local/dev-only AppHost secret command: `aspire secret set "Parameters:name" "<value>"`
+
+`aspire secret set` is a local/dev convenience today, not the deployment parameter path. For TypeScript AppHosts and non-interactive runs, set deploy-time values as environment variables on the `aspire deploy` process:
+
+```bash
+Parameters__name="<value>" \
+aspire deploy --apphost ./apphost.ts --environment Production --non-interactive
+```
 
 Never print secret values. If a command prints secrets, redact them in any summary.
 

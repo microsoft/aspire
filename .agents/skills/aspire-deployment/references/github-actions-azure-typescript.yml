@@ -41,7 +41,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Deploy with Aspire
-        run: aspire deploy --apphost ./apphost.ts --environment Production
+        run: aspire deploy --apphost ./apphost.ts --environment Production --non-interactive
         env:
           Azure__SubscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           Azure__Location: ${{ vars.AZURE_LOCATION || 'eastus' }}
