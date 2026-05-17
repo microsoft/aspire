@@ -16,6 +16,23 @@ export interface ResourceUrlJson {
 
 export interface ResourceCommandJson {
     description: string | null;
+    visibility?: string | null;
+    argumentInputs?: ResourceCommandArgumentInputJson[] | null;
+}
+
+export interface ResourceCommandArgumentInputJson {
+    name: string;
+    label: string | null;
+    description: string | null;
+    enableDescriptionMarkdown?: boolean;
+    inputType: 'Text' | 'SecretText' | 'Choice' | 'Boolean' | 'Number';
+    required?: boolean;
+    placeholder: string | null;
+    value: string | null;
+    options: Record<string, string | null> | null;
+    allowCustomChoice?: boolean;
+    disabled?: boolean;
+    maxLength: number | null;
 }
 
 export interface ResourceHealthReportJson {

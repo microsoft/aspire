@@ -35,6 +35,8 @@ import { AspireGutterDecorationProvider } from './editor/AspireGutterDecorationP
 import { AppHostFilePresenceWatcher } from './editor/AppHostFilePresenceWatcher';
 import { getSupportedLanguageIds } from './editor/parsers/AppHostResourceParser';
 import { readGitCommitSha } from './utils/versionInfo';
+import { collectResourceCommandArguments } from './views/ResourceCommandArguments';
+import { ResourceCommandJson } from './views/AppHostDataRepository';
 
 let aspireExtensionContext = new AspireExtensionContext();
 
@@ -134,12 +136,17 @@ export async function activate(context: vscode.ExtensionContext) {
   const languageFilters = getSupportedLanguageIds().map(lang => ({ language: lang, scheme: 'file' }));
   const codeLensRegistration = vscode.languages.registerCodeLensProvider(languageFilters, codeLensProvider);
   const codeLensDebugPipelineStepRegistration = vscode.commands.registerCommand('aspire-vscode.codeLensDebugPipelineStep', (stepName: string) => editorCommandProvider.tryExecuteDoAppHost(false, stepName));
-  const codeLensResourceActionRegistration = vscode.commands.registerCommand('aspire-vscode.codeLensResourceAction', (resourceName: string, action: string, appHostPath: string) => {
+  const codeLensResourceActionRegistration = vscode.commands.registerCommand('aspire-vscode.codeLensResourceAction', async (resourceName: string, action: string, appHostPath: string, resourceCommand?: ResourceCommandJson) => {
+    const additionalArgs = await collectResourceCommandArguments(action, resourceCommand);
+    if (additionalArgs === undefined) {
+      return;
+    }
+
     let command = `resource "${resourceName}" ${action}`;
     if (appHostPath) {
       command += ` --apphost "${appHostPath}"`;
     }
-    terminalProvider.sendAspireCommandToAspireTerminal(command);
+    terminalProvider.sendAspireCommandToAspireTerminal(command, true, additionalArgs);
   });
   const codeLensViewLogsRegistration = vscode.commands.registerCommand('aspire-vscode.codeLensViewLogs', (resourceName: string, appHostPath: string) => {
     let command = `logs "${resourceName}"`;

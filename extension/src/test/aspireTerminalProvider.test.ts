@@ -142,5 +142,37 @@ suite('AspireTerminalProvider tests', () => {
                 getAspireTerminalStub.restore();
             }
         });
+
+        test('puts extension-added CLI flags before additional pass-through arguments', async () => {
+            resolveCliPathStub.resolves({ cliPath: 'aspire', available: true, source: 'path' });
+            isCliDebugLoggingEnabledStub.returns(true);
+            let executedCommand: string | undefined;
+            const terminal = {
+                shellIntegration: {
+                    executeCommand: (commandLine: string) => {
+                        executedCommand = commandLine;
+                        return {} as vscode.TerminalShellExecution;
+                    }
+                },
+                sendText: () => { },
+                show: () => { }
+            } as unknown as vscode.Terminal;
+            const getAspireTerminalStub = sinon.stub(terminalProvider, 'getAspireTerminal').returns({
+                terminal,
+                dispose: () => { }
+            });
+
+            try {
+                await terminalProvider.sendAspireCommandToAspireTerminal('resource "web" "configure"', true, ['--', '--message', 'hello world']);
+
+                const expected = process.platform === 'win32'
+                    ? '& "aspire" resource "web" "configure" "--debug" "--" "--message" "hello world"'
+                    : 'aspire resource "web" "configure" \'--debug\' \'--\' \'--message\' \'hello world\'';
+                assert.strictEqual(executedCommand, expected);
+            }
+            finally {
+                getAspireTerminalStub.restore();
+            }
+        });
     });
 });

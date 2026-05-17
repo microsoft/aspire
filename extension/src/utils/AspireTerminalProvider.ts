@@ -74,25 +74,30 @@ export class AspireTerminalProvider implements vscode.Disposable {
             command = `${quotedPath} ${subcommand}`;
         }
 
+        const cliArgs: string[] = [];
+        if (this.isCliDebugLoggingEnabled()) {
+            cliArgs.push('--debug');
+        }
+
+        if (process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY] === 'true') {
+            cliArgs.push('--cli-wait-for-debugger');
+        }
+
         if (additionalArgs && additionalArgs.length > 0) {
-            const quotedArgs = additionalArgs.map(arg => {
+            cliArgs.push(...additionalArgs);
+        }
+
+        if (cliArgs.length > 0) {
+            const quotedArgs = cliArgs.map(arg => {
                 if (process.platform === 'win32') {
-                    // On Windows PowerShell, wrap in double quotes and escape inner double quotes
-                    return `"${arg.replace(/"/g, '`"')}"`;
+                    // On Windows PowerShell, wrap in double quotes and escape interpolation characters.
+                    return `"${arg.replace(/`/g, '``').replace(/"/g, '`"').replace(/\$/g, '`$')}"`;
                 } else {
                     // On Unix, wrap in single quotes and escape inner single quotes
                     return `'${arg.replace(/'/g, "'\"'\"'")}'`;
                 }
             });
             command += ' ' + quotedArgs.join(' ');
-        }
-
-        if (this.isCliDebugLoggingEnabled()) {
-            command += ' --debug';
-        }
-
-        if (process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY] === 'true') {
-            command += ' --cli-wait-for-debugger';
         }
 
         const aspireTerminal = this.getAspireTerminal();

@@ -33,6 +33,7 @@ import {
     ViewMode,
     shortenPaths,
 } from './AppHostDataRepository';
+import { collectResourceCommandArguments } from './ResourceCommandArguments';
 
 type TreeElement = AppHostItem | PidItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem | HealthChecksGroupItem | HealthCheckItem;
 
@@ -701,6 +702,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         const items = Object.entries(commands).map(([name, cmd]) => ({
             label: name,
             description: cmd.description ?? undefined,
+            command: cmd,
         }));
 
         const selected = await vscode.window.showQuickPick(items, {
@@ -711,16 +713,12 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             return;
         }
 
-        if (this._repository.viewMode === 'workspace') {
-            const appHostFlag = this._repository.workspaceAppHostPath ? ` --apphost "${this._repository.workspaceAppHostPath}"` : '';
-            this._terminalProvider.sendAspireCommandToAspireTerminal(`resource "${element.resource.name}" "${selected.label}"${appHostFlag}`);
+        const additionalArgs = await collectResourceCommandArguments(selected.label, selected.command);
+        if (additionalArgs === undefined) {
             return;
         }
 
-        const appHost = this._findAppHostForResource(element);
-        if (appHost) {
-            this._terminalProvider.sendAspireCommandToAspireTerminal(`resource "${element.resource.name}" "${selected.label}" --apphost "${appHost.appHostPath}"`);
-        }
+        this._runResourceCommand(element, `"${selected.label}"`, ...additionalArgs);
     }
 
     async copyAppHostPath(element: AppHostItem): Promise<void> {
@@ -749,11 +747,11 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
     }
 
     private _runResourceCommand(element: ResourceItem, command: string, ...extraArgs: string[]): void {
-        const suffix = extraArgs.length > 0 ? ` ${extraArgs.join(' ')}` : '';
+        const additionalArgs = extraArgs.length > 0 ? extraArgs : undefined;
 
         if (this._repository.viewMode === 'workspace') {
             const appHostFlag = this._repository.workspaceAppHostPath ? ` --apphost "${this._repository.workspaceAppHostPath}"` : '';
-            this._terminalProvider.sendAspireCommandToAspireTerminal(`resource "${element.resource.name}" ${command}${suffix}${appHostFlag}`);
+            this._terminalProvider.sendAspireCommandToAspireTerminal(`resource "${element.resource.name}" ${command}${appHostFlag}`, true, additionalArgs);
             return;
         }
 
@@ -761,7 +759,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         if (!appHost) {
             return;
         }
-        this._terminalProvider.sendAspireCommandToAspireTerminal(`resource "${element.resource.name}" ${command} --apphost "${appHost.appHostPath}"${suffix}`);
+        this._terminalProvider.sendAspireCommandToAspireTerminal(`resource "${element.resource.name}" ${command} --apphost "${appHost.appHostPath}"`, true, additionalArgs);
     }
 
     private _findAppHostForResource(element: ResourceItem): AppHostDisplayInfo | undefined {
