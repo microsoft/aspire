@@ -362,8 +362,11 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
 
             // Extract the AppHost log file path from the captured output and verify
             // it exists and is non-empty.
+            // Extract the AppHost log file path from the captured output. The CLI
+            // wraps paths in OSC 8 terminal hyperlinks (\e]8;...;\e\\path\e]8;;\e\\),
+            // so we must strip those escape sequences before extracting the path.
             await auto.RunCommandAsync(
-                "APPHOST_LOG=$(grep 'See AppHost logs at' /tmp/resource-cmd-output.txt | sed 's/.*See AppHost logs at //')",
+                "APPHOST_LOG=$(sed 's/\\x1b\\][^\\x1b]*\\x1b\\\\//g' /tmp/resource-cmd-output.txt | grep 'See AppHost logs at' | sed 's/.*See AppHost logs at //')",
                 counter);
 
             // Debug: Show what was captured in stderr and the extracted APPHOST_LOG value.
