@@ -377,9 +377,15 @@ public sealed class ResourceCommandTests(ITestOutputHelper output)
                 counter,
                 TimeSpan.FromSeconds(10));
 
-            // Verify the log file contains CLI log entries (Aspire.Cli namespace).
+            // Debug: dump the AppHost log content so we can see what's actually in it.
+            await auto.RunCommandAsync(
+                "echo '=== APPHOST_LOG content ===' && cat \"$APPHOST_LOG\" && echo '=== End APPHOST_LOG ===' || true",
+                counter);
+
+            // Verify the log file contains the custom log entry written by the
+            // command handler via ILogger before returning the failure result.
             await auto.RunCommandFailFastAsync(
-                "grep -q 'Aspire\\.Cli' \"$APPHOST_LOG\"",
+                "grep -q 'CUSTOM_E2E_LOG_ENTRY_FOR_VERIFICATION' \"$APPHOST_LOG\"",
                 counter,
                 TimeSpan.FromSeconds(10));
 
