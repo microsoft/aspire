@@ -178,7 +178,7 @@ fi
 
 # Normalize config value if set
 if [[ -n "$CONFIG" ]]; then
-  case "${CONFIG,,}" in
+  case "$(printf '%s' "$CONFIG" | tr '[:upper:]' '[:lower:]')" in
     release) CONFIG=Release ;;
     debug)   CONFIG=Debug ;;
     *) error "Unsupported configuration '$CONFIG'. Use Release or Debug."; exit 1 ;;
@@ -383,6 +383,16 @@ if [[ $SKIP_CLI -eq 0 ]]; then
       fi
     elif [[ ! -d "$CLI_PUBLISH_DIR" ]]; then
       CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net10.0"
+    fi
+
+    if [[ ! -f "$CLI_PUBLISH_DIR/aspire" ]]; then
+      RID_CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net10.0/$BUNDLE_RID/publish"
+      RID_CLI_NATIVE_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net10.0/$BUNDLE_RID/native"
+      if [[ -f "$RID_CLI_PUBLISH_DIR/aspire" ]]; then
+        CLI_PUBLISH_DIR="$RID_CLI_PUBLISH_DIR"
+      elif [[ -f "$RID_CLI_NATIVE_DIR/aspire" ]]; then
+        CLI_PUBLISH_DIR="$RID_CLI_NATIVE_DIR"
+      fi
     fi
   fi
 

@@ -61,6 +61,15 @@ export const errorFetchingAppHosts = (error: string) => vscode.l10n.t('Error fet
 export const resourcesGroupLabel = vscode.l10n.t('Resources');
 export const noCommandsAvailable = vscode.l10n.t('No commands available for this resource.');
 export const selectCommandPlaceholder = vscode.l10n.t('Select a command to execute');
+export const resourceCommandArgumentsTitle = (command: string) => vscode.l10n.t('Run {0}', command);
+export const resourceCommandArgumentInputTitle = (command: string, input: string) => vscode.l10n.t('{0}: {1}', command, input);
+export const resourceCommandCustomChoice = (value: string) => vscode.l10n.t('Use "{0}"', value);
+export const resourceCommandCustomChoiceDescription = vscode.l10n.t('Custom value');
+export const resourceCommandSecretWarning = vscode.l10n.t('This command has secret arguments. Values are masked while you enter them, but they are passed to the Aspire CLI terminal and may be visible in terminal history or scrollback.');
+export const resourceCommandContinue = vscode.l10n.t('Continue');
+export const resourceCommandDontShowAgain = vscode.l10n.t("Don't show again");
+export const resourceCommandInvalidNumber = vscode.l10n.t('Enter a number using invariant culture, for example 1, -1.5, or 1e3.');
+export const resourceCommandMaxLength = (length: number) => vscode.l10n.t('Value must be {0} characters or fewer.', length);
 export const selectDashboardPlaceholder = vscode.l10n.t('Select a dashboard to open');
 export const workspaceAppHostLabel = vscode.l10n.t('Workspace AppHost');
 export const resourceCountDescription = (count: number) => vscode.l10n.t('({0} resources)', count);

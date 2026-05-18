@@ -13,59 +13,38 @@
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <netty.version>4.1.133.Final</netty.version>
+        <reactor-netty.version>1.2.17</reactor-netty.version>
     </properties>
-
-    <repositories>
-        <repository>
-            <id>central</id>
-            <url>https://repo.maven.apache.org/maven2</url>
-        </repository>
-    </repositories>
-
-    <pluginRepositories>
-        <pluginRepository>
-            <id>central</id>
-            <url>https://repo.maven.apache.org/maven2</url>
-        </pluginRepository>
-    </pluginRepositories>
 
     <dependencyManagement>
         <dependencies>
             <!--
-                These overrides pin transitive versions brought in by azure-identity (via azure-core,
-                msal4j, reactor-netty, etc.) and the PostgreSQL JDBC driver. They exist so Component
-                Governance sees the patched versions rather than whatever older versions the upstream
-                BOMs would otherwise resolve.
+                These overrides pin transitive versions brought in by azure-identity, Javalin,
+                and the PostgreSQL JDBC driver so Component Governance sees patched versions
+                rather than older versions from upstream dependency metadata.
             -->
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-bom</artifactId>
+                <version>${netty.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
             <dependency>
                 <groupId>org.postgresql</groupId>
                 <artifactId>postgresql</artifactId>
                 <version>42.7.11</version>
             </dependency>
             <dependency>
-                <groupId>io.netty</groupId>
-                <artifactId>netty-codec-http2</artifactId>
-                <version>4.1.133.Final</version>
-            </dependency>
-            <dependency>
-                <groupId>com.nimbusds</groupId>
-                <artifactId>nimbus-jose-jwt</artifactId>
-                <version>9.48</version>
-            </dependency>
-            <dependency>
                 <groupId>io.projectreactor.netty</groupId>
                 <artifactId>reactor-netty-core</artifactId>
-                <version>1.0.48</version>
+                <version>${reactor-netty.version}</version>
             </dependency>
             <dependency>
                 <groupId>io.projectreactor.netty</groupId>
                 <artifactId>reactor-netty-http</artifactId>
-                <version>1.0.48</version>
-            </dependency>
-            <dependency>
-                <groupId>io.netty</groupId>
-                <artifactId>netty-handler</artifactId>
-                <version>4.1.133.Final</version>
+                <version>${reactor-netty.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

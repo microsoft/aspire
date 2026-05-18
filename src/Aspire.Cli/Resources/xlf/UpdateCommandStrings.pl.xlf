@@ -73,7 +73,7 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Update integrations in the Aspire project (Preview)</source>
+        <source>Update integrations in the Aspire project</source>
         <target state="needs-review-translation">Zaktualizuj integracje w projekcie Aspire. (Wersja zapoznawcza)</target>
         <note />
       </trans-unit>

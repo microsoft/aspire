@@ -160,7 +160,7 @@ internal sealed class LogsCommand : BaseCommand
         // Validate --tail value
         if (tail.HasValue && tail.Value < 1)
         {
-            return CommandResult.Failure(ExitCodeConstants.InvalidCommand, LogsCommandStrings.TailMustBePositive);
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, LogsCommandStrings.TailMustBePositive);
         }
 
         var result = await _connectionResolver.ResolveConnectionAsync(
@@ -190,7 +190,7 @@ internal sealed class LogsCommand : BaseCommand
         {
             if (!ResourceSnapshotMapper.WhereMatchesResourceName(resourceWatcher.GetAllResources(), resourceName).Any())
             {
-                return CommandResult.Failure(ExitCodeConstants.InvalidCommand, string.Format(CultureInfo.CurrentCulture, LogsCommandStrings.ResourceNotFound, resourceName));
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, string.Format(CultureInfo.CurrentCulture, LogsCommandStrings.ResourceNotFound, resourceName));
             }
         }
         else
@@ -295,7 +295,7 @@ internal sealed class LogsCommand : BaseCommand
             }
         }
 
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private async Task<int> ExecuteWatchAsync(
@@ -368,7 +368,7 @@ internal sealed class LogsCommand : BaseCommand
             OutputLogLine(entry, format, timestamps);
         }
 
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     /// <summary>

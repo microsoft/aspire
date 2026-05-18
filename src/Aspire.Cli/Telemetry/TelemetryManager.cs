@@ -43,6 +43,7 @@ internal sealed class TelemetryManager : IDisposable
     // Chosen to provide time to send remaining telemetry without noticeably delaying exit.
     private const int ShutDownTimeoutMilliseconds = 200;
 #endif
+    private const int ProfilingForceFlushTimeoutMilliseconds = 5000;
 
     private readonly TracerProvider? _azureMonitorProvider;
     private readonly TracerProvider? _profilingProvider;
@@ -156,6 +157,24 @@ internal sealed class TelemetryManager : IDisposable
     /// Gets whether DEBUG-only diagnostic telemetry export is enabled.
     /// </summary>
     public bool HasDiagnosticProvider => _debugDiagnosticProvider is not null;
+
+    /// <summary>
+    /// Flushes profiling telemetry without shutting down other telemetry providers.
+    /// </summary>
+    public Task ForceFlushProfilingAsync()
+    {
+        // OpenTelemetry's TracerProvider flush API is the synchronous
+        // ForceFlush(int timeoutMilliseconds) extension method. It can block until the batch
+        // exporter drains or the timeout expires, so keep the CLI profile export path async by
+        // running that bounded wait on the thread pool; callers still await this so export does not
+        // race ahead of pending spans. Adding cancellation here would either skip the flush before
+        // it starts or stop waiting while the synchronous flush keeps running; the provider timeout
+        // is the actual bound for this best-effort drain.
+        return Task.Run(() =>
+        {
+            _profilingProvider?.ForceFlush(ProfilingForceFlushTimeoutMilliseconds);
+        });
+    }
 
     /// <summary>
     /// Shuts down the telemetry providers, flushing any pending telemetry.

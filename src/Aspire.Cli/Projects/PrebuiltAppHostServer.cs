@@ -26,6 +26,8 @@ namespace Aspire.Cli.Projects;
 /// </summary>
 internal sealed class PrebuiltAppHostServer : IAppHostServerProject
 {
+    // An explicit PR/local source only contains Aspire packages. Keep NuGet.org available
+    // for non-Aspire packages and transitive dependencies that are outside the Aspire* mapping.
     private const string NuGetOrgSource = "https://api.nuget.org/v3/index.json";
 
     internal const string ClosureMetadataFileName = "closure-metadata.txt";
@@ -695,6 +697,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         startInfo.Environment["REMOTE_APP_HOST_SOCKET_PATH"] = _socketPath;
         startInfo.Environment["REMOTE_APP_HOST_PID"] = hostPid.ToString(System.Globalization.CultureInfo.InvariantCulture);
         startInfo.Environment[KnownConfigNames.CliProcessId] = hostPid.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        startInfo.Environment[KnownConfigNames.CliLogFilePath] = _executionContext.LogFilePath;
 
         if (_integrationLibsPath is not null)
         {

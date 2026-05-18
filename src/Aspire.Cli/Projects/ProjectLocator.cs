@@ -61,18 +61,28 @@ internal interface IProjectLocator
             ? FindAppHostProjectFilesAsync(searchDirectory, scope, cancellationToken)
             : throw new NotSupportedException();
     Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior, bool createSettingsFile, CancellationToken cancellationToken = default);
+
     Task<FileInfo?> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, bool createSettingsFile, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Resolves the AppHost project file from Aspire settings, without any user interaction or
-    /// recursive filesystem scanning. Returns <c>null</c> when no settings file or AppHost path
-    /// entry is found, or when the configured path is no longer a valid AppHost project.
+    /// Resolves the AppHost project file from Aspire settings, without any user interaction,
+    /// recursive filesystem scanning, or MSBuild-based validation of the configured path.
+    /// Returns <c>null</c> when no settings file is found, when the path entry is absent,
+    /// when the configured file does not exist, or when no registered handler can process it.
     /// </summary>
+    /// <remarks>
+    /// Unlike <see cref="UseOrFindAppHostProjectFileAsync(FileInfo?, bool, CancellationToken)"/>,
+    /// this method intentionally does not call into MSBuild to validate the configured AppHost.
+    /// Callers like <c>aspire update</c> need to operate on an AppHost whose pinned SDK no
+    /// longer resolves (that's the very condition the command exists to repair); environment
+    /// checks similarly just need the configured path so they can run their own targeted
+    /// inspections against it.
+    /// </remarks>
     Task<FileInfo?> GetAppHostFromSettingsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Resolves the AppHost project file from Aspire settings starting in the specified directory,
-    /// without any user interaction or recursive filesystem scanning.
+    /// As <see cref="GetAppHostFromSettingsAsync(CancellationToken)"/>, but rooted at a specific
+    /// directory.
     /// </summary>
     Task<FileInfo?> GetAppHostFromSettingsAsync(DirectoryInfo searchDirectory, bool searchParentDirectories, CancellationToken cancellationToken = default)
         => GetAppHostFromSettingsAsync(cancellationToken);
@@ -335,7 +345,21 @@ internal sealed class ProjectLocator(
     /// <inheritdoc />
     public async Task<FileInfo?> GetAppHostFromSettingsAsync(DirectoryInfo searchDirectory, bool searchParentDirectories, CancellationToken cancellationToken = default)
     {
-        return await GetValidatedAppHostProjectFileFromSettingsAsync(searchDirectory, searchParentDirectories, silent: true, cancellationToken);
+        // Intentionally does not call ValidateAppHostAsync. See interface XML docs for rationale.
+        var settingsAppHost = await GetAppHostProjectFileFromSettingsAsync(searchDirectory, searchParentDirectories, silent: true, cancellationToken);
+        if (settingsAppHost is null)
+        {
+            return null;
+        }
+
+        var handler = projectFactory.TryGetProject(settingsAppHost);
+        if (handler is null)
+        {
+            logger.LogWarning("Ignoring AppHost path '{AppHostPath}' from settings because no project handler can process it.", settingsAppHost.FullName);
+            return null;
+        }
+
+        return settingsAppHost;
     }
 
     private async Task<FileInfo?> GetValidatedAppHostProjectFileFromSettingsAsync(DirectoryInfo searchDirectory, bool searchParentDirectories, bool silent, CancellationToken cancellationToken)
@@ -825,22 +849,22 @@ internal static class ProjectLocatorErrorHelper
         return ex.FailureReason switch
         {
             ProjectLocatorFailureReason.MultipleProjectFilesFound when projectOptionSpecifiedAsDirectory
-                => (ExitCodeConstants.FailedToFindProject, InteractionServiceStrings.ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts),
+                => (CliExitCodes.FailedToFindProject, InteractionServiceStrings.ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts),
             ProjectLocatorFailureReason.ProjectFileDoesntExist or ProjectLocatorFailureReason.NoProjectFileFound when projectOptionSpecifiedAsDirectory
-                => (ExitCodeConstants.FailedToFindProject, InteractionServiceStrings.ProjectOptionSpecifiedDirectoryContainsNoAppHosts),
+                => (CliExitCodes.FailedToFindProject, InteractionServiceStrings.ProjectOptionSpecifiedDirectoryContainsNoAppHosts),
             ProjectLocatorFailureReason.UnsupportedProjects
-                => (ExitCodeConstants.SdkNotInstalled, InteractionServiceStrings.NoSupportedAppHostsFound),
+                => (CliExitCodes.SdkNotInstalled, InteractionServiceStrings.NoSupportedAppHostsFound),
             ProjectLocatorFailureReason.ProjectFileNotAppHostProject
-                => (ExitCodeConstants.FailedToFindProject, InteractionServiceStrings.SpecifiedProjectFileNotAppHostProject),
+                => (CliExitCodes.FailedToFindProject, InteractionServiceStrings.SpecifiedProjectFileNotAppHostProject),
             ProjectLocatorFailureReason.ProjectFileDoesntExist
-                => (ExitCodeConstants.FailedToFindProject, InteractionServiceStrings.ProjectOptionDoesntExist),
+                => (CliExitCodes.FailedToFindProject, InteractionServiceStrings.ProjectOptionDoesntExist),
             ProjectLocatorFailureReason.MultipleProjectFilesFound
-                => (ExitCodeConstants.FailedToFindProject, InteractionServiceStrings.ProjectOptionNotSpecifiedMultipleAppHostsFound),
+                => (CliExitCodes.FailedToFindProject, InteractionServiceStrings.ProjectOptionNotSpecifiedMultipleAppHostsFound),
             ProjectLocatorFailureReason.NoProjectFileFound
-                => (ExitCodeConstants.FailedToFindProject, InteractionServiceStrings.ProjectOptionNotSpecifiedNoCsprojFound),
+                => (CliExitCodes.FailedToFindProject, InteractionServiceStrings.ProjectOptionNotSpecifiedNoCsprojFound),
             ProjectLocatorFailureReason.AppHostsMayNotBeBuildable
-                => (ExitCodeConstants.FailedToFindProject, InteractionServiceStrings.UnbuildableAppHostsDetected),
-            _ => (ExitCodeConstants.FailedToFindProject, string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.UnexpectedErrorOccurred, ex.Message))
+                => (CliExitCodes.FailedToFindProject, InteractionServiceStrings.UnbuildableAppHostsDetected),
+            _ => (CliExitCodes.FailedToFindProject, string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.UnexpectedErrorOccurred, ex.Message))
         };
     }
 }

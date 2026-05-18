@@ -1188,6 +1188,10 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Contains("getDistributedApplicationModel", aspireTs);
         Assert.Contains("subscribeBeforeStart", aspireTs);
         Assert.Contains("subscribeAfterResourcesCreated", aspireTs);
+        Assert.Contains("subscribeBeforePublish", aspireTs);
+        Assert.Contains("subscribeAfterPublish", aspireTs);
+        Assert.Contains("onBeforePublish", aspireTs);
+        Assert.Contains("onAfterPublish", aspireTs);
         Assert.Contains("onBeforeResourceStarted", aspireTs);
         Assert.Contains("onResourceStopped", aspireTs);
         Assert.Contains("onConnectionStringAvailable", aspireTs);

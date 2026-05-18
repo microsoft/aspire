@@ -73,8 +73,8 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Update integrations in the Aspire project (Preview)</source>
-        <target state="needs-review-translation">Aktualizujte integrace v projektu Aspire. (Preview)</target>
+        <source>Update integrations in the Aspire project</source>
+        <target state="needs-review-translation">Aktualizujte integrace v projektu Aspire.</target>
         <note />
       </trans-unit>
       <trans-unit id="DotNetToolSelfUpdateMessage">

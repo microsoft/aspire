@@ -41,10 +41,10 @@ internal sealed class CertificatesTrustCommand : BaseCommand
 
         if (result.WasCancelled)
         {
-            return CommandResult.Failure(ExitCodeConstants.FailedToTrustCertificates);
+            return CommandResult.Failure(CliExitCodes.FailedToTrustCertificates);
         }
 
         var details = string.Format(CultureInfo.CurrentCulture, CertificatesCommandStrings.TrustFailureDetailsFormat, result.ResultCode);
-        return CommandResult.Failure(ExitCodeConstants.FailedToTrustCertificates, $"{CertificatesCommandStrings.TrustFailure} {details}");
+        return CommandResult.Failure(CliExitCodes.FailedToTrustCertificates, $"{CertificatesCommandStrings.TrustFailure} {details}");
     }
 }

@@ -158,6 +158,11 @@ internal sealed class GetAppHostInfoResponse
     /// Gets when the AppHost process started.
     /// </summary>
     public DateTimeOffset? StartedAt { get; init; }
+
+    /// <summary>
+    /// Gets the log file path of the CLI process that launched the AppHost, if applicable.
+    /// </summary>
+    public string? CliLogFilePath { get; init; }
 }
 
 /// <summary>
@@ -1352,6 +1357,12 @@ internal sealed class AppHostInformation
     /// This value is only set when the AppHost is launched via the Aspire CLI.
     /// </summary>
     public DateTimeOffset? CliStartedAt { get; init; }
+
+    /// <summary>
+    /// Gets or sets the log file path of the CLI process that launched the AppHost.
+    /// This value is only set when the AppHost is launched via the Aspire CLI.
+    /// </summary>
+    public string? CliLogFilePath { get; init; }
 }
 
 /// <summary>

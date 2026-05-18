@@ -3,7 +3,7 @@
 
 namespace Aspire.Cli;
 
-internal static class ExitCodeConstants
+internal static class CliExitCodes
 {
     public const int Success = 0;
     public const int InvalidCommand = 1;

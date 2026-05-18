@@ -45,7 +45,7 @@ internal class ExtensionRpcTarget(IConfiguration configuration) : IExtensionRpcT
 
     public Task StopCliAsync()
     {
-        Environment.Exit(ExitCodeConstants.Success);
+        Environment.Exit(CliExitCodes.Success);
         return Task.CompletedTask;
     }
 

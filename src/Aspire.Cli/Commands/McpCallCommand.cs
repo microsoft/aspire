@@ -79,7 +79,7 @@ internal sealed class McpCallCommand : BaseCommand
 
         if (!result.Success)
         {
-            return CommandResult.FromExitCode(AppHostConnectionResultHandler.DisplayFailureAsError(result, _interactionService, ExitCodeConstants.FailedToDotnetRunAppHost));
+            return CommandResult.FromExitCode(AppHostConnectionResultHandler.DisplayFailureAsError(result, _interactionService, CliExitCodes.FailedToDotnetRunAppHost));
         }
 
         var connection = result.Connection!;
@@ -93,7 +93,7 @@ internal sealed class McpCallCommand : BaseCommand
                 using var doc = JsonDocument.Parse(inputJson);
                 if (doc.RootElement.ValueKind != JsonValueKind.Object)
                 {
-                    return CommandResult.Failure(ExitCodeConstants.InvalidCommand, "Invalid JSON input: expected a JSON object.");
+                    return CommandResult.Failure(CliExitCodes.InvalidCommand, "Invalid JSON input: expected a JSON object.");
                 }
                 var dict = new Dictionary<string, JsonElement>();
                 foreach (var prop in doc.RootElement.EnumerateObject())
@@ -104,7 +104,7 @@ internal sealed class McpCallCommand : BaseCommand
             }
             catch (JsonException ex)
             {
-                return CommandResult.Failure(ExitCodeConstants.InvalidCommand, $"Invalid JSON input: {ex.Message}");
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, $"Invalid JSON input: {ex.Message}");
             }
         }
 
@@ -141,14 +141,14 @@ internal sealed class McpCallCommand : BaseCommand
 
             if (callResult.IsError == true)
             {
-                return CommandResult.Failure(ExitCodeConstants.InvalidCommand);
+                return CommandResult.Failure(CliExitCodes.InvalidCommand);
             }
 
             return CommandResult.Success();
         }
         catch (Exception ex)
         {
-            return CommandResult.Failure(ExitCodeConstants.InvalidCommand, $"Failed to call tool '{toolName}' on resource '{resourceName}': {ex.Message}");
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, $"Failed to call tool '{toolName}' on resource '{resourceName}': {ex.Message}");
         }
     }
 }

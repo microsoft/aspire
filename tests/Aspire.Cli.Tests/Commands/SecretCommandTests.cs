@@ -35,7 +35,7 @@ public class SecretCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse($"secret path --apphost \"{appHostFile.FullName}\"");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Contains(expectedPath, outputWriter.Logs);
     }
 
@@ -61,7 +61,7 @@ public class SecretCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse($"secret path --apphost \"{appHostFile.FullName}\"");
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Contains(expectedPath, outputWriter.Logs);
     }
 
