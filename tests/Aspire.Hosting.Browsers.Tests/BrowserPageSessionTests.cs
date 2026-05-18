@@ -267,6 +267,62 @@ public class BrowserPageSessionTests
         await session.DisposeAsync();
     }
 
+    [Fact]
+    public async Task MonitorAsync_CompletesWithConnectionLostWhenReconnectTimesOut()
+    {
+        var host = new TestBrowserHost();
+        var firstConnection = new FakeBrowserLogsCdpConnection
+        {
+            CreatedTargetId = "target-1",
+            AttachSessionId = "target-session-1"
+        };
+        var timeProvider = new FakeTimeProvider(new DateTimeOffset(2026, 4, 26, 0, 0, 0, TimeSpan.Zero));
+
+        // All reconnect attempts after the first connection will fail.
+        var reconnectAttempts = 0;
+        BrowserLogsCdpConnectionFactory connectionFactory = (eventHandler, logger, cancellationToken) =>
+        {
+            if (reconnectAttempts == 0)
+            {
+                reconnectAttempts++;
+                firstConnection.SetEventHandler(eventHandler);
+                return Task.FromResult<IBrowserLogsCdpConnection>(firstConnection);
+            }
+
+            reconnectAttempts++;
+            throw new InvalidOperationException("Simulated connection failure.");
+        };
+
+        var session = await BrowserPageSession.StartAsync(
+            host,
+            "session-0001",
+            new Uri("https://localhost:5001/"),
+            new BrowserConnectionDiagnosticsLogger("session-0001", NullLogger.Instance),
+            connectionFactory,
+            static _ => ValueTask.CompletedTask,
+            NullLogger<BrowserLogsSessionManager>.Instance,
+            timeProvider,
+            reuseInitialBlankTarget: false,
+            CancellationToken.None);
+
+        Assert.Equal("target-1", session.TargetId);
+
+        // Enable auto-advance AFTER startup so the reconnect deadline computation uses a time that is
+        // immediately exceeded by the next GetUtcNow() call in the while-loop condition check.
+        // This causes the recovery window to expire on the first iteration without needing to pump timers.
+        timeProvider.AutoAdvanceAmount = TimeSpan.FromSeconds(6);
+
+        // Trigger connection loss to start the reconnect loop.
+        firstConnection.FailCompletion(new InvalidOperationException("Socket reset."));
+
+        var result = await session.Completion.DefaultTimeout();
+        Assert.Equal(BrowserPageSessionCompletionKind.ConnectionLost, result.CompletionKind);
+        Assert.NotNull(result.Error);
+        Assert.True(firstConnection.Disposed);
+
+        await session.DisposeAsync();
+    }
+
     private static BrowserLogsCdpConnectionFactory CreateConnectionFactory(params FakeBrowserLogsCdpConnection[] connections)
     {
         var nextConnectionIndex = 0;
