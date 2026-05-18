@@ -4,10 +4,13 @@
 #pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only
 
 using System.Reflection;
+using Aspire.Hosting.Azure;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.RemoteHost;
 using Aspire.TypeSystem;
 using Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes;
+using Azure.Provisioning.AppContainers;
+using Azure.Provisioning.AppService;
 
 namespace Aspire.Hosting.CodeGeneration.TypeScript.Tests;
 
@@ -1009,6 +1012,24 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.DoesNotContain("value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression", aspireTs);
     }
 
+    [Fact]
+    public void Scanner_AzureProvisioningCallbacks_ExposeTypedCustomizationProperties()
+    {
+        var capabilities = ScanCapabilitiesFromAzureAssemblies();
+
+        var publishAsWebsite = Assert.Single(capabilities, c => c.CapabilityId == "Aspire.Hosting.Azure.AppService/publishAsAzureAppServiceWebsite");
+        AssertCallbackParameterTypes(publishAsWebsite, "configure", typeof(AzureResourceInfrastructure), typeof(WebSite));
+        AssertCallbackParameterTypes(publishAsWebsite, "configureSlot", typeof(AzureResourceInfrastructure), typeof(WebSiteSlot));
+
+        var publishAsContainerAppJob = Assert.Single(capabilities, c => c.CapabilityId == "Aspire.Hosting.Azure.AppContainers/publishAsAzureContainerAppJob");
+        AssertCallbackParameterTypes(publishAsContainerAppJob, "configure", typeof(AzureResourceInfrastructure), typeof(ContainerAppJob));
+
+        AssertTargetedMethod(capabilities, "Aspire.Hosting.Azure.AppService/configureWebSiteSiteConfig", "configureSiteConfig", typeof(WebSite), GetRequiredType("Aspire.Hosting.Azure.AzureAppServiceSiteConfig, Aspire.Hosting.Azure.AppService"));
+        AssertTargetedMethod(capabilities, "Aspire.Hosting.Azure.AppService/configureWebSiteSlotSiteConfig", "configureSlotSiteConfig", typeof(WebSiteSlot), GetRequiredType("Aspire.Hosting.Azure.AzureAppServiceSiteConfig, Aspire.Hosting.Azure.AppService"));
+
+        AssertTargetedMethod(capabilities, "Aspire.Hosting.Azure.AppContainers/configureContainerAppScale", "configureScale", typeof(ContainerApp), GetRequiredType("Aspire.Hosting.Azure.AzureContainerAppScaleConfig, Aspire.Hosting.Azure.AppContainers"));
+    }
+
     private static List<AtsCapabilityInfo> ScanCapabilitiesFromTestAssembly()
     {
         var testAssembly = LoadTestAssembly();
@@ -1113,6 +1134,59 @@ public class AtsTypeScriptCodeGeneratorTests
         return result.ToAtsContext();
     }
 
+    private static List<AtsCapabilityInfo> ScanCapabilitiesFromAzureAssemblies()
+    {
+        var result = AtsCapabilityScanner.ScanAssemblies(LoadAzureAssemblies());
+        return result.Capabilities;
+    }
+
+    private static Assembly[] LoadAzureAssemblies()
+    {
+        return
+        [
+            typeof(DistributedApplication).Assembly,
+            typeof(AzureResourceInfrastructure).Assembly,
+            typeof(global::Aspire.Hosting.AzureContainerAppProjectExtensions).Assembly,
+            typeof(global::Aspire.Hosting.AzureAppServiceComputeResourceExtensions).Assembly
+        ];
+    }
+
+    private static void AssertCallbackParameterTypes(AtsCapabilityInfo capability, string parameterName, params Type[] expectedTypes)
+    {
+        var parameter = Assert.Single(capability.Parameters, p => p.Name == parameterName);
+
+        Assert.True(parameter.IsCallback);
+        Assert.NotNull(parameter.CallbackParameters);
+        Assert.Equal(expectedTypes.Select(GetAtsTypeId), parameter.CallbackParameters.Select(p => p.Type?.TypeId));
+    }
+
+    private static void AssertTargetedMethod(IReadOnlyList<AtsCapabilityInfo> capabilities, string capabilityId, string methodName, Type targetType, Type parameterType)
+    {
+        var capability = Assert.Single(capabilities, c => c.CapabilityId == capabilityId);
+        var parameter = Assert.Single(capability.Parameters);
+
+        Assert.Equal(methodName, capability.MethodName);
+        Assert.Equal(GetAtsTypeId(targetType), capability.TargetTypeId);
+        Assert.Equal(GetAtsTypeId(parameterType), parameter.Type?.TypeId);
+    }
+
+    private static Type GetRequiredType(string assemblyQualifiedTypeName)
+    {
+        return Type.GetType(assemblyQualifiedTypeName, throwOnError: true)!;
+    }
+
+    private static string GetAtsTypeId(Type type)
+    {
+        return type switch
+        {
+            _ when type == typeof(string) => "string",
+            _ when type == typeof(bool) => "boolean",
+            _ when type == typeof(byte) || type == typeof(short) || type == typeof(int) || type == typeof(long) ||
+                type == typeof(float) || type == typeof(double) || type == typeof(decimal) => "number",
+            _ => $"{type.Assembly.GetName().Name}/{type.FullName}"
+        };
+    }
+
     private static (Assembly testAssembly, Assembly hostingAssembly) LoadBothAssemblies()
     {
         var testAssembly = typeof(TestRedisResource).Assembly;
@@ -1188,6 +1262,10 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Contains("getDistributedApplicationModel", aspireTs);
         Assert.Contains("subscribeBeforeStart", aspireTs);
         Assert.Contains("subscribeAfterResourcesCreated", aspireTs);
+        Assert.Contains("subscribeBeforePublish", aspireTs);
+        Assert.Contains("subscribeAfterPublish", aspireTs);
+        Assert.Contains("onBeforePublish", aspireTs);
+        Assert.Contains("onAfterPublish", aspireTs);
         Assert.Contains("onBeforeResourceStarted", aspireTs);
         Assert.Contains("onResourceStopped", aspireTs);
         Assert.Contains("onConnectionStringAvailable", aspireTs);

@@ -3,6 +3,7 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Eventing;
+using Aspire.Hosting.Publishing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 
@@ -30,6 +31,8 @@ namespace Aspire.Hosting.Ats;
 /// <list type="bullet">
 ///   <item><description><c>subscribeBeforeStart</c> - Called before the application starts</description></item>
 ///   <item><description><c>subscribeAfterResourcesCreated</c> - Called after resources are created</description></item>
+///   <item><description><c>subscribeBeforePublish</c> - Called before the application is published</description></item>
+///   <item><description><c>subscribeAfterPublish</c> - Called after the application is published</description></item>
 /// </list>
 /// </para>
 /// </remarks>
@@ -204,6 +207,54 @@ internal static class BuilderExports
         ArgumentNullException.ThrowIfNull(callback);
 
         return builder.Eventing.Subscribe<BeforeStartEvent>(async (@event, ct) =>
+        {
+            await callback(@event).ConfigureAwait(false);
+        });
+    }
+
+    /// <summary>
+    /// Subscribes to the BeforePublish event, which fires before the application is published.
+    /// </summary>
+    /// <remarks>
+    /// This event provides access to the service provider and distributed application model,
+    /// allowing you to perform final configuration or validation before publish pipeline steps run.
+    /// </remarks>
+    /// <param name="builder">The builder handle.</param>
+    /// <param name="callback">A callback that receives the exported event when the event fires.</param>
+    /// <returns>A subscription handle that can be used to unsubscribe.</returns>
+    [AspireExport(Description = "Subscribes to the BeforePublish event")]
+    public static DistributedApplicationEventSubscription SubscribeBeforePublish(
+        this IDistributedApplicationBuilder builder,
+        Func<BeforePublishEvent, Task> callback)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(callback);
+
+        return builder.Eventing.Subscribe<BeforePublishEvent>(async (@event, ct) =>
+        {
+            await callback(@event).ConfigureAwait(false);
+        });
+    }
+
+    /// <summary>
+    /// Subscribes to the AfterPublish event, which fires after the application is published.
+    /// </summary>
+    /// <remarks>
+    /// This event provides access to the service provider and distributed application model,
+    /// allowing you to inspect the model after publish pipeline steps complete.
+    /// </remarks>
+    /// <param name="builder">The builder handle.</param>
+    /// <param name="callback">A callback that receives the exported event when the event fires.</param>
+    /// <returns>A subscription handle that can be used to unsubscribe.</returns>
+    [AspireExport(Description = "Subscribes to the AfterPublish event")]
+    public static DistributedApplicationEventSubscription SubscribeAfterPublish(
+        this IDistributedApplicationBuilder builder,
+        Func<AfterPublishEvent, Task> callback)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(callback);
+
+        return builder.Eventing.Subscribe<AfterPublishEvent>(async (@event, ct) =>
         {
             await callback(@event).ConfigureAwait(false);
         });

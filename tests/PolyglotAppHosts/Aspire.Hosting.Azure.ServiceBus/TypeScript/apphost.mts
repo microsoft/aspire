@@ -78,10 +78,10 @@ await queue.withProperties(async (q) => {
     await q.requiresSession.set(false);
 
     // Read back properties to verify getter generation
-    const _dlq: boolean = await q.deadLetteringOnMessageExpiration.get();
-    const _ttl: number = await q.defaultMessageTimeToLive.get();
-    const _fwd: string = await q.forwardTo.get();
-    const _maxDel: number = await q.maxDeliveryCount.get();
+    const _dlq: boolean | null = await q.deadLetteringOnMessageExpiration.get();
+    const _ttl: number | null = await q.defaultMessageTimeToLive.get();
+    const _fwd: string | null = await q.forwardTo.get();
+    const _maxDel: number | null = await q.maxDeliveryCount.get();
 });
 
 await topic.withProperties(async (t) => {
@@ -89,7 +89,7 @@ await topic.withProperties(async (t) => {
     await t.duplicateDetectionHistoryTimeWindow.set(3000000000);  // 5 min in ticks
     await t.requiresDuplicateDetection.set(false);
 
-    const _dupDetect: boolean = await t.requiresDuplicateDetection.get();
+    const _dupDetect: boolean | null = await t.requiresDuplicateDetection.get();
 });
 
 await subscription.withProperties(async (s) => {
@@ -102,7 +102,7 @@ await subscription.withProperties(async (s) => {
     await s.requiresSession.set(false);
 
     // Read back a subscription property
-    const _lock: number = await s.lockDuration.get();
+    const _lock: number | null = await s.lockDuration.get();
 
     // Add rules using AspireList.add() and the DTO types
     const rules = await s.rules();

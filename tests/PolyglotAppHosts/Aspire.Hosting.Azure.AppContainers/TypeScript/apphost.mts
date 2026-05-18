@@ -34,8 +34,9 @@ const certificateName = await builder.addParameter("certificateName");
 // === PublishAsAzureContainerApp ===
 // Test publishAsAzureContainerApp on a container resource with callback
 const web = await builder.addContainer("web", "myregistry/web:latest");
-await web.publishAsAzureContainerApp(async (infrastructure, app) => {
+await web.publishAsAzureContainerApp(async (_infrastructure, app) => {
     await app.configureCustomDomain(customDomain, certificateName);
+    await app.configureScale({ minReplicas: 1 });
 });
 
 // Test publishAsAzureContainerAppJob on an executable resource
@@ -50,8 +51,8 @@ await worker.publishAsAzureContainerAppJob();
 // Test publishAsAzureContainerAppJob (with callback)
 const processor = await builder.addContainer("processor", "myregistry/processor:latest");
 await processor.publishAsAzureContainerAppJob({
-    configure: async (infrastructure, job) => {
-    // Configure the container app job here
+    configure: async (_infrastructure, job) => {
+        await job.bicepIdentifier.set("processorJob");
     }
 });
 
@@ -62,8 +63,8 @@ await scheduler.publishAsScheduledAzureContainerAppJob("0 0 * * *");
 // Test publishAsScheduledAzureContainerAppJob (with callback)
 const reporter = await builder.addContainer("reporter", "myregistry/reporter:latest");
 await reporter.publishAsScheduledAzureContainerAppJob("0 */6 * * *", {
-    configure: async (infrastructure, job) => {
-    // Configure the scheduled job here
+    configure: async (_infrastructure, job) => {
+        await job.bicepIdentifier.set("reporterJob");
     }
 });
 

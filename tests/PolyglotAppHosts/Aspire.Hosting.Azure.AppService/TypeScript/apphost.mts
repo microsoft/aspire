@@ -15,20 +15,28 @@ const environment = await builder.addAzureAppServiceEnvironment('appservice-envi
 
 const website = await builder.addContainer('frontend', 'nginx')
     .publishAsAzureAppServiceWebsite({
-        configure: async (_infrastructure, _appService) => {},
-        configureSlot: async (_infrastructure, _appServiceSlot) => {}
+        configure: async (_infrastructure, appService) => {
+            await appService.configureSiteConfig({ isAlwaysOn: true });
+        },
+        configureSlot: async (_infrastructure, appServiceSlot) => {
+            await appServiceSlot.configureSlotSiteConfig({ isAlwaysOn: false });
+        }
     })
     .skipEnvironmentVariableNameChecks();
 
 await builder.addExecutable('worker', 'dotnet', '.', ['run'])
     .publishAsAzureAppServiceWebsite({
-        configure: async (_infrastructure, _appService) => {}
+        configure: async (_infrastructure, appService) => {
+            await appService.configureSiteConfig({ isAlwaysOn: true });
+        }
     })
     .skipEnvironmentVariableNameChecks();
 
 await builder.addProject('api', '../Fake.Api/Fake.Api.csproj', { launchProfileOrOptions: 'https' })
     .publishAsAzureAppServiceWebsite({
-        configureSlot: async (_infrastructure, _appServiceSlot) => {}
+        configureSlot: async (_infrastructure, appServiceSlot) => {
+            await appServiceSlot.configureSlotSiteConfig({ isAlwaysOn: false });
+        }
     })
     .skipEnvironmentVariableNameChecks();
 

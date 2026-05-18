@@ -9,7 +9,7 @@ const chat = await foundry
     .withProperties(async (deployment) => {
         await deployment.deploymentName.set('chat-deployment');
         await deployment.skuCapacity.set(10);
-        const _capacity: number = await deployment.skuCapacity.get();
+        const _capacity: number | null = await deployment.skuCapacity.get();
     });
 
 const model: FoundryModel = FoundryModels.OpenAI.Gpt41Mini;
