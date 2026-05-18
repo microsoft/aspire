@@ -201,7 +201,7 @@ public sealed class DashboardCommandExecutor(
             {
                 Title = canceledTitle,
                 Body = response.Message,
-                Intent = FluentMessageIntent.Warning,
+                Intent = FluentMessageIntent.Info,
             });
             closeToastCts.Dispose();
             return;
