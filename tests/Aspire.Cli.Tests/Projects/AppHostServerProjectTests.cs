@@ -296,7 +296,7 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         };
 
         var runner = new TestDotNetCliRunner();
-        
+
         // Use a real logger to capture debug output for diagnostics
         using var loggerFactory = LoggerFactory.Create(builder =>
         {
@@ -355,12 +355,12 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
     {
         var dirInfo = new DirectoryInfo(path);
         output.WriteLine($"{indent}{dirInfo.Name}/");
-        
+
         foreach (var file in dirInfo.GetFiles())
         {
             output.WriteLine($"{indent}  {file.Name}");
         }
-        
+
         foreach (var dir in dirInfo.GetDirectories())
         {
             DumpDirectoryTree(dir.FullName, output, indent + "  ");

@@ -394,13 +394,8 @@ public class VsCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper)
         // (the scanner ignores .vscode in the home directory as that's for user settings, not workspace config)
         homeDirectory ??= new DirectoryInfo(Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString()));
 
-        return new CliExecutionContext(
-            workingDirectory: workingDirectory,
-            hivesDirectory: workingDirectory,
-            cacheDirectory: workingDirectory,
-            sdksDirectory: workingDirectory,
-            logsDirectory: workingDirectory,
-            logFilePath: "test.log",
+        return TestExecutionContextHelper.CreateExecutionContext(
+            workingDirectory,
             debugMode: false,
             environmentVariables: environmentVariables,
             homeDirectory: homeDirectory);

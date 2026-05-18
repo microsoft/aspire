@@ -30,7 +30,7 @@ public class TelemetrySpansCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Theory]
@@ -48,7 +48,7 @@ public class TelemetrySpansCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
     }
 
     [Fact]
@@ -74,7 +74,7 @@ public class TelemetrySpansCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         // Span output format: "timestamp STATUS shortSpanId resourceName     duration spanName"
         var spanLines = outputWriter.Logs.Where(l => l.Contains("frontend") || l.Contains("backend")).ToList();
@@ -109,7 +109,7 @@ public class TelemetrySpansCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         // Replicas get shortened GUID appended
         var spanLines = outputWriter.Logs.Where(l => l.Contains("apiservice")).ToList();
@@ -193,7 +193,7 @@ public class TelemetrySpansCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         var spanLines = outputWriter.Logs.Where(l => l.Contains("frontend")).ToList();
         Assert.Single(spanLines);
         Assert.Contains("GET /index", spanLines[0]);
@@ -217,7 +217,7 @@ public class TelemetrySpansCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
         Assert.Equal(TelemetryCommandStrings.DashboardUrlAndAppHostExclusive, errorMessage);
     }
@@ -255,7 +255,7 @@ public class TelemetrySpansCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.DashboardFailure, exitCode);
+        Assert.Equal(CliExitCodes.DashboardFailure, exitCode);
         var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
         Assert.Equal(TelemetryCommandStrings.DashboardAuthFailed, errorMessage);
     }
@@ -295,7 +295,7 @@ public class TelemetrySpansCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.DashboardFailure, exitCode);
+        Assert.Equal(CliExitCodes.DashboardFailure, exitCode);
         var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
         Assert.Equal(string.Format(System.Globalization.CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardApiNotEnabled, "http://localhost:18888"), errorMessage);
     }
@@ -379,7 +379,7 @@ public class TelemetrySpansCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonLine = outputWriter.Logs.Single(l => l.TrimStart().StartsWith('['));
         var formattedJson = TelemetryTestHelper.FormatJson(jsonLine);
@@ -450,7 +450,7 @@ public class TelemetrySpansCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.NotNull(capturedUrl);
         Assert.Contains("search=", capturedUrl);
     }

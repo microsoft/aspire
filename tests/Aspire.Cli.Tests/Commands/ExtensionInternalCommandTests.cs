@@ -50,7 +50,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("extension");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -71,7 +71,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("extension get-apphosts");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         // Join all captured output and deserialize
         var allOutput = string.Join(string.Empty, capturedOutput.Logs);
@@ -113,7 +113,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("extension get-apphosts");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         // Join all captured output and deserialize
         var allOutput = string.Join(string.Empty, capturedOutput.Logs);
@@ -152,7 +152,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("extension get-apphosts");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.FailedToFindProject, exitCode);
+        Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
     }
 
     [Fact]
@@ -170,7 +170,7 @@ public class ExtensionInternalCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("extension get-apphosts");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.FailedToFindProject, exitCode);
+        Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
     }
 
     [Fact]

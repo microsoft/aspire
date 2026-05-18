@@ -12,38 +12,48 @@ namespace Aspire.Cli.Tests.Scaffolding;
 
 /// <summary>
 /// Behavioral regression tests for channel reseed in <see cref="ScaffoldingService.ScaffoldAsync"/>.
-/// Verifies that the channel written to <c>aspire.config.json</c> is sourced from
-/// <see cref="CliExecutionContext.IdentityChannel"/> when no explicit channel is given, and from the
-/// caller-supplied value when one is.
+/// Verifies that the channel written to <c>aspire.config.json</c> mirrors
+/// <see cref="ScaffoldContext.Channel"/> verbatim and that <see cref="ScaffoldingService"/>
+/// does NOT fall back to <see cref="CliExecutionContext.IdentityChannel"/>.
 /// <para>
-/// <b>Coverage gap:</b> The heavyweight DI reseed sites —
-/// <c>CliTemplateFactory.PythonStarterTemplate</c>, <c>CliTemplateFactory.GoStarterTemplate</c>,
-/// and <c>GuestAppHostProject</c> — are NOT covered at this unit-test layer because they sit behind
-/// template extraction, project factory, and codegen RPC that this layer cannot reasonably stand up.
-/// Reseed regressions at those sites must be caught by integration tests or dogfood.
+/// All channel selection happens upstream of <see cref="ScaffoldingService"/>: <c>NewCommand</c>
+/// resolves the channel from <c>--channel</c> or an identity-match against a registered
+/// Explicit channel and passes it through <see cref="ScaffoldContext.Channel"/>; <c>aspire init</c>
+/// passes <see langword="null"/>. Pinning <see cref="CliExecutionContext.IdentityChannel"/> when
+/// the caller didn't ask would mismatch <c>aspire.config.json#channel</c> with the running CLI
+/// when the identity isn't a registered Explicit channel (e.g. <c>pr-&lt;N&gt;</c> on a machine
+/// without the matching hive, or <c>staging</c> without the staging feature flag).
+/// <c>PrebuiltAppHostServer</c> aggregates sources from every registered channel when no pin is
+/// present, so <c>aspire add</c> / <c>aspire restore</c> still find the right packages.
+/// </para>
+/// <para>
+/// The three CLI starter template factories
+/// (<c>CliTemplateFactory.{TypeScript,Python,Go}StarterTemplate</c>) have the same semantic — they
+/// only persist <c>aspire.config.json#channel</c> when their <c>TemplateInputs.Channel</c> input
+/// is set. Channel selection for those paths is covered by <c>NewCommandChannelResolutionTests</c>;
+/// the end-to-end consistency between resolved channel and persisted SDK version is covered by
+/// <c>TypeScriptStarterSmokeTests</c> on the daily smoke workflow.
 /// </para>
 /// </summary>
 public class ChannelReseedTests(ITestOutputHelper outputHelper)
 {
     [Theory]
-    [InlineData("stable", null, "stable")]
-    [InlineData("staging", null, "staging")]
-    [InlineData("daily", null, "daily")]
-    [InlineData("pr-12345", null, "pr-12345")]                  // option-(a) resolved label — what reseed sites must persist
-    [InlineData("daily", "explicit-staging", "explicit-staging")] // explicit Channel overrides context.IdentityChannel
-    public async Task ScaffoldAsync_PersistsExpectedChannel(string contextChannel, string? explicitChannel, string expectedPersistedChannel)
+    [InlineData(null, null)]                            // aspire init polyglot — no caller channel, no pin written
+    [InlineData("daily", "daily")]                      // NewCommand resolved Explicit identity-match → pin written
+    [InlineData("pr-12345", "pr-12345")]                // PR-built CLI with matching hive → pin written
+    [InlineData("explicit-staging", "explicit-staging")] // user-supplied --channel → pin written
+    public async Task ScaffoldAsync_PersistsContextChannelVerbatim(string? contextChannel, string? expectedPersistedChannel)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var executionContext = BuildContext(contextChannel);
-        var scaffoldingService = CreateScaffoldingService(executionContext);
+        var scaffoldingService = CreateScaffoldingService();
 
         var ctx = new ScaffoldContext(
             Language: s_testLanguage,
             TargetDirectory: workspace.WorkspaceRoot,
             ProjectName: "test",
             SdkVersion: null,
-            Channel: explicitChannel);
+            Channel: contextChannel);
 
         // ScaffoldGuestLanguageAsync writes the early channel save to disk
         // BEFORE the AppHostServerProject is created — so we capture the
@@ -52,6 +62,10 @@ public class ChannelReseedTests(ITestOutputHelper outputHelper)
             async () => await scaffoldingService.ScaffoldAsync(ctx, CancellationToken.None));
 
         var reloaded = AspireConfigFile.Load(workspace.WorkspaceRoot.FullName);
+        // `LoadOrCreate` migrates the seeded legacy `.aspire/settings.json` to `aspire.config.json`
+        // (TemporaryWorkspace seeds a `{}` settings file so directory-walking config lookups stop
+        // at the test workspace). So the file is always present; the regression we're guarding
+        // is the value written to `channel`, not the existence of the file.
         Assert.NotNull(reloaded);
         Assert.Equal(expectedPersistedChannel, reloaded.Channel);
     }
@@ -64,26 +78,12 @@ public class ChannelReseedTests(ITestOutputHelper outputHelper)
         CodeGenerator: "TypeScript",
         AppHostFileName: "apphost.ts");
 
-    private static CliExecutionContext BuildContext(string channel)
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        return new CliExecutionContext(
-            workingDirectory: dir,
-            hivesDirectory: dir,
-            cacheDirectory: dir,
-            sdksDirectory: dir,
-            logsDirectory: dir,
-            logFilePath: "test.log",
-            identityChannel: channel);
-    }
-
-    private static ScaffoldingService CreateScaffoldingService(CliExecutionContext executionContext)
+    private static ScaffoldingService CreateScaffoldingService()
     {
         return new ScaffoldingService(
             appHostServerProjectFactory: new TestAppHostServerProjectFactory(),
             languageDiscovery: new TestLanguageDiscovery(s_testLanguage),
             interactionService: new TestInteractionService(),
-            cliExecutionContext: executionContext,
             logger: NullLogger<ScaffoldingService>.Instance);
     }
 }

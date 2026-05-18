@@ -131,7 +131,7 @@ internal sealed class InitCommand : BaseCommand
             ? await DropCSharpSkeletonAsync(workingDirectory, solutionFile, cancellationToken)
             : await DropPolyglotSkeletonAsync(selectedProject.LanguageId, workingDirectory, cancellationToken);
 
-        if (dropResult != ExitCodeConstants.Success)
+        if (dropResult != CliExitCodes.Success)
         {
             return CommandResult.Failure(dropResult, InteractionServiceStrings.ProjectCouldNotBeCreated);
         }
@@ -162,10 +162,10 @@ internal sealed class InitCommand : BaseCommand
         // This prompt lets users choose which skills to install — including aspireify.
         var workspaceRoot = solutionFile?.Directory ?? workingDirectory;
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, NewCommand.s_suppressAgentInitOption, defaultValue: true);
-        var agentInitResult = await _agentInitCommand.PromptAndChainAsync(InteractionService, ExitCodeConstants.Success, workspaceRoot, agentInitBinding, cancellationToken);
+        var agentInitResult = await _agentInitCommand.PromptAndChainAsync(InteractionService, CliExitCodes.Success, workspaceRoot, agentInitBinding, cancellationToken);
 
         // Step 5: Print follow-up commands only when the user selected the one-time init skill.
-        if (agentInitResult.ExitCode == ExitCodeConstants.Success &&
+        if (agentInitResult.ExitCode == CliExitCodes.Success &&
             agentInitResult.SelectedSkills.Contains(SkillDefinition.Aspireify))
         {
             var commands = GetAspireifyCommands(agentInitResult.SelectedLocations);
@@ -260,7 +260,7 @@ internal sealed class InitCommand : BaseCommand
         if (File.Exists(appHostPath))
         {
             InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, "apphost.cs already exists — skipping.");
-            return ExitCodeConstants.Success;
+            return CliExitCodes.Success;
         }
 
         // Drop bare single-file apphost. Pin the SDK version so later operations
@@ -289,7 +289,7 @@ internal sealed class InitCommand : BaseCommand
         // had a `profiles` section. Use the SAME ports for apphost.run.json so the two
         // files always agree on dashboard / OTLP / resource service endpoints.
         var (configResult, effectivePorts) = DropAspireConfig(workingDirectory, "apphost.cs", language: null, ports);
-        if (configResult != ExitCodeConstants.Success)
+        if (configResult != CliExitCodes.Success)
         {
             return configResult;
         }
@@ -302,7 +302,7 @@ internal sealed class InitCommand : BaseCommand
         // `aspire run`, but `dotnet run apphost.cs` does not go through that path).
         DropAppHostRunJson(workingDirectory, effectivePorts);
 
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private async Task<int> DropCSharpProjectSkeletonAsync(FileInfo solutionFile, CancellationToken cancellationToken)
@@ -342,7 +342,7 @@ internal sealed class InitCommand : BaseCommand
         if (Directory.Exists(appHostDirPath))
         {
             InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"{appHostDirName}/ already exists — skipping.");
-            return ExitCodeConstants.Success;
+            return CliExitCodes.Success;
         }
 
         // Resolve the channel-aware template package version + feed mapping. The running
@@ -382,12 +382,12 @@ internal sealed class InitCommand : BaseCommand
         catch (ChannelNotFoundException ex)
         {
             InteractionService.DisplayError(ex.Message);
-            return ExitCodeConstants.FailedToInstallTemplates;
+            return CliExitCodes.FailedToInstallTemplates;
         }
         catch (EmptyChoicesException ex)
         {
             InteractionService.DisplayError(ex.Message);
-            return ExitCodeConstants.FailedToInstallTemplates;
+            return CliExitCodes.FailedToInstallTemplates;
         }
         catch (NuGetPackageCacheException ex)
         {
@@ -396,7 +396,7 @@ internal sealed class InitCommand : BaseCommand
             // init code went straight to `dotnet new install` and never invoked a NuGet search, so this catch
             // restores parity with the prior init failure mode for these scenarios.
             InteractionService.DisplayError(ex.Message);
-            return ExitCodeConstants.FailedToInstallTemplates;
+            return CliExitCodes.FailedToInstallTemplates;
         }
 
         // The aspire-apphost template ships in the Aspire.ProjectTemplates package.
@@ -413,7 +413,7 @@ internal sealed class InitCommand : BaseCommand
         {
             InteractionService.DisplayLines(installOutcome.OutputLines);
             InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.TemplateInstallationFailed, installOutcome.ExitCode));
-            return ExitCodeConstants.FailedToInstallTemplates;
+            return CliExitCodes.FailedToInstallTemplates;
         }
 
         // Use the aspire-apphost template to generate a correct AppHost project
@@ -434,12 +434,12 @@ internal sealed class InitCommand : BaseCommand
         if (result != 0)
         {
             InteractionService.DisplayError($"Failed to create AppHost from template (exit code {result}).");
-            return ExitCodeConstants.FailedToCreateNewProject;
+            return CliExitCodes.FailedToCreateNewProject;
         }
 
         InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"Created {appHostDirName}/");
 
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private async Task<int> DropPolyglotSkeletonAsync(string languageId, DirectoryInfo workingDirectory, CancellationToken cancellationToken)
@@ -454,18 +454,18 @@ internal sealed class InitCommand : BaseCommand
         if (File.Exists(appHostPath))
         {
             InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"{appHostFileName} already exists — skipping.");
-            return ExitCodeConstants.Success;
+            return CliExitCodes.Success;
         }
 
         var context = new ScaffoldContext(language, workingDirectory, workingDirectory.Name);
         var scaffolded = await _scaffoldingService.ScaffoldAsync(context, cancellationToken);
         if (!scaffolded)
         {
-            return ExitCodeConstants.FailedToCreateNewProject;
+            return CliExitCodes.FailedToCreateNewProject;
         }
 
         InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"Created {appHostFileName}");
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private (int ExitCode, AppHostProfilePorts EffectivePorts) DropAspireConfig(DirectoryInfo directory, string appHostPath, string? language, AppHostProfilePorts? ports = null)
@@ -492,7 +492,7 @@ internal sealed class InitCommand : BaseCommand
                 {
                     InteractionService.DisplayError($"Failed to parse existing {AspireConfigFile.FileName} at '{configPath}': {ex.Message}");
                     InteractionService.DisplayMessage(KnownEmojis.Warning, $"Fix or remove {AspireConfigFile.FileName} and re-run `aspire init`.");
-                    return (ExitCodeConstants.FailedToCreateNewProject, default);
+                    return (CliExitCodes.FailedToCreateNewProject, default);
                 }
             }
         }
@@ -576,7 +576,7 @@ internal sealed class InitCommand : BaseCommand
         File.WriteAllText(configPath, JsonSerializer.Serialize(settings, JsonSourceGenerationContext.RelaxedEscaping.JsonObject));
 
         InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"Created {AspireConfigFile.FileName}");
-        return (ExitCodeConstants.Success, effectivePorts);
+        return (CliExitCodes.Success, effectivePorts);
     }
 
     // Best-effort extraction of the dashboard / OTLP / resource service ports from an

@@ -23,7 +23,7 @@ internal sealed class ExtensionInternalCommand : BaseCommand
 
     protected override Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
-        return Task.FromResult(CommandResult.FromExitCode(ExitCodeConstants.Success));
+        return Task.FromResult(CommandResult.FromExitCode(CliExitCodes.Success));
     }
 
     private sealed class GetAppHostCandidatesCommand : BaseCommand
@@ -54,7 +54,7 @@ internal sealed class ExtensionInternalCommand : BaseCommand
             }
             catch
             {
-                return CommandResult.Failure(ExitCodeConstants.FailedToFindProject);
+                return CommandResult.Failure(CliExitCodes.FailedToFindProject);
             }
         }
     }
