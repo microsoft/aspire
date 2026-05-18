@@ -285,6 +285,7 @@ export class InteractionService implements IInteractionService {
         }
 
         extensionLogOutputChannel.info(`Displaying message: ${emoji} ${message}`);
+        this.clearProgressNotification();
         vscode.window.showInformationMessage(formatText(message));
     }
 
@@ -297,6 +298,7 @@ export class InteractionService implements IInteractionService {
         }
 
         extensionLogOutputChannel.info(`Displaying success message: ${message}`);
+        this.clearProgressNotification();
         vscode.window.showInformationMessage(formatText(message));
     }
 
@@ -312,6 +314,7 @@ export class InteractionService implements IInteractionService {
 
     displayPlainText(message: string) {
         extensionLogOutputChannel.info(`Displaying plain text: ${message}`);
+        this.clearProgressNotification();
         vscode.window.showInformationMessage(formatText(message));
     }
 
@@ -406,6 +409,8 @@ export class InteractionService implements IInteractionService {
     }
 
     async displayLines(lines: ConsoleLine[]) {
+        this.clearProgressNotification();
+
         const debugSession = this._getAspireDebugSession();
         const aspireTerminal = !debugSession ? this._getAspireTerminal?.() : undefined;
         for (const line of lines) {
@@ -422,6 +427,7 @@ export class InteractionService implements IInteractionService {
 
     displayCancellationMessage() {
         extensionLogOutputChannel.info(`Cancelled Aspire operation.`);
+        this.clearProgressNotification();
     }
 
     async openEditor(path: string) {
