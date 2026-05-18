@@ -179,5 +179,14 @@
   "walkthrough.getStarted.nextSteps.title": "Next steps",
   "walkthrough.getStarted.nextSteps.description": "You're all set! Add integrations for databases, messaging, and cloud services, or deploy your app to production.\n\n[Add an integration](command:aspire-vscode.add)\n\n[Open Aspire docs](https://aspire.dev/docs/)",
   "mcpServerDefinitionProviders.aspire.label": "Aspire",
-  "aspire-vscode.strings.selectDashboardPlaceholder": "Select a dashboard to open"
+  "aspire-vscode.strings.selectDashboardPlaceholder": "Select a dashboard to open",
+  "aspire-vscode.strings.resourceCommandArgumentsTitle": "Run {0}",
+  "aspire-vscode.strings.resourceCommandArgumentInputTitle": "{0}: {1}",
+  "aspire-vscode.strings.resourceCommandCustomChoice": "Use \"{0}\"",
+  "aspire-vscode.strings.resourceCommandCustomChoiceDescription": "Custom value",
+  "aspire-vscode.strings.resourceCommandSecretWarning": "This command has secret arguments. Values are masked while you enter them, but they are passed to the Aspire CLI terminal and may be visible in terminal history or scrollback.",
+  "aspire-vscode.strings.resourceCommandContinue": "Continue",
+  "aspire-vscode.strings.resourceCommandDontShowAgain": "Don't show again",
+  "aspire-vscode.strings.resourceCommandInvalidNumber": "Enter a number using invariant culture, for example 1, -1.5, or 1e3.",
+  "aspire-vscode.strings.resourceCommandMaxLength": "Value must be {0} characters or fewer."
 }

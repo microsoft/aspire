@@ -86,7 +86,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
         {
             var errorMessage = string.Format(CultureInfo.CurrentCulture, AddCommandStrings.ErrorOccurredWhileSearchingIntegrations, ex.Message);
             Telemetry.RecordError(errorMessage, ex);
-            return CommandResult.Failure(ExitCodeConstants.FailedToSearchIntegrations, errorMessage);
+            return CommandResult.Failure(CliExitCodes.FailedToSearchIntegrations, errorMessage);
         }
     }
 
@@ -115,7 +115,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
         {
             var json = JsonSerializer.Serialize(results, JsonSourceGenerationContext.RelaxedEscaping.IntegrationSearchResultArray);
             InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
-            return ExitCodeConstants.Success;
+            return CliExitCodes.Success;
         }
 
         if (results.Length == 0)
@@ -129,7 +129,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
                 InteractionService.DisplayError(AddCommandStrings.NoPackagesFound);
             }
 
-            return ExitCodeConstants.Success;
+            return CliExitCodes.Success;
         }
 
         if (searchTerm is not null)
@@ -155,7 +155,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
         }
 
         InteractionService.DisplayRenderable(table);
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 }
 

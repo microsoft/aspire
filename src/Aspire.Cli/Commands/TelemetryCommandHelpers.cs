@@ -201,7 +201,7 @@ internal static class TelemetryCommandHelpers
         if (projectFile is not null && dashboardUrl is not null)
         {
             interactionService.DisplayError(TelemetryCommandStrings.DashboardUrlAndAppHostExclusive);
-            return DashboardApiResult.Failure(ExitCodeConstants.InvalidCommand);
+            return DashboardApiResult.Failure(CliExitCodes.InvalidCommand);
         }
 
         // Direct dashboard URL mode — bypass AppHost discovery
@@ -220,7 +220,7 @@ internal static class TelemetryCommandHelpers
                     new TelemetryErrorInfo(
                         string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardUrlInvalid, dashboardUrl),
                         TelemetryCommandStrings.DashboardUrlInvalidHint));
-                return DashboardApiResult.Failure(ExitCodeConstants.InvalidCommand);
+                return DashboardApiResult.Failure(CliExitCodes.InvalidCommand);
             }
 
             // If no explicit --api-key was provided but a login token was found in the URL,
@@ -245,7 +245,7 @@ internal static class TelemetryCommandHelpers
                             TelemetryCommandStrings.DashboardLoginTokenFailedAnonymousHint),
                     };
                     DisplayTelemetryError(interactionService, errorInfo);
-                    return DashboardApiResult.Failure(ExitCodeConstants.DashboardFailure);
+                    return DashboardApiResult.Failure(CliExitCodes.DashboardFailure);
                 }
 
                 apiKey = exchangeResult.ApiKey;
@@ -279,7 +279,7 @@ internal static class TelemetryCommandHelpers
                     new TelemetryErrorInfo(
                         TelemetryCommandStrings.DashboardNotAvailable,
                         TelemetryCommandStrings.DashboardNotAvailableHint));
-                return DashboardApiResult.Failure(ExitCodeConstants.DashboardFailure);
+                return DashboardApiResult.Failure(CliExitCodes.DashboardFailure);
             }
 
             // Dashboard is optional — return success with null API info

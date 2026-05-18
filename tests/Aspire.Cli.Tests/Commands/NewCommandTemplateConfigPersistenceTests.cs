@@ -75,6 +75,8 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
     [InlineData(KnownTemplateId.GoEmptyAppHost, "apphost.go")]
     [InlineData(KnownTemplateId.JavaEmptyAppHost, "AppHost.java")]
     [InlineData(KnownTemplateId.TypeScriptStarter, "apphost.ts")]
+    [InlineData(KnownTemplateId.PythonStarter, "apphost.ts")]
+    [InlineData(KnownTemplateId.GoStarter, "apphost.go")]
     public async Task ChannelPinningTemplate_IdentityNotRegistered_DoesNotPinChannel(string templateId, string _)
     {
         var persisted = await ScaffoldAndReadPersistedChannelAsync(
@@ -100,6 +102,8 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
     [InlineData(KnownTemplateId.GoEmptyAppHost, "apphost.go")]
     [InlineData(KnownTemplateId.JavaEmptyAppHost, "AppHost.java")]
     [InlineData(KnownTemplateId.TypeScriptStarter, "apphost.ts")]
+    [InlineData(KnownTemplateId.PythonStarter, "apphost.ts")]
+    [InlineData(KnownTemplateId.GoStarter, "apphost.go")]
     public async Task ChannelPinningTemplate_IdentityMatchesRegisteredChannel_PinsThatChannel(string templateId, string _)
     {
         var persisted = await ScaffoldAndReadPersistedChannelAsync(
@@ -124,6 +128,8 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
     [InlineData(KnownTemplateId.GoEmptyAppHost, "apphost.go")]
     [InlineData(KnownTemplateId.JavaEmptyAppHost, "AppHost.java")]
     [InlineData(KnownTemplateId.TypeScriptStarter, "apphost.ts")]
+    [InlineData(KnownTemplateId.PythonStarter, "apphost.ts")]
+    [InlineData(KnownTemplateId.GoStarter, "apphost.go")]
     public async Task ChannelPinningTemplate_ExplicitChannelArg_OverridesIdentityAndPersists(string templateId, string _)
     {
         var persisted = await ScaffoldAndReadPersistedChannelAsync(
@@ -153,37 +159,6 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
             identityChannel: PackageChannelNames.Staging,
             registerIdentityChannel: false,
             explicitChannelArg: null);
-
-        Assert.Null(persisted);
-    }
-
-    /// <summary>
-    /// Tripwire for the Go and Python starter factories. PR #17120 removed their dead
-    /// channel-write code (it wrote to a <c>.aspire/settings.json</c> file those templates
-    /// don't ship, so the write was a silent no-op). These templates now ship a static
-    /// embedded <c>aspire.config.json</c> with no <c>channel</c> field and the factories
-    /// don't touch it. If anyone reintroduces a channel-write (the most likely path for
-    /// re-introducing the original bug class), the persisted <c>channel</c> stops being
-    /// <see langword="null"/> and this test fails.
-    /// </summary>
-    [Theory]
-    [InlineData(KnownTemplateId.GoStarter, null)]
-    [InlineData(KnownTemplateId.GoStarter, PackageChannelNames.Stable)]
-    [InlineData(KnownTemplateId.PythonStarter, null)]
-    [InlineData(KnownTemplateId.PythonStarter, PackageChannelNames.Stable)]
-    public async Task NonChannelPinningStarter_NeverPersistsChannel(string templateId, string? explicitChannelArg)
-    {
-        // Use a registered Explicit channel identity so the resolution layer DOES produce
-        // a value — making this a true tripwire: if someone re-adds `config.Channel =
-        // inputs.Channel`, the resolution value would propagate through and break the
-        // assertion. Pre-fix dead-code would not have caught this either way (the
-        // dead-code wrote to .aspire/settings.json, not aspire.config.json), so the
-        // tripwire is for *future* writes, not the pre-fix shape.
-        var persisted = await ScaffoldAndReadPersistedChannelAsync(
-            templateId: templateId,
-            identityChannel: PackageChannelNames.Daily,
-            registerIdentityChannel: true,
-            explicitChannelArg: explicitChannelArg);
 
         Assert.Null(persisted);
     }
@@ -317,19 +292,6 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
 
     private static CliExecutionContext BuildExecutionContextWithIdentity(TemporaryWorkspace workspace, string identityChannel)
     {
-        var workingDirectory = workspace.WorkspaceRoot;
-        var hivesDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "hives"));
-        var cacheDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "cache"));
-        var sdksDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "sdks"));
-        var logsDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "logs"));
-        var logFilePath = Path.Combine(logsDirectory.FullName, "test.log");
-        return new CliExecutionContext(
-            workingDirectory,
-            hivesDirectory,
-            cacheDirectory,
-            sdksDirectory,
-            logsDirectory,
-            logFilePath,
-            identityChannel: identityChannel);
+        return workspace.CreateExecutionContext(identityChannel: identityChannel);
     }
 }

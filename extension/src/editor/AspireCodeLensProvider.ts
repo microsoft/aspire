@@ -292,7 +292,7 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
                         title: label,
                         command: 'aspire-vscode.codeLensResourceAction',
                         tooltip: cmd.description ?? cmdName,
-                        arguments: [resource.name, cmdName, appHost.appHostPath],
+                        arguments: [resource.name, cmdName, appHost.appHostPath, cmd],
                     }));
                 }
             }

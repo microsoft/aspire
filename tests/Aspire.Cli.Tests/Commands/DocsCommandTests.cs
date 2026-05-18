@@ -25,7 +25,7 @@ public class DocsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         // Returns InvalidCommand exit code when no subcommand is provided (shows help)
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
     }
 
     [Fact]

@@ -61,7 +61,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Generates deployment artifacts for an Aspire apphost. (Preview).
+        ///   Looks up a localized string similar to Generates deployment artifacts for an Aspire apphost.
         /// </summary>
         public static string Description {
             get {

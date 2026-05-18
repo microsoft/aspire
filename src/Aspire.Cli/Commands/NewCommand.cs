@@ -401,13 +401,13 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         var template = await GetProjectTemplateAsync(availableTemplates, parseResult, cancellationToken);
         if (template is null)
         {
-            return CommandResult.Failure(ExitCodeConstants.InvalidCommand);
+            return CommandResult.Failure(CliExitCodes.InvalidCommand);
         }
 
         var (languageResolutionSuccess, selectedLanguageId) = await ResolveSelectedLanguageAsync(template, parseResult, cancellationToken);
         if (!languageResolutionSuccess)
         {
-            return CommandResult.Failure(ExitCodeConstants.InvalidCommand);
+            return CommandResult.Failure(CliExitCodes.InvalidCommand);
         }
 
         var version = parseResult.GetValue(s_versionOption);
@@ -418,7 +418,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             var resolveResult = await ResolveCliTemplateVersionAsync(parseResult, cancellationToken);
             if (!resolveResult.Success)
             {
-                return CommandResult.Failure(ExitCodeConstants.InvalidCommand, resolveResult.ErrorMessage);
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, resolveResult.ErrorMessage);
             }
 
             version = resolveResult.Version;

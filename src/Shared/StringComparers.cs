@@ -17,7 +17,7 @@ internal static class StringComparers
     public static StringComparer ResourceOwnerKind => StringComparer.Ordinal;
     public static StringComparer ResourceOwnerUid => StringComparer.Ordinal;
     public static StringComparer UserTextSearch => StringComparer.CurrentCultureIgnoreCase;
-    public static StringComparer EnvironmentVariableName => StringComparer.InvariantCultureIgnoreCase;
+    public static StringComparer EnvironmentVariableName => StringComparer.OrdinalIgnoreCase;
     public static StringComparer Url => StringComparer.OrdinalIgnoreCase;
     public static StringComparer UrlPath => StringComparer.OrdinalIgnoreCase;
     public static StringComparer UrlHost => StringComparer.OrdinalIgnoreCase;
@@ -49,7 +49,7 @@ internal static class StringComparisons
     public static StringComparison ResourceOwnerKind => StringComparison.Ordinal;
     public static StringComparison ResourceOwnerUid => StringComparison.Ordinal;
     public static StringComparison UserTextSearch => StringComparison.CurrentCultureIgnoreCase;
-    public static StringComparison EnvironmentVariableName => StringComparison.InvariantCultureIgnoreCase;
+    public static StringComparison EnvironmentVariableName => StringComparison.OrdinalIgnoreCase;
     public static StringComparison Url => StringComparison.OrdinalIgnoreCase;
     public static StringComparison UrlPath => StringComparison.OrdinalIgnoreCase;
     public static StringComparison UrlHost => StringComparison.OrdinalIgnoreCase;

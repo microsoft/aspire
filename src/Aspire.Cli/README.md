@@ -29,7 +29,7 @@ aspire <command> [options]
 | `new` | Create a new app from an Aspire starter template. |
 | `init` | Initialize Aspire in an existing codebase. |
 | `add [<integration>]` | Add a hosting integration to the apphost. |
-| `update` | Update integrations in the Aspire project. (Preview) |
+| `update` | Update integrations in the Aspire project. |
 | `run` | Run an apphost in development mode. |
 | `stop` | Stop a running apphost or the specified resource. |
 | `ps` | List running apphosts. |
@@ -56,9 +56,10 @@ aspire <command> [options]
 
 | Command | Description |
 |---------|-------------|
-| `publish` | Generate deployment artifacts for an apphost. (Preview) |
-| `deploy` | Deploy an apphost to its deployment targets. (Preview) |
-| `do <step>` | Execute a specific pipeline step and its dependencies. (Preview) |
+| `publish` | Generate deployment artifacts for an apphost. |
+| `deploy` | Deploy an apphost to its deployment targets. |
+| `destroy` | Destroy a previously deployed AppHost environment. |
+| `do <step>` | Execute a specific pipeline step and its dependencies. |
 
 ### Tools & Configuration
 

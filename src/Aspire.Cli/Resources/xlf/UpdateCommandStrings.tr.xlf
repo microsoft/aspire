@@ -73,7 +73,7 @@
         <note />
       </trans-unit>
       <trans-unit id="Description">
-        <source>Update integrations in the Aspire project (Preview)</source>
+        <source>Update integrations in the Aspire project</source>
         <target state="needs-review-translation">Aspire projesindeki tümleştirme güncelleştirmelerini yapın. (Önizleme)</target>
         <note />
       </trans-unit>
@@ -105,6 +105,11 @@
       <trans-unit id="FailedFetchItemsAndPropertiesFormat">
         <source>Failed to fetch items and properties for project: {0}</source>
         <target state="translated">Proje için öğeler ve özellikler getirilemedi: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="FailedToRestoreAfterUpdateFormat">
+        <source>Failed to restore packages for project {0} after update.</source>
+        <target state="new">Failed to restore packages for project {0} after update.</target>
         <note />
       </trans-unit>
       <trans-unit id="FailedUpdatePackageReferenceFormat">
@@ -225,6 +230,11 @@
       <trans-unit id="RemovedObsoleteAppHostPackage">
         <source>Removed obsolete Aspire.Hosting.AppHost package reference</source>
         <target state="translated">Kullanımdan kaldırılan Aspire.Hosting.AppHost paket başvurusu kaldırıldı</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RestoringPackagesAfterUpdate">
+        <source>Restoring packages...</source>
+        <target state="new">Restoring packages...</target>
         <note />
       </trans-unit>
       <trans-unit id="RetainedFeedFormat">
