@@ -1,11 +1,15 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Projects;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Utils;
 using Aspire.TypeSystem;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Tests.Projects;
@@ -16,12 +20,14 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
 
     private GuestRuntime CreateRuntime(
         RuntimeSpec? spec = null,
-        Func<string, string?>? commandResolver = null)
+        Func<string, string?>? commandResolver = null,
+        ProfilingTelemetry? profilingTelemetry = null)
     {
         return new GuestRuntime(
             spec ?? CreateTestSpec(),
             _loggerFactory.CreateLogger<GuestRuntime>(),
-            commandResolver: commandResolver);
+            commandResolver: commandResolver,
+            profilingTelemetry: profilingTelemetry);
     }
 
     private static RuntimeSpec CreateTestSpec(
@@ -158,6 +164,101 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RunAsync_CallsAfterAppHostLaunchedAfterPreExecute()
+    {
+        var spec = CreateTestSpec(
+            execute: new CommandSpec { Command = "run-cmd", Args = ["{appHostFile}"] },
+            preExecute:
+            [
+                new CommandSpec { Command = "typecheck-cmd", Args = ["--project", "{appHostDir}"] }
+            ]);
+        var runtime = CreateRuntime(spec);
+        var launcher = new RecordingLauncher();
+        var appHostFile = new FileInfo("/tmp/apphost.ts");
+        var directory = new DirectoryInfo("/tmp");
+        var afterAppHostLaunchedCalls = 0;
+
+        await runtime.RunAsync(
+            appHostFile,
+            directory,
+            new Dictionary<string, string>(),
+            watchMode: false,
+            launcher,
+            CancellationToken.None,
+            afterAppHostLaunchedAsync: () =>
+            {
+                afterAppHostLaunchedCalls++;
+                Assert.Equal(2, launcher.Calls.Count);
+                Assert.Equal("run-cmd", launcher.Calls[1].Command);
+                return Task.CompletedTask;
+            });
+
+        Assert.Equal(1, afterAppHostLaunchedCalls);
+        Assert.Equal(2, launcher.Calls.Count);
+        Assert.Equal("run-cmd", launcher.Calls[1].Command);
+    }
+
+    [Fact]
+    public async Task RunAsync_ProfilingTelemetryRecordsGuestCommandPhasesAndArgs()
+    {
+        var stoppedActivities = new ConcurrentBag<Activity>();
+        using var listener = CreateProfilingActivityListener(stoppedActivities.Add);
+        using var profilingTelemetry = CreateProfilingTelemetry(
+            (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
+            (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1"));
+        using var tempDirectory = new TestTempDirectory();
+
+        var spec = CreateTestSpec(
+            execute: new CommandSpec
+            {
+                Command = "npx",
+                Args = ["tsx", "--tsconfig", "tsconfig.apphost.json", "{appHostFile}"]
+            },
+            preExecute:
+            [
+                new CommandSpec
+                {
+                    Command = "npx",
+                    Args = ["tsc", "--noEmit", "-p", "tsconfig.apphost.json"]
+                }
+            ]);
+        var runtime = CreateRuntime(spec, profilingTelemetry: profilingTelemetry);
+        var launcher = new RecordingLauncher();
+        var directory = new DirectoryInfo(tempDirectory.Path);
+        var appHostFile = new FileInfo(Path.Combine(directory.FullName, "apphost.ts"));
+
+        await runtime.RunAsync(appHostFile, directory, new Dictionary<string, string>(), watchMode: false, launcher, CancellationToken.None);
+
+        var guestActivities = stoppedActivities
+            .Where(activity => activity.OperationName == ProfilingTelemetry.Activities.Process &&
+                activity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId) as string == "session-1" &&
+                activity.GetTagItem(ProfilingTelemetry.Tags.GuestCommandPhase) is not null)
+            .OrderBy(activity => activity.StartTimeUtc)
+            .ToArray();
+
+        Assert.Collection(
+            guestActivities,
+            preExecuteActivity =>
+            {
+                Assert.Equal(ProfilingTelemetry.Values.GuestCommandPhasePreExecute, preExecuteActivity.GetTagItem(ProfilingTelemetry.Tags.GuestCommandPhase));
+                Assert.Equal("process npx", preExecuteActivity.DisplayName);
+                Assert.Equal("npx", preExecuteActivity.GetTagItem(ProfilingTelemetry.Tags.GuestCommand));
+                Assert.Equal(new[] { "tsc", "--noEmit", "-p", "tsconfig.apphost.json" }, Assert.IsType<string[]>(preExecuteActivity.GetTagItem(ProfilingTelemetry.Tags.ProcessCommandArgs)));
+                Assert.Equal(4, preExecuteActivity.GetTagItem(ProfilingTelemetry.Tags.ProcessCommandArgsCount));
+                Assert.Equal(0, preExecuteActivity.GetTagItem(TelemetryConstants.Tags.ProcessExitCode));
+            },
+            executeActivity =>
+            {
+                Assert.Equal(ProfilingTelemetry.Values.GuestCommandPhaseExecute, executeActivity.GetTagItem(ProfilingTelemetry.Tags.GuestCommandPhase));
+                Assert.Equal("process npx", executeActivity.DisplayName);
+                Assert.Equal("npx", executeActivity.GetTagItem(ProfilingTelemetry.Tags.GuestCommand));
+                Assert.Equal(new[] { "tsx", "--tsconfig", "tsconfig.apphost.json", appHostFile.FullName }, Assert.IsType<string[]>(executeActivity.GetTagItem(ProfilingTelemetry.Tags.ProcessCommandArgs)));
+                Assert.Equal(4, executeActivity.GetTagItem(ProfilingTelemetry.Tags.ProcessCommandArgsCount));
+                Assert.Equal(0, executeActivity.GetTagItem(TelemetryConstants.Tags.ProcessExitCode));
+            });
+    }
+
+    [Fact]
     public async Task RunAsync_WhenPreExecuteFails_DoesNotExecute()
     {
         var spec = CreateTestSpec(
@@ -171,12 +272,52 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         launcher.ExitCodes.Enqueue(2);
         var appHostFile = new FileInfo("/tmp/apphost.ts");
         var directory = new DirectoryInfo("/tmp");
+        var afterAppHostLaunchedCalled = false;
 
-        var (exitCode, _) = await runtime.RunAsync(appHostFile, directory, new Dictionary<string, string>(), watchMode: false, launcher, CancellationToken.None);
+        var (exitCode, _) = await runtime.RunAsync(
+            appHostFile,
+            directory,
+            new Dictionary<string, string>(),
+            watchMode: false,
+            launcher,
+            CancellationToken.None,
+            afterAppHostLaunchedAsync: () =>
+            {
+                afterAppHostLaunchedCalled = true;
+                return Task.CompletedTask;
+            });
 
         Assert.Equal(2, exitCode);
+        Assert.False(afterAppHostLaunchedCalled);
         var call = Assert.Single(launcher.Calls);
         Assert.Equal("typecheck-cmd", call.Command);
+    }
+
+    [Fact]
+    public async Task RunAsync_WhenExecuteCommandCannotResolve_DoesNotCallAfterAppHostLaunched()
+    {
+        var spec = CreateTestSpec(execute: new CommandSpec { Command = "missing-cmd", Args = ["{appHostFile}"] });
+        var runtime = CreateRuntime(spec, commandResolver: _ => null);
+        var launcher = runtime.CreateDefaultLauncher();
+        var appHostFile = new FileInfo("/tmp/apphost.ts");
+        var directory = new DirectoryInfo("/tmp");
+        var afterAppHostLaunchedCalled = false;
+
+        var (exitCode, _) = await runtime.RunAsync(
+            appHostFile,
+            directory,
+            new Dictionary<string, string>(),
+            watchMode: false,
+            launcher,
+            CancellationToken.None,
+            afterAppHostLaunchedAsync: () =>
+            {
+                afterAppHostLaunchedCalled = true;
+                return Task.CompletedTask;
+            });
+
+        Assert.Equal(-1, exitCode);
+        Assert.False(afterAppHostLaunchedCalled);
     }
 
     [Fact]
@@ -512,6 +653,59 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ProcessGuestLauncher_AnnotatesAmbientGuestProfilingActivity()
+    {
+        var stoppedActivities = new ConcurrentBag<Activity>();
+        using var listener = CreateProfilingActivityListener(stoppedActivities.Add);
+        using var profilingTelemetry = CreateProfilingTelemetry(
+            (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
+            (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1"));
+        using var tempDirectory = new TestTempDirectory();
+
+        var launcher = new ProcessGuestLauncher(
+            "test",
+            _loggerFactory.CreateLogger<ProcessGuestLauncher>(),
+            commandResolver: cmd => cmd == "dotnet" ? "dotnet" : null);
+
+        using (profilingTelemetry.StartGuestExecuteCommand(
+            "test/runtime",
+            "Test Runtime",
+            "dotnet",
+            ["--version"],
+            new DirectoryInfo(tempDirectory.Path),
+            ProfilingTelemetry.Values.GuestCommandPhaseExecute))
+        {
+            var (exitCode, output) = await launcher.LaunchAsync(
+                "dotnet",
+                ["--version"],
+                new DirectoryInfo(tempDirectory.Path),
+                new Dictionary<string, string>(),
+                CancellationToken.None);
+
+            Assert.Equal(0, exitCode);
+            Assert.NotNull(output);
+            Assert.Contains(output.GetLines(), line => line.Stream == OutputLineStream.StdOut);
+        }
+
+        var activity = Assert.Single(stoppedActivities, activity =>
+            activity.OperationName == ProfilingTelemetry.Activities.Process &&
+            activity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId) as string == "session-1" &&
+            activity.GetTagItem(ProfilingTelemetry.Tags.GuestCommand) as string == "dotnet");
+        Assert.Equal("process dotnet", activity.DisplayName);
+        Assert.Equal("dotnet", activity.GetTagItem(TelemetryConstants.Tags.ProcessExecutablePath));
+        Assert.Equal(new[] { "--version" }, Assert.IsType<string[]>(activity.GetTagItem(ProfilingTelemetry.Tags.ProcessCommandArgs)));
+        Assert.Equal(1, activity.GetTagItem(ProfilingTelemetry.Tags.ProcessCommandArgsCount));
+        Assert.Equal(0, activity.GetTagItem(TelemetryConstants.Tags.ProcessExitCode));
+        Assert.True((int)activity.GetTagItem(TelemetryConstants.Tags.ProcessPid)! > 0);
+        Assert.Contains(activity.Events, @event => @event.Name == ProfilingTelemetry.Events.GuestProcessResolveStart);
+        Assert.Contains(activity.Events, @event => @event.Name == ProfilingTelemetry.Events.GuestProcessResolved);
+        Assert.Contains(activity.Events, @event => @event.Name == ProfilingTelemetry.Events.GuestProcessStart);
+        Assert.Contains(activity.Events, @event => @event.Name == ProfilingTelemetry.Events.GuestProcessStarted);
+        Assert.Contains(activity.Events, @event => @event.Name == ProfilingTelemetry.Events.GuestFirstStdout);
+        Assert.Contains(activity.Events, @event => @event.Name == ProfilingTelemetry.Events.GuestProcessExited);
+    }
+
+    [Fact]
     public async Task RunAsync_CreatesMissingMigrationFiles()
     {
         using var tempDirectory = new TestTempDirectory();
@@ -624,20 +818,46 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         public DirectoryInfo? LastWorkingDirectory { get; private set; }
         public IDictionary<string, string> LastEnvironmentVariables { get; private set; } = new Dictionary<string, string>();
 
-        public Task<(int ExitCode, OutputCollector? Output)> LaunchAsync(
+        public async Task<(int ExitCode, OutputCollector? Output)> LaunchAsync(
             string command,
             string[] args,
             DirectoryInfo workingDirectory,
             IDictionary<string, string> environmentVariables,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            Func<Task>? afterLaunchAsync = null)
         {
             Calls.Add((command, args));
             LastCommand = command;
             LastArgs = args;
             LastWorkingDirectory = workingDirectory;
             LastEnvironmentVariables = new Dictionary<string, string>(environmentVariables);
+            if (afterLaunchAsync is not null)
+            {
+                await afterLaunchAsync().ConfigureAwait(false);
+            }
+
             var exitCode = ExitCodes.Count > 0 ? ExitCodes.Dequeue() : 0;
-            return Task.FromResult<(int, OutputCollector?)>((exitCode, new OutputCollector()));
+            return (exitCode, new OutputCollector());
         }
+    }
+
+    private static ProfilingTelemetry CreateProfilingTelemetry(params (string Key, string? Value)[] values)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(values.Select(value => new KeyValuePair<string, string?>(value.Key, value.Value)))
+            .Build();
+        return new ProfilingTelemetry(configuration);
+    }
+
+    private static ActivityListener CreateProfilingActivityListener(Action<Activity> activityStopped)
+    {
+        var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == ProfilingTelemetry.ActivitySourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = activityStopped
+        };
+        ActivitySource.AddActivityListener(listener);
+        return listener;
     }
 }

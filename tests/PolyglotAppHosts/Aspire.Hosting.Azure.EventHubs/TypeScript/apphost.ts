@@ -8,10 +8,10 @@ await eventHubs.withEventHubsRoleAssignments(eventHubs, [AzureEventHubsRole.Azur
 const hub = await eventHubs.addHub('orders', { hubName: 'orders-hub' });
 await hub.withProperties(async (configuredHub) => {
     await configuredHub.hubName.set('orders-hub');
-    const _hubName: string = await configuredHub.hubName.get();
+    const _hubName: string | null = await configuredHub.hubName.get();
 
     await configuredHub.partitionCount.set(2);
-    const _partitionCount: number | undefined = await configuredHub.partitionCount.get();
+    const _partitionCount: number | null = await configuredHub.partitionCount.get();
 });
 
 const _hubParent = await hub.parent();

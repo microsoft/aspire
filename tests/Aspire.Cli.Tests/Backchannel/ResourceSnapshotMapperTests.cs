@@ -95,6 +95,35 @@ public class ResourceSnapshotMapperTests
     }
 
     [Fact]
+    public void MapToResourceJson_WithWhitespaceCommandDisplayName_MapsDisplayNameToNull()
+    {
+        var snapshot = new ResourceSnapshot
+        {
+            Name = "frontend",
+            DisplayName = "frontend",
+            ResourceType = "Project",
+            State = "Running",
+            Commands =
+            [
+                new ResourceSnapshotCommand
+                {
+                    Name = "custom-command",
+                    State = "Enabled",
+                    DisplayName = "   ",
+                    Description = "Run custom command",
+                    Visibility = KnownCommandVisibility.Api
+                }
+            ]
+        };
+
+        var result = ResourceSnapshotMapper.MapToResourceJson(snapshot, [snapshot]);
+
+        var command = Assert.Single(result.Commands!);
+        Assert.Null(command.Value.DisplayName);
+        Assert.Equal("Run custom command", command.Value.Description);
+    }
+
+    [Fact]
     public void ResolveResources_ByExactName_ReturnsMatch()
     {
         var snapshots = new List<ResourceSnapshot>

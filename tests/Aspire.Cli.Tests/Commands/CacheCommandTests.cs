@@ -22,7 +22,7 @@ public class CacheCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
     }
 
     [Fact]
@@ -58,7 +58,7 @@ public class CacheCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(File.Exists(Path.Combine(restoreDir.FullName, "test.dll")));
     }
 
@@ -79,7 +79,7 @@ public class CacheCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]

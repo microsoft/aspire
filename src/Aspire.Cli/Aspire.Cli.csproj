@@ -124,7 +124,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="$(SharedDir)CliExitCodes.cs" Link="CliExitCodes.cs" />
     <Compile Include="$(SharedDir)AppHostProfilePortGenerator.cs" Link="Utils\AppHostProfilePortGenerator.cs" />
+    <Compile Include="$(SharedDir)AssemblyVersionHelper.cs" Link="Utils\AssemblyVersionHelper.cs" />
     <Compile Include="$(SharedDir)BundleDiscovery.cs" Link="Layout\BundleDiscovery.cs" />
     <Compile Include="$(SharedDir)ChannelExtensions.cs" Link="Utils\ChannelExtensions.cs" />
     <Compile Include="$(SharedDir)EnumerableExtensions.cs" Link="Utils\EnumerableExtensions.cs" />
@@ -278,6 +280,9 @@
       <WithCulture>false</WithCulture>
     </EmbeddedResource>
     <EmbeddedResource Include="..\..\.agents\skills\aspire\**\*" LogicalName="skills.aspire/%(RecursiveDir)%(Filename)%(Extension)">
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\..\.agents\skills\aspire-deployment\**\*" LogicalName="skills.aspire-deployment/%(RecursiveDir)%(Filename)%(Extension)">
       <WithCulture>false</WithCulture>
     </EmbeddedResource>
     <EmbeddedResource Include="..\..\.agents\skills\aspireify\**\*" LogicalName="skills.aspireify/%(RecursiveDir)%(Filename)%(Extension)">

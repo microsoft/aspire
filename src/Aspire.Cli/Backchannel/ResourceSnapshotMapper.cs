@@ -107,15 +107,16 @@ internal static class ResourceSnapshotMapper
             .Where(IsCommandAvailableToApi)
             .OrderBy(c => c.Name)
             .ToDistinctDictionary(
-                  c => c.Name,
-                  c => new ResourceCommandJson
-                  {
-                      Description = c.Description,
-                      Visibility = IsDefaultCommandVisibility(c.Visibility) ? null : c.Visibility,
-                      ArgumentInputs = c.ArgumentInputs.Length > 0
-                          ? c.ArgumentInputs.Select(MapCommandArgumentInput).ToArray()
-                          : null
-                 });
+                c => c.Name,
+                c => new ResourceCommandJson
+                {
+                    DisplayName = string.IsNullOrWhiteSpace(c.DisplayName) ? null : c.DisplayName.Trim(),
+                    Description = c.Description,
+                    Visibility = IsDefaultCommandVisibility(c.Visibility) ? null : c.Visibility,
+                    ArgumentInputs = c.ArgumentInputs.Length > 0
+                        ? c.ArgumentInputs.Select(MapCommandArgumentInput).ToArray()
+                        : null
+                });
 
         // Get source information using the shared ResourceSourceViewModel
         var sourceViewModel = ResourceSource.GetSourceModel(snapshot.ResourceType, snapshot.Properties);

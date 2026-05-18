@@ -2,7 +2,6 @@
 
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
-    <DefineConstants>$(DefineConstants);ASPIRE_EVENTSOURCE</DefineConstants>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <NoWarn>$(NoWarn);CS8002;IL3000</NoWarn>
     <IsPackable>true</IsPackable>
@@ -15,6 +14,7 @@
   </ItemGroup>
   
   <ItemGroup>
+    <Compile Include="$(SharedDir)AssemblyVersionHelper.cs" Link="Utils\AssemblyVersionHelper.cs" />
     <Compile Include="$(SharedDir)BundleDiscovery.cs" Link="Dcp\BundleDiscovery.cs" />
     <Compile Include="$(SharedDir)ChannelExtensions.cs" Link="ChannelExtensions.cs" />
     <Compile Include="$(SharedDir)CircularBuffer.cs" Link="CircularBuffer.cs" />

@@ -261,12 +261,9 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
 
     private static CliExecutionContext CreateExecutionContextWithHives(DirectoryInfo workingDirectory, DirectoryInfo hivesDirectory)
     {
-        var cacheDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "cache"));
-        var sdksDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "sdks"));
-        var logsDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "logs"));
-        return new CliExecutionContext(
-            workingDirectory, hivesDirectory, cacheDirectory, sdksDirectory, logsDirectory,
-            Path.Combine(logsDirectory.FullName, "test.log"));
+        return TestExecutionContextHelper.CreateExecutionContext(
+            workingDirectory,
+            hivesDirectory: hivesDirectory);
     }
 
     private static TemplateNuGetConfigService CreateService(

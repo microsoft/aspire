@@ -181,6 +181,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
     public DistributedApplicationBuilder(DistributedApplicationOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
+        ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostBuilderConstructing);
 
         _options = options;
 
@@ -586,6 +587,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         _innerBuilder.Services.AddSingleton(ExecutionContext);
         LogBuilderConstructed(this);
+        ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostBuilderConstructed, _innerBuilder.Configuration);
     }
 
     private void ConfigureHealthChecks()
@@ -780,37 +782,31 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
     /// <inheritdoc />
     public DistributedApplication Build()
     {
-        AspireEventSource.Instance.DistributedApplicationBuildStart();
-        try
+        ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostBuildStarted, _innerBuilder.Configuration);
+        LogAppBuilding(this);
+
+        // ResourceCollection enforces unique names on Add/Insert/Set, but IResourceCollection
+        // could have a different implementation that doesn't. Validate as a safety net.
+        foreach (var duplicateResourceName in Resources.GroupBy(r => r.Name, StringComparers.ResourceName)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key))
         {
-            LogAppBuilding(this);
-
-            // ResourceCollection enforces unique names on Add/Insert/Set, but IResourceCollection
-            // could have a different implementation that doesn't. Validate as a safety net.
-            foreach (var duplicateResourceName in Resources.GroupBy(r => r.Name, StringComparers.ResourceName)
-                .Where(g => g.Count() > 1)
-                .Select(g => g.Key))
-            {
-                throw new DistributedApplicationException($"Multiple resources with the name '{duplicateResourceName}'. Resource names are case-insensitive.");
-            }
-
-            // Validate resource names. Resources added directly to the collection bypass AddResource validation.
-            foreach (var resource in Resources)
-            {
-                ValidateResourceName(resource);
-            }
-
-            var application = new DistributedApplication(_innerBuilder.Build());
-
-            _executionContextOptions.ServiceProvider = application.Services.GetRequiredService<IServiceProvider>();
-
-            LogAppBuilt(application);
-            return application;
+            throw new DistributedApplicationException($"Multiple resources with the name '{duplicateResourceName}'. Resource names are case-insensitive.");
         }
-        finally
+
+        // Validate resource names. Resources added directly to the collection bypass AddResource validation.
+        foreach (var resource in Resources)
         {
-            AspireEventSource.Instance.DistributedApplicationBuildStop();
+            ValidateResourceName(resource);
         }
+
+        var application = new DistributedApplication(_innerBuilder.Build());
+
+        _executionContextOptions.ServiceProvider = application.Services.GetRequiredService<IServiceProvider>();
+
+        LogAppBuilt(application);
+        ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostBuildCompleted, _innerBuilder.Configuration);
+        return application;
     }
 
     /// <inheritdoc />

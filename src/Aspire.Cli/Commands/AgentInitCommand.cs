@@ -107,7 +107,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         PromptBinding<bool> agentInitBinding,
         CancellationToken cancellationToken)
     {
-        if (previousResultExitCode != ExitCodeConstants.Success)
+        if (previousResultExitCode != CliExitCodes.Success)
         {
             return new(previousResultExitCode, [], []);
         }
@@ -125,7 +125,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             return await ExecuteAgentInitAsync(workspaceRoot, parseResult: null, cancellationToken);
         }
 
-        return new(ExitCodeConstants.Success, [], []);
+        return new(CliExitCodes.Success, [], []);
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -382,7 +382,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         }
 
         return new(
-            hasErrors ? ExitCodeConstants.InvalidCommand : ExitCodeConstants.Success,
+            hasErrors ? CliExitCodes.InvalidCommand : CliExitCodes.Success,
             selectedLocations,
             selectedSkills);
     }

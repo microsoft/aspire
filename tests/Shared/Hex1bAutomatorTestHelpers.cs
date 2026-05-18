@@ -618,10 +618,12 @@ internal static class Hex1bAutomatorTestHelpers
             description: "output path prompt");
         await auto.EnterAsync();
 
-        // Step 5: URLs prompt (all templates have this)
+        // Step 5: URLs prompt (all templates have this). The CLI may spend time
+        // resolving template versions after the output path is entered, so reuse
+        // the template-selection timeout for this first post-resolution prompt.
         await auto.WaitUntilAsync(
             s => new CellPatternSearcher().Find("Use *.dev.localhost URLs").Search(s).Count > 0,
-            timeout: TimeSpan.FromSeconds(10),
+            timeout: templateTimeout,
             description: "URLs prompt");
         await auto.EnterAsync(); // Accept default "No"
 
