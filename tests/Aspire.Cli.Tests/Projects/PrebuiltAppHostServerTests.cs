@@ -674,6 +674,134 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         }
     }
 
+    [Theory]
+    [InlineData("pr-12345")]
+    [InlineData("local")]
+    [InlineData("worktree-feature")]
+    public async Task PrepareAsync_WithHiveBackedChannel_UsesLocalAspireSourceAsOverride(string channelName)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string packageVersion = "13.4.0-pr.17141.gf142085f";
+        var packageSource = workspace.CreateDirectory($"{channelName}-packages").FullName;
+        List<string>? restoreArgs = null;
+
+        await WriteAspireConfigChannelAsync(workspace, channelName);
+        var packagingService = CreatePackagingService(channelName, packageSource, pinnedVersion: packageVersion);
+        var (server, executionFactory) = CreatePackageReferenceServer(workspace, packagingService);
+        executionFactory.AssertionCallback = (args, _, _, _) =>
+        {
+            if (args is ["nuget", "restore", ..])
+            {
+                restoreArgs = [.. args];
+            }
+        };
+
+        var workingDirectory = GetWorkingDirectory(server);
+
+        try
+        {
+            var result = await server.PrepareAsync(
+                packageVersion,
+                [
+                    IntegrationReference.FromPackage("Aspire.Hosting.CodeGeneration.TypeScript", packageVersion),
+                    IntegrationReference.FromPackage("CommunityToolkit.Aspire.Hosting.Redis", "1.0.0")
+                ]);
+
+            Assert.True(result.Success);
+            Assert.NotNull(restoreArgs);
+            Assert.Equal([packageSource, NuGetOrgSource], GetSourceArguments(restoreArgs!));
+            Assert.Contains($"Aspire.Hosting.CodeGeneration.TypeScript,[{packageVersion}]", restoreArgs!);
+            Assert.Contains("CommunityToolkit.Aspire.Hosting.Redis,1.0.0", restoreArgs!);
+            Assert.Contains("--nuget-config", restoreArgs!);
+        }
+        finally
+        {
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task PrepareAsync_WithExplicitPackageSourceOverride_IgnoresHiveBackedAspireSource()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string channelName = "pr-12345";
+        const string packageVersion = "13.4.0-pr.17141.gf142085f";
+        var explicitSource = workspace.CreateDirectory("explicit-source").FullName;
+        var hiveSource = workspace.CreateDirectory("hive-source").FullName;
+        List<string>? restoreArgs = null;
+
+        await WriteAspireConfigChannelAsync(workspace, channelName);
+        var packagingService = CreatePackagingService(channelName, hiveSource, pinnedVersion: packageVersion);
+        var (server, executionFactory) = CreatePackageReferenceServer(workspace, packagingService);
+        executionFactory.AssertionCallback = (args, _, _, _) =>
+        {
+            if (args is ["nuget", "restore", ..])
+            {
+                restoreArgs = [.. args];
+            }
+        };
+
+        var workingDirectory = GetWorkingDirectory(server);
+
+        try
+        {
+            var result = await server.PrepareAsync(
+                packageVersion,
+                [IntegrationReference.FromPackage("Aspire.Hosting.CodeGeneration.TypeScript", packageVersion)],
+                packageSourceOverride: explicitSource);
+
+            Assert.True(result.Success);
+            Assert.NotNull(restoreArgs);
+            Assert.Equal([explicitSource, NuGetOrgSource], GetSourceArguments(restoreArgs!));
+            Assert.DoesNotContain(hiveSource, restoreArgs!);
+            Assert.Contains($"Aspire.Hosting.CodeGeneration.TypeScript,[{packageVersion}]", restoreArgs!);
+        }
+        finally
+        {
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task PrepareAsync_WithHttpBackedChannel_DoesNotUseExactPackageVersions()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string channelName = "daily";
+        const string packageVersion = "13.4.0-preview.1.12345.1";
+        const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
+        List<string>? restoreArgs = null;
+
+        await WriteAspireConfigChannelAsync(workspace, channelName);
+        var packagingService = CreatePackagingService(channelName, channelSource, pinnedVersion: packageVersion);
+        var (server, executionFactory) = CreatePackageReferenceServer(workspace, packagingService);
+        executionFactory.AssertionCallback = (args, _, _, _) =>
+        {
+            if (args is ["nuget", "restore", ..])
+            {
+                restoreArgs = [.. args];
+            }
+        };
+
+        var workingDirectory = GetWorkingDirectory(server);
+
+        try
+        {
+            var result = await server.PrepareAsync(
+                packageVersion,
+                [IntegrationReference.FromPackage("Aspire.Hosting.CodeGeneration.TypeScript", packageVersion)]);
+
+            Assert.True(result.Success);
+            Assert.NotNull(restoreArgs);
+            Assert.Equal([channelSource, NuGetOrgSource], GetSourceArguments(restoreArgs!));
+            Assert.Contains($"Aspire.Hosting.CodeGeneration.TypeScript,{packageVersion}", restoreArgs!);
+            Assert.DoesNotContain($"Aspire.Hosting.CodeGeneration.TypeScript,[{packageVersion}]", restoreArgs!);
+        }
+        finally
+        {
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
     [Fact]
     public async Task PrepareAsync_WithProjectReferencesAndPackageSourceOverride_UsesNuGetConfig()
     {
@@ -1294,6 +1422,11 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 
     private static (PrebuiltAppHostServer Server, TestProcessExecutionFactory ExecutionFactory) CreatePackageReferenceServer(TemporaryWorkspace workspace)
     {
+        return CreatePackageReferenceServer(workspace, MockPackagingServiceFactory.Create());
+    }
+
+    private static (PrebuiltAppHostServer Server, TestProcessExecutionFactory ExecutionFactory) CreatePackageReferenceServer(TemporaryWorkspace workspace, IPackagingService packagingService)
+    {
         var layout = CreateBundleLayout(workspace);
         var executionFactory = new TestProcessExecutionFactory();
         var nugetService = new BundleNuGetService(
@@ -1310,11 +1443,40 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             nugetService,
             new TestDotNetCliRunner(),
             new TestDotNetSdkInstaller(),
-            MockPackagingServiceFactory.Create(),
+            packagingService,
             TestExecutionContextFactory.CreateTestContext(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
 
         return (server, executionFactory);
+    }
+
+    private static TestPackagingService CreatePackagingService(string channelName, string aspirePackageSource, string? pinnedVersion = null)
+    {
+        var channel = PackageChannel.CreateExplicitChannel(
+            channelName,
+            PackageChannelQuality.Both,
+            [
+                new PackageMapping("Aspire*", aspirePackageSource),
+                new PackageMapping(PackageMapping.AllPackages, NuGetOrgSource)
+            ],
+            new FakeNuGetPackageCache(),
+            pinnedVersion: pinnedVersion);
+
+        return new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
+        };
+    }
+
+    private static Task WriteAspireConfigChannelAsync(TemporaryWorkspace workspace, string channelName)
+    {
+        return File.WriteAllTextAsync(
+            Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName),
+            $$"""
+              {
+                "channel": "{{channelName}}"
+              }
+              """);
     }
 
     private static LayoutConfiguration CreateBundleLayout(TemporaryWorkspace workspace)
