@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
@@ -185,15 +186,14 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
     }
 
     private static readonly ActivitySource s_activitySource = new(ActivitySourceName);
-    private static readonly object s_startupEventsLock = new();
-    // Some startup milestones occur before HostApplicationBuilder has created IConfiguration
-    // or before OpenTelemetry has built the TracerProvider. Buffer those timestamps here and
-    // attach them later to the process-start span so the profile still shows the earliest
-    // AppHost work without forcing the full telemetry stack to initialize too soon.
-    private static readonly List<AppHostStartupEvent> s_startupEvents = [];
+    private static readonly ConcurrentQueue<AppHostStartupEvent> s_startupEvents = new();
 
     private readonly IConfiguration _configuration = configuration;
 
+    // These static helpers are used before ProfilingTelemetry can be resolved from DI. Some startup
+    // milestones occur before HostApplicationBuilder has created IConfiguration or before OpenTelemetry
+    // has built the TracerProvider, so buffer timestamps here and attach them later to the process-start
+    // span without forcing the full telemetry stack to initialize too soon.
     public static void RecordAppHostStartupEvent(string eventName, IConfiguration? configuration = null)
     {
         // CreateBuilder-entered events happen before IConfiguration exists. Later startup phases
@@ -204,10 +204,24 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
             return;
         }
 
-        lock (s_startupEventsLock)
+        s_startupEvents.Enqueue(new AppHostStartupEvent(eventName, DateTimeOffset.UtcNow));
+    }
+
+    public static ActivityScope StartAppHostProcessStartup(IConfiguration? configuration)
+    {
+        if (!IsEnabled(configuration))
         {
-            s_startupEvents.Add(new AppHostStartupEvent(eventName, DateTimeOffset.UtcNow));
+            return default;
         }
+
+        var activity = StartActivity(configuration, Activities.AppHostProcessStartup, ActivityKind.Internal, GetProcessStartTime());
+        activity.AddAppHostStartupEvents(DrainAppHostStartupEvents());
+        return activity;
+    }
+
+    public static void RecordAppHostProcessStartup(IConfiguration? configuration)
+    {
+        using var activity = StartAppHostProcessStartup(configuration);
     }
 
     public static void EnsureInitialized(IServiceProvider services)
@@ -239,23 +253,6 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
         var activity = StartActivity(configuration, Activities.DcpRunApplication);
         activity.SetResourceCount(resourceCount);
         return activity;
-    }
-
-    public static ActivityScope StartAppHostProcessStartup(IConfiguration? configuration)
-    {
-        if (!IsEnabled(configuration))
-        {
-            return default;
-        }
-
-        var activity = StartActivity(configuration, Activities.AppHostProcessStartup, ActivityKind.Internal, GetProcessStartTime());
-        activity.AddAppHostStartupEvents(DrainAppHostStartupEvents());
-        return activity;
-    }
-
-    public static void RecordAppHostProcessStartup(IConfiguration? configuration)
-    {
-        using var activity = StartAppHostProcessStartup(configuration);
     }
 
     public static ActivityScope StartAppHostStart(IConfiguration? configuration, string entryPoint)
@@ -310,6 +307,9 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
 
     internal static string GetCallbackDisplayName(Delegate callback)
     {
+        // The eventing pipeline wraps callbacks to normalize signatures, so the original delegate
+        // metadata is the only cheap name we have for identifying callback cost in startup profiles.
+        // This runs once at subscription time, not on every event dispatch.
         var method = callback.Method;
         var typeName = method.DeclaringType?.FullName ?? callback.Target?.GetType().FullName;
         return string.IsNullOrEmpty(typeName) ? method.Name : $"{typeName}.{method.Name}";
@@ -743,12 +743,18 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
 
     private static AppHostStartupEvent[] DrainAppHostStartupEvents()
     {
-        lock (s_startupEventsLock)
+        if (s_startupEvents.IsEmpty)
         {
-            var events = s_startupEvents.ToArray();
-            s_startupEvents.Clear();
-            return events;
+            return [];
         }
+
+        var events = new List<AppHostStartupEvent>();
+        while (s_startupEvents.TryDequeue(out var startupEvent))
+        {
+            events.Add(startupEvent);
+        }
+
+        return events.ToArray();
     }
 
     internal readonly record struct AppHostStartupEvent(string Name, DateTimeOffset Timestamp);
