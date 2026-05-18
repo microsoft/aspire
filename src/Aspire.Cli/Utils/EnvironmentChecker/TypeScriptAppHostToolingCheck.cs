@@ -53,7 +53,7 @@ internal sealed class TypeScriptAppHostToolingCheck : IEnvironmentCheck
         {
             toolchain = TypeScriptAppHostToolchainResolver.Resolve(appHostDirectory, _logger);
         }
-        catch (InvalidOperationException ex)
+        catch (YarnClassicNotSupportedException ex)
         {
             return
             [
