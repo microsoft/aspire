@@ -69,8 +69,7 @@ public sealed class TypeScriptJavaScriptHostingDeploymentTests(ITestOutputHelper
             await AddPackageAsync(auto, counter, "Aspire.Hosting.JavaScript");
             await AddPackageAsync(auto, counter, "Aspire.Hosting.Azure.AppContainers");
 
-            WriteStaticWebsiteWithNodeApi(workspace);
-            WriteAppHost(workspace);
+            WriteStaticWebsiteWithNodeApiAppHost(workspace);
 
             await auto.RunCommandFailFastAsync($"unset ASPIRE_PLAYGROUND && export AZURE__LOCATION=westus3 && export AZURE__RESOURCEGROUP={resourceGroupName}", counter);
 
@@ -120,28 +119,7 @@ public sealed class TypeScriptJavaScriptHostingDeploymentTests(ITestOutputHelper
         await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromMinutes(3));
     }
 
-    private static void WriteAppHost(TemporaryWorkspace workspace)
-    {
-        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"), """
-            import { createBuilder } from './.modules/aspire.js';
-
-            const builder = await createBuilder();
-
-            await builder.addAzureContainerAppEnvironment('env');
-
-            const api = await builder.addNodeApp('api', './api', 'server.js');
-            await api.withHttpEndpoint({ name: 'http', env: 'PORT' });
-
-            const staticsite = await builder.addJavaScriptApp('staticsite', './staticsite');
-            await staticsite.withHttpEndpoint({ name: 'http', targetPort: 5000 });
-            await staticsite.publishAsStaticWebsite({ apiPath: '/api', apiTarget: api });
-            await staticsite.withExternalHttpEndpoints();
-
-            await builder.build().run();
-            """);
-    }
-
-    private static void WriteStaticWebsiteWithNodeApi(TemporaryWorkspace workspace)
+    private static void WriteStaticWebsiteWithNodeApiAppHost(TemporaryWorkspace workspace)
     {
         var apiDir = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "api"));
         File.WriteAllText(Path.Combine(apiDir.FullName, "package.json"), """
@@ -181,6 +159,25 @@ public sealed class TypeScriptJavaScriptHostingDeploymentTests(ITestOutputHelper
             <head><meta charset="UTF-8"><title>Static Site</title></head>
             <body><h1>Weather</h1></body>
             </html>
+            """);
+
+        File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"), """
+            import { createBuilder } from './.modules/aspire.js';
+
+            const builder = await createBuilder();
+
+            // This environment selects Azure Container Apps as the deployment target for these app resources.
+            await builder.addAzureContainerAppEnvironment('env');
+
+            const api = await builder.addNodeApp('api', './api', 'server.js')
+                .withHttpEndpoint({ name: 'http', env: 'PORT' });
+
+            await builder.addJavaScriptApp('staticsite', './staticsite')
+                .withHttpEndpoint({ name: 'http', targetPort: 5000 })
+                .publishAsStaticWebsite({ apiPath: '/api', apiTarget: api })
+                .withExternalHttpEndpoints();
+
+            await builder.build().run();
             """);
     }
 

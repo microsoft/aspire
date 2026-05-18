@@ -28,7 +28,6 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
         using var workspace = TemporaryWorkspace.Create(output);
         var localChannel = CliE2ETestHelpers.PrepareLocalChannel(repoRoot, strategy,
             ["Aspire.Hosting.CodeGeneration.TypeScript.", "Aspire.Hosting.JavaScript.", "Aspire.Hosting.Docker."]);
-        var channelArgument = localChannel is not null ? " --channel local" : string.Empty;
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, mountDockerSocket: true, workspace: workspace);
 
@@ -40,7 +39,7 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
         await auto.InstallAspireCliAsync(strategy, counter);
 
         // Create TS AppHost and add packages
-        await auto.TypeAsync($"aspire init{channelArgument}");
+        await auto.TypeAsync("aspire init");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("Which language would you like to use?", timeout: TimeSpan.FromSeconds(30));
         await auto.DownAsync();
@@ -101,7 +100,6 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
         using var workspace = TemporaryWorkspace.Create(output);
         var localChannel = CliE2ETestHelpers.PrepareLocalChannel(repoRoot, strategy,
             ["Aspire.Hosting.CodeGeneration.TypeScript.", "Aspire.Hosting.JavaScript."]);
-        var channelArgument = localChannel is not null ? " --channel local" : string.Empty;
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, variant: CliE2ETestHelpers.DockerfileVariant.Polyglot, workspace: workspace);
 
@@ -115,7 +113,7 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
             await auto.PrepareDockerEnvironmentAsync(counter, workspace);
             await auto.InstallAspireCliAsync(strategy, counter);
 
-            await auto.RunCommandFailFastAsync($"aspire init --language typescript --non-interactive{channelArgument}", counter, TimeSpan.FromMinutes(2));
+            await auto.RunCommandFailFastAsync("aspire init --language typescript --non-interactive", counter, TimeSpan.FromMinutes(2));
 
             if (localChannel is not null)
             {
@@ -185,25 +183,25 @@ public sealed class JavaScriptPublishTests(ITestOutputHelper output)
             const builder = await createBuilder();
             await builder.addDockerComposeEnvironment('compose');
 
-            const api = await builder.addNodeApp('api', './api', 'server.js');
-            await api.withHttpEndpoint({ port: 3001, env: 'PORT' });
-            await api.withExternalHttpEndpoints();
+            const api = await builder.addNodeApp('api', './api', 'server.js')
+                .withHttpEndpoint({ port: 3001, env: 'PORT' })
+                .withExternalHttpEndpoints();
 
-            const staticsite = await builder.addViteApp('staticsite', './staticsite');
-            await staticsite.withHttpEndpoint({ name: 'http', targetPort: 5000 });
-            await staticsite.publishAsStaticWebsite({ apiPath: '/api', apiTarget: api });
-            await staticsite.withExternalHttpEndpoints();
+            await builder.addViteApp('staticsite', './staticsite')
+                .withHttpEndpoint({ name: 'http', targetPort: 5000 })
+                .publishAsStaticWebsite({ apiPath: '/api', apiTarget: api })
+                .withExternalHttpEndpoints();
 
-            const nodeserver = await builder.addViteApp('nodeserver', './nodeserver');
-            await nodeserver.publishAsNodeServer('build/server.js', { outputPath: 'build' });
-            await nodeserver.withExternalHttpEndpoints();
+            await builder.addViteApp('nodeserver', './nodeserver')
+                .publishAsNodeServer('build/server.js', { outputPath: 'build' })
+                .withExternalHttpEndpoints();
 
-            const npmscript = await builder.addViteApp('npmscript', './npmscript');
-            await npmscript.publishAsNpmScript({ startScriptName: 'start' });
-            await npmscript.withExternalHttpEndpoints();
+            await builder.addViteApp('npmscript', './npmscript')
+                .publishAsNpmScript({ startScriptName: 'start' })
+                .withExternalHttpEndpoints();
 
-            const nextjs = await builder.addNextJsApp('nextjs', './nextjs');
-            await nextjs.withExternalHttpEndpoints();
+            await builder.addNextJsApp('nextjs', './nextjs')
+                .withExternalHttpEndpoints();
 
             await builder.build().run();
             """);
