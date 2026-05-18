@@ -101,6 +101,18 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         const string stagingFeed = "https://example.com/staging/v3/index.json";
 
         using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var configServices = CreateServiceCollection(workspace);
+        using (var configProvider = configServices.BuildServiceProvider())
+        {
+            var configCommand = configProvider.GetRequiredService<RootCommand>();
+            var configResult = configCommand.Parse($"config set -g overrideStagingFeed {stagingFeed}");
+
+            var configExitCode = await configResult.InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.Success, configExitCode);
+        }
+
         var cache = new FakeNuGetPackageCache
         {
             GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
@@ -119,14 +131,10 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         {
             options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(identityChannel: PackageChannelNames.Staging);
             options.NuGetPackageCacheFactory = _ => cache;
-            options.ConfigurationCallback += config =>
-            {
-                config["overrideStagingFeed"] = stagingFeed;
-            };
         });
         using var provider = services.BuildServiceProvider();
 
-        var command = provider.GetRequiredService<NewCommand>();
+        var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"new {KnownTemplateId.CSharpEmptyAppHost} --language csharp --name TemplateOut --output ./TemplateOut --localhost-tld false");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
