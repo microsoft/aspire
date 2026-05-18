@@ -164,6 +164,41 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task RunAsync_CallsAfterAppHostLaunchedAfterPreExecute()
+    {
+        var spec = CreateTestSpec(
+            execute: new CommandSpec { Command = "run-cmd", Args = ["{appHostFile}"] },
+            preExecute:
+            [
+                new CommandSpec { Command = "typecheck-cmd", Args = ["--project", "{appHostDir}"] }
+            ]);
+        var runtime = CreateRuntime(spec);
+        var launcher = new RecordingLauncher();
+        var appHostFile = new FileInfo("/tmp/apphost.ts");
+        var directory = new DirectoryInfo("/tmp");
+        var afterAppHostLaunchedCalls = 0;
+
+        await runtime.RunAsync(
+            appHostFile,
+            directory,
+            new Dictionary<string, string>(),
+            watchMode: false,
+            launcher,
+            CancellationToken.None,
+            afterAppHostLaunchedAsync: () =>
+            {
+                afterAppHostLaunchedCalls++;
+                Assert.Equal(2, launcher.Calls.Count);
+                Assert.Equal("run-cmd", launcher.Calls[1].Command);
+                return Task.CompletedTask;
+            });
+
+        Assert.Equal(1, afterAppHostLaunchedCalls);
+        Assert.Equal(2, launcher.Calls.Count);
+        Assert.Equal("run-cmd", launcher.Calls[1].Command);
+    }
+
+    [Fact]
     public async Task RunAsync_ProfilingTelemetryRecordsGuestCommandPhasesAndArgs()
     {
         var stoppedActivities = new ConcurrentBag<Activity>();
@@ -237,12 +272,52 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         launcher.ExitCodes.Enqueue(2);
         var appHostFile = new FileInfo("/tmp/apphost.ts");
         var directory = new DirectoryInfo("/tmp");
+        var afterAppHostLaunchedCalled = false;
 
-        var (exitCode, _) = await runtime.RunAsync(appHostFile, directory, new Dictionary<string, string>(), watchMode: false, launcher, CancellationToken.None);
+        var (exitCode, _) = await runtime.RunAsync(
+            appHostFile,
+            directory,
+            new Dictionary<string, string>(),
+            watchMode: false,
+            launcher,
+            CancellationToken.None,
+            afterAppHostLaunchedAsync: () =>
+            {
+                afterAppHostLaunchedCalled = true;
+                return Task.CompletedTask;
+            });
 
         Assert.Equal(2, exitCode);
+        Assert.False(afterAppHostLaunchedCalled);
         var call = Assert.Single(launcher.Calls);
         Assert.Equal("typecheck-cmd", call.Command);
+    }
+
+    [Fact]
+    public async Task RunAsync_WhenExecuteCommandCannotResolve_DoesNotCallAfterAppHostLaunched()
+    {
+        var spec = CreateTestSpec(execute: new CommandSpec { Command = "missing-cmd", Args = ["{appHostFile}"] });
+        var runtime = CreateRuntime(spec, commandResolver: _ => null);
+        var launcher = runtime.CreateDefaultLauncher();
+        var appHostFile = new FileInfo("/tmp/apphost.ts");
+        var directory = new DirectoryInfo("/tmp");
+        var afterAppHostLaunchedCalled = false;
+
+        var (exitCode, _) = await runtime.RunAsync(
+            appHostFile,
+            directory,
+            new Dictionary<string, string>(),
+            watchMode: false,
+            launcher,
+            CancellationToken.None,
+            afterAppHostLaunchedAsync: () =>
+            {
+                afterAppHostLaunchedCalled = true;
+                return Task.CompletedTask;
+            });
+
+        Assert.Equal(-1, exitCode);
+        Assert.False(afterAppHostLaunchedCalled);
     }
 
     [Fact]
@@ -743,20 +818,26 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         public DirectoryInfo? LastWorkingDirectory { get; private set; }
         public IDictionary<string, string> LastEnvironmentVariables { get; private set; } = new Dictionary<string, string>();
 
-        public Task<(int ExitCode, OutputCollector? Output)> LaunchAsync(
+        public async Task<(int ExitCode, OutputCollector? Output)> LaunchAsync(
             string command,
             string[] args,
             DirectoryInfo workingDirectory,
             IDictionary<string, string> environmentVariables,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            Func<Task>? afterLaunchAsync = null)
         {
             Calls.Add((command, args));
             LastCommand = command;
             LastArgs = args;
             LastWorkingDirectory = workingDirectory;
             LastEnvironmentVariables = new Dictionary<string, string>(environmentVariables);
+            if (afterLaunchAsync is not null)
+            {
+                await afterLaunchAsync().ConfigureAwait(false);
+            }
+
             var exitCode = ExitCodes.Count > 0 ? ExitCodes.Dequeue() : 0;
-            return Task.FromResult<(int, OutputCollector?)>((exitCode, new OutputCollector()));
+            return (exitCode, new OutputCollector());
         }
     }
 

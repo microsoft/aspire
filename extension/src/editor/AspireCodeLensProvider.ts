@@ -61,8 +61,9 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
 
         const appHosts = this._treeProvider.appHosts;
         const workspaceResources = this._treeProvider.workspaceResources;
+        const workspaceAppHost = this._treeProvider.workspaceAppHost;
         const workspaceAppHostPath = this._treeProvider.workspaceAppHostPath ?? '';
-        const hasRunningData = appHosts.length > 0 || workspaceResources.length > 0;
+        const hasRunningData = appHosts.length > 0 || workspaceResources.length > 0 || workspaceAppHost !== undefined;
         const findWorkspace = findWorkspaceResourceState(workspaceResources, workspaceAppHostPath);
 
         const lenses: vscode.CodeLens[] = [];
@@ -173,8 +174,8 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
      * Resolution order:
      *  1. Exact path or same-directory match against {@link AppHostDataRepository.appHosts}
      *     (covers global mode and any workspace AppHosts that surface there).
-     *  2. The repository's `workspaceAppHostPath` when workspace describe data is live
-     *     and the document lives in the same directory as that AppHost.
+     *  2. The repository's `workspaceAppHostPath` when workspace live data identifies
+     *     a running AppHost and the document lives in the same directory as that AppHost.
      *
      * The document path itself is intentionally not used as a fallback — for C#
      * AppHosts the CLI requires a `.csproj`, not a `.cs` file.
@@ -196,8 +197,9 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
         if (match) {
             return match.appHostPath;
         }
-        if (workspaceAppHostPath && workspaceResources.length > 0) {
-            if (workspaceAppHostPath === docPath || path.dirname(workspaceAppHostPath) === docDir) {
+        if (workspaceAppHostPath && (workspaceResources.length > 0 || this._dataRepository.workspaceAppHost !== undefined)) {
+            const workspaceAppHostDir = path.dirname(workspaceAppHostPath);
+            if (workspaceAppHostPath === docPath || workspaceAppHostDir === docDir) {
                 return workspaceAppHostPath;
             }
         }
@@ -287,11 +289,13 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
         if (resource.commands) {
             for (const [cmdName, cmd] of Object.entries(resource.commands) as [string, ResourceCommandJson][]) {
                 if (!standardCommands.has(cmdName)) {
-                    const label = codeLensCommand(cmd.description ?? cmdName);
+                    const displayName = getNormalizedCommandText(cmd.displayName);
+                    const description = getNormalizedCommandText(cmd.description);
+                    const label = codeLensCommand(displayName ?? cmdName);
                     lenses.push(new vscode.CodeLens(range, {
                         title: label,
                         command: 'aspire-vscode.codeLensResourceAction',
-                        tooltip: cmd.description ?? cmdName,
+                        tooltip: description ?? displayName ?? cmdName,
                         arguments: [resource.name, cmdName, appHost.appHostPath, cmd],
                     }));
                 }
@@ -338,4 +342,9 @@ export function getCodeLensStateLabel(state: string, stateStyle: string, exitCod
         default:
             return state || codeLensResourceStopped;
     }
+}
+
+function getNormalizedCommandText(value: string | null | undefined): string | undefined {
+    const normalized = value?.trim();
+    return normalized ? normalized : undefined;
 }

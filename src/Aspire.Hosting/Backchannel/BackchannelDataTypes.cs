@@ -46,10 +46,9 @@ internal static class AuxiliaryBackchannelCapabilities
     public const string V2 = "aux.v2";
 
     /// <summary>
-    /// Version 3 capabilities: Batched console log streaming.
+    /// Version 3 capabilities: Batched console log streaming and AppHost startup readiness wait.
     /// </summary>
     public const string V3 = "aux.v3";
-
 }
 
 /// <summary>
@@ -71,6 +70,16 @@ internal static class KnownCommandVisibility
 /// </summary>
 internal sealed class BackchannelTraceContext
 {
+    /// <summary>
+    /// Gets the W3C traceparent value associated with the caller span.
+    /// </summary>
+    public string? TraceParent { get; init; }
+
+    /// <summary>
+    /// Gets the W3C tracestate value associated with the caller span.
+    /// </summary>
+    public string? TraceState { get; init; }
+
     /// <summary>
     /// Gets the baggage values associated with the trace.
     /// </summary>
@@ -199,6 +208,26 @@ internal sealed class GetDashboardInfoResponse
     /// Gets whether the Dashboard is healthy.
     /// </summary>
     public bool IsHealthy { get; init; }
+}
+
+/// <summary>
+/// Request for waiting until the AppHost reaches its startup readiness point.
+/// </summary>
+internal sealed class WaitForAppHostReadyRequest : BackchannelRequest
+{
+    /// <inheritdoc />
+    public override WaitForAppHostReadyRequest WithTraceContext(BackchannelTraceContext traceContext) => new() { TraceContext = traceContext };
+}
+
+/// <summary>
+/// Response returned once the AppHost reaches its startup readiness point.
+/// </summary>
+internal sealed class WaitForAppHostReadyResponse
+{
+    /// <summary>
+    /// Gets whether the AppHost has reached its startup readiness point.
+    /// </summary>
+    public bool IsReady { get; init; }
 }
 
 /// <summary>

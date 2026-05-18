@@ -164,6 +164,50 @@ public class NuGetConfigMergerTests
     }
 
     [Fact]
+    public async Task CreateOrUpdateAsync_RemapsAspirePackagesFromStagingToStableSource()
+    {
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        var root = workspace.WorkspaceRoot;
+        const string stagingSource = "https://pkgs.dev.azure.com/dnceng/public/_packaging/aspire-staging/nuget/v3/index.json";
+        const string stableSource = "https://api.nuget.org/v3/index.json";
+
+        await WriteConfigAsync(root,
+            $$"""
+            <?xml version="1.0"?>
+            <configuration>
+                <packageSources>
+                    <add key="aspire-staging" value="{{stagingSource}}" />
+                </packageSources>
+                <packageSourceMapping>
+                    <packageSource key="aspire-staging">
+                        <package pattern="Aspire.*" />
+                    </packageSource>
+                </packageSourceMapping>
+            </configuration>
+            """);
+
+        var mappings = new[]
+        {
+            new PackageMapping("Aspire.*", stableSource)
+        };
+
+        var channel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache());
+        await NuGetConfigMerger.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+
+        var xml = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
+        var packageSources = xml.Root!.Element("packageSources")!;
+        Assert.DoesNotContain(packageSources.Elements("add"), e => (string?)e.Attribute("value") == stagingSource);
+        Assert.Contains(packageSources.Elements("add"), e => (string?)e.Attribute("value") == stableSource);
+
+        var packageSourceMapping = xml.Root!.Element("packageSourceMapping")!;
+        Assert.DoesNotContain(packageSourceMapping.Elements("packageSource"), e => (string?)e.Attribute("key") == "aspire-staging");
+
+        var stableMapping = Assert.Single(packageSourceMapping.Elements("packageSource"));
+        Assert.Equal(stableSource, (string?)stableMapping.Attribute("key"));
+        Assert.Equal("Aspire.*", (string?)stableMapping.Element("package")!.Attribute("pattern"));
+    }
+
+    [Fact]
     public async Task CreateOrUpdateAsync_CreatesPackageSourceMapping_WhenAbsent()
     {
         using var workspace = TemporaryWorkspace.Create(_outputHelper);

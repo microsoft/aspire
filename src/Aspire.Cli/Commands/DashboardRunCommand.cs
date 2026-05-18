@@ -352,7 +352,7 @@ internal sealed class DashboardRunCommand : BaseCommand
     {
         _logger.LogDebug("Starting dashboard in foreground: {ManagedPath}", managedPath);
 
-        var outputCollector = new OutputCollector(_fileLoggerProvider, "Dashboard");
+        var outputCollector = new OutputCollector(_fileLoggerProvider, CliLogFormat.Categories.Dashboard);
         var readyTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         var options = new ProcessInvocationOptions

@@ -3,9 +3,12 @@
 
 #pragma warning disable ASPIRECERTIFICATES001
 
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Threading.Channels;
+using Aspire.Hosting.Diagnostics;
 using Aspire.TestUtilities;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
@@ -20,10 +23,12 @@ using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using k8s.Models;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit.Sdk;
 using TestConstants = Microsoft.AspNetCore.InternalTesting.TestConstants;
@@ -119,6 +124,61 @@ public class DistributedApplicationTests
         Assert.Equal(exceptionMessage, ex.Message);
         Assert.True(signal.FirstHookExecuted);
         Assert.True(signal.SecondHookExecuted);
+    }
+
+    [Fact]
+    public async Task RunAsync_RecordsAppHostStartActivityForBeforeStartFailure()
+    {
+        var exceptionMessage = "Exception from lifecycle hook to prove startup failures are traced!";
+        var activities = new ConcurrentBag<Activity>();
+        using var listener = CreateActivityListener(ProfilingTelemetry.ActivitySourceName, activities.Add);
+
+        using var testProgram = CreateTestProgram("runasync-start-activity-before-start-failure", includeIntegrationServices: false);
+        testProgram.AppBuilder.Configuration[KnownConfigNames.ProfilingEnabled] = "true";
+#pragma warning disable CS0618 // Lifecycle hooks are obsolete, but still need to be tested until removed.
+        testProgram.AppBuilder.Services.AddLifecycleHook(_ =>
+        {
+            return new CallbackLifecycleHook((_, _) =>
+            {
+                throw new DistributedApplicationException(exceptionMessage);
+            });
+        });
+#pragma warning restore CS0618 // Lifecycle hooks are obsolete, but still need to be tested until removed.
+
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(async () =>
+        {
+            await testProgram.RunAsync();
+        }).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+
+        Assert.Equal(exceptionMessage, ex.Message);
+
+        var appHostStartActivity = Assert.Single(activities, activity => activity.OperationName == ProfilingTelemetry.Activities.AppHostStart);
+        Assert.Equal(nameof(DistributedApplication.RunAsync), appHostStartActivity.GetTagItem(ProfilingTelemetry.Tags.AppHostEntryPoint));
+        Assert.Equal(ActivityStatusCode.Error, appHostStartActivity.Status);
+        Assert.Contains(appHostStartActivity.Events, @event => @event.Name == ProfilingTelemetry.Events.Exception);
+    }
+
+    [Fact]
+    public async Task DistributedApplicationLifecycle_StopAsyncDisposesHostStartupActivityWhenStartupDoesNotComplete()
+    {
+        var configuration = CreateConfiguration((KnownConfigNames.ProfilingEnabled, "true"));
+        var activities = new ConcurrentBag<Activity>();
+        using var listener = CreateActivityListener(ProfilingTelemetry.ActivitySourceName, activities.Add);
+        var lifecycle = new DistributedApplicationLifecycle(
+            NullLogger<DistributedApplication>.Instance,
+            configuration,
+            new ProfilingTelemetry(configuration),
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
+            new LocaleOverrideContext());
+
+        await lifecycle.StartingAsync(CancellationToken.None);
+
+        Assert.Empty(activities);
+
+        await lifecycle.StopAsync(CancellationToken.None);
+
+        var hostStartupActivity = Assert.Single(activities, activity => activity.OperationName == ProfilingTelemetry.Activities.AppHostHostStartup);
+        Assert.DoesNotContain(hostStartupActivity.Events, @event => @event.Name == ProfilingTelemetry.Events.AppHostHostStarted);
     }
 
     [Fact]
@@ -2090,5 +2150,24 @@ public class DistributedApplicationTests
         testProgram.AppBuilder.WithTestAndResourceLogging(_testOutputHelper);
 
         return testProgram;
+    }
+
+    private static ActivityListener CreateActivityListener(string sourceName, Action<Activity> activityStopped)
+    {
+        var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == sourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = activityStopped
+        };
+        ActivitySource.AddActivityListener(listener);
+        return listener;
+    }
+
+    private static IConfiguration CreateConfiguration(params (string Key, string? Value)[] values)
+    {
+        return new ConfigurationBuilder()
+            .AddInMemoryCollection(values.Select(value => new KeyValuePair<string, string?>(value.Key, value.Value)))
+            .Build();
     }
 }

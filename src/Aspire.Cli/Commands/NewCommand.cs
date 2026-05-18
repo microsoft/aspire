@@ -100,7 +100,8 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         Options.Add(s_suppressAgentInitOption);
 
         // Customize description based on whether staging channel is enabled
-        var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(_features, configuration);
+        var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(_features, configuration)
+            || string.Equals(ExecutionContext.IdentityChannel, PackageChannelNames.Staging, StringComparison.OrdinalIgnoreCase);
         _channelOption = new Option<string?>("--channel")
         {
             Description = isStagingEnabled
@@ -309,9 +310,8 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             NewCommandStrings.ResolvingTemplateVersion,
             async () =>
             {
-                var channels = await _packagingService.GetChannelsAsync(cancellationToken);
-
                 var configuredChannelName = parseResult.GetValue(_channelOption);
+                var channels = await _packagingService.GetChannelsAsync(cancellationToken, configuredChannelName);
 
                 // When no --channel was passed, prefer the channel whose name matches the running
                 // CLI's identity (CliExecutionContext.IdentityChannel — stable, staging, daily,

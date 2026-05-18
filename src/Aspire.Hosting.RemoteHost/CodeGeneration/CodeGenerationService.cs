@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.TypeSystem;
+using Aspire.Hosting.RemoteHost.Diagnostics;
 using Microsoft.Extensions.Logging;
 using StreamJsonRpc;
 
@@ -12,21 +13,27 @@ namespace Aspire.Hosting.RemoteHost.CodeGeneration;
 /// </summary>
 internal sealed class CodeGenerationService
 {
+    private const string GetCapabilitiesMethodName = "getCapabilities";
+    private const string GenerateCodeMethodName = "generateCode";
+
     private readonly JsonRpcAuthenticationState _authenticationState;
     private readonly AtsContextFactory _atsContextFactory;
     private readonly CodeGeneratorResolver _resolver;
     private readonly ILogger<CodeGenerationService> _logger;
+    private readonly RemoteHostProfilingTelemetry _profilingTelemetry;
 
     public CodeGenerationService(
         JsonRpcAuthenticationState authenticationState,
         AtsContextFactory atsContextFactory,
         CodeGeneratorResolver resolver,
-        ILogger<CodeGenerationService> logger)
+        ILogger<CodeGenerationService> logger,
+        RemoteHostProfilingTelemetry profilingTelemetry)
     {
         _authenticationState = authenticationState;
         _atsContextFactory = atsContextFactory;
         _resolver = resolver;
         _logger = logger;
+        _profilingTelemetry = profilingTelemetry;
     }
 
     /// <summary>
@@ -38,20 +45,28 @@ internal sealed class CodeGenerationService
     /// capabilities are returned for all available assemblies.
     /// </param>
     /// <returns>The capabilities information.</returns>
-    [JsonRpcMethod("getCapabilities")]
+    [JsonRpcMethod(GetCapabilitiesMethodName)]
     public CapabilitiesResponse GetCapabilities(string[]? assemblyNames = null)
     {
-        _authenticationState.ThrowIfNotAuthenticated();
-        _logger.LogDebug(">> getCapabilities()");
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-
+        using var rpcActivity = _profilingTelemetry.StartJsonRpcServerCall(GetCapabilitiesMethodName);
+        using var activity = _profilingTelemetry.StartCodeGenerationGetCapabilities();
         try
         {
+            _authenticationState.ThrowIfNotAuthenticated();
+            _logger.LogDebug(">> getCapabilities()");
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             var context = _atsContextFactory.GetContext();
             if (assemblyNames is { Length: > 0 })
             {
                 context = AtsContextFilter.FilterByExportingAssemblies(context, assemblyNames);
             }
+            activity.SetAtsCounts(
+                context.Capabilities.Count,
+                context.HandleTypes.Count,
+                context.DtoTypes.Count,
+                context.EnumTypes.Count,
+                context.ExportedValues.Count,
+                context.Diagnostics.Count);
 
             var response = new CapabilitiesResponse
             {
@@ -68,6 +83,7 @@ internal sealed class CodeGenerationService
         }
         catch (Exception ex)
         {
+            activity.SetError(ex);
             _logger.LogError(ex, "<< getCapabilities() failed");
             throw;
         }
@@ -203,15 +219,16 @@ internal sealed class CodeGenerationService
     /// <param name="language">The target language (e.g., "TypeScript", "Python").</param>
     /// <param name="assemblyName">The exporting assembly to scope the generated SDK to, or null to use the full ATS context.</param>
     /// <returns>A dictionary of file paths to file contents.</returns>
-    [JsonRpcMethod("generateCode")]
+    [JsonRpcMethod(GenerateCodeMethodName)]
     public Dictionary<string, string> GenerateCode(string language, string? assemblyName = null)
     {
-        _authenticationState.ThrowIfNotAuthenticated();
-        _logger.LogDebug(">> generateCode({Language})", language);
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-
+        using var rpcActivity = _profilingTelemetry.StartJsonRpcServerCall(GenerateCodeMethodName);
+        using var activity = _profilingTelemetry.StartCodeGenerationGenerate(language);
         try
         {
+            _authenticationState.ThrowIfNotAuthenticated();
+            _logger.LogDebug(">> generateCode({Language})", language);
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             var generator = _resolver.GetCodeGenerator(language);
             if (generator == null)
             {
@@ -225,12 +242,14 @@ internal sealed class CodeGenerationService
             }
 
             var files = generator.GenerateDistributedApplication(context);
+            activity.SetFileCount(files.Count);
 
             _logger.LogDebug("<< generateCode({Language}) completed in {ElapsedMs}ms, generated {FileCount} files", language, sw.ElapsedMilliseconds, files.Count);
             return files;
         }
         catch (Exception ex)
         {
+            activity.SetError(ex);
             _logger.LogError(ex, "<< generateCode({Language}) failed", language);
             throw;
         }

@@ -570,7 +570,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             return null;
         }
 
-        var channels = await _packagingService.GetChannelsAsync(cancellationToken);
+        var channels = await _packagingService.GetChannelsAsync(cancellationToken, requestedChannel);
         var channel = channels.FirstOrDefault(c =>
             c.Type == PackageChannelType.Explicit &&
             c.Mappings is { Length: > 0 } &&
@@ -602,7 +602,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
 
     private async Task<IEnumerable<PackageChannel>> GetExplicitRestoreChannelsAsync(string? requestedChannel, CancellationToken cancellationToken)
     {
-        var channels = await _packagingService.GetChannelsAsync(cancellationToken);
+        var channels = await _packagingService.GetChannelsAsync(cancellationToken, requestedChannel);
         if (!string.IsNullOrEmpty(requestedChannel))
         {
             var matchingChannel = channels.FirstOrDefault(c => string.Equals(c.Name, requestedChannel, StringComparison.OrdinalIgnoreCase));

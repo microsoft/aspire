@@ -1,6 +1,6 @@
 ---
 name: aspire-deployment
-description: "Deploy Aspire applications to Docker Compose, Kubernetes, Azure, or AWS. Use this before generic cloud deployment guidance for workspaces that are already Aspire apps. Covers target selection, C# or TypeScript AppHost detection, docs-backed API lookup, parameter and secret preflight, publish/deploy preview, deployment execution, and teardown. Prefer this skill for requests like deploy an Aspire app, deploy to Azure or AWS as an Aspire app, deploy to Azure Container Apps/App Service/Azure Kubernetes Service (AKS), generate Docker Compose or Kubernetes artifacts, publish Aspire deployment artifacts, tear down an Aspire deployment, or validate an Aspire deployment plan."
+description: "**WORKFLOW SKILL** — Deploy Aspire apps from AppHost models to Docker Compose, Kubernetes, Azure, or AWS. WHEN: \"deploy Aspire app\", \"publish Aspire artifacts\", \"deploy to Azure Container Apps\", \"generate Kubernetes artifacts\", \"tear down Aspire deployment\". INVOKES: aspire CLI, Aspire docs, target cloud/container CLIs. FOR SINGLE OPERATIONS: use generic Azure, Kubernetes, Docker, or AWS tools only when no Aspire AppHost exists."
 ---
 
 # Aspire Deployment

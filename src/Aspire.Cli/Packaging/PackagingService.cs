@@ -13,12 +13,12 @@ namespace Aspire.Cli.Packaging;
 
 internal interface IPackagingService
 {
-    public Task<IEnumerable<PackageChannel>> GetChannelsAsync(CancellationToken cancellationToken = default);
+    public Task<IEnumerable<PackageChannel>> GetChannelsAsync(CancellationToken cancellationToken = default, string? requestedChannelName = null);
 }
 
 internal class PackagingService(CliExecutionContext executionContext, INuGetPackageCache nuGetPackageCache, IFeatures features, IConfiguration configuration, ILogger<PackagingService> logger) : IPackagingService
 {
-    public Task<IEnumerable<PackageChannel>> GetChannelsAsync(CancellationToken cancellationToken = default)
+    public Task<IEnumerable<PackageChannel>> GetChannelsAsync(CancellationToken cancellationToken = default, string? requestedChannelName = null)
     {
         var defaultChannel = PackageChannel.CreateImplicitChannel(nuGetPackageCache, logger);
         
@@ -62,10 +62,18 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
 
         var channels = new List<PackageChannel>([defaultChannel, stableChannel]);
 
-        // Add staging channel if feature is enabled (after stable, before daily)
-        if (KnownFeatures.IsStagingChannelEnabled(features, configuration))
+        // Add staging channel after stable and before daily. Staging CLI builds should
+        // dogfood staging packages even before a project-level channel pin exists, and
+        // callers that already resolved a staging channel from another project directory
+        // need the channel materialized before they can match it below.
+        var stagingChannelConfigured = string.Equals(configuration["channel"], PackageChannelNames.Staging, StringComparison.OrdinalIgnoreCase);
+        var stagingChannelRequested = string.Equals(requestedChannelName, PackageChannelNames.Staging, StringComparison.OrdinalIgnoreCase);
+        var stagingIdentityChannel = string.Equals(executionContext.IdentityChannel, PackageChannelNames.Staging, StringComparison.OrdinalIgnoreCase);
+        var stagingFeatureEnabled = features.IsFeatureEnabled(KnownFeatures.StagingChannelEnabled, false);
+        if (stagingFeatureEnabled || stagingChannelConfigured || stagingChannelRequested || stagingIdentityChannel)
         {
-            var stagingChannel = CreateStagingChannel();
+            var defaultQuality = stagingChannelConfigured || stagingChannelRequested || stagingIdentityChannel ? PackageChannelQuality.Both : PackageChannelQuality.Stable;
+            var stagingChannel = CreateStagingChannel(defaultQuality);
             if (stagingChannel is not null)
             {
                 channels.Add(stagingChannel);
@@ -79,9 +87,9 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
         return Task.FromResult<IEnumerable<PackageChannel>>(channels);
     }
 
-    private PackageChannel? CreateStagingChannel()
+    private PackageChannel? CreateStagingChannel(PackageChannelQuality defaultQuality)
     {
-        var stagingQuality = GetStagingQuality();
+        var stagingQuality = GetStagingQuality(defaultQuality);
         var hasExplicitFeedOverride = !string.IsNullOrEmpty(configuration["overrideStagingFeed"]);
 
         // When quality is Prerelease or Both and no explicit feed override is set,
@@ -153,7 +161,7 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
         return $"https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-{truncatedHash}/nuget/v3/index.json";
     }
 
-    private PackageChannelQuality GetStagingQuality()
+    private PackageChannelQuality GetStagingQuality(PackageChannelQuality defaultQuality)
     {
         // Check for configuration override
         var overrideQuality = configuration["overrideStagingQuality"];
@@ -166,8 +174,9 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
             }
         }
 
-        // Default to Stable if not specified or invalid
-        return PackageChannelQuality.Stable;
+        // Preserve the historical safe fallback for invalid override values while allowing
+        // different staging entry points to choose a better default when no override is set.
+        return string.IsNullOrEmpty(overrideQuality) ? defaultQuality : PackageChannelQuality.Stable;
     }
 
     private string? GetStagingPinnedVersion(bool useSharedFeed)

@@ -50,6 +50,82 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         Assert.False(dailyChannel.ConfigureGlobalPackagesFolder);
     }
 
+    [Fact]
+    public async Task GetChannelsAsync_WhenIdentityChannelIsStaging_IncludesStagingChannel()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", identityChannel: PackageChannelNames.Staging);
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["overrideStagingFeed"] = "https://example.com/nuget/v3/index.json"
+            })
+            .Build();
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), configuration, NullLogger<PackagingService>.Instance);
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        var channelNames = channels.Select(c => c.Name).ToList();
+        Assert.Contains(PackageChannelNames.Staging, channelNames);
+        Assert.Equal(
+            channelNames.IndexOf(PackageChannelNames.Stable),
+            channelNames.IndexOf(PackageChannelNames.Staging) - 1);
+        Assert.Equal(
+            channelNames.IndexOf(PackageChannelNames.Daily),
+            channelNames.IndexOf(PackageChannelNames.Staging) + 1);
+
+        var stagingChannel = channels.First(c => c.Name == PackageChannelNames.Staging);
+        Assert.Equal(PackageChannelQuality.Both, stagingChannel.Quality);
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_WhenRequestedChannelIsStaging_IncludesStagingChannel()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", identityChannel: PackageChannelNames.Stable);
+
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), new ConfigurationBuilder().Build(), NullLogger<PackagingService>.Instance);
+
+        var channels = await packagingService.GetChannelsAsync(requestedChannelName: PackageChannelNames.Staging).DefaultTimeout();
+
+        var stagingChannel = Assert.Single(channels, c => c.Name == PackageChannelNames.Staging);
+        Assert.Equal(PackageChannelQuality.Both, stagingChannel.Quality);
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_WhenConfigurationChannelIsStagingWithoutQualityOverride_DefaultsToBothAndSharedFeed()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["channel"] = PackageChannelNames.Staging
+            })
+            .Build();
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), configuration, NullLogger<PackagingService>.Instance);
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        var stagingChannel = channels.First(c => c.Name == PackageChannelNames.Staging);
+        Assert.Equal(PackageChannelQuality.Both, stagingChannel.Quality);
+        Assert.False(stagingChannel.ConfigureGlobalPackagesFolder);
+        Assert.Contains(stagingChannel.Mappings!, m =>
+            m.PackageFilter == "Aspire*" &&
+            m.Source == "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json");
+    }
+
     /// <summary>
     /// Locks in the structural invariant that <c>aspire init</c> and <c>aspire new</c> depend
     /// on: the <c>stable</c> channel is always <see cref="PackageChannelType.Explicit"/> with a
@@ -92,10 +168,10 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
-        
+
         var features = new TestFeatures();
         features.SetFeature(KnownFeatures.StagingChannelEnabled, true);
-        
+
         var testFeedUrl = "https://example.com/nuget/v3/index.json";
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -359,9 +435,9 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             .Build();
 
         var packagingService = new PackagingService(
-            TestExecutionContextHelper.CreateExecutionContext(tempDir), 
-            new FakeNuGetPackageCache(), 
-            features, 
+            TestExecutionContextHelper.CreateExecutionContext(tempDir),
+            new FakeNuGetPackageCache(),
+            features,
             configuration,
             NullLogger<PackagingService>.Instance);
 
@@ -614,9 +690,9 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             .Build();
 
         var packagingService = new PackagingService(
-            TestExecutionContextHelper.CreateExecutionContext(tempDir), 
-            new FakeNuGetPackageCache(), 
-            features, 
+            TestExecutionContextHelper.CreateExecutionContext(tempDir),
+            new FakeNuGetPackageCache(),
+            features,
             configuration,
             NullLogger<PackagingService>.Instance);
 

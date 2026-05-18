@@ -80,6 +80,81 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void NewCommand_WhenIdentityChannelIsStaging_DescribesStagingChannelOption()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(identityChannel: PackageChannelNames.Staging);
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<NewCommand>();
+
+        var channelOption = command.Options.Single(option => option.Name == "--channel");
+        Assert.Equal(NewCommandStrings.ChannelOptionDescriptionWithStaging, channelOption.Description);
+    }
+
+    [Fact]
+    public async Task NewCommand_CSharpEmptyTemplateUnderStagingIdentity_WritesStagingNuGetConfig()
+    {
+        const string stagingFeed = "https://example.com/staging/v3/index.json";
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var configServices = CreateServiceCollection(workspace);
+        using (var configProvider = configServices.BuildServiceProvider())
+        {
+            var configCommand = configProvider.GetRequiredService<RootCommand>();
+            var configResult = configCommand.Parse($"config set -g overrideStagingFeed {stagingFeed}");
+
+            var configExitCode = await configResult.InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.Success, configExitCode);
+        }
+
+        var cache = new FakeNuGetPackageCache
+        {
+            GetTemplatePackagesAsyncCallback = (_, _, _, _) =>
+                Task.FromResult<IEnumerable<NuGetPackage>>(
+                [
+                    new NuGetPackage
+                    {
+                        Id = TemplateNuGetConfigService.TemplatesPackageName,
+                        Source = stagingFeed,
+                        Version = "13.4.0-preview.1.12345"
+                    }
+                ])
+        };
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(identityChannel: PackageChannelNames.Staging);
+            options.NuGetPackageCacheFactory = _ => cache;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"new {KnownTemplateId.CSharpEmptyAppHost} --language csharp --name TemplateOut --output ./TemplateOut --localhost-tld false");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var outputDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "TemplateOut");
+        var nugetConfigPath = Path.Combine(outputDirectory, "nuget.config");
+        Assert.True(File.Exists(nugetConfigPath));
+
+        var nugetConfig = await File.ReadAllTextAsync(nugetConfigPath);
+        Assert.Contains(stagingFeed, nugetConfig);
+        Assert.Contains("Aspire*", nugetConfig);
+
+        var config = AspireConfigFile.Load(outputDirectory);
+        Assert.NotNull(config);
+        Assert.Null(config.Channel);
+    }
+
+    [Fact]
     public async Task NewCommandInteractiveFlowSmokeTest()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

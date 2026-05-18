@@ -5,6 +5,29 @@ using System.Diagnostics;
 
 namespace Aspire.Cli.Processes;
 
+internal interface IDetachedProcessLauncher
+{
+    Process Start(
+        string fileName,
+        IReadOnlyList<string> arguments,
+        string workingDirectory,
+        Func<string, bool>? shouldRemoveEnvironmentVariable = null,
+        IReadOnlyDictionary<string, string>? additionalEnvironmentVariables = null);
+}
+
+internal sealed class DefaultDetachedProcessLauncher : IDetachedProcessLauncher
+{
+    public Process Start(
+        string fileName,
+        IReadOnlyList<string> arguments,
+        string workingDirectory,
+        Func<string, bool>? shouldRemoveEnvironmentVariable = null,
+        IReadOnlyDictionary<string, string>? additionalEnvironmentVariables = null)
+    {
+        return DetachedProcessLauncher.Start(fileName, arguments, workingDirectory, shouldRemoveEnvironmentVariable, additionalEnvironmentVariables);
+    }
+}
+
 // ============================================================================
 // DetachedProcessLauncher — Platform-aware child process launcher for --detach
 // ============================================================================

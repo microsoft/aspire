@@ -27,26 +27,26 @@ await kubernetes.withHelm({
 
 await kubernetes.withProperties(async (environment) => {
     await environment.defaultStorageType.set('pvc');
-    const _configuredDefaultStorageType: string = await environment.defaultStorageType.get();
+    const _configuredDefaultStorageType: string | null = await environment.defaultStorageType.get();
 
     await environment.defaultStorageClassName.set('fast-storage');
-    const _configuredDefaultStorageClassName: string | undefined = await environment.defaultStorageClassName.get();
+    const _configuredDefaultStorageClassName: string | null = await environment.defaultStorageClassName.get();
 
     await environment.defaultStorageSize.set('5Gi');
-    const _configuredDefaultStorageSize: string = await environment.defaultStorageSize.get();
+    const _configuredDefaultStorageSize: string | null = await environment.defaultStorageSize.get();
 
     await environment.defaultStorageReadWritePolicy.set('ReadWriteMany');
-    const _configuredDefaultStorageReadWritePolicy: string = await environment.defaultStorageReadWritePolicy.get();
+    const _configuredDefaultStorageReadWritePolicy: string | null = await environment.defaultStorageReadWritePolicy.get();
 
     await environment.defaultImagePullPolicy.set('Always');
-    const _configuredDefaultImagePullPolicy: string = await environment.defaultImagePullPolicy.get();
+    const _configuredDefaultImagePullPolicy: string | null = await environment.defaultImagePullPolicy.get();
 
     await environment.defaultServiceType.set('LoadBalancer');
-    const _configuredDefaultServiceType: string = await environment.defaultServiceType.get();
+    const _configuredDefaultServiceType: string | null = await environment.defaultServiceType.get();
 });
 
-const _resolvedDefaultStorageClassName: string | undefined = await kubernetes.defaultStorageClassName.get();
-const _resolvedDefaultServiceType: string = await kubernetes.defaultServiceType.get();
+const _resolvedDefaultStorageClassName: string | null = await kubernetes.defaultStorageClassName.get();
+const _resolvedDefaultServiceType: string | null = await kubernetes.defaultServiceType.get();
 
 const gateway = await kubernetes.addGateway('public-gateway');
 await gateway.withHostname('gateway.example.com');

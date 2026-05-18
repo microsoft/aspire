@@ -4,6 +4,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Utils.Markdown;
@@ -54,8 +55,8 @@ internal class ConsoleInteractionService : IInteractionService
         _errorConsole = consoleEnvironment.Error;
         _executionContext = executionContext;
         _hostEnvironment = hostEnvironment;
-        _stdoutLogger = loggerFactory.CreateLogger("Aspire.Cli.Console.Stdout");
-        _stderrLogger = loggerFactory.CreateLogger("Aspire.Cli.Console.Stderr");
+        _stdoutLogger = loggerFactory.CreateLogger($"Aspire.Cli.Console.{CliLogFormat.Categories.Stdout}");
+        _stderrLogger = loggerFactory.CreateLogger($"Aspire.Cli.Console.{CliLogFormat.Categories.Stderr}");
     }
 
     public async Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action, KnownEmoji? emoji = null, bool allowMarkup = false)

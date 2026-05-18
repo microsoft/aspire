@@ -675,8 +675,34 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// <returns>The dashboard URL state including health and resolved dashboard URLs.</returns>
     public async Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken = default)
     {
+        using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(GetDashboardUrlsAsync), streaming: false);
         logger.LogDebug("GetDashboardUrlsAsync called on auxiliary backchannel");
-        return await DashboardUrlsHelper.GetDashboardUrlsAsync(serviceProvider, logger, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var urls = await DashboardUrlsHelper.GetDashboardUrlsAsync(serviceProvider, logger, cancellationToken).ConfigureAwait(false);
+            activity.SetDashboardHealthy(urls.DashboardHealthy);
+            return urls;
+        }
+        catch (Exception ex)
+        {
+            activity.SetError(ex);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Waits until the AppHost has reached its startup readiness point.
+    /// </summary>
+    /// <param name="request">The request (currently unused, for future expansion).</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>The startup readiness state.</returns>
+    public async Task<WaitForAppHostReadyResponse> WaitForAppHostReadyAsync(WaitForAppHostReadyRequest? request = null, CancellationToken cancellationToken = default)
+    {
+        using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(WaitForAppHostReadyAsync), streaming: false, request?.TraceContext);
+
+        var startupState = serviceProvider.GetRequiredService<AppHostStartupState>();
+        await startupState.WaitForReadyAsync(cancellationToken).ConfigureAwait(false);
+        return new WaitForAppHostReadyResponse { IsReady = true };
     }
 
     /// <summary>
@@ -1345,7 +1371,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     public IAsyncEnumerable<BackchannelLogEntry> GetAppHostLogEntriesAsync(CancellationToken cancellationToken = default)
     {
         var rpcTarget = serviceProvider.GetRequiredService<AppHostRpcTarget>();
-        return rpcTarget.GetAppHostLogEntriesAsync(cancellationToken);
+        return rpcTarget.GetAppHostLogEntriesAsync(cancellationToken: cancellationToken);
     }
 
     /// <summary>

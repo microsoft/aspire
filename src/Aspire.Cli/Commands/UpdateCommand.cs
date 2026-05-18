@@ -83,7 +83,7 @@ internal sealed class UpdateCommand : BaseCommand
         AddNonInteractiveRequiresYesValidator(this, s_yesOption);
 
         // Customize description based on whether staging channel is enabled
-        var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(_features, _configuration);
+        var isStagingEnabled = IsStagingChannelAvailable();
 
         _channelOption = new Option<string?>("--channel")
         {
@@ -203,7 +203,7 @@ internal sealed class UpdateCommand : BaseCommand
 
             var allChannels = await InteractionService.ShowStatusAsync(
                 UpdateCommandStrings.CheckingForUpdates,
-                async () => await _packagingService.GetChannelsAsync(cancellationToken));
+                async () => await _packagingService.GetChannelsAsync(cancellationToken, channelName));
 
             if (!string.IsNullOrWhiteSpace(channelName))
             {
@@ -359,6 +359,12 @@ internal sealed class UpdateCommand : BaseCommand
         return CommandResult.FromExitCode(0);
     }
 
+    private bool IsStagingChannelAvailable()
+    {
+        return KnownFeatures.IsStagingChannelEnabled(_features, _configuration)
+            || string.Equals(ExecutionContext.IdentityChannel, PackageChannelNames.Staging, StringComparison.OrdinalIgnoreCase);
+    }
+
     private async Task<CommandResult> ExecuteSelfUpdateAsync(ParseResult parseResult, CancellationToken cancellationToken, string? selectedChannel = null)
     {
         var channel = selectedChannel ?? parseResult.GetValue(_channelOption) ?? parseResult.GetValue(_qualityOption);
@@ -369,7 +375,7 @@ internal sealed class UpdateCommand : BaseCommand
         // aspire.config.json, not from any global setting.
         if (string.IsNullOrEmpty(channel))
         {
-            var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(_features, _configuration);
+            var isStagingEnabled = IsStagingChannelAvailable();
             var channels = isStagingEnabled
                 ? new[] { PackageChannelNames.Stable, PackageChannelNames.Staging, PackageChannelNames.Daily }
                 : new[] { PackageChannelNames.Stable, PackageChannelNames.Daily };

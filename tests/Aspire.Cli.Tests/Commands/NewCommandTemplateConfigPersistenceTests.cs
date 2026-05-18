@@ -142,25 +142,23 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
     }
 
     /// <summary>
-    /// Bug-class peer of the daily / unregistered-identity case. <c>PackagingService</c>
-    /// only registers the <c>staging</c> channel when <c>KnownFeatures.IsStagingChannelEnabled</c>
-    /// is true — so a default staging-identity CLI sees only <c>{ Implicit, Stable, Daily }</c>,
-    /// the identity doesn't match any registered channel, and the resolution must fall back
-    /// to Implicit (no pin). Tracked separately in #17121; pinned here so the staging-
-    /// without-flag path can't silently regress for the channel-pinning templates.
+    /// Issue #17121 regression guard: <c>PackagingService</c> now registers the
+    /// <c>staging</c> channel for a staging-identity CLI. Once <see cref="NewCommand"/>
+    /// resolves that registered identity channel, channel-pinning templates must persist
+    /// <c>channel: staging</c> so later add/restore operations keep using staging.
     /// </summary>
     [Theory]
     [InlineData(KnownTemplateId.TypeScriptEmptyAppHost)]
     [InlineData(KnownTemplateId.TypeScriptStarter)]
-    public async Task ChannelPinningTemplate_StagingIdentityWithoutStagingRegistered_DoesNotPinChannel(string templateId)
+    public async Task ChannelPinningTemplate_StagingIdentityWithRegisteredChannel_PinsStagingChannel(string templateId)
     {
         var persisted = await ScaffoldAndReadPersistedChannelAsync(
             templateId: templateId,
             identityChannel: PackageChannelNames.Staging,
-            registerIdentityChannel: false,
+            registerIdentityChannel: true,
             explicitChannelArg: null);
 
-        Assert.Null(persisted);
+        Assert.Equal(PackageChannelNames.Staging, persisted);
     }
 
     /// <summary>

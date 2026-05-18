@@ -56,6 +56,8 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         public const string RunAppHostFindAppHost = "aspire/cli/run_apphost.find_apphost";
         public const string RunAppHostStopExistingInstance = "aspire/cli/run_apphost.stop_existing_instance";
         public const string RunAppHostStartProject = "aspire/cli/run_apphost.start_project";
+        public const string RunAppHostStartAppHostServer = "aspire/cli/run_apphost.start_apphost_server";
+        public const string RunAppHostStartGuestAppHost = "aspire/cli/run_apphost.start_guest_apphost";
         public const string RunAppHostWaitForBuild = "aspire/cli/run_apphost.wait_for_build";
         public const string RunAppHostWaitForBackchannel = "aspire/cli/run_apphost.wait_for_backchannel";
         public const string RunAppHostGetDashboardUrls = "aspire/cli/run_apphost.get_dashboard_urls";
@@ -71,6 +73,7 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         public const string AppHostBuild = "aspire/cli/apphost.build";
         public const string AppHostCheckCompatibility = "aspire/cli/apphost.check_compatibility";
         public const string AppHostRunDotnetLifetime = "aspire/cli/apphost.run_dotnet.lifetime";
+        public const string ProfileCaptureDelay = "aspire/cli/profile.capture_delay";
         public const string StopCommand = "aspire/cli/stop";
         public const string StopAppHost = "aspire/cli/stop_apphost";
     }
@@ -128,6 +131,7 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         public const string AppHostWatch = "aspire.cli.apphost.watch";
         public const string AppHostStopAll = "aspire.cli.apphost.stop_all";
         public const string AppHostStopCount = "aspire.cli.apphost.stop_count";
+        public const string ProfileCaptureDelayMilliseconds = "aspire.cli.profile.capture_delay_ms";
         public const string DevCertificateEnvironmentVariableCount = "aspire.cli.dev_cert.env_var_count";
         public const string BackchannelSocketFile = "aspire.cli.backchannel.socket_file";
         public const string BackchannelAutoReconnect = "aspire.cli.backchannel.auto_reconnect";
@@ -314,8 +318,36 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
 
     internal ActivityScope StartBackchannelConnect(string socketPath)
     {
+        // Backchannel connection has two entry points: callers like GuestAppHostProject and
+        // DotNetCliRunner that start a parent BackchannelConnect activity with explicit context
+        // (the overloads below), and the inner AppHostCliBackchannel.ConnectAsync, which is
+        // invoked from inside that parent and also wants to record the connection. To avoid a
+        // nested duplicate span when the parent is already current, reuse it (non-owning) and
+        // just decorate it with the socket path.
+        if (IsCurrentActivity(Activities.BackchannelConnect))
+        {
+            var currentActivity = CurrentActivity;
+            currentActivity.SetBackchannelSocketFile(socketPath);
+            return currentActivity;
+        }
+
         var activity = StartActivity(Activities.BackchannelConnect);
         activity.SetBackchannelSocketFile(socketPath);
+        return activity;
+    }
+
+    internal ActivityScope StartBackchannelConnect(string socketPath, ActivityContext parentContext)
+    {
+        var activity = StartActivity(Activities.BackchannelConnect, parentContext: parentContext);
+        activity.SetBackchannelSocketFile(socketPath);
+        return activity;
+    }
+
+    internal ActivityScope StartBackchannelConnect(string socketPath, ActivityContext parentContext, bool autoReconnect, int retryCount)
+    {
+        var activity = StartBackchannelConnect(socketPath, parentContext);
+        activity.SetBackchannelAutoReconnect(autoReconnect);
+        activity.SetBackchannelRetryCount(retryCount);
         return activity;
     }
 
@@ -336,6 +368,13 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
     {
         var activity = StartActivity(Activities.JsonRpcClientCall, ActivityKind.Client);
         activity.SetJsonRpcCall(connectionName, methodName, streaming);
+        return activity;
+    }
+
+    internal ActivityScope StartProfileCaptureDelay(TimeSpan delay)
+    {
+        var activity = StartActivity(Activities.ProfileCaptureDelay);
+        activity.SetProfileCaptureDelay(delay);
         return activity;
     }
 
@@ -370,7 +409,9 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
 
     internal ActivityScope StartAppHostServerLifetime(string implementationName)
     {
-        var activity = StartActivity(Activities.Process, ActivityKind.Client);
+        // The server process span stays open for the process lifetime, but it should not become
+        // the ambient parent for later CLI operations such as backchannel connection attempts.
+        var activity = StartActivity(Activities.Process, ActivityKind.Client, restoreAmbientActivity: true);
         activity.SetAppHostServerImplementation(implementationName);
         return activity;
     }
@@ -479,6 +520,18 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         return activity;
     }
 
+    internal ActivityScope StartRunAppHostStartAppHostServer()
+    {
+        return StartActivity(Activities.RunAppHostStartAppHostServer);
+    }
+
+    internal ActivityScope StartRunAppHostStartGuestAppHost(string languageId)
+    {
+        var activity = StartActivity(Activities.RunAppHostStartGuestAppHost);
+        activity.SetAppHostLanguage(languageId);
+        return activity;
+    }
+
     internal ActivityScope StartRunAppHostStopExistingInstance()
     {
         return StartActivity(Activities.RunAppHostStopExistingInstance);
@@ -528,7 +581,9 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
     private ActivityScope StartActivity(
         string name,
         ActivityKind kind = ActivityKind.Internal,
-        bool startWithRemoteParent = false)
+        bool startWithRemoteParent = false,
+        ActivityContext? parentContext = null,
+        bool restoreAmbientActivity = false)
     {
         if (!IsEnabled)
         {
@@ -537,10 +592,14 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
 
         var ambientActivity = Activity.Current;
         Activity? activity;
-        if (startWithRemoteParent &&
-            TryGetConfiguredActivityContext(out var parentContext))
+        if (parentContext is { } explicitParentContext)
         {
-            activity = _activitySource.StartActivity(name, kind, parentContext);
+            activity = _activitySource.StartActivity(name, kind, explicitParentContext);
+        }
+        else if (startWithRemoteParent &&
+            TryGetConfiguredActivityContext(out var configuredParentContext))
+        {
+            activity = _activitySource.StartActivity(name, kind, configuredParentContext);
         }
         else
         {
@@ -548,6 +607,16 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         }
 
         AddProfilingSession(activity, ambientActivity);
+        // StartActivity makes the new span ambient when it is sampled. For long-lived process
+        // spans that are only used for lifetime/export context, immediately put the previous
+        // CLI activity back so unrelated follow-up operations do not become children of the
+        // process span. Only restore when our activity is still current; otherwise we could
+        // clobber a listener or helper that legitimately changed Activity.Current.
+        if (restoreAmbientActivity && ReferenceEquals(Activity.Current, activity))
+        {
+            Activity.Current = ambientActivity;
+        }
+
         return new ActivityScope(activity);
     }
 
@@ -661,11 +730,21 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         _activitySource.Dispose();
     }
 
+    private static bool IsCurrentActivity(string name)
+    {
+        var currentActivity = Activity.Current;
+        return currentActivity is not null &&
+            currentActivity.Source.Name == ActivitySourceName &&
+            currentActivity.OperationName == name;
+    }
+
     internal readonly struct ActivityScope(Activity? activity, bool ownsActivity = true) : IDisposable
     {
         public bool IsRunning => activity is not null;
 
         public void AddAppHostBuildReadyEvent() => AddEvent(Events.AppHostBuildReady);
+
+        public void AddContextToEnvironment(IDictionary<string, string> environment) => AddActivityContextToEnvironment(activity, environment);
 
         public void AddAuxBackchannelGetDashboardUrlsInvokeEvent() => AddEvent(Events.AuxBackchannelGetDashboardUrlsInvoke);
 
@@ -898,6 +977,8 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
 
         public void SetJsonRpcStreamItemCount(int count) => SetTag(Tags.JsonRpcStreamItemCount, count);
 
+        public void SetProfileCaptureDelay(TimeSpan delay) => SetTag(Tags.ProfileCaptureDelayMilliseconds, delay.TotalMilliseconds);
+
         public BackchannelTraceContext? CreateBackchannelTraceContext()
         {
             if (activity is null)
@@ -916,6 +997,8 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
 
             return new BackchannelTraceContext
             {
+                TraceParent = activity.Id,
+                TraceState = activity.TraceStateString,
                 Baggage = baggage
             };
         }

@@ -3665,6 +3665,20 @@ public class ContainerImageReference extends HandleWrapperBase {
         super(handle, client);
     }
 
+    /** Gets the Resource property */
+    public IResource resource() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (IResource) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerImageReference.resource", reqArgs);
+    }
+
+    /** Gets the ValueExpression property */
+    public String valueExpression() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (String) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerImageReference.valueExpression", reqArgs);
+    }
+
 }
 
 // ===== ContainerLifetime.java =====
@@ -3710,6 +3724,63 @@ public class ContainerMountAnnotation extends HandleWrapperBase {
         super(handle, client);
     }
 
+    /** Gets the Source property */
+    public String source() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (String) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerMountAnnotation.source", reqArgs);
+    }
+
+    /** Gets the Target property */
+    public String target() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (String) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerMountAnnotation.target", reqArgs);
+    }
+
+    /** Gets the Type property */
+    public ContainerMountType type() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (ContainerMountType) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerMountAnnotation.type", reqArgs);
+    }
+
+    /** Gets the IsReadOnly property */
+    public boolean isReadOnly() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (boolean) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerMountAnnotation.isReadOnly", reqArgs);
+    }
+
+}
+
+// ===== ContainerMountType.java =====
+// ContainerMountType.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** ContainerMountType enum. */
+public enum ContainerMountType implements WireValueEnum {
+    BIND_MOUNT("BindMount"),
+    VOLUME("Volume");
+
+    private final String value;
+
+    ContainerMountType(String value) {
+        this.value = value;
+    }
+
+    public String getValue() { return value; }
+
+    public static ContainerMountType fromValue(String value) {
+        for (ContainerMountType e : values()) {
+            if (e.value.equals(value)) return e;
+        }
+        throw new IllegalArgumentException("Unknown value: " + value);
+    }
 }
 
 // ===== ContainerPortReference.java =====
@@ -3724,6 +3795,20 @@ import java.util.function.*;
 public class ContainerPortReference extends HandleWrapperBase {
     ContainerPortReference(Handle handle, AspireClient client) {
         super(handle, client);
+    }
+
+    /** Gets the Resource property */
+    public IResource resource() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (IResource) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerPortReference.resource", reqArgs);
+    }
+
+    /** Gets the ValueExpression property */
+    public String valueExpression() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (String) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerPortReference.valueExpression", reqArgs);
     }
 
 }
@@ -11452,6 +11537,13 @@ public class IAspireStore extends HandleWrapperBase {
         super(handle, client);
     }
 
+    /** Gets the BasePath property */
+    public String basePath() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (String) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/IAspireStore.basePath", reqArgs);
+    }
+
     /** Gets a deterministic file path for the specified file contents */
     public String getFileNameWithContent(String filenameTemplate, String sourceFilename) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -11562,6 +11654,35 @@ import java.util.function.*;
 public class IConfigurationSection extends HandleWrapperBase {
     IConfigurationSection(Handle handle, AspireClient client) {
         super(handle, client);
+    }
+
+    /** Gets the Key property */
+    public String key() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (String) getClient().invokeCapability("Microsoft.Extensions.Configuration/IConfigurationSection.key", reqArgs);
+    }
+
+    /** Gets the Path property */
+    public String path() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (String) getClient().invokeCapability("Microsoft.Extensions.Configuration/IConfigurationSection.path", reqArgs);
+    }
+
+    /** Gets the Value property */
+    public String value() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (String) getClient().invokeCapability("Microsoft.Extensions.Configuration/IConfigurationSection.value", reqArgs);
+    }
+
+    /** Sets the Value property */
+    public IConfigurationSection setValue(String value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        return (IConfigurationSection) getClient().invokeCapability("Microsoft.Extensions.Configuration/IConfigurationSection.setValue", reqArgs);
     }
 
 }
@@ -12305,6 +12426,51 @@ import java.util.function.*;
 public class IHostEnvironment extends HandleWrapperBase {
     IHostEnvironment(Handle handle, AspireClient client) {
         super(handle, client);
+    }
+
+    /** Gets the EnvironmentName property */
+    public String environmentName() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (String) getClient().invokeCapability("Microsoft.Extensions.Hosting/IHostEnvironment.environmentName", reqArgs);
+    }
+
+    /** Sets the EnvironmentName property */
+    public IHostEnvironment setEnvironmentName(String value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        return (IHostEnvironment) getClient().invokeCapability("Microsoft.Extensions.Hosting/IHostEnvironment.setEnvironmentName", reqArgs);
+    }
+
+    /** Gets the ApplicationName property */
+    public String applicationName() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (String) getClient().invokeCapability("Microsoft.Extensions.Hosting/IHostEnvironment.applicationName", reqArgs);
+    }
+
+    /** Sets the ApplicationName property */
+    public IHostEnvironment setApplicationName(String value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        return (IHostEnvironment) getClient().invokeCapability("Microsoft.Extensions.Hosting/IHostEnvironment.setApplicationName", reqArgs);
+    }
+
+    /** Gets the ContentRootPath property */
+    public String contentRootPath() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (String) getClient().invokeCapability("Microsoft.Extensions.Hosting/IHostEnvironment.contentRootPath", reqArgs);
+    }
+
+    /** Sets the ContentRootPath property */
+    public IHostEnvironment setContentRootPath(String value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        return (IHostEnvironment) getClient().invokeCapability("Microsoft.Extensions.Hosting/IHostEnvironment.setContentRootPath", reqArgs);
     }
 
     /** Checks if running in Development environment */
@@ -23541,6 +23707,7 @@ public final class WithVolumeOptions {
 .modules/ContainerImageReference.java
 .modules/ContainerLifetime.java
 .modules/ContainerMountAnnotation.java
+.modules/ContainerMountType.java
 .modules/ContainerPortReference.java
 .modules/ContainerRegistryResource.java
 .modules/ContainerResource.java
