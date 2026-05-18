@@ -325,9 +325,9 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
             File.Copy(userNugetConfig, nugetConfigPath, overwrite: true);
         }
 
-        var channels = await _packagingService.GetChannelsAsync(cancellationToken);
         var configuredChannelName = AspireConfigFile.Load(_appPath)?.Channel
             ?? AspireJsonConfiguration.Load(_appPath)?.Channel;
+        var channels = await _packagingService.GetChannelsAsync(cancellationToken, configuredChannelName);
 
         // Resolve channel sources and add them via RestoreAdditionalProjectSources
         // This is additive — it preserves the user's nuget.config and adds channel-specific sources

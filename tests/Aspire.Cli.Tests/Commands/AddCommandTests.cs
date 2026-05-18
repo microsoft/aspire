@@ -461,6 +461,51 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task IntegrationSearchCommandFormatJsonWithAppHostOutsideLaunchDirectoryUsesConfiguredStagingChannelWithRealPackagingService()
+    {
+        var rawJson = string.Empty;
+        var testInteractionService = new TestInteractionService
+        {
+            DisplayRawTextCallback = text => rawJson = text
+        };
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "elsewhere"));
+        var appHostFile = new FileInfo(Path.Combine(projectDirectory.FullName, "apphost.ts"));
+        File.WriteAllText(appHostFile.FullName, string.Empty);
+        File.WriteAllText(Path.Combine(projectDirectory.FullName, AspireConfigFile.FileName), """
+            {
+              "channel": "staging"
+            }
+            """);
+
+        var cache = new FakeNuGetPackageCache
+        {
+            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "2.0.0")])
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => CreateExecutionContext(workspace, PackageChannelNames.Stable);
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.NuGetPackageCacheFactory = _ => cache;
+        });
+        services.AddSingleton<IAppHostProjectFactory>(new TestTypeScriptStarterProjectFactory((_, _) => Task.FromResult(true)));
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"integration search redis --apphost \"{appHostFile.FullName}\" --format json");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var integration = Assert.Single(ReadIntegrationResults(rawJson));
+        Assert.Equal("Aspire.Hosting.Redis", integration.Package);
+        Assert.Equal("2.0.0", integration.Version);
+    }
+
+    [Fact]
     public async Task IntegrationSearchCommandFormatJsonWithUnpinnedAppHostUsesImplicitChannelUnderStagingCli()
     {
         var rawJson = string.Empty;

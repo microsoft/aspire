@@ -13,12 +13,12 @@ namespace Aspire.Cli.Packaging;
 
 internal interface IPackagingService
 {
-    public Task<IEnumerable<PackageChannel>> GetChannelsAsync(CancellationToken cancellationToken = default);
+    public Task<IEnumerable<PackageChannel>> GetChannelsAsync(CancellationToken cancellationToken = default, string? requestedChannelName = null);
 }
 
 internal class PackagingService(CliExecutionContext executionContext, INuGetPackageCache nuGetPackageCache, IFeatures features, IConfiguration configuration, ILogger<PackagingService> logger) : IPackagingService
 {
-    public Task<IEnumerable<PackageChannel>> GetChannelsAsync(CancellationToken cancellationToken = default)
+    public Task<IEnumerable<PackageChannel>> GetChannelsAsync(CancellationToken cancellationToken = default, string? requestedChannelName = null)
     {
         var defaultChannel = PackageChannel.CreateImplicitChannel(nuGetPackageCache, logger);
         
@@ -63,13 +63,16 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
         var channels = new List<PackageChannel>([defaultChannel, stableChannel]);
 
         // Add staging channel after stable and before daily. Staging CLI builds should
-        // dogfood staging packages even before a project-level channel pin exists.
+        // dogfood staging packages even before a project-level channel pin exists, and
+        // callers that already resolved a staging channel from another project directory
+        // need the channel materialized before they can match it below.
         var stagingChannelConfigured = string.Equals(configuration["channel"], PackageChannelNames.Staging, StringComparison.OrdinalIgnoreCase);
+        var stagingChannelRequested = string.Equals(requestedChannelName, PackageChannelNames.Staging, StringComparison.OrdinalIgnoreCase);
         var stagingIdentityChannel = string.Equals(executionContext.IdentityChannel, PackageChannelNames.Staging, StringComparison.OrdinalIgnoreCase);
         var stagingFeatureEnabled = features.IsFeatureEnabled(KnownFeatures.StagingChannelEnabled, false);
-        if (stagingFeatureEnabled || stagingChannelConfigured || stagingIdentityChannel)
+        if (stagingFeatureEnabled || stagingChannelConfigured || stagingChannelRequested || stagingIdentityChannel)
         {
-            var defaultQuality = stagingChannelConfigured || stagingIdentityChannel ? PackageChannelQuality.Both : PackageChannelQuality.Stable;
+            var defaultQuality = stagingChannelConfigured || stagingChannelRequested || stagingIdentityChannel ? PackageChannelQuality.Both : PackageChannelQuality.Stable;
             var stagingChannel = CreateStagingChannel(defaultQuality);
             if (stagingChannel is not null)
             {

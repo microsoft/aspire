@@ -83,6 +83,23 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetChannelsAsync_WhenRequestedChannelIsStaging_IncludesStagingChannel()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", identityChannel: PackageChannelNames.Stable);
+
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), new ConfigurationBuilder().Build(), NullLogger<PackagingService>.Instance);
+
+        var channels = await packagingService.GetChannelsAsync(requestedChannelName: PackageChannelNames.Staging).DefaultTimeout();
+
+        var stagingChannel = Assert.Single(channels, c => c.Name == PackageChannelNames.Staging);
+        Assert.Equal(PackageChannelQuality.Both, stagingChannel.Quality);
+    }
+
+    [Fact]
     public async Task GetChannelsAsync_WhenConfigurationChannelIsStagingWithoutQualityOverride_DefaultsToBothAndSharedFeed()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

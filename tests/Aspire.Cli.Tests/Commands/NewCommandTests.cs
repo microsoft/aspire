@@ -80,6 +80,22 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void NewCommand_WhenIdentityChannelIsStaging_DescribesStagingChannelOption()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(identityChannel: PackageChannelNames.Staging);
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<NewCommand>();
+
+        var channelOption = command.Options.Single(option => option.Name == "--channel");
+        Assert.Equal(NewCommandStrings.ChannelOptionDescriptionWithStaging, channelOption.Description);
+    }
+
+    [Fact]
     public async Task NewCommandInteractiveFlowSmokeTest()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
