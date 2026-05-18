@@ -369,17 +369,21 @@ internal class ConsoleInteractionService : IInteractionService
     public void DisplayError(string errorMessage, bool allowMarkup = false)
     {
         var formatted = allowMarkup ? errorMessage : errorMessage.EscapeMarkup();
-        DisplayMessage(KnownEmojis.CrossMark, $"[red bold]{formatted}[/]", allowMarkup: true);
+        // Always write errors to stderr so callers can capture them separately from stdout.
+        WriteEmojiMessage(_errorConsole, _stderrLogger, KnownEmojis.CrossMark, $"[red bold]{formatted}[/]", allowMarkup: true);
     }
 
     public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false)
+        => WriteEmojiMessage(MessageConsole, MessageLogger, emoji, message, allowMarkup);
+
+    private static void WriteEmojiMessage(IAnsiConsole target, ILogger logger, KnownEmoji emoji, string message, bool allowMarkup)
     {
-        if (MessageLogger.IsEnabled(LogLevel.Information))
+        if (logger.IsEnabled(LogLevel.Information))
         {
             // Only attempt to parse/remove markup when the message is expected to contain it.
             // Plain text messages may contain characters like '[' that would be rejected by the markup parser.
             var logMessage = allowMarkup ? message.RemoveMarkup() : message;
-            MessageLogger.LogInformation("{Message}", ConsoleHelpers.FormatEmojiPrefix(emoji, MessageConsole, replaceEmoji: true) + logMessage);
+            logger.LogInformation("{Message}", ConsoleHelpers.FormatEmojiPrefix(emoji, target, replaceEmoji: true) + logMessage);
         }
 
         var displayMessage = allowMarkup ? message : message.EscapeMarkup();
@@ -394,10 +398,10 @@ internal class ConsoleInteractionService : IInteractionService
         grid.Columns[1].Padding = new Padding(0);
 
         grid.AddRow(
-            new Markup(ConsoleHelpers.FormatEmojiPrefix(emoji, MessageConsole)),
+            new Markup(ConsoleHelpers.FormatEmojiPrefix(emoji, target)),
             new Markup(displayMessage));
 
-        MessageConsole.Write(grid);
+        target.Write(grid);
     }
 
     public void DisplayPlainText(string message)
