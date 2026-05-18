@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "CLI improvement: grid layout for better text wrapping in console messages",
+  "mergedAt": "2026-05-18T07:33:49Z",
+  "number": 17198,
+  "runDate": "2026-05-18T09:10:29Z",
+  "status": "included",
+  "title": "Use grid layout in DisplayMessage/DisplayError for better text wrapping"
+}

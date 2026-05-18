@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Console error and informational messages now use a two-column grid layout, placing the emoji prefix in a fixed-width column and the message text in a wrapping column. Long messages wrap cleanly beneath the text without running under the icon.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🎨",
+  "firstMergedAt": "2026-05-18T07:33:49Z",
+  "lastMergedAt": "2026-05-18T07:33:49Z",
+  "name": "Improved text wrapping in CLI messages",
+  "owner": "JamesNK",
+  "prs": [
+    17198
+  ]
+}
