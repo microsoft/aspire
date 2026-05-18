@@ -139,5 +139,131 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CheckingPrerequisites", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Polyglot AppHost.
+        /// </summary>
+        public static string PolyglotCategoryHeader {
+            get {
+                return ResourceManager.GetString("PolyglotCategoryHeader", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} {1} is installed.
+        /// </summary>
+        public static string PackageManagerInstalled {
+            get {
+                return ResourceManager.GetString("PackageManagerInstalled", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} is installed.
+        /// </summary>
+        public static string PackageManagerInstalledNoVersion {
+            get {
+                return ResourceManager.GetString("PackageManagerInstalledNoVersion", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} not found but required by this TypeScript AppHost.
+        /// </summary>
+        public static string PackageManagerMissing {
+            get {
+                return ResourceManager.GetString("PackageManagerMissing", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Install {0} to run this TypeScript AppHost..
+        /// </summary>
+        public static string PackageManagerMissingFix {
+            get {
+                return ResourceManager.GetString("PackageManagerMissingFix", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to npx not found but required by npm-managed TypeScript AppHosts.
+        /// </summary>
+        public static string NpxMissing {
+            get {
+                return ResourceManager.GetString("NpxMissing", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to npx ships with Node.js; ensure your Node.js installation is on PATH..
+        /// </summary>
+        public static string NpxMissingFix {
+            get {
+                return ResourceManager.GetString("NpxMissingFix", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Yarn Classic (v1) detected; Aspire supports Yarn 4 or later.
+        /// </summary>
+        public static string YarnClassicUnsupported {
+            get {
+                return ResourceManager.GetString("YarnClassicUnsupported", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Upgrade to Yarn 4+ via 'corepack prepare yarn@stable --activate' or follow the Yarn install guide..
+        /// </summary>
+        public static string YarnClassicUnsupportedFix {
+            get {
+                return ResourceManager.GetString("YarnClassicUnsupportedFix", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Node.js not found but required by this TypeScript AppHost.
+        /// </summary>
+        public static string NodeJsMissing {
+            get {
+                return ResourceManager.GetString("NodeJsMissing", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Install Node.js 20.19+ or 22.13+ from https://nodejs.org/..
+        /// </summary>
+        public static string NodeJsMissingFix {
+            get {
+                return ResourceManager.GetString("NodeJsMissingFix", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Node.js {0} is below the supported version (20.19+ or 22.13+).
+        /// </summary>
+        public static string NodeJsOutdated {
+            get {
+                return ResourceManager.GetString("NodeJsOutdated", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Upgrade Node.js to 20.19+ or 22.13+ from https://nodejs.org/..
+        /// </summary>
+        public static string NodeJsOutdatedFix {
+            get {
+                return ResourceManager.GetString("NodeJsOutdatedFix", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Node.js {0} is installed.
+        /// </summary>
+        public static string NodeJsInstalled {
+            get {
+                return ResourceManager.GetString("NodeJsInstalled", resourceCulture);
+            }
+        }
     }
 }

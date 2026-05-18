@@ -171,6 +171,7 @@ internal sealed class DoctorCommand : BaseCommand
         {
             "sdk" => DoctorCommandStrings.SdkCategoryHeader,
             "container" => DoctorCommandStrings.ContainerCategoryHeader,
+            "polyglot" => DoctorCommandStrings.PolyglotCategoryHeader,
             "environment" => DoctorCommandStrings.EnvironmentCategoryHeader,
             _ => category
         };
@@ -182,7 +183,8 @@ internal sealed class DoctorCommand : BaseCommand
         {
             "sdk" => 1,
             "container" => 2,
-            "environment" => 3,
+            "polyglot" => 3,
+            "environment" => 4,
             _ => 99
         };
     }

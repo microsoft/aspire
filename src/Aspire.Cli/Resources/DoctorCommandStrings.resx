@@ -85,4 +85,52 @@
   <data name="CheckingPrerequisites" xml:space="preserve">
     <value>Checking Aspire environment...</value>
   </data>
+  <data name="PolyglotCategoryHeader" xml:space="preserve">
+    <value>Polyglot AppHost</value>
+  </data>
+  <data name="PackageManagerInstalled" xml:space="preserve">
+    <value>{0} {1} is installed</value>
+    <comment>{0} is the package manager display name (e.g., 'npm'), {1} is the version or path.</comment>
+  </data>
+  <data name="PackageManagerInstalledNoVersion" xml:space="preserve">
+    <value>{0} is installed</value>
+    <comment>{0} is the package manager display name (e.g., 'npm').</comment>
+  </data>
+  <data name="PackageManagerMissing" xml:space="preserve">
+    <value>{0} not found but required by this TypeScript AppHost</value>
+    <comment>{0} is the package manager display name (e.g., 'pnpm').</comment>
+  </data>
+  <data name="PackageManagerMissingFix" xml:space="preserve">
+    <value>Install {0} to run this TypeScript AppHost.</value>
+    <comment>{0} is the package manager display name (e.g., 'pnpm').</comment>
+  </data>
+  <data name="NpxMissing" xml:space="preserve">
+    <value>npx not found but required by npm-managed TypeScript AppHosts</value>
+  </data>
+  <data name="NpxMissingFix" xml:space="preserve">
+    <value>npx ships with Node.js; ensure your Node.js installation is on PATH.</value>
+  </data>
+  <data name="YarnClassicUnsupported" xml:space="preserve">
+    <value>Yarn Classic (v1) detected; Aspire supports Yarn 4 or later</value>
+  </data>
+  <data name="YarnClassicUnsupportedFix" xml:space="preserve">
+    <value>Upgrade to Yarn 4+ via 'corepack prepare yarn@stable --activate' or follow the Yarn install guide.</value>
+  </data>
+  <data name="NodeJsMissing" xml:space="preserve">
+    <value>Node.js not found but required by this TypeScript AppHost</value>
+  </data>
+  <data name="NodeJsMissingFix" xml:space="preserve">
+    <value>Install Node.js 20.19+ or 22.13+ from https://nodejs.org/.</value>
+  </data>
+  <data name="NodeJsOutdated" xml:space="preserve">
+    <value>Node.js {0} is below the supported version (20.19+ or 22.13+)</value>
+    <comment>{0} is the detected Node.js version string.</comment>
+  </data>
+  <data name="NodeJsOutdatedFix" xml:space="preserve">
+    <value>Upgrade Node.js to 20.19+ or 22.13+ from https://nodejs.org/.</value>
+  </data>
+  <data name="NodeJsInstalled" xml:space="preserve">
+    <value>Node.js {0} is installed</value>
+    <comment>{0} is the detected Node.js version string.</comment>
+  </data>
 </root>

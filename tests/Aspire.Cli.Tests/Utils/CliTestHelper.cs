@@ -146,6 +146,8 @@ internal static class CliTestHelper
         services.AddSingleton<IEnvironmentCheck, DeprecatedWorkloadCheck>();
         services.AddSingleton<IEnvironmentCheck, DevCertsCheck>();
         services.AddSingleton<IEnvironmentCheck, ContainerRuntimeCheck>();
+        services.AddSingleton<IEnvironmentCheck, NodeJsRuntimeCheck>();
+        services.AddSingleton<IEnvironmentCheck, TypeScriptAppHostPackageManagerCheck>();
         services.AddSingleton<IEnvironmentCheck, DeprecatedAgentConfigCheck>();
         services.AddSingleton<IEnvironmentChecker, EnvironmentChecker>();
 

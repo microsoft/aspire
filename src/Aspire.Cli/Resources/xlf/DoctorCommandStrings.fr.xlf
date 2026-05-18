@@ -37,6 +37,66 @@
         <target state="translated">Format de sortie (Tableau ou JSON).</target>
         <note />
       </trans-unit>
+      <trans-unit id="NodeJsInstalled">
+        <source>Node.js {0} is installed</source>
+        <target state="new">Node.js {0} is installed</target>
+        <note>{0} is the detected Node.js version string.</note>
+      </trans-unit>
+      <trans-unit id="NodeJsMissing">
+        <source>Node.js not found but required by this TypeScript AppHost</source>
+        <target state="new">Node.js not found but required by this TypeScript AppHost</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NodeJsMissingFix">
+        <source>Install Node.js 20.19+ or 22.13+ from https://nodejs.org/.</source>
+        <target state="new">Install Node.js 20.19+ or 22.13+ from https://nodejs.org/.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NodeJsOutdated">
+        <source>Node.js {0} is below the supported version (20.19+ or 22.13+)</source>
+        <target state="new">Node.js {0} is below the supported version (20.19+ or 22.13+)</target>
+        <note>{0} is the detected Node.js version string.</note>
+      </trans-unit>
+      <trans-unit id="NodeJsOutdatedFix">
+        <source>Upgrade Node.js to 20.19+ or 22.13+ from https://nodejs.org/.</source>
+        <target state="new">Upgrade Node.js to 20.19+ or 22.13+ from https://nodejs.org/.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NpxMissing">
+        <source>npx not found but required by npm-managed TypeScript AppHosts</source>
+        <target state="new">npx not found but required by npm-managed TypeScript AppHosts</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NpxMissingFix">
+        <source>npx ships with Node.js; ensure your Node.js installation is on PATH.</source>
+        <target state="new">npx ships with Node.js; ensure your Node.js installation is on PATH.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PackageManagerInstalled">
+        <source>{0} {1} is installed</source>
+        <target state="new">{0} {1} is installed</target>
+        <note>{0} is the package manager display name (e.g., 'npm'), {1} is the version or path.</note>
+      </trans-unit>
+      <trans-unit id="PackageManagerInstalledNoVersion">
+        <source>{0} is installed</source>
+        <target state="new">{0} is installed</target>
+        <note>{0} is the package manager display name (e.g., 'npm').</note>
+      </trans-unit>
+      <trans-unit id="PackageManagerMissing">
+        <source>{0} not found but required by this TypeScript AppHost</source>
+        <target state="new">{0} not found but required by this TypeScript AppHost</target>
+        <note>{0} is the package manager display name (e.g., 'pnpm').</note>
+      </trans-unit>
+      <trans-unit id="PackageManagerMissingFix">
+        <source>Install {0} to run this TypeScript AppHost.</source>
+        <target state="new">Install {0} to run this TypeScript AppHost.</target>
+        <note>{0} is the package manager display name (e.g., 'pnpm').</note>
+      </trans-unit>
+      <trans-unit id="PolyglotCategoryHeader">
+        <source>Polyglot AppHost</source>
+        <target state="new">Polyglot AppHost</target>
+        <note />
+      </trans-unit>
       <trans-unit id="SdkCategoryHeader">
         <source>.NET SDK</source>
         <target state="translated">Kit de développement logiciel (SDK) .NET</target>
@@ -45,6 +105,16 @@
       <trans-unit id="SummaryFormat">
         <source>Summary: {0} passed, {1} warnings, {2} failed</source>
         <target state="translated">Résumé : {0} réussis, {1} avertissements, {2} échoués</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="YarnClassicUnsupported">
+        <source>Yarn Classic (v1) detected; Aspire supports Yarn 4 or later</source>
+        <target state="new">Yarn Classic (v1) detected; Aspire supports Yarn 4 or later</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="YarnClassicUnsupportedFix">
+        <source>Upgrade to Yarn 4+ via 'corepack prepare yarn@stable --activate' or follow the Yarn install guide.</source>
+        <target state="new">Upgrade to Yarn 4+ via 'corepack prepare yarn@stable --activate' or follow the Yarn install guide.</target>
         <note />
       </trans-unit>
     </body>
