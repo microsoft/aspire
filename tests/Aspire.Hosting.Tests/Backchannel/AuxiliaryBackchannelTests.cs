@@ -271,10 +271,8 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task SocketPathUsesAuxiPrefix()
+    public async Task SocketPathUsesCompactFormat()
     {
-        // This test verifies that the socket path uses "auxi.sock." prefix instead of "aux.sock."
-        // to avoid Windows reserved device name issues (AUX is reserved on Windows < 11)
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(outputHelper);
 
         using var app = builder.Build();
@@ -286,11 +284,16 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
         await service.ListeningTask.DefaultTimeout();
         Assert.NotNull(service.SocketPath);
 
-        // Verify that the socket path uses "auxi.sock." prefix
         var fileName = Path.GetFileName(service.SocketPath);
-        Assert.StartsWith("auxi.sock.", fileName);
+        Assert.Matches("^[A-Za-z0-9_-]{19}\\.[0-9]+$", fileName);
 
-        // Verify that the socket file can be created (not blocked by Windows reserved names)
+        var directory = Path.GetDirectoryName(service.SocketPath);
+        Assert.NotNull(directory);
+        Assert.EndsWith(Path.Combine(".aspire", "cli", "bch"), directory);
+        Assert.True(
+            BackchannelConstants.GetSocketPathByteCountIncludingNull(service.SocketPath) <= BackchannelConstants.GetMaxSocketPathBytesIncludingNull(),
+            $"Socket path should fit the platform byte limit: {service.SocketPath}");
+
         Assert.True(File.Exists(service.SocketPath), $"Socket file should exist at: {service.SocketPath}");
 
         outputHelper.WriteLine($"Socket path: {service.SocketPath}");

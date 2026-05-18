@@ -8,6 +8,7 @@ using System.Runtime.CompilerServices;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Backchannel;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -29,7 +30,8 @@ internal sealed class AuxiliaryBackchannelMonitor(
     
     // Outer key: hash (prefix), Inner key: socketPath, Value: connection
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, AppHostAuxiliaryBackchannel>> _connectionsByHash = new();
-    private readonly string _backchannelsDirectory = GetBackchannelsDirectory();
+    private readonly string _backchannelsDirectory = BackchannelConstants.GetBackchannelsDirectory(GetHomeDirectory());
+    private readonly string _legacyBackchannelsDirectory = BackchannelConstants.GetLegacyBackchannelsDirectory(GetHomeDirectory());
 
     // Track known socket files to detect additions and removals
     private readonly HashSet<string> _knownSocketFiles = new(StringComparer.OrdinalIgnoreCase);
@@ -152,11 +154,10 @@ internal sealed class AuxiliaryBackchannelMonitor(
 
             logger.LogInformation("Starting auxiliary backchannel monitor for {CommandType}", command.GetType().Name);
 
-            // Ensure the backchannels directory exists
-            if (!Directory.Exists(_backchannelsDirectory))
-            {
-                Directory.CreateDirectory(_backchannelsDirectory);
-            }
+            // Ensure both directories exist so the monitor can see compact sockets and
+            // sockets created by older AppHosts that still use the legacy location.
+            Directory.CreateDirectory(_backchannelsDirectory);
+            Directory.CreateDirectory(_legacyBackchannelsDirectory);
 
             // Scan for existing sockets on startup.
             await ProcessDirectoryChangesAsync(stoppingToken).ConfigureAwait(false);
@@ -165,9 +166,14 @@ internal sealed class AuxiliaryBackchannelMonitor(
             using var fileProvider = new PhysicalFileProvider(_backchannelsDirectory);
             fileProvider.UsePollingFileWatcher = true;
             fileProvider.UseActivePolling = true;
+            using var legacyFileProvider = new PhysicalFileProvider(_legacyBackchannelsDirectory);
+            legacyFileProvider.UsePollingFileWatcher = true;
+            legacyFileProvider.UseActivePolling = true;
 
             // Run the watcher loop until cancellation
-            var fileWatcherTask = RunFileWatcherLoopAsync(fileProvider, stoppingToken);
+            var fileWatcherTask = Task.WhenAll(
+                RunFileWatcherLoopAsync(fileProvider, stoppingToken),
+                RunFileWatcherLoopAsync(legacyFileProvider, stoppingToken));
 
             await fileWatcherTask.ConfigureAwait(false);
         }
@@ -206,15 +212,7 @@ internal sealed class AuxiliaryBackchannelMonitor(
         await _scanLock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            // Support both "auxi.sock.*" (new) and "aux.sock.*" (old) for backward compatibility
-            // Note: "aux" is a reserved device name on Windows < 11, but we still scan for it
-            // to support connections from older CLI versions
-            // Using "aux*.sock.*" wildcard to match both patterns
-            var currentFiles = new HashSet<string>(
-                Directory.Exists(_backchannelsDirectory)
-                    ? Directory.GetFiles(_backchannelsDirectory, "aux*.sock.*")
-                    : [],
-                StringComparer.OrdinalIgnoreCase);
+            var currentFiles = new HashSet<string>(GetSocketFiles(), StringComparer.OrdinalIgnoreCase);
 
             // Find new files (files that exist now but weren't known before)
             var newFiles = currentFiles.Except(_knownSocketFiles, StringComparer.OrdinalIgnoreCase).ToList();
@@ -495,11 +493,33 @@ internal sealed class AuxiliaryBackchannelMonitor(
         await Task.CompletedTask.ConfigureAwait(false);
     }
 
-    private static string GetBackchannelsDirectory()
+    private IEnumerable<string> GetSocketFiles()
     {
-        var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        return Path.Combine(homeDirectory, ".aspire", "cli", "backchannels");
+        if (Directory.Exists(_backchannelsDirectory))
+        {
+            foreach (var socketPath in Directory.GetFiles(_backchannelsDirectory))
+            {
+                if (AppHostHelper.ExtractHashFromSocketPath(socketPath) is not null)
+                {
+                    yield return socketPath;
+                }
+            }
+        }
+
+        if (Directory.Exists(_legacyBackchannelsDirectory))
+        {
+            // Support both "auxi.sock.*" and "aux.sock.*" for backward compatibility.
+            // Note: "aux" is a reserved device name on Windows < 11, but we still scan for it
+            // to support sockets created by older AppHost versions.
+            foreach (var socketPath in Directory.GetFiles(_legacyBackchannelsDirectory, "aux*.sock.*"))
+            {
+                yield return socketPath;
+            }
+        }
     }
+
+    private static string GetHomeDirectory()
+        => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
     /// <summary>
     /// Runs the file watcher loop that triggers scans when file changes are detected.

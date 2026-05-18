@@ -17,19 +17,11 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
 
         Assert.NotEqual(socketPath1, socketPath2);
 
-        if (OperatingSystem.IsWindows())
-        {
-            Assert.Matches("^apphost\\.sock\\.[a-f0-9]{12}$", socketPath1);
-            Assert.Matches("^apphost\\.sock\\.[a-f0-9]{12}$", socketPath2);
-        }
-        else
-        {
-            var expectedDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".aspire", "cli", "runtime", "sockets");
-            Assert.Equal(expectedDirectory, Path.GetDirectoryName(socketPath1));
-            Assert.Equal(expectedDirectory, Path.GetDirectoryName(socketPath2));
-            Assert.Matches("^apphost\\.sock\\.[a-f0-9]{12}$", Path.GetFileName(socketPath1));
-            Assert.Matches("^apphost\\.sock\\.[a-f0-9]{12}$", Path.GetFileName(socketPath2));
-        }
+        var expectedDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".aspire", "cli", "bch");
+        Assert.Equal(expectedDirectory, Path.GetDirectoryName(socketPath1));
+        Assert.Equal(expectedDirectory, Path.GetDirectoryName(socketPath2));
+        Assert.Matches("^h[A-Za-z0-9_-]{8}$", Path.GetFileName(socketPath1));
+        Assert.Matches("^h[A-Za-z0-9_-]{8}$", Path.GetFileName(socketPath2));
     }
 
     [Fact]
@@ -42,10 +34,10 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
 
         Assert.NotEqual(socketPath1, socketPath2);
 
-        var expectedDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".aspire", "cli", "runtime", "sockets");
+        var expectedDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".aspire", "cli", "bch");
         Assert.Equal(expectedDirectory, Path.GetDirectoryName(socketPath1));
         Assert.Equal(expectedDirectory, Path.GetDirectoryName(socketPath2));
-        Assert.Matches("^apphost\\.sock\\.[a-f0-9]{12}$", Path.GetFileName(socketPath1));
-        Assert.Matches("^apphost\\.sock\\.[a-f0-9]{12}$", Path.GetFileName(socketPath2));
+        Assert.Matches("^h[A-Za-z0-9_-]{8}$", Path.GetFileName(socketPath1));
+        Assert.Matches("^h[A-Za-z0-9_-]{8}$", Path.GetFileName(socketPath2));
     }
 }
