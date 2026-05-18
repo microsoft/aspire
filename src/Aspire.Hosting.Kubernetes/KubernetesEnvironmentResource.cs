@@ -737,6 +737,16 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
         foreach (var gatewayResource in gatewayResources)
         {
+            // Apply auto-routing here (rather than via BeforePublishEvent) so it runs under
+            // both `dotnet run -- --publisher kubernetes` (which goes through PipelineExecutor
+            // and fires BeforePublishEvent) and `aspire deploy` (which drives pipeline steps
+            // directly over the CLI JSON-RPC backchannel and never raises BeforePublishEvent).
+            // Recipes such as WithSimplifiedDeployment attach the annotation when they want this.
+            if (gatewayResource.TryGetLastAnnotation<KubernetesGatewayAutoRouteAnnotation>(out var autoRoute))
+            {
+                ApplyAutoRouting(model, gatewayResource, autoRoute);
+            }
+
             if (gatewayResource.Routes.Count == 0)
             {
                 logger.LogWarning("Gateway '{GatewayName}' has no routes configured. Skipping.", gatewayResource.Name);
@@ -745,6 +755,112 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
             await BuildGatewayObjects(gatewayResource, deploymentTargets, logger, cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// Adds an HTTPRoute on the gateway for every external HTTP endpoint in the model that the
+    /// user has not already routed. User-authored <c>WithRoute(...)</c> calls win — both the
+    /// resource name and the path are snapshotted so we never overwrite or duplicate them.
+    /// </summary>
+    private static void ApplyAutoRouting(
+        DistributedApplicationModel model,
+        KubernetesGatewayResource gatewayResource,
+        KubernetesGatewayAutoRouteAnnotation autoRoute)
+    {
+        var alreadyRoutedResources = new HashSet<string>(
+            gatewayResource.Routes.Select(r => r.Endpoint.Resource.Name),
+            StringComparer.OrdinalIgnoreCase);
+
+        var usedPaths = new HashSet<string>(
+            gatewayResource.Routes.Select(r => r.Path),
+            StringComparer.Ordinal);
+
+        var candidates = model.Resources
+            .OfType<IResourceWithEndpoints>()
+            .Where(r => !autoRoute.InfrastructureResourceNames.Contains(r.Name))
+            .Where(r => !alreadyRoutedResources.Contains(r.Name))
+            .Where(r => !IsKubernetesInfrastructureResource(r))
+            .Select(r => new
+            {
+                Resource = r,
+                // Collapse multiple external endpoints down to a single representative
+                // endpoint per resource. WithExternalHttpEndpoints() annotates BOTH the
+                // "http" and "https" endpoints on a project, but the backing k8s Service
+                // typically exposes one port that fronts the same Kestrel — so emitting
+                // two routes that point at the same backend is just noise. Prefer "http"
+                // because TLS terminates at the gateway and the in-cluster Service
+                // listens plaintext; fall back to whichever endpoint exists otherwise.
+                Endpoint = r.Annotations
+                    .OfType<EndpointAnnotation>()
+                    .Where(e => e.IsExternal && IsHttpScheme(e.UriScheme))
+                    .OrderBy(e => string.Equals(e.UriScheme, "http", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+                    .FirstOrDefault(),
+            })
+            .Where(x => x.Endpoint is not null)
+            .ToList();
+
+        // Single-frontend constraint: WithSimplifiedDeployment is designed for the
+        // 80% case of "expose one frontend behind one ALB hostname". Multi-frontend
+        // hostname allocation needs stable endpoint-to-listener mappings across deploys
+        // and bumps against AGC's 5-frontends-per-load-balancer limit, so users who
+        // need more than one external HTTP frontend should drop down to the verbose
+        // AddAzureKubernetesEnvironment path (manual gateway + routes + cert wiring).
+        // Fail loudly here rather than silently routing them under path prefixes,
+        // which (as we discovered) is a footgun when the backend doesn't expect a
+        // mount-point prefix.
+        if (candidates.Count > 1)
+        {
+            var names = string.Join(", ", candidates.Select(c => c.Resource.Name).OrderBy(n => n, StringComparer.Ordinal));
+            throw new DistributedApplicationException(
+                $"WithSimplifiedDeployment only supports a single resource with external HTTP endpoints, " +
+                $"but found {candidates.Count}: {names}. " +
+                $"Use AddAzureKubernetesEnvironment with explicit gateway, route, and cert-manager " +
+                $"configuration to expose multiple external frontends.");
+        }
+
+        // Pit-of-success behavior: the single allowed external frontend mounts at "/" so
+        // the bare gateway URL just works. No prefix to strip, so RewritePrefix stays off.
+        if (candidates.Count == 1)
+        {
+            var entry = candidates[0];
+
+            if (usedPaths.Add("/"))
+            {
+                var endpointRef = new EndpointReference(entry.Resource, entry.Endpoint!.Name);
+                gatewayResource.Routes.Add(new GatewayRouteConfig(
+                    Host: null,
+                    Path: "/",
+                    PathType: IngressPathType.Prefix,
+                    Endpoint: endpointRef));
+            }
+        }
+    }
+
+    private static bool IsHttpScheme(string uriScheme)
+        => string.Equals(uriScheme, "http", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(uriScheme, "https", StringComparison.OrdinalIgnoreCase);
+
+    // Mirror of the conservative full-name filter used by the auto-router so we never route a
+    // gateway/load-balancer/cert-manager to itself. String compare keeps the K8s assembly free
+    // of hard references to Azure types that may not be loaded.
+    private static bool IsKubernetesInfrastructureResource(IResource resource)
+    {
+        var fullName = resource.GetType().FullName;
+        return fullName switch
+        {
+            "Aspire.Hosting.Kubernetes.KubernetesEnvironmentResource" => true,
+            "Aspire.Hosting.Azure.Kubernetes.AzureKubernetesEnvironmentResource" => true,
+            "Aspire.Hosting.Azure.Kubernetes.AzureKubernetesLoadBalancerResource" => true,
+            "Aspire.Hosting.Azure.AzureVirtualNetworkResource" => true,
+            "Aspire.Hosting.Azure.AzureSubnetResource" => true,
+            "Aspire.Hosting.Azure.AzureContainerRegistryResource" => true,
+            "Aspire.Hosting.Kubernetes.KubernetesGatewayResource" => true,
+            "Aspire.Hosting.Kubernetes.KubernetesIngressResource" => true,
+            "Aspire.Hosting.Kubernetes.KubernetesHelmChartResource" => true,
+            "Aspire.Hosting.Kubernetes.CertManagerResource" => true,
+            "Aspire.Hosting.Kubernetes.CertManagerIssuerResource" => true,
+            _ => false,
+        };
     }
 
     private static async Task BuildGatewayObjects(
@@ -845,6 +961,13 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
 
         gatewayResource.GeneratedGateway = gateway;
 
+        // Compute TLS posture for filter emission below. A single gateway can have multiple
+        // TLS configs (one per hostname listener) — for redirect and HSTS we honor "any wants
+        // it" semantics so the user only has to opt out once via WithTls(o => o.RedirectHttp = false).
+        var redirectHttpToHttps = gatewayResource.TlsConfigs.Any(t => t.RedirectHttp);
+        var hstsConfig = gatewayResource.TlsConfigs.FirstOrDefault(t => t.HstsEnabled);
+        var hstsHeader = hstsConfig is not null ? BuildHstsHeaderValue(hstsConfig) : null;
+
         var routesByHost = gatewayResource.Routes.GroupBy(r => r.Host ?? string.Empty);
 
         foreach (var hostGroup in routesByHost)
@@ -890,6 +1013,52 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                         Value = route.Path
                     }
                 });
+
+                // Apply HSTS via a ResponseHeaderModifier filter on each user rule when any
+                // TLS config on this gateway enables HSTS. The header lands on responses for
+                // both HTTP and HTTPS, but browsers only honor Strict-Transport-Security on
+                // valid HTTPS connections — so emitting it unconditionally is safe and avoids
+                // a second per-listener route split.
+                if (hstsHeader is not null)
+                {
+                    rule.Filters.Add(new HttpRouteFilterV1
+                    {
+                        Type = "ResponseHeaderModifier",
+                        ResponseHeaderModifier = new HttpRouteResponseHeaderModifierV1
+                        {
+                            Set =
+                            {
+                                new HttpRouteHeaderV1
+                                {
+                                    Name = "Strict-Transport-Security",
+                                    Value = hstsHeader,
+                                }
+                            }
+                        }
+                    });
+                }
+
+                // Strip the matched path prefix before forwarding when the route was
+                // synthesized by the auto-router. Without this, a backend mounted at "/"
+                // sees the full "/{resource}" path and returns 404 for every request.
+                // PathPrefix matches only — Exact matches forward as-is and don't need
+                // a rewrite. ReplacePrefixMatch with "/" replaces the matched prefix.
+                if (route.RewritePrefix && route.PathType == IngressPathType.Prefix)
+                {
+                    rule.Filters.Add(new HttpRouteFilterV1
+                    {
+                        Type = "URLRewrite",
+                        UrlRewrite = new HttpRouteUrlRewriteV1
+                        {
+                            Path = new HttpRouteUrlRewritePathV1
+                            {
+                                Type = "ReplacePrefixMatch",
+                                ReplacePrefixMatch = "/",
+                            }
+                        }
+                    });
+                }
+
                 rule.BackendRefs.Add(backendRef);
                 httpRoute.Spec.Rules.Add(rule);
             }
@@ -899,6 +1068,69 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                 gatewayResource.GeneratedHttpRoutes.Add(httpRoute);
             }
         }
+
+        // Emit a synthetic HTTPRoute that 301-redirects everything on the HTTP listener to
+        // HTTPS. Bound to sectionName: http only so it does not also attach to the HTTPS
+        // listener (which would cause an infinite redirect loop). The catch-all PathPrefix: /
+        // is the fallback for everything not matched by a more specific route — notably
+        // cert-manager's HTTP-01 solver route uses path.type: Exact and therefore wins per
+        // Gateway API route precedence, so ACME validation continues to work.
+        if (redirectHttpToHttps)
+        {
+            var redirectRoute = new HttpRouteV1
+            {
+                Metadata = { Name = $"{gatewayName}-http-redirect" }
+            };
+            redirectRoute.Spec.ParentRefs.Add(new HttpRouteParentRefV1
+            {
+                Name = gatewayName,
+                SectionName = "http",
+            });
+            var redirectRule = new HttpRouteRuleV1();
+            redirectRule.Matches.Add(new HttpRouteMatchV1
+            {
+                Path = new HttpRoutePathMatchV1
+                {
+                    Type = "PathPrefix",
+                    Value = "/",
+                }
+            });
+            redirectRule.Filters.Add(new HttpRouteFilterV1
+            {
+                Type = "RequestRedirect",
+                RequestRedirect = new HttpRouteRequestRedirectV1
+                {
+                    Scheme = "https",
+                    StatusCode = 301,
+                }
+            });
+            redirectRoute.Spec.Rules.Add(redirectRule);
+            gatewayResource.GeneratedHttpRoutes.Add(redirectRoute);
+        }
+    }
+
+    /// <summary>
+    /// Renders the <c>Strict-Transport-Security</c> header value from the snapshot HSTS
+    /// settings on a <see cref="GatewayTlsConfig"/>. Format per RFC 6797 §6.1:
+    /// <c>max-age=&lt;seconds&gt;[; includeSubDomains][; preload]</c>.
+    /// </summary>
+    private static string BuildHstsHeaderValue(GatewayTlsConfig tls)
+    {
+        var maxAgeSeconds = (long)tls.HstsMaxAge.TotalSeconds;
+        var builder = new System.Text.StringBuilder();
+        builder.Append("max-age=").Append(maxAgeSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+        if (tls.HstsIncludeSubDomains)
+        {
+            builder.Append("; includeSubDomains");
+        }
+
+        if (tls.HstsPreload)
+        {
+            builder.Append("; preload");
+        }
+
+        return builder.ToString();
     }
 
     private static HttpRouteBackendRefV1? ResolveGatewayBackendRef(

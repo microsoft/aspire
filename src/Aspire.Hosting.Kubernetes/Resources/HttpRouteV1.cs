@@ -55,11 +55,21 @@ public sealed class HttpRouteParentRefV1
     /// </summary>
     [YamlMember(Alias = "name")]
     public string Name { get; set; } = null!;
+
+    /// <summary>
+    /// Gets or sets the optional listener section the route binds to. When set,
+    /// the route only attaches to listeners with a matching <c>name</c>. Used to
+    /// bind the HTTP→HTTPS redirect route to the <c>http</c> listener only without
+    /// also attaching it to the <c>https</c> listener (which would cause an infinite
+    /// redirect loop).
+    /// </summary>
+    [YamlMember(Alias = "sectionName")]
+    public string? SectionName { get; set; }
 }
 
 /// <summary>
 /// A single routing rule in an HTTPRoute. Each rule matches requests and forwards
-/// them to one or more backend services.
+/// them to one or more backend services, optionally applying filters along the way.
 /// </summary>
 [YamlSerializable]
 public sealed class HttpRouteRuleV1
@@ -70,6 +80,14 @@ public sealed class HttpRouteRuleV1
     /// </summary>
     [YamlMember(Alias = "matches")]
     public List<HttpRouteMatchV1> Matches { get; } = [];
+
+    /// <summary>
+    /// Gets the filters applied to matched requests/responses. Common filters include
+    /// <c>RequestRedirect</c> (used to redirect HTTP→HTTPS) and <c>ResponseHeaderModifier</c>
+    /// (used to add HSTS headers).
+    /// </summary>
+    [YamlMember(Alias = "filters")]
+    public List<HttpRouteFilterV1> Filters { get; } = [];
 
     /// <summary>
     /// Gets the backend references that matched requests are forwarded to.

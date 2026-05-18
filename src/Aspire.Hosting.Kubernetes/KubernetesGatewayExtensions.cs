@@ -198,24 +198,31 @@ public static class KubernetesGatewayExtensions
     /// <summary>
     /// Configures TLS termination on the gateway by adding an HTTPS listener that references
     /// a Kubernetes TLS secret. The Gateway terminates TLS and forwards plain HTTP to backends.
-    /// This does not create a separate route — existing HTTPRoutes serve both HTTP and HTTPS.
-    /// The TLS configuration applies to all hostnames configured via <see cref="WithHostname(IResourceBuilder{KubernetesGatewayResource}, string)"/>.
+    /// By default this also emits a <c>301</c> HTTP→HTTPS redirect on the gateway's HTTP listener
+    /// and HSTS (<c>Strict-Transport-Security: max-age=31536000</c>) on HTTPS responses; both
+    /// behaviors can be tuned via <paramref name="configure"/>.
     /// </summary>
     /// <param name="builder">The gateway resource builder.</param>
     /// <param name="secretName">The name of the Kubernetes <c>kubernetes.io/tls</c> Secret.</param>
+    /// <param name="configure">Optional callback to customize the TLS posture (HTTP→HTTPS redirect, HSTS).</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
+    /// <remarks>
+    /// The TLS configuration applies to all hostnames configured via <see cref="WithHostname(IResourceBuilder{KubernetesGatewayResource}, string)"/>.
+    /// Port 80 on a TLS'd gateway exists for ACME HTTP-01 challenges; the cert-manager solver's
+    /// HTTPRoute uses <c>path.type: Exact</c> and therefore wins over the redirect's
+    /// <c>PathPrefix: /</c> per Gateway API route-precedence rules, so HTTP-01 validation
+    /// continues to work with the redirect in place.
+    /// </remarks>
     [AspireExport("withGatewayTls", MethodName = "withTls", Description = "Configures TLS on a Kubernetes Gateway listener")]
     public static IResourceBuilder<KubernetesGatewayResource> WithTls(
         this IResourceBuilder<KubernetesGatewayResource> builder,
-        string secretName)
+        string secretName,
+        Action<TlsOptions>? configure = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(secretName);
 
-        builder.Resource.TlsConfigs.Add(new GatewayTlsConfig(
-            SecretName: ReferenceExpression.Create($"{secretName}")));
-
-        return builder;
+        return builder.AddTlsConfig(ReferenceExpression.Create($"{secretName}"), configure);
     }
 
     /// <summary>
@@ -223,36 +230,51 @@ public static class KubernetesGatewayExtensions
     /// </summary>
     /// <param name="builder">The gateway resource builder.</param>
     /// <param name="secretName">A parameter resource builder for the secret name.</param>
+    /// <param name="configure">Optional callback to customize the TLS posture (HTTP→HTTPS redirect, HSTS).</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
     [AspireExport("withGatewayTlsParam", Description = "Configures TLS on a Kubernetes Gateway with a parameterized secret")]
     public static IResourceBuilder<KubernetesGatewayResource> WithTls(
         this IResourceBuilder<KubernetesGatewayResource> builder,
-        IResourceBuilder<ParameterResource> secretName)
+        IResourceBuilder<ParameterResource> secretName,
+        Action<TlsOptions>? configure = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(secretName);
 
-        builder.Resource.TlsConfigs.Add(new GatewayTlsConfig(
-            SecretName: ReferenceExpression.Create($"{secretName.Resource}")));
-
-        return builder;
+        return builder.AddTlsConfig(ReferenceExpression.Create($"{secretName.Resource}"), configure);
     }
 
     /// <summary>
     /// Configures TLS termination with an auto-generated secret name derived from the gateway name.
     /// </summary>
     /// <param name="builder">The gateway resource builder.</param>
+    /// <param name="configure">Optional callback to customize the TLS posture (HTTP→HTTPS redirect, HSTS).</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
     [AspireExport("withGatewayTlsAuto", Description = "Configures TLS on a Kubernetes Gateway with an auto-generated secret")]
     public static IResourceBuilder<KubernetesGatewayResource> WithTls(
-        this IResourceBuilder<KubernetesGatewayResource> builder)
+        this IResourceBuilder<KubernetesGatewayResource> builder,
+        Action<TlsOptions>? configure = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
 
         var secretName = $"{builder.Resource.Name}-tls";
 
-        builder.Resource.TlsConfigs.Add(new GatewayTlsConfig(
-            SecretName: ReferenceExpression.Create($"{secretName}")));
+        return builder.AddTlsConfig(ReferenceExpression.Create($"{secretName}"), configure);
+    }
+
+    /// <summary>
+    /// Shared implementation: builds and registers a <see cref="GatewayTlsConfig"/> from a
+    /// resolved secret-name expression and an optional TLS-options callback.
+    /// </summary>
+    private static IResourceBuilder<KubernetesGatewayResource> AddTlsConfig(
+        this IResourceBuilder<KubernetesGatewayResource> builder,
+        ReferenceExpression secretName,
+        Action<TlsOptions>? configure)
+    {
+        var options = new TlsOptions();
+        configure?.Invoke(options);
+
+        builder.Resource.TlsConfigs.Add(GatewayTlsConfig.FromOptions(secretName, options));
 
         return builder;
     }

@@ -301,13 +301,16 @@ public static class CertManagerExtensions
     /// Adds an HTTPS listener to the gateway and wires it to the supplied cert-manager
     /// <c>ClusterIssuer</c>. This adds the <c>cert-manager.io/cluster-issuer</c> annotation
     /// to the generated Gateway resource, causing cert-manager to provision and renew a
-    /// certificate for each gateway listener hostname.
+    /// certificate for each gateway listener hostname. By default the same call also emits
+    /// a 301 HTTP→HTTPS redirect and HSTS on HTTPS responses — see <see cref="TlsOptions"/>
+    /// for the knobs.
     /// </summary>
     /// <param name="builder">The gateway resource builder.</param>
     /// <param name="issuer">The cert-manager <c>ClusterIssuer</c> to issue certificates from.</param>
+    /// <param name="configure">Optional callback to customize the TLS posture (HTTP→HTTPS redirect, HSTS).</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
     /// <remarks>
-    /// Equivalent to calling <c>WithTls()</c> followed by
+    /// Equivalent to calling <c>WithTls(configure)</c> followed by
     /// <c>WithGatewayAnnotation("cert-manager.io/cluster-issuer", issuer.Resource.Name)</c>,
     /// but type-safe and refactor-friendly. Throws if the gateway and the issuer's
     /// cert-manager installation are not part of the same Kubernetes environment, since
@@ -317,7 +320,8 @@ public static class CertManagerExtensions
     [AspireExport("withGatewayTlsIssuer", Description = "Configures TLS on a Kubernetes Gateway using a cert-manager ClusterIssuer")]
     public static IResourceBuilder<KubernetesGatewayResource> WithTls(
         this IResourceBuilder<KubernetesGatewayResource> builder,
-        IResourceBuilder<CertManagerIssuerResource> issuer)
+        IResourceBuilder<CertManagerIssuerResource> issuer,
+        Action<TlsOptions>? configure = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(issuer);
@@ -335,7 +339,7 @@ public static class CertManagerExtensions
         }
 
         return builder
-            .WithTls()
+            .WithTls(configure)
             .WithGatewayAnnotation(ClusterIssuerAnnotationKey, issuer.Resource.Name);
     }
 

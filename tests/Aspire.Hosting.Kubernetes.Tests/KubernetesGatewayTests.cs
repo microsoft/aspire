@@ -309,4 +309,238 @@ public class KubernetesGatewayTests
         var httpsSection = lines.Skip(httpsIndex).Take((nextListenerOrEnd > httpsIndex ? nextListenerOrEnd : lines.Count) - httpsIndex).ToList();
         Assert.Contains(httpsSection, l => l.Contains("hostname:") && l.Contains("api.example.com"));
     }
+
+    [Fact]
+    public async Task WithTls_EmitsRedirectHttpRouteByDefault()
+    {
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("test");
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        gateway
+            .WithRoute("api.example.com", "/", api.GetEndpoint("http"))
+            .WithHostname("api.example.com").WithTls("my-tls-secret");
+
+        var app = builder.Build();
+        app.Run();
+
+        var gatewayDir = Path.Combine(tempDir.Path, "templates", "public");
+        var redirectFile = Path.Combine(gatewayDir, "http-redirect.yaml");
+        Assert.True(File.Exists(redirectFile), $"Redirect HTTPRoute not emitted; files: {string.Join(", ", Directory.GetFiles(gatewayDir).Select(Path.GetFileName))}");
+
+        var redirectContent = await File.ReadAllTextAsync(redirectFile);
+        Assert.Contains("HTTPRoute", redirectContent);
+        Assert.Contains("RequestRedirect", redirectContent);
+        Assert.Contains("scheme: \"https\"", redirectContent);
+        Assert.Contains("statusCode: 301", redirectContent);
+        Assert.Contains("sectionName: \"http\"", redirectContent);
+    }
+
+    [Fact]
+    public async Task WithTls_RedirectHttpFalse_DoesNotEmitRedirect()
+    {
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("test");
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        gateway
+            .WithRoute("api.example.com", "/", api.GetEndpoint("http"))
+            .WithHostname("api.example.com")
+            .WithTls("my-tls-secret", o => o.RedirectHttp = false);
+
+        var app = builder.Build();
+        app.Run();
+
+        var gatewayDir = Path.Combine(tempDir.Path, "templates", "public");
+        Assert.False(File.Exists(Path.Combine(gatewayDir, "http-redirect.yaml")),
+            "Redirect HTTPRoute should not be emitted when RedirectHttp=false");
+    }
+
+    [Fact]
+    public async Task WithTls_AppliesHstsFilterToUserRoutesByDefault()
+    {
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("test");
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        gateway
+            .WithRoute("api.example.com", "/", api.GetEndpoint("http"))
+            .WithHostname("api.example.com").WithTls("my-tls-secret");
+
+        var app = builder.Build();
+        app.Run();
+
+        var gatewayDir = Path.Combine(tempDir.Path, "templates", "public");
+        var routeFile = Directory.GetFiles(gatewayDir)
+            .First(f => Path.GetFileName(f).Contains("api-example-com-route"));
+
+        var content = await File.ReadAllTextAsync(routeFile);
+        Assert.Contains("ResponseHeaderModifier", content);
+        Assert.Contains("Strict-Transport-Security", content);
+        // Default max-age = 365 days = 31536000 seconds
+        Assert.Contains("max-age=31536000", content);
+        Assert.DoesNotContain("includeSubDomains", content);
+        Assert.DoesNotContain("preload", content);
+    }
+
+    [Fact]
+    public async Task WithTls_HstsDisabled_OmitsFilter()
+    {
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("test");
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        gateway
+            .WithRoute("api.example.com", "/", api.GetEndpoint("http"))
+            .WithHostname("api.example.com")
+            .WithTls("my-tls-secret", o => o.Hsts.Enabled = false);
+
+        var app = builder.Build();
+        app.Run();
+
+        var gatewayDir = Path.Combine(tempDir.Path, "templates", "public");
+        var routeFile = Directory.GetFiles(gatewayDir)
+            .First(f => Path.GetFileName(f).Contains("api-example-com-route"));
+
+        var content = await File.ReadAllTextAsync(routeFile);
+        Assert.DoesNotContain("Strict-Transport-Security", content);
+        Assert.DoesNotContain("ResponseHeaderModifier", content);
+    }
+
+    [Fact]
+    public async Task WithTls_HstsIncludeSubDomainsAndPreload_AppendsDirectives()
+    {
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("test");
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        gateway
+            .WithRoute("api.example.com", "/", api.GetEndpoint("http"))
+            .WithHostname("api.example.com")
+            .WithTls("my-tls-secret", o =>
+            {
+                o.Hsts.IncludeSubDomains = true;
+                o.Hsts.Preload = true;
+            });
+
+        var app = builder.Build();
+        app.Run();
+
+        var gatewayDir = Path.Combine(tempDir.Path, "templates", "public");
+        var routeFile = Directory.GetFiles(gatewayDir)
+            .First(f => Path.GetFileName(f).Contains("api-example-com-route"));
+
+        var content = await File.ReadAllTextAsync(routeFile);
+        Assert.Contains("max-age=31536000; includeSubDomains; preload", content);
+    }
+
+    [Fact]
+    public async Task WithTls_HstsCustomMaxAge_RespectsValue()
+    {
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("test");
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        gateway
+            .WithRoute("api.example.com", "/", api.GetEndpoint("http"))
+            .WithHostname("api.example.com")
+            .WithTls("my-tls-secret", o => o.Hsts.MaxAge = TimeSpan.FromDays(30));
+
+        var app = builder.Build();
+        app.Run();
+
+        var gatewayDir = Path.Combine(tempDir.Path, "templates", "public");
+        var routeFile = Directory.GetFiles(gatewayDir)
+            .First(f => Path.GetFileName(f).Contains("api-example-com-route"));
+
+        var content = await File.ReadAllTextAsync(routeFile);
+        // 30 days = 2592000 seconds
+        Assert.Contains("max-age=2592000", content);
+    }
+
+    [Fact]
+    public async Task NonTlsGateway_NoRedirectNoHsts()
+    {
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("test");
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        gateway.WithRoute("/", api.GetEndpoint("http"));
+
+        var app = builder.Build();
+        app.Run();
+
+        var gatewayDir = Path.Combine(tempDir.Path, "templates", "public");
+        Assert.False(File.Exists(Path.Combine(gatewayDir, "http-redirect.yaml")));
+
+        // And the user route file must not contain HSTS / ResponseHeaderModifier.
+        var routeFile = Directory.GetFiles(gatewayDir).First(f => f.Contains("route"));
+        var content = await File.ReadAllTextAsync(routeFile);
+        Assert.DoesNotContain("Strict-Transport-Security", content);
+        Assert.DoesNotContain("ResponseHeaderModifier", content);
+    }
+
+    [Fact]
+    public async Task WithTls_RedirectRouteUsesPathPrefixCatchAll()
+    {
+        // The redirect route must use PathPrefix: / so that cert-manager's HTTP-01 solver
+        // route (path.type: Exact, /.well-known/acme-challenge/<token>) takes precedence
+        // per Gateway API route-precedence rules and ACME validation continues to work.
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("test");
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        gateway
+            .WithRoute("api.example.com", "/", api.GetEndpoint("http"))
+            .WithHostname("api.example.com").WithTls("my-tls-secret");
+
+        var app = builder.Build();
+        app.Run();
+
+        var redirectFile = Path.Combine(tempDir.Path, "templates", "public", "http-redirect.yaml");
+        var content = await File.ReadAllTextAsync(redirectFile);
+
+        Assert.Contains("type: \"PathPrefix\"", content);
+        Assert.Contains("value: \"/\"", content);
+    }
 }

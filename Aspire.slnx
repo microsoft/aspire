@@ -182,6 +182,10 @@
     <Project Path="playground/CertManagerDemo/CertManagerDemo.ApiService/CertManagerDemo.ApiService.csproj" />
     <Project Path="playground/CertManagerDemo/CertManagerDemo.AppHost/CertManagerDemo.AppHost.csproj" />
   </Folder>
+  <Folder Name="/playground/AksSimplifiedDeploymentDemo/">
+    <Project Path="playground/AksSimplifiedDeploymentDemo/AksSimplifiedDeploymentDemo.ApiService/AksSimplifiedDeploymentDemo.ApiService.csproj" />
+    <Project Path="playground/AksSimplifiedDeploymentDemo/AksSimplifiedDeploymentDemo.AppHost/AksSimplifiedDeploymentDemo.AppHost.csproj" />
+  </Folder>
   <Folder Name="/playground/AzureStorageEndToEnd/">
     <Project Path="playground/AzureStorageEndToEnd/AzureStorageEndToEnd.ApiService/AzureStorageEndToEnd.ApiService.csproj" />
     <Project Path="playground/AzureStorageEndToEnd/AzureStorageEndToEnd.AppHost/AzureStorageEndToEnd.AppHost.csproj" />

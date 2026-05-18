@@ -89,14 +89,45 @@ internal sealed record GatewayRouteConfig(
     string? Host,
     string Path,
     IngressPathType PathType,
-    EndpointReference Endpoint);
+    EndpointReference Endpoint)
+{
+    /// <summary>
+    /// When true, the emitted HTTPRoute rule includes a URLRewrite filter that
+    /// strips the matched <see cref="Path"/> prefix before forwarding to the
+    /// backend. Used by the WithSimplifiedDeployment auto-router because backends
+    /// don't know about their synthetic gateway-side path prefix.
+    /// </summary>
+    public bool RewritePrefix { get; init; }
+}
 
 /// <summary>
 /// Stores TLS configuration for a <see cref="KubernetesGatewayResource"/>.
-/// Configures an HTTPS listener on the Gateway with TLS termination. The set of hostnames
-/// the listener applies to is resolved from the gateway's <see cref="KubernetesGatewayResource.Hostnames"/>
-/// at manifest-emit time, so callers can register hostnames before or after WithTls without
-/// affecting the generated listener.
+/// Configures an HTTPS listener on the Gateway with TLS termination, plus the
+/// HTTP→HTTPS redirect and HSTS posture controlled by <see cref="TlsOptions"/>.
+/// The set of hostnames the listener applies to is resolved from the gateway's
+/// <see cref="KubernetesGatewayResource.Hostnames"/> at manifest-emit time, so
+/// callers can register hostnames before or after WithTls without affecting the
+/// generated listener.
 /// </summary>
 internal sealed record GatewayTlsConfig(
-    ReferenceExpression SecretName);
+    ReferenceExpression SecretName,
+    bool RedirectHttp,
+    bool HstsEnabled,
+    TimeSpan HstsMaxAge,
+    bool HstsIncludeSubDomains,
+    bool HstsPreload)
+{
+    /// <summary>
+    /// Builds a <see cref="GatewayTlsConfig"/> from a <see cref="TlsOptions"/> instance,
+    /// snapshotting the option values so subsequent mutation of the options object
+    /// doesn't affect already-registered TLS configs.
+    /// </summary>
+    public static GatewayTlsConfig FromOptions(ReferenceExpression secretName, TlsOptions options) =>
+        new(
+            SecretName: secretName,
+            RedirectHttp: options.RedirectHttp,
+            HstsEnabled: options.Hsts.Enabled,
+            HstsMaxAge: options.Hsts.MaxAge,
+            HstsIncludeSubDomains: options.Hsts.IncludeSubDomains,
+            HstsPreload: options.Hsts.Preload);
+}
