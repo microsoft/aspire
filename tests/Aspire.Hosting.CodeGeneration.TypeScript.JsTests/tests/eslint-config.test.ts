@@ -196,4 +196,96 @@ work();
         expect(appHostFloats).toEqual([]);
         expect(otherFloats).toEqual([]);
     });
+
+    it('flags a .then() chain that lacks .catch() handling', async () => {
+        // .then() returns a new Promise. Without .catch()/.finally() the chain
+        // is still floating, even though developers commonly think the handler
+        // "consumes" the promise.
+        writeAppHost(
+            fixtureDir,
+            `declare const builder: {
+    build(): { run(): Promise<void> };
+};
+
+builder.build().run().then(() => {
+    console.log('AppHost finished');
+});
+`
+        );
+
+        const results = await lintAppHost(fixtureDir);
+        const messages = collectFloatingPromiseMessages(results);
+
+        expect(messages.length).toBeGreaterThan(0);
+        expect(messages[0].severity).toBe(2);
+    });
+
+    it('lints clean when the AppHost promise is suppressed with the void operator', async () => {
+        // The ts-eslint rule defaults to ignoreVoid: true. Pinning this lets
+        // the project tighten the rule (ignoreVoid: false) deliberately rather
+        // than by accident.
+        writeAppHost(
+            fixtureDir,
+            `declare const builder: {
+    build(): { run(): Promise<void> };
+};
+
+void builder.build().run();
+`
+        );
+
+        const results = await lintAppHost(fixtureDir);
+        const messages = collectFloatingPromiseMessages(results);
+
+        expect(messages).toEqual([]);
+    });
+
+    it('lints clean when an async wrapper returns the AppHost promise to its caller', async () => {
+        // Returning the promise delegates handling to the caller, which is a
+        // legitimate way to factor a bootstrap function. The rule recognises
+        // this and stays quiet.
+        writeAppHost(
+            fixtureDir,
+            `declare const builder: {
+    build(): { run(): Promise<void> };
+};
+
+async function start(): Promise<void> {
+    return builder.build().run();
+}
+
+await start();
+`
+        );
+
+        const results = await lintAppHost(fixtureDir);
+        const messages = collectFloatingPromiseMessages(results);
+
+        expect(messages).toEqual([]);
+    });
+
+    it('flags a floating promise inside a nested async function body', async () => {
+        // The rule must walk into function bodies, not just inspect the file's
+        // top-level statements. Catches a regression where a parser tweak
+        // accidentally narrows the rule's scope.
+        writeAppHost(
+            fixtureDir,
+            `declare const builder: {
+    build(): { run(): Promise<void> };
+};
+
+async function start(): Promise<void> {
+    builder.build().run();
+}
+
+await start();
+`
+        );
+
+        const results = await lintAppHost(fixtureDir);
+        const messages = collectFloatingPromiseMessages(results);
+
+        expect(messages.length).toBeGreaterThan(0);
+        expect(messages[0].severity).toBe(2);
+    });
 });
