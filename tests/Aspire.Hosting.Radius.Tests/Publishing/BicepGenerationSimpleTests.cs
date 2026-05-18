@@ -109,16 +109,46 @@ public class BicepGenerationSimpleTests
     }
 
     [Fact]
+    public void GenerateBicep_ProjectResourceWithoutContainerImage_ThrowsActionableError()
+    {
+        // The Aspire.Hosting.Radius integration does not yet build or push project images.
+        // Without a clear failure at publish time the user would only see ImagePullBackOff
+        // inside the cluster after `aspire deploy` (surfaced by Radius/Kubernetes, not
+        // Aspire) — opaque and hard to attribute. Fail fast with a remediation hint
+        // naming the missing prereq.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var env = builder.AddRadiusEnvironment("myenv");
+        builder.AddProject<TestProjectMetadata>("webapp");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        RadiusTestHelper.AttachDeploymentTargets(env.Resource, model);
+        var context = new RadiusBicepPublishingContext(env.Resource);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => context.GenerateBicep(model));
+        Assert.Contains("webapp", ex.Message);
+        Assert.Contains("WithContainerImage", ex.Message);
+    }
+
+    [Fact]
     public void EnvironmentResource_HasPipelineStepAnnotation()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var env = builder.AddRadiusEnvironment("myenv");
 
         var annotations = env.Resource.Annotations.OfType<PipelineStepAnnotation>().ToList();
-        // The integration wires three pipeline steps onto the environment resource:
+        // A single PipelineStepAnnotation with a multi-step factory is registered in
+        // RadiusEnvironmentResource..ctor (mirroring KubernetesEnvironmentResource).
+        // The factory expands to three pipeline steps at execution time:
         //   1. prepare-deployment-targets-{name} — attaches DeploymentTargetAnnotation (A1)
         //   2. publish-radius-{name}             — emits app.bicep + bicepconfig.json
         //   3. deploy-radius-{name}              — invokes `rad deploy`
-        Assert.Equal(3, annotations.Count);
+        Assert.Single(annotations);
+    }
+
+    private sealed class TestProjectMetadata : IProjectMetadata
+    {
+        public string ProjectPath => "testproject";
+        public LaunchSettings LaunchSettings { get; } = new();
     }
 }

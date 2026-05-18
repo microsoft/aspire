@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Radius.Models;
 using Aspire.Hosting.Radius.Publishing;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -45,7 +44,7 @@ public class CustomRecipeTests
                 c.Recipe = new RadiusRecipe
                 {
                     Name = "premium-redis",
-                    Parameters = new Dictionary<string, object> { ["sku"] = "Premium" }
+                    Parameters = { ["sku"] = "Premium" }
                 };
             });
         builder.AddContainer("api", "myapp/api", "latest");
@@ -111,23 +110,5 @@ public class CustomRecipeTests
         var cacheBlockEnd = bicep.IndexOf("}", cacheBlockStart);
         var cacheBlock = bicep[cacheBlockStart..cacheBlockEnd];
         Assert.DoesNotContain("recipe:", cacheBlock);
-    }
-
-    [Fact]
-    public void RecipeAndManual_ThrowsInvalidOperationException()
-    {
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        builder.AddRadiusEnvironment("myenv");
-
-        var ex = Assert.Throws<InvalidOperationException>(() =>
-            builder.AddRedis("cache")
-                .PublishAsRadiusResource(c =>
-                {
-                    c.Recipe = new RadiusRecipe { Name = "custom" };
-                    c.Provisioning = ResourceProvisioning.Manual;
-                }));
-
-        Assert.Contains("mutually exclusive", ex.Message);
-        Assert.Contains("cache", ex.Message);
     }
 }

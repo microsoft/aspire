@@ -4,8 +4,6 @@
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Logging;
 
-#pragma warning disable CS0618 // Legacy* constants are [Obsolete] but still used for fallback during UDT migration
-
 namespace Aspire.Hosting.Radius.ResourceMapping;
 
 /// <summary>
@@ -20,7 +18,7 @@ namespace Aspire.Hosting.Radius.ResourceMapping;
 /// to stable, the legacy fallback should be removed from the mapping entry.
 /// </para>
 /// <para>
-/// Custom type overrides (via <see cref="Models.RadiusResourceCustomization.RadiusType"/>) are
+/// Custom type overrides (via <see cref="RadiusResourceCustomization.TypeOverride"/>) are
 /// resolved by <see cref="Publishing.RadiusInfrastructureBuilder.ResolveResourceType"/> before
 /// this mapper is consulted.
 /// </para>

@@ -1,7 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-namespace Aspire.Hosting.Radius.Models;
+using System.Diagnostics.CodeAnalysis;
+
+namespace Aspire.Hosting.Radius;
 
 /// <summary>
 /// Represents a custom Radius recipe override for a resource.
@@ -18,7 +20,8 @@ namespace Aspire.Hosting.Radius.Models;
 /// See: https://github.com/radius-project/radius/blob/main/eng/design-notes/extensibility/2025-02-user-defined-resource-type-feature-spec.md
 /// </para>
 /// </remarks>
-public class RadiusRecipe
+[AspireExport(ExposeProperties = true)]
+public sealed class RadiusRecipe
 {
     /// <summary>
     /// Gets or sets the recipe name to select for this resource.
@@ -26,9 +29,21 @@ public class RadiusRecipe
     /// <remarks>
     /// <b>Upstream deprecation note</b>: Radius's UDT model is retiring named recipe selection.
     /// Under UDTs, each resource type has one recipe per environment — developers do not select
-    /// recipes by name. This property will continue to function during the transition period.
+    /// recipes by name. This property will continue to function during the transition period
+    /// (which is why it is marked <see cref="ExperimentalAttribute"/> rather than
+    /// <see cref="ObsoleteAttribute"/>), and will be marked <see cref="ObsoleteAttribute"/> and
+    /// eventually removed once the UDT model is broadly available. The default is the empty
+    /// string, which the publisher treats as <c>"default"</c> when emitting the recipe pack.
     /// </remarks>
-    public required string Name { get; set; }
+    /// <remarks>
+    /// Not marked <c>required</c> — CS9042 disallows combining <c>required</c> with the
+    /// <see cref="ExperimentalAttribute"/> (which the compiler treats like
+    /// <see cref="ObsoleteAttribute"/>) unless the containing type's constructors are all
+    /// experimental too. The reviewer specifically wanted only this property — not the
+    /// whole type — to carry the experimental signal.
+    /// </remarks>
+    [Experimental("ASPIRERADIUS002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public string Name { get; set; } = string.Empty;
 
     /// <summary>
     /// Gets or sets the OCI template location for recipe registration in a recipe pack.
@@ -42,8 +57,8 @@ public class RadiusRecipe
     public string? RecipeLocation { get; set; }
 
     /// <summary>
-    /// Gets or sets the recipe parameters. Values are serialized to correct Bicep types
+    /// Gets the recipe parameters. Values are serialized to correct Bicep types
     /// (e.g., <c>42</c> not <c>"42"</c>, <c>true</c> not <c>"true"</c>).
     /// </summary>
-    public Dictionary<string, object> Parameters { get; set; } = [];
+    public IDictionary<string, object> Parameters { get; } = new Dictionary<string, object>();
 }

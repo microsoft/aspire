@@ -10,11 +10,11 @@ namespace Aspire.Hosting.Radius.Publishing;
 /// AST customization via the <c>ConfigureRadiusInfrastructure</c> callback.
 /// </summary>
 /// <remarks>
-/// <b>Internal prototype API.</b> The construct shapes here mirror the still-
-/// evolving Radius preview schemas. Holding this type <c>internal</c> for the
-/// prototype window prevents users from binding to construct types that will
-/// likely be reshaped as the Radius schemas stabilize. Tests reach this type
-/// via <c>InternalsVisibleTo</c>.
+/// <b>Preview surface.</b> The construct shapes exposed here mirror the still-
+/// evolving Radius preview schemas and are expected to change as those schemas
+/// stabilize. Treat <c>ConfigureRadiusInfrastructure</c> and the construct types
+/// referenced by this options bag as an advanced escape hatch that may shift
+/// shape across releases of <c>Aspire.Hosting.Radius</c>.
 /// </remarks>
 public sealed class RadiusInfrastructureOptions
 {

@@ -13,7 +13,7 @@ public class RadiusExtensionsTests
     {
         var builder = DistributedApplication.CreateBuilder();
 
-        var resourceBuilder = builder.AddRadiusEnvironment();
+        var resourceBuilder = builder.AddRadiusEnvironment("radius");
 
         Assert.NotNull(resourceBuilder);
         Assert.Equal("radius", resourceBuilder.Resource.Name);
@@ -38,7 +38,7 @@ public class RadiusExtensionsTests
         // so this test runs the AppHost in Publish mode to verify the resource is registered
         // on the publish path.
         using var builder = Aspire.Hosting.Utils.TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        builder.AddRadiusEnvironment();
+        builder.AddRadiusEnvironment("radius");
 
         using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -51,7 +51,7 @@ public class RadiusExtensionsTests
     {
         var builder = DistributedApplication.CreateBuilder();
 
-        var resourceBuilder = builder.AddRadiusEnvironment()
+        var resourceBuilder = builder.AddRadiusEnvironment("radius")
             .WithNamespace("staging-ns");
 
         Assert.Equal("staging-ns", resourceBuilder.Resource.Namespace);
@@ -61,7 +61,7 @@ public class RadiusExtensionsTests
     public void WithNamespace_ValidatesRFC1123_ThrowsOnInvalid()
     {
         var builder = DistributedApplication.CreateBuilder();
-        var resourceBuilder = builder.AddRadiusEnvironment();
+        var resourceBuilder = builder.AddRadiusEnvironment("radius");
 
         Assert.Throws<ArgumentException>(() => resourceBuilder.WithNamespace("Invalid_Namespace"));
     }
@@ -70,7 +70,7 @@ public class RadiusExtensionsTests
     public void WithNamespace_ThrowsOnLeadingHyphen()
     {
         var builder = DistributedApplication.CreateBuilder();
-        var resourceBuilder = builder.AddRadiusEnvironment();
+        var resourceBuilder = builder.AddRadiusEnvironment("radius");
 
         Assert.Throws<ArgumentException>(() => resourceBuilder.WithNamespace("-invalid"));
     }
@@ -79,7 +79,7 @@ public class RadiusExtensionsTests
     public void WithNamespace_ThrowsOnTrailingHyphen()
     {
         var builder = DistributedApplication.CreateBuilder();
-        var resourceBuilder = builder.AddRadiusEnvironment();
+        var resourceBuilder = builder.AddRadiusEnvironment("radius");
 
         Assert.Throws<ArgumentException>(() => resourceBuilder.WithNamespace("invalid-"));
     }
@@ -88,7 +88,7 @@ public class RadiusExtensionsTests
     public void WithNamespace_ThrowsOnUppercase()
     {
         var builder = DistributedApplication.CreateBuilder();
-        var resourceBuilder = builder.AddRadiusEnvironment();
+        var resourceBuilder = builder.AddRadiusEnvironment("radius");
 
         Assert.Throws<ArgumentException>(() => resourceBuilder.WithNamespace("MyNamespace"));
     }
@@ -97,7 +97,7 @@ public class RadiusExtensionsTests
     public void WithNamespace_ThrowsOnTooLong()
     {
         var builder = DistributedApplication.CreateBuilder();
-        var resourceBuilder = builder.AddRadiusEnvironment();
+        var resourceBuilder = builder.AddRadiusEnvironment("radius");
 
         var longName = new string('a', 64);
         Assert.Throws<ArgumentException>(() => resourceBuilder.WithNamespace(longName));
@@ -107,7 +107,7 @@ public class RadiusExtensionsTests
     public void WithNamespace_AcceptsValidNames()
     {
         var builder = DistributedApplication.CreateBuilder();
-        var resourceBuilder = builder.AddRadiusEnvironment();
+        var resourceBuilder = builder.AddRadiusEnvironment("radius");
 
         // Single char
         resourceBuilder.WithNamespace("a");
@@ -132,7 +132,7 @@ public class RadiusExtensionsTests
     {
         IDistributedApplicationBuilder builder = null!;
 
-        Assert.Throws<ArgumentNullException>(() => builder.AddRadiusEnvironment());
+        Assert.Throws<ArgumentNullException>(() => builder.AddRadiusEnvironment("radius"));
     }
 
     [Fact]

@@ -1,16 +1,15 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIRERADIUS002 // RadiusRecipe.Name signals upstream deprecation for callers; internal publisher code still reads it.
+
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Radius.Models;
 using Aspire.Hosting.Radius.Publishing.Constructs;
 using Aspire.Hosting.Radius.ResourceMapping;
 using Azure.Provisioning;
 using Azure.Provisioning.Expressions;
 using Azure.Provisioning.Primitives;
 using Microsoft.Extensions.Logging;
-
-#pragma warning disable CS0618 // Legacy* constants are [Obsolete] but still used for fallback during UDT migration
 
 namespace Aspire.Hosting.Radius.Publishing;
 
@@ -445,13 +444,13 @@ internal sealed class RadiusInfrastructureBuilder
     private (string ResourceType, string ApiVersion) ResolveResourceType(IResource resource)
     {
         var customization = GetCustomization(resource);
-        if (customization?.RadiusType is not null)
+        if (customization?.TypeOverride is { } typeOverride)
         {
-            var apiVersion = customization.RadiusApiVersion ?? RadiusResourceTypes.RadiusApiVersion;
+            var apiVersion = typeOverride.ApiVersion ?? RadiusResourceTypes.RadiusApiVersion;
             _logger.LogInformation(
                 "Resource '{ResourceName}' using custom type override '{RadiusType}' (API {ApiVersion}).",
-                resource.Name, customization.RadiusType, apiVersion);
-            return (customization.RadiusType, apiVersion);
+                resource.Name, typeOverride.Type, apiVersion);
+            return (typeOverride.Type, apiVersion);
         }
 
         return _typeMapper.MapResource(resource);
@@ -517,15 +516,16 @@ internal sealed class RadiusInfrastructureBuilder
     private bool IsTargetedToThisEnvironment(IResource resource)
     {
         // The PrepareDeploymentTargets pipeline step (RadiusInfrastructure.PrepareDeploymentTargetsAsync)
-        // attaches a DeploymentTargetAnnotation for this environment to every compute resource that
-        // belongs to it. With multiple compute environments in the model, untargeted resources are
-        // rejected upstream by ValidateComputeEnvironments before this code runs. So a resource is
-        // only owned by this environment when it carries a DeploymentTargetAnnotation that points
-        // here — there is no "no annotations → default to me" branch.
-        return resource.Annotations
-            .OfType<DeploymentTargetAnnotation>()
-            .Any(dt => dt.ComputeEnvironment == _environment ||
-                       dt.ComputeEnvironment == _environment.OwningComputeEnvironment);
+        // attaches a DeploymentTargetAnnotation to every compute resource that belongs to this
+        // environment, with ComputeEnvironment set to OwningComputeEnvironment ?? this. With multiple
+        // compute environments in the model, untargeted resources are rejected upstream by
+        // ValidateComputeEnvironments before this code runs.
+        //
+        // Use the framework's canonical lookup (Aspire.Hosting.ApplicationModel.ResourceExtensions
+        // .GetDeploymentTargetAnnotation) so behaviour stays in sync with manifest/publish paths
+        // and so the lookup honours ComputeEnvironmentAnnotation overrides set via WithComputeEnvironment.
+        var targetComputeEnvironment = _environment.OwningComputeEnvironment ?? _environment;
+        return resource.GetDeploymentTargetAnnotation(targetComputeEnvironment) is not null;
     }
 
     /// <summary>
@@ -590,7 +590,11 @@ internal sealed class RadiusInfrastructureBuilder
             // Custom recipe
             if (customization.Recipe is not null)
             {
-                construct.RecipeName = customization.Recipe.Name;
+                // Empty Name means the caller relied on the default; map to "default"
+                // so the emitted recipe pack entry has a sensible name.
+                construct.RecipeName = string.IsNullOrEmpty(customization.Recipe.Name)
+                    ? "default"
+                    : customization.Recipe.Name;
 
                 if (customization.Recipe.Parameters.Count > 0)
                 {
@@ -598,23 +602,6 @@ internal sealed class RadiusInfrastructureBuilder
                     {
                         construct.RecipeParameters[key] = BicepPostProcessor.ToBicepLiteral(value);
                     }
-                }
-            }
-
-            // Manual provisioning
-            if (customization.Provisioning == ResourceProvisioning.Manual)
-            {
-                construct.ResourceProvisioning = "manual";
-
-                if (customization.ConnectionStringOverrides.TryGetValue("host", out var host))
-                {
-                    construct.Host = host;
-                }
-
-                if (customization.ConnectionStringOverrides.TryGetValue("port", out var portStr)
-                    && int.TryParse(portStr, out var port))
-                {
-                    construct.Port = port;
                 }
             }
         }
@@ -627,12 +614,6 @@ internal sealed class RadiusInfrastructureBuilder
         string resourceType,
         RadiusResourceCustomization? customization)
     {
-        // Don't add recipe entries for manually provisioned resources
-        if (customization?.Provisioning == ResourceProvisioning.Manual)
-        {
-            return;
-        }
-
         // Custom recipe with template path
         if (customization?.Recipe?.RecipeLocation is not null)
         {
@@ -677,11 +658,6 @@ internal sealed class RadiusInfrastructureBuilder
         string resourceType,
         RadiusResourceCustomization? customization)
     {
-        if (customization?.Provisioning == ResourceProvisioning.Manual)
-        {
-            return;
-        }
-
         var recipeName = customization?.Recipe?.Name ?? "default";
 
         if (!entries.TryGetValue(resourceType, out var byName))
@@ -770,7 +746,26 @@ internal sealed class RadiusInfrastructureBuilder
             return image;
         }
 
-        // Fallback: use the resource name as a placeholder image
+        // ProjectResource has no ContainerImageAnnotation by default — the integration does
+        // not (yet) build and push project images. Failing fast at publish time with a clear
+        // remediation prevents the silent `aspire publish && aspire deploy` → in-cluster
+        // ImagePullBackOff failure mode, which is opaque to the user (Radius/Kubernetes
+        // surface it, not Aspire). Mirrors the CLI behaviour guideline that errors should
+        // name the specific action the user must take.
+        if (resource is ProjectResource)
+        {
+            throw new InvalidOperationException(
+                $"Project resource '{resource.Name}' cannot be published to Radius because no container image " +
+                "has been associated with it. The Aspire.Hosting.Radius integration does not yet build or push " +
+                "project images. As a workaround, build and push an image to a registry the target cluster can " +
+                "pull from, then attach it via WithContainerImage(\"<registry>/<image>:<tag>\") on the project " +
+                "resource. Tracking issue: https://github.com/microsoft/aspire/issues/16844.");
+        }
+
+        // Non-project, non-container resources reach this path only in misconfiguration
+        // (the resource type mapping would normally skip them). Fall back to a placeholder
+        // image with a logged warning via WarnIfImageMayNotPull so the publish still
+        // produces inspectable output.
         return $"{resource.Name}:latest";
     }
 

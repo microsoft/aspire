@@ -3,7 +3,6 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Radius;
-using Aspire.Hosting.Radius.Models;
 using Aspire.Hosting.Radius.Publishing;
 
 namespace Aspire.Hosting;
@@ -21,10 +20,6 @@ public static class RadiusPublishExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="configure">A callback to configure the <see cref="RadiusResourceCustomization"/>.</param>
     /// <returns>The resource builder for chaining.</returns>
-    /// <exception cref="InvalidOperationException">
-    /// Thrown when both <see cref="RadiusResourceCustomization.Recipe"/> and
-    /// <see cref="ResourceProvisioning.Manual"/> are set, which is mutually exclusive.
-    /// </exception>
     // RunSyncOnBackgroundThread = true: the configure callback mutates the customization
     // synchronously here. Polyglot AppHost runtimes (TypeScript, Python, ...) marshal sync
     // delegates over RPC and would deadlock if invoked on the dispatcher thread. The opt-in
@@ -40,14 +35,6 @@ public static class RadiusPublishExtensions
 
         var customization = new RadiusResourceCustomization();
         configure(customization);
-
-        // Authoritative validation: Recipe + Manual is mutually exclusive (FR-027)
-        if (customization.Recipe is not null && customization.Provisioning == ResourceProvisioning.Manual)
-        {
-            throw new InvalidOperationException(
-                $"Resource '{builder.Resource.Name}' sets both a custom recipe and manual provisioning, " +
-                "which is mutually exclusive. Use either a recipe (automatic provisioning) or manual provisioning, not both.");
-        }
 
         builder.Resource.Annotations.Add(new RadiusResourceCustomizationAnnotation(customization));
         return builder;

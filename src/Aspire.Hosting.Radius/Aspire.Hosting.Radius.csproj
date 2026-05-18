@@ -9,6 +9,12 @@
       ships to nuget.org and breaking-change tracking begins.
     -->
     <EnablePackageValidation>false</EnablePackageValidation>
+    <!--
+      Brand-new integration: ship as preview until the public API has had
+      sufficient bake time and the Radius UDT transition stabilises. Mirrors
+      Aspire.Hosting.Kubernetes, which is also preview-only today.
+    -->
+    <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
     <PackageTags>aspire integration hosting radius radapp deployment</PackageTags>
     <Description>Provides extensions and resource definitions for an Aspire AppHost to publish and deploy applications to a Radius (radapp.io) compute environment.</Description>
   </PropertyGroup>

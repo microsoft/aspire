@@ -18,7 +18,7 @@ public class GracefulDegradationTests
         // Kubernetes or the rad CLI. So `aspire run` against an AppHost using AddRadiusEnvironment
         // must succeed regardless of whether a Kubernetes cluster is reachable.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        builder.AddRadiusEnvironment();
+        builder.AddRadiusEnvironment("radius");
         builder.AddContainer("api", "myapp/api:latest");
 
         using var app = builder.Build();
@@ -41,7 +41,7 @@ public class GracefulDegradationTests
     {
         // Run mode never invokes the rad CLI — the deploy pipeline step is publish-only.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        builder.AddRadiusEnvironment();
+        builder.AddRadiusEnvironment("radius");
         builder.AddContainer("api", "myapp/api:latest");
 
         using var app = builder.Build();
@@ -56,7 +56,7 @@ public class GracefulDegradationTests
         // deploy step is what requires rad/Kubernetes — annotation attachment is pure
         // in-process model manipulation.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        builder.AddRadiusEnvironment();
+        builder.AddRadiusEnvironment("radius");
         builder.AddContainer("frontend", "myapp/frontend:latest");
         builder.AddContainer("backend", "myapp/backend:latest");
 

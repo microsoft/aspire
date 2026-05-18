@@ -10,7 +10,7 @@ internal static class SimpleRadiusAppHost
 {
     public static void Configure(IDistributedApplicationBuilder builder)
     {
-        builder.AddRadiusEnvironment();
+        builder.AddRadiusEnvironment("radius");
         builder.AddContainer("api", "myapp/api:latest");
     }
 }

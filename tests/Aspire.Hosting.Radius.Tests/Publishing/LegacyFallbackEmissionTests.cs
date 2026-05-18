@@ -221,7 +221,7 @@ public class LegacyFallbackEmissionTests
         builder.AddRedis("cacheA")
             .PublishAsRadiusResource(c =>
             {
-                c.Recipe = new Aspire.Hosting.Radius.Models.RadiusRecipe
+                c.Recipe = new Aspire.Hosting.Radius.RadiusRecipe
                 {
                     Name = "recipeA",
                     RecipeLocation = "ghcr.io/myorg/recipes/redis-a:latest",
@@ -231,7 +231,7 @@ public class LegacyFallbackEmissionTests
         builder.AddRedis("cacheB")
             .PublishAsRadiusResource(c =>
             {
-                c.Recipe = new Aspire.Hosting.Radius.Models.RadiusRecipe
+                c.Recipe = new Aspire.Hosting.Radius.RadiusRecipe
                 {
                     Name = "recipeB",
                     RecipeLocation = "ghcr.io/myorg/recipes/redis-b:latest",

@@ -28,8 +28,10 @@ public class DeployPipelineIntegrationTests
         var envResource = model.Resources.OfType<RadiusEnvironmentResource>().First();
         var pipelineAnnotations = envResource.Annotations.OfType<PipelineStepAnnotation>().ToList();
 
-        // Assert — should have at least a publish step and a deploy step
-        Assert.True(pipelineAnnotations.Count >= 2, $"Expected at least 2 pipeline step annotations, got {pipelineAnnotations.Count}");
+        // Assert — the multi-step PipelineStepAnnotation registered in the resource's
+        // constructor expands to publish + deploy + prepare steps. We just verify one
+        // annotation exists; the steps themselves are inspected in DeployStep_* tests.
+        Assert.Single(pipelineAnnotations);
     }
 
     [Fact]
@@ -165,7 +167,7 @@ public class DeployPipelineIntegrationTests
         foreach (var envResource in environments)
         {
             var annotations = envResource.Annotations.OfType<PipelineStepAnnotation>().ToList();
-            Assert.True(annotations.Count >= 2, $"Environment '{envResource.Name}' should have at least 2 pipeline step annotations");
+            Assert.Single(annotations);
         }
     }
 }

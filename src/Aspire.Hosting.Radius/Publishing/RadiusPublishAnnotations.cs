@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Radius.Models;
 using Aspire.Hosting.Radius.Publishing;
 
 namespace Aspire.Hosting.Radius;

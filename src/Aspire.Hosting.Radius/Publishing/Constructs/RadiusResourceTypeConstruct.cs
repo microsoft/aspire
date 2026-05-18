@@ -19,9 +19,6 @@ public sealed class RadiusResourceTypeConstruct : ProvisionableResource
     private BicepValue<string>? _environmentId;
     private BicepValue<string>? _recipeName;
     private BicepDictionary<object>? _recipeParameters;
-    private BicepValue<string>? _resourceProvisioning;
-    private BicepValue<string>? _host;
-    private BicepValue<int>? _port;
 
     /// <summary>The resource name.</summary>
     public BicepValue<string> ResourceName
@@ -58,27 +55,6 @@ public sealed class RadiusResourceTypeConstruct : ProvisionableResource
         set { Initialize(); _recipeParameters!.Assign(value); }
     }
 
-    /// <summary>Resource provisioning mode (e.g., "manual").</summary>
-    public BicepValue<string> ResourceProvisioning
-    {
-        get { Initialize(); return _resourceProvisioning!; }
-        set { Initialize(); _resourceProvisioning!.Assign(value); }
-    }
-
-    /// <summary>Host for manually provisioned resources.</summary>
-    public BicepValue<string> Host
-    {
-        get { Initialize(); return _host!; }
-        set { Initialize(); _host!.Assign(value); }
-    }
-
-    /// <summary>Port for manually provisioned resources.</summary>
-    public BicepValue<int> Port
-    {
-        get { Initialize(); return _port!; }
-        set { Initialize(); _port!.Assign(value); }
-    }
-
     /// <summary>
     /// Gets the Radius resource type string (e.g., "Radius.Data/redisCaches").
     /// </summary>
@@ -102,8 +78,5 @@ public sealed class RadiusResourceTypeConstruct : ProvisionableResource
         _environmentId = DefineProperty<string>(nameof(EnvironmentId), ["properties", "environment"]);
         _recipeName = DefineProperty<string>(nameof(RecipeName), ["properties", "recipe", "name"]);
         _recipeParameters = DefineDictionaryProperty<object>(nameof(RecipeParameters), ["properties", "recipe", "parameters"]);
-        _resourceProvisioning = DefineProperty<string>(nameof(ResourceProvisioning), ["properties", "resourceProvisioning"]);
-        _host = DefineProperty<string>(nameof(Host), ["properties", "host"]);
-        _port = DefineProperty<int>(nameof(Port), ["properties", "port"]);
     }
 }

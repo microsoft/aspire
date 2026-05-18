@@ -1,13 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREPIPELINES001
-
+using System.Diagnostics.CodeAnalysis;
 using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
-using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Radius;
-using Aspire.Hosting.Radius.Publishing;
 
 namespace Aspire.Hosting;
 
@@ -34,7 +31,7 @@ public static partial class RadiusExtensions
     [AspireExport(Description = "Adds a Radius publishing environment")]
     public static IResourceBuilder<RadiusEnvironmentResource> AddRadiusEnvironment(
         this IDistributedApplicationBuilder builder,
-        [ResourceName] string name = "radius")
+        [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
@@ -45,35 +42,12 @@ public static partial class RadiusExtensions
         {
             // Return a builder that isn't added to the top-level application builder so it
             // doesn't surface as a resource. The Radius integration is publish/deploy-only
-            // today; Run mode has nothing to wire up.
+            // today; Run mode has nothing to wire up. The pipeline-step annotations on the
+            // resource (registered in its constructor) are inert because the resource is
+            // not in the application model — matches AddKubernetesEnvironment and
+            // AddDockerComposeEnvironment.
             return builder.CreateResourceBuilder(resource);
         }
-
-        // Per-environment prepare step: materializes DeploymentTargetAnnotations on
-        // compute resources scoped to this environment. Modelled after K8s/Docker so
-        // ValidateComputeEnvironments (a DependsOn) fails-fast on multi-env ambiguity
-        // before this step runs, and so the step is part of the standard BeforeStart
-        // synchronization point downstream code observes.
-        resource.Annotations.Add(new PipelineStepAnnotation(_ =>
-        {
-            var step = new PipelineStep
-            {
-                Name = $"prepare-deployment-targets-{name}",
-                Description = $"Prepares Radius deployment targets for {name}.",
-                Action = stepContext => RadiusInfrastructure.PrepareDeploymentTargetsAsync(resource, stepContext),
-                DependsOnSteps = [WellKnownPipelineSteps.ValidateComputeEnvironments],
-                RequiredBySteps = [WellKnownPipelineSteps.BeforeStart],
-            };
-            return step;
-        }));
-
-        // Bicep publish step
-        resource.Annotations.Add(new PipelineStepAnnotation(_ =>
-            new RadiusBicepPublishingContext(resource).CreatePipelineStep()));
-
-        // rad CLI deploy step
-        resource.Annotations.Add(new PipelineStepAnnotation(_ =>
-            new RadiusDeploymentPipelineStep(resource).CreatePipelineStep()));
 
         return builder.AddResource(resource);
     }
@@ -120,6 +94,13 @@ public static partial class RadiusExtensions
     /// </summary>
     /// <param name="builder">The Radius environment resource builder.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{RadiusEnvironmentResource}"/>.</returns>
+    /// <remarks>
+    /// Transitional escape hatch. Marked <see cref="ExperimentalAttribute"/> because
+    /// the API will be marked <see cref="ObsoleteAttribute"/> and eventually removed
+    /// once the <c>Radius.Compute/containers</c> UDT recipe is broadly available in
+    /// shipped Radius installs.
+    /// </remarks>
+    [Experimental("ASPIRERADIUS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport(Description = "Emits container workloads as legacy Applications.Core/containers instead of Radius.Compute/containers")]
     public static IResourceBuilder<RadiusEnvironmentResource> WithLegacyContainers(
         this IResourceBuilder<RadiusEnvironmentResource> builder)
@@ -127,5 +108,102 @@ public static partial class RadiusExtensions
         ArgumentNullException.ThrowIfNull(builder);
         builder.Resource.UseLegacyContainers = true;
         return builder;
+    }
+
+    /// <summary>
+    /// Associates a pre-built container image reference with a project resource so the
+    /// Aspire.Hosting.Radius publisher can emit a valid Radius container manifest for it.
+    /// </summary>
+    /// <param name="builder">The project resource builder.</param>
+    /// <param name="image">
+    /// A fully-qualified image reference in <c>[registry/]image[:tag]</c> form
+    /// (for example <c>localhost:5001/apiservice:latest</c>). When the tag is omitted
+    /// <c>latest</c> is used.
+    /// </param>
+    /// <returns>The same <see cref="IResourceBuilder{ProjectResource}"/> for chaining.</returns>
+    /// <remarks>
+    /// The Radius publisher does not yet build or push images for <see cref="ProjectResource"/>
+    /// (tracked at https://github.com/microsoft/aspire/issues/16844). Until that lands,
+    /// callers must build and push the image themselves (for example with
+    /// <c>dotnet publish /t:PublishContainer</c>) and then call this method to attach
+    /// the resulting registry reference. Without it, <c>aspire publish</c> against a Radius
+    /// environment fails with a clear remediation message — and <c>aspire deploy</c> against
+    /// Radius would otherwise land pods that hit <c>ImagePullBackOff</c> against the
+    /// publisher's <c>&lt;name&gt;:latest</c> fallback.
+    ///
+    /// The reference is stored as a <see cref="ContainerImageAnnotation"/>, which is also
+    /// what container resources use, so the publisher's existing
+    /// <c>Registry</c>/<c>Image</c>/<c>Tag</c> assembly path applies uniformly.
+    /// </remarks>
+    [Experimental("ASPIRERADIUS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport(Description = "Attaches a pre-built container image reference to a project resource for Radius publishing")]
+    public static IResourceBuilder<ProjectResource> WithContainerImage(
+        this IResourceBuilder<ProjectResource> builder,
+        string image)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(image);
+
+        var (registry, repository, tag) = ParseImageReference(image);
+
+        // Replace any previous annotation so callers can override an earlier attachment;
+        // matches the LastOrDefault() lookup behaviour the publisher uses.
+        var existing = builder.Resource.Annotations.OfType<ContainerImageAnnotation>().LastOrDefault();
+        if (existing is not null)
+        {
+            builder.Resource.Annotations.Remove(existing);
+        }
+
+        builder.Resource.Annotations.Add(new ContainerImageAnnotation
+        {
+            Registry = registry,
+            Image = repository,
+            Tag = tag,
+        });
+
+        return builder;
+    }
+
+    // Parse [registry/]image[:tag] into its three components. Examples:
+    //   "redis"                       -> (null, "redis",            "latest")
+    //   "redis:7"                     -> (null, "redis",            "7")
+    //   "library/redis:7"             -> (null, "library/redis",    "7")
+    //   "localhost:5001/api:latest"   -> ("localhost:5001", "api",  "latest")
+    //   "ghcr.io/owner/repo:v1"       -> ("ghcr.io", "owner/repo",  "v1")
+    //
+    // A leading path segment is treated as a registry when it contains a '.' or ':' or
+    // equals "localhost" — the same heuristic Docker/containerd use to disambiguate a
+    // registry hostname from a Docker Hub user namespace. Digests (@sha256:...) are
+    // intentionally not supported here; callers needing digest pinning can construct a
+    // ContainerImageAnnotation directly.
+    private static (string? Registry, string Image, string Tag) ParseImageReference(string reference)
+    {
+        var registry = (string?)null;
+        var remainder = reference;
+
+        var firstSlash = reference.IndexOf('/');
+        if (firstSlash > 0)
+        {
+            var firstSegment = reference[..firstSlash];
+            if (firstSegment == "localhost" || firstSegment.Contains('.') || firstSegment.Contains(':'))
+            {
+                registry = firstSegment;
+                remainder = reference[(firstSlash + 1)..];
+            }
+        }
+
+        // Tag separator: the last ':' that appears after the last '/' in the remainder
+        // (so we don't mistake a port-in-registry for a tag, which is already split off above).
+        var tag = "latest";
+        var image = remainder;
+        var lastSlash = remainder.LastIndexOf('/');
+        var lastColon = remainder.LastIndexOf(':');
+        if (lastColon > lastSlash)
+        {
+            tag = remainder[(lastColon + 1)..];
+            image = remainder[..lastColon];
+        }
+
+        return (registry, image, tag);
     }
 }

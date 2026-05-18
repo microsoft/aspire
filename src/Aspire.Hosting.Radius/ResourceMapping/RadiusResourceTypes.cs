@@ -17,8 +17,9 @@ internal static class RadiusResourceTypes
 
     /// <summary>
     /// API version for legacy Applications.* namespace resource types.
+    /// Will be removed once portable resource types are removed from Radius
+    /// and the mapper switches the remaining legacy entries to Radius.* UDTs.
     /// </summary>
-    [Obsolete("Legacy API version for portable resource types being replaced by UDTs. Use RadiusApiVersion instead.")]
     public const string LegacyApiVersion = "2023-10-01-preview";
 
     // --- Radius.Core ---
@@ -49,20 +50,23 @@ internal static class RadiusResourceTypes
 
     // --- Legacy Applications.* fallback types ---
     // These portable resource types are being replaced by user-defined types (UDTs)
-    // in the Radius.* namespace. See: https://github.com/radius-project/radius/blob/main/eng/design-notes/extensibility/2025-02-user-defined-resource-type-feature-spec.md
+    // in the Radius.* namespace. The corresponding Radius.* constants above should be
+    // used once the UDT equivalents are available in the target Radius release.
+    // See: https://github.com/radius-project/radius/blob/main/eng/design-notes/extensibility/2025-02-user-defined-resource-type-feature-spec.md
+    //
+    // These constants intentionally do not carry [Obsolete] attributes — the package
+    // is in preview, the constants are internal, and the mapper still emits these
+    // values as fallbacks. The constants (and their callsites in ResourceTypeMapper)
+    // will be removed in the same change that migrates the mapper to the Radius.*
+    // UDT equivalents.
 
-    [Obsolete("Portable resource types are being replaced by Radius.* user-defined types. Use RadiusResourceTypes.RedisCaches instead.")]
     public const string LegacyRedisCaches = "Applications.Datastores/redisCaches";
 
-    [Obsolete("Portable resource types are being replaced by Radius.* user-defined types. Use RadiusResourceTypes.MongoDatabases instead.")]
     public const string LegacyMongoDatabases = "Applications.Datastores/mongoDatabases";
 
-    [Obsolete("Portable resource types are being replaced by Radius.* user-defined types. Use RadiusResourceTypes.RabbitMQQueues instead.")]
     public const string LegacyRabbitMQQueues = "Applications.Messaging/rabbitMQQueues";
 
-    [Obsolete("Portable resource types are being replaced by Radius.* user-defined types. Use RadiusResourceTypes.DaprStateStores instead.")]
     public const string LegacyDaprStateStores = "Applications.Dapr/stateStores";
 
-    [Obsolete("Portable resource types are being replaced by Radius.* user-defined types. Use RadiusResourceTypes.DaprPubSubBrokers instead.")]
     public const string LegacyDaprPubSubBrokers = "Applications.Dapr/pubSubBrokers";
 }

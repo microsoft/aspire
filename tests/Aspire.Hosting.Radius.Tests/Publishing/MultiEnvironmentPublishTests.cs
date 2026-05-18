@@ -72,9 +72,14 @@ public class MultiEnvironmentPublishTests
     public void MultipleEnvironments_ProduceSeparateBicepOutputs()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        builder.AddRadiusEnvironment("dev");
-        builder.AddRadiusEnvironment("staging");
-        builder.AddContainer("api", "myapp/api", "latest");
+        var dev = builder.AddRadiusEnvironment("dev");
+        var staging = builder.AddRadiusEnvironment("staging");
+        // Pin each container to its environment. In production the per-environment
+        // prepare step + ValidateComputeEnvironments enforce a single DeploymentTarget
+        // per compute resource; the canonical GetDeploymentTargetAnnotation lookup the
+        // publishing context now uses is strict about that contract.
+        builder.AddContainer("api-dev", "myapp/api", "latest").WithComputeEnvironment(dev);
+        builder.AddContainer("api-staging", "myapp/api", "latest").WithComputeEnvironment(staging);
 
         using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -82,7 +87,6 @@ public class MultiEnvironmentPublishTests
         var environments = model.Resources.OfType<RadiusEnvironmentResource>().ToArray();
         Assert.Equal(2, environments.Length);
 
-        // Each environment can independently generate its own Bicep
         foreach (var env in environments)
         {
             RadiusTestHelper.AttachDeploymentTargets(env, model);

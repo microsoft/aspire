@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIRERADIUS001 // WithLegacyContainers is a transitional experimental API.
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Radius.Publishing;

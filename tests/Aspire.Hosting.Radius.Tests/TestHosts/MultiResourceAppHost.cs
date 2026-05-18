@@ -13,7 +13,7 @@ internal static class MultiResourceAppHost
 {
     public static void Configure(IDistributedApplicationBuilder builder)
     {
-        builder.AddRadiusEnvironment();
+        builder.AddRadiusEnvironment("radius");
 
         // Data resources
         builder.AddRedis("cache");

@@ -1,7 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>$(AllTargetFrameworks)</TargetFrameworks>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <!--
+      ASPIRERADIUS002 (RadiusRecipe.Name) is intentionally surfaced as Experimental for end users
+      to telegraph that named recipe selection is going away under Radius's UDT model. Tests need
+      to exercise that property to cover the legacy/transition code paths in the publisher.
+    -->
+    <NoWarn>$(NoWarn);ASPIRERADIUS002</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

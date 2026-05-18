@@ -101,7 +101,7 @@ public class ConfigureRadiusInfrastructureTests
         builder.AddRedis("cache")
             .PublishAsRadiusResource(c =>
             {
-                c.Recipe = new Radius.Models.RadiusRecipe { Name = "original-recipe" };
+                c.Recipe = new Radius.RadiusRecipe { Name = "original-recipe" };
             });
         builder.AddContainer("api", "myapp/api", "latest");
 

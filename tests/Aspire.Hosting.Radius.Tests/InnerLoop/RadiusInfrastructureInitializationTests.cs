@@ -19,7 +19,7 @@ public class RadiusInfrastructureInitializationTests
     public async Task PrepareDeploymentTargets_AttachesDeploymentTargetAnnotation_ToContainerResources()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        builder.AddRadiusEnvironment();
+        builder.AddRadiusEnvironment("radius");
         builder.AddContainer("api", "myapp/api:latest");
 
         using var app = builder.Build();
@@ -37,7 +37,7 @@ public class RadiusInfrastructureInitializationTests
     public async Task PrepareDeploymentTargets_AttachesAnnotation_ToAllComputeResources()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        builder.AddRadiusEnvironment();
+        builder.AddRadiusEnvironment("radius");
         builder.AddContainer("frontend", "myapp/frontend:latest");
         builder.AddContainer("backend", "myapp/backend:latest");
 
@@ -57,7 +57,7 @@ public class RadiusInfrastructureInitializationTests
     public async Task PrepareDeploymentTargets_DoesNotAnnotate_NonComputeResources()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        builder.AddRadiusEnvironment();
+        builder.AddRadiusEnvironment("radius");
         builder.AddContainer("api", "myapp/api:latest");
         builder.AddParameter("my-param");
 
@@ -93,7 +93,7 @@ public class RadiusInfrastructureInitializationTests
     public async Task PrepareDeploymentTargets_AttachesAnnotation_ToProjectResources()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        builder.AddRadiusEnvironment();
+        builder.AddRadiusEnvironment("radius");
         builder.AddProject<TestProjectMetadata>("webapp");
 
         using var app = builder.Build();
@@ -115,7 +115,7 @@ public class RadiusInfrastructureInitializationTests
         // and prevents pipeline steps from being wired up for inner-loop scenarios. Matches the
         // Kubernetes / Docker Compose integration behaviour.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        builder.AddRadiusEnvironment();
+        builder.AddRadiusEnvironment("radius");
         builder.AddContainer("api", "myapp/api:latest");
 
         using var app = builder.Build();
