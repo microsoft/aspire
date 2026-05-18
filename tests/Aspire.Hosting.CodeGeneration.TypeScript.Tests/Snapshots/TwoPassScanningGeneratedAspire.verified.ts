@@ -1288,39 +1288,6 @@ export interface SaveStateJsonOptions {
     cancellationToken?: AbortSignal | CancellationToken;
 }
 
-export interface SetDescriptionOptions {
-    value?: string | null;
-}
-
-export interface SetLaunchProfileNameOptions {
-    /** The launch profile to use. If `null` then the default launch profile will be used. */
-    value?: string | null;
-}
-
-export interface SetNameOptions {
-    value?: string | null;
-}
-
-export interface SetPortOptions {
-    /** Gets or sets the desired host port. */
-    value?: number | null;
-}
-
-export interface SetRemoteImageNameOptions {
-    /** Gets or sets the remote image name (repository path without registry endpoint or tag). */
-    value?: string | null;
-}
-
-export interface SetRemoteImageTagOptions {
-    /** Gets or sets the remote image tag. */
-    value?: string | null;
-}
-
-export interface SetTargetPortOptions {
-    /** Gets or sets the target port. */
-    value?: number | null;
-}
-
 export interface UpdateTaskMarkdownOptions {
     cancellationToken?: AbortSignal | CancellationToken;
 }

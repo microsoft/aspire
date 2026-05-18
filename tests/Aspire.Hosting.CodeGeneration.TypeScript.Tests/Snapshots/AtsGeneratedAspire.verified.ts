@@ -181,14 +181,6 @@ export interface GetStatusAsyncOptions {
     cancellationToken?: AbortSignal | CancellationToken;
 }
 
-export interface SetDescriptionOptions {
-    value?: string | null;
-}
-
-export interface SetNameOptions {
-    value?: string | null;
-}
-
 export interface WaitForReadyAsyncOptions {
     cancellationToken?: AbortSignal | CancellationToken;
 }

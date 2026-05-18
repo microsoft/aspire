@@ -1102,7 +1102,7 @@ public static class AtsCapabilityScanner
 
             var propDocumentation = GetXmlDocumentation(prop);
             var propDescription = propDocumentation?.Summary;
-            var isOptional = !prop.CanWrite || propTypeRef.IsNullable == true;
+            var isOptional = !prop.CanWrite || Nullable.GetUnderlyingType(prop.PropertyType) is not null;
 
             properties.Add(new AtsDtoPropertyInfo
             {
@@ -1700,7 +1700,7 @@ public static class AtsCapabilityScanner
                                 Name = "value",
                                 Type = setterTypeRef,
                                 IsOptional = false,
-                                IsNullable = setterTypeRef.IsNullable == true,
+                                IsNullable = false,
                                 IsCallback = false,
                                 Documentation = propertyDocumentation,
                                 DefaultValue = null

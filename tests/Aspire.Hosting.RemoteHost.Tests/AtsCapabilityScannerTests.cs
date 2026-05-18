@@ -377,7 +377,7 @@ public class AtsCapabilityScannerTests
         var nullableString = Assert.Single(dto.Properties, p => p.Name == nameof(NullableScalarDto.NullableString));
         Assert.Equal(AtsConstants.String, nullableString.Type.TypeId);
         Assert.True(nullableString.Type.IsNullable);
-        Assert.True(nullableString.IsOptional);
+        Assert.False(nullableString.IsOptional);
 
         var requiredString = Assert.Single(dto.Properties, p => p.Name == nameof(NullableScalarDto.RequiredString));
         Assert.Equal(AtsConstants.String, requiredString.Type.TypeId);
