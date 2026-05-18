@@ -8,21 +8,21 @@
 #
 # Options:
 #   -c, --configuration   Build configuration: Release or Debug
-#   -n, --name            Hive name (default: local)
-#   -o, --output          Output directory for portable layout (instead of $HOME/.aspire)
+#   -n, --name            Hive/channel name (default: local-<worktree-folder>)
+#   -o, --output          Output directory for portable layout (instead of $HOME/.aspire-local/<build>)
 #   -r, --rid             Target RID for cross-platform builds (e.g. linux-x64)
 #   -v, --versionsuffix   Prerelease version suffix (default: auto-generates local.YYYYMMDD.tHHmmss)
 #       --archive         Create a .tar.gz (or .zip for win-* RIDs) archive of the output. Requires --output.
-#       --copy            Copy .nupkg files instead of creating a symlink
-#       --skip-cli        Skip installing the locally-built CLI to $HOME/.aspire/bin
+#       --copy            Deprecated; local hives always copy packages
+#       --skip-cli        Skip installing the locally-built CLI to $HOME/.aspire-local/<build>/bin
 #       --skip-bundle     Skip building the bundle payload (CLI won't have embedded bundle)
 #       --native-aot      Build native AOT CLI (self-extracting with embedded bundle)
 #   -h, --help            Show this help and exit
 #
 # Notes:
 # - If no configuration is specified, the script tries Release then Debug.
-# - The hive is created at $HOME/.aspire/hives/<HiveName> so the Aspire CLI can discover a channel.
-# - The CLI is installed to $HOME/.aspire/bin so it can be used directly.
+# - The hive is created at $HOME/.aspire/hives/<HiveName> and the CLI is stamped with the same channel.
+# - The CLI is installed to $HOME/.aspire-local/<build>/bin so it can be used side by side.
 # - The bundle payload is embedded in the CLI binary and self-extracts on first run.
 
 set -euo pipefail
@@ -35,13 +35,13 @@ Usage:
 
 Options:
   -c, --configuration   Build configuration: Release or Debug
-  -n, --name            Hive name (default: local)
-  -o, --output          Output directory for portable layout (instead of \$HOME/.aspire)
+  -n, --name            Hive/channel name (default: local-<worktree-folder>)
+  -o, --output          Output directory for portable layout (instead of \$HOME/.aspire-local/<build>)
   -r, --rid             Target RID for cross-platform builds (e.g. linux-x64)
   -v, --versionsuffix   Prerelease version suffix (default: auto-generates local.YYYYMMDD.tHHmmss)
       --archive         Create a .tar.gz (or .zip for win-* RIDs) archive of the output. Requires --output.
-      --copy            Copy .nupkg files instead of creating a symlink
-      --skip-cli        Skip installing the locally-built CLI to \$HOME/.aspire/bin
+      --copy            Deprecated; local hives always copy packages
+      --skip-cli        Skip installing the locally-built CLI to \$HOME/.aspire-local/<build>/bin
       --skip-bundle     Skip building the bundle payload (CLI won't have embedded bundle)
       --native-aot      Build native AOT CLI (self-extracting with embedded bundle)
   -h, --help            Show this help and exit
@@ -54,14 +54,101 @@ Examples:
   ./localhive.sh -o /tmp/aspire-linux -r linux-x64 --archive   # Portable archive for a Linux machine
 
 This will pack NuGet packages into artifacts/packages/<Config>/Shipping and create/update
-a hive at \$HOME/.aspire/hives/<HiveName> so the Aspire CLI can use it as a channel.
-It also installs the locally-built CLI to \$HOME/.aspire/bin (unless --skip-cli is specified).
+a hive at \$HOME/.aspire/hives/<HiveName> and stamps the CLI with the same channel.
+It also installs the locally-built CLI to \$HOME/.aspire-local/<build>/bin (unless --skip-cli is specified).
 EOF
 }
 
 log()   { echo "[localhive] $*"; }
 warn()  { echo "[localhive] Warning: $*" >&2; }
 error() { echo "[localhive] Error: $*" >&2; }
+
+is_sourced() {
+  [[ "${BASH_SOURCE[0]:-}" != "$0" ]]
+}
+
+sanitize_channel_suffix() {
+  local name
+  name="$1"
+  name="$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')"
+  if [[ -z "$name" ]]; then
+    name="local"
+  fi
+  printf '%s' "$name"
+}
+
+get_default_hive_name() {
+  printf 'local-%s' "$(sanitize_channel_suffix "$(basename "$REPO_ROOT")")"
+}
+
+normalize_hive_name() {
+  local name="$1"
+  if [[ "$name" =~ ^(stable|staging|daily|local|local-[a-z0-9-]+|pr-[0-9]+)$ ]]; then
+    printf '%s' "$name"
+  else
+    printf 'local-%s' "$(sanitize_channel_suffix "$name")"
+  fi
+}
+
+print_shell_activation() {
+  local cli_bin_dir="$1"
+  log "To use this local hive from your current shell, run:"
+  log "  export PATH=\"$cli_bin_dir:\$PATH\""
+}
+
+purge_old_local_hives() {
+  local current_root="$1"
+  local local_hives_root
+  local current_root_resolved
+  local purged_count=0
+  local skipped_count=0
+  local failed_count=0
+
+  local_hives_root="$(dirname "$current_root")"
+
+  if [[ ! -d "$local_hives_root" ]]; then
+    return
+  fi
+
+  current_root_resolved="$(cd "$current_root" && pwd -P)"
+
+  while IFS= read -r -d '' candidate; do
+    local candidate_resolved
+    local candidate_bin
+    local candidate_bin_resolved
+    candidate_bin="$candidate/bin"
+    candidate_resolved="$(cd "$candidate" && pwd -P)"
+    candidate_bin_resolved="$candidate_resolved/bin"
+
+    if [[ "$candidate_resolved" == "$current_root_resolved" ]]; then
+      continue
+    fi
+
+    if [[ ":$PATH:" == *":$candidate_bin:"* ]] || [[ ":$PATH:" == *":$candidate_bin_resolved:"* ]]; then
+      skipped_count=$((skipped_count + 1))
+      continue
+    fi
+
+    if rm -rf "$candidate"; then
+      purged_count=$((purged_count + 1))
+    else
+      warn "Failed to remove old local install: $candidate"
+      failed_count=$((failed_count + 1))
+    fi
+  done < <(find "$local_hives_root" -mindepth 1 -maxdepth 1 -type d -print0)
+
+  if [[ $purged_count -gt 0 ]]; then
+    log "Purged $purged_count unused old local install(s) from $local_hives_root"
+  fi
+
+  if [[ $skipped_count -gt 0 ]]; then
+    log "Skipped $skipped_count old local install(s) referenced by PATH"
+  fi
+
+  if [[ $failed_count -gt 0 ]]; then
+    warn "Could not purge $failed_count old local install(s). They may be in use."
+  fi
+}
 
 if [ -z "${ZSH_VERSION:-}" ]; then
   source="${BASH_SOURCE[0]}"
@@ -80,7 +167,7 @@ fi
 REPO_ROOT=$(cd "${scriptroot}"; pwd)
 
 CONFIG=""
-HIVE_NAME="local"
+HIVE_NAME=""
 USE_COPY=0
 SKIP_CLI=0
 SKIP_BUNDLE=0
@@ -147,7 +234,7 @@ while [[ $# -gt 0 ]]; do
       shift ;;
     *)
       # Treat first unknown as hive name if not set, else error
-      if [[ "$HIVE_NAME" == "local" ]]; then HIVE_NAME="$1"; shift; else error "Unknown argument: $1"; exit 1; fi ;;
+      if [[ -z "$HIVE_NAME" ]]; then HIVE_NAME="$1"; shift; else error "Unknown argument: $1"; exit 1; fi ;;
   esac
 done
 
@@ -171,14 +258,20 @@ if [[ -n "$TARGET_RID" ]] && [[ $NATIVE_AOT -eq 1 ]]; then
   fi
 fi
 
-# When --output is specified, always copy (portable layout, no symlinks)
-if [[ -n "$OUTPUT_DIR" ]]; then
-  USE_COPY=1
+# Always copy so local hives remain self-contained and do not point at mutable build artifacts.
+USE_COPY=1
+
+if [[ -z "$HIVE_NAME" ]]; then
+  HIVE_NAME="$(get_default_hive_name)"
+else
+  HIVE_NAME="$(normalize_hive_name "$HIVE_NAME")"
 fi
+log "Using hive/channel name: $HIVE_NAME"
 
 # Normalize config value if set
 if [[ -n "$CONFIG" ]]; then
-  case "${CONFIG,,}" in
+  CONFIG_LOWER="$(printf '%s' "$CONFIG" | tr '[:upper:]' '[:lower:]')"
+  case "$CONFIG_LOWER" in
     release) CONFIG=Release ;;
     debug)   CONFIG=Debug ;;
     *) error "Unsupported configuration '$CONFIG'. Use Release or Debug."; exit 1 ;;
@@ -210,7 +303,7 @@ fi
 if [ -n "$CONFIG" ]; then
   log "Building and packing NuGet packages [-c $CONFIG] with versionsuffix '$VERSION_SUFFIX'"
   # Single invocation: restore + build + pack to ensure all Build-triggered targets run and packages are produced.
-  "$REPO_ROOT/build.sh" --restore --build --pack -c "$CONFIG" /p:VersionSuffix="$VERSION_SUFFIX" /p:SkipTestProjects=true /p:SkipPlaygroundProjects=true $AOT_ARG
+  "$REPO_ROOT/build.sh" --restore --build --pack -c "$CONFIG" /p:VersionSuffix="$VERSION_SUFFIX" /p:AspireCliChannel="$HIVE_NAME" /p:SkipTestProjects=true /p:SkipPlaygroundProjects=true /p:TreatWarningsAsErrors=false /p:WarningsNotAsErrors=NU5123 $AOT_ARG
   PKG_DIR="$REPO_ROOT/artifacts/packages/$CONFIG/Shipping"
   if [ ! -d "$PKG_DIR" ]; then
     error "Could not find packages path $PKG_DIR for CONFIG=$CONFIG"
@@ -218,7 +311,7 @@ if [ -n "$CONFIG" ]; then
   fi
 else
   log "Building and packing NuGet packages [-c Release] with versionsuffix '$VERSION_SUFFIX'"
-  "$REPO_ROOT/build.sh" --restore --build --pack -c Release /p:VersionSuffix="$VERSION_SUFFIX" /p:SkipTestProjects=true /p:SkipPlaygroundProjects=true $AOT_ARG
+  "$REPO_ROOT/build.sh" --restore --build --pack -c Release /p:VersionSuffix="$VERSION_SUFFIX" /p:AspireCliChannel="$HIVE_NAME" /p:SkipTestProjects=true /p:SkipPlaygroundProjects=true /p:TreatWarningsAsErrors=false /p:WarningsNotAsErrors=NU5123 $AOT_ARG
   PKG_DIR="$REPO_ROOT/artifacts/packages/Release/Shipping"
   if [ ! -d "$PKG_DIR" ]; then
     error "Could not find packages path $PKG_DIR for CONFIG=Release"
@@ -258,12 +351,13 @@ fi
 
 if [[ -n "$OUTPUT_DIR" ]]; then
   ASPIRE_ROOT="$OUTPUT_DIR"
+  HIVES_ROOT="$ASPIRE_ROOT/hives"
 else
-  ASPIRE_ROOT="$HOME/.aspire"
+  ASPIRE_ROOT="$HOME/.aspire-local/$VERSION_SUFFIX"
+  HIVES_ROOT="$HOME/.aspire/hives"
 fi
 CLI_BIN_DIR="$ASPIRE_ROOT/bin"
 
-HIVES_ROOT="$ASPIRE_ROOT/hives"
 HIVE_ROOT="$HIVES_ROOT/$HIVE_NAME"
 HIVE_PATH="$HIVE_ROOT/packages"
 
@@ -326,10 +420,10 @@ if [[ $SKIP_BUNDLE -eq 0 ]]; then
 
   if [[ $NATIVE_AOT -eq 1 ]]; then
     log "Building bundle (aspire-managed + DCP + native AOT CLI)..."
-    dotnet build "$BUNDLE_PROJ" -c "$EFFECTIVE_CONFIG" "/p:VersionSuffix=$VERSION_SUFFIX" "/p:TargetRid=$BUNDLE_RID"
+    dotnet build "$BUNDLE_PROJ" -c "$EFFECTIVE_CONFIG" "/p:VersionSuffix=$VERSION_SUFFIX" "/p:AspireCliChannel=$HIVE_NAME" "/p:TargetRid=$BUNDLE_RID"
   else
     log "Building bundle (aspire-managed + DCP)..."
-    dotnet build "$BUNDLE_PROJ" -c "$EFFECTIVE_CONFIG" /p:SkipNativeBuild=true "/p:VersionSuffix=$VERSION_SUFFIX" "/p:TargetRid=$BUNDLE_RID"
+    dotnet build "$BUNDLE_PROJ" -c "$EFFECTIVE_CONFIG" /p:SkipNativeBuild=true "/p:VersionSuffix=$VERSION_SUFFIX" "/p:AspireCliChannel=$HIVE_NAME" "/p:TargetRid=$BUNDLE_RID"
   fi
   if [[ $? -ne 0 ]]; then
     error "Bundle build failed."
@@ -349,7 +443,9 @@ if [[ $SKIP_BUNDLE -eq 0 ]]; then
 fi
 
 # Install the CLI to $ASPIRE_ROOT/bin
+CLI_INSTALLED=0
 if [[ $SKIP_CLI -eq 0 ]]; then
+  FRAMEWORK_DEPENDENT_CLI=0
   if [[ $NATIVE_AOT -eq 1 ]]; then
     # Native AOT CLI from Bundle.proj publish (already has embedded bundle payload)
     CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli/$EFFECTIVE_CONFIG/net10.0/$BUNDLE_RID/native"
@@ -361,7 +457,7 @@ if [[ $SKIP_CLI -eq 0 ]]; then
     log "Publishing Aspire CLI for target RID: $TARGET_RID"
     CLI_PROJ="$REPO_ROOT/src/Aspire.Cli/Aspire.Cli.csproj"
     CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli/$EFFECTIVE_CONFIG/net10.0/$TARGET_RID/publish"
-    PUBLISH_ARGS=(-c "$EFFECTIVE_CONFIG" -r "$TARGET_RID" --self-contained /p:PublishAot=false /p:PublishSingleFile=true "/p:VersionSuffix=$VERSION_SUFFIX")
+    PUBLISH_ARGS=(-c "$EFFECTIVE_CONFIG" -r "$TARGET_RID" --self-contained /p:PublishAot=false /p:PublishSingleFile=true "/p:VersionSuffix=$VERSION_SUFFIX" "/p:AspireCliChannel=$HIVE_NAME")
     if [[ -n "$BUNDLE_PAYLOAD_ARCHIVE" ]]; then
       PUBLISH_ARGS+=("/p:BundlePayloadPath=$BUNDLE_PAYLOAD_ARCHIVE")
     fi
@@ -371,18 +467,26 @@ if [[ $SKIP_CLI -eq 0 ]]; then
       exit 1
     fi
   else
+    FRAMEWORK_DEPENDENT_CLI=1
     # Framework-dependent CLI with embedded bundle payload
     CLI_PROJ="$REPO_ROOT/src/Aspire.Cli/Aspire.Cli.Tool.csproj"
     CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net10.0/publish"
     if [[ -n "$BUNDLE_PAYLOAD_ARCHIVE" ]]; then
       log "Publishing Aspire CLI (dotnet tool) with embedded bundle payload..."
-      dotnet publish "$CLI_PROJ" -c "$EFFECTIVE_CONFIG" "/p:VersionSuffix=$VERSION_SUFFIX" "/p:BundlePayloadPath=$BUNDLE_PAYLOAD_ARCHIVE"
+      dotnet publish "$CLI_PROJ" -c "$EFFECTIVE_CONFIG" "/p:VersionSuffix=$VERSION_SUFFIX" "/p:AspireCliChannel=$HIVE_NAME" "/p:BundlePayloadPath=$BUNDLE_PAYLOAD_ARCHIVE"
       if [[ $? -ne 0 ]]; then
         error "CLI publish with embedded bundle failed."
         exit 1
       fi
+      if [[ ! -f "$CLI_PUBLISH_DIR/aspire" ]] && [[ -f "$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net10.0/$BUNDLE_RID/publish/aspire" ]]; then
+        CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net10.0/$BUNDLE_RID/publish"
+      fi
     elif [[ ! -d "$CLI_PUBLISH_DIR" ]]; then
-      CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net10.0"
+      if [[ -f "$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net10.0/$BUNDLE_RID/aspire" ]]; then
+        CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net10.0/$BUNDLE_RID"
+      else
+        CLI_PUBLISH_DIR="$REPO_ROOT/artifacts/bin/Aspire.Cli.Tool/$EFFECTIVE_CONFIG/net10.0"
+      fi
     fi
   fi
 
@@ -398,24 +502,22 @@ if [[ $SKIP_CLI -eq 0 ]]; then
 
     # Copy all files from the publish directory (CLI and its dependencies)
     cp -f "$CLI_PUBLISH_DIR"/* "$CLI_BIN_DIR"/ 2>/dev/null || true
+    if [[ $FRAMEWORK_DEPENDENT_CLI -eq 1 ]]; then
+      rm -f "$CLI_BIN_DIR/libcoreclr.dylib" "$CLI_BIN_DIR/libhostfxr.dylib" "$CLI_BIN_DIR/libhostpolicy.dylib"
+      rm -f "$CLI_BIN_DIR/libcoreclr.so" "$CLI_BIN_DIR/libhostfxr.so" "$CLI_BIN_DIR/libhostpolicy.so"
+    fi
 
     # Ensure the CLI is executable
     chmod +x "$CLI_BIN_DIR/aspire"
 
     log "Aspire CLI installed to: $CLI_BIN_DIR/aspire"
+    CLI_INSTALLED=1
 
-    if [[ -z "$OUTPUT_DIR" ]]; then
-      if "$CLI_BIN_DIR/aspire" config set channel "$HIVE_NAME" -g >/dev/null 2>&1; then
-        log "Set global channel to '$HIVE_NAME'"
-      else
-        warn "Failed to set global channel to '$HIVE_NAME'. Run: aspire config set channel '$HIVE_NAME' -g"
-      fi
-
-      # Check if the bin directory is in PATH
-      if [[ ":$PATH:" != *":$CLI_BIN_DIR:"* ]]; then
-        warn "The CLI bin directory is not in your PATH."
-        log "Add it to your PATH with: export PATH=\"$CLI_BIN_DIR:\$PATH\""
-      fi
+    if [[ -z "$OUTPUT_DIR" ]] && is_sourced; then
+        if [[ ":$PATH:" != *":$CLI_BIN_DIR:"* ]]; then
+          export PATH="$CLI_BIN_DIR:$PATH"
+        fi
+        log "Updated current shell PATH to prefer: $CLI_BIN_DIR"
     fi
   else
     warn "Could not find CLI at $CLI_SOURCE_PATH. Skipping CLI installation."
@@ -439,6 +541,13 @@ if [[ $ARCHIVE -eq 1 ]]; then
   log "Archive created: $ARCHIVE_PATH"
 fi
 
+if [[ -z "$OUTPUT_DIR" ]] && [[ $CLI_INSTALLED -eq 1 ]]; then
+  # Only purge old ~/.aspire-local/* installs when we successfully installed a
+  # replacement CLI. Skipping the purge when --skip-cli is set (or CLI install
+  # failed) avoids deleting prior installs without putting anything in their place.
+  purge_old_local_hives "$ASPIRE_ROOT"
+fi
+
 echo
 log "Done."
 echo
@@ -448,8 +557,9 @@ if [[ -n "$OUTPUT_DIR" ]]; then
     log "Archive: $ARCHIVE_PATH"
     log ""
     log "To install on the target machine:"
-    log "  mkdir -p ~/.aspire && tar -xzf $(basename "$ARCHIVE_PATH") -C ~/.aspire"
-    log "  ~/.aspire/bin/aspire config set channel '$HIVE_NAME' -g"
+    log "  mkdir -p ~/.aspire-local/$VERSION_SUFFIX && tar -xzf $(basename "$ARCHIVE_PATH") -C ~/.aspire-local/$VERSION_SUFFIX"
+    log "  mkdir -p ~/.aspire && cp -R ~/.aspire-local/$VERSION_SUFFIX/hives ~/.aspire/"
+    log "  export PATH=\"~/.aspire-local/$VERSION_SUFFIX/bin:\$PATH\""
   fi
 else
   log "Aspire CLI will discover a channel named '$HIVE_NAME' from:"
@@ -460,6 +570,11 @@ else
   if [[ $SKIP_CLI -eq 0 ]]; then
     log "The locally-built CLI was installed to: $ASPIRE_ROOT/bin"
     echo
+    if ! is_sourced; then
+      warn "Unable to update the parent shell because the script was executed instead of sourced."
+      print_shell_activation "$CLI_BIN_DIR"
+      echo
+    fi
   fi
   if [[ $SKIP_BUNDLE -eq 0 ]]; then
     log "Bundle payload embedded in CLI binary. The CLI will extract and"

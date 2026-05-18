@@ -98,6 +98,8 @@ public class IdentityChannelReaderTests
     [InlineData("staging", true)]
     [InlineData("daily", true)]
     [InlineData("local", true)]
+    [InlineData("local-super-parakeet", true)]
+    [InlineData("local-worktree-123", true)]
     [InlineData("pr-1", true)]
     [InlineData("pr-12345", true)]
     [InlineData("pr-0", true)]                                  // zero is permitted; build pipeline never emits it but the reader does not gate on positivity
@@ -120,7 +122,10 @@ public class IdentityChannelReaderTests
     [InlineData("Local", false)]
     [InlineData(" stable", false)]                              // leading whitespace on a literal — symmetric with the existing pr-12345 whitespace cases
     [InlineData("stable ", false)]
-    [InlineData("local-foo", false)]                            // literal-as-prefix must not match; only "pr-" is a recognised prefix
+    [InlineData("local-", false)]
+    [InlineData("local-Foo", false)]
+    [InlineData("local-worktree_123", false)]
+    [InlineData("local-worktree.123", false)]
     [InlineData("foobar", false)]
     [InlineData("default", false)]                              // PackageChannelNames.Default is for runtime PSM, never baked
     [InlineData("   ", false)]
@@ -166,4 +171,3 @@ public class IdentityChannelReaderTests
         return builder;
     }
 }
-

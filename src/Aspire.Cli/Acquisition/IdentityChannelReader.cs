@@ -49,6 +49,7 @@ internal sealed class IdentityChannelReader : IIdentityChannelReader
 {
     private const string ChannelMetadataKey = "AspireCliChannel";
     private const string PrChannelPrefix = "pr-";
+    private const string LocalChannelPrefix = "local-";
 
     private readonly Assembly _assembly;
     private readonly Lazy<string> _channel;
@@ -100,7 +101,7 @@ internal sealed class IdentityChannelReader : IIdentityChannelReader
         {
             throw new InvalidOperationException(
                 $"Assembly metadata '{ChannelMetadataKey}' is missing or empty on '{_assembly.GetName().Name}'. " +
-                "The CLI must be built with /p:AspireCliChannel=<channel> (one of stable, staging, daily, local, or pr-<N>).");
+                "The CLI must be built with /p:AspireCliChannel=<channel> (one of stable, staging, daily, local, local-<name>, or pr-<N>).");
         }
 
         var value = metadata.Value;
@@ -108,7 +109,7 @@ internal sealed class IdentityChannelReader : IIdentityChannelReader
         {
             throw new InvalidOperationException(
                 $"Assembly metadata '{ChannelMetadataKey}' on '{_assembly.GetName().Name}' has invalid value '{value}'. " +
-                "Expected one of: stable, staging, daily, local, or pr-<N> where <N> is one or more ASCII digits.");
+                "Expected one of: stable, staging, daily, local, local-<name>, or pr-<N> where <N> is one or more ASCII digits.");
         }
 
         return value;
@@ -130,6 +131,12 @@ internal sealed class IdentityChannelReader : IIdentityChannelReader
             return true;
         }
 
+        if (value.StartsWith(LocalChannelPrefix, StringComparison.Ordinal))
+        {
+            var suffix = value.AsSpan(LocalChannelPrefix.Length);
+            return IsValidLocalChannelSuffix(suffix);
+        }
+
         if (!value.StartsWith(PrChannelPrefix, StringComparison.Ordinal))
         {
             return false;
@@ -140,5 +147,25 @@ internal sealed class IdentityChannelReader : IIdentityChannelReader
         // the build pipeline emits (never localized digits, never sign chars).
         var digits = value.AsSpan(PrChannelPrefix.Length);
         return !digits.IsEmpty && !digits.ContainsAnyExceptInRange('0', '9');
+    }
+
+    private static bool IsValidLocalChannelSuffix(ReadOnlySpan<char> suffix)
+    {
+        if (suffix.IsEmpty)
+        {
+            return false;
+        }
+
+        foreach (var c in suffix)
+        {
+            if ((c is >= 'a' and <= 'z') || (c is >= '0' and <= '9') || c is '-')
+            {
+                continue;
+            }
+
+            return false;
+        }
+
+        return true;
     }
 }

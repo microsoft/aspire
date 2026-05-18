@@ -14,7 +14,7 @@ public class AssemblyMetadataChannelTests
     public void AspireCliChannel_AssemblyMetadata_HasValidShape()
     {
         // The baked AspireCliChannel must match the shape IdentityChannelReader.IsValidChannel
-        // accepts: one of `stable`, `staging`, `daily`, `local`, or `pr-<digits>`. This is
+        // accepts: one of `stable`, `staging`, `daily`, `local`, `local-<name>`, or `pr-<digits>`. This is
         // the smoke test that protects against a CI misconfiguration emitting the legacy
         // literal `pr` (no `-<N>` suffix) — which would build successfully and then mis-route
         // packages at runtime.
@@ -28,7 +28,7 @@ public class AssemblyMetadataChannelTests
         Assert.False(string.IsNullOrEmpty(metadata.Value), "AspireCliChannel must have a non-empty value.");
         Assert.True(
             IdentityChannelReader.IsValidChannel(metadata.Value),
-            $"AspireCliChannel value '{metadata.Value}' is not in the accepted set (stable|staging|daily|local|pr-<N>).");
+            $"AspireCliChannel value '{metadata.Value}' is not in the accepted set (stable|staging|daily|local|local-<name>|pr-<N>).");
     }
 
     [Fact]
@@ -66,4 +66,3 @@ public class AssemblyMetadataChannelTests
         return dir.FullName;
     }
 }
-

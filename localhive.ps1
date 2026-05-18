@@ -7,23 +7,23 @@
 .DESCRIPTION
   Mirrors localhive.sh behavior on Windows. Packs the repo, creates a symlink from
   $HOME/.aspire/hives/<HiveName> to artifacts/packages/<Config>/Shipping (or copies .nupkg files),
-  installs the locally-built Aspire CLI to $HOME/.aspire/bin, and embeds the bundle
+  installs the locally-built Aspire CLI to $HOME/.aspire-local/<build>/bin, and embeds the bundle
   payload (aspire-managed + DCP) in the CLI binary so it self-extracts on first run.
 
 .PARAMETER Configuration
   Build configuration: Release or Debug (positional parameter 0). If omitted, the script tries Release then falls back to Debug.
 
 .PARAMETER Name
-  Hive name (positional parameter 1). Default: local.
+  Hive/channel name (positional parameter 1). Default: local-<worktree-folder>.
 
 .PARAMETER VersionSuffix
   Prerelease version suffix. If omitted, auto-generates: local.YYYYMMDD.tHHmmss (UTC)
 
 .PARAMETER Copy
-  Copy .nupkg files instead of linking the hive directory.
+  Deprecated. Local hives always copy packages.
 
 .PARAMETER SkipCli
-  Skip installing the locally-built CLI to $HOME/.aspire/bin.
+  Skip installing the locally-built CLI to $HOME/.aspire-local/<build>/bin.
 
 .PARAMETER SkipBundle
   Skip building the bundle payload. Without it the CLI binary will not have an embedded
@@ -45,8 +45,8 @@
   .\localhive.ps1 -SkipCli
 
 .NOTES
-  The hive is created at $HOME/.aspire/hives/<HiveName> so the Aspire CLI can discover a channel.
-  The CLI is installed to $HOME/.aspire/bin so it can be used directly.
+  The hive is created at $HOME/.aspire/hives/<HiveName> and the CLI is stamped with the same channel.
+  The CLI is installed to $HOME/.aspire-local/<build>/bin so it can be used side by side.
 #>
 
 [CmdletBinding(PositionalBinding=$true)]
@@ -57,7 +57,7 @@ param(
 
   [Alias('n','hive','hiveName')]
   [Parameter(Position=1)]
-  [string] $Name = 'local',
+  [string] $Name,
 
   [Alias('v')]
   [string] $VersionSuffix,
@@ -92,17 +92,17 @@ Usage:
 
 Positional parameters:
   [Release|Debug]      Optional build configuration (Position 0). If omitted, attempts Release then Debug.
-  [HiveName]           Optional hive name (Position 1). Defaults to 'local'.
+  [HiveName]           Optional hive/channel name (Position 1). Defaults to local-<worktree-folder>.
 
 Options:
   -Configuration (-c)   Build configuration: Release or Debug
-  -Name (-n)            Hive name (default: local)
-  -Output (-o)          Output directory for portable layout (instead of $HOME\.aspire)
+  -Name (-n)            Hive/channel name (default: local-<worktree-folder>)
+  -Output (-o)          Output directory for portable layout (instead of $HOME\.aspire-local\<build>)
   -Rid (-r)             Target RID for cross-platform builds (e.g. linux-x64)
   -VersionSuffix (-v)   Prerelease version suffix (default: auto-generates local.YYYYMMDD.tHHmmss)
   -Archive              Create an archive (.tar.gz or .zip) of the output. Requires -Output.
-  -Copy                 Copy .nupkg files instead of creating a symlink
-  -SkipCli              Skip installing the locally-built CLI to $HOME\.aspire\bin
+  -Copy                 Deprecated; local hives always copy packages
+  -SkipCli              Skip installing the locally-built CLI to $HOME\.aspire-local\<build>\bin
   -SkipBundle           Skip building and installing the bundle (aspire-managed + DCP)
   -NativeAot            Build native AOT CLI (self-extracting with embedded bundle)
   -Help (-h)            Show this help and exit
@@ -111,20 +111,99 @@ Examples:
   .\localhive.ps1 -c Release -n local
   .\localhive.ps1 Debug my-feature
   .\localhive.ps1 -c Release -n demo -v local.20250811.t033324
-  .\localhive.ps1            # Packs (tries Release then Debug) -> hive 'local'
-  .\localhive.ps1 Debug      # Packs Debug -> hive 'local'
+  .\localhive.ps1            # Packs (tries Release then Debug) -> hive 'local-<worktree-folder>'
+  .\localhive.ps1 Debug      # Packs Debug -> hive 'local-<worktree-folder>'
   .\localhive.ps1 Release demo
   .\localhive.ps1 -o ./aspire-linux -r linux-x64 -Archive  # Portable archive for a Linux machine
 
 This will pack NuGet packages into artifacts\packages\<Config>\Shipping and create/update
-a hive at $HOME\.aspire\hives\<HiveName> so the Aspire CLI can use it as a channel.
-It also installs the locally-built CLI to $HOME\.aspire\bin (unless -SkipCli is specified).
+a hive at $HOME\.aspire\hives\<HiveName> and stamps the CLI with the same channel.
+It also installs the locally-built CLI to $HOME\.aspire-local\<build>\bin (unless -SkipCli is specified).
 '@ | Write-Host
 }
 
 function Write-Log   { param([string]$m) Write-Host "[localhive] $m" }
 function Write-Warn  { param([string]$m) Write-Warning "[localhive] $m" }
 function Write-Err   { param([string]$m) Write-Error "[localhive] $m" }
+function Write-ShellActivation {
+  param([string]$CliBinDir)
+  Write-Log "To use this local hive from your current shell, run:"
+  Write-Log "  `$env:PATH = '$CliBinDir' + [System.IO.Path]::PathSeparator + `$env:PATH"
+}
+
+function ConvertTo-ChannelSuffix {
+  param([string]$Value)
+  $name = $Value
+  $name = $name.ToLowerInvariant() -replace '[^a-z0-9]+', '-'
+  $name = $name.Trim('-')
+  if (-not $name) {
+    $name = 'local'
+  }
+  $name
+}
+
+function Get-DefaultHiveName {
+  "local-$(ConvertTo-ChannelSuffix -Value (Split-Path -Leaf $RepoRoot))"
+}
+
+function Normalize-HiveName {
+  param([string]$Value)
+  # AspireCliChannel is validated case-sensitively at runtime, so always emit a
+  # lowercase value. Match case-sensitively after lowercasing so we preserve
+  # well-formed channel names like 'pr-123' and produce a valid channel for
+  # inputs like 'Stable' or 'Local-foo'.
+  $lower = $Value.ToLowerInvariant()
+  if ($lower -cmatch '^(stable|staging|daily|local|local-[a-z0-9-]+|pr-[0-9]+)$') {
+    return $lower
+  }
+  "local-$(ConvertTo-ChannelSuffix -Value $Value)"
+}
+
+function Remove-OldLocalHives {
+  param([string]$CurrentRoot)
+
+  $localHivesRoot = Split-Path -Parent $CurrentRoot
+  if (-not (Test-Path -LiteralPath $localHivesRoot)) {
+    return
+  }
+
+  $currentRootResolved = (Resolve-Path -LiteralPath $CurrentRoot).Path
+  $currentPathArray = $env:PATH.Split([System.IO.Path]::PathSeparator, [StringSplitOptions]::RemoveEmptyEntries)
+  $purgedCount = 0
+  $skippedCount = 0
+  $failedCount = 0
+
+  Get-ChildItem -LiteralPath $localHivesRoot -Directory -Force | ForEach-Object {
+    if ($_.FullName -ne $currentRootResolved) {
+      $candidateBin = Join-Path $_.FullName 'bin'
+      if ($currentPathArray -contains $candidateBin) {
+        $skippedCount++
+        return
+      }
+
+      try {
+        Remove-Item -LiteralPath $_.FullName -Recurse -Force -ErrorAction Stop
+        $purgedCount++
+      }
+      catch {
+        Write-Warn "Failed to remove old local install: $($_.FullName)"
+        $failedCount++
+      }
+    }
+  }
+
+  if ($purgedCount -gt 0) {
+    Write-Log "Purged $purgedCount unused old local install(s) from $localHivesRoot"
+  }
+
+  if ($skippedCount -gt 0) {
+    Write-Log "Skipped $skippedCount old local install(s) referenced by PATH"
+  }
+
+  if ($failedCount -gt 0) {
+    Write-Warn "Could not purge $failedCount old local install(s). They may be in use."
+  }
+}
 
 if ($Help) { Show-Usage; exit 0 }
 
@@ -143,10 +222,8 @@ if ($Rid -and $NativeAot) {
   }
 }
 
-# When -Output is specified, always copy (portable layout, no symlinks)
-if ($Output) {
-  $Copy = $true
-}
+# Always copy so local hives remain self-contained and do not point at mutable build artifacts.
+$Copy = $true
 
 # Normalize configuration casing if provided (case-insensitive) and allow common abbreviations.
 if ($Configuration) {
@@ -184,6 +261,14 @@ if (-not (Test-VersionSuffix -Suffix $VersionSuffix)) {
 }
 Write-Log "Using prerelease version suffix: $VersionSuffix"
 
+if (-not $Name) {
+  $Name = Get-DefaultHiveName
+}
+else {
+  $Name = Normalize-HiveName -Value $Name
+}
+Write-Log "Using hive/channel name: $Name"
+
 # Build and pack
 $pkgDir = $null
 # Use build.cmd on Windows, build.sh otherwise (PowerShell is cross-platform)
@@ -206,7 +291,7 @@ $aotArg = if (-not $NativeAot) { "/p:PublishAot=false" } else { "" }
 
 if ($Configuration) {
   Write-Log "Building and packing NuGet packages [-c $Configuration] with versionsuffix '$VersionSuffix'"
-  & $buildScript -restore -build -pack -c $Configuration "/p:VersionSuffix=$VersionSuffix" "/p:SkipTestProjects=true" "/p:SkipPlaygroundProjects=true" $aotArg
+  & $buildScript -restore -build -pack -c $Configuration "/p:VersionSuffix=$VersionSuffix" "/p:AspireCliChannel=$Name" "/p:SkipTestProjects=true" "/p:SkipPlaygroundProjects=true" "/p:TreatWarningsAsErrors=false" "/p:WarningsNotAsErrors=NU5123" $aotArg
   if ($LASTEXITCODE -ne 0) {
     Write-Err "Build failed for configuration $Configuration."
     exit 1
@@ -219,7 +304,7 @@ if ($Configuration) {
 }
 else {
   Write-Log "Building and packing NuGet packages [-c Release] with versionsuffix '$VersionSuffix'"
-  & $buildScript -restore -build -pack -c Release "/p:VersionSuffix=$VersionSuffix" "/p:SkipTestProjects=true" "/p:SkipPlaygroundProjects=true" $aotArg
+  & $buildScript -restore -build -pack -c Release "/p:VersionSuffix=$VersionSuffix" "/p:AspireCliChannel=$Name" "/p:SkipTestProjects=true" "/p:SkipPlaygroundProjects=true" "/p:TreatWarningsAsErrors=false" "/p:WarningsNotAsErrors=NU5123" $aotArg
   if ($LASTEXITCODE -ne 0) {
     Write-Err "Build failed for configuration Release."
     exit 1
@@ -253,12 +338,13 @@ if ($Rid) {
 
 if ($Output) {
   $aspireRoot = $Output
+  $hivesRoot = Join-Path $aspireRoot 'hives'
 } else {
-  $aspireRoot = Join-Path $HOME '.aspire'
+  $aspireRoot = Join-Path (Join-Path $HOME '.aspire-local') $VersionSuffix
+  $hivesRoot = Join-Path (Join-Path $HOME '.aspire') 'hives'
 }
 $cliBinDir = Join-Path $aspireRoot 'bin'
 
-$hivesRoot = Join-Path $aspireRoot 'hives'
 $hiveRoot  = Join-Path $hivesRoot $Name
 $hivePath  = Join-Path $hiveRoot 'packages'
 
@@ -272,14 +358,23 @@ if (Test-Path -LiteralPath $hiveRoot) {
 }
 
 function Copy-PackagesToHive {
-  param([string]$Source,[string]$Destination)
+  param([string]$Source,[string]$Destination,[string]$VersionSuffix)
   New-Item -ItemType Directory -Path $Destination -Force | Out-Null
-  Get-ChildItem -LiteralPath $Source -Filter *.nupkg -File | Copy-Item -Destination $Destination -Force
+  # Filter by the current VersionSuffix so we don't carry over stale packages
+  # from a previous run. The earlier preflight only checks for *any* .nupkg, so
+  # validate here that at least one package matches the expected suffix before
+  # producing an otherwise-empty hive.
+  $matched = @(Get-ChildItem -LiteralPath $Source -Filter "*$VersionSuffix*.nupkg" -File)
+  if ($matched.Count -eq 0) {
+    Write-Err "No .nupkg files matching '*$VersionSuffix*.nupkg' were found in $Source. Re-run pack with the expected VersionSuffix '$VersionSuffix', or remove stale packages."
+    exit 1
+  }
+  $matched | Copy-Item -Destination $Destination -Force
 }
 
 if ($Copy) {
-  Write-Log "Populating hive '$Name' by copying .nupkg files"
-  Copy-PackagesToHive -Source $pkgDir -Destination $hivePath
+  Write-Log "Populating hive '$Name' by copying .nupkg files (version suffix: $VersionSuffix)"
+  Copy-PackagesToHive -Source $pkgDir -Destination $hivePath -VersionSuffix $VersionSuffix
   Write-Log "Created/updated hive '$Name' at $hivePath (copied packages)."
 }
 else {
@@ -298,7 +393,7 @@ else {
     }
     catch {
       Write-Warn "Link creation failed; copying .nupkg files instead"
-      Copy-PackagesToHive -Source $pkgDir -Destination $hivePath
+      Copy-PackagesToHive -Source $pkgDir -Destination $hivePath -VersionSuffix $VersionSuffix
       Write-Log "Created/updated hive '$Name' at $hivePath (copied packages)."
     }
   }
@@ -317,7 +412,7 @@ if (-not $SkipBundle) {
   }
 
   Write-Log "Building bundle (aspire-managed + DCP$(if ($NativeAot) { ' + native AOT CLI' }))..."
-  $buildArgs = @($bundleProjPath, '-c', $effectiveConfig, "/p:VersionSuffix=$VersionSuffix", "/p:TargetRid=$bundleRid")
+  $buildArgs = @($bundleProjPath, '-c', $effectiveConfig, "/p:VersionSuffix=$VersionSuffix", "/p:AspireCliChannel=$Name", "/p:TargetRid=$bundleRid")
   if (-not $NativeAot) {
     $buildArgs += '/p:SkipNativeBuild=true'
   }
@@ -340,8 +435,10 @@ if (-not $SkipBundle) {
 }
 
 # Install the CLI to $aspireRoot/bin
+$cliInstalled = $false
 if (-not $SkipCli) {
   $cliExeName = if ($bundleRid -like 'win-*') { 'aspire.exe' } else { 'aspire' }
+  $frameworkDependentCli = $false
 
   if ($NativeAot) {
     # Native AOT CLI is produced by Bundle.proj's _PublishNativeCli target
@@ -355,7 +452,7 @@ if (-not $SkipCli) {
     Write-Log "Publishing Aspire CLI for target RID: $Rid"
     $cliProj = Join-Path $RepoRoot "src" "Aspire.Cli" "Aspire.Cli.csproj"
     $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli" $effectiveConfig "net10.0" $Rid "publish"
-    $publishArgs = @($cliProj, '-c', $effectiveConfig, '-r', $Rid, '--self-contained', '/p:PublishAot=false', '/p:PublishSingleFile=true', "/p:VersionSuffix=$VersionSuffix")
+    $publishArgs = @($cliProj, '-c', $effectiveConfig, '-r', $Rid, '--self-contained', '/p:PublishAot=false', '/p:PublishSingleFile=true', "/p:VersionSuffix=$VersionSuffix", "/p:AspireCliChannel=$Name")
     if ($bundlePayloadArchive) {
       $publishArgs += "/p:BundlePayloadPath=$($bundlePayloadArchive.FullName)"
     }
@@ -365,18 +462,29 @@ if (-not $SkipCli) {
       exit 1
     }
   } else {
+    $frameworkDependentCli = $true
     # Framework-dependent CLI with embedded bundle payload
     $cliProj = Join-Path $RepoRoot "src" "Aspire.Cli" "Aspire.Cli.Tool.csproj"
     $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli.Tool" $effectiveConfig "net10.0" "publish"
     if ($bundlePayloadArchive) {
       Write-Log "Publishing Aspire CLI (dotnet tool) with embedded bundle payload..."
-      & dotnet publish $cliProj -c $effectiveConfig "/p:VersionSuffix=$VersionSuffix" "/p:BundlePayloadPath=$($bundlePayloadArchive.FullName)"
+      & dotnet publish $cliProj -c $effectiveConfig "/p:VersionSuffix=$VersionSuffix" "/p:AspireCliChannel=$Name" "/p:BundlePayloadPath=$($bundlePayloadArchive.FullName)"
       if ($LASTEXITCODE -ne 0) {
         Write-Err "CLI publish with embedded bundle failed."
         exit 1
       }
+      $ridPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli.Tool" $effectiveConfig "net10.0" $bundleRid "publish"
+      if (-not (Test-Path -LiteralPath (Join-Path $cliPublishDir $cliExeName)) -and (Test-Path -LiteralPath (Join-Path $ridPublishDir $cliExeName))) {
+        $cliPublishDir = $ridPublishDir
+      }
     } elseif (-not (Test-Path -LiteralPath $cliPublishDir)) {
-      $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli.Tool" $effectiveConfig "net10.0"
+      $ridBuildDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli.Tool" $effectiveConfig "net10.0" $bundleRid
+      if (Test-Path -LiteralPath (Join-Path $ridBuildDir $cliExeName)) {
+        $cliPublishDir = $ridBuildDir
+      }
+      else {
+        $cliPublishDir = Join-Path $RepoRoot "artifacts" "bin" "Aspire.Cli.Tool" $effectiveConfig "net10.0"
+      }
     }
   }
 
@@ -417,6 +525,14 @@ if (-not $SkipCli) {
       if ($copyErrors.Count -gt 0) {
         Write-Warn "$($copyErrors.Count) file(s) could not be overwritten (likely locked by a running process). The CLI executable was updated successfully."
       }
+      if ($frameworkDependentCli -and -not $IsWindows) {
+        Remove-Item -LiteralPath (Join-Path $cliBinDir 'libcoreclr.dylib') -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath (Join-Path $cliBinDir 'libhostfxr.dylib') -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath (Join-Path $cliBinDir 'libhostpolicy.dylib') -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath (Join-Path $cliBinDir 'libcoreclr.so') -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath (Join-Path $cliBinDir 'libhostfxr.so') -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath (Join-Path $cliBinDir 'libhostpolicy.so') -Force -ErrorAction SilentlyContinue
+      }
 
       # Clean up old backup files
       Get-ChildItem -LiteralPath $cliBinDir -Filter "$cliExeName.old.*" -ErrorAction SilentlyContinue |
@@ -433,19 +549,15 @@ if (-not $SkipCli) {
 
     $installedCliPath = Join-Path $cliBinDir $cliExeName
     Write-Log "Aspire CLI installed to: $installedCliPath"
+    $cliInstalled = $true
 
     if (-not $Output) {
-      # Set the channel to the local hive so templates and packages resolve from it
-      & $installedCliPath config set channel $Name -g 2>$null
-      Write-Log "Set global channel to '$Name'"
-
-      # Check if the bin directory is in PATH
       $pathSeparator = [System.IO.Path]::PathSeparator
       $currentPathArray = $env:PATH.Split($pathSeparator, [StringSplitOptions]::RemoveEmptyEntries)
       if ($currentPathArray -notcontains $cliBinDir) {
-        Write-Warn "The CLI bin directory is not in your PATH."
-        Write-Log "Add it to your PATH with: `$env:PATH = '$cliBinDir' + '$pathSeparator' + `$env:PATH"
+        $env:PATH = $cliBinDir + $pathSeparator + $env:PATH
       }
+      Write-Log "Updated current shell PATH to prefer: $cliBinDir"
     }
   }
   else {
@@ -468,6 +580,13 @@ if ($Archive) {
   Write-Log "Archive created: $archivePath"
 }
 
+if (-not $Output -and $cliInstalled) {
+  # Only purge old $HOME\.aspire-local\* installs when we successfully installed
+  # a replacement CLI. Skipping the purge when -SkipCli is set (or CLI install
+  # failed) avoids deleting prior installs without putting anything in their place.
+  Remove-OldLocalHives -CurrentRoot $aspireRoot
+}
+
 Write-Host
 Write-Log 'Done.'
 Write-Host
@@ -478,11 +597,12 @@ if ($Output) {
     Write-Log ""
     Write-Log "To install on the target machine:"
     if ($bundleRid -like 'win-*') {
-      Write-Log "  Expand-Archive -Path $(Split-Path $archivePath -Leaf) -DestinationPath `$HOME\.aspire"
+      Write-Log "  Expand-Archive -Path $(Split-Path $archivePath -Leaf) -DestinationPath `$HOME\.aspire-local\$VersionSuffix"
     } else {
-      Write-Log "  mkdir -p ~/.aspire && tar -xzf $(Split-Path $archivePath -Leaf) -C ~/.aspire"
+      Write-Log "  mkdir -p ~/.aspire-local/$VersionSuffix && tar -xzf $(Split-Path $archivePath -Leaf) -C ~/.aspire-local/$VersionSuffix"
     }
-    Write-Log "  ~/.aspire/bin/aspire config set channel '$Name' -g"
+    Write-Log "  Copy-Item -Recurse -Force `$HOME\.aspire-local\$VersionSuffix\hives `$HOME\.aspire\"
+    Write-Log "  `$env:PATH = '$HOME\.aspire-local\$VersionSuffix\bin' + [System.IO.Path]::PathSeparator + `$env:PATH"
   }
 } else {
   Write-Log "Aspire CLI will discover a channel named '$Name' from:"
@@ -492,6 +612,8 @@ if ($Output) {
   Write-Host
   if (-not $SkipCli) {
     Write-Log "The locally-built CLI was installed to: $cliBinDir"
+    Write-Host
+    Write-ShellActivation -CliBinDir $cliBinDir
     Write-Host
   }
   if (-not $SkipBundle) {

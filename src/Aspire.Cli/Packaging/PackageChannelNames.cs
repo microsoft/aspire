@@ -29,8 +29,8 @@ internal static class PackageChannelNames
     public const string Default = "default";
 
     /// <summary>
-    /// The local channel name, used when the CLI binary was built locally
-    /// (i.e., with <c>AspireCliChannel=local</c>).
+    /// The base local channel name, used when the CLI binary was built locally
+    /// (i.e., with <c>AspireCliChannel=local</c> or <c>AspireCliChannel=local-*</c>).
     /// </summary>
     public const string Local = "local";
 }

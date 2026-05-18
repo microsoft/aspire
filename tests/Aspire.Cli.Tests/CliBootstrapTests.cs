@@ -52,8 +52,8 @@ public class CliBootstrapTests
         // assert shape, not a single literal, so this test stops being an accidental
         // regression for non-default builds (including pr-<N> when the test host is a PR build).
         Assert.True(
-            s_fixedChannels.Contains(channel) || channel.StartsWith("pr-", StringComparison.Ordinal),
-            $"Unexpected channel '{channel}'; expected one of stable|staging|daily|local|pr-<N>.");
+            s_fixedChannels.Contains(channel) || channel.StartsWith("local-", StringComparison.Ordinal) || channel.StartsWith("pr-", StringComparison.Ordinal),
+            $"Unexpected channel '{channel}'; expected one of stable|staging|daily|local|local-<name>|pr-<N>.");
     }
 
     [Fact]
@@ -104,4 +104,3 @@ public class CliBootstrapTests
         Assert.Equal(bakedChannel, context.IdentityChannel);
     }
 }
-
