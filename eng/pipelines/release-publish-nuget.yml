@@ -197,8 +197,10 @@ extends:
 
                   # Sentinel: AzDO's UI rejects empty-string param values even
                   # when default is '', so we use the literal 'auto' as a
-                  # stand-in for "derive from source build tag".
-                  if ($override -eq 'auto') {
+                  # stand-in for "derive from source build tag". Match
+                  # case-insensitively with whitespace trimming so operators
+                  # who paste " Auto " still hit the sentinel branch.
+                  if ($override.Trim() -match '^(?i)auto$') {
                     $override = ''
                   }
 
@@ -236,7 +238,7 @@ extends:
                     exit 1
                   } else {
                     $derived = ($tagMatches[0] -replace '^release-version:', '').Trim()
-                    if ($derived -notmatch '^\d+\.\d+\.\d+') {
+                    if ($derived -notmatch '^\d+\.\d+\.\d+(-[A-Za-z0-9.-]+)?$') {
                       Write-Error "Derived release version '$derived' does not look like valid semver (X.Y.Z[-suffix])."
                       exit 1
                     }

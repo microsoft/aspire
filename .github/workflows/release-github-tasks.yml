@@ -572,6 +572,7 @@ jobs:
           echo "║ Skip GitHub Release: ${{ inputs.skip_github_release }}"
           echo "║ Skip Merge PR:       ${{ inputs.skip_merge_pr }}"
           echo "║ Skip Baseline PR:    ${{ inputs.skip_baseline_pr }}"
+          echo "╠═══════════════════════════════════════════════════════════════╣"
           echo "║ Release job:    ${{ needs.release.result }}"
           echo "║ Merge PR job:   ${{ needs.merge-pr.result }}"
           echo "║ Baseline PR job: ${{ needs.baseline-pr.result }}"

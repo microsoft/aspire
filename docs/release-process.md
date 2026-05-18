@@ -57,7 +57,9 @@ Before starting a release:
    (definition `1600` in `dnceng/internal`)
 2. Click "Run pipeline"
 3. Under **Resources**, select the source build from the `aspire-build` dropdown
-   - The picker is filtered to builds from `release/*` branches by default.
+   - The picker shows all recent builds from the `microsoft-aspire`
+     pipeline regardless of branch. Pick the build that corresponds to the
+     release branch and version you intend to ship.
    - Each build's tags are shown alongside its number — verify the
      `release-version:X.Y.Z` tag matches the version you intend to ship
      **before** clicking Run. If the tag is missing, either re-run the
@@ -73,7 +75,7 @@ Before starting a release:
 
    | Parameter | Description | Example |
    |-----------|-------------|---------|
-   | `ReleaseVersion` | Override for the version label (used as `v<version>` tag). **Leave blank to auto-derive from the source build's `release-version:*` tag** — the normal case. Only set this when re-shipping under a corrected tag. | _(blank)_ |
+   | `ReleaseVersion` | Override for the version label (used as `v<version>` tag). **Leave as `auto` to derive from the source build's `release-version:*` tag** — the normal case. Only set this when re-shipping under a corrected tag. | `auto` |
    | `IsPrerelease` | `true` for preview releases | `false` |
    | `DryRun` | Set `true` to test without publishing or tagging | `false` |
    | `GaChannelName` | Target GA channel | `Aspire 9.x GA` |
