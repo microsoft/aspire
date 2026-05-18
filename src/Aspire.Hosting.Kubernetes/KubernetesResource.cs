@@ -472,6 +472,18 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
                 return s;
             }
 
+            // Handle scalar/primitive types (bool, numerics, DateTimeOffset, TimeSpan, Uri, etc.)
+            // These can appear when third-party integrations set environment variables to non-string values.
+            if (value is bool boolValue)
+            {
+                return boolValue ? "true" : "false";
+            }
+
+            if (value is IFormattable formattable)
+            {
+                return formattable.ToString(null, CultureInfo.InvariantCulture);
+            }
+
             if (value is EndpointReference ep)
             {
                 var referencedResource = ep.Resource == this

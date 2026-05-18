@@ -213,6 +213,11 @@ internal sealed class ResourceRelationshipJson
 internal sealed class ResourceCommandJson
 {
     /// <summary>
+    /// The display name of the command.
+    /// </summary>
+    public string? DisplayName { get; set; }
+
+    /// <summary>
     /// The description of the command.
     /// </summary>
     public string? Description { get; set; }
@@ -232,6 +237,8 @@ internal sealed class ResourceCommandJson
 
 /// <summary>
 /// Represents a command invocation argument input in JSON format.
+/// Keep this contract in sync with the VS Code extension's ResourceCommandArgumentInputJson
+/// in extension/src/views/AppHostDataRepository.ts.
 /// </summary>
 internal sealed class ResourceCommandArgumentJson
 {

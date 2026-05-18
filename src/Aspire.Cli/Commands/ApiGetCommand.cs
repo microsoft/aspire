@@ -69,7 +69,7 @@ internal sealed class ApiGetCommand : BaseCommand
 
         if (item is null)
         {
-            return CommandResult.Failure(ExitCodeConstants.InvalidCommand, string.Format(CultureInfo.CurrentCulture, ApiCommandStrings.ApiNotFound, id));
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, string.Format(CultureInfo.CurrentCulture, ApiCommandStrings.ApiNotFound, id));
         }
 
         if (format is OutputFormat.Json)

@@ -62,6 +62,7 @@ namespace Aspire.Cli.Backchannel;
 [JsonSerializable(typeof(CommonErrorData))]
 // V2 API request/response types
 [JsonSerializable(typeof(GetCapabilitiesRequest))]
+[JsonSerializable(typeof(BackchannelTraceContext))]
 [JsonSerializable(typeof(GetCapabilitiesResponse))]
 [JsonSerializable(typeof(GetAppHostInfoRequest))]
 [JsonSerializable(typeof(GetAppHostInfoResponse))]

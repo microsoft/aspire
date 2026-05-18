@@ -351,21 +351,21 @@ suite('getResourceContextValue', () => {
 
     test('resource with start command', () => {
         const result = getResourceContextValue(makeResource({
-            commands: { 'start': { description: null } },
+            commands: { 'start': { displayName: null, description: null } },
         }));
         assert.strictEqual(result, 'resource:canStart');
     });
 
     test('resource with resource-start command', () => {
         const result = getResourceContextValue(makeResource({
-            commands: { 'resource-start': { description: null } },
+            commands: { 'resource-start': { displayName: null, description: null } },
         }));
         assert.strictEqual(result, 'resource:canStart');
     });
 
     test('resource with stop command', () => {
         const result = getResourceContextValue(makeResource({
-            commands: { 'stop': { description: null } },
+            commands: { 'stop': { displayName: null, description: null } },
         }));
         assert.strictEqual(result, 'resource:canStop');
     });
@@ -373,9 +373,9 @@ suite('getResourceContextValue', () => {
     test('resource with all lifecycle commands', () => {
         const result = getResourceContextValue(makeResource({
             commands: {
-                'start': { description: null },
-                'stop': { description: null },
-                'restart': { description: null },
+                'start': { displayName: null, description: null },
+                'stop': { displayName: null, description: null },
+                'restart': { displayName: null, description: null },
             },
         }));
         assert.strictEqual(result, 'resource:canStart:canStop:canRestart');
@@ -383,7 +383,7 @@ suite('getResourceContextValue', () => {
 
     test('resource with non-lifecycle commands has base context only', () => {
         const result = getResourceContextValue(makeResource({
-            commands: { 'custom-action': { description: 'do something' } },
+            commands: { 'custom-action': { displayName: null, description: 'do something' } },
         }));
         assert.strictEqual(result, 'resource');
     });
@@ -391,8 +391,8 @@ suite('getResourceContextValue', () => {
     test('resource with mixed lifecycle and custom commands', () => {
         const result = getResourceContextValue(makeResource({
             commands: {
-                'restart': { description: null },
-                'custom-action': { description: null },
+                'restart': { displayName: null, description: null },
+                'custom-action': { displayName: null, description: null },
             },
         }));
         assert.strictEqual(result, 'resource:canRestart');

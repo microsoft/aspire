@@ -287,12 +287,14 @@ export class AspireCodeLensProvider implements vscode.CodeLensProvider {
         if (resource.commands) {
             for (const [cmdName, cmd] of Object.entries(resource.commands) as [string, ResourceCommandJson][]) {
                 if (!standardCommands.has(cmdName)) {
-                    const label = codeLensCommand(cmd.description ?? cmdName);
+                    const displayName = getNormalizedCommandText(cmd.displayName);
+                    const description = getNormalizedCommandText(cmd.description);
+                    const label = codeLensCommand(displayName ?? cmdName);
                     lenses.push(new vscode.CodeLens(range, {
                         title: label,
                         command: 'aspire-vscode.codeLensResourceAction',
-                        tooltip: cmd.description ?? cmdName,
-                        arguments: [resource.name, cmdName, appHost.appHostPath],
+                        tooltip: description ?? displayName ?? cmdName,
+                        arguments: [resource.name, cmdName, appHost.appHostPath, cmd],
                     }));
                 }
             }
@@ -338,4 +340,9 @@ export function getCodeLensStateLabel(state: string, stateStyle: string, exitCod
         default:
             return state || codeLensResourceStopped;
     }
+}
+
+function getNormalizedCommandText(value: string | null | undefined): string | undefined {
+    const normalized = value?.trim();
+    return normalized ? normalized : undefined;
 }

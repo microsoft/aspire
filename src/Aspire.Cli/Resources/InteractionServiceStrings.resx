@@ -226,6 +226,10 @@
     <value>See logs at {0}</value>
     <comment>{0} is the log file path</comment>
   </data>
+  <data name="SeeAppHostLogsAt" xml:space="preserve">
+    <value>See AppHost logs at {0}</value>
+    <comment>{0} is the log file path of the CLI process managing the AppHost</comment>
+  </data>
   <data name="WaitingForDebuggerToAttachToAppHost" xml:space="preserve">
     <value>Waiting for debugger to attach to AppHost process</value>
   </data>

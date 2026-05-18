@@ -60,11 +60,7 @@ internal sealed class RunningInstanceManager
             var cliPidText = appHostInfo.CliProcessId.HasValue ? appHostInfo.CliProcessId.Value.ToString(CultureInfo.InvariantCulture) : "N/A";
             _interactionService.DisplayMessage(KnownEmojis.StopSign, $"Stopping previous instance (AppHost PID: {appHostInfo.ProcessId.ToString(CultureInfo.InvariantCulture)}, CLI PID: {cliPidText})");
 
-            // Call StopAppHostAsync on the auxiliary backchannel
-            await backchannel.StopAppHostAsync(cancellationToken).ConfigureAwait(false);
-
-            // Monitor the PIDs for termination
-            var stopped = await MonitorProcessesForTerminationAsync(appHostInfo, cancellationToken).ConfigureAwait(false);
+            var stopped = await StopAndMonitorAsync(backchannel, cancellationToken).ConfigureAwait(false);
 
             if (stopped)
             {
@@ -82,6 +78,28 @@ internal sealed class RunningInstanceManager
             _logger.LogWarning(ex, "Failed to stop running instance");
             return false;
         }
+    }
+
+    /// <summary>
+    /// Sends an RPC stop to the AppHost via its auxiliary backchannel and waits for the AppHost
+    /// and child CLI processes to terminate within the standard timeout. Used by callers that
+    /// already hold an established backchannel (e.g., right after launching the AppHost) so the
+    /// same "RPC stop + wait for termination" sequence is shared with socket-discovered stops.
+    /// </summary>
+    /// <param name="backchannel">An open auxiliary backchannel to the AppHost.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>True if all monitored processes terminated within the timeout, false otherwise.</returns>
+    public async Task<bool> StopAndMonitorAsync(IAppHostAuxiliaryBackchannel backchannel, CancellationToken cancellationToken)
+    {
+        var appHostInfo = backchannel.AppHostInfo;
+        if (appHostInfo is null)
+        {
+            _logger.LogWarning("Failed to get AppHost information from running instance");
+            return false;
+        }
+
+        await backchannel.StopAppHostAsync(cancellationToken).ConfigureAwait(false);
+        return await MonitorProcessesForTerminationAsync(appHostInfo, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

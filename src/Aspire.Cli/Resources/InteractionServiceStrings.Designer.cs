@@ -439,6 +439,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to See app host logs at {0}.
+        /// </summary>
+        public static string SeeAppHostLogsAt {
+            get {
+                return ResourceManager.GetString("SeeAppHostLogsAt", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Waiting for debugger to attach to apphost process.
         /// </summary>
         public static string WaitingForDebuggerToAttachToAppHost {

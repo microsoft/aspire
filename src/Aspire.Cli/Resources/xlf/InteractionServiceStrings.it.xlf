@@ -172,6 +172,11 @@
         <target state="translated">Ricerca in corso...</target>
         <note />
       </trans-unit>
+      <trans-unit id="SeeAppHostLogsAt">
+        <source>See AppHost logs at {0}</source>
+        <target state="new">See AppHost logs at {0}</target>
+        <note>{0} is the log file path of the CLI process managing the AppHost</note>
+      </trans-unit>
       <trans-unit id="SeeLogsAt">
         <source>See logs at {0}</source>
         <target state="translated">Consultare i log in {0}</target>

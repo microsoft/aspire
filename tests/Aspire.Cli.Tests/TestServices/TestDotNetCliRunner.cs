@@ -50,7 +50,7 @@ internal sealed class TestDotNetCliRunner : IDotNetCliRunner
     {
         return RestoreAsyncCallback != null
             ? Task.FromResult(RestoreAsyncCallback(projectFilePath, options, cancellationToken))
-            : throw new NotImplementedException();
+            : Task.FromResult(0); // If not overridden, just return success.
     }
 
     public Task<(int ExitCode, bool IsAspireHost, string? AspireHostingVersion)> GetAppHostInformationAsync(FileInfo projectFile, ProcessInvocationOptions options, CancellationToken cancellationToken)

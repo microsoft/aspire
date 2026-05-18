@@ -72,6 +72,16 @@ internal static class KnownCommandVisibility
 internal sealed class BackchannelTraceContext
 {
     /// <summary>
+    /// Gets the W3C traceparent value associated with the caller span.
+    /// </summary>
+    public string? TraceParent { get; init; }
+
+    /// <summary>
+    /// Gets the W3C tracestate value associated with the caller span.
+    /// </summary>
+    public string? TraceState { get; init; }
+
+    /// <summary>
     /// Gets the baggage values associated with the trace.
     /// </summary>
     public Dictionary<string, string> Baggage { get; init; } = [];
@@ -158,6 +168,11 @@ internal sealed class GetAppHostInfoResponse
     /// Gets when the AppHost process started.
     /// </summary>
     public DateTimeOffset? StartedAt { get; init; }
+
+    /// <summary>
+    /// Gets the log file path of the CLI process that launched the AppHost, if applicable.
+    /// </summary>
+    public string? CliLogFilePath { get; init; }
 }
 
 /// <summary>
@@ -1352,6 +1367,12 @@ internal sealed class AppHostInformation
     /// This value is only set when the AppHost is launched via the Aspire CLI.
     /// </summary>
     public DateTimeOffset? CliStartedAt { get; init; }
+
+    /// <summary>
+    /// Gets or sets the log file path of the CLI process that launched the AppHost.
+    /// This value is only set when the AppHost is launched via the Aspire CLI.
+    /// </summary>
+    public string? CliLogFilePath { get; init; }
 }
 
 /// <summary>
