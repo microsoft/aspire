@@ -8,6 +8,7 @@ import {
     resourceCommandCustomChoiceDescription,
     resourceCommandInvalidNumber,
     resourceCommandMaxLength,
+    resourceCommandDontShowAgain,
     resourceCommandSecretWarning,
     yesLabel,
 } from '../loc/strings';
@@ -22,20 +23,26 @@ interface ResourceCommandChoiceItem extends vscode.QuickPickItem {
     value: string;
 }
 
+export const resourceCommandSecretWarningSuppressedKey = 'resourceCommandArguments.secretWarningSuppressed';
+
+export interface ResourceCommandArgumentOptions {
+    secretWarningState?: vscode.Memento;
+}
+
 // Resource command number inputs are forwarded to hosting, which validates with
 // double.TryParse(NumberStyles.Float, InvariantCulture). Accept examples like "1",
 // "-1.5", ".5", and "1e3"; reject locale-specific values like "1,5".
 const numberPattern = /^[+-]?(?:(?:\d+(?:\.\d*)?)|(?:\.\d+))(?:[eE][+-]?\d+)?$/;
 
-export async function collectResourceCommandArguments(commandName: string, command: ResourceCommandJson | undefined): Promise<string[] | undefined> {
+export async function collectResourceCommandArguments(commandName: string, command: ResourceCommandJson | undefined, options?: ResourceCommandArgumentOptions): Promise<string[] | undefined> {
     const inputs = command?.argumentInputs?.filter(input => !input.disabled) ?? [];
     if (inputs.length === 0) {
         return [];
     }
 
     if (inputs.some(input => input.inputType === ResourceCommandInputType.SecretText)) {
-        const result = await vscode.window.showWarningMessage(resourceCommandSecretWarning, { modal: true }, resourceCommandContinue);
-        if (result !== resourceCommandContinue) {
+        const confirmed = await confirmSecretArgumentWarning(options?.secretWarningState);
+        if (!confirmed) {
             return undefined;
         }
     }
@@ -54,6 +61,25 @@ export async function collectResourceCommandArguments(commandName: string, comma
     }
 
     return buildResourceCommandCliArgs(values);
+}
+
+export async function confirmSecretArgumentWarning(secretWarningState: vscode.Memento | undefined): Promise<boolean> {
+    if (secretWarningState?.get<boolean>(resourceCommandSecretWarningSuppressedKey)) {
+        return true;
+    }
+
+    const result = await vscode.window.showWarningMessage(
+        resourceCommandSecretWarning,
+        { modal: true },
+        resourceCommandContinue,
+        resourceCommandDontShowAgain);
+
+    if (result === resourceCommandDontShowAgain) {
+        await secretWarningState?.update(resourceCommandSecretWarningSuppressedKey, true);
+        return true;
+    }
+
+    return result === resourceCommandContinue;
 }
 
 export function hasSecretResourceCommandArguments(command: ResourceCommandJson | undefined): boolean {

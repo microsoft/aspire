@@ -1,8 +1,12 @@
 import * as assert from 'assert';
+import * as sinon from 'sinon';
+import * as vscode from 'vscode';
 import {
     buildResourceCommandCliArgs,
+    confirmSecretArgumentWarning,
     getResourceCommandArgumentValidationMessage,
     hasSecretResourceCommandArguments,
+    resourceCommandSecretWarningSuppressedKey,
     ResourceCommandArgumentValue,
 } from '../views/ResourceCommandArguments';
 import { ResourceCommandArgumentInputJson } from '../views/AppHostDataRepository';
@@ -20,6 +24,28 @@ function makeInput(overrides: Partial<ResourceCommandArgumentInputJson> = {}): R
         maxLength: null,
         ...overrides,
     };
+}
+
+class TestMemento implements vscode.Memento {
+    private readonly values = new Map<string, unknown>();
+
+    keys(): readonly string[] {
+        return [...this.values.keys()];
+    }
+
+    get<T>(key: string): T | undefined;
+    get<T>(key: string, defaultValue: T): T;
+    get<T>(key: string, defaultValue?: T): T | undefined {
+        return this.values.has(key) ? this.values.get(key) as T : defaultValue;
+    }
+
+    update(key: string, value: unknown): Thenable<void> {
+        this.values.set(key, value);
+        return Promise.resolve();
+    }
+
+    setKeysForSync(): void {
+    }
 }
 
 suite('ResourceCommandArguments', () => {
@@ -179,5 +205,32 @@ suite('ResourceCommandArguments', () => {
                 makeInput({ inputType: 'SecretText', disabled: true }),
             ],
         }), false);
+    });
+
+    test('stores secret warning suppression when requested', async () => {
+        const memento = new TestMemento();
+        const warningStub = sinon.stub(vscode.window, 'showWarningMessage').resolves("Don't show again" as never);
+
+        try {
+            assert.strictEqual(await confirmSecretArgumentWarning(memento), true);
+            assert.strictEqual(memento.get(resourceCommandSecretWarningSuppressedKey), true);
+        }
+        finally {
+            warningStub.restore();
+        }
+    });
+
+    test('skips secret warning when suppression is stored', async () => {
+        const memento = new TestMemento();
+        await memento.update(resourceCommandSecretWarningSuppressedKey, true);
+        const warningStub = sinon.stub(vscode.window, 'showWarningMessage');
+
+        try {
+            assert.strictEqual(await confirmSecretArgumentWarning(memento), true);
+            assert.strictEqual(warningStub.called, false);
+        }
+        finally {
+            warningStub.restore();
+        }
     });
 });

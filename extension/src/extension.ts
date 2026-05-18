@@ -85,7 +85,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Aspire panel - running app hosts tree view
   const dataRepository = new AppHostDataRepository(terminalProvider);
-  const appHostTreeProvider = new AspireAppHostTreeProvider(dataRepository, terminalProvider);
+  const appHostTreeProvider = new AspireAppHostTreeProvider(dataRepository, terminalProvider, context.globalState);
   const appHostTreeView = vscode.window.createTreeView('aspire-vscode.runningAppHosts', {
     treeDataProvider: appHostTreeProvider,
     showCollapseAll: true,
@@ -137,12 +137,12 @@ export async function activate(context: vscode.ExtensionContext) {
   const codeLensRegistration = vscode.languages.registerCodeLensProvider(languageFilters, codeLensProvider);
   const codeLensDebugPipelineStepRegistration = vscode.commands.registerCommand('aspire-vscode.codeLensDebugPipelineStep', (stepName: string) => editorCommandProvider.tryExecuteDoAppHost(false, stepName));
   const codeLensResourceActionRegistration = vscode.commands.registerCommand('aspire-vscode.codeLensResourceAction', async (resourceName: string, action: string, appHostPath: string, resourceCommand?: ResourceCommandJson) => {
-    const additionalArgs = await collectResourceCommandArguments(action, resourceCommand);
+    const additionalArgs = await collectResourceCommandArguments(action, resourceCommand, { secretWarningState: context.globalState });
     if (additionalArgs === undefined) {
       return;
     }
 
-    let command = `resource "${resourceName}" ${action}`;
+    let command = `resource "${resourceName}" "${action}"`;
     if (appHostPath) {
       command += ` --apphost "${appHostPath}"`;
     }

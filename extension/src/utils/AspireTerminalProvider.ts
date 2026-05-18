@@ -136,6 +136,10 @@ export class AspireTerminalProvider implements vscode.Disposable {
         }
         extensionLogOutputChannel.info(`Sending command to Aspire terminal: ${logCommand}`);
 
+        if (showTerminal) {
+            aspireTerminal.terminal.show();
+        }
+
         if (aspireTerminal.terminal.shellIntegration) {
             aspireTerminal.terminal.shellIntegration.executeCommand(command);
         }
@@ -146,9 +150,6 @@ export class AspireTerminalProvider implements vscode.Disposable {
             aspireTerminal.terminal.sendText(command);
         }
 
-        if (showTerminal) {
-            aspireTerminal.terminal.show();
-        }
     }
 
     getAspireTerminal(forceCreate?: boolean): AspireTerminal {

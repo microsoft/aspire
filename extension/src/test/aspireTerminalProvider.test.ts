@@ -83,12 +83,14 @@ suite('AspireTerminalProvider tests', () => {
 
         test('uses shell integration to execute command when available', async () => {
             resolveCliPathStub.resolves({ cliPath: 'aspire', available: true, source: 'path' });
+            const events: string[] = [];
             const sentTexts: string[] = [];
             let executedCommand: string | undefined;
             let shown = false;
             const terminal = {
                 shellIntegration: {
                     executeCommand: (commandLine: string) => {
+                        events.push('execute');
                         executedCommand = commandLine;
                         return {} as vscode.TerminalShellExecution;
                     }
@@ -97,6 +99,7 @@ suite('AspireTerminalProvider tests', () => {
                     sentTexts.push(text);
                 },
                 show: () => {
+                    events.push('show');
                     shown = true;
                 }
             } as unknown as vscode.Terminal;
@@ -111,6 +114,7 @@ suite('AspireTerminalProvider tests', () => {
                 assert.strictEqual(executedCommand, expectedCommand);
                 assert.deepStrictEqual(sentTexts, []);
                 assert.strictEqual(shown, true);
+                assert.deepStrictEqual(events, ['show', 'execute']);
             }
             finally {
                 getAspireTerminalStub.restore();

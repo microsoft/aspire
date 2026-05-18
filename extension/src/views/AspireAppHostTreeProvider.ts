@@ -326,6 +326,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
     constructor(
         private readonly _repository: AppHostDataRepository,
         private readonly _terminalProvider: AspireTerminalProvider,
+        private readonly _secretWarningState?: vscode.Memento,
     ) {
         this._dataSubscription = this._repository.onDidChangeData(() => {
             this._onDidChangeTreeData.fire();
@@ -713,7 +714,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             return;
         }
 
-        const additionalArgs = await collectResourceCommandArguments(selected.label, selected.command);
+        const additionalArgs = await collectResourceCommandArguments(selected.label, selected.command, { secretWarningState: this._secretWarningState });
         if (additionalArgs === undefined) {
             return;
         }
