@@ -45,6 +45,7 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
     /// </summary>
     internal static class Activities
     {
+        public const string Command = "aspire/cli/command";
         public const string Process = "aspire/cli/process";
         public const string RunCommand = "aspire/cli/run";
         public const string LsCommand = "aspire/cli/ls";
@@ -498,6 +499,13 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         return StartActivity(Activities.RunCommand, startWithRemoteParent: true);
     }
 
+    internal ActivityScope StartCommand(string commandName)
+    {
+        var activity = StartActivity(Activities.Command, startWithRemoteParent: true);
+        activity.SetCommandName(commandName);
+        return activity;
+    }
+
     internal ActivityScope StartStopCommand(bool stopAll, bool passedAppHostProjectFile)
     {
         var activity = StartActivity(Activities.StopCommand, startWithRemoteParent: true);
@@ -828,6 +836,8 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration) : IDispos
         public void SetBackchannelSocketFile(string socketPath) => SetTag(Tags.BackchannelSocketFile, Path.GetFileName(socketPath));
 
         public void SetChildCommand(string command) => SetTag(Tags.ChildCommand, command);
+
+        public void SetCommandName(string commandName) => SetTag(TelemetryConstants.Tags.CommandName, commandName);
 
         public void SetDevCertificateEnvironmentVariables(int count) => SetTag(Tags.DevCertificateEnvironmentVariableCount, count);
 

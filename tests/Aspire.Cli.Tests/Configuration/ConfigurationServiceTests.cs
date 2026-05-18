@@ -25,14 +25,7 @@ public class ConfigurationServiceTests(ITestOutputHelper outputHelper)
             File.WriteAllText(settingsFilePath, existingContent);
         }
 
-        var logsDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "logs"));
-        var executionContext = new CliExecutionContext(
-            workspace.WorkspaceRoot,
-            new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives")),
-            new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cache")),
-            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")),
-            logsDir,
-            "test.log");
+        var executionContext = workspace.CreateExecutionContext();
 
         var configBuilder = new ConfigurationBuilder();
         var configuration = configBuilder.Build();

@@ -1,13 +1,13 @@
 ---
 name: startup-perf
-description: Measures Aspire profiling with the OTEL startup harness, dashboard export, optional dotnet-trace traces, and optional MSBuild binlogs.
+description: Measures Aspire startup profiling with CLI self-profile capture and dashboard export traces.
 ---
 
 # Aspire Startup Profiling with OTEL
 
-Use this skill when measuring, validating, or investigating Aspire startup performance with the OTEL profiling harness.
+Use this skill when measuring, validating, or investigating Aspire startup performance with the CLI self-profile capture flow.
 
-The primary workflow is the PowerShell-free `eng/scripts/verify-startup-otel.sh` harness. A Windows PowerShell equivalent exists at `eng/scripts/verify-startup-otel.ps1` for parity checks. Both scripts run a throwaway AppHost through the Aspire CLI, enable profiling-only OTEL instrumentation, export dashboard telemetry, and validate that CLI, Hosting, and DCP startup spans are correlated in one trace.
+The workflow is the hidden CLI flag `--capture-profile`. It starts a private standalone dashboard collector, enables profiling-only OTEL instrumentation for the command and child AppHost processes, exports a trace archive, and then exits with the wrapped command's exit code.
 
 ## Current Profiling Model
 
@@ -19,132 +19,73 @@ Profiling is opt-in and separate from reported telemetry:
 - DCP startup spans use the `dcp.startup` instrumentation scope.
 - Reported telemetry must not carry profiling session IDs, high-cardinality profiling tags, or profiling spans.
 
-The older EventSource/dotnet-trace startup measurement scripts still exist, but they are a legacy fallback for explicit EventSource timing requests. Prefer the OTEL harness for current profiling work.
+The older EventSource/dotnet-trace startup measurement scripts still exist for explicit EventSource timing requests. Prefer the self-profile capture flow for current profiling work.
 
 ## Prerequisites
 
-The Bash harness runs on macOS/Linux with:
+Use an Aspire CLI build that contains `--capture-profile`. From a repo checkout:
 
-- Bash
-- `dotnet`
-- `node`
-- `curl`
-- `unzip`
-- `pgrep` and `ps`
-- `dotnet-trace` only when using `--collect-dotnet-traces`
+```bash
+./restore.sh
+./dotnet.sh build src/Aspire.Cli/Aspire.Cli.csproj /p:SkipNativeBuild=true
+```
 
-From a clean checkout, the harness can restore and build the local CLI and bundle layout itself. Use `--skip-build` only when the CLI and bundle layout were already built in the same worktree.
-
-The PowerShell harness runs on Windows with PowerShell 7+, `dotnet`, `node`/`npm`, and the usual Aspire CLI prerequisites. The Bash harness has the richer diagnostics path today (`--collect-dotnet-traces` and `--collect-dotnet-binlogs`); keep the shared validator in parity when updating either shell.
+Repo-local development builds discover the built managed dashboard from `artifacts/bin/Aspire.Managed` when `ASPIRE_REPO_ROOT` points at the checkout. Installed or bundled CLIs discover the dashboard from the bundle. Use `ASPIRE_DASHBOARD_PATH` / `ASPIRE_MANAGED_PATH` when profiling with a custom dashboard build.
 
 ## Quick Start
 
-```bash
-# From repository root. Builds local CLI/layout if needed.
-./eng/scripts/verify-startup-otel.sh
-```
-
-After a successful run, inspect the generated run root:
+Capture startup for an AppHost and exit automatically after startup:
 
 ```bash
-cat artifacts/tmp/startup-otel-harness/*/summary.json
+./dotnet.sh exec artifacts/bin/Aspire.Cli/Debug/net10.0/aspire.dll run \
+  --project tests/TestingAppHost1/TestingAppHost1.AppHost/TestingAppHost1.AppHost.csproj \
+  --capture-profile \
+  --capture-profile-output artifacts/tmp/startup-profile/profile.zip \
+  --non-interactive
 ```
 
-For faster iteration after a successful local build:
+Capture any other Aspire command:
 
 ```bash
-./eng/scripts/verify-startup-otel.sh --skip-build
+aspire ls \
+  --capture-profile \
+  --capture-profile-output artifacts/tmp/startup-profile/ls-profile.zip \
+  --non-interactive
 ```
 
-Windows parity check:
+If `--capture-profile-output` is omitted, the CLI writes `aspire-profile-<timestamp>-<session>.zip` under the current working directory. For long-lived `run` and `start`, the CLI exits automatically after startup and waits for profiling data to settle before writing the export.
 
-```powershell
-.\eng\scripts\verify-startup-otel.ps1 -SkipBuild
-```
-
-Collect sampled CPU traces and MSBuild binlogs:
-
-```bash
-./eng/scripts/verify-startup-otel.sh --collect-dotnet-traces
-```
-
-Collect only MSBuild binlogs:
-
-```bash
-./eng/scripts/verify-startup-otel.sh --collect-dotnet-binlogs
-```
-
-Use a specific Aspire CLI, bundle layout, or DCP build:
-
-```bash
-./eng/scripts/verify-startup-otel.sh \
-  --target-aspire-path artifacts/bin/Aspire.Cli/Debug/net10.0/aspire \
-  --layout-path artifacts/bundle/osx-arm64 \
-  --dcp-path path/to/dcp
-```
-
-## Bash Harness Options
+## Self-Profile Options
 
 | Option | Description |
 | --- | --- |
-| `--target-aspire-path PATH` | Aspire CLI under test. Alias: `--aspire-path`. |
-| `--profiler-aspire-path PATH` | Aspire CLI used to host/export dashboard telemetry. Alias: `--dashboard-aspire-path`. |
-| `--layout-path PATH` | Aspire bundle layout path. |
-| `--dcp-path PATH` | DCP directory or binary path override. |
-| `--output-root PATH` | Output root for harness artifacts. Defaults to `artifacts/tmp/startup-otel-harness`. |
-| `--post-start-delay SECONDS` | Delay after AppHost start before stopping to allow extra telemetry to flush. |
-| `--require-dcp-spans` | Require exported DCP process/resource spans in addition to CLI/Hosting spans. |
-| `--collect-dotnet-traces` | Collect `.nettrace` files for the CLI and child .NET processes. Also enables MSBuild binlog collection. |
-| `--collect-dotnet-binlogs` | Collect `.binlog` files for dotnet MSBuild commands. |
-| `--skip-build` | Do not restore/build the local Aspire CLI or bundle layout. |
-
-## PowerShell Harness Options
-
-The PowerShell script intentionally mirrors the core validation knobs but does not duplicate the Bash-only process sampling path:
-
-| Parameter | Description |
-| --- | --- |
-| `-TargetAspirePath PATH` | Aspire CLI under test. Alias: `-AspirePath`. |
-| `-ProfilerAspirePath PATH` | Aspire CLI used to host/export dashboard telemetry. Alias: `-DashboardAspirePath`. |
-| `-LayoutPath PATH` | Aspire bundle layout path. |
-| `-DcpPath PATH` | DCP directory or binary path override. |
-| `-OutputRoot PATH` | Output root for harness artifacts. Defaults to `artifacts\tmp\startup-otel-harness`. |
-| `-PostStartDelaySeconds SECONDS` | Delay after AppHost start before stopping to allow extra telemetry to flush. |
-| `-RequireDcpSpans` | Require exported DCP process/resource spans in addition to CLI/Hosting spans. |
-| `-SkipBuild` | Do not restore/build the local Aspire CLI. |
+| `--capture-profile` | Hidden recursive root option that enables self-profile capture for any Aspire command. |
+| `--capture-profile-output PATH` | Output zip path. Relative paths are rooted at the current working directory. |
+| `--capture-profile-delay SECONDS` | Optional warmup delay before stopping long-lived `run`/`start` commands. Defaults to 0 seconds. Use only when you intentionally want additional post-start resource activity in the capture. |
 
 ## Output Artifacts
 
-Each run writes to:
-
-```text
-artifacts/tmp/startup-otel-harness/<timestamp>/
-```
-
-Important files:
+The capture writes a dashboard export zip containing:
 
 | Path | Description |
 | --- | --- |
-| `summary.json` | Run summary with `ProfilingSessionId`, `TraceId`, `CorrelatedSpanCount`, paths, and optional trace/binlog file lists. |
-| `span-summary.json` | Flattened exported span summary for quick inspection. |
-| `startup-otel-export.zip` | Dashboard export containing trace JSON. |
-| `logs/` | stdout/stderr for harness commands and child processes. |
-| `workspace/` | Generated throwaway AppHost fixture. |
-| `dotnet-traces/` | Optional `.nettrace` files from `--collect-dotnet-traces`. |
-| `binlogs/` | Optional MSBuild `.binlog` files from trace/binlog collection. |
+| `traces/profile.json` | OTLP JSON trace export from the private dashboard collector. |
 
-## What the Harness Validates
+Inspect the export:
 
-The shared C# file-based validator (`tools/StartupOtelValidator/ValidateStartupOtelExport.cs`) reads the dashboard export and requires a profiling session with correlated spans from:
+```bash
+unzip -l artifacts/tmp/startup-profile/profile.zip
+tmpdir="$(mktemp -d)"
+unzip -q artifacts/tmp/startup-profile/profile.zip -d "$tmpdir"
+jq -r '.resourceSpans[]?.scopeSpans[]?.scope.name' "$tmpdir/traces/profile.json" | sort | uniq -c
+jq -r '.resourceSpans[]?.scopeSpans[]?.spans[]?.name' "$tmpdir/traces/profile.json" | sort | uniq -c
+```
 
-- CLI startup/launch spans, including `aspire/cli/start_apphost.spawn_child`.
-- Child CLI spans such as `aspire/cli/run`, dotnet build/run spans, backchannel connect spans, and dashboard URL retrieval.
-- Hosting spans such as DCP model work, resource creation, resource wait, and DCP resource observation.
-- Hosting-to-DCP trace links for created DCP objects.
-- Resource wait events, including observed and completed events.
-- DCP process/resource spans when `--require-dcp-spans` is specified.
+Expected startup captures include:
 
-If validation fails, inspect `span-summary.json` first. Then use `startup-otel-export.zip` for the full dashboard export and `logs/` for process output.
+- `Aspire.Cli.Profiling` spans such as `aspire/cli/command`, `aspire/cli/run`, dotnet process spans, backchannel connect spans, and dashboard URL retrieval.
+- `Aspire.Hosting.Profiling` spans such as DCP model work, resource creation, resource wait, and DCP resource observation.
+- `dcp.startup` spans when the DCP process emits startup telemetry and the scenario is configured to require them.
 
 ## Comparing Before/After Changes
 
@@ -152,20 +93,21 @@ Prefer separate worktrees for baseline and feature measurements so branch switch
 
 ```bash
 # Baseline worktree
-./eng/scripts/verify-startup-otel.sh --output-root artifacts/tmp/startup-otel-baseline --collect-dotnet-binlogs
+aspire run --project path/to/AppHost.csproj \
+  --capture-profile \
+  --capture-profile-output artifacts/tmp/startup-profile-baseline/profile.zip \
+  --non-interactive
 
 # Feature worktree
-./eng/scripts/verify-startup-otel.sh --output-root artifacts/tmp/startup-otel-feature --collect-dotnet-binlogs
+aspire run --project path/to/AppHost.csproj \
+  --capture-profile \
+  --capture-profile-output artifacts/tmp/startup-profile-feature/profile.zip \
+  --non-interactive
 ```
 
-Compare:
+Compare `traces/profile.json` span names, durations, operation IDs, process IDs, events, and trace correlation. For statistically meaningful wall-clock comparisons, run multiple iterations manually and keep the environment stable. The self-profile capture flow produces artifacts; it is not a statistical benchmark runner by itself.
 
-- `summary.json` for correlated span count and artifact paths.
-- `span-summary.json` for span names, durations, operation IDs, process IDs, and events.
-- `binlogs/` for MSBuild cost.
-- `.nettrace` files when CPU sampling was collected.
-
-For statistically meaningful wall-clock comparisons, run multiple iterations manually and keep the environment stable. The OTEL harness validates correlation and produces artifacts; it is not a statistical benchmark runner by itself.
+Parallel captures are supported because each `--capture-profile` process allocates its own collector ports and profiling session ID. Always use distinct `--capture-profile-output` paths. If the profiled AppHost launch profile pins dashboard, resource-service, or application ports, those AppHost ports can still conflict across parallel worktrees; use an isolated/randomized profile or adjust the AppHost ports for parallel runs.
 
 ## Instrumentation Guidance
 
@@ -182,12 +124,10 @@ Keep profiling APIs coarse-grained and profiling-specific:
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| `Required command 'dotnet-trace' was not found` | `--collect-dotnet-traces` was used without the global tool. | Run `dotnet tool install -g dotnet-trace`. |
-| `Target Aspire CLI not found` | CLI was not built or `--target-aspire-path` is wrong. | Omit `--skip-build` or pass the correct CLI path. |
-| `No exported spans contained aspire.profiling.session_id` | Profiling was not enabled or telemetry was not exported. | Confirm `ASPIRE_PROFILING_ENABLED=true` and inspect `logs/`. |
-| `No profiling session contained correlated... spans` | CLI/Hosting/DCP spans did not land in one correlated trace. | Inspect `span-summary.json` for missing scopes or broken parent/trace IDs. |
-| `No dotnet-trace files were collected` | Trace collection was requested but no traceable child process was found or attach failed. | Inspect `logs/dotnet-trace-*.stderr.txt`; rerun with a longer `--post-start-delay`. |
-| `No dotnet MSBuild binlogs were collected` | Binlog collection was requested but no MSBuild-backed dotnet command ran. | Inspect `logs/start.*`; rerun without `--skip-build` if necessary. |
+| `The CLI bundle layout was found, but the dashboard binary (aspire-managed) is missing.` | The CLI could not find a bundled, repo-local, or override dashboard binary. | Build the repo-local CLI, use an installed/bundled CLI, set `ASPIRE_REPO_ROOT` to the checkout, or set `ASPIRE_DASHBOARD_PATH` / `ASPIRE_MANAGED_PATH` to a custom managed dashboard build. |
+| Self-profile export contains CLI spans but not Hosting spans | The AppHost did not run through a profiled startup path, or Hosting telemetry did not reach the collector. | Confirm `aspire run` or `aspire start` launched the expected AppHost and inspect `traces/profile.json` for `Aspire.Hosting.Profiling`. |
+| `No exported spans contained aspire.profiling.session_id` | Profiling was not enabled or telemetry was not exported. | Confirm `--capture-profile` was parsed before `--` and inspect `traces/profile.json`. |
+| `No profiling session contained correlated... spans` | CLI/Hosting/DCP spans did not land in one correlated trace. | Inspect `traces/profile.json` for missing scopes or broken parent/trace IDs. |
 
 ## Legacy EventSource Tooling
 

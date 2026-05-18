@@ -92,7 +92,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         // Validate --limit value
         if (limit.HasValue && limit.Value < 1)
         {
-            return CommandResult.Failure(ExitCodeConstants.InvalidCommand, TelemetryCommandStrings.LimitMustBePositive);
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, TelemetryCommandStrings.LimitMustBePositive);
         }
 
         var dashboardApi = await TelemetryCommandHelpers.GetDashboardApiAsync(
@@ -119,7 +119,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
             _logger.LogError(ex, "Failed to fetch traces from Dashboard API");
             var errorInfo = await TelemetryCommandHelpers.FormatTelemetryErrorAsync(ex, dashboardApi.BaseUrl!, dashboardUrl is not null, _httpClientFactory, _logger, cancellationToken);
             TelemetryCommandHelpers.DisplayTelemetryError(_interactionService, errorInfo);
-            return CommandResult.Failure(ExitCodeConstants.DashboardFailure);
+            return CommandResult.Failure(CliExitCodes.DashboardFailure);
         }
     }
 
@@ -149,7 +149,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
             _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.TraceNotFound, traceId));
-            return ExitCodeConstants.InvalidCommand;
+            return CliExitCodes.InvalidCommand;
         }
 
         TelemetryCommandHelpers.EnsureTelemetryApiResponse(response);
@@ -178,7 +178,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
             DisplayTraceDetails(json, traceId, allOtlpResources, dashboardUrl);
         }
 
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private async Task<int> FetchTracesAsync(
@@ -201,7 +201,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
         if (!TelemetryCommandHelpers.TryResolveResourceNames(resource, resources, out var resolvedResources))
         {
             _interactionService.DisplayError($"Resource '{resource}' not found.");
-            return ExitCodeConstants.InvalidCommand;
+            return CliExitCodes.InvalidCommand;
         }
 
         var allOtlpResources = TelemetryCommandHelpers.ToOtlpResources(resources);
@@ -230,7 +230,7 @@ internal sealed class TelemetryTracesCommand : BaseCommand
             DisplayTracesTable(json, allOtlpResources, dashboardUrl);
         }
 
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private void DisplayTracesTable(string json, IReadOnlyList<IOtlpResource> allResources, string dashboardUrl)

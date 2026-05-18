@@ -100,7 +100,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var parseResult = initCommand.Parse("init");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal("aspire-apphost", capturedTemplateName);
         Assert.Equal("Test.AppHost", capturedName);
         Assert.Contains("Test.AppHost", capturedOutputPath);
@@ -143,7 +143,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var parseResult = initCommand.Parse("init");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal("aspire-apphost", capturedTemplateName);
         Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json")));
     }
@@ -160,7 +160,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var parseResult = initCommand.Parse("init");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs")));
 
         var config = JsonNode.Parse(File.ReadAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json")))!.AsObject();
@@ -186,7 +186,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var parseResult = initCommand.Parse("init");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var runJsonPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.run.json");
         Assert.True(File.Exists(runJsonPath), "apphost.run.json should be created so `dotnet run apphost.cs` works.");
@@ -267,7 +267,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var parseResult = initCommand.Parse("init");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var runJson = JsonNode.Parse(File.ReadAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.run.json")))!.AsObject();
         var profiles = runJson["profiles"]!.AsObject();
@@ -318,7 +318,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var parseResult = initCommand.Parse("init");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         // The user's customizations must be preserved verbatim — only the appHost.path
         // is allowed to be touched (since that's the primary purpose of DropAspireConfig).
@@ -356,7 +356,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var parseResult = initCommand.Parse("init --source https://example.test/v3/index.json --version 13.0.0 --channel daily --suppress-agent-init");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs")));
         Assert.Contains(interactionService.DisplayedMessages, m => m.Message.Contains("`aspire init --source` is deprecated", StringComparison.Ordinal));
         Assert.Contains(interactionService.DisplayedMessages, m => m.Message.Contains("`aspire init --version` is deprecated", StringComparison.Ordinal));
@@ -391,7 +391,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var parseResult = initCommand.Parse("init");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts")));
 
         var config = JsonNode.Parse(File.ReadAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire.config.json")))!.AsObject();
@@ -421,7 +421,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var parseResult = initCommand.Parse("init --language typescript");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(existingAppHostContent, File.ReadAllText(existingAppHostPath));
         Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts")));
         Assert.Equal("""{ "type": "commonjs" }""", File.ReadAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json")));
@@ -469,7 +469,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var parseResult = initCommand.Parse("init --language typescript");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts")));
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "aspire-apphost", "apphost.mts")));
         Assert.Contains(interactionService.DisplayedMessages, m => m.Message == "Created aspire-apphost/apphost.mts");
@@ -512,7 +512,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var parseResult = initCommand.Parse("init --language typescript");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Contains(interactionService.DisplayedMessages, m => m.Message == "Aspire AppHost created! To complete setup, run one of:");
         Assert.DoesNotContain(subtleMessages, m => m.Contains("copilot", StringComparison.OrdinalIgnoreCase));
         Assert.Contains("  claude \"run the aspireify skill\"", subtleMessages);
@@ -556,7 +556,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var parseResult = initCommand.Parse("init --language typescript");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.DoesNotContain(interactionService.DisplayedMessages, m => m.Message.Contains("To complete setup", StringComparison.Ordinal));
         Assert.DoesNotContain(subtleMessages, m => m.Contains("run the aspireify skill", StringComparison.Ordinal));
     }
@@ -573,7 +573,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var parseResult = initCommand.Parse("init");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
         var appHostContent = await File.ReadAllTextAsync(appHostPath);
@@ -607,7 +607,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var parseResult = initCommand.Parse("init");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var merged = JsonNode.Parse(await File.ReadAllTextAsync(configPath))!.AsObject();
         Assert.Equal("apphost.cs", merged["appHost"]!.AsObject()["path"]!.GetValue<string>());
@@ -655,7 +655,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var parseResult = initCommand.Parse("init");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(preExistingContent, await File.ReadAllTextAsync(appHostPath));
     }
 
@@ -697,7 +697,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var parseResult = initCommand.Parse("init");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Null(capturedNuGetConfigFile);
         // The implicit channel surfaces the package's Source field as the nugetSource even when no
         // temporary config is generated, so nugetSource may be non-null. The contract this test guards
@@ -784,7 +784,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var parseResult = initCommand.Parse("init");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal("13.3.0", capturedTemplateVersion);
     }
 
@@ -837,7 +837,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var parseResult = initCommand.Parse("init");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.FailedToInstallTemplates, exitCode);
+        Assert.Equal(CliExitCodes.FailedToInstallTemplates, exitCode);
         Assert.Contains(interactionService.DisplayedErrors, e => e.Contains("simulated network failure", StringComparison.Ordinal));
     }
 
@@ -892,7 +892,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var parseResult = initCommand.Parse("init");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(SourceForChannel(contextChannel), capturedNuGetSource);
     }
 
@@ -941,7 +941,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var parseResult = initCommand.Parse("init");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(SourceForChannel("pr-12345"), capturedNuGetSource);
     }
 
@@ -975,7 +975,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var parseResult = initCommand.Parse("init");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs")));
 
         var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
@@ -1049,7 +1049,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var parseResult = initCommand.Parse("init");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     /// <summary>
@@ -1134,7 +1134,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var parseResult = initCommand.Parse("init");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal("13.3.0", capturedTemplateVersion);
     }
 
@@ -1201,7 +1201,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var parseResult = initCommand.Parse("init");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         Assert.True(File.Exists(nugetConfigPath), $"nuget.config should be created in the solution directory for channel '{contextChannel}'.");
         Assert.NotNull(nugetConfigContentAtNewProjectTime);
@@ -1250,7 +1250,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var parseResult = initCommand.Parse("init");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
         Assert.True(File.Exists(nugetConfigPath), "rerun must create the workspace nuget.config even though the AppHost dir already exists.");
         AssertNuGetConfigHasChannelShape(nugetConfigPath, contextChannel);
@@ -1287,7 +1287,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var parseResult = initCommand.Parse("init");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
         Assert.True(File.Exists(nugetConfigPath), "rerun must create the workspace nuget.config even though apphost.cs already exists.");
         AssertNuGetConfigHasChannelShape(nugetConfigPath, contextChannel);
@@ -1336,7 +1336,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var parseResult = initCommand.Parse("init");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(File.Exists(Path.Combine(solutionDir.FullName, "nuget.config")),
             "nuget.config must be written in the solution directory, not the working directory.");
         Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config")),
@@ -1398,7 +1398,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var parseResult = initCommand.Parse("init");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var merged = File.ReadAllText(nugetConfigPath);
         Assert.Contains(userFeedUrl, merged);
@@ -1449,7 +1449,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var parseResult = initCommand.Parse("init");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
         var content = File.ReadAllText(nugetConfigPath);
 
@@ -1516,7 +1516,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var parseResult = initCommand.Parse("init");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(
             File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config")),
             "no workspace nuget.config should be written when no matching channel exists for IdentityChannel='local'.");
@@ -1563,7 +1563,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         var parseResult = initCommand.Parse("init");
         var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         var nugetConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config");
         Assert.True(File.Exists(nugetConfigPath));
         AssertNuGetConfigHasChannelShape(nugetConfigPath, contextChannel);
@@ -1576,19 +1576,8 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
 
     private static CliExecutionContext BuildExecutionContext(DirectoryInfo workingDirectory, string channel)
     {
-        var hivesDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "hives"));
-        var cacheDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "cache"));
-        var sdksDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "sdks"));
-        var logsDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "logs"));
-        var logFilePath = Path.Combine(logsDirectory.FullName, "test.log");
-
-        return new CliExecutionContext(
-            workingDirectory: workingDirectory,
-            hivesDirectory: hivesDirectory,
-            cacheDirectory: cacheDirectory,
-            sdksDirectory: sdksDirectory,
-            logsDirectory: logsDirectory,
-            logFilePath: logFilePath,
+        return TestExecutionContextHelper.CreateExecutionContext(
+            workingDirectory,
             identityChannel: channel);
     }
 

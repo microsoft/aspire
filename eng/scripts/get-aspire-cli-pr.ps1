@@ -682,18 +682,22 @@ function Update-PathEnvironment {
 
     if (Test-PathContainsDirectory -PathValue $env:PATH -Directory $CliBinDir) {
         Write-Message "Path $CliBinDir already exists in PATH, skipping addition" -Level Info
-        return
+    } else {
+        # Update current session PATH
+        $currentPathArray = if ($env:PATH) { $env:PATH.Split($pathSeparator, [StringSplitOptions]::RemoveEmptyEntries) } else { @() }
+        if ($PSCmdlet.ShouldProcess("PATH environment variable", "Add $CliBinDir to current session")) {
+            $env:PATH = (@($CliBinDir) + $currentPathArray) -join $pathSeparator
+            Write-Message "Added $CliBinDir to PATH for current session" -Level Info
+        }
     }
 
-    # Update current session PATH
-    $currentPathArray = $env:PATH.Split($pathSeparator, [StringSplitOptions]::RemoveEmptyEntries)
-    if ($PSCmdlet.ShouldProcess("PATH environment variable", "Add $CliBinDir to current session")) {
-        $env:PATH = (@($CliBinDir) + $currentPathArray) -join $pathSeparator
-        Write-Message "Added $CliBinDir to PATH for current session" -Level Info
-    }
-
-    # Update persistent PATH for Windows
-    if ($Script:HostOS -eq "win") {
+    # Update persistent PATH for Windows.
+    # PR installs deliberately skip the persistent user PATH write: a PR build is a per-session
+    # dogfood activation. Writing it into HKCU\Environment would silently demote a developer's
+    # daily/stable install on every new shell until they hunt down the stale entry. The
+    # activation hint printed elsewhere shows how to opt in manually.
+    $isPrPath = $CliBinDir -match '[/\\]dogfood[/\\]pr-[^/\\]+[/\\]bin$'
+    if ($Script:HostOS -eq "win" -and -not $isPrPath) {
         try {
             $userPath = [Environment]::GetEnvironmentVariable("PATH", [EnvironmentVariableTarget]::User)
             if (-not $userPath) { $userPath = "" }
@@ -713,6 +717,8 @@ function Update-PathEnvironment {
             Write-Message "Failed to update persistent PATH environment variable: $($_.Exception.Message)" -Level Warning
             Write-Message "You may need to manually add $CliBinDir to your PATH environment variable" -Level Info
         }
+    } elseif ($Script:HostOS -eq "win" -and $isPrPath) {
+        Write-Message "PR install: leaving user PATH untouched; the activation hint below shows the PATH line to use." -Level Info
     }
 
     # GitHub Actions support
@@ -1822,6 +1828,12 @@ OPTIONS:
     if ($InstallMode -eq 'Tool' -and $HiveOnly) {
         Write-Message "Error: -HiveOnly cannot be combined with -InstallMode Tool: -HiveOnly skips the CLI install, but -InstallMode Tool installs Aspire.Cli as a .NET tool." -Level Error
         Write-Message "Drop one of the two flags. Both archive and tool modes populate the hive." -Level Info
+        if ($InvokedFromFile) { exit 1 } else { return 1 }
+    }
+
+    if ($InstallMode -ne 'Tool' -and $Force) {
+        Write-Message "Error: -Force can only be combined with -InstallMode Tool: archive mode installs from downloaded binaries and does not use dotnet tool update." -Level Error
+        Write-Message "Use -InstallMode Tool with -Force, or drop -Force." -Level Info
         if ($InvokedFromFile) { exit 1 } else { return 1 }
     }
 

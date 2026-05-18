@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Templates.Tests;
 using Microsoft.DotNet.XUnitExtensions;
 using Xunit;
 
@@ -81,6 +82,34 @@ public class PRScriptShellTests(ITestOutputHelper testOutput)
         result.EnsureSuccessful();
         Assert.Contains("12345", result.Output);
         Assert.Contains("[DRY RUN]", result.Output);
+    }
+
+    [Fact]
+    public async Task MockGhApiWorkflowWithoutJqFailsLoudly()
+    {
+        using var env = new TestEnvironment();
+        var mockBinPath = await env.CreateMockGhScriptAsync(_testOutput);
+        var mockGhPath = Path.Combine(mockBinPath, "gh");
+        using var cmd = new ToolCommand(mockGhPath, _testOutput, "mock-gh");
+
+        var result = await cmd.ExecuteAsync("api", "repos/microsoft/aspire/actions/workflows/ci.yml/runs?event=pull_request&head_sha=abc123");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("_mock_missing_jq", result.Output);
+    }
+
+    [Fact]
+    public async Task MockGhApiWorkflowWithJqReturnsRunId()
+    {
+        using var env = new TestEnvironment();
+        var mockBinPath = await env.CreateMockGhScriptAsync(_testOutput);
+        var mockGhPath = Path.Combine(mockBinPath, "gh");
+        using var cmd = new ToolCommand(mockGhPath, _testOutput, "mock-gh");
+
+        var result = await cmd.ExecuteAsync("api", "repos/microsoft/aspire/actions/workflows/ci.yml/runs?event=pull_request&head_sha=abc123", "--jq", ".workflow_runs[0].id");
+
+        result.EnsureSuccessful();
+        Assert.Equal("987654321", result.Output.Trim());
     }
 
     [Fact]

@@ -129,7 +129,7 @@ internal sealed class ResourceCommand : BaseCommand
 
         if (!result.Success)
         {
-            return CommandResult.FromExitCode(AppHostConnectionResultHandler.DisplayFailureAsError(result, _interactionService, ExitCodeConstants.FailedToFindProject));
+            return CommandResult.FromExitCode(AppHostConnectionResultHandler.DisplayFailureAsError(result, _interactionService, CliExitCodes.FailedToFindProject));
         }
 
         var connection = result.Connection!;
@@ -137,7 +137,7 @@ internal sealed class ResourceCommand : BaseCommand
         var commandArgumentsResult = CreateCommandArguments(command, capturedArguments);
         if (commandArgumentsResult.ErrorMessage is { } errorMessage)
         {
-            return CommandResult.Failure(ExitCodeConstants.InvalidCommand, errorMessage);
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, errorMessage);
         }
 
         var commandArguments = commandArgumentsResult.Arguments;
@@ -541,7 +541,7 @@ internal sealed class ResourceCommand : BaseCommand
             }
 
             WriteResourceCommandHelp(parseResult.InvocationConfiguration.Output, parseResult.CommandResult, request.ResourceName, resourceCommand);
-            return ExitCodeConstants.Success;
+            return CliExitCodes.Success;
         }
 
         private async Task WriteAvailableCommandsAsync(ParseResult parseResult, string resourceName, CancellationToken cancellationToken)

@@ -57,7 +57,7 @@ internal sealed class SecretSetCommand : BaseCommand
         var result = await _secretStoreResolver.ResolveAsync(projectFile, autoInit: true, cancellationToken);
         if (result is null)
         {
-            return CommandResult.Failure(ExitCodeConstants.FailedToFindProject, SecretCommandStrings.CouldNotFindAppHost);
+            return CommandResult.Failure(CliExitCodes.FailedToFindProject, SecretCommandStrings.CouldNotFindAppHost);
         }
 
         result.Store.Set(key, value);

@@ -279,7 +279,7 @@ public class DoCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Assert
-        Assert.Equal(ExitCodeConstants.FailedToFindProject, exitCode);
+        Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
     }
 
     [Fact]

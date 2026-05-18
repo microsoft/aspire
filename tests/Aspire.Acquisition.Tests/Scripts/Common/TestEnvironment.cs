@@ -74,21 +74,46 @@ public sealed class TestEnvironment : IDisposable
                 exit 0
 
                 :api
-                rem The scripts only use these mocked API calls with --jq, so return the scalar
-                rem values directly. Avoid parsing the jq expression because it can contain cmd
-                rem metacharacters such as pipes.
                 set "ENDPOINT=%~2"
+                shift
+                shift
+                set "HAS_JQ="
+                rem The scripts only use these mocked API calls with --jq. Scan only for the
+                rem flag and avoid parsing the jq expression because it can contain cmd
+                rem metacharacters such as pipes.
+                :api_arg_loop
+                if "%~1"=="" goto :api_args_done
+                if "%~1"=="--jq" (
+                    set "HAS_JQ=true"
+                    goto :api_args_done
+                )
+                shift
+                goto :api_arg_loop
+
+                :api_args_done
                 if "%ENDPOINT%"=="graphql" (
+                    if not "%HAS_JQ%"=="true" (
+                        echo {"_mock_missing_jq":true}
+                        exit 1
+                    )
                     echo abc123def456789012345678901234567890abcd
                     exit 0
                 )
                 echo "%ENDPOINT%" | findstr /C:"/pulls/" >nul 2>&1
                 if not errorlevel 1 (
+                    if not "%HAS_JQ%"=="true" (
+                        echo {"_mock_missing_jq":true}
+                        exit 1
+                    )
                     echo abc123def456789012345678901234567890abcd
                     exit 0
                 )
                 echo "%ENDPOINT%" | findstr /C:"/actions/workflows/" >nul 2>&1
                 if not errorlevel 1 (
+                    rem Workflow-run endpoints include '&' query separators. When PowerShell
+                    rem invokes this .cmd shim, cmd.exe treats those as command separators before
+                    rem this script can see later arguments like --jq, so this endpoint must keep
+                    rem returning the scalar value used by the scripts' --jq path.
                     echo 987654321
                     exit 0
                 )
@@ -210,23 +235,32 @@ public sealed class TestEnvironment : IDisposable
                         esac
                     done
 
+                    if [ "$endpoint" = "graphql" ]; then
+                        if [ -z "$jq_filter" ]; then
+                            echo '{"_mock_missing_jq":true}'
+                            exit 1
+                        fi
+                        echo "abc123def456789012345678901234567890abcd"
+                        exit 0
+                    fi
+
                     # PR head SHA lookup: repos/.../pulls/<number>
                     if echo "$endpoint" | grep -q "/pulls/"; then
-                        if [ -n "$jq_filter" ]; then
-                            echo "abc123def456789012345678901234567890abcd"
-                        else
-                            echo '{"head":{"sha":"abc123def456789012345678901234567890abcd"}}'
+                        if [ -z "$jq_filter" ]; then
+                            echo '{"_mock_missing_jq":true}'
+                            exit 1
                         fi
+                        echo "abc123def456789012345678901234567890abcd"
                         exit 0
                     fi
 
                     # Workflow run lookup: repos/.../actions/workflows/...
                     if echo "$endpoint" | grep -q "/actions/workflows/"; then
-                        if [ -n "$jq_filter" ]; then
-                            echo "987654321"
-                        else
-                            echo '{"workflow_runs":[{"id":987654321,"conclusion":"success"}]}'
+                        if [ -z "$jq_filter" ]; then
+                            echo '{"_mock_missing_jq":true}'
+                            exit 1
                         fi
+                        echo "987654321"
                         exit 0
                     fi
 

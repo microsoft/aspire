@@ -68,19 +68,19 @@ internal sealed class SdkGenerateCommand : BaseCommand
         // Validate the integration project exists
         if (!integrationProject.Exists)
         {
-            return CommandResult.Failure(ExitCodeConstants.FailedToFindProject, $"Integration project not found: {integrationProject.FullName}");
+            return CommandResult.Failure(CliExitCodes.FailedToFindProject, $"Integration project not found: {integrationProject.FullName}");
         }
 
         if (!integrationProject.Extension.Equals(".csproj", StringComparison.OrdinalIgnoreCase))
         {
-            return CommandResult.Failure(ExitCodeConstants.InvalidCommand, $"Expected a .csproj file, got: {integrationProject.Extension}");
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, $"Expected a .csproj file, got: {integrationProject.Extension}");
         }
 
         // Resolve the language info
         var languageInfo = await GetLanguageInfoAsync(language, cancellationToken);
         if (languageInfo is null)
         {
-            return CommandResult.Failure(ExitCodeConstants.InvalidCommand, $"Unsupported language: {language}");
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, $"Unsupported language: {language}");
         }
 
         // Create output directory if it doesn't exist
@@ -154,7 +154,7 @@ internal sealed class SdkGenerateCommand : BaseCommand
                         InteractionService.DisplayMessage(KnownEmojis.Wrench, line);
                     }
                 }
-                return ExitCodeConstants.FailedToBuildArtifacts;
+                return CliExitCodes.FailedToBuildArtifacts;
             }
 
             await using var serverSession = AppHostServerSession.Start(
@@ -193,7 +193,7 @@ internal sealed class SdkGenerateCommand : BaseCommand
 
             InteractionService.DisplaySuccess($"Generated {generatedFiles.Count} files in {outputDir.FullName}");
 
-            return ExitCodeConstants.Success;
+            return CliExitCodes.Success;
         }
         finally
         {

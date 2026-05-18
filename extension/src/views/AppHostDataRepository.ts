@@ -16,6 +16,38 @@ export interface ResourceUrlJson {
 
 export interface ResourceCommandJson {
     description: string | null;
+    visibility?: string | null;
+    argumentInputs?: ResourceCommandArgumentInputJson[] | null;
+}
+
+// Resource command argument input types. Values match the strings emitted by the CLI
+// JSON contract (ResourceCommandArgumentJson.InputType in
+// src/Shared/Model/Serialization/ResourceJson.cs).
+export const ResourceCommandInputType = {
+    Text: 'Text',
+    SecretText: 'SecretText',
+    Choice: 'Choice',
+    Boolean: 'Boolean',
+    Number: 'Number',
+} as const;
+
+export type ResourceCommandInputType = typeof ResourceCommandInputType[keyof typeof ResourceCommandInputType];
+
+// Mirrors the CLI JSON contract in src/Shared/Model/Serialization/ResourceJson.cs
+// (`ResourceCommandArgumentJson`), populated by Aspire.Cli's ResourceSnapshotMapper.
+export interface ResourceCommandArgumentInputJson {
+    name: string;
+    label: string | null;
+    description: string | null;
+    enableDescriptionMarkdown?: boolean;
+    inputType: ResourceCommandInputType;
+    required?: boolean;
+    placeholder: string | null;
+    value: string | null;
+    options: Record<string, string | null> | null;
+    allowCustomChoice?: boolean;
+    disabled?: boolean;
+    maxLength: number | null;
 }
 
 export interface ResourceHealthReportJson {

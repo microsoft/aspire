@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Reflection;
-using System.Reflection.Emit;
 using System.Text.Json;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Utils;
@@ -19,54 +18,6 @@ namespace Aspire.Hosting.Backchannel;
 [Trait("Partition", "4")]
 public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 {
-    [Theory]
-    [InlineData("8.0.0-preview.1", "8.0.0-preview.1")]
-    [InlineData("8.0.0-preview.1+asdlkjfdijee", "8.0.0-preview.1")]
-    [InlineData("8.0.0-preview.1+asdlkjfdijee+someothersuffix", "8.0.0-preview.1")]
-    [InlineData("+asdlkjfdijee", "+asdlkjfdijee")]
-    [InlineData("Plain old text", "Plain old text")]
-    [InlineData("", "")]
-    public void GetDisplayVersionUsesDashboardDisplayVersionImplementation(string informationalVersion, string expectedDisplayVersion)
-    {
-        var assembly = CreateAssembly(CreateAttribute<AssemblyInformationalVersionAttribute>(informationalVersion));
-
-        var actualDisplayVersion = AuxiliaryBackchannelRpcTarget.GetDisplayVersion(assembly);
-
-        Assert.Equal(expectedDisplayVersion, actualDisplayVersion);
-    }
-
-    [Fact]
-    public void GetDisplayVersionUsesFileVersionWhenInformationalVersionIsMissing()
-    {
-        var assembly = CreateAssembly(
-            CreateAttribute<AssemblyFileVersionAttribute>("42.42.42.42424"),
-            CreateAttribute<AssemblyVersionAttribute>("8.0.0.0"));
-
-        var actualDisplayVersion = AuxiliaryBackchannelRpcTarget.GetDisplayVersion(assembly);
-
-        Assert.Equal("42.42.42.42424", actualDisplayVersion);
-    }
-
-    [Fact]
-    public void GetDisplayVersionUsesAssemblyVersionWhenInformationalAndFileVersionsAreMissing()
-    {
-        var assembly = CreateAssembly(CreateAttribute<AssemblyVersionAttribute>("8.0.0.0"));
-
-        var actualDisplayVersion = AuxiliaryBackchannelRpcTarget.GetDisplayVersion(assembly);
-
-        Assert.Equal("8.0.0.0", actualDisplayVersion);
-    }
-
-    [Fact]
-    public void GetDisplayVersionReturnsNullWhenVersionAttributesAreMissing()
-    {
-        var assembly = CreateAssembly();
-
-        var actualDisplayVersion = AuxiliaryBackchannelRpcTarget.GetDisplayVersion(assembly);
-
-        Assert.Null(actualDisplayVersion);
-    }
-
     [Fact]
     public async Task GetAppHostInfoAsync_ReturnsAssemblyDisplayVersion()
     {
@@ -101,27 +52,6 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
             ?? "unknown";
 
         Assert.Equal(expectedVersion, result.AspireHostVersion);
-    }
-
-    private static AssemblyBuilder CreateAssembly(params CustomAttributeBuilder[] attributes)
-    {
-        var assembly = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName($"TestAssembly{Guid.NewGuid():N}"), AssemblyBuilderAccess.Run);
-
-        foreach (var attribute in attributes)
-        {
-            assembly.SetCustomAttribute(attribute);
-        }
-
-        return assembly;
-    }
-
-    private static CustomAttributeBuilder CreateAttribute<TAttribute>(string value)
-        where TAttribute : Attribute
-    {
-        var constructor = typeof(TAttribute).GetConstructor([typeof(string)]);
-        Assert.NotNull(constructor);
-
-        return new CustomAttributeBuilder(constructor, [value]);
     }
 
     [Fact]
@@ -1469,6 +1399,62 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         Assert.True(result.ResourceNotFound);
 
         await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task GetAppHostInformationAsync_ReturnsCliLogFilePath_WhenConfigured()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AppHost:Path"] = "/path/to/apphost.csproj",
+                [KnownConfigNames.CliProcessId] = "5678",
+                [KnownConfigNames.CliLogFilePath] = "/logs/cli_20260516T120000_abcd1234.log"
+            })
+            .Build();
+
+        using var services = new ServiceCollection()
+            .AddSingleton<IConfiguration>(configuration)
+            .AddSingleton<ProfilingTelemetry>()
+            .BuildServiceProvider();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            configuration,
+            services.GetRequiredService<ProfilingTelemetry>(),
+            services);
+
+        var result = await target.GetAppHostInformationAsync().DefaultTimeout();
+
+        Assert.Equal("/logs/cli_20260516T120000_abcd1234.log", result.CliLogFilePath);
+        Assert.Equal(5678, result.CliProcessId);
+    }
+
+    [Fact]
+    public async Task GetAppHostInfoAsync_IncludesCliLogFilePath()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["AppHost:Path"] = "/path/to/apphost.csproj",
+                [KnownConfigNames.CliLogFilePath] = "/logs/cli_session.log"
+            })
+            .Build();
+
+        using var services = new ServiceCollection()
+            .AddSingleton<IConfiguration>(configuration)
+            .AddSingleton<ProfilingTelemetry>()
+            .BuildServiceProvider();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            configuration,
+            services.GetRequiredService<ProfilingTelemetry>(),
+            services);
+
+        var result = await target.GetAppHostInfoAsync().DefaultTimeout();
+
+        Assert.Equal("/logs/cli_session.log", result.CliLogFilePath);
     }
 }
 

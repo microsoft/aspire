@@ -525,6 +525,105 @@ public class NuGetConfigMergerTests
     }
 
     [Fact]
+    public async Task CreateOrUpdateAsync_RemovesOldPrHive_WhenSwitchingBetweenPrHives()
+    {
+        // Reproduces the scenario reported on `aspire update --channel pr-<new>` when the
+        // previous channel was also a PR hive: switching between two `~/.aspire/hives/pr-*/packages`
+        // sources must remove the old source from <packageSources>, not just from
+        // <packageSourceMapping>. If the stale path lingers, subsequent `dotnet restore`
+        // fails with NU1301 when that hive directory has since been deleted/cleaned.
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        var root = workspace.WorkspaceRoot;
+
+        const string oldHive = "/Users/midenn/.aspire/hives/pr-17182/packages";
+        const string newHive = "/Users/midenn/.aspire/hives/pr-17192/packages";
+
+        await WriteConfigAsync(root,
+            $"""
+            <?xml version="1.0" encoding="utf-8"?>
+            <configuration>
+                <packageSources>
+                    <add key="{oldHive}" value="{oldHive}" />
+                    <add key="https://api.nuget.org/v3/index.json" value="https://api.nuget.org/v3/index.json" />
+                </packageSources>
+                <packageSourceMapping>
+                    <packageSource key="{oldHive}">
+                        <package pattern="Aspire*" />
+                    </packageSource>
+                    <packageSource key="https://api.nuget.org/v3/index.json">
+                        <package pattern="*" />
+                    </packageSource>
+                </packageSourceMapping>
+            </configuration>
+            """);
+
+        var mappings = new[]
+        {
+            new PackageMapping("Aspire*", newHive),
+            new PackageMapping("*", "https://api.nuget.org/v3/index.json"),
+        };
+
+        var channel = CreateChannel(mappings);
+        await NuGetConfigMerger.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+
+        var xml = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
+        var packageSources = xml.Root!.Element("packageSources")!;
+
+        Assert.DoesNotContain(packageSources.Elements("add"),
+            e => string.Equals((string?)e.Attribute("value"), oldHive, StringComparison.Ordinal));
+        Assert.Contains(packageSources.Elements("add"),
+            e => string.Equals((string?)e.Attribute("value"), newHive, StringComparison.Ordinal));
+
+        var psm = xml.Root!.Element("packageSourceMapping")!;
+        Assert.DoesNotContain(psm.Elements("packageSource"),
+            ps => string.Equals((string?)ps.Attribute("key"), oldHive, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task CreateOrUpdateAsync_RemovesOldPrHive_WhenItHasNoMappingElement()
+    {
+        // This is the *real* shape of the regression reported on pr-17192 follow-up:
+        // the AppHost-level nuget.config had pr-17182 listed in <packageSources> but the
+        // <packageSourceMapping> contained no entry for that source at all. Because
+        // RemoveEmptyPackageSourceElements only cleans up entries whose mapping element
+        // became empty *during the merge*, a source that never had a mapping element
+        // survives the merge and breaks subsequent `dotnet restore` once the hive
+        // directory is deleted.
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        var root = workspace.WorkspaceRoot;
+
+        const string oldHive = "/Users/midenn/.aspire/hives/pr-17182/packages";
+        const string newHive = "/Users/midenn/.aspire/hives/pr-17192/packages";
+
+        await WriteConfigAsync(root,
+            $"""
+            <?xml version="1.0" encoding="utf-8"?>
+            <configuration>
+                <packageSources>
+                    <add key="{oldHive}" value="{oldHive}" />
+                </packageSources>
+                <packageSourceMapping>
+                </packageSourceMapping>
+            </configuration>
+            """);
+
+        var mappings = new[]
+        {
+            new PackageMapping("Aspire*", newHive),
+            new PackageMapping("*", "https://api.nuget.org/v3/index.json"),
+        };
+
+        var channel = CreateChannel(mappings);
+        await NuGetConfigMerger.CreateOrUpdateAsync(root, channel).DefaultTimeout();
+
+        var xml = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
+        var packageSources = xml.Root!.Element("packageSources")!;
+
+        Assert.DoesNotContain(packageSources.Elements("add"),
+            e => string.Equals((string?)e.Attribute("value"), oldHive, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task CreateOrUpdateAsync_CallbackInvokedForNewConfig()
     {
         using var workspace = TemporaryWorkspace.Create(_outputHelper);

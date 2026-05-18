@@ -31,7 +31,7 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
     }
 
     [Fact]
@@ -230,7 +230,7 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.DashboardFailure, exitCode);
+        Assert.Equal(CliExitCodes.DashboardFailure, exitCode);
         var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
         var expectedMessage = GetExpectedErrorMessage(expectedMessageKey);
         Assert.Equal(expectedMessage, errorMessage);
