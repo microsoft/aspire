@@ -1890,8 +1890,8 @@ public class DistributedApplicationTests
     {
         const string testName = "parent-process-lifetime-scope";
         using var builder = TestDistributedApplicationBuilder.Create(_testOutputHelper);
-        var parentProcess = Process.GetCurrentProcess();
-        var parentProcessIdentity = new DcpProcessMonitor().GetMonitorProcess(parentProcess);
+        using var parentProcess = Process.GetCurrentProcess();
+        var parentProcessIdentity = DcpProcessMonitor.GetMonitorProcessIdentity(parentProcess);
 
         var container = AddRedisContainer(builder, $"{testName}-container")
             .WithParentProcessLifetime(parentProcess.Id)

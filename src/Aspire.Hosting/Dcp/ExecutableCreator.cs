@@ -30,7 +30,6 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
     private readonly DistributedApplicationExecutionContext _executionContext;
     private readonly Locations _locations;
     private readonly IAspireStore _aspireStore;
-    private readonly IDcpProcessMonitor _processMonitor;
     private readonly ILogger<ExecutableCreator> _logger;
     private readonly DcpAppResourceStore _appResources;
 
@@ -42,7 +41,6 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         DistributedApplicationExecutionContext executionContext,
         Locations locations,
         IAspireStore aspireStore,
-        IDcpProcessMonitor processMonitor,
         ILogger<ExecutableCreator> logger,
         DcpAppResourceStore appResources)
     {
@@ -53,7 +51,6 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         _executionContext = executionContext;
         _locations = locations;
         _aspireStore = aspireStore;
-        _processMonitor = processMonitor;
         _logger = logger;
         _appResources = appResources;
     }
@@ -322,13 +319,12 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         }
     }
 
-    private void ApplyMonitorProcess(IResource resource, ExecutableSpec spec)
+    private static void ApplyMonitorProcess(IResource resource, ExecutableSpec spec)
     {
         if (resource.TryGetParentProcessLifetime(out var annotation))
         {
-            var monitorProcess = _processMonitor.GetMonitorProcess(annotation.ParentProcess);
-            spec.MonitorPid = monitorProcess.ProcessId;
-            spec.MonitorTimestamp = monitorProcess.Timestamp;
+            spec.MonitorPid = annotation.ParentProcessId;
+            spec.MonitorTimestamp = annotation.ParentProcessTimestamp;
         }
     }
 

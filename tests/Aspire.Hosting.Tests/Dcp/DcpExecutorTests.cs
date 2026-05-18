@@ -2385,7 +2385,8 @@ public class DcpExecutorTests
     public async Task ExplicitParentProcessLifetimeIncludesMonitorProcess()
     {
         var builder = DistributedApplication.CreateBuilder();
-        var parentProcess = Process.GetCurrentProcess();
+        using var parentProcess = Process.GetCurrentProcess();
+        var parentProcessIdentity = DcpProcessMonitor.GetMonitorProcessIdentity(parentProcess);
 
         builder.AddContainer("database", "image")
             .WithParentProcessLifetime(parentProcess.Id);
@@ -2399,8 +2400,6 @@ public class DcpExecutorTests
             ["AppHost:Sha256"] = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
         };
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
-        var monitorProcess = new DcpProcessIdentity(parentProcess.Id, new DateTime(2026, 5, 14, 1, 2, 3, DateTimeKind.Utc));
-        var processMonitor = new TestDcpProcessMonitor(monitorProcess);
 
         var kubernetesService = new TestKubernetesService();
         using var app = builder.Build();
@@ -2408,15 +2407,14 @@ public class DcpExecutorTests
         var appExecutor = CreateAppExecutor(
             distributedAppModel,
             kubernetesService: kubernetesService,
-            configuration: configuration,
-            processMonitor: processMonitor);
+            configuration: configuration);
 
         await appExecutor.RunApplicationAsync();
 
         var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
         Assert.True(container.Spec.Persistent.GetValueOrDefault());
-        Assert.Equal(monitorProcess.ProcessId, container.Spec.MonitorPid);
-        Assert.Equal(monitorProcess.Timestamp, container.Spec.MonitorTimestamp);
+        Assert.Equal(parentProcessIdentity.ProcessId, container.Spec.MonitorPid);
+        Assert.Equal(parentProcessIdentity.Timestamp, container.Spec.MonitorTimestamp);
 
         var executables = kubernetesService.CreatedResources.OfType<Executable>()
             .Where(e => e.AppModelResourceName is "worker" or "project")
@@ -2425,12 +2423,10 @@ public class DcpExecutorTests
         Assert.All(executables, exe =>
         {
             Assert.True(exe.Spec.Persistent.GetValueOrDefault());
-            Assert.Equal(monitorProcess.ProcessId, exe.Spec.MonitorPid);
-            Assert.Equal(monitorProcess.Timestamp, exe.Spec.MonitorTimestamp);
+            Assert.Equal(parentProcessIdentity.ProcessId, exe.Spec.MonitorPid);
+            Assert.Equal(parentProcessIdentity.Timestamp, exe.Spec.MonitorTimestamp);
             Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
         });
-        Assert.Equal(3, processMonitor.MonitoredProcesses.Count);
-        Assert.All(processMonitor.MonitoredProcesses, process => Assert.Equal(parentProcess.Id, process.Id));
     }
 
     [Fact]
@@ -4196,8 +4192,7 @@ public class DcpExecutorTests
         DcpOptions? dcpOptions = null,
         ResourceLoggerService? resourceLoggerService = null,
         DcpExecutorEvents? events = null,
-        Hosting.Eventing.IDistributedApplicationEventing? distributedApplicationEventing = null,
-        IDcpProcessMonitor? processMonitor = null)
+        Hosting.Eventing.IDistributedApplicationEventing? distributedApplicationEventing = null)
     {
         if (configuration == null)
         {
@@ -4239,7 +4234,6 @@ public class DcpExecutorTests
         var aspireStore = new AspireStore(Path.Join(aspireStoreDirectory, ".aspire"), fileSystemService);
         var hostEnv = hostEnvironment ?? new TestHostEnvironment();
         var dcpDependencyCheckService = new TestDcpDependencyCheckService();
-        processMonitor ??= new TestDcpProcessMonitor(null);
 
         var appResources = new DcpAppResourceStore();
 
@@ -4251,7 +4245,6 @@ public class DcpExecutorTests
             executionContext,
             locations,
             aspireStore,
-            processMonitor,
             NullLogger<ExecutableCreator>.Instance,
             appResources);
 
@@ -4263,7 +4256,6 @@ public class DcpExecutorTests
             executionContext,
             resourceLoggerService,
             dcpDependencyCheckService,
-            processMonitor,
             hostEnv,
             NullLogger<ContainerCreator>.Instance,
             appResources);
@@ -4314,17 +4306,6 @@ public class DcpExecutorTests
             Assert.NotNull(specArgs);
             Assert.InRange(index, 0, specArgs.Count - 1);
             Assert.Equal(annotation.Argument, specArgs[index]);
-        }
-    }
-
-    private sealed class TestDcpProcessMonitor(DcpProcessIdentity? monitorProcess) : IDcpProcessMonitor
-    {
-        public List<Process> MonitoredProcesses { get; } = [];
-
-        public DcpProcessIdentity GetMonitorProcess(Process process)
-        {
-            MonitoredProcesses.Add(process);
-            return monitorProcess ?? throw new InvalidOperationException("No test monitor process identity was configured.");
         }
     }
 

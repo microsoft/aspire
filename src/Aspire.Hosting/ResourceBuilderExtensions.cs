@@ -10,6 +10,7 @@ using System.Security.Cryptography.X509Certificates;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Ats;
+using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Utils;
@@ -152,9 +153,12 @@ public static class ResourceBuilderExtensions
             throw new ArgumentOutOfRangeException(nameof(parentProcessId), "The parent process ID must be greater than zero.");
         }
 
+        using var parentProcess = SystemProcess.GetProcessById(parentProcessId);
+        var parentProcessIdentity = DcpProcessMonitor.GetMonitorProcessIdentity(parentProcess);
+
         return builder
             .WithPersistentLifetime()
-            .WithAnnotation(new ParentProcessLifetimeAnnotation(SystemProcess.GetProcessById(parentProcessId)), ResourceAnnotationMutationBehavior.Replace);
+            .WithAnnotation(new ParentProcessLifetimeAnnotation(parentProcessIdentity.ProcessId, parentProcessIdentity.Timestamp), ResourceAnnotationMutationBehavior.Replace);
     }
 
     private static IResourceBuilder<T> ApplyLifetime<T>(IResourceBuilder<T> builder, Lifetime lifetime)

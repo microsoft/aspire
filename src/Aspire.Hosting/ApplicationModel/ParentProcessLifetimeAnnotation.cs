@@ -3,15 +3,18 @@
 
 namespace Aspire.Hosting.ApplicationModel;
 
-using SystemProcess = System.Diagnostics.Process;
-
 /// <summary>
 /// Configures a persistent resource to be monitored by a parent process identity.
 /// </summary>
-internal sealed class ParentProcessLifetimeAnnotation(SystemProcess parentProcess) : IResourceAnnotation
+internal sealed class ParentProcessLifetimeAnnotation(int parentProcessId, DateTime parentProcessTimestamp) : IResourceAnnotation
 {
     /// <summary>
-    /// Gets the parent process to monitor.
+    /// Gets the ID of the parent process to monitor.
     /// </summary>
-    public SystemProcess ParentProcess { get; } = parentProcess ?? throw new ArgumentNullException(nameof(parentProcess));
+    public int ParentProcessId { get; } = parentProcessId;
+
+    /// <summary>
+    /// Gets the identity timestamp of the parent process to monitor.
+    /// </summary>
+    public DateTime ParentProcessTimestamp { get; } = parentProcessTimestamp;
 }

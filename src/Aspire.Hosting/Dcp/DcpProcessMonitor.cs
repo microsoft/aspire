@@ -9,17 +9,12 @@ namespace Aspire.Hosting.Dcp;
 
 internal sealed record DcpProcessIdentity(int ProcessId, DateTime Timestamp);
 
-internal interface IDcpProcessMonitor
-{
-    DcpProcessIdentity GetMonitorProcess(SystemProcess parentProcess);
-}
-
-internal sealed partial class DcpProcessMonitor : IDcpProcessMonitor
+internal static partial class DcpProcessMonitor
 {
     private const int DefaultLinuxClockTicksPerSecond = 100;
     private const int LinuxClockTicksPerSecondConfigName = 2; // _SC_CLK_TCK
 
-    public DcpProcessIdentity GetMonitorProcess(SystemProcess parentProcess)
+    internal static DcpProcessIdentity GetMonitorProcessIdentity(SystemProcess parentProcess)
     {
         ArgumentNullException.ThrowIfNull(parentProcess);
 

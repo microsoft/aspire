@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
+using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Tests;
@@ -46,6 +48,22 @@ public class ResourceBuilderLifetimeTests
     }
 
     [Fact]
+    public void WithParentProcessLifetimeReplacesExistingParentProcessLifetimeAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var originalTimestamp = new DateTime(2026, 5, 18, 1, 2, 3, DateTimeKind.Utc);
+        var container = builder.AddContainer("container", "image")
+            .WithAnnotation(new ParentProcessLifetimeAnnotation(parentProcessId: 1, parentProcessTimestamp: originalTimestamp));
+
+        container.WithParentProcessLifetime(Environment.ProcessId);
+
+        var annotation = Assert.Single(container.Resource.Annotations.OfType<ParentProcessLifetimeAnnotation>());
+        Assert.Equal(Environment.ProcessId, annotation.ParentProcessId);
+        Assert.NotEqual(originalTimestamp, annotation.ParentProcessTimestamp);
+    }
+
+    [Fact]
     public void WithLifetimeOfMatchesSourceResourceLifetime()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -68,14 +86,17 @@ public class ResourceBuilderLifetimeTests
     public void WithLifetimeOfMatchesSourceParentProcessLifetime()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
+        using var parentProcess = Process.GetCurrentProcess();
+        var parentProcessIdentity = DcpProcessMonitor.GetMonitorProcessIdentity(parentProcess);
 
         var source = builder.AddContainer("source", "image")
-            .WithParentProcessLifetime(Environment.ProcessId);
+            .WithParentProcessLifetime(parentProcess.Id);
         var container = builder.AddContainer("container", "image")
             .WithLifetimeOf(source);
 
         Assert.True(container.Resource.TryGetParentProcessLifetime(out var parentProcessLifetimeAnnotation));
-        Assert.Equal(Environment.ProcessId, parentProcessLifetimeAnnotation.ParentProcess.Id);
+        Assert.Equal(parentProcessIdentity.ProcessId, parentProcessLifetimeAnnotation.ParentProcessId);
+        Assert.Equal(parentProcessIdentity.Timestamp, parentProcessLifetimeAnnotation.ParentProcessTimestamp);
 
         source.WithSessionLifetime();
 
