@@ -337,7 +337,8 @@ function shouldSubmitValue(input: ResourceCommandArgumentInputJson, value: strin
 }
 
 function getArgumentPrompt(input: ResourceCommandArgumentInputJson): string {
-    return input.description ?? getArgumentLabel(input);
+    const label = getArgumentLabel(input);
+    return input.description ? resourceCommandArgumentInputTitle(label, input.description) : label;
 }
 
 function getArgumentInputTitle(commandTitle: string, input: ResourceCommandArgumentInputJson): string {
