@@ -1170,6 +1170,16 @@ internal sealed class ResourceSnapshotCommandArgument
     /// Gets the maximum length for text inputs.
     /// </summary>
     public int? MaxLength { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the argument's allowed values are loaded dynamically based on prior input values.
+    /// </summary>
+    public bool IsDynamic { get; init; }
+
+    /// <summary>
+    /// Gets the names of inputs this argument depends on for dynamic loading, in the same order they appear on the command.
+    /// </summary>
+    public IReadOnlyList<string>? DependsOnInputs { get; init; }
 }
 
 /// <summary>
