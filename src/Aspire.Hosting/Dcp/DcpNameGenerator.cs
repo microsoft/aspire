@@ -34,6 +34,8 @@ internal sealed class DcpNameGenerator
 
     public void EnsureDcpInstancesPopulated(IResource resource)
     {
+        ThrowIfPersistentExecutableHasReplicas(resource);
+
         if (resource.TryGetInstances(out _))
         {
             return;
@@ -65,6 +67,19 @@ internal sealed class DcpNameGenerator
     private static void AddInstancesAnnotation(IResource resource, ImmutableArray<DcpInstance> instances)
     {
         resource.Annotations.Add(new DcpInstancesAnnotation(instances));
+    }
+
+    private static void ThrowIfPersistentExecutableHasReplicas(IResource resource)
+    {
+        if (resource is not (ExecutableResource or ProjectResource))
+        {
+            return;
+        }
+
+        if (resource.GetReplicaCount() > 1 && resource.GetLifetimeType() == Lifetime.Persistent)
+        {
+            throw new InvalidOperationException($"Resource '{resource.Name}' uses multiple replicas and a persistent lifetime. These features do not work together.");
+        }
     }
 
     public (string Name, string Suffix) GetContainerName(IResource container)

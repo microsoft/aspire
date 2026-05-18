@@ -2277,6 +2277,42 @@ public class DcpExecutorTests
     }
 
     [Fact]
+    public async Task PersistentProjectWithReplicasThrows()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddProject<TestProject>("project", launchProfileName: null)
+            .WithReplicas(2)
+            .WithPersistentLifetime();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => appExecutor.RunApplicationAsync());
+        Assert.Equal("Resource 'project' uses multiple replicas and a persistent lifetime. These features do not work together.", exception.Message);
+    }
+
+    [Fact]
+    public async Task PersistentPlainExecutableWithReplicasThrows()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddExecutable("worker", "worker", Environment.CurrentDirectory)
+            .WithAnnotation(new ReplicaAnnotation(2))
+            .WithPersistentLifetime();
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => appExecutor.RunApplicationAsync());
+        Assert.Equal("Resource 'worker' uses multiple replicas and a persistent lifetime. These features do not work together.", exception.Message);
+    }
+
+    [Fact]
     public async Task PersistentContainerWithOtlpExporterUsesStableServiceInstanceId()
     {
         var first = await CreateOtlpServiceInstanceIdAsync(builder =>
