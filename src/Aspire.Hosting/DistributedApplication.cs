@@ -445,7 +445,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
         _localeOverrideContext = _host.Services.GetRequiredService<LocaleOverrideContext>();
         var configuration = _host.Services.GetRequiredService<IConfiguration>();
         ProfilingTelemetry.EnsureInitialized(_host.Services);
-        ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostStartAsyncEntered);
+        ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostStartAsyncEntered, configuration);
         ProfilingTelemetry.RecordAppHostProcessStartup(configuration);
 
         using var appHostStartActivity = ProfilingTelemetry.StartAppHostStart(configuration, nameof(StartAsync));
@@ -515,7 +515,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
     {
         ProfilingTelemetry.EnsureInitialized(_host.Services);
         var configuration = _host.Services.GetRequiredService<IConfiguration>();
-        ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostRunAsyncEntered);
+        ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostRunAsyncEntered, configuration);
         ProfilingTelemetry.RecordAppHostProcessStartup(configuration);
         var lifetime = _host.Services.GetRequiredService<IHostApplicationLifetime>();
 

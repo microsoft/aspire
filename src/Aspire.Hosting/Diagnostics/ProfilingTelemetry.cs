@@ -186,14 +186,20 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
 
     private static readonly ActivitySource s_activitySource = new(ActivitySourceName);
     private static readonly object s_startupEventsLock = new();
+    // Some startup milestones occur before HostApplicationBuilder has created IConfiguration
+    // or before OpenTelemetry has built the TracerProvider. Buffer those timestamps here and
+    // attach them later to the process-start span so the profile still shows the earliest
+    // AppHost work without forcing the full telemetry stack to initialize too soon.
     private static readonly List<AppHostStartupEvent> s_startupEvents = [];
 
     private readonly IConfiguration _configuration = configuration;
 
-    public static void RecordAppHostStartupEvent(string eventName)
+    public static void RecordAppHostStartupEvent(string eventName, IConfiguration? configuration = null)
     {
-        if (!IsTruthy(Environment.GetEnvironmentVariable(KnownConfigNames.ProfilingEnabled)) &&
-            !IsTruthy(Environment.GetEnvironmentVariable(KnownConfigNames.Legacy.StartupProfilingEnabled)))
+        // CreateBuilder-entered events happen before IConfiguration exists. Later startup phases
+        // pass configuration explicitly so command-line/config providers are honored as soon as
+        // they are available.
+        if (!IsStartupEventRecordingEnabled(configuration))
         {
             return;
         }
@@ -695,6 +701,17 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
     {
         return IsTruthy(configuration?[KnownConfigNames.ProfilingEnabled]) ||
             IsTruthy(configuration?[KnownConfigNames.Legacy.StartupProfilingEnabled]);
+    }
+
+    private static bool IsStartupEventRecordingEnabled(IConfiguration? configuration)
+    {
+        if (configuration is not null)
+        {
+            return IsEnabled(configuration);
+        }
+
+        return IsTruthy(Environment.GetEnvironmentVariable(KnownConfigNames.ProfilingEnabled)) ||
+            IsTruthy(Environment.GetEnvironmentVariable(KnownConfigNames.Legacy.StartupProfilingEnabled));
     }
 
     private static bool TryGetAnnotation(IDictionary<string, string> annotations, string name, string legacyName, out string? value)
