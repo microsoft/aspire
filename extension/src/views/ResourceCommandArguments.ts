@@ -43,6 +43,9 @@ export interface ResourceCommandArgumentOptions {
 const numberPattern = /^[+-]?(?:(?:\d+(?:\.\d*)?)|(?:\.\d+))(?:[eE][+-]?\d+)?$/;
 
 export async function collectResourceCommandArguments(commandName: string, command: ResourceCommandJson | undefined, options?: ResourceCommandArgumentOptions): Promise<string[] | undefined> {
+    // This flow only supports the static argumentInputs snapshot emitted by the CLI today. It
+    // does not re-query arguments or options while prompting, so dynamic inputs whose choices or
+    // validation depend on previously-entered values need a future protocol/UI change.
     const inputs = command?.argumentInputs?.filter(input => !input.disabled) ?? [];
     if (inputs.length === 0) {
         return [];
