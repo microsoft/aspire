@@ -27,6 +27,8 @@ internal sealed class AuxiliaryBackchannelMonitor(
 {
     private static readonly TimeSpan s_maxRetryElapsed = TimeSpan.FromSeconds(3);
     private static readonly TimeSpan s_maxRetryDelay = TimeSpan.FromSeconds(1);
+    private const string CompactSocketWatchPattern = "*";
+    private const string LegacySocketWatchPattern = "aux*.sock.*";
     
     // Outer key: hash (prefix), Inner key: socketPath, Value: connection
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, AppHostAuxiliaryBackchannel>> _connectionsByHash = new();
@@ -172,8 +174,8 @@ internal sealed class AuxiliaryBackchannelMonitor(
 
             // Run the watcher loop until cancellation
             var fileWatcherTask = Task.WhenAll(
-                RunFileWatcherLoopAsync(fileProvider, stoppingToken),
-                RunFileWatcherLoopAsync(legacyFileProvider, stoppingToken));
+                RunFileWatcherLoopAsync(fileProvider, CompactSocketWatchPattern, stoppingToken),
+                RunFileWatcherLoopAsync(legacyFileProvider, LegacySocketWatchPattern, stoppingToken));
 
             await fileWatcherTask.ConfigureAwait(false);
         }
@@ -524,11 +526,11 @@ internal sealed class AuxiliaryBackchannelMonitor(
     /// <summary>
     /// Runs the file watcher loop that triggers scans when file changes are detected.
     /// </summary>
-    private async Task RunFileWatcherLoopAsync(IFileProvider fileProvider, CancellationToken cancellationToken)
+    private async Task RunFileWatcherLoopAsync(IFileProvider fileProvider, string watchPattern, CancellationToken cancellationToken)
     {
         try
         {
-            await foreach (var changed in WatchForChangesAsync(fileProvider, cancellationToken))
+            await foreach (var changed in WatchForChangesAsync(fileProvider, watchPattern, cancellationToken))
             {
                 await ProcessDirectoryChangesAsync(cancellationToken).ConfigureAwait(false);
             }
@@ -542,13 +544,11 @@ internal sealed class AuxiliaryBackchannelMonitor(
     /// <summary>
     /// Watches for file changes in the backchannels directory using change tokens.
     /// </summary>
-    private static async IAsyncEnumerable<bool> WatchForChangesAsync(IFileProvider fileProvider, [EnumeratorCancellation] CancellationToken cancellationToken)
+    private static async IAsyncEnumerable<bool> WatchForChangesAsync(IFileProvider fileProvider, string watchPattern, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         while (!cancellationToken.IsCancellationRequested)
         {
-            // Watch for both "auxi.sock.*" (new) and "aux.sock.*" (old) patterns for backward compatibility
-            // Using "aux*.sock.*" wildcard to match both patterns
-            var changeToken = fileProvider.Watch("aux*.sock.*");
+            var changeToken = fileProvider.Watch(watchPattern);
             var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
             using var registration = changeToken.RegisterChangeCallback(state => ((TaskCompletionSource<bool>)state!).TrySetResult(true), tcs);
