@@ -687,8 +687,7 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
 
     internal static bool IsEnabled(IConfiguration? configuration)
     {
-        return IsTruthy(configuration?[KnownConfigNames.ProfilingEnabled]) ||
-            IsTruthy(configuration?[KnownConfigNames.Legacy.StartupProfilingEnabled]);
+        return configuration?.GetBool(KnownConfigNames.ProfilingEnabled, KnownConfigNames.Legacy.StartupProfilingEnabled) is true;
     }
 
     private static bool IsStartupEventRecordingEnabled(IConfiguration? configuration)
@@ -731,9 +730,11 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
 
     private static AppHostStartupEvent[] DrainAppHostStartupEvents()
     {
-        // Move the pre-DI startup timestamps into the process-start activity exactly once. The
-        // queue is static because the earliest records happen before DI is available, but draining
-        // here prevents the same milestones from leaking into later AppHost instances in this process.
+        // Move the pre-DI startup timestamps into the process-start activity exactly once. The queue
+        // is static because the earliest records happen before DI is available, but draining here
+        // prevents the same milestones from leaking into later AppHost instances in this process.
+        // ConcurrentQueue.TryDequeue atomically claims each event, so callers that race with the
+        // drain do not need a separate lock.
         if (s_startupEvents.IsEmpty)
         {
             return [];

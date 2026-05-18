@@ -816,11 +816,17 @@ public class ResourceNotificationService : IDisposable
             return;
         }
 
+        // This method runs while the per-resource notification state lock is held. Keep the locked
+        // work to timestamp bookkeeping; the potentially async resource-ready work is observed below
+        // without blocking the notification publisher.
         var observedAt = DateTimeOffset.UtcNow;
+        var startupEvents = notificationState.GetOrCreateStartupEvents();
         if (notificationState.FirstObservedAt is null)
         {
+            // The first notification is the earliest point where the orchestrator has an observable
+            // state for this resource, so use it as the resource startup span's start timestamp.
             notificationState.FirstObservedAt = observedAt;
-            notificationState.StartupEvents.Add(new ResourceStartupEvent(
+            startupEvents.Add(new ResourceStartupEvent(
                 ResourceStartupEventKind.Observed,
                 observedAt,
                 snapshot,
@@ -830,11 +836,13 @@ public class ResourceNotificationService : IDisposable
 
         var firstObservedAt = notificationState.FirstObservedAt.Value;
 
+        // Snapshots can change for reasons that are not useful in startup profiles, such as version
+        // bumps or property updates. Record only user-visible state text transitions.
         var previousState = previousSnapshot?.State?.Text;
         var newState = snapshot.State?.Text;
         if (!string.IsNullOrWhiteSpace(newState) && !string.Equals(previousState, newState, StringComparison.Ordinal))
         {
-            notificationState.StartupEvents.Add(new ResourceStartupEvent(
+            startupEvents.Add(new ResourceStartupEvent(
                 ResourceStartupEventKind.StateChanged,
                 observedAt,
                 snapshot,
@@ -842,11 +850,13 @@ public class ResourceNotificationService : IDisposable
                 PreviousHealthStatus: null));
         }
 
+        // Health transitions are tracked separately from state text because health is often what
+        // explains why a resource was delayed even when its textual state did not change.
         var previousHealthStatus = previousSnapshot?.HealthStatus?.ToString();
         var newHealthStatus = snapshot.HealthStatus?.ToString();
         if (newHealthStatus is not null && !string.Equals(previousHealthStatus, newHealthStatus, StringComparison.Ordinal))
         {
-            notificationState.StartupEvents.Add(new ResourceStartupEvent(
+            startupEvents.Add(new ResourceStartupEvent(
                 ResourceStartupEventKind.HealthChanged,
                 observedAt,
                 snapshot,
@@ -854,25 +864,27 @@ public class ResourceNotificationService : IDisposable
                 PreviousHealthStatus: previousHealthStatus));
         }
 
+        // ResourceReadyEvent carries the task that represents ready-event subscriber work. Snapshot
+        // the milestones seen so far and finish the startup activity after that task completes so
+        // resource startup includes user callbacks that run as part of becoming ready.
         if (notificationState.ReadyAt is null &&
             snapshot.ResourceReadyEvent is { } resourceReadyEvent)
         {
             notificationState.ReadyAt = observedAt;
-            notificationState.ReadySnapshot = snapshot;
-            notificationState.StartupEvents.Add(new ResourceStartupEvent(
+            startupEvents.Add(new ResourceStartupEvent(
                 ResourceStartupEventKind.Ready,
                 observedAt,
                 snapshot,
                 PreviousState: null,
                 PreviousHealthStatus: null));
-            var startupEvents = notificationState.StartupEvents.ToArray();
+            var startupEventsSnapshot = startupEvents.ToArray();
             _ = RecordResourceStartupAsync(
                 configuration,
                 resource,
                 resourceId,
                 firstObservedAt,
                 snapshot,
-                startupEvents,
+                startupEventsSnapshot,
                 resourceReadyEvent.EventTask);
         }
     }
@@ -1158,10 +1170,13 @@ public class ResourceNotificationService : IDisposable
         public long GetNextVersion() => _lastVersion++;
         public CustomResourceSnapshot? LastSnapshot { get; set; }
         public IResource Resource { get; } = resource;
+        // These profiling fields stay unset unless startup profiling is enabled. Keep the event list
+        // lazy so normal resource notifications do not allocate milestone storage for every resource.
         public DateTimeOffset? FirstObservedAt { get; set; }
         public DateTimeOffset? ReadyAt { get; set; }
-        public CustomResourceSnapshot? ReadySnapshot { get; set; }
-        public List<ResourceStartupEvent> StartupEvents { get; } = [];
+        private List<ResourceStartupEvent>? StartupEvents { get; set; }
+
+        public List<ResourceStartupEvent> GetOrCreateStartupEvents() => StartupEvents ??= [];
     }
 
     private sealed record ResourceStartupEvent(
