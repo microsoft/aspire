@@ -23,13 +23,33 @@ export interface SendAspireCommandOptions {
     redactAdditionalArgs?: boolean;
 }
 
-function quoteShellArg(arg: string): string {
-    if (process.platform === 'win32') {
-        // On Windows PowerShell, wrap in double quotes and escape interpolation characters.
+/**
+ * Quotes a single argument for safe interpolation into a shell command line.
+ *
+ * Windows: The output targets PowerShell (powershell.exe / pwsh.exe), which is
+ * VS Code's default integrated terminal on Windows. The argument is wrapped in
+ * double quotes and the interpolation-significant characters (backtick, double
+ * quote, dollar sign) are backtick-escaped. This form is NOT safe for cmd.exe;
+ * users who have configured cmd.exe as their default terminal may see
+ * unexpected behavior. End-to-end coverage through a real child process is
+ * out of scope for this helper.
+ *
+ * Unix: The output uses POSIX single-quote quoting, which is interpreted the
+ * same way by bash, zsh, dash, sh, and fish. Embedded single quotes are split
+ * out and rejoined with a double-quoted single quote.
+ *
+ * @param arg The raw argument value to quote.
+ * @param platform Override for the target platform. Defaults to
+ * `process.platform`, but tests pass an explicit value to validate both
+ * branches regardless of the host OS.
+ */
+export function quoteShellArg(arg: string, platform: NodeJS.Platform = process.platform): string {
+    if (platform === 'win32') {
+        // Order matters: escape backticks first so that the backticks we
+        // introduce when escaping " and $ are not themselves re-escaped.
         return `"${arg.replace(/`/g, '``').replace(/"/g, '`"').replace(/\$/g, '`$')}"`;
     }
 
-    // On Unix, wrap in single quotes and escape inner single quotes.
     return `'${arg.replace(/'/g, "'\"'\"'")}'`;
 }
 
@@ -103,14 +123,14 @@ export class AspireTerminalProvider implements vscode.Disposable {
             : extensionArgs;
 
         if (cliArgs.length > 0) {
-            const quotedArgs = cliArgs.map(quoteShellArg);
+            const quotedArgs = cliArgs.map(arg => quoteShellArg(arg));
             command += ' ' + quotedArgs.join(' ');
         }
 
         const aspireTerminal = this.getAspireTerminal();
         let logCommand = command;
         if (options?.redactAdditionalArgs && additionalArgs && additionalArgs.length > 0) {
-            const logArgs = extensionArgs.map(quoteShellArg);
+            const logArgs = extensionArgs.map(arg => quoteShellArg(arg));
             logArgs.push('[redacted command arguments]');
             logCommand = `${baseCommand} ${logArgs.join(' ')}`;
         }

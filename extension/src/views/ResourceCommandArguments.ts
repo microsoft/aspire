@@ -11,7 +11,7 @@ import {
     resourceCommandSecretWarning,
     yesLabel,
 } from '../loc/strings';
-import { ResourceCommandArgumentInputJson, ResourceCommandJson } from './AppHostDataRepository';
+import { ResourceCommandArgumentInputJson, ResourceCommandInputType, ResourceCommandJson } from './AppHostDataRepository';
 
 export interface ResourceCommandArgumentValue {
     input: ResourceCommandArgumentInputJson;
@@ -33,7 +33,7 @@ export async function collectResourceCommandArguments(commandName: string, comma
         return [];
     }
 
-    if (inputs.some(input => input.inputType === 'SecretText')) {
+    if (inputs.some(input => input.inputType === ResourceCommandInputType.SecretText)) {
         const result = await vscode.window.showWarningMessage(resourceCommandSecretWarning, { modal: true }, resourceCommandContinue);
         if (result !== resourceCommandContinue) {
             return undefined;
@@ -57,7 +57,7 @@ export async function collectResourceCommandArguments(commandName: string, comma
 }
 
 export function hasSecretResourceCommandArguments(command: ResourceCommandJson | undefined): boolean {
-    return command?.argumentInputs?.some(input => !input.disabled && input.inputType === 'SecretText') ?? false;
+    return command?.argumentInputs?.some(input => !input.disabled && input.inputType === ResourceCommandInputType.SecretText) ?? false;
 }
 
 export function buildResourceCommandCliArgs(values: readonly ResourceCommandArgumentValue[]): string[] {
@@ -69,7 +69,7 @@ export function buildResourceCommandCliArgs(values: readonly ResourceCommandArgu
         }
 
         const optionName = `--${input.name}`;
-        if (input.inputType === 'Boolean') {
+        if (input.inputType === ResourceCommandInputType.Boolean) {
             args.push(`${optionName}=${value === 'true' ? 'true' : 'false'}`);
         }
         else {
@@ -83,7 +83,7 @@ export function buildResourceCommandCliArgs(values: readonly ResourceCommandArgu
 }
 
 export function getResourceCommandArgumentValidationMessage(input: ResourceCommandArgumentInputJson, value: string): string | undefined {
-    if (input.required && input.inputType !== 'Boolean' && value.trim().length === 0) {
+    if (input.required && input.inputType !== ResourceCommandInputType.Boolean && value.trim().length === 0) {
         return fieldRequired;
     }
 
@@ -91,7 +91,7 @@ export function getResourceCommandArgumentValidationMessage(input: ResourceComma
         return resourceCommandMaxLength(input.maxLength);
     }
 
-    if (input.inputType === 'Number' && value.trim().length > 0 && !numberPattern.test(value.trim())) {
+    if (input.inputType === ResourceCommandInputType.Number && value.trim().length > 0 && !numberPattern.test(value.trim())) {
         return resourceCommandInvalidNumber;
     }
 
@@ -100,13 +100,13 @@ export function getResourceCommandArgumentValidationMessage(input: ResourceComma
 
 async function promptForArgumentValue(title: string, input: ResourceCommandArgumentInputJson, step: number, totalSteps: number): Promise<string | undefined> {
     switch (input.inputType) {
-        case 'Choice':
+        case ResourceCommandInputType.Choice:
             return promptForChoiceArgument(title, input, step, totalSteps);
-        case 'Boolean':
+        case ResourceCommandInputType.Boolean:
             return promptForBooleanArgument(title, input, step, totalSteps);
-        case 'Text':
-        case 'SecretText':
-        case 'Number':
+        case ResourceCommandInputType.Text:
+        case ResourceCommandInputType.SecretText:
+        case ResourceCommandInputType.Number:
             return promptForTextArgument(title, input, step, totalSteps);
     }
 }
@@ -120,7 +120,7 @@ async function promptForTextArgument(title: string, input: ResourceCommandArgume
         inputBox.step = step;
         inputBox.totalSteps = totalSteps;
         inputBox.value = input.value ?? '';
-        inputBox.password = input.inputType === 'SecretText';
+        inputBox.password = input.inputType === ResourceCommandInputType.SecretText;
         inputBox.prompt = getArgumentPrompt(input);
         inputBox.placeholder = input.placeholder ?? getArgumentLabel(input);
         inputBox.ignoreFocusOut = true;
@@ -144,7 +144,7 @@ async function promptForTextArgument(title: string, input: ResourceCommandArgume
                 return;
             }
 
-            finish(input.inputType === 'Number' ? inputBox.value.trim() : inputBox.value);
+            finish(input.inputType === ResourceCommandInputType.Number ? inputBox.value.trim() : inputBox.value);
         });
         inputBox.onDidHide(() => finish(undefined));
         inputBox.show();
@@ -281,7 +281,7 @@ function findChoiceItem(input: ResourceCommandArgumentInputJson, items: readonly
 }
 
 function shouldSubmitValue(input: ResourceCommandArgumentInputJson, value: string): boolean {
-    if (input.inputType === 'Boolean') {
+    if (input.inputType === ResourceCommandInputType.Boolean) {
         return true;
     }
 
@@ -290,7 +290,7 @@ function shouldSubmitValue(input: ResourceCommandArgumentInputJson, value: strin
     }
 
     // Empty number values cannot be parsed by the CLI, so fall back to the snapshot default.
-    if (input.inputType === 'Number') {
+    if (input.inputType === ResourceCommandInputType.Number) {
         return false;
     }
 

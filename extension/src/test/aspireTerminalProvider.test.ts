@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
 import * as sinon from 'sinon';
-import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
+import { AspireTerminalProvider, quoteShellArg } from '../utils/AspireTerminalProvider';
 import * as cliPathModule from '../utils/cliPath';
 import { EnvironmentVariables } from '../utils/environment';
 import { extensionLogOutputChannel } from '../utils/logging';
@@ -249,6 +249,72 @@ suite('AspireTerminalProvider tests', () => {
                 getAspireTerminalStub.restore();
                 infoStub.restore();
             }
+        });
+    });
+
+    // The Windows quoting form targets PowerShell (powershell.exe / pwsh.exe),
+    // which is VS Code's default integrated terminal on Windows. The Unix
+    // form uses POSIX single-quote quoting, which is interpreted identically
+    // by bash, zsh, dash, sh, and fish. These tests run on every host OS so
+    // we get coverage of both branches regardless of where the test executes.
+    suite('quoteShellArg (cross-platform)', () => {
+        suite('win32 (PowerShell / pwsh)', () => {
+            const cases: { name: string; input: string; expected: string }[] = [
+                { name: 'plain value', input: 'hello', expected: '"hello"' },
+                { name: 'value with spaces', input: 'hello world', expected: '"hello world"' },
+                { name: 'embedded double quote', input: 'say "hi"', expected: '"say `"hi`""' },
+                { name: 'embedded single quote', input: "it's fine", expected: `"it's fine"` },
+                { name: 'variable expansion $env', input: '$env:USERPROFILE', expected: '"`$env:USERPROFILE"' },
+                { name: 'variable expansion $var', input: '$PATH', expected: '"`$PATH"' },
+                { name: 'subshell expansion $(...)', input: '$(whoami)', expected: '"`$(whoami)"' },
+                { name: 'backtick subshell', input: '`whoami`', expected: '"``whoami``"' },
+                { name: 'backslash sequences', input: 'C:\\Program Files\\Aspire', expected: '"C:\\Program Files\\Aspire"' },
+                { name: 'backslash followed by quote', input: 'a\\"b', expected: '"a\\`"b"' },
+                { name: 'pipe and chaining', input: 'a | b; c && d', expected: '"a | b; c && d"' },
+                { name: 'redirection', input: '> out.txt < in.txt', expected: '"> out.txt < in.txt"' },
+                { name: 'newline', input: 'line1\nline2', expected: '"line1\nline2"' },
+                { name: 'mixed dollar quote backtick', input: '`$x"y"`', expected: '"```$x`"y`"``"' },
+                { name: 'attempted PowerShell break-out', input: '"; Remove-Item C:\\ -Recurse #', expected: '"`"; Remove-Item C:\\ -Recurse #"' },
+                { name: 'subshell with backticks and dollar', input: '`echo $(rm -rf /)`', expected: '"``echo `$(rm -rf /)``"' },
+                { name: 'empty string', input: '', expected: '""' },
+                { name: 'only special characters', input: '`$"', expected: '"```$`""' },
+            ];
+
+            for (const { name, input, expected } of cases) {
+                test(name, () => {
+                    assert.strictEqual(quoteShellArg(input, 'win32'), expected);
+                });
+            }
+        });
+
+        suite('posix (bash / zsh / sh / fish)', () => {
+            const cases: { name: string; input: string; expected: string }[] = [
+                { name: 'plain value', input: 'hello', expected: `'hello'` },
+                { name: 'value with spaces', input: 'hello world', expected: `'hello world'` },
+                { name: 'embedded double quote', input: 'say "hi"', expected: `'say "hi"'` },
+                { name: 'embedded single quote', input: "it's fine", expected: `'it'"'"'s fine'` },
+                { name: 'multiple single quotes', input: "''", expected: `''"'"''"'"''` },
+                { name: 'variable expansion', input: '$HOME', expected: `'$HOME'` },
+                { name: 'subshell expansion $(...)', input: '$(whoami)', expected: `'$(whoami)'` },
+                { name: 'backtick subshell', input: '`whoami`', expected: `'\`whoami\`'` },
+                { name: 'glob characters', input: '* ? [a-z]', expected: `'* ? [a-z]'` },
+                { name: 'pipe and chaining', input: 'a | b; c && d', expected: `'a | b; c && d'` },
+                { name: 'redirection', input: '> out.txt < in.txt', expected: `'> out.txt < in.txt'` },
+                { name: 'newline', input: 'line1\nline2', expected: `'line1\nline2'` },
+                { name: 'attempted bash break-out', input: `'; rm -rf / #`, expected: `''"'"'; rm -rf / #'` },
+                { name: 'backslash', input: 'a\\b', expected: `'a\\b'` },
+                { name: 'empty string', input: '', expected: `''` },
+            ];
+
+            for (const { name, input, expected } of cases) {
+                test(name, () => {
+                    assert.strictEqual(quoteShellArg(input, 'linux'), expected);
+                });
+            }
+
+            test('darwin uses identical posix quoting', () => {
+                assert.strictEqual(quoteShellArg(`it's fine`, 'darwin'), `'it'"'"'s fine'`);
+            });
         });
     });
 });
