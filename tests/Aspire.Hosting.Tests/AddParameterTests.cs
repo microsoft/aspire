@@ -656,6 +656,30 @@ public class AddParameterTests
         Assert.Equal("api-key", input.Label);
         Assert.Equal(string.Format(InteractionStrings.ParametersInputsParameterPlaceholder, "api-key"), input.Placeholder);
     }
+
+    [Fact]
+    public void ParameterWithPolyglotCustomInput_IgnoresEmptyOptionalStrings()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+
+        var parameter = appBuilder.AddParameter("worker-count")
+            .WithDescription("**Worker** count", enableMarkdown: true);
+
+        InvokeWithCustomInputForPolyglot(parameter, new Dictionary<string, object?>
+        {
+            [nameof(InteractionInput.Label)] = "",
+            [nameof(InteractionInput.Description)] = "",
+            [nameof(InteractionInput.Placeholder)] = "",
+            [nameof(InteractionInput.Value)] = ""
+        });
+
+        var input = parameter.Resource.CreateInput();
+        Assert.Equal("worker-count", input.Label);
+        Assert.Equal("**Worker** count", input.Description);
+        Assert.True(input.EnableDescriptionMarkdown);
+        Assert.Equal(string.Format(InteractionStrings.ParametersInputsParameterPlaceholder, "worker-count"), input.Placeholder);
+        Assert.Null(input.Value);
+    }
 #pragma warning restore ASPIREINTERACTION001
 
     private static void InvokeWithCustomInputForPolyglot(IResourceBuilder<ParameterResource> parameter, IReadOnlyDictionary<string, object?>? properties = null)

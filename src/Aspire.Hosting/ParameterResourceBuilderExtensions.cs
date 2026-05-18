@@ -262,12 +262,12 @@ public static class ParameterResourceBuilderExtensions
         {
             Name = parameter.Name,
             InputType = options.InputType ?? (parameter.Secret ? InputType.SecretText : InputType.Text),
-            Label = options.Label ?? parameter.Name,
-            Description = options.Description ?? parameter.Description,
+            Label = GetOptionalString(options.Label) ?? parameter.Name,
+            Description = GetOptionalString(options.Description) ?? parameter.Description,
             EnableDescriptionMarkdown = options.EnableDescriptionMarkdown ?? parameter.EnableDescriptionMarkdown,
             Options = options.Options?.Select(static option => KeyValuePair.Create(option.Key, option.Value)).ToArray(),
-            Value = options.Value,
-            Placeholder = options.Placeholder ?? string.Format(CultureInfo.CurrentCulture, InteractionStrings.ParametersInputsParameterPlaceholder, parameter.Name),
+            Value = GetOptionalString(options.Value),
+            Placeholder = GetOptionalString(options.Placeholder) ?? string.Format(CultureInfo.CurrentCulture, InteractionStrings.ParametersInputsParameterPlaceholder, parameter.Name),
             AllowCustomChoice = options.AllowCustomChoice ?? false,
             Disabled = options.Disabled ?? false,
             MaxLength = options.MaxLength
@@ -275,6 +275,8 @@ public static class ParameterResourceBuilderExtensions
 
         return builder;
     }
+
+    private static string? GetOptionalString(string? value) => string.IsNullOrEmpty(value) ? null : value;
 
     // Internal to allow ParameterProcessor to check for configured values
     // without triggering default value generation
