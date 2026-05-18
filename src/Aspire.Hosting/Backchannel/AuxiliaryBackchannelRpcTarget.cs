@@ -875,7 +875,11 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                     Options = CreateOptionsDictionary(i.Options),
                     AllowCustomChoice = i.AllowCustomChoice,
                     Disabled = i.Disabled,
-                    MaxLength = i.MaxLength
+                    MaxLength = i.MaxLength,
+                    IsDynamic = i.DynamicLoading is not null,
+                    DependsOnInputs = i.DynamicLoading?.DependsOnInputs is { Count: > 0 } deps
+                        ? deps.ToArray()
+                        : null
                 }).ToArray(),
                 Visibility = c.Visibility.ToString(),
                 State = c.State.ToString()
