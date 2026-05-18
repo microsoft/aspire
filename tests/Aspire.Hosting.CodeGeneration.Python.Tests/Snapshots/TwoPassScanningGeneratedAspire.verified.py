@@ -2074,16 +2074,16 @@ class AbstractConfigurationSection:
         return typing.cast(str, result)
 
     @_uncached_property
-    def value(self) -> str:
+    def value(self) -> str | None:
         """Gets the Value property"""
         result = self._client.invoke_capability(
             'Microsoft.Extensions.Configuration/IConfigurationSection.value',
             {'context': self._handle}
         )
-        return typing.cast(str, result)
+        return typing.cast(str | None, result)
 
     @value.setter
-    def value(self, value: str) -> None:
+    def value(self, value: str | None) -> None:
         """Sets the Value property"""
         self._client.invoke_capability(
             'Microsoft.Extensions.Configuration/IConfigurationSection.setValue',
@@ -3591,13 +3591,13 @@ class ContainerMountAnnotation:
         return self._handle
 
     @_cached_property
-    def source(self) -> str:
+    def source(self) -> str | None:
         """Gets the Source property"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.ApplicationModel/ContainerMountAnnotation.source',
             {'context': self._handle}
         )
-        return typing.cast(str, result)
+        return typing.cast(str | None, result)
 
     @_cached_property
     def target(self) -> str:

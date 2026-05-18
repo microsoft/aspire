@@ -1,4 +1,4 @@
-// aspire.ts - Capability-based Aspire SDK
+﻿// aspire.ts - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -2194,7 +2194,7 @@ class ContainerImageReferenceImpl implements ContainerImageReference {
 export interface ContainerMountAnnotation {
     toJSON(): MarshalledHandle;
     /** Gets the source of the bind mount or name if a volume. Can be `null` if the mount is an anonymous volume. */
-    source(): Promise<string>;
+    source(): Promise<string | null>;
     /** Gets the target of the mount. */
     target(): Promise<string>;
     /** Gets the type of the mount. */
@@ -2214,8 +2214,8 @@ class ContainerMountAnnotationImpl implements ContainerMountAnnotation {
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
-    async source(): Promise<string> {
-        return await this._client.invokeCapability<string>(
+    async source(): Promise<string | null> {
+        return await this._client.invokeCapability<string | null>(
             'Aspire.Hosting.ApplicationModel/ContainerMountAnnotation.source',
             { context: this._handle }
         );
@@ -7296,8 +7296,8 @@ export interface ConfigurationSection {
     path(): Promise<string>;
     /** Gets the Value property */
     value: {
-        get: () => Promise<string>;
-        set: (value: string) => Promise<void>;
+        get: () => Promise<string | null>;
+        set: (value: string | null) => Promise<void>;
     };
 }
 
@@ -7327,13 +7327,13 @@ class ConfigurationSectionImpl implements ConfigurationSection {
     }
 
     value = {
-        get: async (): Promise<string> => {
-            return await this._client.invokeCapability<string>(
+        get: async (): Promise<string | null> => {
+            return await this._client.invokeCapability<string | null>(
                 'Microsoft.Extensions.Configuration/IConfigurationSection.value',
                 { context: this._handle }
             );
         },
-        set: async (value: string): Promise<void> => {
+        set: async (value: string | null): Promise<void> => {
             await this._client.invokeCapability<void>(
                 'Microsoft.Extensions.Configuration/IConfigurationSection.setValue',
                 { context: this._handle, value }
