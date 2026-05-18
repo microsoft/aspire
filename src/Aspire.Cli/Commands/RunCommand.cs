@@ -549,9 +549,9 @@ internal sealed class RunCommand : BaseCommand
         TimeSpan delay,
         CancellationToken cancellationToken)
     {
-        // The backchannel has already connected before this method is called, so startup spans have
-        // been produced. The optional delay is only a warmup window for scenarios that want extra
-        // post-start resource activity, not a telemetry flush mechanism.
+        // The AppHost exports profiling spans through the batched OTLP exporter. Keep the process
+        // alive briefly after startup so late server-side spans (for example dashboard readiness)
+        // have time to flush before the CLI requests shutdown and exports the capture archive.
         if (delay > TimeSpan.Zero)
         {
             var delayTask = Task.Delay(delay, cancellationToken);

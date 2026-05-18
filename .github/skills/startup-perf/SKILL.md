@@ -61,7 +61,7 @@ If `--capture-profile-output` is omitted, the CLI writes `aspire-profile-<timest
 | --- | --- |
 | `--capture-profile` | Hidden recursive root option that enables self-profile capture for any Aspire command. |
 | `--capture-profile-output PATH` | Output zip path. Relative paths are rooted at the current working directory. |
-| `--capture-profile-delay SECONDS` | Optional warmup delay before stopping long-lived `run`/`start` commands. Defaults to 0 seconds. Use only when you intentionally want additional post-start resource activity in the capture. |
+| `--capture-profile-delay SECONDS` | Optional warmup delay before stopping long-lived `run`/`start` commands. Defaults to 5 seconds so AppHost-side spans have time to flush before shutdown. Increase it when you intentionally want additional post-start resource activity in the capture. |
 
 ## Output Artifacts
 

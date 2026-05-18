@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Commands;
 using Aspire.Cli.Profiling;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Telemetry;
@@ -65,7 +66,7 @@ public class ProfileCaptureOptionsTests(ITestOutputHelper outputHelper)
         Assert.StartsWith(workspace.WorkspaceRoot.FullName, options.OutputPath, StringComparison.Ordinal);
         Assert.EndsWith(".zip", options.OutputPath, StringComparison.Ordinal);
         Assert.Contains("aspire-profile-", Path.GetFileName(options.OutputPath), StringComparison.Ordinal);
-        Assert.Equal(TimeSpan.Zero, options.StartupDelay);
+        Assert.Equal(TimeSpan.FromSeconds(RootCommand.DefaultCaptureProfileDelaySeconds), options.StartupDelay);
     }
 
     [Fact]

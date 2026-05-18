@@ -22,8 +22,6 @@ internal sealed record ProfileCaptureOptions(
     string SessionId,
     TimeSpan StartupDelay)
 {
-    private const int DefaultStartupDelaySeconds = 0;
-
     public static ProfileCaptureOptions? TryCreate(
         IReadOnlyList<string> args,
         TimeProvider timeProvider,
@@ -42,7 +40,7 @@ internal sealed record ProfileCaptureOptions(
         var captureProfileOutputOption = new Option<string?>(AspireRootCommand.CaptureProfileOutputOption.Name);
         var captureProfileDelayOption = new Option<int>(AspireRootCommand.CaptureProfileDelayOption.Name)
         {
-            DefaultValueFactory = _ => DefaultStartupDelaySeconds
+            DefaultValueFactory = _ => AspireRootCommand.DefaultCaptureProfileDelaySeconds
         };
         var bootstrapCommand = new BootstrapRootCommand
         {
