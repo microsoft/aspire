@@ -9,9 +9,10 @@
 //
 // Strategy:
 // 1. Copy the scaffolded `eslint.config.mjs` + `tsconfig.apphost.json` from
-//    `src/Aspire.Hosting.CodeGeneration.TypeScript/Resources/` into a per-test
-//    fixture directory located *inside* this test project so node_modules
-//    resolution can find `eslint` and `typescript-eslint`.
+//    the ts-starter template (the single physical source the codegen
+//    project also embeds) into a per-test fixture directory located *inside*
+//    this test project so node_modules resolution can find `eslint` and
+//    `typescript-eslint`.
 // 2. Drop a fixture `apphost.ts` containing the scenario under test.
 // 3. Invoke `ESLint` programmatically with `cwd` set to the fixture dir so the
 //    flat config is loaded exactly as the scaffolded project would load it.
@@ -32,17 +33,19 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const projectDir = resolve(fileURLToPath(import.meta.url), '..', '..');
-const resourcesDir = resolve(
+const scaffoldSourceDir = resolve(
     projectDir,
     '..',
     '..',
     'src',
-    'Aspire.Hosting.CodeGeneration.TypeScript',
-    'Resources'
+    'Aspire.Cli',
+    'Templating',
+    'Templates',
+    'ts-starter'
 );
 
-const eslintConfigPath = join(resourcesDir, 'eslint.config.mjs');
-const appHostTsConfigPath = join(resourcesDir, 'tsconfig.apphost.json');
+const eslintConfigPath = join(scaffoldSourceDir, 'eslint.config.mjs');
+const appHostTsConfigPath = join(scaffoldSourceDir, 'tsconfig.apphost.json');
 
 // Per-test fixtures live under .fixtures/ inside the JsTests project so the
 // node_modules lookup chain finds the eslint + typescript-eslint packages
@@ -84,8 +87,8 @@ describe('scaffolded eslint.config.mjs', () => {
     let fixtureDir: string;
 
     beforeAll(() => {
-        // Confirm the scaffold resource files actually exist before we promise
-        // regression coverage; this fails loudly if the Resources/ layout moves.
+        // Confirm the scaffold source files actually exist before we promise
+        // regression coverage; this fails loudly if the ts-starter template moves.
         expect(existsSync(eslintConfigPath)).toBe(true);
         expect(existsSync(appHostTsConfigPath)).toBe(true);
     });
