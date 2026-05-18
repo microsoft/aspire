@@ -10,6 +10,9 @@ using System.Net.Sockets;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Utils;
+// Type alias keeps the public ContainerTargetPlatform enum reachable here
+// without dragging in the rest of the Aspire.Hosting.Publishing namespace.
+using ContainerTargetPlatform = Aspire.Hosting.Publishing.ContainerTargetPlatform;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -294,7 +297,7 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         var dcpContainer = cr.DcpResource;
         var modelContainer = cr.ModelResource;
 
-        await ApplyBuildArgumentsAsync(dcpContainer, cr.ModelResource, _executionContext.ServiceProvider, cToken).ConfigureAwait(false);
+        await ApplyBuildArgumentsAsync(dcpContainer, cr.ModelResource, _executionContext, logger, cToken).ConfigureAwait(false);
 
         var spec = dcpContainer.Spec;
 
@@ -874,11 +877,11 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         return (runArgs, failedToApplyArgs);
     }
 
-    private static async Task ApplyBuildArgumentsAsync(Container dcpContainerResource, IResource modelContainerResource, IServiceProvider serviceProvider, CancellationToken cancellationToken)
+    private static async Task ApplyBuildArgumentsAsync(Container dcpContainerResource, IResource modelContainerResource, DistributedApplicationExecutionContext executionContext, ILogger logger, CancellationToken cancellationToken)
     {
         if (modelContainerResource.Annotations.OfType<DockerfileBuildAnnotation>().SingleOrDefault() is { } dockerfileBuildAnnotation)
         {
-            await DockerfileHelper.ExecuteDockerfileFactoryAsync(dockerfileBuildAnnotation, modelContainerResource, serviceProvider, cancellationToken).ConfigureAwait(false);
+            await DockerfileHelper.ExecuteDockerfileFactoryAsync(dockerfileBuildAnnotation, modelContainerResource, executionContext.ServiceProvider, cancellationToken).ConfigureAwait(false);
 
             var dcpBuildArgs = new List<EnvVar>();
 
@@ -925,8 +928,43 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                 Args = dcpBuildArgs,
                 Secrets = dcpBuildSecrets
             };
+
+#pragma warning disable ASPIREPIPELINES003 // ContainerBuildOptions APIs are experimental.
+            var buildOptionsContext = await modelContainerResource.ProcessContainerBuildOptionsCallbackAsync(
+                executionContext.ServiceProvider,
+                logger,
+                executionContext,
+                cancellationToken).ConfigureAwait(false);
+
+            if (buildOptionsContext.TargetPlatform is { } targetPlatform)
+            {
+                dcpContainerResource.Spec.Build.Platform = ToDcpPlatformString(targetPlatform);
+            }
+#pragma warning restore ASPIREPIPELINES003
         }
     }
+
+    // Local to keep this file free of a using on Aspire.Hosting.Publishing. Behavior matches
+    // ToRuntimePlatformString in Publishing/ResourceContainerImageManager.cs.
+#pragma warning disable ASPIREPIPELINES003 // ContainerTargetPlatform is experimental.
+    private static string ToDcpPlatformString(ContainerTargetPlatform platform)
+    {
+        var parts = new List<string>();
+        if (platform.HasFlag(ContainerTargetPlatform.LinuxAmd64)) { parts.Add("linux/amd64"); }
+        if (platform.HasFlag(ContainerTargetPlatform.LinuxArm64)) { parts.Add("linux/arm64"); }
+        if (platform.HasFlag(ContainerTargetPlatform.LinuxArm)) { parts.Add("linux/arm"); }
+        if (platform.HasFlag(ContainerTargetPlatform.Linux386)) { parts.Add("linux/386"); }
+        if (platform.HasFlag(ContainerTargetPlatform.WindowsAmd64)) { parts.Add("windows/amd64"); }
+        if (platform.HasFlag(ContainerTargetPlatform.WindowsArm64)) { parts.Add("windows/arm64"); }
+
+        if (parts.Count == 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(platform), platform, "Unknown container target platform");
+        }
+
+        return string.Join(",", parts);
+    }
+#pragma warning restore ASPIREPIPELINES003
 
     private static List<ContainerPortSpec> BuildContainerPorts(RenderedModelResource<Container> cr)
     {
