@@ -272,13 +272,6 @@ internal sealed class UpdateCommand : BaseCommand
                 }
             }
         }
-        catch (UnauthorizedAccessException ex)
-        {
-            var message = Markup.Escape(ex.Message);
-            Telemetry.RecordError(message, ex);
-            InteractionService.DisplayError(message);
-            return ExitCodeConstants.FailedToUpgradeProject;
-        }
         catch (ProjectUpdaterException ex)
         {
             var message = Markup.Escape(ex.Message);
