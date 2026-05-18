@@ -348,7 +348,7 @@ suite('Dotnet Debugger Extension Tests', () => {
         assert.ok(debugConfig.serverReadyAction);
         assert.ok('uriFormat' in debugConfig.serverReadyAction);
         assert.strictEqual(debugConfig.serverReadyAction.uriFormat, 'https://localhost:5001');
-        assert.strictEqual(debugConfig.serverReadyAction.pattern, '\\bNow listening on:\\s+(https?://\\S+)');
+        assert.strictEqual(debugConfig.serverReadyAction.pattern, '\\bNow listening on:\\s+https://localhost:5001');
 
         // cleanup
         fs.rmSync(tempDir, { recursive: true, force: true });
