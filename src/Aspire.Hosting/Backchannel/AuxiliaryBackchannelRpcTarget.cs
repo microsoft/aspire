@@ -2,13 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading.Channels;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Diagnostics;
+using Aspire.Shared;
 using Aspire.Shared.ConsoleLogs;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -69,44 +69,12 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         return new GetAppHostInfoResponse
         {
             Pid = legacyInfo.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            AspireHostVersion = GetAspireHostVersion(),
+            AspireHostVersion = AssemblyVersionHelper.GetDisplayVersion(typeof(AuxiliaryBackchannelRpcTarget).Assembly) ?? "unknown",
             AppHostPath = legacyInfo.AppHostPath,
             CliProcessId = legacyInfo.CliProcessId,
-            StartedAt = legacyInfo.StartedAt
+            StartedAt = legacyInfo.StartedAt,
+            CliLogFilePath = legacyInfo.CliLogFilePath
         };
-    }
-
-    private static string GetAspireHostVersion()
-    {
-        return GetDisplayVersion(typeof(AuxiliaryBackchannelRpcTarget).Assembly) ?? "unknown";
-    }
-
-    internal static string? GetDisplayVersion(Assembly assembly)
-    {
-        // The package version is stamped into the assembly's AssemblyInformationalVersionAttribute at build time, followed by a '+' and
-        // the commit hash, e.g.:
-        // [assembly: AssemblyInformationalVersion("8.0.0-preview.2.23604.7+e7762a46d31842884a0bc72c92e07ba700c99bf5")]
-
-        var version = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
-
-        if (version is not null)
-        {
-            var plusIndex = version.IndexOf('+');
-
-            if (plusIndex > 0)
-            {
-                return version[..plusIndex];
-            }
-
-            return version;
-        }
-
-        // Fallback to the file version, which is based on the CI build number, and then fallback to the assembly version, which is
-        // product stable version, e.g. 8.0.0.0
-        version = assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version
-            ?? assembly.GetCustomAttribute<AssemblyVersionAttribute>()?.Version;
-
-        return version;
     }
 
     /// <summary>
@@ -695,7 +663,8 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             ProcessId = Environment.ProcessId,
             CliProcessId = cliProcessId,
             StartedAt = new DateTimeOffset(Process.GetCurrentProcess().StartTime),
-            CliStartedAt = cliStartedAt
+            CliStartedAt = cliStartedAt,
+            CliLogFilePath = configuration[KnownConfigNames.CliLogFilePath]
         });
     }
 

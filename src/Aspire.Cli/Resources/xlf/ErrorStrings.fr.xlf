@@ -102,6 +102,11 @@
         <target state="translated">Le jeton d’extension Aspire doit être défini si ASPIRE_EXTENSION_ENDPOINT est défini. Veuillez vérifier que ASPIRE_EXTENSION_TOKEN est défini</target>
         <note>Do not localize ASPIRE_EXTENSION_TOKEN and ASPIRE_EXTENSION_ENDPOINT</note>
       </trans-unit>
+      <trans-unit id="FailedToParsePackageSearchResults">
+        <source>Failed to parse package search results.</source>
+        <target state="new">Failed to parse package search results.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="FailedToParseTemplateVersionFromStdout">
         <source>Failed to parse template version from stdout.</source>
         <target state="translated">Échec de l’analyse de la version du modèle à partir de stdout.</target>

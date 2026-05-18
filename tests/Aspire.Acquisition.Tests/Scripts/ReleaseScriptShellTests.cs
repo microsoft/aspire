@@ -213,4 +213,47 @@ public class ReleaseScriptShellTests(ITestOutputHelper testOutput)
             File.Exists(configPath),
             $"install.sh must not create global aspire.config.json; found at {configPath}.");
     }
+
+    // Under --dry-run the release-route script must NOT write the script-route
+    // sidecar at <prefix>/.aspire-install.json. The describe-but-do-not-do
+    // contract requires the script to print a DRYRUN message naming the path it
+    // would write, then return without touching the filesystem. A previous
+    // implementation wrote the sidecar even under --dry-run, which can leave a
+    // stale source=script marker visible to BundleService when the install
+    // was never actually performed.
+    [Fact]
+    public async Task DryRun_DoesNotWriteScriptRouteSidecar_AndAnnouncesPath()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+        var result = await cmd.ExecuteAsync("--dry-run", "--quality", "release", "--skip-path");
+
+        result.EnsureSuccessful();
+
+        var sidecarPath = Path.Combine(env.MockHome, ".aspire", "bin", ".aspire-install.json");
+        Assert.Contains($"DRYRUN: would write route sidecar to: {sidecarPath}", result.Output);
+        Assert.False(
+            File.Exists(sidecarPath),
+            $"Expected no sidecar to be written under --dry-run, but found one at {sidecarPath}");
+    }
+
+    // The release-route script must not mutate route sidecars under --dry-run,
+    // regardless of the configured quality. This guards the dry-run contract on
+    // the 'dev' quality path, which historically took a slightly different
+    // code branch in the script body.
+    [Fact]
+    public async Task DryRun_DevQuality_DoesNotWriteScriptRouteSidecar()
+    {
+        using var env = new TestEnvironment();
+        using var cmd = new ScriptToolCommand(s_scriptPath, env, _testOutput);
+        var result = await cmd.ExecuteAsync("--dry-run", "--quality", "dev", "--skip-path");
+
+        result.EnsureSuccessful();
+
+        var sidecarPath = Path.Combine(env.MockHome, ".aspire", "bin", ".aspire-install.json");
+        Assert.Contains($"DRYRUN: would write route sidecar to: {sidecarPath}", result.Output);
+        Assert.False(
+            File.Exists(sidecarPath),
+            $"Expected no sidecar to be written under --dry-run, but found one at {sidecarPath}");
+    }
 }

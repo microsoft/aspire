@@ -5,6 +5,11 @@
 # 2. Publishes packages to NuGet.org
 # 3. Promotes the build to the Aspire GA channel via darc
 # 4. Submits WinGet manifests and Homebrew cask PRs
+# 5. Dispatches the release-github-tasks GitHub Actions workflow as the
+#    aspire-repo-bot GitHub App (tag, GitHub Release, merge-back PR,
+#    baseline PR) and waits for it to complete
+# 6. Uploads aspire-cli-* archives from the source build's BlobArtifacts
+#    onto the GitHub Release as the aspire-repo-bot
 #
 # For full documentation, see: docs/release-process.md
 
@@ -42,6 +47,40 @@ parameters:
     displayName: 'Skip Homebrew Publishing (set true if already completed)'
     type: boolean
     default: false
+
+  # Inputs required to dispatch the release-github-tasks workflow at the end of
+  # the pipeline. commit_sha and release_branch are derived from the source
+  # build resource. release_version is provided explicitly; is_prerelease
+  # defaults to false because preview releases are rare.
+  - name: ReleaseVersion
+    displayName: 'Release Version (e.g. 13.0.0). Used as the v<version> tag.'
+    type: string
+
+  - name: IsPrerelease
+    displayName: 'Is this a preview / prerelease?'
+    type: boolean
+    default: false
+
+  - name: SkipGitHubTasks
+    displayName: 'Skip GitHub Tasks dispatch (set true if already completed)'
+    type: boolean
+    default: false
+
+  - name: SkipReleaseAssets
+    displayName: 'Skip CLI asset upload to GitHub Release (set true if already completed)'
+    type: boolean
+    default: false
+
+  # Ref used when invoking `workflow_dispatch` against release-github-tasks.yml.
+  # GitHub loads the workflow file *from this ref*, so it controls which version
+  # of the workflow runs. The branch/commit being released is passed separately
+  # via the `release_branch` and `commit_sha` workflow inputs, so this ref only
+  # affects the workflow source — not what gets tagged or released. Defaults to
+  # 'main' so workflow fixes don't require backporting to every release branch.
+  - name: GitHubTasksWorkflowRef
+    displayName: 'Ref to dispatch release-github-tasks.yml from (workflow source only)'
+    type: string
+    default: 'main'
 
 variables:
   - template: /eng/pipelines/common-variables.yml@self
@@ -507,6 +546,22 @@ extends:
                   }
                   Write-Host "║ WinGet:         (runs in parallel after this job)"
                   Write-Host "║ Homebrew:       (runs in parallel after this job)"
+                  Write-Host "║ GitHub Tasks:   ${{ parameters.SkipGitHubTasks }}" -NoNewline
+                  if ("${{ parameters.SkipGitHubTasks }}" -eq "true") {
+                    Write-Host " (SKIPPED)"
+                  } elseif ("${{ parameters.DryRun }}" -eq "true") {
+                    Write-Host " (dispatched after Release stage; dry_run=true forwarded)"
+                  } else {
+                    Write-Host " (dispatched after Release stage)"
+                  }
+                  Write-Host "║ Release Assets: ${{ parameters.SkipReleaseAssets }}" -NoNewline
+                  if ("${{ parameters.SkipReleaseAssets }}" -eq "true") {
+                    Write-Host " (SKIPPED)"
+                  } elseif ("${{ parameters.DryRun }}" -eq "true") {
+                    Write-Host " (verify only; no upload in dry-run)"
+                  } else {
+                    Write-Host " (uploaded after GitHub Tasks job)"
+                  }
                   Write-Host "╚═══════════════════════════════════════════════════════════════╝"
                   Write-Host ""
                 displayName: 'Print Summary'
@@ -566,3 +621,180 @@ extends:
                 parameters:
                   caskArtifactPath: $(Pipeline.Workspace)/homebrew/homebrew-cask-stable
                   dryRun: ${{ parameters.DryRun }}
+
+      # ===== STAGE 3: GITHUB TASKS =====
+      # Two responsibilities, both running as the aspire-repo-bot GitHub App:
+      #
+      #   1. DispatchGitHubTasksJob — dispatches the release-github-tasks
+      #      GitHub Actions workflow (tag, GitHub Release, merge-back PR,
+      #      baseline PR) and polls the run to completion. Fails the pipeline
+      #      if the workflow doesn't succeed.
+      #
+      #   2. PublishReleaseAssetsJob — downloads aspire-cli-* archives from
+      #      the signed source build's BlobArtifacts, verifies their SHA512s,
+      #      and uploads them as assets on the GitHub release that the
+      #      dispatch job just created.
+      #
+      # Each job has its own skip flag (SkipGitHubTasks / SkipReleaseAssets)
+      # so partial-failure re-runs can recover either piece independently:
+      #
+      #   | SkipGitHubTasks | SkipReleaseAssets | Behavior                        |
+      #   |-----------------|-------------------|---------------------------------|
+      #   | false           | false             | Full path (default release)     |
+      #   | true            | false             | Skip dispatch, upload assets    |
+      #   | true            | true              | Skip the whole stage            |
+      #   | false           | true              | Dispatch only, no asset upload  |
+      #
+      # DryRun behavior: this stage still runs when DryRun=true. DryRun is
+      # propagated to the GH workflow as dry_run=true (keeps it from
+      # creating tags/releases/PRs) and to the asset script (downloads and
+      # verifies SHA512s but skips the gh release upload). This lets a
+      # release manager validate the full AzDO → GitHub path end-to-end
+      # without performing a real release.
+      - stage: GitHubTasks
+        displayName: 'Dispatch GitHub Release Tasks'
+        dependsOn: Release
+        condition: |
+          and(
+            in(dependencies.Release.result, 'Succeeded', 'SucceededWithIssues'),
+            or(
+              eq('${{ parameters.SkipGitHubTasks }}', 'false'),
+              eq('${{ parameters.SkipReleaseAssets }}', 'false')
+            )
+          )
+        jobs:
+          - job: DispatchGitHubTasksJob
+            displayName: 'Dispatch and Wait for release-github-tasks workflow'
+            condition: eq('${{ parameters.SkipGitHubTasks }}', 'false')
+            timeoutInMinutes: 90
+            pool:
+              name: NetCore1ESPool-Internal
+              image: windows.vs2026preview.scout.amd64
+              os: windows
+            steps:
+              - checkout: self
+                displayName: 'Checkout repo (for dispatch script)'
+                fetchDepth: 1
+
+              - powershell: |
+                  # Derive the GitHub workflow inputs from the source build resource.
+                  # sourceBranch is in refs/heads/<name> form; strip the prefix.
+                  $sourceBranch = "$(resources.pipeline.aspire-build.sourceBranch)"
+                  $releaseBranch = $sourceBranch -replace '^refs/heads/', ''
+                  $commitSha = "$(resources.pipeline.aspire-build.sourceCommit)"
+
+                  Write-Host "Source branch: $sourceBranch -> release_branch: $releaseBranch"
+                  Write-Host "Source commit: $commitSha"
+
+                  if ([string]::IsNullOrWhiteSpace($commitSha) -or $commitSha.Length -ne 40) {
+                    Write-Error "Expected a 40-char commit SHA from the source build, got '$commitSha'"
+                    exit 1
+                  }
+
+                  Write-Host "##vso[task.setvariable variable=ReleaseBranchDerived]$releaseBranch"
+                  Write-Host "##vso[task.setvariable variable=CommitShaDerived]$commitSha"
+                displayName: 'Derive workflow inputs from source build'
+
+              # pwsh (not powershell): Get-AspireBotInstallationToken.ps1 uses
+              # RSA.ImportFromPem, which is only available in .NET Core 3.0+ / .NET 5+.
+              # The legacy `powershell:` shorthand runs Windows PowerShell 5.1 on
+              # .NET Framework, which doesn't have that API and would fail at runtime.
+              - pwsh: |
+                  $inputs = @{
+                    release_version     = "${{ parameters.ReleaseVersion }}"
+                    commit_sha          = "$(CommitShaDerived)"
+                    release_branch      = "$(ReleaseBranchDerived)"
+                    is_prerelease       = ([System.Convert]::ToBoolean("${{ parameters.IsPrerelease }}")).ToString().ToLowerInvariant()
+                    dry_run             = ([System.Convert]::ToBoolean("${{ parameters.DryRun }}")).ToString().ToLowerInvariant()
+                    # The AzDO pipeline owns idempotency for the *AzDO* side via its
+                    # own Skip* parameters. The GH workflow skip_* flags stay at
+                    # their defaults (false). If a GH-side step needs to be
+                    # skipped, the release manager can run the workflow manually
+                    # after setting SkipGitHubTasks=true on the AzDO re-run.
+                    skip_tagging        = "false"
+                    skip_github_release = "false"
+                    skip_merge_pr       = "false"
+                    skip_baseline_pr    = "false"
+                  }
+
+                  & "$(Build.SourcesDirectory)/eng/pipelines/scripts/dispatch-release-github-tasks.ps1" `
+                    -AppId         "$env:ASPIRE_BOT_APP_ID" `
+                    -PrivateKeyPem "$env:ASPIRE_BOT_PRIVATE_KEY" `
+                    -Owner         'microsoft' `
+                    -Repo          'aspire' `
+                    -WorkflowFile  'release-github-tasks.yml' `
+                    -Ref           '${{ parameters.GitHubTasksWorkflowRef }}' `
+                    -Inputs        $inputs
+                displayName: 'Dispatch release-github-tasks and wait'
+                env:
+                  # Secrets must be mapped explicitly into env so PowerShell can
+                  # read them; AzDO doesn't expose secret variables to scripts
+                  # by default.
+                  ASPIRE_BOT_APP_ID: $(aspire-bot-app-id)
+                  ASPIRE_BOT_PRIVATE_KEY: $(aspire-bot-private-key)
+
+              - powershell: |
+                  Write-Host ""
+                  Write-Host "Dispatched run: $env:DISPATCHED_RUN_URL"
+                displayName: 'Print dispatched run URL'
+                condition: always()
+                env:
+                  DISPATCHED_RUN_URL: $(DispatchedRunUrl)
+
+          # Upload aspire-cli-* archives from the signed source build's
+          # BlobArtifacts onto the GitHub release. Depends on the dispatch
+          # job so the release exists before we try to attach assets to it.
+          # When SkipGitHubTasks=true (re-run after the GH workflow already
+          # ran), we still want to try the upload — dependsOn declares only
+          # ordering, and the conditions above let this job run on its own
+          # when its sibling is skipped.
+          - job: PublishReleaseAssetsJob
+            displayName: 'Upload CLI Assets to GitHub Release'
+            dependsOn: DispatchGitHubTasksJob
+            condition: |
+              and(
+                eq('${{ parameters.SkipReleaseAssets }}', 'false'),
+                in(dependencies.DispatchGitHubTasksJob.result, 'Succeeded', 'SucceededWithIssues', 'Skipped')
+              )
+            timeoutInMinutes: 30
+            pool:
+              name: NetCore1ESPool-Internal
+              image: windows.vs2026preview.scout.amd64
+              os: windows
+            steps:
+              - checkout: self
+                displayName: 'Checkout repo (for upload script)'
+                fetchDepth: 1
+
+              # Download aspire-cli-* archives from the source build. Matches
+              # the existing PackageArtifacts/winget/homebrew download pattern.
+              - download: aspire-build
+                displayName: 'Download aspire-cli-* from Source Build'
+                artifact: BlobArtifacts
+                patterns: 'aspire-cli-*'
+
+              # pwsh (not powershell): publish-release-cli-assets.ps1 calls
+              # Get-AspireBotInstallationToken.ps1, which uses RSA.ImportFromPem
+              # — only available in .NET Core 3.0+ / .NET 5+, not in the .NET
+              # Framework runtime backing the legacy `powershell:` shorthand.
+              - pwsh: |
+                  $dryRun = [System.Convert]::ToBoolean("${{ parameters.DryRun }}")
+                  $tag    = "v${{ parameters.ReleaseVersion }}"
+
+                  $assetsDir = Join-Path "$(Pipeline.Workspace)" 'aspire-build/BlobArtifacts'
+                  Write-Host "Assets dir: $assetsDir"
+
+                  # Use a custom name — $args is an automatic variable in PowerShell.
+                  $scriptArgs = @(
+                    '-AssetsDir',    $assetsDir,
+                    '-Tag',          $tag,
+                    '-AppId',        $env:ASPIRE_BOT_APP_ID,
+                    '-PrivateKeyPem',$env:ASPIRE_BOT_PRIVATE_KEY
+                  )
+                  if ($dryRun) { $scriptArgs += '-DryRun' }
+
+                  & "$(Build.SourcesDirectory)/eng/pipelines/scripts/publish-release-cli-assets.ps1" @scriptArgs
+                displayName: 'Verify SHA512s and upload to GitHub Release'
+                env:
+                  ASPIRE_BOT_APP_ID: $(aspire-bot-app-id)
+                  ASPIRE_BOT_PRIVATE_KEY: $(aspire-bot-private-key)

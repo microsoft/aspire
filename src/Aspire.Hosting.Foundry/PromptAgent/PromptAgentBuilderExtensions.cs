@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable OPENAI001 // Responses API is experimental
+#pragma warning disable ASPIREINTERACTION001
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
@@ -9,7 +10,6 @@ using Aspire.Hosting.Foundry;
 using Azure.AI.Extensions.OpenAI;
 using Azure.AI.Projects;
 using Azure.Identity;
-using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting;
 
@@ -77,19 +77,7 @@ public static class PromptAgentBuilderExtensions
             displayName: "Send Message",
             executeCommand: async ctx =>
             {
-                var interactionService = ctx.ServiceProvider.GetRequiredService<IInteractionService>();
-                var inputResult = await interactionService.PromptInputAsync(
-                    title: "Prompt Agent",
-                    message: $"Enter a message to send to '{name}'.",
-                    inputLabel: "Message",
-                    placeHolder: "Hello, what can you do?",
-                    cancellationToken: ctx.CancellationToken
-                ).ConfigureAwait(false);
-
-                if (inputResult.Canceled || string.IsNullOrWhiteSpace(inputResult.Data.Value))
-                {
-                    return new ExecuteCommandResult { Success = true };
-                }
+                var message = ctx.Arguments.GetString("message")!;
 
                 try
                 {
@@ -102,36 +90,13 @@ public static class PromptAgentBuilderExtensions
                     var projectClient = new AIProjectClient(new Uri(endpoint), new DefaultAzureCredential());
                     var agentRef = new AgentReference(name: name);
                     var responseClient = projectClient.ProjectOpenAIClient.GetProjectResponsesClientForAgent(agentRef);
-                    var response = await responseClient.CreateResponseAsync(inputResult.Data.Value, cancellationToken: ctx.CancellationToken).ConfigureAwait(false);
-                    var outputText = response.Value.GetOutputText();
+                    var response = await responseClient.CreateResponseAsync(message, cancellationToken: ctx.CancellationToken).ConfigureAwait(false);
 
-                    await interactionService.PromptMessageBoxAsync(
-                        title: $"Response from '{name}'",
-                        message: outputText,
-                        options: new()
-                        {
-                            Intent = MessageIntent.Success,
-                            EnableMessageMarkdown = true,
-                            PrimaryButtonText = "OK"
-                        },
-                        cancellationToken: ctx.CancellationToken
-                    ).ConfigureAwait(false);
-
-                    return new ExecuteCommandResult { Success = true };
+                    return CommandResults.Success("Agent response received.", response.Value.GetOutputText(), CommandResultFormat.Markdown, displayImmediately: true);
                 }
                 catch (Exception ex)
                 {
-                    await interactionService.PromptMessageBoxAsync(
-                        title: "Error",
-                        message: $"Failed to invoke agent: {ex.Message}",
-                        options: new()
-                        {
-                            Intent = MessageIntent.Error,
-                            PrimaryButtonText = "OK"
-                        },
-                        cancellationToken: ctx.CancellationToken
-                    ).ConfigureAwait(false);
-                    return new ExecuteCommandResult { Success = false };
+                    return CommandResults.Failure($"Failed to invoke agent: {ex.Message}");
                 }
             },
             commandOptions: new()
@@ -139,6 +104,18 @@ public static class PromptAgentBuilderExtensions
                 IconName = "Agents",
                 IconVariant = IconVariant.Regular,
                 IsHighlighted = true,
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "message",
+                        InputType = InputType.Text,
+                        Label = "Message",
+                        Required = true,
+                        Placeholder = "Hello, what can you do?",
+                        Description = $"Enter a message to send to '{name}'."
+                    }
+                ]
             }
         );
 

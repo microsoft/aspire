@@ -30,7 +30,7 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Theory]
@@ -48,7 +48,7 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
     }
 
     [Fact]
@@ -74,7 +74,7 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         // Parse table data rows for assertion
         var dataRows = ParseTableDataRows(outputWriter.Logs);
@@ -125,7 +125,7 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         // Parse table data rows for assertion
         var dataRows = ParseTableDataRows(outputWriter.Logs);
@@ -241,7 +241,7 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         var dataRows = ParseTableDataRows(outputWriter.Logs);
         Assert.Single(dataRows);
         Assert.Contains("frontend", dataRows[0][1]);
@@ -265,7 +265,7 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
         Assert.Equal(TelemetryCommandStrings.DashboardUrlAndAppHostExclusive, errorMessage);
     }
@@ -303,7 +303,7 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.DashboardFailure, exitCode);
+        Assert.Equal(CliExitCodes.DashboardFailure, exitCode);
         var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
         Assert.Equal(TelemetryCommandStrings.DashboardAuthFailed, errorMessage);
     }
@@ -386,7 +386,7 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonLine = outputWriter.Logs.Single(l => l.TrimStart().StartsWith('['));
         var formattedJson = TelemetryTestHelper.FormatJson(jsonLine);
@@ -470,7 +470,7 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonLine = outputWriter.Logs.Single(l => l.TrimStart().StartsWith('['));
         Assert.Equal("[]", jsonLine);
@@ -519,7 +519,7 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.NotNull(capturedUrl);
         Assert.Contains("search=frontend", capturedUrl);
     }

@@ -29,7 +29,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         
         // Help should return success
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -53,7 +53,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var (json, console) = Assert.Single(interactionService.DisplayedRawText);
         Assert.Equal(ConsoleOutput.Standard, console);
@@ -95,7 +95,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var (json, _) = Assert.Single(interactionService.DisplayedRawText);
         using var document = JsonDocument.Parse(json);
@@ -155,7 +155,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(runnerCalled);
 
         var (json, _) = Assert.Single(interactionService.DisplayedRawText);
@@ -201,7 +201,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(versionLookupCalled);
 
         var (json, _) = Assert.Single(interactionService.DisplayedRawText);
@@ -240,7 +240,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(versionLookupCalled);
 
         var (json, _) = Assert.Single(interactionService.DisplayedRawText);
@@ -278,7 +278,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var (json, _) = Assert.Single(interactionService.DisplayedRawText);
         using var document = JsonDocument.Parse(json);
@@ -315,7 +315,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(versionLookupCalled);
 
         var (json, _) = Assert.Single(interactionService.DisplayedRawText);
@@ -351,7 +351,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var (json, _) = Assert.Single(interactionService.DisplayedRawText);
         using var document = JsonDocument.Parse(json);
@@ -390,7 +390,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var (json, _) = Assert.Single(interactionService.DisplayedRawText);
         using var document = JsonDocument.Parse(json);
@@ -437,7 +437,7 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var (json, _) = Assert.Single(interactionService.DisplayedRawText);
         using var document = JsonDocument.Parse(json);

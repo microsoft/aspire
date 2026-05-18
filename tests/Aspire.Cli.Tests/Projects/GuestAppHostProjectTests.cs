@@ -9,7 +9,6 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
-using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -679,7 +678,7 @@ public class GuestAppHostProjectTests : IDisposable
         };
 
         var exitCode = await project.RunAsync(context, CancellationToken.None);
-        Assert.Equal(ExitCodeConstants.FailedToBuildArtifacts, exitCode);
+        Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode);
 
         var reloaded = AspireConfigFile.Load(_workspace.WorkspaceRoot.FullName);
         Assert.NotNull(reloaded);
@@ -705,15 +704,10 @@ public class GuestAppHostProjectTests : IDisposable
 
         var logFilePath = Path.Combine(_workspace.WorkspaceRoot.FullName, $"test-guest-{Guid.NewGuid()}.log");
 
-        var workspace = new DirectoryInfo(AppContext.BaseDirectory);
-        var executionContext = new CliExecutionContext(
-            workingDirectory: workspace,
-            hivesDirectory: workspace,
-            cacheDirectory: workspace,
-            sdksDirectory: workspace,
-            logsDirectory: workspace,
-            logFilePath: logFilePath,
-            identityChannel: identityChannel);
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
+            new DirectoryInfo(AppContext.BaseDirectory),
+            identityChannel: identityChannel,
+            logFilePath: logFilePath);
 
         return new GuestAppHostProject(
             language: language,
@@ -730,25 +724,5 @@ public class GuestAppHostProjectTests : IDisposable
             logger: NullLogger<GuestAppHostProject>.Instance,
             fileLoggerProvider: new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()),
             profilingTelemetry: _profilingTelemetry);
-    }
-
-    private sealed class FakeFailingAppHostServerProject(string appDirectoryPath) : IAppHostServerProject
-    {
-        public string AppDirectoryPath { get; } = appDirectoryPath;
-
-        public string GetInstanceIdentifier() => AppDirectoryPath;
-
-        public Task<AppHostServerPrepareResult> PrepareAsync(
-            string sdkVersion,
-            IEnumerable<IntegrationReference> integrations,
-            CancellationToken cancellationToken = default) =>
-            Task.FromResult(new AppHostServerPrepareResult(Success: false, Output: null));
-
-        public (string SocketPath, System.Diagnostics.Process Process, OutputCollector OutputCollector) Run(
-            int hostPid,
-            IReadOnlyDictionary<string, string>? environmentVariables = null,
-            string[]? additionalArgs = null,
-            bool debug = false) =>
-            throw new NotSupportedException("Run should not be invoked when PrepareAsync fails.");
     }
 }

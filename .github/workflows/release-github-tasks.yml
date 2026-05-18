@@ -8,6 +8,14 @@
 #
 # Designed for idempotency - safe to re-run after partial failures.
 #
+# Invocation paths:
+# - Manual: triggered by a release manager via the Actions UI. The `authorize`
+#   job gates on admin/maintain permission for the dispatching user.
+# - Chained: dispatched automatically by the AzDO release-publish-nuget
+#   pipeline running as the aspire-repo-bot GitHub App. The authorize job
+#   recognizes this actor and bypasses the human permission check because
+#   the AzDO pipeline itself gates on AzDO release-publish permissions.
+#
 # For full documentation, see: docs/release-process.md
 
 name: Release GitHub Tasks
@@ -77,22 +85,47 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          echo "Checking if ${{ github.actor }} is authorized to run releases..."
-          
+          ACTOR="${{ github.actor }}"
+          ACTOR_ID="${{ github.actor_id }}"
+          echo "Checking if $ACTOR (id=$ACTOR_ID) is authorized to run releases..."
+
+          # The AzDO release pipeline dispatches this workflow as the
+          # aspire-repo-bot GitHub App. That path is already gated on AzDO
+          # release-publish permissions, so we skip the human admin/maintain
+          # check for the bot after verifying the actor identity.
+          if [[ "$ACTOR" == "aspire-repo-bot[bot]" ]]; then
+            ACTOR_INFO=$(gh api "users/$ACTOR" 2>/dev/null || echo '')
+            ACTOR_TYPE=$(echo "$ACTOR_INFO" | jq -r '.type // empty')
+            ACTOR_API_ID=$(echo "$ACTOR_INFO" | jq -r '.id // empty')
+
+            if [[ "$ACTOR_TYPE" != "Bot" ]]; then
+              echo "❌ ERROR: $ACTOR resolves to account type '$ACTOR_TYPE', expected 'Bot'."
+              exit 1
+            fi
+
+            if [[ -z "$ACTOR_ID" || -z "$ACTOR_API_ID" || "$ACTOR_ID" != "$ACTOR_API_ID" ]]; then
+              echo "❌ ERROR: actor_id mismatch (context=$ACTOR_ID, api=$ACTOR_API_ID)."
+              exit 1
+            fi
+
+            echo "✓ Verified dispatcher is aspire-repo-bot GitHub App (type=Bot, id=$ACTOR_API_ID) — skipping human permission check."
+            exit 0
+          fi
+
           # Get the user's permission level for this repo
-          PERMISSION=$(gh api repos/${{ github.repository }}/collaborators/${{ github.actor }}/permission --jq '.permission')
+          PERMISSION=$(gh api repos/${{ github.repository }}/collaborators/$ACTOR/permission --jq '.permission')
           
           echo "User permission level: $PERMISSION"
           
           # Only allow admin or maintain permission levels
           if [[ "$PERMISSION" != "admin" && "$PERMISSION" != "maintain" ]]; then
-            echo "❌ ERROR: User ${{ github.actor }} does not have sufficient permissions."
+            echo "❌ ERROR: User $ACTOR does not have sufficient permissions."
             echo "Required: 'admin' or 'maintain' permission level."
             echo "Current: '$PERMISSION'"
             exit 1
           fi
           
-          echo "✓ User ${{ github.actor }} is authorized (permission: $PERMISSION)"
+          echo "✓ User $ACTOR is authorized (permission: $PERMISSION)"
 
   validate:
     name: Validate Inputs
@@ -229,39 +262,19 @@ jobs:
         if: steps.check-release.outputs.release_exists != 'true'
         id: release-notes
         run: |
-          VERSION="${{ inputs.release_version }}"
-          TAG_NAME="v$VERSION"
-          IS_PRERELEASE="${{ inputs.is_prerelease }}"
-
-          # Create release notes
+          # Write a short placeholder. The real release notes are generated
+          # asynchronously by the release-notes-generate agentic workflow,
+          # which fires on the `release: [released]` event once `gh release
+          # create` below publishes the release, and edits this body in
+          # place.
           cat << EOF > release_notes.md
-          ## What's New in Aspire $VERSION
-
-          See the full changelog and documentation at:
-          - 📖 [Documentation](https://aspire.dev/docs)
-          - 🐛 [Known Issues](https://github.com/microsoft/aspire/issues?q=is%3Aissue+is%3Aopen+label%3A%22known-issue%22)
-
-          ### Installation
-
-          \`\`\`bash
-          dotnet new install Aspire.ProjectTemplates::$VERSION
-          \`\`\`
-
-          Or update your existing projects:
-
-          \`\`\`bash
-          dotnet workload update
-          \`\`\`
-
-          ### Package Downloads
-
-          All packages are available on [NuGet.org](https://www.nuget.org/packages?q=owner%3Adotnet+aspire).
+          *Release notes are being generated automatically and will be added to this release shortly. If they haven't appeared within a few hours, ping the Aspire team.*
 
           ---
           *Full commit: [${{ inputs.commit_sha }}](https://github.com/${{ github.repository }}/commit/${{ inputs.commit_sha }})*
           EOF
 
-          echo "Release notes generated"
+          echo "Placeholder release notes generated"
 
       - name: Create GitHub Release
         if: steps.check-release.outputs.release_exists != 'true'
@@ -342,7 +355,7 @@ jobs:
           echo "   Title: Merge ${{ inputs.release_branch }} to main after v${{ inputs.release_version }} release"
           echo "   Head branch: ${{ inputs.release_branch }}"
           echo "   Base branch: main"
-          echo "   Labels: area-infrastructure, release-automation"
+          echo "   Labels: area-engineering-systems"
           echo ""
           echo "   PR body:"
           echo "   ─────────────────────────────────────"
@@ -374,8 +387,7 @@ jobs:
           base: main
           branch-already-exists: 'true'
           labels: |
-            area-infrastructure
-            release-automation
+            area-engineering-systems
 
   create-baseline-pr:
     name: Create Baseline Version PR
@@ -450,7 +462,7 @@ jobs:
           echo "   Title: Update PackageValidationBaselineVersion to $VERSION"
           echo "   Branch: $BRANCH_NAME"
           echo "   Base: main"
-          echo "   Labels: area-infrastructure, release-automation"
+          echo "   Labels: area-engineering-systems"
           echo ""
           echo "   File changes (src/Directory.Build.props):"
           echo "   ─────────────────────────────────────"
@@ -495,8 +507,7 @@ jobs:
           base: main
           branch-already-exists: 'true'
           labels: |
-            area-infrastructure
-            release-automation
+            area-engineering-systems
 
   summary:
     name: Release Summary

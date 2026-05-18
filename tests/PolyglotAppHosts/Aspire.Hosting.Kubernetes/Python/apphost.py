@@ -35,6 +35,7 @@ with create_builder() as builder:
     ingress.with_hostname("ingress.example.com")
     ingress.with_tls("ingress-tls")
     service_container = builder.add_container("resource", "image")
+    service_container.with_compute_environment(kubernetes)
 
     def configure_service(service):
         def configure_manifest(manifest):

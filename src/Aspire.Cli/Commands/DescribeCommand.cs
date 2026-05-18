@@ -203,7 +203,7 @@ internal sealed class DescribeCommand : BaseCommand
         if (resourceName is not null && snapshots.Count == 0)
         {
             _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, DescribeCommandStrings.ResourceNotFound, resourceName));
-            return ExitCodeConstants.FailedToFindProject;
+            return CliExitCodes.FailedToFindProject;
         }
 
         var resourceList = ResourceSnapshotMapper.MapToResourceJsonList(snapshots, dashboardBaseUrl);
@@ -220,7 +220,7 @@ internal sealed class DescribeCommand : BaseCommand
             DisplayResourcesTable(snapshots, dashboardBaseUrl);
         }
 
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private async Task<int> ExecuteWatchAsync(IAppHostAuxiliaryBackchannel connection, ResourceSnapshotWatcher resourceWatcher, string? dashboardBaseUrl, string? resourceName, OutputFormat format, CancellationToken cancellationToken)
@@ -282,7 +282,7 @@ internal sealed class DescribeCommand : BaseCommand
             }
         }
 
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
     private void DisplayResourcesTable(IReadOnlyList<ResourceSnapshot> snapshots, string? dashboardBaseUrl)
     {

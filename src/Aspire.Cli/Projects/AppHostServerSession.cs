@@ -100,7 +100,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         }
 
         activity.SetProcessId(serverProcess.Id);
-        activity.SetProcessExecutableName(Path.GetFileName(serverProcess.StartInfo.FileName));
+        activity.SetProcessInvocation(serverProcess.StartInfo.FileName, serverProcess.StartInfo.ArgumentList);
 
         return new AppHostServerSession(
             serverProcess,

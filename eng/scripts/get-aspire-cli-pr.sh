@@ -27,12 +27,15 @@ readonly RESET='\033[0m'
 
 # Variables (defaults set after parsing arguments)
 INSTALL_PREFIX=""
+INSTALL_PREFIX_EXPLICIT=false
 PR_NUMBER=""
 WORKFLOW_RUN_ID=""
 LOCAL_DIR=""
 HIVE_LABEL=""
 OS_ARG=""
 ARCH_ARG=""
+INSTALL_MODE="archive"
+FORCE=false
 SHOW_HELP=false
 VERBOSE=false
 KEEP_ARCHIVE=false
@@ -77,11 +80,17 @@ USAGE:
     --hive-label LABEL          Override the NuGet hive label (default: pr-<PR_NUMBER>, run-<RUN_ID>,
                                 or local for --local-dir)
     -i, --install-path PATH     Directory prefix to install (default: ~/.aspire)
-                                CLI installs to: <install-path>/bin
+                                CLI installs to: <install-path>/bin when installing from archives
+                                or as a dotnet tool with --tool-path.
                                 NuGet hive:      <install-path>/hives/pr-<PR_NUMBER>/packages (or run-<RUN_ID>)
+    -m, --install-mode MODE     How to install the CLI: 'archive' (default) installs from
+                                cli-native-archives-<rid> artifact, 'tool' installs the Aspire.Cli
+                                dotnet tool from the PR's RID-specific NuGet artifact.
+    --force                     Tool mode only: run dotnet tool update instead of install to move an
+                                existing Aspire.Cli tool to the exact PR package version (allows downgrades).
     --os OS                     Override OS detection (win, linux, linux-musl, osx)
     --arch ARCH                 Override architecture detection (x64, arm64)
-    --hive-only                 Only install NuGet packages to the hive, skip CLI download
+    --hive-only                 For installs from archives only: only install NuGet packages to the hive, skip CLI download
     --skip-extension.           Skip VS Code extension download and installation
     --use-insiders              Install extension to VS Code Insiders instead of VS Code
     --skip-path                 Do not add the install path to PATH environment variable (useful for portable installs)
@@ -102,6 +111,9 @@ EXAMPLES:
     ./get-aspire-cli-pr.sh 1234 --hive-only
     ./get-aspire-cli-pr.sh 1234 --skip-extension
     ./get-aspire-cli-pr.sh 1234 --use-insiders
+    ./get-aspire-cli-pr.sh 1234 -m tool
+    ./get-aspire-cli-pr.sh 1234 --install-mode tool --force
+    ./get-aspire-cli-pr.sh --local-dir /path/to/artifacts --install-mode tool
     ./get-aspire-cli-pr.sh 1234 --skip-path
     ./get-aspire-cli-pr.sh 1234 --dry-run
 
@@ -109,6 +121,7 @@ EXAMPLES:
 
 REQUIREMENTS:
     - GitHub CLI (gh) must be installed and authenticated (not needed with --local-dir)
+    - In tool mode (--install-mode tool), the .NET SDK 'dotnet' command must be available in PATH
     - Permissions to download artifacts from the target repository
     - VS Code extension installation requires VS Code CLI (code) to be available in PATH
 
@@ -198,7 +211,30 @@ parse_args() {
                     exit 1
                 fi
                 INSTALL_PREFIX="$2"
+                INSTALL_PREFIX_EXPLICIT=true
                 shift 2
+                ;;
+            -m|--install-mode)
+                if [[ $# -lt 2 || -z "$2" ]]; then
+                    say_error "Option '$1' requires a non-empty value"
+                    say_info "Use --help for usage information."
+                    exit 1
+                fi
+                case "$2" in
+                    archive|tool)
+                        INSTALL_MODE="$2"
+                        ;;
+                    *)
+                        say_error "Invalid value for --install-mode: '$2'. Allowed: archive, tool"
+                        say_info "Use --help for usage information."
+                        exit 1
+                        ;;
+                esac
+                shift 2
+                ;;
+            --force)
+                FORCE=true
+                shift
                 ;;
             --os)
                 if [[ $# -lt 2 || -z "$2" ]]; then
@@ -454,6 +490,11 @@ install_archive() {
 #   $1 - config_file: Path to the shell configuration file
 #   $2 - bin_path: The binary path to add to PATH
 #   $3 - command: The command to add to the configuration file
+path_contains() {
+    local bin_path="$1"
+    [[ ":$PATH:" == *":$bin_path:"* ]]
+}
+
 add_to_path()
 {
     local config_file="$1"
@@ -466,7 +507,7 @@ add_to_path()
         return 0
     fi
 
-    if [[ ":$PATH:" == *":$bin_path:"* ]]; then
+    if path_contains "$bin_path"; then
         say_info "Path $bin_path already exists in \$PATH, skipping addition"
     elif [[ -f "$config_file" ]] && grep -Fxq "$command" "$config_file"; then
         say_info "Command already exists in $config_file, skipping addition"
@@ -663,7 +704,7 @@ get_pr_head_sha() {
 # Function to extract version suffix from downloaded NuGet packages
 extract_version_suffix_from_packages() {
     local download_dir="$1"
-    
+
     if [[ "$DRY_RUN" == true ]]; then
         # Return a non-PR-shaped sentinel so the --local-dir auto-detect regex at the
         # call site (^pr\.([0-9]+)\.[0-9a-g]+$) does NOT match and the caller falls
@@ -673,35 +714,35 @@ extract_version_suffix_from_packages() {
         printf "local"
         return 0
     fi
-    
+
     # Look for any .nupkg file and extract version from its name
     local nupkg_file
     nupkg_file=$(find "$download_dir" -name "*.nupkg" | head -1)
-    
+
     if [[ -z "$nupkg_file" ]]; then
         say_verbose "No .nupkg files found to extract version from"
         return 1
     fi
-    
+
     local filename
     filename=$(basename "$nupkg_file")
     say_verbose "Extracting version from package: $filename"
-    
+
     # Extract version from package name using a more robust two-step approach
     # First remove the .nupkg extension, then extract the version part
     local base_name="${filename%.nupkg}"
     local version
-    
+
     # Look for semantic version pattern with PR suffix (more specific and robust)
     version=$(echo "$base_name" | sed -En 's/.*\.([0-9]+\.[0-9]+\.[0-9]+-pr\.[0-9]+\.[a-g0-9]+)/\1/p')
-    
+
     if [[ -z "$version" ]]; then
         say_verbose "Could not extract version from package name: $filename"
         return 1
     fi
-    
+
     say_verbose "Extracted full version: $version"
-    
+
     # Extract just the PR suffix part using bash regex for better compatibility
     if [[ "$version" =~ (pr\.[0-9]+\.[a-g0-9]+) ]]; then
         local version_suffix="${BASH_REMATCH[1]}"
@@ -710,6 +751,154 @@ extract_version_suffix_from_packages() {
         say_verbose "Package version does not contain PR suffix: $version"
         return 1
     fi
+}
+
+# =============================================================================
+# Tool-mode helpers (installing the Aspire.Cli dotnet tool)
+# =============================================================================
+
+# Verify that 'dotnet' is available in PATH (required for tool mode).
+check_dotnet_dependency() {
+    if ! command -v dotnet >/dev/null 2>&1; then
+        say_error "The .NET SDK 'dotnet' command is required for --install-mode tool but was not found in PATH."
+        say_info "Install the .NET SDK from https://dotnet.microsoft.com/download and ensure 'dotnet' is on your PATH."
+        return 1
+    fi
+    say_verbose "dotnet found: $(dotnet --version 2>/dev/null || echo unknown)"
+    return 0
+}
+
+# Find the unique Aspire.Cli.<version>.nupkg in the given directory and print its exact version.
+# Fails fast if zero or more than one matching package is present.
+find_aspire_cli_package_version() {
+    local search_dir="${1:-}"
+
+    if [[ -z "$search_dir" ]]; then
+        say_error "Cannot find Aspire.Cli package: search directory is empty"
+        return 1
+    fi
+
+    if [[ "$DRY_RUN" == true && ! -d "$search_dir" ]]; then
+        say_info "[DRY RUN] Would discover Aspire.Cli package version under: $search_dir"
+        printf "13.3.0-pr.1234.a1b2c3d4"
+        return 0
+    fi
+
+    if [[ ! -d "$search_dir" ]]; then
+        say_error "Cannot find Aspire.Cli package: directory does not exist: $search_dir"
+        return 1
+    fi
+
+    local -a matches=()
+    local f base ver
+    while IFS= read -r -d '' f; do
+        base=$(basename "$f")
+        if [[ "$base" =~ ^Aspire\.Cli\.(win|linux|linux-musl|osx)-(x64|arm64)\. ]]; then
+            continue
+        fi
+
+        local version="${base#Aspire.Cli.}"
+        version="${version%.nupkg}"
+        if [[ "$base" == Aspire.Cli.*.nupkg && "$version" =~ ^[0-9A-Za-z.-]+$ ]]; then
+            matches+=("$f")
+        fi
+    done < <(find "$search_dir" -type f -name 'Aspire.Cli.*.nupkg' ! -name '*.symbols.nupkg' ! -name '*.snupkg' -print0 | sort -z)
+
+    if [[ ${#matches[@]} -eq 0 ]]; then
+        say_error "No Aspire.Cli.<version>.nupkg package found under: $search_dir"
+        say_info "Tool mode requires the Aspire.Cli dotnet tool package to be present in the package source."
+        return 1
+    fi
+    if [[ ${#matches[@]} -gt 1 ]]; then
+        say_error "Multiple Aspire.Cli.<version>.nupkg packages found (expected exactly one):"
+        printf '  %s\n' "${matches[@]}" >&2
+        return 1
+    fi
+
+    base=$(basename "${matches[0]}")
+    # Strip 'Aspire.Cli.' prefix and '.nupkg' suffix to get exact version.
+    ver="${base#Aspire.Cli.}"
+    ver="${ver%.nupkg}"
+    if [[ -z "$ver" ]]; then
+        say_error "Failed to parse version from Aspire.Cli package filename: $base"
+        return 1
+    fi
+    printf "%s" "$ver"
+}
+
+# Install or update the Aspire.Cli dotnet tool from the populated hive.
+# Parameters:
+#   $1 - hive_dir: directory containing nupkg files used as --add-source
+#   $2 - tool_path: optional directory for --tool-path installs
+install_or_update_aspire_cli_tool() {
+    local hive_dir="$1"
+    local tool_path="${2:-}"
+
+    local version
+    if ! version=$(find_aspire_cli_package_version "$hive_dir"); then
+        return 1
+    fi
+
+    local tool_action
+    local -a cmd
+    local -a install_location_args
+    if [[ -n "$tool_path" ]]; then
+        install_location_args=(--tool-path "$tool_path")
+    else
+        install_location_args=(--global)
+    fi
+
+    if [[ "$FORCE" == true ]]; then
+        tool_action="update"
+        cmd=(dotnet tool update "${install_location_args[@]}" Aspire.Cli --version "$version" --add-source "$hive_dir" --allow-downgrade)
+    else
+        tool_action="install"
+        cmd=(dotnet tool install "${install_location_args[@]}" Aspire.Cli --version "$version" --add-source "$hive_dir")
+    fi
+
+    if [[ "$DRY_RUN" == true ]]; then
+        say_info "[DRY RUN] Would run: ${cmd[*]}"
+        return 0
+    fi
+
+    say_info "Installing Aspire.Cli dotnet tool (version $version) from $hive_dir"
+    say_verbose "Running: ${cmd[*]}"
+
+    if ! "${cmd[@]}"; then
+        say_error "Failed to $tool_action Aspire.Cli dotnet tool from $hive_dir"
+        if [[ "$FORCE" != true ]]; then
+            say_info "If Aspire.Cli is already installed or this PR version needs to replace an existing install, re-run with --force."
+        fi
+        return 1
+    fi
+
+    say_success "Aspire.Cli dotnet tool installed (version $version)"
+    return 0
+}
+
+validate_tool_mode_runtime_identifier() {
+    local target_os="${OS_ARG:-$HOST_OS}"
+    local target_arch
+    if [[ -n "$ARCH_ARG" ]]; then
+        if ! target_arch=$(get_cli_architecture_from_architecture "$ARCH_ARG"); then
+            return 1
+        fi
+    elif ! target_arch=$(get_cli_architecture_from_architecture "<auto>"); then
+        return 1
+    fi
+
+    local host_arch
+    if ! host_arch=$(get_cli_architecture_from_architecture "<auto>"); then
+        return 1
+    fi
+
+    if [[ "$target_os" != "$HOST_OS" || "$target_arch" != "$host_arch" ]]; then
+        say_error "--install-mode tool cannot target ${target_os}-${target_arch} from this ${HOST_OS}-${host_arch} host."
+        say_info "dotnet tool install resolves RID-specific packages for the current host. Run tool mode on the target machine, or use archive mode for cross-RID downloads."
+        return 1
+    fi
+
+    return 0
 }
 
 # Function to find workflow run for SHA
@@ -725,7 +914,7 @@ find_workflow_run() {
     fi
 
     if [[ -z "$workflow_run_id" || "$workflow_run_id" == "null" ]]; then
-    say_error "No ci.yml workflow run found for PR SHA: $head_sha. This could mean no workflow has been triggered for this SHA $head_sha . Check at https://github.com/${REPO}/actions/workflows/ci.yml"
+        say_error "No ci.yml workflow run found for PR SHA: $head_sha. This could mean no workflow has been triggered for this SHA $head_sha . Check at https://github.com/${REPO}/actions/workflows/ci.yml"
         return 1
     fi
 
@@ -760,7 +949,7 @@ download_built_nugets() {
 
     if ! "${nugets_download_command[@]}"; then
         say_verbose "gh run download command failed. Command: ${nugets_download_command[*]}"
-    say_error "Failed to download artifact '$BUILT_NUGETS_ARTIFACT_NAME' from run: $workflow_run_id . If the workflow is still running then the artifact named '$BUILT_NUGETS_ARTIFACT_NAME' may not be available yet. Check at https://github.com/${REPO}/actions/runs/$workflow_run_id#artifacts"
+        say_error "Failed to download artifact '$BUILT_NUGETS_ARTIFACT_NAME' from run: $workflow_run_id . If the workflow is still running then the artifact named '$BUILT_NUGETS_ARTIFACT_NAME' may not be available yet. Check at https://github.com/${REPO}/actions/runs/$workflow_run_id#artifacts"
         return 1
     fi
 
@@ -769,7 +958,7 @@ download_built_nugets() {
 
     if ! "${nugets_rid_download_command[@]}"; then
         say_verbose "gh run download command failed. Command: ${nugets_rid_download_command[*]}"
-    say_error "Failed to download artifact '$nugets_rid_filename' from run: $workflow_run_id . If the workflow is still running then the artifact named '$nugets_rid_filename' may not be available yet. Check at https://github.com/${REPO}/actions/runs/$workflow_run_id#artifacts"
+        say_error "Failed to download artifact '$nugets_rid_filename' from run: $workflow_run_id . If the workflow is still running then the artifact named '$nugets_rid_filename' may not be available yet. Check at https://github.com/${REPO}/actions/runs/$workflow_run_id#artifacts"
         return 1
     fi
 
@@ -1022,6 +1211,43 @@ install_aspire_cli_from_binary() {
     return 0
 }
 
+# Computes the CLI install directory. PR installs are isolated under
+# <prefix>/dogfood/pr-<N>/bin; without PR_NUMBER, falls back to the shared
+# script-route bin dir.
+compute_cli_install_dir() {
+    if [[ -n "$PR_NUMBER" ]]; then
+        printf '%s' "$INSTALL_PREFIX/dogfood/pr-$PR_NUMBER/bin"
+    else
+        printf '%s' "$INSTALL_PREFIX/bin"
+    fi
+}
+
+# Writes the PR-source sidecar (.aspire-install.json) next to the binary at
+# <install_prefix>/dogfood/pr-<N>/bin/.aspire-install.json. The sidecar marks
+# the install as PR-sourced so downstream consumers (e.g. 'aspire update')
+# know not to assume the stable script source. Per-RID archives produced
+# by eng/clipack are shared across routes and ship without a baked sidecar;
+# this write is the PR-route's authoritative author. If a future or
+# external archive ever smuggles a sidecar at the same path, this write
+# overwrites it by design. Under --dry-run the script is describe-but-do-
+# not-do: print the path it would write to and skip the filesystem mutation
+# so a real user's sidecar is never overwritten.
+write_pr_route_sidecar() {
+    local install_prefix="$1"
+    local pr_number="$2"
+
+    local sidecar_dir="$install_prefix/dogfood/pr-$pr_number/bin"
+    local sidecar_path="$sidecar_dir/.aspire-install.json"
+    local sidecar_content='{"source":"pr"}'
+
+    if [[ "$DRY_RUN" == true ]]; then
+        printf 'DRYRUN: would write route sidecar to: %s\n' "$sidecar_path"
+    else
+        mkdir -p "$sidecar_dir"
+        printf '%s\n' "$sidecar_content" > "$sidecar_path"
+    fi
+}
+
 # Function to install downloaded CLI
 install_aspire_cli() {
     local cli_archive_path="$1"
@@ -1029,6 +1255,10 @@ install_aspire_cli() {
 
     if [[ "$DRY_RUN" == true ]]; then
         say_info "[DRY RUN] Would install CLI archive to: $cli_install_dir"
+        # Emit the install path as an informational message that tests can parse,
+        # instead of touching the filesystem.
+        local binary_path="$cli_install_dir/aspire"
+        printf 'DRYRUN: would install Aspire CLI binary to: %s\n' "$binary_path"
         return 0
     fi
 
@@ -1060,8 +1290,11 @@ install_from_local_dir() {
 
     say_info "Installing from local directory: $local_dir"
 
-    # Set installation paths
-    local cli_install_dir="$INSTALL_PREFIX/bin"
+    # PR-route installs are isolated under <prefix>/dogfood/pr-<N>/bin so they
+    # don't collide with the script-route prefix or with other PR installs.
+    # Hives remain shared under <prefix>/hives/<label>/packages.
+    local cli_install_dir
+    cli_install_dir="$(compute_cli_install_dir)"
     local hive_label
     if [[ -n "$HIVE_LABEL" ]]; then
         hive_label="$HIVE_LABEL"
@@ -1091,6 +1324,8 @@ install_from_local_dir() {
     # Find CLI archive in local directory, or auto-detect raw build output.
     if [[ "$HIVE_ONLY" == true ]]; then
         say_info "Skipping CLI installation due to --hive-only flag"
+    elif [[ "$INSTALL_MODE" == "tool" ]]; then
+        say_verbose "Skipping CLI archive lookup in local directory (install mode: tool)"
     else
         local -a cli_files=()
         while IFS= read -r -d '' f; do
@@ -1127,7 +1362,9 @@ install_from_local_dir() {
         fi
     fi
 
-    # Install NuGet packages from local directory
+    # Populate the hive from the local directory. In tool mode this gives `aspire
+    # new` the PR/local Aspire.AppHost.Sdk + Aspire.Hosting + Aspire.ProjectTemplates
+    # so the generated project can build against the dogfood build.
     if ! install_built_nugets "$local_dir" "$nuget_hive_dir"; then
         say_error "Failed to install nuget packages from local directory"
         return 1
@@ -1140,6 +1377,25 @@ install_from_local_dir() {
     else
         say_warn "Could not extract version suffix from local packages"
     fi
+
+    # In tool mode, install/update the dotnet tool from the populated hive (durable
+    # `--add-source` for any future `dotnet tool update`).
+    if [[ "$HIVE_ONLY" != true && "$INSTALL_MODE" == "tool" ]]; then
+        local tool_path=""
+        if [[ "$INSTALL_PREFIX_EXPLICIT" == true ]]; then
+            tool_path="$cli_install_dir"
+        fi
+        if ! install_or_update_aspire_cli_tool "$nuget_hive_dir" "$tool_path"; then
+            return 1
+        fi
+    fi
+
+    # PR installs from archives get a sidecar. --local-dir installs are unmanaged, and
+    # dotnet-tool packages embed their own source=dotnet-tool sidecar.
+    if [[ "$HIVE_ONLY" != true && "$INSTALL_MODE" == "archive" && -n "$PR_NUMBER" ]]; then
+        write_pr_route_sidecar "$INSTALL_PREFIX" "$PR_NUMBER"
+    fi
+
 }
 
 # Main function to download and install from PR or workflow run ID
@@ -1178,8 +1434,11 @@ download_and_install_from_pr() {
 
     say_info "Using workflow run https://github.com/${REPO}/actions/runs/$workflow_run_id"
 
-    # Set installation paths
-    local cli_install_dir="$INSTALL_PREFIX/bin"
+    # PR-route installs are isolated under <prefix>/dogfood/pr-<N>/bin so they
+    # don't collide with the script-route prefix or with other PR installs.
+    # Hives remain shared under <prefix>/hives/<label>/packages.
+    local cli_install_dir
+    cli_install_dir="$(compute_cli_install_dir)"
     local hive_label
     if [[ -n "$HIVE_LABEL" ]]; then
         hive_label="$HIVE_LABEL"
@@ -1208,12 +1467,18 @@ download_and_install_from_pr() {
     say_verbose "Computed RID: $rid"
     if [[ "$HIVE_ONLY" == true ]]; then
         say_info "Skipping CLI download due to --hive-only flag"
+    elif [[ "$INSTALL_MODE" == "tool" ]]; then
+        say_verbose "Skipping CLI native archive download (install mode: tool)"
     else
     if ! cli_archive_path=$(download_aspire_cli "$workflow_run_id" "$rid" "$temp_dir"); then
             return 1
         fi
     fi
 
+    # Both modes need the cross-platform built-nugets (for the hive: Aspire.Hosting,
+    # Aspire.AppHost.Sdk, Aspire.ProjectTemplates, ...) and the RID-specific one
+    # (CLI archive in archive mode, or Aspire.Cli.<rid> tool pack in tool mode).
+    # download_built_nugets fetches both into the same temp directory.
     if ! nuget_download_dir=$(download_built_nugets "$workflow_run_id" "$rid" "$temp_dir"); then
         say_error "Failed to download nuget packages"
         return 1
@@ -1244,15 +1509,34 @@ download_and_install_from_pr() {
     say_info "Installing artifacts..."
     if [[ "$HIVE_ONLY" == true ]]; then
         say_info "Skipping CLI installation due to --hive-only flag"
+    elif [[ "$INSTALL_MODE" == "tool" ]]; then
+        say_verbose "Skipping CLI archive installation (install mode: tool)"
     else
         if ! install_aspire_cli "$cli_archive_path" "$cli_install_dir"; then
             return 1
         fi
     fi
 
+    # Populate the PR hive with both cross-platform and RID-specific nupkgs.
+    # In tool mode the hive is what `aspire new` discovers so it picks the PR
+    # version of Aspire.AppHost.Sdk / Aspire.Hosting / Aspire.ProjectTemplates.
     if ! install_built_nugets "$nuget_download_dir" "$nuget_hive_dir"; then
         say_error "Failed to install nuget packages"
         return 1
+    fi
+
+    # In tool mode, install/update the dotnet tool from the populated hive.
+    # Using the hive directory (rather than the temp download dir) gives `dotnet
+    # tool install --add-source` a durable source, which matters if the user later
+    # runs `dotnet tool update Aspire.Cli` against the same `--tool-path`.
+    if [[ "$HIVE_ONLY" != true && "$INSTALL_MODE" == "tool" ]]; then
+        local tool_path=""
+        if [[ "$INSTALL_PREFIX_EXPLICIT" == true ]]; then
+            tool_path="$cli_install_dir"
+        fi
+        if ! install_or_update_aspire_cli_tool "$nuget_hive_dir" "$tool_path"; then
+            return 1
+        fi
     fi
 
     # Install VS Code extension if downloaded
@@ -1261,6 +1545,13 @@ download_and_install_from_pr() {
             install_aspire_extension "$extension_download_dir"
         fi
     fi
+
+    # Write the PR-route sidecar only for installs from archives. Tool-mode packages
+    # carry their own source=dotnet-tool sidecar.
+    if [[ "$HIVE_ONLY" != true && "$INSTALL_MODE" == "archive" && -n "$PR_NUMBER" ]]; then
+        write_pr_route_sidecar "$INSTALL_PREFIX" "$PR_NUMBER"
+    fi
+
 }
 
 # Main entry point — wraps everything after function definitions.
@@ -1290,6 +1581,28 @@ main() {
         fi
     fi
 
+    if [[ "$INSTALL_MODE" == "tool" && "$HIVE_ONLY" == true ]]; then
+        say_error "--hive-only cannot be combined with --install-mode tool: --hive-only skips the CLI install, but --install-mode tool installs Aspire.Cli as a .NET tool."
+        say_info "Drop one of the two flags. Both archive and tool modes populate the hive."
+        exit 1
+    fi
+
+    if [[ "$INSTALL_MODE" != "tool" && "$FORCE" == true ]]; then
+        say_error "--force can only be combined with --install-mode tool: archive mode installs from downloaded binaries and does not use dotnet tool update."
+        say_info "Use --install-mode tool with --force, or drop --force."
+        exit 1
+    fi
+
+    if [[ "$INSTALL_MODE" == "tool" ]]; then
+        if ! validate_tool_mode_runtime_identifier; then
+            exit 1
+        fi
+
+        if ! check_dotnet_dependency; then
+            exit 1
+        fi
+    fi
+
     # Check gh dependency (not needed for --local-dir mode)
     if [[ -z "$LOCAL_DIR" ]]; then
         check_gh_dependency
@@ -1303,9 +1616,16 @@ main() {
         INSTALL_PREFIX_UNEXPANDED="$INSTALL_PREFIX"
     fi
 
-    # Set paths based on install prefix
-    cli_install_dir="$INSTALL_PREFIX/bin"
-    INSTALL_PATH_UNEXPANDED="$INSTALL_PREFIX_UNEXPANDED/bin"
+    # Set paths based on install prefix.
+    # PR-route installs go under $INSTALL_PREFIX/dogfood/pr-<N>/bin to isolate them from
+    # the script-route prefix and from other PR installs.
+    if [[ -n "$PR_NUMBER" ]]; then
+        cli_install_dir="$INSTALL_PREFIX/dogfood/pr-$PR_NUMBER/bin"
+        INSTALL_PATH_UNEXPANDED="$INSTALL_PREFIX_UNEXPANDED/dogfood/pr-$PR_NUMBER/bin"
+    else
+        cli_install_dir="$INSTALL_PREFIX/bin"
+        INSTALL_PATH_UNEXPANDED="$INSTALL_PREFIX_UNEXPANDED/bin"
+    fi
 
     # Create a temporary directory for downloads
     if [[ "$DRY_RUN" == true ]]; then
@@ -1332,22 +1652,46 @@ main() {
         fi
     fi
 
-    # Add to shell profile for persistent PATH
+    # Add to shell profile for persistent PATH. Default tool installs use 'dotnet tool install -g',
+    # which owns any global-tools PATH guidance; explicit tool-path installs use cli_install_dir.
+    # PR installs deliberately skip the persistent profile write: a PR build is a per-session
+    # dogfood activation. Touching ~/.zshrc / ~/.bashrc would silently demote a developer's
+    # daily/stable install on every new terminal until they hunt down the stale `export PATH=`
+    # line. The activation hint printed below shows how to opt in manually.
     if [[ "$HIVE_ONLY" != true ]]; then
-        if [[ "$SKIP_PATH" == true ]]; then
-            say_info "Skipping PATH configuration due to --skip-path flag"
-        else
-            add_to_shell_profile "$cli_install_dir" "$INSTALL_PATH_UNEXPANDED"
+        if [[ "$INSTALL_MODE" != "tool" || "$INSTALL_PREFIX_EXPLICIT" == true ]]; then
+            if [[ "$SKIP_PATH" == true ]]; then
+                say_info "Skipping PATH configuration due to --skip-path flag"
+            else
+                local path_to_add="$cli_install_dir"
+                local path_to_add_unexpanded="$INSTALL_PATH_UNEXPANDED"
 
-            # Add to current session PATH, if the path is not already in PATH
-            if  [[ ":$PATH:" != *":$cli_install_dir:"* ]]; then
-                if [[ "$DRY_RUN" == true ]]; then
-                    say_info "[DRY RUN] Would add $cli_install_dir to PATH"
+                if path_contains "$path_to_add"; then
+                    say_info "Path $path_to_add already exists in \$PATH, skipping addition"
                 else
-                    export PATH="$cli_install_dir:$PATH"
+                    if [[ -n "$PR_NUMBER" ]]; then
+                        say_info "PR install: leaving shell profile untouched; the activation hint below shows the PATH line to use."
+                    else
+                        add_to_shell_profile "$path_to_add" "$path_to_add_unexpanded"
+                    fi
+
+                    # Add to current session PATH, if the path is not already in PATH
+                    if [[ "$DRY_RUN" == true ]]; then
+                        say_info "[DRY RUN] Would add $path_to_add to PATH"
+                    else
+                        export PATH="$path_to_add:$PATH"
+                    fi
                 fi
             fi
         fi
+    fi
+
+    # Print PATH activation hint for PR installs.
+    # Goes to stdout (not stderr) so it's visible in normal install output and tests can grep it.
+    # Printed in success path (after install completes) and also under --dry-run.
+    if [[ "$HIVE_ONLY" != true && -n "$PR_NUMBER" && ("$INSTALL_MODE" == "archive" || "$INSTALL_PREFIX_EXPLICIT" == true) ]]; then
+        local profile_path_unexpanded="$INSTALL_PATH_UNEXPANDED"
+        echo "Add to your shell profile: export PATH=\"$profile_path_unexpanded:\$PATH\""
     fi
 }
 

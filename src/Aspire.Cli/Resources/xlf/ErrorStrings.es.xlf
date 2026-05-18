@@ -102,6 +102,11 @@
         <target state="translated">Si se establece ASPIRE_EXTENSION_ENDPOINT, se debe configurar el token de extensión de Aspire. Asegúrese de que ASPIRE_EXTENSION_TOKEN esté configurado</target>
         <note>Do not localize ASPIRE_EXTENSION_TOKEN and ASPIRE_EXTENSION_ENDPOINT</note>
       </trans-unit>
+      <trans-unit id="FailedToParsePackageSearchResults">
+        <source>Failed to parse package search results.</source>
+        <target state="new">Failed to parse package search results.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="FailedToParseTemplateVersionFromStdout">
         <source>Failed to parse template version from stdout.</source>
         <target state="translated">No se pudo analizar la versión de la plantilla desde stdout.</target>

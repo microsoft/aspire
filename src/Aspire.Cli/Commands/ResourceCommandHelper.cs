@@ -93,7 +93,7 @@ internal static class ResourceCommandHelper
         else if (response.Canceled)
         {
             interactionService.DisplayMessage(KnownEmojis.Warning, $"Command '{commandName}' on '{resourceName}' was canceled.");
-            return ExitCodeConstants.FailedToExecuteResourceCommand;
+            return CliExitCodes.FailedToExecuteResourceCommand;
         }
         else
         {
@@ -109,7 +109,7 @@ internal static class ResourceCommandHelper
             DisplayCommandResult(interactionService, response.Value);
         }
 
-        return response.Success ? ExitCodeConstants.Success : ExitCodeConstants.FailedToExecuteResourceCommand;
+        return response.Success ? CliExitCodes.Success : CliExitCodes.FailedToExecuteResourceCommand;
     }
 
     private static int HandleResponse(
@@ -127,7 +127,7 @@ internal static class ResourceCommandHelper
         else if (response.Canceled)
         {
             interactionService.DisplayMessage(KnownEmojis.Warning, $"{progressVerb} command for '{resourceName}' was canceled.");
-            return ExitCodeConstants.FailedToExecuteResourceCommand;
+            return CliExitCodes.FailedToExecuteResourceCommand;
         }
         else
         {
@@ -143,7 +143,7 @@ internal static class ResourceCommandHelper
             DisplayCommandResult(interactionService, response.Value);
         }
 
-        return response.Success ? ExitCodeConstants.Success : ExitCodeConstants.FailedToExecuteResourceCommand;
+        return response.Success ? CliExitCodes.Success : CliExitCodes.FailedToExecuteResourceCommand;
     }
 
     private static void DisplayCommandResult(IInteractionService interactionService, ExecuteResourceCommandResult result)

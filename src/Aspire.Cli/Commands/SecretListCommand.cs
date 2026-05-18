@@ -49,7 +49,7 @@ internal sealed class SecretListCommand : BaseCommand
         var result = await _secretStoreResolver.ResolveAsync(projectFile, autoInit: false, cancellationToken);
         if (result is null)
         {
-            return CommandResult.Failure(ExitCodeConstants.FailedToFindProject, SecretCommandStrings.CouldNotFindAppHost);
+            return CommandResult.Failure(CliExitCodes.FailedToFindProject, SecretCommandStrings.CouldNotFindAppHost);
         }
 
         var secrets = result.Store.ToList();

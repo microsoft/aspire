@@ -422,6 +422,40 @@ public class AddParameterTests
     }
 
     [Fact]
+    public void ParameterCreateInput_WithNameOverride_UsesOverrideAsInputName()
+    {
+        // Arrange
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var parameter = appBuilder.AddParameter("test")
+            .WithDescription("Test description");
+
+        // Act
+        var input = parameter.Resource.CreateInput("value");
+
+        // Assert
+        Assert.Equal("value", input.Name);
+        Assert.Equal("test", input.Label);
+        Assert.Equal("Test description", input.Description);
+        Assert.Equal(string.Format(InteractionStrings.ParametersInputsParameterPlaceholder, "test"), input.Placeholder);
+    }
+
+    [Fact]
+    public void ParameterCreateInput_WithDynamicLoading_SetsDynamicLoading()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var parameter = appBuilder.AddParameter("test");
+        var dynamicLoading = new InputLoadOptions
+        {
+            AlwaysLoadOnStart = true,
+            LoadCallback = _ => Task.CompletedTask
+        };
+
+        var input = parameter.Resource.CreateInput(dynamicLoading: dynamicLoading);
+
+        Assert.Same(dynamicLoading, input.DynamicLoading);
+    }
+
+    [Fact]
     public void ParameterCreateInput_ForSecretParameter_ReturnsSecretTextInput()
     {
         // Arrange
@@ -466,6 +500,56 @@ public class AddParameterTests
         Assert.Equal("Custom: Custom description", input.Description);
         Assert.Equal("Enter number", input.Placeholder);
         Assert.True(input.EnableDescriptionMarkdown);
+    }
+
+    [Fact]
+    public void ParameterCreateInput_WithCustomGeneratorAndNameOverride_UsesOverrideAsInputName()
+    {
+        // Arrange
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var parameter = appBuilder.AddParameter("test")
+            .WithCustomInput(_ => new InteractionInput
+            {
+                Name = "CustomInput",
+                InputType = InputType.Number,
+                Label = "Custom Label",
+                Description = "Custom description",
+                Placeholder = "Enter number",
+                Value = "5"
+            });
+
+        // Act
+        var input = parameter.Resource.CreateInput("value");
+
+        // Assert
+        Assert.Equal("value", input.Name);
+        Assert.Equal(InputType.Number, input.InputType);
+        Assert.Equal("Custom Label", input.Label);
+        Assert.Equal("Custom description", input.Description);
+        Assert.Equal("Enter number", input.Placeholder);
+        Assert.Equal("5", input.Value);
+    }
+
+    [Fact]
+    public void ParameterCreateInput_WithCustomGeneratorAndDynamicLoading_UsesDynamicLoading()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var parameter = appBuilder.AddParameter("test")
+            .WithCustomInput(_ => new InteractionInput
+            {
+                Name = "CustomInput",
+                InputType = InputType.Number,
+                Label = "Custom Label"
+            });
+        var dynamicLoading = new InputLoadOptions
+        {
+            AlwaysLoadOnStart = true,
+            LoadCallback = _ => Task.CompletedTask
+        };
+
+        var input = parameter.Resource.CreateInput(dynamicLoading: dynamicLoading);
+
+        Assert.Same(dynamicLoading, input.DynamicLoading);
     }
 
     [Fact]

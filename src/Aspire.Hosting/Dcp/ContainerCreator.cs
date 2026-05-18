@@ -28,8 +28,8 @@ internal record struct HostResourceWithEndpoints(
     {
         if (resource is IResourceWithEndpoints rwe && !resource.IsContainer())
         {
-            var endpoints = resource.Annotations.OfType<EndpointAnnotation>();
-            if (endpoints.Any())
+            var endpoints = resource.Annotations.OfType<EndpointAnnotation>().ToArray();
+            if (endpoints.Length > 0)
             {
                 return new HostResourceWithEndpoints(rwe, endpoints);
             }

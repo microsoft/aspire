@@ -102,6 +102,11 @@
         <target state="translated">È necessario impostare il token di espansione Aspire se ASPIRE_EXTENSION_ENDPOINT è impostato. Assicurarsi che ASPIRE_EXTENSION_TOKEN sia impostato</target>
         <note>Do not localize ASPIRE_EXTENSION_TOKEN and ASPIRE_EXTENSION_ENDPOINT</note>
       </trans-unit>
+      <trans-unit id="FailedToParsePackageSearchResults">
+        <source>Failed to parse package search results.</source>
+        <target state="new">Failed to parse package search results.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="FailedToParseTemplateVersionFromStdout">
         <source>Failed to parse template version from stdout.</source>
         <target state="translated">Non è possibile analizzare la versione del modello da stdout.</target>

@@ -48,6 +48,7 @@ internal sealed class RenderCommand : BaseCommand
         ["markdown-interactive"] = "Render markdown with DisplayMarkdown (interactive)",
         ["markdown-plain"] = "Render markdown as plain text with DisplayRawText (non-interactive)",
         ["markdown-renderable"] = "Render markdown via ConvertToRenderable with ANSI disabled",
+        ["links"] = "Render terminal links with SafeLink and SafeFileLink",
         ["debug-activities"] = "Debug pipeline activities (calls ProcessPublishingActivitiesDebugAsync)",
         ["pipeline-activities"] = "Pipeline activities with spinner (calls ProcessAndDisplayPublishingActivitiesAsync)",
         ["publish-summary-all"] = "Publish summary timeline (stress scenarios)",
@@ -124,8 +125,14 @@ internal sealed class RenderCommand : BaseCommand
             return CommandResult.FromExitCode(await ExecuteChoiceAsync(requestedScenario, parseResult.GetValue(s_consoleWidthOption), cancellationToken));
         }
 
+        var renderedPreviousChoice = false;
         while (true)
         {
+            if (renderedPreviousChoice)
+            {
+                InteractionService.DisplayEmptyLine();
+            }
+
             var choice = await InteractionService.PromptForSelectionAsync(
                 "What do you want to test?",
                 s_choices.Keys,
@@ -133,10 +140,12 @@ internal sealed class RenderCommand : BaseCommand
                 cancellationToken: cancellationToken);
 
             var exitCode = await ExecuteChoiceAsync(choice, parseResult.GetValue(s_consoleWidthOption), cancellationToken);
-            if (choice == "exit" || exitCode != ExitCodeConstants.Success)
+            if (choice == "exit" || exitCode != CliExitCodes.Success)
             {
                 return CommandResult.FromExitCode(exitCode);
             }
+
+            renderedPreviousChoice = true;
         }
     }
 
@@ -169,13 +178,15 @@ internal sealed class RenderCommand : BaseCommand
                     return await TestChoiceSimpleAsync(cancellationToken);
                 case "mixed":
                     await TestMixedMethodsAsync(cancellationToken);
-                    return ExitCodeConstants.Success;
+                    return CliExitCodes.Success;
                 case "markdown-interactive":
                     return TestMarkdownRenderInteractive();
                 case "markdown-plain":
                     return TestMarkdownRenderPlainText();
                 case "markdown-renderable":
                     return TestMarkdownRenderRenderable();
+                case "links":
+                    return await TestLinksAsync(cancellationToken);
                 case "debug-activities":
                     return await RenderDebugActivitiesAsync(cancellationToken);
                 case "pipeline-activities":
@@ -183,7 +194,7 @@ internal sealed class RenderCommand : BaseCommand
                 case "publish-summary-all":
                     return RenderPublishSummaryScenarios(s_publishSummaryScenarioDescriptions.Keys.Where(k => !StringComparers.CommandName.Equals(k, "publish-summary-all")));
                 case "exit":
-                    return ExitCodeConstants.Success;
+                    return CliExitCodes.Success;
                 default:
                     if (s_publishSummaryScenarioDescriptions.ContainsKey(choice))
                     {
@@ -192,7 +203,7 @@ internal sealed class RenderCommand : BaseCommand
 
                     InteractionService.DisplayError($"Unknown render scenario '{choice}'.");
                     InteractionService.DisplayPlainText("Use 'aspire render --list-scenarios' to see supported values.");
-                    return ExitCodeConstants.InvalidCommand;
+                    return CliExitCodes.InvalidCommand;
             }
         }
         finally
@@ -223,7 +234,12 @@ internal sealed class RenderCommand : BaseCommand
             InteractionService.DisplayMessage(emoji, $"DisplayMessage with {emoji.Name}");
         }
 
-        return ExitCodeConstants.Success;
+        InteractionService.DisplayEmptyLine();
+        InteractionService.DisplayMessage(KnownEmojis.Rocket, "This is a much longer message that is designed to test how text wraps when the terminal window is narrow. It should wrap cleanly beneath the text column without pushing content under the emoji icon on the left side of the display.");
+        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, "Successfully deployed the application to the remote environment. The deployment included 14 services, 3 databases, and 2 message brokers. All health checks passed and the application is now accepting traffic on the configured endpoints.");
+        InteractionService.DisplayError("Something went terribly wrong while attempting to connect to the remote application host. The connection timed out after 30 seconds. Please verify that the host is running and that the network configuration allows traffic on the specified port.");
+
+        return CliExitCodes.Success;
     }
 
     private int TestDisplayStyles()
@@ -232,7 +248,11 @@ internal sealed class RenderCommand : BaseCommand
         InteractionService.DisplaySuccess("Operation completed successfully.");
         InteractionService.DisplaySubtleMessage("This is a subtle hint.");
         InteractionService.DisplayCancellationMessage();
-        return ExitCodeConstants.Success;
+
+        InteractionService.DisplayEmptyLine();
+        InteractionService.DisplayError("Failed to resolve package 'Aspire.Hosting.Azure.CosmosDB' version 9.2.0. The package source 'https://api.nuget.org/v3/index.json' returned a 503 Service Unavailable response. Please check your network connection and try again, or configure an alternative package source in your NuGet.config file.");
+        InteractionService.DisplaySuccess("All 47 integration tests passed successfully across 3 target frameworks (net8.0, net9.0, net10.0). Total execution time: 2 minutes and 14 seconds. Code coverage increased from 78.3% to 82.1%.");
+        return CliExitCodes.Success;
     }
 
     private async Task<int> TestShowStatusAsync(CancellationToken cancellationToken)
@@ -249,7 +269,7 @@ internal sealed class RenderCommand : BaseCommand
                 emoji: emoji);
         }
 
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private async Task<int> TestShowStatusWithMarkupAsync(CancellationToken cancellationToken)
@@ -264,7 +284,7 @@ internal sealed class RenderCommand : BaseCommand
             emoji: KnownEmojis.Package,
             allowMarkup: true);
 
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private async Task<int> TestShowStatusEscapedAsync(CancellationToken cancellationToken)
@@ -278,7 +298,7 @@ internal sealed class RenderCommand : BaseCommand
             },
             emoji: KnownEmojis.Package);
 
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private async Task<int> TestChoiceWithFormatterAsync(CancellationToken cancellationToken)
@@ -299,7 +319,7 @@ internal sealed class RenderCommand : BaseCommand
             p => $"{p.Item1.EscapeMarkup()} [dim]v{p.Item2}[/] ({p.Item3})",
             cancellationToken: cancellationToken);
 
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private async Task<int> TestChoiceSimpleAsync(CancellationToken cancellationToken)
@@ -313,7 +333,7 @@ internal sealed class RenderCommand : BaseCommand
             cancellationToken: cancellationToken);
 
         InteractionService.DisplayMessage(KnownEmojis.Rocket, $"Deploying to {selected}...");
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private async Task TestMixedMethodsAsync(CancellationToken cancellationToken)
@@ -371,6 +391,20 @@ internal sealed class RenderCommand : BaseCommand
         InteractionService.DisplayMessage(KnownEmojis.StopSign, "Mixed methods test complete.");
     }
 
+    private async Task<int> TestLinksAsync(CancellationToken cancellationToken)
+    {
+        var tempDirectory = Directory.CreateTempSubdirectory("aspire-render-links-");
+        var filePath = Path.Combine(tempDirectory.FullName, "safe file link sample.txt");
+        await File.WriteAllTextAsync(filePath, "This file is used to smoke test SafeFileLink rendering.", cancellationToken).ConfigureAwait(false);
+        InteractionService.DisplaySubtleMessage($"Temporary file created at {filePath}", allowMarkup: false);
+
+        InteractionService.DisplayPlainText($"Supports links: {InteractionService.SupportsLinks}");
+        InteractionService.DisplayMarkupLine($"SafeLink: {MarkupHelpers.SafeLink(InteractionService, "https://www.aspire.dev/", "Aspire documentation")}");
+        InteractionService.DisplayMarkupLine($"SafeFileLink: {MarkupHelpers.SafeFileLink(InteractionService, filePath)}");
+
+        return CliExitCodes.Success;
+    }
+
     private int RenderPublishSummaryScenarios(IEnumerable<string> scenarioKeys)
     {
         foreach (var scenarioKey in scenarioKeys)
@@ -385,7 +419,7 @@ internal sealed class RenderCommand : BaseCommand
             logger.WriteSummary();
         }
 
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private static PublishSummaryRenderScenario CreatePublishSummaryScenario(string scenarioKey) => scenarioKey switch
@@ -487,7 +521,7 @@ internal sealed class RenderCommand : BaseCommand
         var succeeded = await command.ProcessPublishingActivitiesDebugAsync(activities, backchannel: null!, cancellationToken);
         InteractionService.DisplayEmptyLine();
         InteractionService.DisplaySubtleMessage($"ProcessPublishingActivitiesDebugAsync returned succeeded={succeeded}", allowMarkup: false);
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private async Task<int> RenderPipelineActivitiesAsync(CancellationToken cancellationToken)
@@ -497,7 +531,7 @@ internal sealed class RenderCommand : BaseCommand
         var succeeded = await command.ProcessAndDisplayPublishingActivitiesAsync(activities, backchannel: null!, isDebugOrTraceLoggingEnabled: true, cancellationToken);
         InteractionService.DisplayEmptyLine();
         InteractionService.DisplaySubtleMessage($"ProcessAndDisplayPublishingActivitiesAsync returned succeeded={succeeded}", allowMarkup: false);
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
 #pragma warning disable IDE0060 // Remove unused parameter — cancellationToken is used by the generated async iterator via [EnumeratorCancellation]
@@ -754,14 +788,14 @@ internal sealed class RenderCommand : BaseCommand
     private int TestMarkdownRenderInteractive()
     {
         InteractionService.DisplayMarkdown(MarkdownShowcase);
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private int TestMarkdownRenderPlainText()
     {
         var plainText = MarkdownToSpectreConverter.ConvertToPlainText(MarkdownShowcase);
         InteractionService.DisplayRawText(plainText);
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private int TestMarkdownRenderRenderable()
@@ -778,7 +812,7 @@ internal sealed class RenderCommand : BaseCommand
         console.Write(renderable);
 
         InteractionService.DisplayRawText(writer.ToString());
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 }
 

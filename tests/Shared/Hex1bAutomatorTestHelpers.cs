@@ -618,10 +618,12 @@ internal static class Hex1bAutomatorTestHelpers
             description: "output path prompt");
         await auto.EnterAsync();
 
-        // Step 5: URLs prompt (all templates have this)
+        // Step 5: URLs prompt (all templates have this). The CLI may spend time
+        // resolving template versions after the output path is entered, so reuse
+        // the template-selection timeout for this first post-resolution prompt.
         await auto.WaitUntilAsync(
             s => new CellPatternSearcher().Find("Use *.dev.localhost URLs").Search(s).Count > 0,
-            timeout: TimeSpan.FromSeconds(10),
+            timeout: templateTimeout,
             description: "URLs prompt");
         await auto.EnterAsync(); // Accept default "No"
 
@@ -664,8 +666,13 @@ internal static class Hex1bAutomatorTestHelpers
         this Hex1bTerminalAutomator auto,
         SequenceCounter counter)
     {
+        // Match the actual prompt text shape — the trailing '?' avoids false-matching
+        // informational confirmation messages like "Created NuGet.config..." which contain
+        // the same substring but are not Y/n prompts. The two real prompts are
+        // "Create NuGet.config for selected channels?" and "Update NuGet.config to add
+        // missing package sources for the selected channel?" — both end in '?'.
         var waitingForNuGetConfigPrompt = new CellPatternSearcher()
-            .Find("NuGet.config");
+            .Find("NuGet.config?");
 
         var waitingForUrlsPrompt = new CellPatternSearcher()
             .Find("Use *.dev.localhost URLs");

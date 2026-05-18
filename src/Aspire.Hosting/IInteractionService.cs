@@ -261,14 +261,31 @@ public sealed class LoadInputContext
 [DebuggerDisplay("Name = {Name}, InputType = {InputType}, Required = {Required}, Value = {Value}")]
 public sealed class InteractionInput
 {
+    private string _name = null!;
+    private bool _required;
+    private InputLoadOptions? _dynamicLoading;
+
     internal string EffectiveLabel => string.IsNullOrWhiteSpace(Label) ? Name : Label;
     internal InputLoadingState? DynamicLoadingState { get; set; }
     internal List<string> ValidationErrors { get; } = [];
+    internal void SetName(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        _name = name;
+    }
+
+    internal void SetRequired(bool required) => _required = required;
+
+    internal void SetDynamicLoading(InputLoadOptions? dynamicLoading) => _dynamicLoading = dynamicLoading;
 
     /// <summary>
     /// Gets or sets the name for the input. Used for accessing inputs by name from a keyed collection.
     /// </summary>
-    public required string Name { get; init; }
+    public required string Name
+    {
+        get => _name;
+        init => _name = value;
+    }
 
     /// <summary>
     /// Gets or sets the label for the input. If not specified, the name will be used as the label.
@@ -294,7 +311,11 @@ public sealed class InteractionInput
     /// <summary>
     /// Gets or sets a value indicating whether the input is required.
     /// </summary>
-    public bool Required { get; init; }
+    public bool Required
+    {
+        get => _required;
+        init => _required = value;
+    }
 
     /// <summary>
     /// Gets or sets the options for the input. Only used by <see cref="InputType.Choice"/> inputs.
@@ -306,7 +327,11 @@ public sealed class InteractionInput
     /// Dynamic loading is used to load data and update inputs after a prompt has started.
     /// It can also be used to reload data and update inputs after a dependant input has changed.
     /// </summary>
-    public InputLoadOptions? DynamicLoading { get; init; }
+    public InputLoadOptions? DynamicLoading
+    {
+        get => _dynamicLoading;
+        init => _dynamicLoading = value;
+    }
 
     /// <summary>
     /// Gets or sets the value of the input.

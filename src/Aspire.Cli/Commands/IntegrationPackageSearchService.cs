@@ -107,7 +107,7 @@ internal sealed class IntegrationPackageSearchService(
         catch (JsonException ex)
         {
             interactionService.DisplayError(ex.Message);
-            return (ConfiguredChannel: null, ExitCode: ExitCodeConstants.FailedToLoadConfiguration);
+            return (ConfiguredChannel: null, ExitCode: CliExitCodes.FailedToLoadConfiguration);
         }
     }
 

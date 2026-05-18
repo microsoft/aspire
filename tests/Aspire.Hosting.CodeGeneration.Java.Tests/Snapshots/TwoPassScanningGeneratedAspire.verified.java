@@ -1,4 +1,4 @@
-// ===== AddContainerOptions.java =====
+﻿// ===== AddContainerOptions.java =====
 // AddContainerOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
@@ -135,6 +135,36 @@ public final class AddStepOptions {
     public AddStepOptions requiredBy(String[] value) {
         this.requiredBy = value;
         return this;
+    }
+
+}
+
+// ===== AfterPublishEvent.java =====
+// AfterPublishEvent.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.Publishing.AfterPublishEvent. */
+public class AfterPublishEvent extends HandleWrapperBase {
+    AfterPublishEvent(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets the Services property */
+    public IServiceProvider services() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (IServiceProvider) getClient().invokeCapability("Aspire.Hosting.Publishing/AfterPublishEvent.services", reqArgs);
+    }
+
+    /** Gets the Model property */
+    public DistributedApplicationModel model() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (DistributedApplicationModel) getClient().invokeCapability("Aspire.Hosting.Publishing/AfterPublishEvent.model", reqArgs);
     }
 
 }
@@ -1269,6 +1299,8 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.InputsDialogValidationContext", (h, c) -> new InputsDialogValidationContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions", (h, c) -> new ProjectResourceOptions(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.IUserSecretsManager", (h, c) -> new IUserSecretsManager(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Publishing.AfterPublishEvent", (h, c) -> new AfterPublishEvent(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Publishing.BeforePublishEvent", (h, c) -> new BeforePublishEvent(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineConfigurationContext", (h, c) -> new PipelineConfigurationContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineContext", (h, c) -> new PipelineContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineEditor", (h, c) -> new PipelineEditor(h, c));
@@ -1313,6 +1345,7 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ExternalServiceResource", (h, c) -> new ExternalServiceResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.CSharpAppResource", (h, c) -> new CSharpAppResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.IResourceWithContainerFiles", (h, c) -> new IResourceWithContainerFiles(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeEnvironmentResource", (h, c) -> new IComputeEnvironmentResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCallbackContext", (h, c) -> new TestCallbackContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext", (h, c) -> new TestResourceContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext", (h, c) -> new TestEnvironmentContext(h, c));
@@ -1405,6 +1438,36 @@ public final class BaseRegistrations {
 
     static void ensureRegistered() {
     }
+}
+
+// ===== BeforePublishEvent.java =====
+// BeforePublishEvent.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.Publishing.BeforePublishEvent. */
+public class BeforePublishEvent extends HandleWrapperBase {
+    BeforePublishEvent(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets the Services property */
+    public IServiceProvider services() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (IServiceProvider) getClient().invokeCapability("Aspire.Hosting.Publishing/BeforePublishEvent.services", reqArgs);
+    }
+
+    /** Gets the Model property */
+    public DistributedApplicationModel model() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (DistributedApplicationModel) getClient().invokeCapability("Aspire.Hosting.Publishing/BeforePublishEvent.model", reqArgs);
+    }
+
 }
 
 // ===== BeforeResourceStartedEvent.java =====
@@ -2394,6 +2457,19 @@ public class CSharpAppResource extends ProjectResource {
         }
         getClient().invokeCapability("Aspire.Hosting/withIconName", reqArgs);
         return this;
+    }
+
+    /** Configures the compute environment for the compute resource */
+    public CSharpAppResource withComputeEnvironment(IComputeEnvironmentResource computeEnvironmentResource) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("computeEnvironmentResource", AspireClient.serializeValue(computeEnvironmentResource));
+        getClient().invokeCapability("Aspire.Hosting/withComputeEnvironment", reqArgs);
+        return this;
+    }
+
+    public CSharpAppResource withComputeEnvironment(ResourceBuilderBase computeEnvironmentResource) {
+        return withComputeEnvironment(new IComputeEnvironmentResource(computeEnvironmentResource.getHandle(), computeEnvironmentResource.getClient()));
     }
 
     /** Adds an HTTP health probe to the resource */
@@ -5464,6 +5540,19 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures the compute environment for the compute resource */
+    public ContainerResource withComputeEnvironment(IComputeEnvironmentResource computeEnvironmentResource) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("computeEnvironmentResource", AspireClient.serializeValue(computeEnvironmentResource));
+        getClient().invokeCapability("Aspire.Hosting/withComputeEnvironment", reqArgs);
+        return this;
+    }
+
+    public ContainerResource withComputeEnvironment(ResourceBuilderBase computeEnvironmentResource) {
+        return withComputeEnvironment(new IComputeEnvironmentResource(computeEnvironmentResource.getHandle(), computeEnvironmentResource.getClient()));
+    }
+
     /** Adds an HTTP health probe to the resource */
     public ContainerResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions options) {
         var path = options == null ? null : options.getPath();
@@ -7561,6 +7650,19 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Configures the compute environment for the compute resource */
+    public DotnetToolResource withComputeEnvironment(IComputeEnvironmentResource computeEnvironmentResource) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("computeEnvironmentResource", AspireClient.serializeValue(computeEnvironmentResource));
+        getClient().invokeCapability("Aspire.Hosting/withComputeEnvironment", reqArgs);
+        return this;
+    }
+
+    public DotnetToolResource withComputeEnvironment(ResourceBuilderBase computeEnvironmentResource) {
+        return withComputeEnvironment(new IComputeEnvironmentResource(computeEnvironmentResource.getHandle(), computeEnvironmentResource.getClient()));
+    }
+
     /** Adds an HTTP health probe to the resource */
     public DotnetToolResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions options) {
         var path = options == null ? null : options.getPath();
@@ -8659,6 +8761,36 @@ public class EventingSubscriberRegistrationContext extends HandleWrapperBase {
         return (DistributedApplicationEventSubscription) getClient().invokeCapability("Aspire.Hosting/eventingSubscriberOnBeforeStart", reqArgs);
     }
 
+    /** Subscribes an eventing subscriber to the BeforePublish event */
+    public DistributedApplicationEventSubscription onBeforePublish(AspireAction1<BeforePublishEvent> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (BeforePublishEvent) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        return (DistributedApplicationEventSubscription) getClient().invokeCapability("Aspire.Hosting/eventingSubscriberOnBeforePublish", reqArgs);
+    }
+
+    /** Subscribes an eventing subscriber to the AfterPublish event */
+    public DistributedApplicationEventSubscription onAfterPublish(AspireAction1<AfterPublishEvent> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (AfterPublishEvent) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        return (DistributedApplicationEventSubscription) getClient().invokeCapability("Aspire.Hosting/eventingSubscriberOnAfterPublish", reqArgs);
+    }
+
     /** Subscribes an eventing subscriber to the AfterResourcesCreated event */
     public DistributedApplicationEventSubscription onAfterResourcesCreated(AspireAction1<AfterResourcesCreatedEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -9573,6 +9705,19 @@ public class ExecutableResource extends ResourceBuilderBase {
         }
         getClient().invokeCapability("Aspire.Hosting/withIconName", reqArgs);
         return this;
+    }
+
+    /** Configures the compute environment for the compute resource */
+    public ExecutableResource withComputeEnvironment(IComputeEnvironmentResource computeEnvironmentResource) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("computeEnvironmentResource", AspireClient.serializeValue(computeEnvironmentResource));
+        getClient().invokeCapability("Aspire.Hosting/withComputeEnvironment", reqArgs);
+        return this;
+    }
+
+    public ExecutableResource withComputeEnvironment(ResourceBuilderBase computeEnvironmentResource) {
+        return withComputeEnvironment(new IComputeEnvironmentResource(computeEnvironmentResource.getHandle(), computeEnvironmentResource.getClient()));
     }
 
     /** Adds an HTTP health probe to the resource */
@@ -11318,6 +11463,22 @@ public class IAspireStore extends HandleWrapperBase {
 
 }
 
+// ===== IComputeEnvironmentResource.java =====
+// IComputeEnvironmentResource.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeEnvironmentResource. */
+public class IComputeEnvironmentResource extends ResourceBuilderBase {
+    IComputeEnvironmentResource(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+}
+
 // ===== IComputeResource.java =====
 // IComputeResource.java - GENERATED CODE - DO NOT EDIT
 
@@ -11774,6 +11935,36 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
             reqArgs.put("callback", callbackId);
         }
         return (DistributedApplicationEventSubscription) getClient().invokeCapability("Aspire.Hosting/subscribeBeforeStart", reqArgs);
+    }
+
+    /** Subscribes to the BeforePublish event */
+    public DistributedApplicationEventSubscription subscribeBeforePublish(AspireAction1<BeforePublishEvent> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (BeforePublishEvent) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        return (DistributedApplicationEventSubscription) getClient().invokeCapability("Aspire.Hosting/subscribeBeforePublish", reqArgs);
+    }
+
+    /** Subscribes to the AfterPublish event */
+    public DistributedApplicationEventSubscription subscribeAfterPublish(AspireAction1<AfterPublishEvent> callback) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        var callbackId = getClient().registerCallback(args -> {
+            var arg = (AfterPublishEvent) args[0];
+            callback.invoke(arg);
+            return null;
+        });
+        if (callbackId != null) {
+            reqArgs.put("callback", callbackId);
+        }
+        return (DistributedApplicationEventSubscription) getClient().invokeCapability("Aspire.Hosting/subscribeAfterPublish", reqArgs);
     }
 
     /** Subscribes to the AfterResourcesCreated event */
@@ -15245,6 +15436,19 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures the compute environment for the compute resource */
+    public ProjectResource withComputeEnvironment(IComputeEnvironmentResource computeEnvironmentResource) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("computeEnvironmentResource", AspireClient.serializeValue(computeEnvironmentResource));
+        getClient().invokeCapability("Aspire.Hosting/withComputeEnvironment", reqArgs);
+        return this;
+    }
+
+    public ProjectResource withComputeEnvironment(ResourceBuilderBase computeEnvironmentResource) {
+        return withComputeEnvironment(new IComputeEnvironmentResource(computeEnvironmentResource.getHandle(), computeEnvironmentResource.getClient()));
+    }
+
     /** Adds an HTTP health probe to the resource */
     public ProjectResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions options) {
         var path = options == null ? null : options.getPath();
@@ -17941,6 +18145,19 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Configures the compute environment for the compute resource */
+    public TestDatabaseResource withComputeEnvironment(IComputeEnvironmentResource computeEnvironmentResource) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("computeEnvironmentResource", AspireClient.serializeValue(computeEnvironmentResource));
+        getClient().invokeCapability("Aspire.Hosting/withComputeEnvironment", reqArgs);
+        return this;
+    }
+
+    public TestDatabaseResource withComputeEnvironment(ResourceBuilderBase computeEnvironmentResource) {
+        return withComputeEnvironment(new IComputeEnvironmentResource(computeEnvironmentResource.getHandle(), computeEnvironmentResource.getClient()));
+    }
+
     /** Adds an HTTP health probe to the resource */
     public TestDatabaseResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions options) {
         var path = options == null ? null : options.getPath();
@@ -19860,6 +20077,19 @@ public class TestRedisResource extends ContainerResource {
         }
         getClient().invokeCapability("Aspire.Hosting/withIconName", reqArgs);
         return this;
+    }
+
+    /** Configures the compute environment for the compute resource */
+    public TestRedisResource withComputeEnvironment(IComputeEnvironmentResource computeEnvironmentResource) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("computeEnvironmentResource", AspireClient.serializeValue(computeEnvironmentResource));
+        getClient().invokeCapability("Aspire.Hosting/withComputeEnvironment", reqArgs);
+        return this;
+    }
+
+    public TestRedisResource withComputeEnvironment(ResourceBuilderBase computeEnvironmentResource) {
+        return withComputeEnvironment(new IComputeEnvironmentResource(computeEnvironmentResource.getHandle(), computeEnvironmentResource.getClient()));
     }
 
     /** Adds an HTTP health probe to the resource */
@@ -21824,6 +22054,19 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Configures the compute environment for the compute resource */
+    public TestVaultResource withComputeEnvironment(IComputeEnvironmentResource computeEnvironmentResource) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("computeEnvironmentResource", AspireClient.serializeValue(computeEnvironmentResource));
+        getClient().invokeCapability("Aspire.Hosting/withComputeEnvironment", reqArgs);
+        return this;
+    }
+
+    public TestVaultResource withComputeEnvironment(ResourceBuilderBase computeEnvironmentResource) {
+        return withComputeEnvironment(new IComputeEnvironmentResource(computeEnvironmentResource.getHandle(), computeEnvironmentResource.getClient()));
+    }
+
     /** Adds an HTTP health probe to the resource */
     public TestVaultResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions options) {
         var path = options == null ? null : options.getPath();
@@ -23254,6 +23497,7 @@ public final class WithVolumeOptions {
 .modules/AddParameterOptions.java
 .modules/AddParameterWithGeneratedValueOptions.java
 .modules/AddStepOptions.java
+.modules/AfterPublishEvent.java
 .modules/AfterResourcesCreatedEvent.java
 .modules/Aspire.java
 .modules/AspireAction0.java
@@ -23272,6 +23516,7 @@ public final class WithVolumeOptions {
 .modules/AspireRegistrations.java
 .modules/AspireUnion.java
 .modules/BaseRegistrations.java
+.modules/BeforePublishEvent.java
 .modules/BeforeResourceStartedEvent.java
 .modules/BeforeStartEvent.java
 .modules/BuildOptions.java
@@ -23331,6 +23576,7 @@ public final class WithVolumeOptions {
 .modules/HttpsCertificateExecutionConfigurationExportData.java
 .modules/HttpsCertificateInfo.java
 .modules/IAspireStore.java
+.modules/IComputeEnvironmentResource.java
 .modules/IComputeResource.java
 .modules/IConfiguration.java
 .modules/IConfigurationSection.java

@@ -54,6 +54,12 @@ internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, Direct
     /// </summary>
     public string LogFilePath { get; } = logFilePath;
 
+    /// <summary>
+    /// Gets or sets the log file path of the CLI process managing the connected app host.
+    /// This is populated after connecting to a running app host via <see cref="Backchannel.AppHostConnectionResolver"/>.
+    /// </summary>
+    public string? AppHostCliLogFilePath { get; set; }
+
     public DirectoryInfo HomeDirectory { get; } = homeDirectory ?? new DirectoryInfo(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
     public bool DebugMode { get; } = debugMode;
 

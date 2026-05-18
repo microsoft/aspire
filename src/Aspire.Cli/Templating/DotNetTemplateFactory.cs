@@ -9,6 +9,8 @@ using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
@@ -437,7 +439,7 @@ internal class DotNetTemplateFactory(
     {
         if (!await SdkInstallHelper.EnsureSdkInstalledAsync(sdkInstaller, interactionService, telemetry, cancellationToken: cancellationToken))
         {
-            return new TemplateResult(ExitCodeConstants.SdkNotInstalled);
+            return new TemplateResult(CliExitCodes.SdkNotInstalled);
         }
 
         var name = await GetProjectNameAsync(inputs, template.Name, parseResult, cancellationToken);
@@ -445,7 +447,7 @@ internal class DotNetTemplateFactory(
 
         if (outputPath is null)
         {
-            return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
         }
 
         return await ApplyTemplateAsync(template, inputs, name, outputPath, parseResult, extraArgsCallback, cancellationToken);
@@ -481,7 +483,7 @@ internal class DotNetTemplateFactory(
             {
                 interactionService.DisplayLines(installOutcome.OutputLines);
                 interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.TemplateInstallationFailed, installOutcome.ExitCode));
-                return new TemplateResult(ExitCodeConstants.FailedToInstallTemplates);
+                return new TemplateResult(CliExitCodes.FailedToInstallTemplates);
             }
 
             interactionService.DisplayMessage(KnownEmojis.Package, string.Format(CultureInfo.CurrentCulture, TemplatingStrings.UsingProjectTemplatesVersion, installOutcome.TemplateVersion));
@@ -515,16 +517,32 @@ internal class DotNetTemplateFactory(
                 if (newProjectExitCode == 73)
                 {
                     interactionService.DisplayError(TemplatingStrings.ProjectAlreadyExists);
-                    return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+                    return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
                 }
 
                 interactionService.DisplayLines(newProjectCollector.GetLines());
                 interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.ProjectCreationFailed, newProjectExitCode));
-                return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+                return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
             }
 
             // Trust certificates (result not used since we're not launching an AppHost)
             _ = await certificateService.EnsureCertificatesTrustedAsync(cancellationToken);
+
+            // Persist the resolved channel into the scaffolded project's aspire.config.json
+            // for Explicit channels (pr-<N>, daily, staging, local). Without this pin, `aspire
+            // update` on the new project skips the local-config step in its channel-resolution
+            // precedence and falls through to either an interactive prompt (when hives exist)
+            // or the Implicit/nuget.org channel — silently moving a project scaffolded by a
+            // PR or daily CLI onto stable/nuget.org. Implicit channels (stable/nuget.org) are
+            // not persisted so `aspire add`/`aspire restore` continue to use the ambient
+            // NuGet config without a per-project pin. Mirrors the TypeScript starter behavior
+            // in CliTemplateFactory.TypeScriptStarterTemplate.
+            if (selectedTemplateDetails.Channel.Type is PackageChannelType.Explicit)
+            {
+                var config = AspireConfigFile.LoadOrCreate(outputPath);
+                config.Channel = selectedTemplateDetails.Channel.Name;
+                config.Save(outputPath);
+            }
 
             // For explicit channels, optionally create or update a NuGet.config. If none exists in the current
             // working directory, create one in the newly created project's output directory.
@@ -532,26 +550,35 @@ internal class DotNetTemplateFactory(
 
             interactionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.ProjectCreatedSuccessfully, outputPath));
 
-            return new TemplateResult(ExitCodeConstants.Success, outputPath);
+            return new TemplateResult(CliExitCodes.Success, outputPath);
         }
         catch (OperationCanceledException)
         {
-            return new TemplateResult(ExitCodeConstants.Cancelled);
+            return new TemplateResult(CliExitCodes.Cancelled);
         }
         catch (CertificateServiceException ex)
         {
             interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.CertificateTrustError, ex.Message));
-            return new TemplateResult(ExitCodeConstants.FailedToTrustCertificates);
+            return new TemplateResult(CliExitCodes.FailedToTrustCertificates);
         }
         catch (Exceptions.ChannelNotFoundException ex)
         {
             interactionService.DisplayError(ex.Message);
-            return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
         }
         catch (EmptyChoicesException ex)
         {
             interactionService.DisplayError(ex.Message);
-            return new TemplateResult(ExitCodeConstants.FailedToCreateNewProject);
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
+        }
+        catch (NuGetPackageCacheException ex)
+        {
+            // Surface NuGet feed search failures (offline, inaccessible feed, etc.) with a friendly error
+            // instead of letting them bubble up to the top-level "unexpected error" handler. The pre-extraction
+            // init code went straight to `dotnet new install` and never invoked a NuGet search, so this catch
+            // restores parity with the prior init failure mode for these scenarios.
+            interactionService.DisplayError(ex.Message);
+            return new TemplateResult(CliExitCodes.FailedToCreateNewProject);
         }
     }
 

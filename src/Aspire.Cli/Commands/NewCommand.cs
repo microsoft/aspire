@@ -313,24 +313,31 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
 
                 var configuredChannelName = parseResult.GetValue(_channelOption);
 
-                // When the running CLI was built on a local-build channel (pr-*, run-*, local) and
-                // the matching hive-backed channel is registered, prefer it over the Implicit
-                // (nuget.org) channel. Without this, `aspire new` resolves the template version
-                // from nuget.org and yields the latest stable (e.g. 13.2.4), which is then routed
-                // by Package Source Mapping to the PR hive and rejected because the hive only
-                // contains the corresponding prerelease (e.g. 13.4.0-pr.16820.gSHA). Aligning the
-                // selected channel with the CLI's own build channel keeps the version-range
-                // semantics coherent end-to-end (build → execution context → hive → restore).
-                PackageChannel? localBuildChannel = null;
+                // When no --channel was passed, prefer the channel whose name matches the running
+                // CLI's identity (CliExecutionContext.IdentityChannel — stable, staging, daily,
+                // local, or pr-<N>) over the Implicit (nuget.org) channel. This keeps the
+                // resolved template package and the channel pinned into aspire.config.json
+                // mutually satisfiable: a daily CLI scaffolds a daily-channel project whose
+                // prerelease SDK version is reachable through the daily channel's Package Source
+                // Mapping (Aspire.* → dnceng), a stable CLI scaffolds a stable project whose
+                // stable SDK version is reachable through nuget.org, and so on. The opposite
+                // outcome — resolving against Implicit while pinning channel to the identity —
+                // makes restore reject the prerelease/stable mismatch with "Unable to find a
+                // stable package Aspire.Hosting with version (>= …)".
+                //
+                // Falls back to the Implicit channel when the identity doesn't match any
+                // registered channel (e.g. typoed override, future identity name) so the
+                // command stays useful while surfacing a deterministic version.
+                PackageChannel? identityChannelMatch = null;
                 if (string.IsNullOrWhiteSpace(configuredChannelName) &&
-                    VersionHelper.IsLocalBuildChannel(ExecutionContext.IdentityChannel))
+                    !string.IsNullOrWhiteSpace(ExecutionContext.IdentityChannel))
                 {
-                    localBuildChannel = channels.FirstOrDefault(c =>
+                    identityChannelMatch = channels.FirstOrDefault(c =>
                         string.Equals(c.Name, ExecutionContext.IdentityChannel, StringComparison.OrdinalIgnoreCase));
                 }
 
                 var selectedChannel = string.IsNullOrWhiteSpace(configuredChannelName)
-                    ? localBuildChannel
+                    ? identityChannelMatch
                         ?? channels.FirstOrDefault(c => c.Type is PackageChannelType.Implicit)
                         ?? channels.FirstOrDefault()
                     : channels.FirstOrDefault(c => string.Equals(c.Name, configuredChannelName, StringComparison.OrdinalIgnoreCase));
@@ -344,34 +351,41 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
                     return new ResolveTemplateVersionResult { ErrorMessage = errorMessage };
                 }
 
-                var packages = (await selectedChannel.GetTemplatePackagesAsync(ExecutionContext.WorkingDirectory, cancellationToken))
-                    .Where(p => Semver.SemVersion.TryParse(p.Version, Semver.SemVersionStyles.Strict, out _))
-                    .ToArray();
-                var hasPrHives = ExecutionContext.GetHiveCount() > 0;
-
-                NuGetPackage? package = VersionHelper.TryGetCurrentCliVersionMatch(
-                    packages,
-                    p => p.Version,
-                    out var cliVersionPackage,
-                    channelName: selectedChannel.Name,
-                    hasPrHives: hasPrHives)
-                    ? cliVersionPackage
-                    : null;
-
-                package ??= packages
-                    .OrderByDescending(p => Semver.SemVersion.Parse(p.Version, Semver.SemVersionStyles.Strict), Semver.SemVersion.PrecedenceComparer)
-                    .FirstOrDefault();
-
-                if (package is null)
+                try
                 {
-                    return new ResolveTemplateVersionResult { ErrorMessage = $"No template versions found in channel '{selectedChannel.Name}'." };
+                    var packages = (await selectedChannel.GetTemplatePackagesAsync(ExecutionContext.WorkingDirectory, cancellationToken))
+                        .Where(p => Semver.SemVersion.TryParse(p.Version, Semver.SemVersionStyles.Strict, out _))
+                        .ToArray();
+                    var hasPrHives = ExecutionContext.GetHiveCount() > 0;
+
+                    NuGetPackage? package = VersionHelper.TryGetCurrentCliVersionMatch(
+                        packages,
+                        p => p.Version,
+                        out var cliVersionPackage,
+                        channelName: selectedChannel.Name,
+                        hasPrHives: hasPrHives)
+                        ? cliVersionPackage
+                        : null;
+
+                    package ??= packages
+                        .OrderByDescending(p => Semver.SemVersion.Parse(p.Version, Semver.SemVersionStyles.Strict), Semver.SemVersion.PrecedenceComparer)
+                        .FirstOrDefault();
+
+                    if (package is null)
+                    {
+                        return new ResolveTemplateVersionResult { ErrorMessage = $"No template versions found in channel '{selectedChannel.Name}'." };
+                    }
+
+                    // Only persist explicit channel names (e.g. local, daily) — implicit channels
+                    // (stable/nuget.org) should not be written so aspire add uses its default behavior.
+                    var channelName = selectedChannel.Type is PackageChannelType.Explicit ? selectedChannel.Name : null;
+
+                    return new ResolveTemplateVersionResult { Version = package.Version, ChannelName = channelName };
                 }
-
-                // Only persist explicit channel names (e.g. local, daily) — implicit channels
-                // (stable/nuget.org) should not be written so aspire add uses its default behavior.
-                var channelName = selectedChannel.Type is PackageChannelType.Explicit ? selectedChannel.Name : null;
-
-                return new ResolveTemplateVersionResult { Version = package.Version, ChannelName = channelName };
+                catch (NuGetPackageCacheException ex)
+                {
+                    return new ResolveTemplateVersionResult { ErrorMessage = ex.Message };
+                }
             });
     }
 
@@ -387,13 +401,13 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         var template = await GetProjectTemplateAsync(availableTemplates, parseResult, cancellationToken);
         if (template is null)
         {
-            return CommandResult.Failure(ExitCodeConstants.InvalidCommand);
+            return CommandResult.Failure(CliExitCodes.InvalidCommand);
         }
 
         var (languageResolutionSuccess, selectedLanguageId) = await ResolveSelectedLanguageAsync(template, parseResult, cancellationToken);
         if (!languageResolutionSuccess)
         {
-            return CommandResult.Failure(ExitCodeConstants.InvalidCommand);
+            return CommandResult.Failure(CliExitCodes.InvalidCommand);
         }
 
         var version = parseResult.GetValue(s_versionOption);
@@ -404,7 +418,7 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             var resolveResult = await ResolveCliTemplateVersionAsync(parseResult, cancellationToken);
             if (!resolveResult.Success)
             {
-                return CommandResult.Failure(ExitCodeConstants.InvalidCommand, resolveResult.ErrorMessage);
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, resolveResult.ErrorMessage);
             }
 
             version = resolveResult.Version;

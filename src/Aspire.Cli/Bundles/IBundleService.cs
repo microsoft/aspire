@@ -39,6 +39,27 @@ internal interface IBundleService
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The discovered layout, or <see langword="null"/> if no layout is found.</returns>
     Task<LayoutConfiguration?> EnsureExtractedAndGetLayoutAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Determines the default extraction directory for the supplied CLI binary path
+    /// by reading the <c>.aspire-install.json</c> sidecar (if any) next to the
+    /// resolved binary and switching on its <c>source</c> field. The resulting
+    /// directory is the parent of <c>versions/&lt;id&gt;/</c> and varies by source:
+    /// <list type="bullet">
+    /// <item><description>Script / PR sources (<c>source=script</c> or <c>source=pr</c>,
+    /// binary in <c>bin/</c>): the parent of the binary's directory (= the install
+    /// prefix root).</description></item>
+    /// <item><description>Packager-managed sources (<c>source=winget</c> /
+    /// <c>source=brew</c> / <c>source=dotnet-tool</c>): the directory containing the
+    /// binary (symlinks resolved first).</description></item>
+    /// <item><description>No sidecar / unmanaged installs: the parent of the binary's
+    /// directory, preserving the historical <c>~/.aspire/bin/aspire → ~/.aspire/</c>
+    /// heuristic.</description></item>
+    /// </list>
+    /// </summary>
+    /// <param name="processPath">An absolute path to the CLI binary.</param>
+    /// <returns>The extraction directory, or <see langword="null"/> if it cannot be determined.</returns>
+    string? GetDefaultExtractDir(string processPath);
 }
 
 /// <summary>
