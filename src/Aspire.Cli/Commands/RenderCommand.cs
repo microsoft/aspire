@@ -234,6 +234,11 @@ internal sealed class RenderCommand : BaseCommand
             InteractionService.DisplayMessage(emoji, $"DisplayMessage with {emoji.Name}");
         }
 
+        InteractionService.DisplayEmptyLine();
+        InteractionService.DisplayMessage(KnownEmojis.Rocket, "This is a much longer message that is designed to test how text wraps when the terminal window is narrow. It should wrap cleanly beneath the text column without pushing content under the emoji icon on the left side of the display.");
+        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, "Successfully deployed the application to the remote environment. The deployment included 14 services, 3 databases, and 2 message brokers. All health checks passed and the application is now accepting traffic on the configured endpoints.");
+        InteractionService.DisplayError("Something went terribly wrong while attempting to connect to the remote application host. The connection timed out after 30 seconds. Please verify that the host is running and that the network configuration allows traffic on the specified port.");
+
         return CliExitCodes.Success;
     }
 
@@ -243,6 +248,10 @@ internal sealed class RenderCommand : BaseCommand
         InteractionService.DisplaySuccess("Operation completed successfully.");
         InteractionService.DisplaySubtleMessage("This is a subtle hint.");
         InteractionService.DisplayCancellationMessage();
+
+        InteractionService.DisplayEmptyLine();
+        InteractionService.DisplayError("Failed to resolve package 'Aspire.Hosting.Azure.CosmosDB' version 9.2.0. The package source 'https://api.nuget.org/v3/index.json' returned a 503 Service Unavailable response. Please check your network connection and try again, or configure an alternative package source in your NuGet.config file.");
+        InteractionService.DisplaySuccess("All 47 integration tests passed successfully across 3 target frameworks (net8.0, net9.0, net10.0). Total execution time: 2 minutes and 14 seconds. Code coverage increased from 78.3% to 82.1%.");
         return CliExitCodes.Success;
     }
 
