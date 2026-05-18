@@ -3,7 +3,7 @@
 
 namespace Aspire.Hosting;
 
-internal sealed class BrowserLogsProcessResult(int exitCode)
+internal sealed class BrowserProcessResult(int exitCode)
 {
     public int ExitCode { get; } = exitCode;
 }

@@ -10,12 +10,12 @@ namespace Aspire.Hosting;
 // launch contracts:
 // - POSIX: the child must see the browser-input pipe at fd 3 and browser-output pipe at fd 4.
 // - Windows: Chromium can adopt explicit inherited handles supplied through --remote-debugging-io-pipes=<read>,<write>.
-internal static partial class BrowserLogsPipeBrowserProcessLauncher
+internal static partial class BrowserPipeProcessLauncher
 {
     private const string RemoteDebuggingPipeArgument = "--remote-debugging-pipe";
     private static readonly TimeSpan s_processExitTimeout = TimeSpan.FromSeconds(5);
 
-    public static IBrowserLogsPipeBrowserProcess Start(
+    public static IBrowserPipeProcess Start(
         string executablePath,
         IReadOnlyList<string> browserArguments)
     {

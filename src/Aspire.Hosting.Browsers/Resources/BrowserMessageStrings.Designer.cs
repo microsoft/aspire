@@ -14,21 +14,21 @@ internal static class BrowserMessageStrings
 
     internal static CultureInfo? Culture { get; set; }
 
-    internal static string BrowserLogsDefaultProfileName => GetString(nameof(BrowserLogsDefaultProfileName));
-    internal static string BrowserLogsEmptyBrowserConfiguration => GetString(nameof(BrowserLogsEmptyBrowserConfiguration));
-    internal static string BrowserLogsEmptyProfileConfiguration => GetString(nameof(BrowserLogsEmptyProfileConfiguration));
-    internal static string BrowserLogsProfileRequiresSharedUserDataMode => GetString(nameof(BrowserLogsProfileRequiresSharedUserDataMode));
-    internal static string BrowserLogsInvalidUserDataModeConfiguration => GetString(nameof(BrowserLogsInvalidUserDataModeConfiguration));
-    internal static string BrowserLogsUnableToLocateBrowser => GetString(nameof(BrowserLogsUnableToLocateBrowser));
-    internal static string BrowserLogsAppHostPathShaNotAvailable => GetString(nameof(BrowserLogsAppHostPathShaNotAvailable));
-    internal static string BrowserLogsUserDataDirectoryNotFound => GetString(nameof(BrowserLogsUserDataDirectoryNotFound));
-    internal static string BrowserLogsTrackedBrowserProfileConflict => GetString(nameof(BrowserLogsTrackedBrowserProfileConflict));
-    internal static string BrowserLogsUnableToReadProfileMetadata => GetString(nameof(BrowserLogsUnableToReadProfileMetadata));
-    internal static string BrowserLogsInvalidProfileMetadata => GetString(nameof(BrowserLogsInvalidProfileMetadata));
-    internal static string BrowserLogsProfileNotFound => GetString(nameof(BrowserLogsProfileNotFound));
-    internal static string BrowserLogsAmbiguousProfile => GetString(nameof(BrowserLogsAmbiguousProfile));
-    internal static string BrowserLogsResourceMissingHttpEndpoint => GetString(nameof(BrowserLogsResourceMissingHttpEndpoint));
-    internal static string BrowserLogsEndpointNotAllocated => GetString(nameof(BrowserLogsEndpointNotAllocated));
+    internal static string BrowserDefaultProfileName => GetString(nameof(BrowserDefaultProfileName));
+    internal static string BrowserEmptyBrowserConfiguration => GetString(nameof(BrowserEmptyBrowserConfiguration));
+    internal static string BrowserEmptyProfileConfiguration => GetString(nameof(BrowserEmptyProfileConfiguration));
+    internal static string BrowserProfileRequiresSharedUserDataMode => GetString(nameof(BrowserProfileRequiresSharedUserDataMode));
+    internal static string BrowserInvalidUserDataModeConfiguration => GetString(nameof(BrowserInvalidUserDataModeConfiguration));
+    internal static string BrowserUnableToLocateBrowser => GetString(nameof(BrowserUnableToLocateBrowser));
+    internal static string BrowserAppHostPathShaNotAvailable => GetString(nameof(BrowserAppHostPathShaNotAvailable));
+    internal static string BrowserUserDataDirectoryNotFound => GetString(nameof(BrowserUserDataDirectoryNotFound));
+    internal static string BrowserTrackedBrowserProfileConflict => GetString(nameof(BrowserTrackedBrowserProfileConflict));
+    internal static string BrowserUnableToReadProfileMetadata => GetString(nameof(BrowserUnableToReadProfileMetadata));
+    internal static string BrowserInvalidProfileMetadata => GetString(nameof(BrowserInvalidProfileMetadata));
+    internal static string BrowserProfileNotFound => GetString(nameof(BrowserProfileNotFound));
+    internal static string BrowserAmbiguousProfile => GetString(nameof(BrowserAmbiguousProfile));
+    internal static string BrowserResourceMissingHttpEndpoint => GetString(nameof(BrowserResourceMissingHttpEndpoint));
+    internal static string BrowserEndpointNotAllocated => GetString(nameof(BrowserEndpointNotAllocated));
 
     private static string GetString(string name) => s_resourceManager.GetString(name, Culture)!;
 }

@@ -13,9 +13,9 @@ using Microsoft.Win32.SafeHandles;
 
 namespace Aspire.Hosting;
 
-internal static partial class BrowserLogsPipeBrowserProcessLauncher
+internal static partial class BrowserPipeProcessLauncher
 {
-    private static BrowserLogsPipeBrowserProcess StartWindows(string executablePath, IReadOnlyList<string> browserArguments)
+    private static BrowserPipeProcess StartWindows(string executablePath, IReadOnlyList<string> browserArguments)
     {
         // Parent writes CDP commands to appToBrowser; the browser reads the client end. Parent reads responses/events
         // from browserToApp; the browser writes the client end. AnonymousPipeServerStream makes the client handles
@@ -52,7 +52,7 @@ internal static partial class BrowserLogsPipeBrowserProcessLauncher
             browserToApp.DisposeLocalCopyOfClientHandle();
 
             var processTask = WaitForWindowsProcessAsync(processHandle);
-            return new BrowserLogsPipeBrowserProcess(
+            return new BrowserPipeProcess(
                 processInfo.ProcessId,
                 browserToApp,
                 appToBrowser,
@@ -157,6 +157,16 @@ internal static partial class BrowserLogsPipeBrowserProcessLauncher
         return builder.ToString();
     }
 
+    // Windows CreateProcessW receives one command-line string, and Chromium reconstructs argv using the Microsoft C
+    // runtime backslash/quote rules:
+    // https://learn.microsoft.com/cpp/c-language/parsing-c-command-line-arguments
+    //
+    // Examples:
+    //   C:\Program Files\Browser\browser.exe     -> "C:\Program Files\Browser\browser.exe"
+    //   --user-data-dir=C:\Users\me\A B          -> "--user-data-dir=C:\Users\me\A B"
+    //   --flag=value"with quote"                -> "--flag=value\"with quote\""
+    //   C:\path\ending-with-slash\              -> "C:\path\ending-with-slash\\"
+    //
     // Adapted from dotnet/runtime PasteArguments.AppendArgument so CreateProcess receives the same argv Chromium expects.
     private static void AppendWindowsCommandLineArgument(StringBuilder builder, string argument)
     {
@@ -212,7 +222,7 @@ internal static partial class BrowserLogsPipeBrowserProcessLauncher
         builder.Append('"');
     }
 
-    private static async Task<BrowserLogsProcessResult> WaitForWindowsProcessAsync(SafeWaitHandle processHandle)
+    private static async Task<BrowserProcessResult> WaitForWindowsProcessAsync(SafeWaitHandle processHandle)
     {
         return await Task.Run(() =>
         {
@@ -227,7 +237,7 @@ internal static partial class BrowserLogsPipeBrowserProcessLauncher
                 throw CreateWindowsException("GetExitCodeProcess");
             }
 
-            return new BrowserLogsProcessResult(unchecked((int)exitCode));
+            return new BrowserProcessResult(unchecked((int)exitCode));
         }).ConfigureAwait(false);
     }
 
@@ -299,7 +309,7 @@ internal static partial class BrowserLogsPipeBrowserProcessLauncher
 
     private readonly record struct WindowsProcessInfo(int ProcessId, IntPtr ProcessHandle, IntPtr ThreadHandle);
 
-    private sealed class WindowsProcessLifetime(int processId, SafeWaitHandle processHandle, SafeWaitHandle? jobHandle, Task<BrowserLogsProcessResult> processTask) : IBrowserLogsPipeBrowserProcessLifetime
+    private sealed class WindowsProcessLifetime(int processId, SafeWaitHandle processHandle, SafeWaitHandle? jobHandle, Task<BrowserProcessResult> processTask) : IBrowserPipeProcessLifetime
     {
         public async ValueTask DisposeAsync()
         {

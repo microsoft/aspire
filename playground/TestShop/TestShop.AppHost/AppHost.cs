@@ -2,6 +2,8 @@ using Aspire.Hosting.Yarp.Transforms;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
+#pragma warning disable ASPIREBROWSERAUTOMATION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 var builder = DistributedApplication.CreateBuilder(args);
 
 var catalogDb = builder.AddPostgres("postgres")
@@ -87,7 +89,8 @@ var frontend = builder.AddProject<Projects.MyFrontend>("frontend")
        .WithUrlForEndpoint("http", url => url.DisplayLocation = UrlDisplayLocation.DetailsOnly)
        // Add health relative URL (show in details only)
        .WithUrlForEndpoint("https", ep => new() { Url = "/health", DisplayText = "Health", DisplayLocation = UrlDisplayLocation.DetailsOnly })
-       .WithHttpHealthCheck("/health");
+       .WithHttpHealthCheck("/health")
+       .WithBrowserAutomation();
 
 builder.AddProject<Projects.OrderProcessor>("orderprocessor", launchProfileName: "OrderProcessor")
        .WithReference(messaging).WaitFor(messaging);
@@ -121,3 +124,5 @@ builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard
 #endif
 
 builder.Build().Run();
+
+#pragma warning restore ASPIREBROWSERAUTOMATION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.

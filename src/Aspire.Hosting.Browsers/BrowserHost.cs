@@ -14,11 +14,11 @@ internal abstract class BrowserHost(
     BrowserHostOwnership ownership,
     Uri? debugEndpoint,
     string browserDisplayName,
-    ILogger<BrowserLogsSessionManager> logger,
+    ILogger<BrowserSessionManager> logger,
     TimeProvider timeProvider,
     bool reuseInitialBlankTarget) : IBrowserHost
 {
-    private readonly ILogger<BrowserLogsSessionManager> _logger = logger;
+    private readonly ILogger<BrowserSessionManager> _logger = logger;
     private readonly bool _reuseInitialBlankTarget = reuseInitialBlankTarget;
     private readonly TimeProvider _timeProvider = timeProvider;
 
@@ -34,20 +34,20 @@ internal abstract class BrowserHost(
 
     public abstract Task Termination { get; }
 
-    public virtual async Task<IBrowserLogsCdpConnection> CreateCdpConnectionAsync(
-        Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
-        ILogger<BrowserLogsSessionManager> logger,
+    public virtual async Task<IBrowserCdpConnection> CreateCdpConnectionAsync(
+        Func<BrowserCdpProtocolEvent, ValueTask> eventHandler,
+        ILogger<BrowserSessionManager> logger,
         CancellationToken cancellationToken)
     {
         var debugEndpoint = DebugEndpoint ?? throw new InvalidOperationException("Tracked browser host does not expose a WebSocket debug endpoint.");
-        return await BrowserLogsCdpConnection.ConnectAsync(debugEndpoint, eventHandler, logger, cancellationToken).ConfigureAwait(false);
+        return await BrowserCdpConnection.ConnectAsync(debugEndpoint, eventHandler, logger, cancellationToken).ConfigureAwait(false);
     }
 
     public Task<IBrowserPageSession> CreatePageSessionAsync(
         string sessionId,
         Uri url,
         BrowserConnectionDiagnosticsLogger connectionDiagnostics,
-        Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
+        Func<BrowserCdpProtocolEvent, ValueTask> eventHandler,
         CancellationToken cancellationToken)
     {
         return CreatePageSessionCoreAsync(sessionId, url, connectionDiagnostics, eventHandler, cancellationToken);
@@ -59,7 +59,7 @@ internal abstract class BrowserHost(
         string sessionId,
         Uri url,
         BrowserConnectionDiagnosticsLogger connectionDiagnostics,
-        Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
+        Func<BrowserCdpProtocolEvent, ValueTask> eventHandler,
         CancellationToken cancellationToken)
     {
         return await BrowserPageSession.StartAsync(
@@ -79,20 +79,20 @@ internal abstract class BrowserHost(
 // private browser-level CDP pipe and cleaning it up when the final lease is released.
 internal sealed class OwnedBrowserHost : BrowserHost
 {
-    private readonly BrowserLogsCdpConnectionMultiplexer _connectionMultiplexer;
-    private readonly IBrowserLogsPipeBrowserProcess _process;
-    private readonly BrowserLogsUserDataDirectory _userDataDirectory;
-    private readonly Task<BrowserLogsProcessResult> _processTask;
+    private readonly BrowserCdpConnectionMultiplexer _connectionMultiplexer;
+    private readonly IBrowserPipeProcess _process;
+    private readonly BrowserUserDataDirectory _userDataDirectory;
+    private readonly Task<BrowserProcessResult> _processTask;
     private readonly Task _termination;
     private int _disposed;
 
     private OwnedBrowserHost(
         BrowserHostIdentity identity,
         string browserDisplayName,
-        IBrowserLogsPipeBrowserProcess process,
-        BrowserLogsCdpConnectionMultiplexer connectionMultiplexer,
-        BrowserLogsUserDataDirectory userDataDirectory,
-        ILogger<BrowserLogsSessionManager> logger,
+        IBrowserPipeProcess process,
+        BrowserCdpConnectionMultiplexer connectionMultiplexer,
+        BrowserUserDataDirectory userDataDirectory,
+        ILogger<BrowserSessionManager> logger,
         TimeProvider timeProvider)
         : base(identity, BrowserHostOwnership.Owned, debugEndpoint: null, browserDisplayName, logger, timeProvider, reuseInitialBlankTarget: true)
     {
@@ -108,16 +108,16 @@ internal sealed class OwnedBrowserHost : BrowserHost
 
     public override Task Termination => _termination;
 
-    public override Task<IBrowserLogsCdpConnection> CreateCdpConnectionAsync(
-        Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
-        ILogger<BrowserLogsSessionManager> logger,
+    public override Task<IBrowserCdpConnection> CreateCdpConnectionAsync(
+        Func<BrowserCdpProtocolEvent, ValueTask> eventHandler,
+        ILogger<BrowserSessionManager> logger,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         return Task.FromResult(_connectionMultiplexer.CreateConnection(eventHandler));
     }
 
-    private static List<string> BuildBrowserArguments(BrowserLogsUserDataDirectory userDataDirectory)
+    private static List<string> BuildBrowserArguments(BrowserUserDataDirectory userDataDirectory)
     {
         // The initial about:blank page gives owned hosts a predictable first page target that can be navigated instead
         // of leaving an extra blank tab.
@@ -142,11 +142,11 @@ internal sealed class OwnedBrowserHost : BrowserHost
     public static async Task<OwnedBrowserHost> StartAsync(
         BrowserHostIdentity identity,
         string browserDisplayName,
-        BrowserLogsUserDataDirectory userDataDirectory,
-        ILogger<BrowserLogsSessionManager> logger,
+        BrowserUserDataDirectory userDataDirectory,
+        ILogger<BrowserSessionManager> logger,
         TimeProvider timeProvider,
         CancellationToken cancellationToken,
-        Func<string, IReadOnlyList<string>, IBrowserLogsPipeBrowserProcess>? startPipeBrowserProcess = null)
+        Func<string, IReadOnlyList<string>, IBrowserPipeProcess>? startPipeBrowserProcess = null)
     {
         var devToolsActivePortFilePath = Path.Combine(userDataDirectory.Path, "DevToolsActivePort");
         // Pipe-backed launches do not use DevToolsActivePort or the sidecar endpoint file. Clear stale WebSocket
@@ -154,16 +154,16 @@ internal sealed class OwnedBrowserHost : BrowserHost
         // for current state.
         DeleteBrowserEndpointFile(devToolsActivePortFilePath, logger);
         BrowserEndpointDiscovery.DeleteEndpointMetadata(userDataDirectory.Path);
-        startPipeBrowserProcess ??= BrowserLogsPipeBrowserProcessLauncher.Start;
+        startPipeBrowserProcess ??= BrowserPipeProcessLauncher.Start;
 
-        IBrowserLogsPipeBrowserProcess? process = null;
-        BrowserLogsCdpConnectionMultiplexer? connectionMultiplexer = null;
+        IBrowserPipeProcess? process = null;
+        BrowserCdpConnectionMultiplexer? connectionMultiplexer = null;
         try
         {
             cancellationToken.ThrowIfCancellationRequested();
             process = startPipeBrowserProcess(identity.ExecutablePath, BuildBrowserArguments(userDataDirectory));
-            connectionMultiplexer = new BrowserLogsCdpConnectionMultiplexer(
-                new BrowserLogsPipeCdpTransport(process.BrowserOutput, process.BrowserInput),
+            connectionMultiplexer = new BrowserCdpConnectionMultiplexer(
+                new BrowserPipeCdpTransport(process.BrowserOutput, process.BrowserInput),
                 logger);
         }
         catch
@@ -259,7 +259,7 @@ internal sealed class AdoptedBrowserHost : BrowserHost
         BrowserHostIdentity identity,
         Uri debugEndpoint,
         string browserDisplayName,
-        ILogger<BrowserLogsSessionManager> logger,
+        ILogger<BrowserSessionManager> logger,
         TimeProvider timeProvider)
         : base(identity, BrowserHostOwnership.Adopted, debugEndpoint, browserDisplayName, logger, timeProvider, reuseInitialBlankTarget: false)
     {

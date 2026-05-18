@@ -3,10 +3,10 @@
 
 namespace Aspire.Hosting;
 
-// Stores browser-log configuration chosen from the dashboard for the current AppHost process. User secrets persist the
+// Stores browser configuration chosen from the dashboard for the current AppHost process. User secrets persist the
 // same values for the next run, but the store makes the next command execution use the new values immediately without
 // depending on configuration reload timing.
-internal sealed class BrowserLogsConfigurationStore
+internal sealed class BrowserConfigurationStore
 {
     private readonly object _lock = new();
     private readonly Dictionary<string, BrowserConfiguration> _resourceConfigurations = new(StringComparers.ResourceName);
@@ -23,13 +23,13 @@ internal sealed class BrowserLogsConfigurationStore
         }
     }
 
-    public void Set(BrowserLogsConfigurationScope scope, string resourceName, BrowserConfiguration configuration)
+    public void Set(BrowserConfigurationScope scope, string resourceName, BrowserConfiguration configuration)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(resourceName);
 
         lock (_lock)
         {
-            if (scope == BrowserLogsConfigurationScope.Global)
+            if (scope == BrowserConfigurationScope.Global)
             {
                 _globalConfiguration = configuration;
             }
@@ -41,7 +41,7 @@ internal sealed class BrowserLogsConfigurationStore
     }
 }
 
-internal enum BrowserLogsConfigurationScope
+internal enum BrowserConfigurationScope
 {
     Resource,
     Global

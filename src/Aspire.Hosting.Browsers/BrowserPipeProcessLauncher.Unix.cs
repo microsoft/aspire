@@ -9,9 +9,9 @@ using Microsoft.Win32.SafeHandles;
 
 namespace Aspire.Hosting;
 
-internal static partial class BrowserLogsPipeBrowserProcessLauncher
+internal static partial class BrowserPipeProcessLauncher
 {
-    private static BrowserLogsPipeBrowserProcess StartPosix(string executablePath, IReadOnlyList<string> browserArguments)
+    private static BrowserPipeProcess StartPosix(string executablePath, IReadOnlyList<string> browserArguments)
     {
         var appToBrowser = PosixPipe.Invalid;
         var browserToApp = PosixPipe.Invalid;
@@ -58,12 +58,12 @@ internal static partial class BrowserLogsPipeBrowserProcessLauncher
             ClosePosixDescriptor(ref browserToApp.Write);
 
             // After spawn, the parent owns the write side of appToBrowser and the read side of browserToApp. Wrap them
-            // in FileStream so the rest of BrowserLogs can treat pipe CDP like any other async stream transport.
+            // in FileStream so the rest of Browser can treat pipe CDP like any other async stream transport.
             browserInput = CreateFileStreamFromDescriptor(ref appToBrowser.Write, FileAccess.Write);
             browserOutput = CreateFileStreamFromDescriptor(ref browserToApp.Read, FileAccess.Read);
             var processTask = WaitForPosixProcessAsync(processId);
 
-            return new BrowserLogsPipeBrowserProcess(
+            return new BrowserPipeProcess(
                 processId,
                 browserOutput,
                 browserInput,
@@ -123,7 +123,7 @@ internal static partial class BrowserLogsPipeBrowserProcessLauncher
         return movedDescriptor;
     }
 
-    private static async Task<BrowserLogsProcessResult> WaitForPosixProcessAsync(int processId)
+    private static async Task<BrowserProcessResult> WaitForPosixProcessAsync(int processId)
     {
         return await Task.Run(() =>
         {
@@ -132,7 +132,7 @@ internal static partial class BrowserLogsPipeBrowserProcessLauncher
                 var result = waitpid(processId, out var status, 0);
                 if (result == processId)
                 {
-                    return new BrowserLogsProcessResult(GetPosixExitCode(status));
+                    return new BrowserProcessResult(GetPosixExitCode(status));
                 }
 
                 if (Marshal.GetLastPInvokeError() != EINTR)
@@ -244,7 +244,7 @@ internal static partial class BrowserLogsPipeBrowserProcessLauncher
         }
     }
 
-    private sealed class PosixProcessLifetime(int processId, Task<BrowserLogsProcessResult> processTask) : IBrowserLogsPipeBrowserProcessLifetime
+    private sealed class PosixProcessLifetime(int processId, Task<BrowserProcessResult> processTask) : IBrowserPipeProcessLifetime
     {
         public async ValueTask DisposeAsync()
         {

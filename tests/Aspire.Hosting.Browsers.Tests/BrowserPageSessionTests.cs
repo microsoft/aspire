@@ -16,9 +16,9 @@ public class BrowserPageSessionTests
     {
         var targetId = BrowserPageSession.TrySelectReusableStartupPageTargetId(
         [
-            new BrowserLogsTargetInfo { TargetId = "restored-page", Type = "page", Url = "https://example.com", Attached = false },
-            new BrowserLogsTargetInfo { TargetId = "service-worker", Type = "service_worker", Url = "https://example.com/sw.js", Attached = false },
-            new BrowserLogsTargetInfo { TargetId = "launcher-page", Type = "page", Url = "about:blank", Attached = false }
+            new BrowserTargetInfo { TargetId = "restored-page", Type = "page", Url = "https://example.com", Attached = false },
+            new BrowserTargetInfo { TargetId = "service-worker", Type = "service_worker", Url = "https://example.com/sw.js", Attached = false },
+            new BrowserTargetInfo { TargetId = "launcher-page", Type = "page", Url = "about:blank", Attached = false }
         ]);
 
         Assert.Equal("launcher-page", targetId);
@@ -29,8 +29,8 @@ public class BrowserPageSessionTests
     {
         var targetId = BrowserPageSession.TrySelectReusableStartupPageTargetId(
         [
-            new BrowserLogsTargetInfo { TargetId = "attached-page", Type = "page", Url = "about:blank", Attached = true },
-            new BrowserLogsTargetInfo { TargetId = "fallback-page", Type = "page", Url = "chrome://newtab/", Attached = false }
+            new BrowserTargetInfo { TargetId = "attached-page", Type = "page", Url = "about:blank", Attached = true },
+            new BrowserTargetInfo { TargetId = "fallback-page", Type = "page", Url = "chrome://newtab/", Attached = false }
         ]);
 
         Assert.Equal("fallback-page", targetId);
@@ -40,14 +40,14 @@ public class BrowserPageSessionTests
     public async Task StartAsync_ReusesStartupTargetAttachesInstrumentsNavigatesAndRoutesEvents()
     {
         var host = new TestBrowserHost();
-        var connection = new FakeBrowserLogsCdpConnection
+        var connection = new FakeBrowserCdpConnection
         {
             TargetInfos =
             [
-                new BrowserLogsTargetInfo { TargetId = "startup-target", Type = "page", Url = "about:blank", Attached = false }
+                new BrowserTargetInfo { TargetId = "startup-target", Type = "page", Url = "about:blank", Attached = false }
             ]
         };
-        var routedEvents = new List<BrowserLogsCdpProtocolEvent>();
+        var routedEvents = new List<BrowserCdpProtocolEvent>();
 
         var session = await BrowserPageSession.StartAsync(
             host,
@@ -60,7 +60,7 @@ public class BrowserPageSessionTests
                 routedEvents.Add(protocolEvent);
                 return ValueTask.CompletedTask;
             },
-            NullLogger<BrowserLogsSessionManager>.Instance,
+            NullLogger<BrowserSessionManager>.Instance,
             TimeProvider.System,
             reuseInitialBlankTarget: true,
             CancellationToken.None);
@@ -78,17 +78,17 @@ public class BrowserPageSessionTests
             },
             connection.Calls);
 
-        var unrelatedEvent = new BrowserLogsConsoleApiCalledEvent("other-session", new BrowserLogsRuntimeConsoleApiCalledParameters { Type = "log" });
-        var routedEvent = new BrowserLogsConsoleApiCalledEvent("target-session-1", new BrowserLogsRuntimeConsoleApiCalledParameters { Type = "log" });
+        var unrelatedEvent = new BrowserConsoleApiCalledEvent("other-session", new BrowserRuntimeConsoleApiCalledParameters { Type = "log" });
+        var routedEvent = new BrowserConsoleApiCalledEvent("target-session-1", new BrowserRuntimeConsoleApiCalledParameters { Type = "log" });
         await connection.RaiseEventAsync(unrelatedEvent);
         await connection.RaiseEventAsync(routedEvent);
 
         var capturedEvent = Assert.Single(routedEvents);
         Assert.Same(routedEvent, capturedEvent);
 
-        await connection.RaiseEventAsync(new BrowserLogsTargetDestroyedEvent(
+        await connection.RaiseEventAsync(new BrowserTargetDestroyedEvent(
             SessionId: null,
-            new BrowserLogsTargetDestroyedParameters { TargetId = "startup-target" }));
+            new BrowserTargetDestroyedParameters { TargetId = "startup-target" }));
 
         var result = await session.Completion.DefaultTimeout();
         Assert.Equal(BrowserPageSessionCompletionKind.PageClosed, result.CompletionKind);
@@ -99,10 +99,43 @@ public class BrowserPageSessionTests
     }
 
     [Fact]
+    public async Task SendCdpCommandJsonAsync_UsesPageOrBrowserSession()
+    {
+        var host = new TestBrowserHost();
+        var connection = new FakeBrowserCdpConnection
+        {
+            CreatedTargetId = "created-target",
+            AttachSessionId = "target-session-1"
+        };
+
+        var session = await BrowserPageSession.StartAsync(
+            host,
+            "session-0001",
+            new Uri("https://localhost:5001/"),
+            new BrowserConnectionDiagnosticsLogger("session-0001", NullLogger.Instance),
+            CreateConnectionFactory(connection),
+            static _ => ValueTask.CompletedTask,
+            NullLogger<BrowserSessionManager>.Instance,
+            TimeProvider.System,
+            reuseInitialBlankTarget: false,
+            CancellationToken.None);
+
+        var pageResult = await session.SendCdpCommandJsonAsync("Runtime.evaluate", """{"expression":"document.title"}""", "page", CancellationToken.None);
+        var browserResult = await session.SendCdpCommandJsonAsync("Target.getTargets", parametersJson: null, "browser", CancellationToken.None);
+
+        Assert.Equal("""{"ok":true}""", pageResult);
+        Assert.Equal("""{"ok":true}""", browserResult);
+        Assert.Contains("Raw:target-session-1:Runtime.evaluate:{\"expression\":\"document.title\"}", connection.Calls);
+        Assert.Contains("Raw::Target.getTargets:", connection.Calls);
+
+        await session.DisposeAsync();
+    }
+
+    [Fact]
     public async Task DisposeAsync_ClosesTrackedTarget()
     {
         var host = new TestBrowserHost();
-        var connection = new FakeBrowserLogsCdpConnection
+        var connection = new FakeBrowserCdpConnection
         {
             CreatedTargetId = "created-target"
         };
@@ -114,7 +147,7 @@ public class BrowserPageSessionTests
             new BrowserConnectionDiagnosticsLogger("session-0001", NullLogger.Instance),
             CreateConnectionFactory(connection),
             static _ => ValueTask.CompletedTask,
-            NullLogger<BrowserLogsSessionManager>.Instance,
+            NullLogger<BrowserSessionManager>.Instance,
             TimeProvider.System,
             reuseInitialBlankTarget: false,
             CancellationToken.None);
@@ -141,7 +174,7 @@ public class BrowserPageSessionTests
     public async Task CaptureScreenshotAsync_UsesCurrentTargetSession()
     {
         var host = new TestBrowserHost();
-        var connection = new FakeBrowserLogsCdpConnection
+        var connection = new FakeBrowserCdpConnection
         {
             CreatedTargetId = "created-target",
             ScreenshotData = "image-data"
@@ -154,12 +187,12 @@ public class BrowserPageSessionTests
             new BrowserConnectionDiagnosticsLogger("session-0001", NullLogger.Instance),
             CreateConnectionFactory(connection),
             static _ => ValueTask.CompletedTask,
-            NullLogger<BrowserLogsSessionManager>.Instance,
+            NullLogger<BrowserSessionManager>.Instance,
             TimeProvider.System,
             reuseInitialBlankTarget: false,
             CancellationToken.None);
 
-        var result = await session.CaptureScreenshotAsync(CancellationToken.None);
+        var result = await session.CaptureScreenshotAsync(BrowserScreenshotCaptureOptions.Default, CancellationToken.None);
 
         Assert.Equal("image-data", result.Data);
         Assert.Contains("CaptureScreenshot:target-session-1", connection.Calls);
@@ -171,7 +204,7 @@ public class BrowserPageSessionTests
     public async Task CaptureScreenshotAsync_IsCanceledWhenSessionIsDisposed()
     {
         var host = new TestBrowserHost();
-        var connection = new FakeBrowserLogsCdpConnection
+        var connection = new FakeBrowserCdpConnection
         {
             CreatedTargetId = "created-target",
             WaitForScreenshotCancellation = true
@@ -184,12 +217,12 @@ public class BrowserPageSessionTests
             new BrowserConnectionDiagnosticsLogger("session-0001", NullLogger.Instance),
             CreateConnectionFactory(connection),
             static _ => ValueTask.CompletedTask,
-            NullLogger<BrowserLogsSessionManager>.Instance,
+            NullLogger<BrowserSessionManager>.Instance,
             TimeProvider.System,
             reuseInitialBlankTarget: false,
             CancellationToken.None);
 
-        var captureTask = session.CaptureScreenshotAsync(CancellationToken.None);
+        var captureTask = session.CaptureScreenshotAsync(BrowserScreenshotCaptureOptions.Default, CancellationToken.None);
         await connection.ScreenshotCaptureStarted.Task.DefaultTimeout();
 
         var disposeTask = session.DisposeAsync().AsTask();
@@ -203,16 +236,16 @@ public class BrowserPageSessionTests
     public async Task MonitorAsync_ReconnectsToExistingTargetAfterConnectionLoss()
     {
         var host = new TestBrowserHost();
-        var firstConnection = new FakeBrowserLogsCdpConnection
+        var firstConnection = new FakeBrowserCdpConnection
         {
             CreatedTargetId = "target-1",
             AttachSessionId = "target-session-1"
         };
-        var secondConnection = new FakeBrowserLogsCdpConnection
+        var secondConnection = new FakeBrowserCdpConnection
         {
             AttachSessionId = "target-session-2"
         };
-        var routedEvents = new List<BrowserLogsCdpProtocolEvent>();
+        var routedEvents = new List<BrowserCdpProtocolEvent>();
         var timeProvider = new FakeTimeProvider(new DateTimeOffset(2026, 4, 26, 0, 0, 0, TimeSpan.Zero));
 
         var session = await BrowserPageSession.StartAsync(
@@ -226,7 +259,7 @@ public class BrowserPageSessionTests
                 routedEvents.Add(protocolEvent);
                 return ValueTask.CompletedTask;
             },
-            NullLogger<BrowserLogsSessionManager>.Instance,
+            NullLogger<BrowserSessionManager>.Instance,
             timeProvider,
             reuseInitialBlankTarget: false,
             CancellationToken.None);
@@ -250,14 +283,14 @@ public class BrowserPageSessionTests
             },
             secondConnection.Calls);
 
-        var routedEvent = new BrowserLogsConsoleApiCalledEvent("target-session-2", new BrowserLogsRuntimeConsoleApiCalledParameters { Type = "log" });
+        var routedEvent = new BrowserConsoleApiCalledEvent("target-session-2", new BrowserRuntimeConsoleApiCalledParameters { Type = "log" });
         await secondConnection.RaiseEventAsync(routedEvent);
 
         Assert.Same(routedEvent, Assert.Single(routedEvents));
 
-        await secondConnection.RaiseEventAsync(new BrowserLogsTargetDestroyedEvent(
+        await secondConnection.RaiseEventAsync(new BrowserTargetDestroyedEvent(
             SessionId: null,
-            new BrowserLogsTargetDestroyedParameters { TargetId = "target-1" }));
+            new BrowserTargetDestroyedParameters { TargetId = "target-1" }));
 
         var result = await session.Completion.DefaultTimeout();
         Assert.Equal(BrowserPageSessionCompletionKind.PageClosed, result.CompletionKind);
@@ -267,7 +300,7 @@ public class BrowserPageSessionTests
         await session.DisposeAsync();
     }
 
-    private static BrowserLogsCdpConnectionFactory CreateConnectionFactory(params FakeBrowserLogsCdpConnection[] connections)
+    private static BrowserCdpConnectionFactory CreateConnectionFactory(params FakeBrowserCdpConnection[] connections)
     {
         var nextConnectionIndex = 0;
         return (eventHandler, _, _) =>
@@ -275,7 +308,7 @@ public class BrowserPageSessionTests
             Assert.True(nextConnectionIndex < connections.Length);
             var connection = connections[nextConnectionIndex++];
             connection.SetEventHandler(eventHandler);
-            return Task.FromResult<IBrowserLogsCdpConnection>(connection);
+            return Task.FromResult<IBrowserCdpConnection>(connection);
         };
     }
 
@@ -297,9 +330,9 @@ public class BrowserPageSessionTests
 
         public Task Termination => _terminationSource.Task;
 
-        public Task<IBrowserLogsCdpConnection> CreateCdpConnectionAsync(
-            Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
-            ILogger<BrowserLogsSessionManager> logger,
+        public Task<IBrowserCdpConnection> CreateCdpConnectionAsync(
+            Func<BrowserCdpProtocolEvent, ValueTask> eventHandler,
+            ILogger<BrowserSessionManager> logger,
             CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
@@ -307,7 +340,7 @@ public class BrowserPageSessionTests
             string sessionId,
             Uri url,
             BrowserConnectionDiagnosticsLogger connectionDiagnostics,
-            Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler,
+            Func<BrowserCdpProtocolEvent, ValueTask> eventHandler,
             CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
@@ -318,11 +351,11 @@ public class BrowserPageSessionTests
         }
     }
 
-    private sealed class FakeBrowserLogsCdpConnection : IBrowserLogsCdpConnection
+    private sealed class FakeBrowserCdpConnection : IBrowserCdpConnection
     {
         private readonly TaskCompletionSource _completionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _instrumentationEnabled = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        private Func<BrowserLogsCdpProtocolEvent, ValueTask>? _eventHandler;
+        private Func<BrowserCdpProtocolEvent, ValueTask>? _eventHandler;
 
         public List<string> Calls { get; } = [];
 
@@ -338,40 +371,40 @@ public class BrowserPageSessionTests
 
         public bool Disposed { get; private set; }
 
-        public BrowserLogsTargetInfo[]? TargetInfos { get; init; }
+        public BrowserTargetInfo[]? TargetInfos { get; init; }
 
         public Task Completion => _completionSource.Task;
 
         public Task InstrumentationEnabled => _instrumentationEnabled.Task;
 
-        public Task<BrowserLogsCreateTargetResult> CreateTargetAsync(CancellationToken cancellationToken)
+        public Task<BrowserCreateTargetResult> CreateTargetAsync(CancellationToken cancellationToken)
         {
             Calls.Add("CreateTarget");
-            return Task.FromResult(new BrowserLogsCreateTargetResult { TargetId = CreatedTargetId });
+            return Task.FromResult(new BrowserCreateTargetResult { TargetId = CreatedTargetId });
         }
 
-        public Task<BrowserLogsGetTargetsResult> GetTargetsAsync(CancellationToken cancellationToken)
+        public Task<BrowserGetTargetsResult> GetTargetsAsync(CancellationToken cancellationToken)
         {
             Calls.Add("GetTargets");
-            return Task.FromResult(new BrowserLogsGetTargetsResult { TargetInfos = TargetInfos });
+            return Task.FromResult(new BrowserGetTargetsResult { TargetInfos = TargetInfos });
         }
 
-        public Task<BrowserLogsAttachToTargetResult> AttachToTargetAsync(string targetId, CancellationToken cancellationToken)
+        public Task<BrowserAttachToTargetResult> AttachToTargetAsync(string targetId, CancellationToken cancellationToken)
         {
             Calls.Add($"Attach:{targetId}");
-            return Task.FromResult(new BrowserLogsAttachToTargetResult { SessionId = AttachSessionId });
+            return Task.FromResult(new BrowserAttachToTargetResult { SessionId = AttachSessionId });
         }
 
-        public Task<BrowserLogsCommandAck> CloseTargetAsync(string targetId, CancellationToken cancellationToken)
+        public Task<BrowserCommandAck> CloseTargetAsync(string targetId, CancellationToken cancellationToken)
         {
             Calls.Add($"CloseTarget:{targetId}");
-            return Task.FromResult(BrowserLogsCommandAck.Instance);
+            return Task.FromResult(BrowserCommandAck.Instance);
         }
 
-        public Task<BrowserLogsCommandAck> EnableTargetDiscoveryAsync(CancellationToken cancellationToken)
+        public Task<BrowserCommandAck> EnableTargetDiscoveryAsync(CancellationToken cancellationToken)
         {
             Calls.Add("EnableTargetDiscovery");
-            return Task.FromResult(BrowserLogsCommandAck.Instance);
+            return Task.FromResult(BrowserCommandAck.Instance);
         }
 
         public Task EnablePageInstrumentationAsync(string sessionId, CancellationToken cancellationToken)
@@ -381,13 +414,31 @@ public class BrowserPageSessionTests
             return Task.CompletedTask;
         }
 
-        public Task<BrowserLogsCommandAck> NavigateAsync(string sessionId, Uri url, CancellationToken cancellationToken)
+        public Task<BrowserNavigateResult> NavigateAsync(string sessionId, Uri url, CancellationToken cancellationToken)
         {
             Calls.Add($"Navigate:{sessionId}:{url}");
-            return Task.FromResult(BrowserLogsCommandAck.Instance);
+            return Task.FromResult(new BrowserNavigateResult { FrameId = "frame-1" });
         }
 
-        public async Task<BrowserLogsCaptureScreenshotResult> CaptureScreenshotAsync(string sessionId, CancellationToken cancellationToken)
+        public Task<BrowserRuntimeEvaluateResult> EvaluateAsync(string sessionId, string expression, TimeSpan? timeout, CancellationToken cancellationToken)
+        {
+            Calls.Add($"Evaluate:{sessionId}:{expression}");
+            return Task.FromResult(new BrowserRuntimeEvaluateResult
+            {
+                Result = new BrowserCdpProtocolRemoteObject
+                {
+                    Value = new BrowserCdpProtocolStringValue("""{"action":"evaluate"}""")
+                }
+            });
+        }
+
+        public Task<string> SendRawCommandAsync(string? sessionId, string method, string? parametersJson, CancellationToken cancellationToken)
+        {
+            Calls.Add($"Raw:{sessionId}:{method}:{parametersJson}");
+            return Task.FromResult("""{"ok":true}""");
+        }
+
+        public async Task<BrowserCaptureScreenshotResult> CaptureScreenshotAsync(string sessionId, BrowserScreenshotCaptureOptions options, CancellationToken cancellationToken)
         {
             Calls.Add($"CaptureScreenshot:{sessionId}");
             ScreenshotCaptureStarted.TrySetResult();
@@ -397,15 +448,15 @@ public class BrowserPageSessionTests
                 await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
             }
 
-            return new BrowserLogsCaptureScreenshotResult { Data = ScreenshotData };
+            return new BrowserCaptureScreenshotResult { Data = ScreenshotData };
         }
 
-        public void SetEventHandler(Func<BrowserLogsCdpProtocolEvent, ValueTask> eventHandler)
+        public void SetEventHandler(Func<BrowserCdpProtocolEvent, ValueTask> eventHandler)
         {
             _eventHandler = eventHandler;
         }
 
-        public ValueTask RaiseEventAsync(BrowserLogsCdpProtocolEvent protocolEvent)
+        public ValueTask RaiseEventAsync(BrowserCdpProtocolEvent protocolEvent)
         {
             return _eventHandler is null
                 ? throw new InvalidOperationException("The fake connection is not connected.")

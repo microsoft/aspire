@@ -3,7 +3,7 @@
 
 namespace Aspire.Hosting;
 
-internal interface IBrowserLogsPipeBrowserProcess : IAsyncDisposable
+internal interface IBrowserPipeProcess : IAsyncDisposable
 {
     int ProcessId { get; }
 
@@ -11,19 +11,19 @@ internal interface IBrowserLogsPipeBrowserProcess : IAsyncDisposable
 
     Stream BrowserInput { get; }
 
-    Task<BrowserLogsProcessResult> ProcessTask { get; }
+    Task<BrowserProcessResult> ProcessTask { get; }
 }
 
-internal sealed class BrowserLogsPipeBrowserProcess(
+internal sealed class BrowserPipeProcess(
     int processId,
     Stream browserOutput,
     Stream browserInput,
-    Task<BrowserLogsProcessResult> processTask,
-    IBrowserLogsPipeBrowserProcessLifetime processLifetime) : IBrowserLogsPipeBrowserProcess
+    Task<BrowserProcessResult> processTask,
+    IBrowserPipeProcessLifetime processLifetime) : IBrowserPipeProcess
 {
     private readonly Stream _browserInput = browserInput;
     private readonly Stream _browserOutput = browserOutput;
-    private readonly IBrowserLogsPipeBrowserProcessLifetime _processLifetime = processLifetime;
+    private readonly IBrowserPipeProcessLifetime _processLifetime = processLifetime;
     private int _disposed;
 
     public int ProcessId { get; } = processId;
@@ -32,7 +32,7 @@ internal sealed class BrowserLogsPipeBrowserProcess(
 
     public Stream BrowserInput => _browserInput;
 
-    public Task<BrowserLogsProcessResult> ProcessTask { get; } = processTask;
+    public Task<BrowserProcessResult> ProcessTask { get; } = processTask;
 
     public async ValueTask DisposeAsync()
     {
@@ -59,7 +59,7 @@ internal sealed class BrowserLogsPipeBrowserProcess(
     }
 }
 
-internal interface IBrowserLogsPipeBrowserProcessLifetime
+internal interface IBrowserPipeProcessLifetime
 {
     ValueTask DisposeAsync();
 }

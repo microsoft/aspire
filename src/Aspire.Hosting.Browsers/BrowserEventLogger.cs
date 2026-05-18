@@ -26,35 +26,35 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
     // resource-log line when the request is complete.
     private readonly Dictionary<string, BrowserNetworkRequestState> _networkRequests = new(StringComparer.Ordinal);
 
-    public void HandleEvent(BrowserLogsCdpProtocolEvent protocolEvent)
+    public void HandleEvent(BrowserCdpProtocolEvent protocolEvent)
     {
         switch (protocolEvent)
         {
-            case BrowserLogsConsoleApiCalledEvent consoleApiCalledEvent:
+            case BrowserConsoleApiCalledEvent consoleApiCalledEvent:
                 LogConsoleMessage(consoleApiCalledEvent.Parameters);
                 break;
-            case BrowserLogsExceptionThrownEvent exceptionThrownEvent:
+            case BrowserExceptionThrownEvent exceptionThrownEvent:
                 LogUnhandledException(exceptionThrownEvent.Parameters);
                 break;
-            case BrowserLogsLogEntryAddedEvent logEntryAddedEvent:
+            case BrowserLogEntryAddedEvent logEntryAddedEvent:
                 LogEntryAdded(logEntryAddedEvent.Parameters);
                 break;
-            case BrowserLogsRequestWillBeSentEvent requestWillBeSentEvent:
+            case BrowserRequestWillBeSentEvent requestWillBeSentEvent:
                 TrackRequestStarted(requestWillBeSentEvent.Parameters);
                 break;
-            case BrowserLogsResponseReceivedEvent responseReceivedEvent:
+            case BrowserResponseReceivedEvent responseReceivedEvent:
                 TrackResponseReceived(responseReceivedEvent.Parameters);
                 break;
-            case BrowserLogsLoadingFinishedEvent loadingFinishedEvent:
+            case BrowserLoadingFinishedEvent loadingFinishedEvent:
                 TrackRequestCompleted(loadingFinishedEvent.Parameters);
                 break;
-            case BrowserLogsLoadingFailedEvent loadingFailedEvent:
+            case BrowserLoadingFailedEvent loadingFailedEvent:
                 TrackRequestFailed(loadingFailedEvent.Parameters);
                 break;
         }
     }
 
-    private void LogConsoleMessage(BrowserLogsRuntimeConsoleApiCalledParameters parameters)
+    private void LogConsoleMessage(BrowserRuntimeConsoleApiCalledParameters parameters)
     {
         var level = parameters.Type ?? "log";
         var message = parameters.Args is { Length: > 0 }
@@ -64,7 +64,7 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
         WriteLog(MapConsoleLevel(level), $"[console.{level}] {message}".TrimEnd());
     }
 
-    private void LogUnhandledException(BrowserLogsExceptionThrownParameters parameters)
+    private void LogUnhandledException(BrowserExceptionThrownParameters parameters)
     {
         var exceptionDetails = parameters.ExceptionDetails;
         if (exceptionDetails is null)
@@ -80,7 +80,7 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
         WriteLog(LogLevel.Error, $"[exception] {message}{location}");
     }
 
-    private void LogEntryAdded(BrowserLogsLogEntryAddedParameters parameters)
+    private void LogEntryAdded(BrowserLogEntryAddedParameters parameters)
     {
         var entry = parameters.Entry;
         if (entry is null)
@@ -95,8 +95,20 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
         WriteLog(MapLogEntryLevel(level), $"[log.{level}] {text}{location}".TrimEnd());
     }
 
-    private void TrackRequestStarted(BrowserLogsRequestWillBeSentParameters parameters)
+    private void TrackRequestStarted(BrowserRequestWillBeSentParameters parameters)
     {
+        // Network events arrive as a loosely-coupled CDP stream rather than one complete HTTP record:
+        // https://chromedevtools.github.io/devtools-protocol/tot/Network/
+        //
+        // Typical successful request:
+        //   Network.requestWillBeSent  { requestId: "1", request: { method: "GET", url: "https://..." }, timestamp: 1.25 }
+        //   Network.responseReceived   { requestId: "1", response: { status: 200, fromDiskCache: false } }
+        //   Network.loadingFinished    { requestId: "1", encodedDataLength: 1234, timestamp: 1.40 }
+        //
+        // Redirect edge case:
+        //   Network.requestWillBeSent  { requestId: "1", redirectResponse: { status: 302 }, request: { url: "https://next" } }
+        //
+        // CDP reuses the same requestId for the redirected hop, so emit the previous hop before replacing its state.
         if (parameters.RequestId is not { Length: > 0 } requestId || parameters.Request is not { } request)
         {
             return;
@@ -127,7 +139,7 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
         };
     }
 
-    private void TrackResponseReceived(BrowserLogsResponseReceivedParameters parameters)
+    private void TrackResponseReceived(BrowserResponseReceivedParameters parameters)
     {
         if (parameters.RequestId is not { Length: > 0 } requestId ||
             !_networkRequests.TryGetValue(requestId, out var request))
@@ -148,7 +160,7 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
         }
     }
 
-    private void TrackRequestCompleted(BrowserLogsLoadingFinishedParameters parameters)
+    private void TrackRequestCompleted(BrowserLoadingFinishedParameters parameters)
     {
         if (parameters.RequestId is not { Length: > 0 } requestId ||
             !_networkRequests.Remove(requestId, out var request))
@@ -159,7 +171,7 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
         LogCompletedRequest(request, parameters.Timestamp, parameters.EncodedDataLength, redirectUrl: null);
     }
 
-    private void TrackRequestFailed(BrowserLogsLoadingFailedParameters parameters)
+    private void TrackRequestFailed(BrowserLoadingFailedParameters parameters)
     {
         if (parameters.RequestId is not { Length: > 0 } requestId ||
             !_networkRequests.Remove(requestId, out var request))
@@ -227,7 +239,7 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
         WriteLog(LogLevel.Information, $"[network.{request.ResourceType}] {request.Method} {request.Url}{statusText}{FormatDetails(details)}");
     }
 
-    private static void UpdateResponse(BrowserNetworkRequestState request, BrowserLogsResponse response)
+    private static void UpdateResponse(BrowserNetworkRequestState request, BrowserResponse response)
     {
         request.Url = response.Url ?? request.Url;
         request.StatusCode = response.Status;
@@ -266,6 +278,9 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
 
     private static string? FormatDuration(double? startTimestamp, double? endTimestamp)
     {
+        // CDP Network timestamps are MonotonicTime values in seconds. Keep the subtraction in that domain and only
+        // convert the delta to milliseconds for the log line; DateTime/Stopwatch conversions would mix clocks and can
+        // produce nonsense when the browser and AppHost have different time origins.
         if (startTimestamp is null || endTimestamp is null || endTimestamp < startTimestamp)
         {
             return null;
@@ -296,18 +311,18 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
         _ => LogLevel.Information
     };
 
-    private static string FormatRemoteObject(BrowserLogsCdpProtocolRemoteObject remoteObject)
+    private static string FormatRemoteObject(BrowserCdpProtocolRemoteObject remoteObject)
     {
         // Console arguments can arrive either as pre-rendered descriptions or as structured values that need stable
         // formatting for logs and tests.
-        if (remoteObject.Value is BrowserLogsCdpProtocolValue value)
+        if (remoteObject.Value is BrowserCdpProtocolValue value)
         {
             return value switch
             {
-                BrowserLogsCdpProtocolStringValue stringValue => stringValue.Value,
-                BrowserLogsCdpProtocolNullValue => "null",
-                BrowserLogsCdpProtocolBooleanValue booleanValue => booleanValue.Value ? bool.TrueString : bool.FalseString,
-                BrowserLogsCdpProtocolNumberValue numberValue => numberValue.RawValue,
+                BrowserCdpProtocolStringValue stringValue => stringValue.Value,
+                BrowserCdpProtocolNullValue => "null",
+                BrowserCdpProtocolBooleanValue booleanValue => booleanValue.Value ? bool.TrueString : bool.FalseString,
+                BrowserCdpProtocolNumberValue numberValue => numberValue.RawValue,
                 _ => FormatStructuredValue(value)
             };
         }
@@ -320,7 +335,7 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
         return remoteObject.Description ?? string.Empty;
     }
 
-    private static string FormatStructuredValue(BrowserLogsCdpProtocolValue value)
+    private static string FormatStructuredValue(BrowserCdpProtocolValue value)
     {
         var buffer = new ArrayBufferWriter<byte>();
         using var writer = new Utf8JsonWriter(buffer, s_structuredValueWriterOptions);
@@ -329,11 +344,11 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
         return Encoding.UTF8.GetString(buffer.WrittenSpan);
     }
 
-    private static void WriteStructuredValue(Utf8JsonWriter writer, BrowserLogsCdpProtocolValue value)
+    private static void WriteStructuredValue(Utf8JsonWriter writer, BrowserCdpProtocolValue value)
     {
         switch (value)
         {
-            case BrowserLogsCdpProtocolArrayValue arrayValue:
+            case BrowserCdpProtocolArrayValue arrayValue:
                 writer.WriteStartArray();
                 foreach (var item in arrayValue.Items)
                 {
@@ -342,16 +357,16 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
 
                 writer.WriteEndArray();
                 break;
-            case BrowserLogsCdpProtocolBooleanValue booleanValue:
+            case BrowserCdpProtocolBooleanValue booleanValue:
                 writer.WriteBooleanValue(booleanValue.Value);
                 break;
-            case BrowserLogsCdpProtocolNullValue:
+            case BrowserCdpProtocolNullValue:
                 writer.WriteNullValue();
                 break;
-            case BrowserLogsCdpProtocolNumberValue numberValue:
+            case BrowserCdpProtocolNumberValue numberValue:
                 writer.WriteRawValue(numberValue.RawValue, skipInputValidation: false);
                 break;
-            case BrowserLogsCdpProtocolObjectValue objectValue:
+            case BrowserCdpProtocolObjectValue objectValue:
                 writer.WriteStartObject();
                 foreach (var (propertyName, propertyValue) in objectValue.Properties)
                 {
@@ -361,13 +376,13 @@ internal sealed class BrowserEventLogger(string sessionId, ILogger resourceLogge
 
                 writer.WriteEndObject();
                 break;
-            case BrowserLogsCdpProtocolStringValue stringValue:
+            case BrowserCdpProtocolStringValue stringValue:
                 writer.WriteStringValue(stringValue.Value);
                 break;
         }
     }
 
-    private static string GetLocationSuffix(BrowserLogsSourceLocation details)
+    private static string GetLocationSuffix(BrowserSourceLocation details)
     {
         var url = details.Url;
         if (string.IsNullOrEmpty(url))

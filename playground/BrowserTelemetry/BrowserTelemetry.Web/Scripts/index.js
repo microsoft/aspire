@@ -131,7 +131,7 @@ function wireButton(id, callback) {
 }
 
 function setStatus(message) {
-    const status = document.getElementById('browser-log-status');
+    const status = document.getElementById('browser-status');
     if (!status) {
         return;
     }
