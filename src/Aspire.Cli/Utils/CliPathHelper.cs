@@ -184,33 +184,25 @@ internal static class CliPathHelper
     /// </summary>
     /// <param name="socketPrefix">The socket file prefix.</param>
     internal static string CreateUnixDomainSocketPath(string socketPrefix)
-        => CreateSocketPath(socketPrefix, isGuestAppHost: false);
+        => CreateSocketPath(socketPrefix);
 
     internal static string CreateGuestAppHostSocketPath(string socketPrefix)
-        => CreateSocketPath(socketPrefix, isGuestAppHost: true);
+        => OperatingSystem.IsWindows()
+            ? CreateSocketName(socketPrefix)
+            : CreateSocketPath(socketPrefix);
 
-    private static string CreateSocketPath(string socketPrefix, bool isGuestAppHost)
+    private static string CreateSocketPath(string socketPrefix)
     {
-        var socketName = $"{socketPrefix}.{BackchannelConstants.CreateRandomIdentifier()}";
-
-        if (isGuestAppHost && OperatingSystem.IsWindows())
-        {
-            return socketName;
-        }
-
-        var socketDirectory = GetCliSocketDirectory();
-        Directory.CreateDirectory(socketDirectory);
-        return Path.Combine(socketDirectory, socketName);
+        var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var socketPath = BackchannelConstants.ComputeCliSocketPath(homeDirectory, socketPrefix);
+        Directory.CreateDirectory(Path.GetDirectoryName(socketPath)!);
+        return socketPath;
     }
 
-    private static string GetCliHomeDirectory()
-        => Path.Combine(GetAspireHomeDirectory(), "cli");
-
-    private static string GetCliRuntimeDirectory()
-        => Path.Combine(GetCliHomeDirectory(), "runtime");
-
-    private static string GetCliSocketDirectory()
-        => Path.Combine(GetCliRuntimeDirectory(), "sockets");
+    private static string CreateSocketName(string socketPrefix)
+    {
+        return BackchannelConstants.ComputeSocketFileName(socketPrefix);
+    }
 
     private static string? TryResolveSymlinkTarget(string path, ILogger? logger, string fallbackDescription)
     {
