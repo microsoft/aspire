@@ -78,7 +78,7 @@ public class DistributedApplicationEventing : IDistributedApplicationEventing
     {
         if (typeof(T).IsInterface || typeof(T).IsAbstract)
         {
-            throw new ArgumentException($"Cannot subscribe to interface or abstract type '{typeof(T).Name}'. Subscribe to a concrete event type instead.", nameof(callback));
+            throw new ArgumentException($"Cannot subscribe to interface or abstract type '{typeof(T).Name}'. Subscribe to a concrete event type instead.");
         }
 
         var subscription = new DistributedApplicationEventSubscription(async (@event, ct) =>
