@@ -21,7 +21,11 @@ public sealed class VolumeNodeAffinityV1
     /// This property specifies mandatory node selection criteria using a <see cref="NodeSelectorV1"/> object.
     /// The criteria are used to determine the nodes on which a Kubernetes volume can be scheduled.
     /// It enables the definition of strict scheduling constraints that must be met for a node to be eligible.
+    /// Defaults to <see langword="null"/> so the property is omitted from the serialized YAML
+    /// when no required selector has been configured. Eagerly initializing this to
+    /// <c>new()</c> would otherwise emit an invalid empty <c>required: {}</c> mapping that
+    /// Kubernetes rejects on apply.
     /// </remarks>
     [YamlMember(Alias = "required")]
-    public NodeSelectorV1 Required { get; set; } = new();
+    public NodeSelectorV1? Required { get; set; }
 }

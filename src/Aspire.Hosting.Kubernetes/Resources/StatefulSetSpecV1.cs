@@ -103,9 +103,13 @@ public sealed class StatefulSetSpecV1
     /// </summary>
     /// <remarks>
     /// Defines how PersistentVolumeClaims should be retained or deleted when the StatefulSet is deleted or scaled down.
+    /// Defaults to <see langword="null"/> so the property is omitted from the serialized YAML when no
+    /// retention policy has been configured. Eagerly initializing this to <c>new()</c> would otherwise
+    /// emit an invalid empty <c>persistentVolumeClaimRetentionPolicy: {}</c> mapping that Kubernetes
+    /// rejects on apply.
     /// </remarks>
     [YamlMember(Alias = "persistentVolumeClaimRetentionPolicy")]
-    public StatefulSetPersistentVolumeClaimRetentionPolicyV1 PersistentVolumeClaimRetentionPolicy { get; set; } = new();
+    public StatefulSetPersistentVolumeClaimRetentionPolicyV1? PersistentVolumeClaimRetentionPolicy { get; set; }
 
     /// <summary>
     /// Defines the policy for managing the pods in a StatefulSet.
@@ -119,6 +123,11 @@ public sealed class StatefulSetSpecV1
     /// Gets or sets the strategy used to update the stateful set's pods.
     /// This property specifies how updates to the StatefulSet should be performed.
     /// </summary>
+    /// <remarks>
+    /// Defaults to <see langword="null"/> so the property is omitted from the serialized YAML when no
+    /// update strategy has been configured. Eagerly initializing this to <c>new()</c> would otherwise
+    /// emit an invalid empty <c>updateStrategy: {}</c> mapping that Kubernetes rejects on apply.
+    /// </remarks>
     [YamlMember(Alias = "updateStrategy")]
-    public StatefulSetUpdateStrategyV1 UpdateStrategy { get; set; } = new();
+    public StatefulSetUpdateStrategyV1? UpdateStrategy { get; set; }
 }

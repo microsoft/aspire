@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES002
+#pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes.Extensions;
@@ -134,6 +135,15 @@ internal sealed class KubernetesPublishingContext(
                 var gatewayObjects = new List<BaseKubernetesResource> { generatedGateway };
                 gatewayObjects.AddRange(gatewayResource.GeneratedHttpRoutes);
                 await WriteKubernetesTemplatesForResource(gatewayResource, gatewayObjects).ConfigureAwait(false);
+            }
+        }
+
+        // Write first-class persistent volume resources as standalone PVC templates.
+        foreach (var volumeResource in resources.OfType<KubernetesPersistentVolumeResource>())
+        {
+            if (volumeResource.Parent == environment && volumeResource.GeneratedClaim is { } generatedClaim)
+            {
+                await WriteKubernetesTemplatesForResource(volumeResource, [generatedClaim]).ConfigureAwait(false);
             }
         }
 

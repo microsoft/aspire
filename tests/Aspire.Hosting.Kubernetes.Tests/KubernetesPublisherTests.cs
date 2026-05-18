@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes.Resources;
 using Aspire.Hosting.Utils;
@@ -701,6 +703,272 @@ public class KubernetesPublisherTests()
         }
 
         await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_WithPvcStorageType_GeneratesValidPersistentVolumeAndClaim()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/14096 (PV emits empty
+        // claimRef/hostPath/local/nodeAffinity blocks) and
+        // https://github.com/microsoft/aspire/issues/16504 (PVC emits empty
+        // dataSource/dataSourceRef/selector blocks). Both are caused by eager `= new()`
+        // initialization of complex sub-properties on V1 spec types; once those properties are
+        // nullable the YAML serializer's OmitNull configuration suppresses the empty mappings.
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        builder.AddKubernetesEnvironment("env")
+            .WithProperties(env =>
+            {
+                env.DefaultStorageType = "pvc";
+                env.DefaultStorageClassName = "managed-csi";
+                env.DefaultStorageSize = "10Gi";
+                env.DefaultStorageReadWritePolicy = "ReadWriteOnce";
+            });
+
+        builder.AddContainer("service", "nginx")
+            .WithVolume("data", "/var/lib/data");
+
+        var app = builder.Build();
+        app.Run();
+
+        var expectedFiles = new[]
+        {
+            "templates/service/deployment.yaml",
+            "templates/service/data-pv.yaml",
+            "templates/service/data-pvc.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            Assert.True(File.Exists(filePath), $"Expected publisher to emit {expectedFile}.");
+
+            var content = await File.ReadAllTextAsync(filePath);
+
+            // Empty `{ }` mappings are the failure mode the bug fixes address; assert against
+            // them explicitly so a regression is obvious without snapshot-diffing.
+            Assert.DoesNotContain("{}", content);
+
+            settingsTask = settingsTask is null
+                ? Verify(content, "yaml")
+                : settingsTask.AppendContentAsFile(content, "yaml");
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_WithHostPathStorageType_GeneratesValidPersistentVolumeAndClaim()
+    {
+        // Regression test that exercises the hostPath emission path of
+        // CreatePersistentVolume in addition to the PVC path. With the bug fixes the rendered
+        // PV correctly contains a populated `hostPath` mapping while still omitting the empty
+        // `claimRef`/`local`/`nodeAffinity` blocks that previously broke `kubectl apply`.
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        builder.AddKubernetesEnvironment("env")
+            .WithProperties(env =>
+            {
+                env.DefaultStorageType = "hostpath";
+                env.DefaultStorageSize = "5Gi";
+            });
+
+        builder.AddContainer("service", "nginx")
+            .WithVolume("logs", "/var/log/service");
+
+        var app = builder.Build();
+        app.Run();
+
+        var deploymentPath = Path.Combine(tempDir.Path, "templates", "service", "deployment.yaml");
+        Assert.True(File.Exists(deploymentPath));
+
+        var deploymentContent = await File.ReadAllTextAsync(deploymentPath);
+        Assert.DoesNotContain("{}", deploymentContent);
+
+        await Verify(deploymentContent, "yaml");
+    }
+
+    [Fact]
+    public async Task PublishAsync_WithFirstClassPersistentVolume_BindsByName_PromotesToStatefulSet()
+    {
+        // First-class persistent volumes bind to a workload by matching a
+        // ContainerMountAnnotation source name. The publisher routes the pod's
+        // volumes[] entry through the generated PVC and promotes the workload to a
+        // StatefulSet (regardless of whether the resource implements
+        // IResourceWithConnectionString).
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+
+        var data = k8s.AddPersistentVolume("data")
+            .WithStorageClass("managed-csi")
+            .WithCapacity("20Gi")
+            .WithAccessMode(PersistentVolumeAccessMode.ReadWriteOnce)
+            .WithVolumeAnnotation("volume.beta.kubernetes.io/storage-provisioner", "disk.csi.azure.com");
+
+        builder.AddContainer("service", "nginx")
+            .WithVolume("data", "/var/lib/data")
+            .WithPersistentVolume(data);
+
+        var app = builder.Build();
+        app.Run();
+
+        var expectedFiles = new[]
+        {
+            "templates/service/statefulset.yaml",
+            "templates/data/data.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            Assert.True(File.Exists(filePath), $"Expected publisher to emit {expectedFile}.");
+
+            var content = await File.ReadAllTextAsync(filePath);
+            AssertNoBuggyEmptyMappings(content);
+
+            settingsTask = settingsTask is null
+                ? Verify(content, "yaml")
+                : settingsTask.AppendContentAsFile(content, "yaml");
+        }
+
+        // The pre-existing per-resource PVC under templates/service/ must NOT be emitted —
+        // the binding consumes the volume mount and routes it to the standalone PVC instead.
+        var legacyPvc = Path.Combine(tempDir.Path, "templates", "service", "data-pvc.yaml");
+        Assert.False(File.Exists(legacyPvc), "Bound volumes must not also be emitted via the env-default PV/PVC path.");
+
+        // And no Deployment manifest for the bound workload — it must promote to StatefulSet.
+        var deploymentPath = Path.Combine(tempDir.Path, "templates", "service", "deployment.yaml");
+        Assert.False(File.Exists(deploymentPath), "Workloads bound to a persistent volume must render as a StatefulSet, not a Deployment.");
+
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_WithFirstClassPersistentVolume_OnProject_BindsViaMountPathOverload()
+    {
+        // Closes https://github.com/dotnet/aspire/issues/9430 — projects can bind a
+        // persistent volume via the (volume, mountPath) overload, which adds the
+        // ContainerMountAnnotation itself.
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+
+        var media = k8s.AddPersistentVolume("media")
+            .WithStorageClass("azurefile-csi")
+            .WithCapacity("100Gi")
+            .WithAccessMode(PersistentVolumeAccessMode.ReadWriteMany);
+
+        builder.AddProject<TestProject>("api", launchProfileName: null)
+            .WithPersistentVolume(media, "/srv/media");
+
+        var app = builder.Build();
+        app.Run();
+
+        var expectedFiles = new[]
+        {
+            "templates/api/statefulset.yaml",
+            "templates/media/media.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            Assert.True(File.Exists(filePath), $"Expected publisher to emit {expectedFile}.");
+
+            var content = await File.ReadAllTextAsync(filePath);
+            AssertNoBuggyEmptyMappings(content);
+
+            settingsTask = settingsTask is null
+                ? Verify(content, "yaml")
+                : settingsTask.AppendContentAsFile(content, "yaml");
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_WithFirstClassPersistentVolume_FallsThroughForUnboundVolumes()
+    {
+        // A workload may declare both a bound and an unbound volume. The bound one
+        // routes through the standalone PVC; the unbound one falls through to the
+        // env-default storage type (here: emptyDir) so existing workloads are not
+        // perturbed by this feature.
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+
+        var data = k8s.AddPersistentVolume("data")
+            .WithStorageClass("managed-csi")
+            .WithCapacity("5Gi");
+
+        builder.AddContainer("service", "nginx")
+            .WithVolume("data", "/var/lib/data")
+            .WithVolume("scratch", "/srv/scratch")
+            .WithPersistentVolume(data);
+
+        var app = builder.Build();
+        app.Run();
+
+        var statefulSetPath = Path.Combine(tempDir.Path, "templates", "service", "statefulset.yaml");
+        Assert.True(File.Exists(statefulSetPath));
+
+        var statefulSetContent = await File.ReadAllTextAsync(statefulSetPath);
+        AssertNoBuggyEmptyMappings(statefulSetContent);
+
+        var pvcPath = Path.Combine(tempDir.Path, "templates", "data", "data.yaml");
+        Assert.True(File.Exists(pvcPath));
+        var pvcContent = await File.ReadAllTextAsync(pvcPath);
+        Assert.DoesNotContain("{}", pvcContent);
+
+        await Verify(statefulSetContent, "yaml")
+            .AppendContentAsFile(pvcContent, "yaml");
+    }
+
+    /// <summary>
+    /// Asserts that the rendered YAML does not contain known-buggy empty <c>{}</c>
+    /// mappings that Kubernetes rejects on apply. Some <c>{}</c> mappings — such as
+    /// <c>emptyDir: {}</c> — are valid Kubernetes shorthand and must be permitted.
+    /// </summary>
+    private static void AssertNoBuggyEmptyMappings(string content)
+    {
+        string[] buggyPatterns =
+        [
+            "volumeClaimRetentionPolicy: {}",
+            "updateStrategy: {}",
+            "rollingUpdate: {}",
+            "dataSource: {}",
+            "dataSourceRef: {}",
+            "selector: {}",
+            "claimRef: {}",
+            "hostPath: {}",
+            "local: {}",
+            "nodeAffinity:",
+        ];
+
+        foreach (var pattern in buggyPatterns)
+        {
+            if (pattern == "nodeAffinity:")
+            {
+                // nodeAffinity is only buggy when followed by an empty `required: {}` block.
+                Assert.DoesNotContain("required: {}", content);
+            }
+            else
+            {
+                Assert.DoesNotContain(pattern, content);
+            }
+        }
     }
 
     private sealed class TestConditionProvider(string value) : IValueProvider, IManifestExpressionProvider
