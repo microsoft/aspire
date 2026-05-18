@@ -135,10 +135,11 @@ internal sealed class BundleService(IBundlePayloadProvider payloadProvider, ILay
         }
         catch (UnauthorizedAccessException ex)
         {
-            throw new UnauthorizedAccessException(
-                $"Cannot write to bundle extraction directory '{destinationPath}'. " +
-                $"Run the command with elevated permissions (e.g., sudo on Linux/macOS), or reinstall the Aspire CLI to a user-writable location.",
-                ex);
+            logger.LogError(
+                ex,
+                "Failed to extract bundle to {Path}: Insufficient permissions. Run the command with elevated permissions (e.g., sudo on Linux/macOS), or reinstall the Aspire CLI to a user-writable location.",
+                destinationPath);
+            return BundleExtractResult.ExtractionFailed;
         }
         catch (Exception ex)
         {
