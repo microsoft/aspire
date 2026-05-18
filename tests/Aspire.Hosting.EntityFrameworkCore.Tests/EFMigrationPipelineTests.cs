@@ -79,6 +79,24 @@ public class EFMigrationPipelineTests
     }
 
     [Fact]
+    public async Task PublishBundleContainerProducesNoStepsInRunMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var db = builder.AddResource(new TestDatabaseResource("mydb"));
+        var project = builder.AddProject<Projects.ServiceA>("myproject");
+        var migrations = project.AddEFMigrations("mymigrations", typeof(TestDbContext).FullName!)
+            .WaitFor(db)
+            .RunDatabaseUpdateOnStart()
+            .PublishAsMigrationBundle(publishContainer: true);
+
+        var steps = await CreateStepsAsync(builder, migrations.Resource);
+
+        Assert.Empty(steps);
+        Assert.True(migrations.Resource.PublishAsMigrationBundle);
+        Assert.True(migrations.Resource.PublishBundleContainer);
+    }
+
+    [Fact]
     public void WaitForConnectionStringResourceAddsWaitAnnotation()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -510,7 +528,7 @@ public class EFMigrationPipelineTests
         using var serviceProvider = builder.Services.BuildServiceProvider();
         var pipelineContext = new PipelineContext(
             serviceProvider.GetRequiredService<DistributedApplicationModel>(),
-            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish),
+            builder.ExecutionContext,
             serviceProvider,
             NullLogger.Instance,
             CancellationToken.None);
