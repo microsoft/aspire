@@ -384,7 +384,6 @@ public sealed class AtsParameterInfo
     /// <summary>
     /// Gets or sets whether this parameter is nullable.
     /// </summary>
-    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
     public bool IsNullable { get; init; }
 
     /// <summary>

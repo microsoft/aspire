@@ -619,18 +619,6 @@ public class AtsCapabilityScannerTests
     }
 
     [AspireExport(ExposeProperties = true)]
-    private sealed class NullableScalarContext
-    {
-        public string? NullableString { get; set; }
-
-        public string RequiredString { get; set; } = "";
-
-        public int? NullableNumber { get; set; }
-
-        public int RequiredNumber { get; set; }
-    }
-
-    [AspireExport(ExposeProperties = true)]
     private class BaseExportedProperties
     {
         public string Name { get; } = "";
