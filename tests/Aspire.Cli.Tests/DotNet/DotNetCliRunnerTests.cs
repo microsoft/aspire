@@ -18,12 +18,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
 {
     private static Aspire.Cli.CliExecutionContext CreateExecutionContext(DirectoryInfo workingDirectory)
     {
-        // NOTE: This would normally be in the users home directory, but for tests we create
-        //       it in the temporary workspace directory.
-        var settingsDirectory = workingDirectory.CreateSubdirectory(".aspire");
-        var hivesDirectory = settingsDirectory.CreateSubdirectory("hives");
-        var cacheDirectory = new DirectoryInfo(Path.Combine(workingDirectory.FullName, ".aspire", "cache"));
-        return new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        return TestExecutionContextHelper.CreateExecutionContext(workingDirectory);
     }
 
     [Fact]
@@ -624,7 +619,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             cancellationToken: CancellationToken.None).DefaultTimeout();
 
         await launchAppHostCalledTcs.Task.DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -1818,5 +1813,44 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
             CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task RunAsyncSetsCliLogFilePathEnvironmentVariable()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var options = new ProcessInvocationOptions();
+
+        Dictionary<string, string>? capturedEnv = null;
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var runner = DotNetCliRunnerTestHelper.Create(
+            provider,
+            executionContext,
+            (args, env, _, _) =>
+            {
+                capturedEnv = env?.ToDictionary();
+            },
+            0);
+
+        var exitCode = await runner.RunAsync(
+            projectFile: projectFile,
+            watch: false,
+            noBuild: true,
+            noRestore: true,
+            args: ["--operation", "inspect"],
+            env: new Dictionary<string, string>(),
+            null,
+            options,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.NotNull(capturedEnv);
+        Assert.Equal(executionContext.LogFilePath, capturedEnv[KnownConfigNames.CliLogFilePath]);
     }
 }

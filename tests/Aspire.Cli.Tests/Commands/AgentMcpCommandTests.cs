@@ -579,7 +579,7 @@ public class AgentMcpCommandTests(ITestOutputHelper outputHelper)
 
         var result = await agentMcpCommand.ExecuteCommandAsync(parseResult, CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, result.ExitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, result.ExitCode);
     }
 
     private static string GetResultText(CallToolResult result)

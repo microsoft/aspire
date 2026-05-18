@@ -6,7 +6,6 @@ using Aspire.Cli.Acquisition;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Tests;
 
@@ -26,7 +25,7 @@ public class CliBootstrapTests
         var loggingOptions = Program.ParseLoggingOptions([]);
         var errorWriter = new TestStartupErrorWriter();
         var (loggerFactory, fileLoggerProvider) = Program.CreateLoggerFactory([], loggingOptions, errorWriter);
-        var startupContext = new Program.CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, loggerFactory.CreateLogger<Program>());
+        var startupContext = new Program.CliStartupContext(loggingOptions, errorWriter, loggerFactory, fileLoggerProvider, loggerFactory.CreateLogger(Program.RootLoggerName));
         return await Program.BuildApplicationAsync([], startupContext);
     }
 

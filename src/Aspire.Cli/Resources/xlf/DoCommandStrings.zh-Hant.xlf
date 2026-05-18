@@ -3,7 +3,7 @@
   <file datatype="xml" source-language="en" target-language="zh-Hant" original="../DoCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Execute a specific pipeline step and its dependencies (Preview)</source>
+        <source>Execute a specific pipeline step and its dependencies</source>
         <target state="needs-review-translation">執行特定管線步驟及其相依性。(預覽)</target>
         <note />
       </trans-unit>

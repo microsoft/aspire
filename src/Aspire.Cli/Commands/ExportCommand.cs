@@ -94,7 +94,7 @@ internal sealed class ExportCommand : BaseCommand
         // Validate mutual exclusivity of --apphost and --dashboard-url
         if (passedAppHostProjectFile is not null && dashboardUrl is not null)
         {
-            return CommandResult.Failure(ExitCodeConstants.InvalidCommand, TelemetryCommandStrings.DashboardUrlAndAppHostExclusive);
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, TelemetryCommandStrings.DashboardUrlAndAppHostExclusive);
         }
 
         // Default file name if not specified
@@ -133,12 +133,12 @@ internal sealed class ExportCommand : BaseCommand
             _logger.LogError(ex, "Failed to export telemetry data from dashboard");
             var errorInfo = await TelemetryCommandHelpers.FormatTelemetryErrorAsync(ex, dashboardApi.BaseUrl!, true, _httpClientFactory, _logger, cancellationToken);
             TelemetryCommandHelpers.DisplayTelemetryError(_interactionService, errorInfo);
-            return CommandResult.Failure(ExitCodeConstants.DashboardFailure);
+            return CommandResult.Failure(CliExitCodes.DashboardFailure);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to export telemetry data");
-            return CommandResult.Failure(ExitCodeConstants.DashboardFailure, string.Format(CultureInfo.CurrentCulture, ExportCommandStrings.FailedToExport, ex.Message));
+            return CommandResult.Failure(CliExitCodes.DashboardFailure, string.Format(CultureInfo.CurrentCulture, ExportCommandStrings.FailedToExport, ex.Message));
         }
     }
 
@@ -178,13 +178,13 @@ internal sealed class ExportCommand : BaseCommand
             if (!ResourceSnapshotMapper.WhereMatchesResourceName(snapshots, resourceName).Any())
             {
                 _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, ExportCommandStrings.ResourceNotFound, resourceName));
-                return ExitCodeConstants.InvalidCommand;
+                return CliExitCodes.InvalidCommand;
             }
         }
         else if (resourceName is null && connection is not null && snapshots.Count == 0)
         {
             _interactionService.DisplayMessage(KnownEmojis.Information, ExportCommandStrings.NoResourcesFound);
-            return ExitCodeConstants.Success;
+            return CliExitCodes.Success;
         }
 
         // Resolve which telemetry resources match the filter
@@ -236,7 +236,7 @@ internal sealed class ExportCommand : BaseCommand
         exportArchive.WriteToFile(fullPath);
 
         _interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, string.Format(CultureInfo.CurrentCulture, ExportCommandStrings.ExportComplete, fullPath));
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private static void AddResources(ExportArchive exportArchive, IReadOnlyList<ResourceSnapshot> snapshots, string? resourceName)

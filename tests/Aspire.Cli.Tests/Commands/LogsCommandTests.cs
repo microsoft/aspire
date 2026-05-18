@@ -28,7 +28,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Help should return success
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -130,7 +130,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Should fail validation
-        Assert.NotEqual(ExitCodeConstants.Success, exitCode);
+        Assert.NotEqual(CliExitCodes.Success, exitCode);
     }
 
     [Theory]
@@ -151,7 +151,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Help should succeed (validation passed)
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -168,7 +168,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Should succeed - no running AppHost is not an error
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Theory]
@@ -187,7 +187,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Theory]
@@ -205,7 +205,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -221,7 +221,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         // Invalid format should cause parsing error
-        Assert.NotEqual(ExitCodeConstants.Success, exitCode);
+        Assert.NotEqual(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -236,7 +236,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -251,7 +251,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -267,7 +267,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -381,7 +381,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\""));
         Assert.NotNull(jsonOutput);
@@ -411,7 +411,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         // Plain text output uses "[resourceName] content" format
         // Replicas share the same DisplayName, so the unique Name should be used instead
@@ -440,11 +440,11 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         if (expectError)
         {
-            Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+            Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         }
         else
         {
-            Assert.Equal(ExitCodeConstants.Success, exitCode);
+            Assert.Equal(CliExitCodes.Success, exitCode);
         }
     }
 
@@ -460,7 +460,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\""));
         Assert.NotNull(jsonOutput);
@@ -498,7 +498,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\""));
         Assert.NotNull(jsonOutput);
@@ -537,7 +537,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         // Logs are sorted by timestamp, timestamp prefix is ISO 8601 round-trip format
         var logLines = outputWriter.Logs.Where(l => l.StartsWith("2025-", StringComparison.Ordinal)).ToList();
@@ -559,7 +559,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         // Without --timestamps, log lines start with "[resourceName]" with no timestamp prefix
         // Logs are sorted by timestamp
@@ -595,7 +595,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var logLine = Assert.Single(outputWriter.Logs, l => l.StartsWith("[", StringComparison.Ordinal));
         Assert.Equal("[redis] Ready to accept connections", logLine);
@@ -627,7 +627,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonOutput = outputWriter.Logs.First(l => l.Contains("\"logs\"", StringComparison.Ordinal));
         var logsOutput = JsonSerializer.Deserialize(jsonOutput, LogsCommandJsonContext.Snapshot.LogsOutput);
@@ -649,7 +649,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\""));
         Assert.NotNull(jsonOutput);
@@ -674,7 +674,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\""));
         Assert.NotNull(jsonOutput);
@@ -699,7 +699,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\""));
         Assert.NotNull(jsonOutput);
@@ -784,7 +784,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\""));
         Assert.NotNull(jsonOutput);
@@ -893,7 +893,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Contains(outputWriter.Logs, l => l.Contains("[redis] Ready to accept connections", StringComparison.Ordinal));
         Assert.DoesNotContain(outputWriter.Logs, l => l.Contains("late-hidden", StringComparison.Ordinal));
     }
@@ -915,7 +915,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Single(outputWriter.Logs, l => l.TrimStart().StartsWith("{", StringComparison.Ordinal));
         Assert.DoesNotContain(outputWriter.Logs, l => l.Contains("unexpected error occurred", StringComparison.OrdinalIgnoreCase));
         Assert.Contains(InteractionServiceStrings.AppHostConnectionLostGeneric, errorWriter.ToString(), StringComparison.Ordinal);
@@ -938,7 +938,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Single(outputWriter.Logs, l => l.TrimStart().StartsWith("{", StringComparison.Ordinal));
         Assert.Contains(InteractionServiceStrings.AppHostShutDown, errorWriter.ToString(), StringComparison.Ordinal);
     }
@@ -965,7 +965,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await pendingRun.DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.DoesNotContain(InteractionServiceStrings.AppHostConnectionLostGeneric, errorWriter.ToString(), StringComparison.Ordinal);
         Assert.DoesNotContain(InteractionServiceStrings.AppHostShutDown, errorWriter.ToString(), StringComparison.Ordinal);
     }
@@ -1050,7 +1050,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\""));
         Assert.NotNull(jsonOutput);
@@ -1081,7 +1081,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\""));
         Assert.NotNull(jsonOutput);
@@ -1110,7 +1110,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\""));
         Assert.NotNull(jsonOutput);
@@ -1142,7 +1142,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var request = Assert.Single(requests);
         Assert.Equal("redis", request.ResourceName);
@@ -1190,7 +1190,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Empty(consoleRequests);
 
         var request = Assert.Single(batchRequests);
@@ -1226,7 +1226,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonOutput = outputWriter.Logs.FirstOrDefault(l => l.Contains("\"logs\"", StringComparison.Ordinal));
         Assert.NotNull(jsonOutput);
@@ -1271,7 +1271,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Empty(consoleRequests);
 
         var legacyRequest = Assert.Single(legacyRequests);
@@ -1320,7 +1320,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Empty(consoleRequests);
 
         var legacyRequest = Assert.Single(legacyRequests);
@@ -1349,7 +1349,7 @@ public class LogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         // The tail output should only contain lines matching the search
         Assert.DoesNotContain(outputWriter.Logs, l => l.Contains("Ready to accept connections", StringComparison.Ordinal));

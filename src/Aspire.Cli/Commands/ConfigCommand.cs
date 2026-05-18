@@ -84,7 +84,7 @@ internal sealed class ConfigCommand : BaseCommand
             var key = parseResult.GetValue(s_keyArgument);
             if (key is null)
             {
-                return CommandResult.Failure(ExitCodeConstants.InvalidCommand, ErrorStrings.ConfigurationKeyRequired);
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, ErrorStrings.ConfigurationKeyRequired);
             }
 
             return CommandResult.FromExitCode(await ExecuteAsync(key, cancellationToken));
@@ -103,12 +103,12 @@ internal sealed class ConfigCommand : BaseCommand
             if (value is not null)
             {
                 InteractionService.DisplayPlainText(value);
-                return ExitCodeConstants.Success;
+                return CliExitCodes.Success;
             }
             else
             {
                 InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, ErrorStrings.ConfigurationKeyNotFound, key));
-                return ExitCodeConstants.ConfigNotFound;
+                return CliExitCodes.ConfigNotFound;
             }
         }
     }
@@ -146,12 +146,12 @@ internal sealed class ConfigCommand : BaseCommand
 
             if (key is null)
             {
-                return CommandResult.Failure(ExitCodeConstants.InvalidCommand, ErrorStrings.ConfigurationKeyRequired);
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, ErrorStrings.ConfigurationKeyRequired);
             }
 
             if (value is null)
             {
-                return CommandResult.Failure(ExitCodeConstants.InvalidCommand, ErrorStrings.ConfigurationValueRequired);
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, ErrorStrings.ConfigurationValueRequired);
             }
 
             return CommandResult.FromExitCode(await ExecuteAsync(key, value, isGlobal, cancellationToken));
@@ -175,13 +175,13 @@ internal sealed class ConfigCommand : BaseCommand
             if (AppHostPathConfigurationPolicy.IsLegacyAppHostPathKey(key))
             {
                 InteractionService.DisplayError(ErrorStrings.LegacyAppHostPathCannotBeSetWithConfigCommand);
-                return ExitCodeConstants.InvalidCommand;
+                return CliExitCodes.InvalidCommand;
             }
 
             if (isGlobal && !AppHostPathConfigurationPolicy.IsGloballySettableKey(key))
             {
                 InteractionService.DisplayError(ErrorStrings.GlobalAppHostPathCannotBeSetWithConfigCommand);
-                return ExitCodeConstants.InvalidCommand;
+                return CliExitCodes.InvalidCommand;
             }
 
             try
@@ -193,14 +193,14 @@ internal sealed class ConfigCommand : BaseCommand
                     : string.Format(CultureInfo.CurrentCulture, ConfigCommandStrings.ConfigurationKeySetLocally, key,
                         value));
 
-                return ExitCodeConstants.Success;
+                return CliExitCodes.Success;
             }
             catch (Exception ex)
             {
                 var errorMessage = string.Format(CultureInfo.CurrentCulture, ErrorStrings.ErrorSettingConfiguration, ex.Message);
                 Telemetry.RecordError(errorMessage, ex);
                 InteractionService.DisplayError(errorMessage);
-                return ExitCodeConstants.InvalidCommand;
+                return CliExitCodes.InvalidCommand;
             }
         }
     }
@@ -239,7 +239,7 @@ internal sealed class ConfigCommand : BaseCommand
                 if (Path.Exists(settingsFilePath))
                 {
                     extensionInteractionService.OpenEditor(settingsFilePath);
-                    return ExitCodeConstants.Success;
+                    return CliExitCodes.Success;
                 }
             }
 
@@ -257,7 +257,7 @@ internal sealed class ConfigCommand : BaseCommand
                 {
                     // Show hint about --all flag when there's no config and user didn't pass --all
                     InteractionService.DisplayMarkupLine($"  [dim]{ConfigCommandStrings.ListCommand_AllFeaturesHint.EscapeMarkup()}[/]");
-                    return ExitCodeConstants.Success;
+                    return CliExitCodes.Success;
                 }
 
                 // showAll=true: fall through to show available features below
@@ -319,7 +319,7 @@ internal sealed class ConfigCommand : BaseCommand
                 }
             }
 
-            return ExitCodeConstants.Success;
+            return CliExitCodes.Success;
 
             static int MaxWidth(string header, IEnumerable<string> localValues, IEnumerable<string> globalValues)
             {
@@ -385,7 +385,7 @@ internal sealed class ConfigCommand : BaseCommand
 
             if (key is null)
             {
-                return CommandResult.Failure(ExitCodeConstants.InvalidCommand, ErrorStrings.ConfigurationKeyRequired);
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, ErrorStrings.ConfigurationKeyRequired);
             }
 
             return CommandResult.FromExitCode(await ExecuteAsync(key, isGlobal, cancellationToken));
@@ -399,7 +399,7 @@ internal sealed class ConfigCommand : BaseCommand
             if (value is null)
             {
                 InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, ErrorStrings.ConfigurationKeyNotFound, key));
-                return ExitCodeConstants.ConfigNotFound;
+                return CliExitCodes.ConfigNotFound;
             }
 
             var isGlobal = await InteractionService.PromptForSelectionAsync(
@@ -428,12 +428,12 @@ internal sealed class ConfigCommand : BaseCommand
                         InteractionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, ConfigCommandStrings.ConfigurationKeyDeletedLocally, key));
                     }
 
-                    return ExitCodeConstants.Success;
+                    return CliExitCodes.Success;
                 }
                 else
                 {
                     InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, ErrorStrings.ConfigurationKeyNotFound, key));
-                    return ExitCodeConstants.InvalidCommand;
+                    return CliExitCodes.InvalidCommand;
                 }
             }
             catch (Exception ex)
@@ -441,7 +441,7 @@ internal sealed class ConfigCommand : BaseCommand
                 var errorMessage = string.Format(CultureInfo.CurrentCulture, ErrorStrings.ErrorDeletingConfiguration, ex.Message);
                 Telemetry.RecordError(errorMessage, ex);
                 InteractionService.DisplayError(errorMessage);
-                return ExitCodeConstants.InvalidCommand;
+                return CliExitCodes.InvalidCommand;
             }
         }
     }
@@ -522,7 +522,7 @@ internal sealed class ConfigCommand : BaseCommand
                 }
             }
 
-            return Task.FromResult(ExitCodeConstants.Success);
+            return Task.FromResult(CliExitCodes.Success);
         }
     }
 }

@@ -101,7 +101,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
         // Validate --limit value
         if (limit.HasValue && limit.Value < 1)
         {
-            return CommandResult.Failure(ExitCodeConstants.InvalidCommand, TelemetryCommandStrings.LimitMustBePositive);
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, TelemetryCommandStrings.LimitMustBePositive);
         }
 
         var dashboardApi = await TelemetryCommandHelpers.GetDashboardApiAsync(
@@ -144,7 +144,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
             if (!TelemetryCommandHelpers.TryResolveResourceNames(resource, resources, out var resolvedResources))
             {
                 _interactionService.DisplayError($"Resource '{resource}' not found.");
-                return ExitCodeConstants.InvalidCommand;
+                return CliExitCodes.InvalidCommand;
             }
 
             // Build URL with query parameters
@@ -166,7 +166,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
             _logger.LogError(ex, "Failed to fetch logs from Dashboard API");
             var errorInfo = await TelemetryCommandHelpers.FormatTelemetryErrorAsync(ex, baseUrl, dashboardOnly, _httpClientFactory, _logger, cancellationToken);
             TelemetryCommandHelpers.DisplayTelemetryError(_interactionService, errorInfo);
-            return ExitCodeConstants.DashboardFailure;
+            return CliExitCodes.DashboardFailure;
         }
     }
 
@@ -189,7 +189,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
             DisplayLogsSnapshot(json, allResources);
         }
 
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private async Task<int> StreamLogsAsync(HttpClient client, string url, OutputFormat format, IReadOnlyList<IOtlpResource> allResources, string dashboardUrl, CancellationToken cancellationToken)
@@ -215,7 +215,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
             }
         }
 
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private void DisplayLogsSnapshot(string json, IReadOnlyList<IOtlpResource> allResources)

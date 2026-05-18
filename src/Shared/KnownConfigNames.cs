@@ -33,6 +33,7 @@ internal static class KnownConfigNames
     public const string RemoteAppHostToken = "ASPIRE_REMOTE_APPHOST_TOKEN";
     public const string CliProcessId = "ASPIRE_CLI_PID";
     public const string CliProcessStarted = "ASPIRE_CLI_STARTED";
+    public const string CliLogFilePath = "ASPIRE_CLI_LOG_FILE";
     public const string CliRunDetached = "ASPIRE_CLI_RUN_DETACHED";
     public const string IntegrationLibsPath = "ASPIRE_INTEGRATION_LIBS_PATH";
     public const string IntegrationProbeManifestPath = "ASPIRE_INTEGRATION_PROBE_MANIFEST_PATH";

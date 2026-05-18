@@ -31,7 +31,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -45,7 +45,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("stop myresource");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.NotEqual(ExitCodeConstants.Success, exitCode);
+        Assert.NotEqual(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -67,7 +67,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.FailedToFindProject, exitCode);
+        Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
     }
 
     [Fact]
@@ -99,7 +99,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.True(projectLocatorInvoked);
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         var displayedMessage = Assert.Single(interactionService.DisplayedMessages);
         Assert.Equal(
             string.Format(SharedCommandStrings.AppHostNotRunningAtPath, Path.Combine("Resolved.AppHost", "Resolved.AppHost.csproj")),
@@ -132,7 +132,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var expectedPath1 = Path.Combine("App1", "AppHost.cs");
         var expectedPath2 = Path.Combine("App2", "AppHost.cs");
@@ -168,7 +168,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var expectedPath = "App1.AppHost.csproj";
         var expectedIdentifier1 = string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostIdentifierWithProcessId, expectedPath, processId1);
@@ -202,7 +202,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var expectedPath = Path.Combine("App1", "App1.AppHost", "App1.AppHost.csproj");
         Assert.Contains(statusMessages, message => message == string.Format(CultureInfo.CurrentCulture, StopCommandStrings.StoppingAppHost, expectedPath));
@@ -235,7 +235,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         Assert.Contains(statusMessages, message => message == string.Format(CultureInfo.CurrentCulture, StopCommandStrings.StoppingAppHost, appHostPath));
         Assert.Contains(interactionService.DisplayedSuccess, message => message == string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, appHostPath));
@@ -271,12 +271,12 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var stopCommandActivity = Assert.Single(stoppedActivities, activity => activity.OperationName == ProfilingTelemetry.Activities.StopCommand);
         Assert.Equal(true, stopCommandActivity.GetTagItem(ProfilingTelemetry.Tags.AppHostStopAll));
         Assert.Equal(2, stopCommandActivity.GetTagItem(ProfilingTelemetry.Tags.AppHostStopCount));
-        Assert.Equal(ExitCodeConstants.Success, stopCommandActivity.GetTagItem(TelemetryConstants.Tags.ProcessExitCode));
+        Assert.Equal(CliExitCodes.Success, stopCommandActivity.GetTagItem(TelemetryConstants.Tags.ProcessExitCode));
 
         var stopAppHostActivities = stoppedActivities.Where(activity => activity.OperationName == ProfilingTelemetry.Activities.StopAppHost).ToArray();
         Assert.Equal(2, stopAppHostActivities.Length);
@@ -287,7 +287,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
                 .Select(activity => Assert.IsType<int>(activity.GetTagItem(TelemetryConstants.Tags.ProcessPid)))
                 .Order()
                 .ToArray());
-        Assert.All(stopAppHostActivities, activity => Assert.Equal(ExitCodeConstants.Success, activity.GetTagItem(TelemetryConstants.Tags.ProcessExitCode)));
+        Assert.All(stopAppHostActivities, activity => Assert.Equal(CliExitCodes.Success, activity.GetTagItem(TelemetryConstants.Tags.ProcessExitCode)));
     }
 
     private static TestAppHostAuxiliaryBackchannel CreateConnection(string appHostPath, int processId, bool isInScope = true)

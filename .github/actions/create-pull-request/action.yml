@@ -47,7 +47,10 @@ runs:
       env:
         GH_TOKEN: ${{ inputs.token }}
       run: |
-        # Use the provided token for both git and gh operations
+        # actions/checkout persists GITHUB_TOKEN as an extraheader by default. If
+        # that credential wins for git push, GitHub suppresses the PR synchronize
+        # workflows. Remove it so pushes use the supplied token instead.
+        git config --local --unset-all http.https://github.com/.extraheader || true
         gh auth setup-git
 
     - name: Commit and push changes
@@ -57,6 +60,7 @@ runs:
       env:
         BRANCH: ${{ inputs.branch }}
         COMMIT_MESSAGE: ${{ inputs.commit-message }}
+        GH_TOKEN: ${{ inputs.token }}
       run: |
         # Check for any changes (staged, unstaged, or untracked)
         if git diff --quiet && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard)" ]; then

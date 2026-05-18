@@ -74,7 +74,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         Assert.Empty(rawJson);
     }
 
@@ -105,7 +105,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         Assert.Empty(rawJson);
     }
 
@@ -181,7 +181,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(projectLocatorWasCalled);
         Assert.False(promptedForIntegration);
         Assert.False(promptedForVersion);
@@ -224,7 +224,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Empty(ReadIntegrationResults(rawJson));
     }
 
@@ -249,7 +249,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.FailedToSearchIntegrations, exitCode);
+        Assert.Equal(CliExitCodes.FailedToSearchIntegrations, exitCode);
     }
 
     [Fact]
@@ -299,7 +299,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(addPackageWasCalled);
 
         var integrations = ReadIntegrationResults(rawJson);
@@ -345,7 +345,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var integrations = ReadIntegrationResults(rawJson);
         var integration = Assert.Single(integrations);
@@ -399,7 +399,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var integration = Assert.Single(ReadIntegrationResults(rawJson));
         Assert.Equal("Aspire.Hosting.Redis", integration.Package);
@@ -549,7 +549,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var integration = Assert.Single(ReadIntegrationResults(rawJson));
         Assert.Equal("Aspire.Hosting.Redis", integration.Package);
@@ -602,7 +602,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(addPackageWasCalled);
 
         var integrations = ReadIntegrationResults(rawJson);
@@ -1361,7 +1361,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.FailedToAddPackage, exitCode);
+        Assert.Equal(CliExitCodes.FailedToAddPackage, exitCode);
         Assert.False(promptedForVersion);
         Assert.False(addPackageWasCalled);
         Assert.Contains(testInteractionService.DisplayedErrors, error => error.Contains("13.2.0") && error.Contains("Aspire.Hosting.Redis"));
@@ -1438,7 +1438,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.FailedToAddPackage, exitCode);
+        Assert.Equal(CliExitCodes.FailedToAddPackage, exitCode);
         Assert.False(promptedForIntegration);
         Assert.False(promptedForVersion);
         Assert.False(addPackageWasCalled);
@@ -1626,7 +1626,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("add");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.FailedToAddPackage, exitCode);
+        Assert.Equal(CliExitCodes.FailedToAddPackage, exitCode);
         Assert.Contains(testInteractionService.DisplayedErrors, e => e.Contains(AddCommandStrings.NoIntegrationPackagesFound));
     }
 
@@ -2343,7 +2343,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.FailedToAddPackage, exitCode);
+        Assert.Equal(CliExitCodes.FailedToAddPackage, exitCode);
         Assert.False(addPackageWasCalled);
         Assert.Contains(string.Format(AddCommandStrings.SpecifiedVersionRequiresExactPackageMatch, "postgre"), testInteractionService.DisplayedErrors);
     }
@@ -2395,7 +2395,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.FailedToAddPackage, exitCode);
+        Assert.Equal(CliExitCodes.FailedToAddPackage, exitCode);
         Assert.False(addPackageWasCalled);
         Assert.Contains(string.Format(AddCommandStrings.SpecifiedVersionRequiresExactPackageMatch, "nonexistentpackage"), testInteractionService.DisplayedErrors);
     }
@@ -2645,7 +2645,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.FailedToAddPackage, exitCode);
+        Assert.Equal(CliExitCodes.FailedToAddPackage, exitCode);
         Assert.True(promptedForIntegration);
         Assert.False(promptedForVersion);
         Assert.False(addPackageWasCalled);
@@ -2820,7 +2820,7 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.FailedToAddPackage, exitCode);
+        Assert.Equal(CliExitCodes.FailedToAddPackage, exitCode);
         Assert.True(promptedForIntegration);
         Assert.False(promptedForVersion);
         Assert.False(addPackageWasCalled);

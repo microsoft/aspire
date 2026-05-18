@@ -5,6 +5,7 @@ const builder = await createBuilder();
 const compose = await builder.addDockerComposeEnvironment("compose");
 const containerName = await builder.addParameter("container-name");
 const api = await builder.addContainer("api", "nginx:alpine");
+await api.withComputeEnvironment(compose);
 await api.withBindMount("/host/path/data", "/container/data");
 await api.withHttpEndpoint({ name: "http", targetPort: 80 });
 
@@ -34,9 +35,22 @@ await compose.configureComposeFile(async (composeFile) => {
     await composeFile.name.set("validation-compose");
     const _composeFileName: string | null = await composeFile.name.get();
 
+    await composeFile.addNetwork("validation-network-extra", { driver: "bridge" });
+    await composeFile.addService("validation-sidecar", { image: "busybox" });
+    await composeFile.addVolume("validation-data", {
+        driver: "local",
+        configure: async (volume) => {
+            await volume.labels.set("purpose", "validation");
+        }
+    });
+    await composeFile.addConfig("validation-config", { content: "enabled=true" });
+    await composeFile.addSecret("validation-secret", { external: true });
+
     const composeApi = await composeFile.services.get("api");
     await composeApi.pullPolicy.set("always");
     const _composeApiPullPolicy: string | null = await composeApi.pullPolicy.get();
+
+    await composeApi.addVolume("validation-data", "/container/compose-data", { isReadOnly: true });
 });
 
 await compose.withDashboard({ enabled: false });

@@ -94,7 +94,7 @@ internal sealed class TelemetrySpansCommand : BaseCommand
         // Validate --limit value
         if (limit.HasValue && limit.Value < 1)
         {
-            return CommandResult.Failure(ExitCodeConstants.InvalidCommand, TelemetryCommandStrings.LimitMustBePositive);
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, TelemetryCommandStrings.LimitMustBePositive);
         }
 
         var dashboardApi = await TelemetryCommandHelpers.GetDashboardApiAsync(
@@ -137,7 +137,7 @@ internal sealed class TelemetrySpansCommand : BaseCommand
             if (!TelemetryCommandHelpers.TryResolveResourceNames(resource, resources, out var resolvedResources))
             {
                 _interactionService.DisplayError($"Resource '{resource}' not found.");
-                return ExitCodeConstants.InvalidCommand;
+                return CliExitCodes.InvalidCommand;
             }
 
             // Build URL with query parameters
@@ -161,7 +161,7 @@ internal sealed class TelemetrySpansCommand : BaseCommand
             _logger.LogError(ex, "Failed to fetch spans from Dashboard API");
             var errorInfo = await TelemetryCommandHelpers.FormatTelemetryErrorAsync(ex, baseUrl, dashboardOnly, _httpClientFactory, _logger, cancellationToken);
             TelemetryCommandHelpers.DisplayTelemetryError(_interactionService, errorInfo);
-            return ExitCodeConstants.DashboardFailure;
+            return CliExitCodes.DashboardFailure;
         }
     }
 
@@ -184,7 +184,7 @@ internal sealed class TelemetrySpansCommand : BaseCommand
             DisplaySpansSnapshot(json, allResources, dashboardUrl);
         }
 
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private async Task<int> StreamSpansAsync(HttpClient client, string url, OutputFormat format, IReadOnlyList<IOtlpResource> allResources, string dashboardUrl, CancellationToken cancellationToken)
@@ -210,7 +210,7 @@ internal sealed class TelemetrySpansCommand : BaseCommand
             }
         }
 
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private void DisplaySpansSnapshot(string json, IReadOnlyList<IOtlpResource> allResources, string dashboardUrl)

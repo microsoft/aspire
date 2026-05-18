@@ -23,8 +23,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
         
         var features = new TestFeatures();
         var configuration = new ConfigurationBuilder().Build();
@@ -127,8 +126,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
 
         var features = new TestFeatures();
         var configuration = new ConfigurationBuilder().Build();
@@ -152,8 +150,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
         
         var features = new TestFeatures();
         features.SetFeature(KnownFeatures.StagingChannelEnabled, true);
@@ -196,8 +193,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
         
         var features = new TestFeatures();
         features.SetFeature(KnownFeatures.StagingChannelEnabled, true);
@@ -229,8 +225,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
         
         var features = new TestFeatures();
         features.SetFeature(KnownFeatures.StagingChannelEnabled, true);
@@ -262,8 +257,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
         
         var features = new TestFeatures();
         features.SetFeature(KnownFeatures.StagingChannelEnabled, true);
@@ -294,8 +288,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
         
         var features = new TestFeatures();
         features.SetFeature(KnownFeatures.StagingChannelEnabled, true);
@@ -325,8 +318,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
         
         var features = new TestFeatures();
         features.SetFeature(KnownFeatures.StagingChannelEnabled, true);
@@ -356,8 +348,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
         
         var features = new TestFeatures();
         features.SetFeature(KnownFeatures.StagingChannelEnabled, true);
@@ -387,8 +378,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
         
         var features = new TestFeatures();
         features.SetFeature(KnownFeatures.StagingChannelEnabled, true);
@@ -428,7 +418,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             .Build();
 
         var packagingService = new PackagingService(
-            new CliExecutionContext(tempDir, tempDir, tempDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log"), 
+            TestExecutionContextHelper.CreateExecutionContext(tempDir), 
             new FakeNuGetPackageCache(), 
             features, 
             configuration,
@@ -467,14 +457,13 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
         
         // Create some PR hives to ensure staging appears before them
         hivesDir.Create();
         Directory.CreateDirectory(Path.Combine(hivesDir.FullName, "pr-10167"));
         Directory.CreateDirectory(Path.Combine(hivesDir.FullName, "pr-11832"));
         
-        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
         
         var features = new TestFeatures();
         features.SetFeature(KnownFeatures.StagingChannelEnabled, true);
@@ -524,13 +513,12 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
         
         // Create some PR hives
         hivesDir.Create();
         Directory.CreateDirectory(Path.Combine(hivesDir.FullName, "pr-12345"));
         
-        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
         
         var features = new TestFeatures();
         // Staging disabled by default
@@ -565,8 +553,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
         
         var features = new TestFeatures();
         features.SetFeature(KnownFeatures.StagingChannelEnabled, true);
@@ -601,8 +588,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
         
         var features = new TestFeatures();
         features.SetFeature(KnownFeatures.StagingChannelEnabled, true);
@@ -637,8 +623,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
         
         var features = new TestFeatures();
         features.SetFeature(KnownFeatures.StagingChannelEnabled, true);
@@ -688,7 +673,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
             .Build();
 
         var packagingService = new PackagingService(
-            new CliExecutionContext(tempDir, tempDir, tempDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log"), 
+            TestExecutionContextHelper.CreateExecutionContext(tempDir), 
             new FakeNuGetPackageCache(), 
             features, 
             configuration,
@@ -719,8 +704,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
         
         var features = new TestFeatures();
         features.SetFeature(KnownFeatures.StagingChannelEnabled, true);
@@ -752,8 +736,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
         
         var features = new TestFeatures();
         features.SetFeature(KnownFeatures.StagingChannelEnabled, true);
@@ -783,8 +766,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
         
         var features = new TestFeatures();
         features.SetFeature(KnownFeatures.StagingChannelEnabled, true);
@@ -815,8 +797,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
         var localPackagesDir = new DirectoryInfo(Path.Combine(hivesDir.FullName, "local", "packages"));
         localPackagesDir.Create();
 
@@ -846,8 +827,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
         var localPackagesDir = new DirectoryInfo(Path.Combine(hivesDir.FullName, "local", "packages"));
         localPackagesDir.Create();
 
@@ -888,8 +868,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
 
         var features = new TestFeatures();
         features.SetFeature(KnownFeatures.StagingChannelEnabled, true);
@@ -941,8 +920,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
 
         var features = new TestFeatures();
         features.SetFeature(KnownFeatures.StagingChannelEnabled, true);
@@ -993,8 +971,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
 
         var features = new TestFeatures();
         features.SetFeature(KnownFeatures.StagingChannelEnabled, true);
@@ -1040,7 +1017,6 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
 
         // Hive directory named "local" (as written by get-aspire-cli-pr.sh --local-dir)
         const string localHiveName = "local";
@@ -1051,10 +1027,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         File.WriteAllText(Path.Combine(localPackagesDir.FullName, $"Aspire.ProjectTemplates.{pinnedVersion}.nupkg"), string.Empty);
 
         // CLI binary built with AspireCliChannel=local
-        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir,
-            new DirectoryInfo(Path.Combine(tempDir.FullName, "aspire-test-runtimes")),
-            new DirectoryInfo(Path.Combine(tempDir.FullName, "aspire-test-logs")),
-            "test.log", identityChannel: "local");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir, identityChannel: "local");
 
         var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), new ConfigurationBuilder().Build(), NullLogger<PackagingService>.Instance);
 
@@ -1078,7 +1051,6 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
 
         const string runHiveName = "run-99999";
         var runPackagesDir = new DirectoryInfo(Path.Combine(hivesDir.FullName, runHiveName, "packages"));
@@ -1089,10 +1061,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
 
         // CLI binary built with non-local channel ("daily") — explicit so the test stays
         // accurate even as the CliExecutionContext default channel evolves.
-        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir,
-            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")),
-            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")),
-            "test.log", identityChannel: "daily");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir, identityChannel: "daily");
 
         var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), new ConfigurationBuilder().Build(), NullLogger<PackagingService>.Instance);
 
@@ -1116,11 +1085,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir,
-            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")),
-            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")),
-            "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
 
         var localPackagesDir = new DirectoryInfo(Path.Combine(hivesDir.FullName, "local", "packages"));
         localPackagesDir.Create();
@@ -1159,11 +1124,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir,
-            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")),
-            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")),
-            "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
 
         var localPackagesDir = new DirectoryInfo(Path.Combine(hivesDir.FullName, PackageChannelNames.Local, "packages"));
         localPackagesDir.Create();
@@ -1203,11 +1164,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir,
-            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")),
-            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")),
-            "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
 
         // Create the hive root but no `packages/` subdir — directory-exists-but-unpopulated.
         var localHiveDir = new DirectoryInfo(Path.Combine(hivesDir.FullName, PackageChannelNames.Local));
@@ -1237,11 +1194,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var tempDir = workspace.WorkspaceRoot;
         var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
-        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir,
-            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")),
-            new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")),
-            "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(tempDir, hivesDirectory: hivesDir);
 
         var localPackagesDir = new DirectoryInfo(Path.Combine(hivesDir.FullName, PackageChannelNames.Local, "packages"));
         localPackagesDir.Create();

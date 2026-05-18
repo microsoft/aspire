@@ -211,7 +211,7 @@ public class ResourceCommandHelperTests
             arguments: null,
             cancellationToken: CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.FailedToExecuteResourceCommand, exitCode);
+        Assert.Equal(CliExitCodes.FailedToExecuteResourceCommand, exitCode);
         var error = Assert.Single(interactionService.DisplayedErrors);
         Assert.Contains("Command argument validation failed.", error);
         Assert.Contains("--target: Target must not be prod.", error);
@@ -241,7 +241,7 @@ public class ResourceCommandHelperTests
             arguments: null,
             cancellationToken: CancellationToken.None).DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.FailedToExecuteResourceCommand, exitCode);
+        Assert.Equal(CliExitCodes.FailedToExecuteResourceCommand, exitCode);
         var error = Assert.Single(interactionService.DisplayedErrors);
         Assert.Contains("Failed to execute command 'ss' on resource 'test-resource'", error);
         Assert.Contains("Command 'ss' not available for resource 'test-resource'.", error);
