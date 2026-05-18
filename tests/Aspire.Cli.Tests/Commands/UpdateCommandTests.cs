@@ -1629,6 +1629,60 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     // logic; explicit `--channel` and per-project config still override
     // identity.
     // ------------------------------------------------------------------
+    [Fact]
+    public async Task UpdateCommand_WhenStagingIdentityRegistersChannel_UsesStagingForUnpinnedProject()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var promptForSelectionInvoked = false;
+        var updatedWithChannel = string.Empty;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(identityChannel: PackageChannelNames.Staging);
+
+            options.ProjectLocatorFactory = _ => new TestProjectLocator()
+            {
+                UseOrFindAppHostProjectFileAsyncCallback = (projectFile, _, _) =>
+                {
+                    return Task.FromResult<FileInfo?>(new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj")));
+                }
+            };
+
+            options.InteractionServiceFactory = _ => new TestInteractionService()
+            {
+                PromptForSelectionCallback = (prompt, choices, formatter, ct) =>
+                {
+                    promptForSelectionInvoked = true;
+                    return choices.Cast<object>().First();
+                }
+            };
+
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner();
+            options.NuGetPackageCacheFactory = _ => new FakeNuGetPackageCache();
+
+            options.ProjectUpdaterFactory = _ => new TestProjectUpdater()
+            {
+                UpdateProjectAsyncCallback = (context, cancellationToken) =>
+                {
+                    updatedWithChannel = context.Channel.Name;
+                    return Task.FromResult(new ProjectUpdateResult { UpdatedApplied = false });
+                }
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(promptForSelectionInvoked, "Staging identity should resolve through the registered staging channel without prompting.");
+        Assert.Equal(PackageChannelNames.Staging, updatedWithChannel);
+    }
+
     [Theory]
     [InlineData("pr-12345", "pr-12345")]
     [InlineData("daily", "daily")]
@@ -1637,10 +1691,9 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        // Create a hive so the would-prompt branch is exercised — that is
-        // the path the identity-channel fallback covers. Without a hive,
-        // the implicit fallback fires first and the identity-channel
-        // logic never runs.
+        // Create a hive so pr-* identities have a registered channel to match and so
+        // the identity fallback proves it bypasses the prompt when a prompt would
+        // otherwise be available.
         var hivesDir = workspace.CreateDirectory(".aspire").CreateSubdirectory("hives");
         hivesDir.CreateSubdirectory("pr-12345");
 
