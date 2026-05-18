@@ -333,7 +333,7 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
 
         var exitCode = await session.ExportAsync(CancellationToken.None);
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(File.Exists(outputPath));
         Assert.True(Directory.Exists(Path.GetDirectoryName(outputPath)));
         using var archive = ZipFile.OpenRead(outputPath);
@@ -367,7 +367,7 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
 
         var exitCode = await session.ExportAsync(CancellationToken.None);
 
-        Assert.Equal(ExitCodeConstants.DashboardFailure, exitCode);
+        Assert.Equal(CliExitCodes.DashboardFailure, exitCode);
         Assert.False(File.Exists(options.OutputPath));
     }
 
@@ -383,7 +383,7 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
 
         var exitCode = await session.ExportAsync(CancellationToken.None);
 
-        Assert.Equal(ExitCodeConstants.DashboardFailure, exitCode);
+        Assert.Equal(CliExitCodes.DashboardFailure, exitCode);
         Assert.False(File.Exists(options.OutputPath));
     }
 
@@ -554,7 +554,7 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
             () => 1)
         {
             WaitForExitAsyncCallback = (_, ct) => exitCompletionSource.Task.WaitAsync(ct),
-            KillCallback = _ => exitCompletionSource.TrySetResult(ExitCodeConstants.Success)
+            KillCallback = _ => exitCompletionSource.TrySetResult(CliExitCodes.Success)
         };
     }
 

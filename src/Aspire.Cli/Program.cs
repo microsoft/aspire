@@ -802,7 +802,7 @@ public class Program
 
         try
         {
-            var exitCode = ExitCodeConstants.Success;
+            var exitCode = CliExitCodes.Success;
             try
             {
                 if (profileCaptureOptions is not null)
@@ -832,7 +832,7 @@ public class Program
 
                     exitCode = await parseResult.InvokeAsync(invokeConfig, cancellationManager.Token);
                     profileCommandActivity.SetProcessExitCode(exitCode);
-                    if (exitCode != ExitCodeConstants.Success)
+                    if (exitCode != CliExitCodes.Success)
                     {
                         profileCommandActivity.SetError($"Command exited with code {exitCode}.");
                     }
@@ -878,7 +878,7 @@ public class Program
                 {
                     await telemetryManager.ForceFlushProfilingAsync().ConfigureAwait(false);
                     var exportExitCode = await profileCaptureSession.ExportAsync(cancellationManager.Token).ConfigureAwait(false);
-                    if (exitCode == ExitCodeConstants.Success && exportExitCode != ExitCodeConstants.Success)
+                    if (exitCode == CliExitCodes.Success && exportExitCode != CliExitCodes.Success)
                     {
                         exitCode = exportExitCode;
                     }
@@ -887,9 +887,9 @@ public class Program
                 {
                     logger.LogError(ex, "Failed to export profile capture.");
                     errorWriter.WriteLine(string.Format(CultureInfo.CurrentCulture, ExportCommandStrings.FailedToExport, ex.Message));
-                    if (exitCode == ExitCodeConstants.Success)
+                    if (exitCode == CliExitCodes.Success)
                     {
-                        exitCode = ExitCodeConstants.DashboardFailure;
+                        exitCode = CliExitCodes.DashboardFailure;
                     }
                 }
             }

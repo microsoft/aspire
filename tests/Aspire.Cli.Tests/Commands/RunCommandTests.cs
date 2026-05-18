@@ -498,7 +498,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout(TestConstants.LongTimeoutDuration);
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.True(requestStopCalled.Task.IsCompleted, "Capture mode should stop the AppHost after startup.");
     }
 
@@ -578,7 +578,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
                 {
                     // Simulate an AppHost that crashes during shutdown rather than terminating
                     // via a known teardown signal. Capture mode must surface that failure.
-                    appHostExitCode.SetResult(ExitCodeConstants.FailedToDotnetRunAppHost);
+                    appHostExitCode.SetResult(CliExitCodes.FailedToDotnetRunAppHost);
                     return Task.CompletedTask;
                 },
                 GetAppHostLogEntriesAsyncCallback = EmptyLogEntriesAsync
@@ -592,7 +592,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout(TestConstants.LongTimeoutDuration);
 
-        Assert.Equal(ExitCodeConstants.FailedToDotnetRunAppHost, exitCode);
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
         Assert.True(requestStopCalled.Task.IsCompleted, "Capture mode should stop the AppHost after startup.");
     }
 

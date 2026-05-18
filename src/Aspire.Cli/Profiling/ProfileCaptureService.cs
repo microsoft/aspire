@@ -307,13 +307,13 @@ internal sealed class ProfileCaptureService(
             if (traces?.Data?.ResourceSpans is not { Length: > 0 })
             {
                 _logger.LogError("No profiling traces were exported for session {SessionId}", _options.SessionId);
-                return ExitCodeConstants.DashboardFailure;
+                return CliExitCodes.DashboardFailure;
             }
 
             if (CountSessionSpans(traces, _options.SessionId) == 0)
             {
                 _logger.LogError("No exported spans matched profiling session {SessionId}", _options.SessionId);
-                return ExitCodeConstants.DashboardFailure;
+                return CliExitCodes.DashboardFailure;
             }
 
             var outputDirectory = Path.GetDirectoryName(_options.OutputPath);
@@ -331,7 +331,7 @@ internal sealed class ProfileCaptureService(
                 string.Format(CultureInfo.CurrentCulture, ExportCommandStrings.ExportComplete, MarkupHelpers.SafeFileLink(_interactionService, _options.OutputPath)),
                 allowMarkup: true);
 
-            return ExitCodeConstants.Success;
+            return CliExitCodes.Success;
         }
 
         public async ValueTask DisposeAsync()
@@ -456,7 +456,7 @@ internal sealed class ProfileCaptureService(
             }
             catch (OperationCanceledException)
             {
-                return ExitCodeConstants.Cancelled;
+                return CliExitCodes.Cancelled;
             }
         }
     }
