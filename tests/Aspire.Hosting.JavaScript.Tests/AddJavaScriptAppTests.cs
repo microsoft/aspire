@@ -124,6 +124,37 @@ public class AddJavaScriptAppTests
     }
 
     [Fact]
+    public async Task VerifyPnpmDockerfileCopiesWorkspaceFileBeforeInstall()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(tempDir.Path, "js");
+        Directory.CreateDirectory(appDir);
+
+        File.WriteAllText(Path.Combine(appDir, "pnpm-workspace.yaml"), "allowBuilds: {}\n");
+
+        var pnpmApp = builder.AddJavaScriptApp("js", appDir)
+            .WithPnpm(installArgs: ["--prefer-frozen-lockfile"])
+            .WithBuildScript("mybuild");
+
+        await ManifestUtils.GetManifest(pnpmApp.Resource, tempDir.Path);
+
+        var dockerfilePath = Path.Combine(tempDir.Path, "js.Dockerfile");
+        var dockerfileLines = await File.ReadAllLinesAsync(dockerfilePath);
+
+        var copyLineIndex = Array.FindIndex(
+            dockerfileLines,
+            line => line.StartsWith("COPY ", StringComparison.Ordinal)
+                && line.Contains("pnpm-workspace.yaml", StringComparison.Ordinal));
+        var installLineIndex = Array.FindIndex(dockerfileLines, line => line.Contains("pnpm install", StringComparison.Ordinal));
+
+        Assert.NotEqual(-1, copyLineIndex);
+        Assert.NotEqual(-1, installLineIndex);
+        Assert.True(copyLineIndex < installLineIndex);
+    }
+
+    [Fact]
     [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
     [OuterloopTest("Builds a Docker image to verify the generated pnpm Dockerfile works")]
     public async Task VerifyPnpmDockerfileBuildSucceeds()
