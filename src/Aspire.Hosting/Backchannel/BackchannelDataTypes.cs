@@ -50,6 +50,11 @@ internal static class AuxiliaryBackchannelCapabilities
     /// </summary>
     public const string V3 = "aux.v3";
 
+    /// <summary>
+    /// Version 4 capabilities: Dynamic resource command argument option loading (<see cref="LoadDynamicArgumentOptionsRequest"/>).
+    /// </summary>
+    public const string V4 = "aux.v4";
+
 }
 
 /// <summary>
@@ -1180,6 +1185,109 @@ internal sealed class ResourceSnapshotCommandArgument
     /// Gets the names of inputs this argument depends on for dynamic loading, in the same order they appear on the command.
     /// </summary>
     public IReadOnlyList<string>? DependsOnInputs { get; init; }
+}
+
+/// <summary>
+/// Request for loading the dynamic options of a single resource command argument given the partial values for prior inputs.
+/// </summary>
+internal sealed class LoadDynamicArgumentOptionsRequest : BackchannelRequest
+{
+    /// <summary>
+    /// Gets the resource identifier (the resolved instance name).
+    /// </summary>
+    public required string ResourceId { get; init; }
+
+    /// <summary>
+    /// Gets the command name as it appears on the resource (legacy aliases are resolved server-side).
+    /// </summary>
+    public required string CommandName { get; init; }
+
+    /// <summary>
+    /// Gets the name of the argument whose dynamic options should be loaded.
+    /// </summary>
+    public required string ArgumentName { get; init; }
+
+    /// <summary>
+    /// Gets the user-supplied values for the command's arguments, keyed by argument name. Missing keys are treated as unset.
+    /// </summary>
+    public Dictionary<string, string?>? CurrentValues { get; init; }
+
+    /// <inheritdoc />
+    public override LoadDynamicArgumentOptionsRequest WithTraceContext(BackchannelTraceContext traceContext) => new()
+    {
+        ResourceId = ResourceId,
+        CommandName = CommandName,
+        ArgumentName = ArgumentName,
+        CurrentValues = CurrentValues,
+        TraceContext = traceContext
+    };
+}
+
+/// <summary>
+/// Indicates the outcome of a <see cref="LoadDynamicArgumentOptionsRequest"/>.
+/// </summary>
+internal enum LoadDynamicArgumentOptionsStatus
+{
+    /// <summary>
+    /// Options were loaded successfully and are available on the response.
+    /// </summary>
+    Loaded,
+
+    /// <summary>
+    /// The argument's <c>DependsOnInputs</c> were not all satisfied with the supplied values. The dependent options were not loaded.
+    /// </summary>
+    DependenciesNotSatisfied,
+
+    /// <summary>
+    /// The target argument is not configured for dynamic loading.
+    /// </summary>
+    NotDynamic,
+
+    /// <summary>
+    /// The requested resource could not be located.
+    /// </summary>
+    ResourceNotFound,
+
+    /// <summary>
+    /// The requested command could not be located on the resource.
+    /// </summary>
+    CommandNotFound,
+
+    /// <summary>
+    /// The named argument does not exist on the command.
+    /// </summary>
+    ArgumentNotFound,
+
+    /// <summary>
+    /// The dynamic load callback threw or otherwise failed.
+    /// </summary>
+    Error
+}
+
+/// <summary>
+/// Response for <see cref="LoadDynamicArgumentOptionsRequest"/>.
+/// </summary>
+internal sealed class LoadDynamicArgumentOptionsResponse
+{
+    /// <summary>
+    /// Gets the outcome of the load operation.
+    /// </summary>
+    public required LoadDynamicArgumentOptionsStatus Status { get; init; }
+
+    /// <summary>
+    /// Gets the loaded option entries when <see cref="Status"/> is <see cref="LoadDynamicArgumentOptionsStatus.Loaded"/>.
+    /// </summary>
+    public KeyValuePair<string, string?>[]? Options { get; init; }
+
+    /// <summary>
+    /// Gets the names of dependencies missing values when <see cref="Status"/> is <see cref="LoadDynamicArgumentOptionsStatus.DependenciesNotSatisfied"/>.
+    /// </summary>
+    public string[]? MissingDependencies { get; init; }
+
+    /// <summary>
+    /// Gets a human-readable message describing the outcome, primarily used for <see cref="LoadDynamicArgumentOptionsStatus.Error"/>.
+    /// </summary>
+    public string? Message { get; init; }
 }
 
 /// <summary>
