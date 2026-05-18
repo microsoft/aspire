@@ -108,6 +108,25 @@ public class DevTunnelResourceBuilderExtensionsTests
     }
 
     [Fact]
+    public async Task WithReference_UsesAllocatedPortForContainerDevTunnelPort()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var target = builder.AddContainer("target", "image")
+            .WithHttpEndpoint(port: 5000, targetPort: 8080, name: "http");
+        var tunnel = builder.AddDevTunnel("tunnel")
+            .WithReference(target);
+
+        var tunnelPort = Assert.Single(tunnel.Resource.Ports);
+        tunnelPort.TargetEndpoint.EndpointAnnotation.AllocatedEndpoint = new(
+            tunnelPort.TargetEndpoint.EndpointAnnotation,
+            "localhost",
+            5000);
+
+        Assert.Equal(5000, await tunnelPort.GetTunnelPortAsync());
+    }
+
+    [Fact]
     public async Task WithReference_ResolvesDynamicTargetPortForDevTunnelPortWhenAvailable()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
