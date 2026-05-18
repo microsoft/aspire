@@ -132,31 +132,6 @@ internal sealed class UpdateCommand : BaseCommand
                 return CommandResult.Failure(CliExitCodes.InvalidCommand, "CLI self-update is not available in this environment.");
             }
 
-            // When the running CLI was built from a PR (its baked AspireCliChannel is
-            // `pr-<N>`), refuse to silently fall through to ExecuteSelfUpdateAsync, which
-            // hard-codes its prompt choices to { Stable, Daily, (Staging) } and would
-            // therefore move the user off the PR build without warning. The acquisition
-            // scripts (get-aspire-cli-pr.sh / .ps1) are the supported refresh path for a
-            // PR install; surface them in a clear refusal instead. An explicit --channel
-            // (or --quality) on the command line is treated as an opt-in to move off the
-            // PR build and is allowed through.
-            var explicitChannel = parseResult.GetValue(_channelOption) ?? parseResult.GetValue(_qualityOption);
-            var identityChannel = ExecutionContext.IdentityChannel;
-            if (string.IsNullOrEmpty(explicitChannel)
-                && !string.IsNullOrWhiteSpace(identityChannel)
-                && identityChannel.StartsWith("pr-", StringComparison.OrdinalIgnoreCase))
-            {
-                var prNumber = identityChannel.Substring("pr-".Length);
-                InteractionService.DisplayMessage(
-                    KnownEmojis.Information,
-                    $"This CLI was built from PR {prNumber} (channel '{identityChannel}'). 'aspire update --self' cannot refresh a PR build because PR channels do not publish to a CLI download feed.");
-                InteractionService.DisplayPlainText("To refresh to the latest commit on this PR, re-run the acquisition script:");
-                InteractionService.DisplayPlainText($"  get-aspire-cli-pr.sh -r {prNumber}");
-                InteractionService.DisplayPlainText($"  get-aspire-cli-pr.ps1 -PRNumber {prNumber}");
-                InteractionService.DisplayPlainText("Or pass an explicit channel to move off the PR build, e.g.: aspire update --self --channel daily");
-                return CommandResult.FromExitCode(0);
-            }
-
             try
             {
                 return await ExecuteSelfUpdateAsync(parseResult, cancellationToken);
