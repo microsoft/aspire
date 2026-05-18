@@ -7,10 +7,17 @@ namespace Aspire.Cli.Tests.TestServices;
 
 internal sealed class TestPackagingService : IPackagingService
 {
+    public Func<CancellationToken, string?, Task<IEnumerable<PackageChannel>>>? GetChannelsWithRequestedChannelAsyncCallback { get; set; }
+
     public Func<CancellationToken, Task<IEnumerable<PackageChannel>>>? GetChannelsAsyncCallback { get; set; }
 
     public Task<IEnumerable<PackageChannel>> GetChannelsAsync(CancellationToken cancellationToken = default, string? requestedChannelName = null)
     {
+        if (GetChannelsWithRequestedChannelAsyncCallback is not null)
+        {
+            return GetChannelsWithRequestedChannelAsyncCallback(cancellationToken, requestedChannelName);
+        }
+
         if (GetChannelsAsyncCallback is not null)
         {
             return GetChannelsAsyncCallback(cancellationToken);

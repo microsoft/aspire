@@ -923,7 +923,10 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             new FakeNuGetPackageCache());
         var packagingService = new TestPackagingService
         {
-            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([stagingChannel])
+            GetChannelsWithRequestedChannelAsyncCallback = (_, requestedChannelName) => Task.FromResult<IEnumerable<PackageChannel>>(
+                string.Equals(requestedChannelName, PackageChannelNames.Staging, StringComparison.OrdinalIgnoreCase)
+                    ? [stagingChannel]
+                    : [])
         };
 
         var server = new PrebuiltAppHostServer(
