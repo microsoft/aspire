@@ -35,6 +35,12 @@ export type VSCodeServerReadyAction =
         killOnServerStop?: boolean;
     };
 
+const defaultServerReadyActionPattern = "\\bNow listening on:\\s+(https?://\\S+)";
+
+function escapeRegExp(value: string): string {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export function determineVSCodeServerReadyAction(
     launchBrowser?: boolean,
     applicationUrl?: string,
@@ -52,11 +58,28 @@ export function determineVSCodeServerReadyAction(
         return undefined;
     }
 
-    const uriFormat = applicationUrl.includes(';') ? applicationUrl.split(';')[0] : applicationUrl;
+    const applicationUrls = applicationUrl
+        .split(';')
+        .map(url => url.trim())
+        .filter(url => url.length > 0);
+
+    if (applicationUrls.length === 0) {
+        return undefined;
+    }
+
+    if (applicationUrls.length === 1) {
+        const uriFormat = applicationUrls[0];
+
+        return {
+            action: "openExternally",
+            pattern: `\\bNow listening on:\\s+${escapeRegExp(uriFormat)}`,
+            uriFormat: uriFormat
+        };
+    }
 
     return {
         action: "openExternally",
-        pattern: "\\bNow listening on:\\s+(https?://\\S+)",
-        uriFormat: uriFormat
+        pattern: defaultServerReadyActionPattern,
+        uriFormat: "%s"
     };
 }

@@ -3,6 +3,17 @@ import { determineVSCodeServerReadyAction } from '../debugger/vscode/serverReady
 
 suite('VS Code Server Ready Action Tests', () => {
     suite('determineVSCodeServerReadyAction', () => {
+        const assertLiteralUriServerReadyAction = (
+            result: ReturnType<typeof determineVSCodeServerReadyAction>,
+            expectedUriFormat: string
+        ): void => {
+            assert.notStrictEqual(result, undefined);
+            assert.ok(result);
+            assert.ok('uriFormat' in result);
+            assert.strictEqual(result.uriFormat, expectedUriFormat);
+            assert.strictEqual(result.pattern, `\\bNow listening on:\\s+${expectedUriFormat}`);
+        };
+
         const assertUriServerReadyAction = (
             result: ReturnType<typeof determineVSCodeServerReadyAction>,
             expectedUriFormat: string
@@ -76,15 +87,15 @@ suite('VS Code Server Ready Action Tests', () => {
             const result = determineVSCodeServerReadyAction(true, applicationUrl);
 
             assert.strictEqual(result?.action, 'openExternally');
-            assertUriServerReadyAction(result, applicationUrl);
+            assertLiteralUriServerReadyAction(result, applicationUrl);
         });
 
-        test('returns serverReadyAction with first URL when multiple URLs separated by semicolon', () => {
+        test('returns placeholder-based serverReadyAction when multiple URLs are separated by semicolon', () => {
             const applicationUrl = 'https://localhost:5001;http://localhost:5000';
             const result = determineVSCodeServerReadyAction(true, applicationUrl);
 
             assert.strictEqual(result?.action, 'openExternally');
-            assertUriServerReadyAction(result, 'https://localhost:5001');
+            assertUriServerReadyAction(result, '%s');
         });
     });
 });
