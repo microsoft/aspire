@@ -77,7 +77,7 @@ internal sealed class AddCommand : BaseCommand
 
             if (effectiveAppHostProjectFile is null)
             {
-                return CommandResult.Failure(ExitCodeConstants.FailedToFindProject);
+                return CommandResult.Failure(CliExitCodes.FailedToFindProject);
             }
 
             // Get the appropriate project handler
@@ -88,7 +88,7 @@ internal sealed class AddCommand : BaseCommand
             {
                 if (!await SdkInstallHelper.EnsureSdkInstalledAsync(_sdkInstaller, InteractionService, Telemetry, cancellationToken: cancellationToken))
                 {
-                    return CommandResult.Failure(ExitCodeConstants.SdkNotInstalled);
+                    return CommandResult.Failure(CliExitCodes.SdkNotInstalled);
                 }
             }
 
@@ -111,7 +111,7 @@ internal sealed class AddCommand : BaseCommand
 
             if (!packagesWithShortName.Any())
             {
-                return CommandResult.Failure(ExitCodeConstants.FailedToAddPackage, AddCommandStrings.NoPackagesFound);
+                return CommandResult.Failure(CliExitCodes.FailedToAddPackage, AddCommandStrings.NoPackagesFound);
             }
 
             var filteredPackagesWithShortName = packagesWithShortName
@@ -200,7 +200,7 @@ internal sealed class AddCommand : BaseCommand
             }
             else if (runningInstanceResult == RunningInstanceResult.StopFailed)
             {
-                return CommandResult.Failure(ExitCodeConstants.FailedToAddPackage, AddCommandStrings.UnableToStopRunningInstances);
+                return CommandResult.Failure(CliExitCodes.FailedToAddPackage, AddCommandStrings.UnableToStopRunningInstances);
             }
 
             var success = await InteractionService.ShowStatusAsync(
@@ -214,7 +214,7 @@ internal sealed class AddCommand : BaseCommand
                 {
                     InteractionService.DisplayLines(outputCollector.GetLines());
                 }
-                return CommandResult.Failure(ExitCodeConstants.FailedToAddPackage, string.Format(CultureInfo.CurrentCulture, AddCommandStrings.PackageInstallationFailed, ExitCodeConstants.FailedToAddPackage));
+                return CommandResult.Failure(CliExitCodes.FailedToAddPackage, string.Format(CultureInfo.CurrentCulture, AddCommandStrings.PackageInstallationFailed, CliExitCodes.FailedToAddPackage));
             }
 
             InteractionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.PackageAddedSuccessfully, selectedNuGetPackage.Package.Id, selectedNuGetPackage.Package.Version));
@@ -231,7 +231,7 @@ internal sealed class AddCommand : BaseCommand
         catch (EmptyChoicesException ex)
         {
             Telemetry.RecordError(ex.Message, ex);
-            return CommandResult.Failure(ExitCodeConstants.FailedToAddPackage, ex.Message);
+            return CommandResult.Failure(CliExitCodes.FailedToAddPackage, ex.Message);
         }
         catch (Exception ex)
         {
@@ -241,7 +241,7 @@ internal sealed class AddCommand : BaseCommand
             }
             var errorMessage = string.Format(CultureInfo.CurrentCulture, AddCommandStrings.ErrorOccurredWhileAddingPackage, ex.Message);
             Telemetry.RecordError(errorMessage, ex);
-            return CommandResult.Failure(ExitCodeConstants.FailedToAddPackage, errorMessage);
+            return CommandResult.Failure(CliExitCodes.FailedToAddPackage, errorMessage);
         }
     }
 

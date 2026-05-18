@@ -57,7 +57,7 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
         var result = new AppHostConnectionResult
         {
             ErrorMessage = "failed",
-            ExitCode = ExitCodeConstants.FailedToCreateNewProject
+            ExitCode = CliExitCodes.FailedToCreateNewProject
         };
 
         Assert.False(result.IsProjectResolutionError);
@@ -91,7 +91,7 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
 
         Assert.False(result.Success);
         Assert.True(result.IsProjectResolutionError);
-        Assert.Equal(ExitCodeConstants.FailedToFindProject, result.ExitCode);
+        Assert.Equal(CliExitCodes.FailedToFindProject, result.ExitCode);
         Assert.Equal(InteractionServiceStrings.ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts, result.ErrorMessage);
     }
 
@@ -123,26 +123,14 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
 
         Assert.False(result.Success);
         Assert.True(result.IsProjectResolutionError);
-        Assert.Equal(ExitCodeConstants.FailedToFindProject, result.ExitCode);
+        Assert.Equal(CliExitCodes.FailedToFindProject, result.ExitCode);
         Assert.Equal(InteractionServiceStrings.ProjectOptionSpecifiedDirectoryContainsNoAppHosts, result.ErrorMessage);
     }
 
     private static CliExecutionContext CreateExecutionContext(DirectoryInfo workingDirectory)
     {
-        var settingsDirectory = workingDirectory.CreateSubdirectory(".aspire");
-        var hivesDirectory = settingsDirectory.CreateSubdirectory("hives");
-        var cacheDirectory = settingsDirectory.CreateSubdirectory("cache");
-        var sdksDirectory = workingDirectory.CreateSubdirectory("sdks");
-        var logsDirectory = workingDirectory.CreateSubdirectory("logs");
-        var logFilePath = Path.Combine(logsDirectory.FullName, "test.log");
-
-        return new CliExecutionContext(
+        return TestExecutionContextHelper.CreateExecutionContext(
             workingDirectory,
-            hivesDirectory,
-            cacheDirectory,
-            sdksDirectory,
-            logsDirectory,
-            logFilePath,
             homeDirectory: workingDirectory);
     }
 

@@ -106,7 +106,7 @@ internal sealed class AgentMcpCommand : BaseCommand
             if (!UrlHelper.IsHttpUrl(dashboardUrl))
             {
                 _logger.LogError("Invalid --dashboard-url: {DashboardUrl}", dashboardUrl);
-                return CommandResult.Failure(ExitCodeConstants.InvalidCommand, string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardUrlInvalid, dashboardUrl));
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardUrlInvalid, dashboardUrl));
             }
 
             _dashboardOnlyMode = true;

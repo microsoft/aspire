@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.TestUtilities;
+using Aspire.Templates.Tests;
 using Xunit;
 
 namespace Aspire.Acquisition.Tests.Scripts;
@@ -90,6 +91,48 @@ public class PRScriptPowerShellTests(ITestOutputHelper testOutput)
 
         result.EnsureSuccessful();
         Assert.Contains("12345", result.Output);
+    }
+
+    [Fact]
+    public async Task MockGhApiWithoutJqFailsLoudly()
+    {
+        using var env = new TestEnvironment();
+        var mockBinPath = await env.CreateMockGhScriptAsync(_testOutput);
+        var mockGhPath = Path.Combine(mockBinPath, OperatingSystem.IsWindows() ? "gh.cmd" : "gh");
+        using var cmd = new ToolCommand(mockGhPath, _testOutput, "mock-gh");
+
+        var result = await cmd.ExecuteAsync("api", "repos/microsoft/aspire/pulls/12345");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("_mock_missing_jq", result.Output);
+    }
+
+    [Fact]
+    public async Task MockGhApiGraphQlWithoutJqFailsLoudly()
+    {
+        using var env = new TestEnvironment();
+        var mockBinPath = await env.CreateMockGhScriptAsync(_testOutput);
+        var mockGhPath = Path.Combine(mockBinPath, OperatingSystem.IsWindows() ? "gh.cmd" : "gh");
+        using var cmd = new ToolCommand(mockGhPath, _testOutput, "mock-gh");
+
+        var result = await cmd.ExecuteAsync("api", "graphql");
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("_mock_missing_jq", result.Output);
+    }
+
+    [Fact]
+    public async Task MockGhApiGraphQlWithJqReturnsHeadSha()
+    {
+        using var env = new TestEnvironment();
+        var mockBinPath = await env.CreateMockGhScriptAsync(_testOutput);
+        var mockGhPath = Path.Combine(mockBinPath, OperatingSystem.IsWindows() ? "gh.cmd" : "gh");
+        using var cmd = new ToolCommand(mockGhPath, _testOutput, "mock-gh");
+
+        var result = await cmd.ExecuteAsync("api", "graphql", "--jq", ".data.repository.pullRequest.headRefOid");
+
+        result.EnsureSuccessful();
+        Assert.Equal("abc123def456789012345678901234567890abcd", result.Output.Trim());
     }
 
     [Fact]

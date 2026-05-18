@@ -36,7 +36,7 @@ internal abstract class BaseCommand : Command
         _executionContext = executionContext;
         InteractionService = interactionService;
         Telemetry = telemetry;
-        SetAction(async (parseResult, cancellationToken) =>
+        SetAction((Func<ParseResult, CancellationToken, Task<int>>)(async (parseResult, cancellationToken) =>
         {
             // Set the command on the execution context so background services can access it
             _executionContext.Command = this;
@@ -58,7 +58,7 @@ internal abstract class BaseCommand : Command
             catch (NonInteractiveException)
             {
                 // Error messages have already been displayed by the interaction service.
-                result = CommandResult.Failure(ExitCodeConstants.MissingRequiredArgument);
+                result = CommandResult.Failure((int)CliExitCodes.MissingRequiredArgument);
             }
 
             if (result.ErrorMessage is not null)
@@ -80,12 +80,22 @@ internal abstract class BaseCommand : Command
             // Display the CLI log file path on non-zero exit codes so the user knows
             // where to find diagnostic details. Suppress for user-input errors where
             // the log wouldn't contain useful context (e.g., missing required arguments).
-            if (result.ExitCode != ExitCodeConstants.Success && result.ExitCode != ExitCodeConstants.MissingRequiredArgument)
+            if (result.ExitCode != CliExitCodes.Success && result.ExitCode != CliExitCodes.MissingRequiredArgument)
             {
                 interactionService.DisplayMessage(
                     KnownEmojis.PageFacingUp,
                     string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, MarkupHelpers.SafeFileLink(interactionService, executionContext.LogFilePath)),
                     allowMarkup: true);
+
+                // If we connected to a running app host, also display the log file path of
+                // the CLI process that launched it so users can diagnose issues in both processes.
+                if (executionContext.AppHostCliLogFilePath is not null)
+                {
+                    interactionService.DisplayMessage(
+                        KnownEmojis.MagnifyingGlassTiltedLeft,
+                        string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeAppHostLogsAt, MarkupHelpers.SafeFileLink(interactionService, executionContext.AppHostCliLogFilePath)),
+                        allowMarkup: true);
+                }
             }
 
             if (UpdateNotificationsEnabled && features.IsFeatureEnabled(KnownFeatures.UpdateNotificationsEnabled, true))
@@ -101,7 +111,7 @@ internal abstract class BaseCommand : Command
             }
 
             return result.ExitCode;
-        });
+        }));
     }
 
     protected abstract Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken);

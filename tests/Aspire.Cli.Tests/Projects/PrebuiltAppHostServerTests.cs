@@ -13,6 +13,7 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Hosting;
 using Aspire.Shared;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Projects;
 
@@ -1175,6 +1176,35 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             typeof(PrebuiltAppHostServer)
                 .GetField("_workingDirectory", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
                 .GetValue(server));
+    }
+
+    [Fact]
+    public void CreateStartInfo_SetsCliLogFilePathEnvironmentVariable()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var layout = CreateBundleLayout(workspace);
+        var executionContext = TestExecutionContextFactory.CreateTestContext();
+        var nugetService = new BundleNuGetService(
+            new FixedLayoutDiscovery(layout),
+            new LayoutProcessRunner(new TestProcessExecutionFactory()),
+            new TestFeatures(),
+            executionContext,
+            NullLogger<BundleNuGetService>.Instance);
+
+        var server = new PrebuiltAppHostServer(
+            workspace.WorkspaceRoot.FullName,
+            "test.sock",
+            layout,
+            nugetService,
+            new TestDotNetCliRunner(),
+            new TestDotNetSdkInstaller(),
+            MockPackagingServiceFactory.Create(),
+            executionContext,
+            NullLogger<PrebuiltAppHostServer>.Instance);
+
+        var startInfo = server.CreateStartInfo(123);
+
+        Assert.Equal(executionContext.LogFilePath, startInfo.Environment[KnownConfigNames.CliLogFilePath]);
     }
 
     private static void DeleteWorkingDirectory(string workingDirectory)

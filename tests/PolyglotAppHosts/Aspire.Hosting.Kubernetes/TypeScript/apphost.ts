@@ -92,6 +92,7 @@ await customIssuerParam.withHttp01Solver();
 await gateway.withGatewayTlsIssuer(stagingIssuer);
 
 const serviceContainer = await builder.addContainer('kube-service', 'redis:alpine');
+await serviceContainer.withComputeEnvironment(kubernetes);
 await serviceContainer.publishAsKubernetesService(async (service) => {
     const _serviceName: string = await service.name();
     const _serviceParent = await service.parent();

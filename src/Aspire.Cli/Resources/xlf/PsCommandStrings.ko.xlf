@@ -7,6 +7,11 @@
         <target state="needs-review-translation">실행 중인 Aspire AppHost를 나열합니다.</target>
         <note />
       </trans-unit>
+      <trans-unit id="HeaderCliLog">
+        <source>Logs</source>
+        <target state="new">Logs</target>
+        <note />
+      </trans-unit>
       <trans-unit id="HeaderCliPid">
         <source>CLI PID</source>
         <target state="translated">CLI PID</target>

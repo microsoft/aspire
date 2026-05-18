@@ -362,7 +362,7 @@ internal class ConsoleInteractionService : IInteractionService
         MessageConsole.MarkupLine($"\t[bold]{InteractionServiceStrings.AspireCLIVersion}[/]: {cliInformationalVersion.EscapeMarkup()}");
         MessageConsole.MarkupLine($"\t[bold]{InteractionServiceStrings.RequiredCapability}[/]: {ex.RequiredCapability.EscapeMarkup()}");
         MessageConsole.WriteLine();
-        return ExitCodeConstants.AppHostIncompatible;
+        return CliExitCodes.AppHostIncompatible;
     }
 
     public void DisplayError(string errorMessage, bool allowMarkup = false)
@@ -382,7 +382,21 @@ internal class ConsoleInteractionService : IInteractionService
         }
 
         var displayMessage = allowMarkup ? message : message.EscapeMarkup();
-        MessageConsole.MarkupLine(ConsoleHelpers.FormatEmojiPrefix(emoji, MessageConsole) + displayMessage);
+
+        // Use a grid to keep the icon in a fixed first column so long text wraps
+        // without pushing under the emoji prefix.
+        var grid = new Grid();
+        grid.AddColumn();
+        grid.AddColumn();
+        grid.Columns[0].NoWrap = true;
+        grid.Columns[0].Padding = new Padding(0);
+        grid.Columns[1].Padding = new Padding(0);
+
+        grid.AddRow(
+            new Markup(ConsoleHelpers.FormatEmojiPrefix(emoji, MessageConsole)),
+            new Markup(displayMessage));
+
+        MessageConsole.Write(grid);
     }
 
     public void DisplayPlainText(string message)
