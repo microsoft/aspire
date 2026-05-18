@@ -11,108 +11,177 @@ namespace Aspire.Dashboard.Tests;
 public class LoggingHelpersTests
 {
     [Fact]
-    public void WriteDashboardUrl_WithToken_LogsLoginUrl()
+    public void WriteDashboardSummary_WithTokenAndOtlpEndpoints_LogsSummaryAndStructuredUrls()
     {
         var sink = new TestSink();
         var logger = new TestLogger("TestLogger", sink, enabled: true);
 
-        LoggingHelpers.WriteDashboardUrl(logger, "http://localhost:18888", "abc123", isContainer: false);
+        LoggingHelpers.WriteDashboardSummary(
+            logger,
+            "http://localhost:18888",
+            "http://localhost:18889",
+            "http://localhost:18890",
+            "abc123");
 
         var write = Assert.Single(sink.Writes);
         Assert.Equal(LogLevel.Information, write.LogLevel);
-        Assert.Contains("/login?t=abc123", write.Message);
-        Assert.Contains("Login to the dashboard at", write.Message);
+        Assert.NotNull(write.Message);
+        var lines = GetMessageLines(write.Message!);
+
+        Assert.Collection(lines,
+            line => Assert.Equal("Aspire Dashboard", line),
+            line => Assert.Equal(string.Empty, line),
+            line => Assert.Equal("Dashboard:    http://localhost:18888", line),
+            line => Assert.Equal("Login URL:    http://localhost:18888/login?t=abc123", line),
+            line => Assert.Equal("OTLP/gRPC:    http://localhost:18889", line),
+            line => Assert.Equal("OTLP/HTTP:    http://localhost:18890", line),
+            line => Assert.Equal(string.Empty, line));
+
+        Assert.Equal("http://localhost:18888", LogTestHelpers.GetValue(write, "DashboardUrl"));
+        Assert.Equal("http://localhost:18889", LogTestHelpers.GetValue(write, "OtlpGrpcUrl"));
+        Assert.Equal("http://localhost:18890", LogTestHelpers.GetValue(write, "OtlpHttpUrl"));
+        Assert.Equal("http://localhost:18888/login?t=abc123", LogTestHelpers.GetValue(write, "LoginUrl"));
     }
 
     [Fact]
-    public void WriteDashboardUrl_WithToken_IsContainer_LogsContainerMessage()
+    public void WriteDashboardSummary_WithoutToken_DoesNotIncludeLoginUrl()
     {
         var sink = new TestSink();
         var logger = new TestLogger("TestLogger", sink, enabled: true);
 
-        LoggingHelpers.WriteDashboardUrl(logger, "http://localhost:18888", "abc123", isContainer: true);
+        LoggingHelpers.WriteDashboardSummary(
+            logger,
+            "http://localhost:18888",
+            "http://localhost:18889",
+            "http://localhost:18890",
+            token: null);
 
         var write = Assert.Single(sink.Writes);
         Assert.Equal(LogLevel.Information, write.LogLevel);
-        Assert.Contains("/login?t=abc123", write.Message);
-        Assert.Contains("URL may need changes depending on how network access to the container is configured", write.Message);
+        Assert.NotNull(write.Message);
+        var lines = GetMessageLines(write.Message!);
+
+        Assert.Collection(lines,
+            line => Assert.Equal("Aspire Dashboard", line),
+            line => Assert.Equal(string.Empty, line),
+            line => Assert.Equal("Dashboard:    http://localhost:18888", line),
+            line => Assert.Equal("OTLP/gRPC:    http://localhost:18889", line),
+            line => Assert.Equal("OTLP/HTTP:    http://localhost:18890", line),
+            line => Assert.Equal(string.Empty, line));
+
+        Assert.Null(LogTestHelpers.GetValue(write, "LoginUrl"));
     }
 
     [Fact]
-    public void WriteDashboardUrl_WithoutToken_LogsDashboardUrl()
+    public void WriteDashboardSummary_InvalidDashboardUrl_DoesNotLog()
     {
         var sink = new TestSink();
         var logger = new TestLogger("TestLogger", sink, enabled: true);
 
-        LoggingHelpers.WriteDashboardUrl(logger, "http://localhost:18888", token: null, isContainer: false);
-
-        var write = Assert.Single(sink.Writes);
-        Assert.Equal(LogLevel.Information, write.LogLevel);
-        Assert.Contains("The dashboard is available at", write.Message);
-        Assert.Contains("http://localhost:18888", write.Message);
-        Assert.DoesNotContain("/login?t=", write.Message);
-    }
-
-    [Fact]
-    public void WriteDashboardUrl_WithoutToken_IsContainer_LogsContainerMessage()
-    {
-        var sink = new TestSink();
-        var logger = new TestLogger("TestLogger", sink, enabled: true);
-
-        LoggingHelpers.WriteDashboardUrl(logger, "http://localhost:18888", token: null, isContainer: true);
-
-        var write = Assert.Single(sink.Writes);
-        Assert.Equal(LogLevel.Information, write.LogLevel);
-        Assert.Contains("The dashboard is available at", write.Message);
-        Assert.Contains("URL may need changes depending on how network access to the container is configured", write.Message);
-    }
-
-    [Fact]
-    public void WriteDashboardUrl_EmptyToken_LogsDashboardUrlWithoutLogin()
-    {
-        var sink = new TestSink();
-        var logger = new TestLogger("TestLogger", sink, enabled: true);
-
-        LoggingHelpers.WriteDashboardUrl(logger, "http://localhost:18888", token: "", isContainer: false);
-
-        var write = Assert.Single(sink.Writes);
-        Assert.Equal(LogLevel.Information, write.LogLevel);
-        Assert.Contains("The dashboard is available at", write.Message);
-        Assert.DoesNotContain("/login?t=", write.Message);
-    }
-
-    [Fact]
-    public void WriteDashboardUrl_InvalidUrl_DoesNotLog()
-    {
-        var sink = new TestSink();
-        var logger = new TestLogger("TestLogger", sink, enabled: true);
-
-        LoggingHelpers.WriteDashboardUrl(logger, "not-a-url", token: "abc123", isContainer: false);
+        LoggingHelpers.WriteDashboardSummary(logger, "not-a-url", "http://localhost:18889", "http://localhost:18890", token: "abc123");
 
         Assert.Empty(sink.Writes);
     }
 
     [Fact]
-    public void WriteDashboardUrl_NullUrl_DoesNotLog()
+    public void WriteDashboardSummary_NullDashboardUrl_DoesNotLog()
     {
         var sink = new TestSink();
         var logger = new TestLogger("TestLogger", sink, enabled: true);
 
-        LoggingHelpers.WriteDashboardUrl(logger, dashboardUrls: null, token: "abc123", isContainer: false);
+        LoggingHelpers.WriteDashboardSummary(
+            logger,
+            dashboardUrls: null,
+            otlpGrpcUrls: "http://localhost:18889",
+            otlpHttpUrls: "http://localhost:18890",
+            token: "abc123");
 
         Assert.Empty(sink.Writes);
     }
 
     [Fact]
-    public void WriteDashboardUrl_SemicolonDelimitedUrls_UsesFirstUrl()
+    public void WriteDashboardSummary_SemicolonDelimitedUrls_UsesFirstUrls()
     {
         var sink = new TestSink();
         var logger = new TestLogger("TestLogger", sink, enabled: true);
 
-        LoggingHelpers.WriteDashboardUrl(logger, "http://localhost:18888;http://localhost:19999", "mytoken", isContainer: false);
+        LoggingHelpers.WriteDashboardSummary(
+            logger,
+            "http://localhost:18888;http://localhost:19999",
+            "http://localhost:18889;http://localhost:19998",
+            "http://localhost:18890;http://localhost:19997",
+            "mytoken");
 
         var write = Assert.Single(sink.Writes);
-        Assert.Contains("http://localhost:18888/login?t=mytoken", write.Message);
-        Assert.DoesNotContain("19999", write.Message);
+        Assert.NotNull(write.Message);
+        var lines = GetMessageLines(write.Message!);
+
+        Assert.Collection(lines,
+            line => Assert.Equal("Aspire Dashboard", line),
+            line => Assert.Equal(string.Empty, line),
+            line => Assert.Equal("Dashboard:    http://localhost:18888", line),
+            line => Assert.Equal("Login URL:    http://localhost:18888/login?t=mytoken", line),
+            line => Assert.Equal("OTLP/gRPC:    http://localhost:18889", line),
+            line => Assert.Equal("OTLP/HTTP:    http://localhost:18890", line),
+            line => Assert.Equal(string.Empty, line));
+
+        Assert.Equal("http://localhost:18888", LogTestHelpers.GetValue(write, "DashboardUrl"));
+        Assert.Equal("http://localhost:18889", LogTestHelpers.GetValue(write, "OtlpGrpcUrl"));
+        Assert.Equal("http://localhost:18890", LogTestHelpers.GetValue(write, "OtlpHttpUrl"));
+        Assert.Equal("http://localhost:18888/login?t=mytoken", LogTestHelpers.GetValue(write, "LoginUrl"));
+    }
+
+    [Fact]
+    public void WriteDashboardSummary_WithoutOtlpEndpoints_DoesNotIncludeOtlpLines()
+    {
+        var sink = new TestSink();
+        var logger = new TestLogger("TestLogger", sink, enabled: true);
+
+        LoggingHelpers.WriteDashboardSummary(
+            logger,
+            "http://localhost:18888",
+            otlpGrpcUrls: null,
+            otlpHttpUrls: null,
+            token: "abc123");
+
+        var write = Assert.Single(sink.Writes);
+        Assert.NotNull(write.Message);
+        var lines = GetMessageLines(write.Message!);
+
+        Assert.Collection(lines,
+            line => Assert.Equal("Aspire Dashboard", line),
+            line => Assert.Equal(string.Empty, line),
+            line => Assert.Equal("Dashboard:    http://localhost:18888", line),
+            line => Assert.Equal("Login URL:    http://localhost:18888/login?t=abc123", line),
+            line => Assert.Equal(string.Empty, line));
+
+        Assert.Null(LogTestHelpers.GetValue(write, "OtlpGrpcUrl"));
+        Assert.Null(LogTestHelpers.GetValue(write, "OtlpHttpUrl"));
+    }
+
+    [Fact]
+    public void WriteDashboardSummary_IsContainer_IncludesContainerMessage()
+    {
+        var sink = new TestSink();
+        var logger = new TestLogger("TestLogger", sink, enabled: true);
+
+        LoggingHelpers.WriteDashboardSummary(
+            logger,
+            "http://localhost:18888",
+            otlpGrpcUrls: null,
+            otlpHttpUrls: null,
+            token: "abc123",
+            isContainer: true);
+
+        var write = Assert.Single(sink.Writes);
+        Assert.NotNull(write.Message);
+        var containerMessage = "URLs may need changes depending on how network access to the container is configured.";
+
+        Assert.Contains(containerMessage, write.Message);
+    }
+
+    private static string[] GetMessageLines(string message)
+    {
+        return message.Replace("\r", string.Empty).Split('\n');
     }
 }

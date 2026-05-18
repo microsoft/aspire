@@ -3,35 +3,66 @@
 
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
+using System.Text;
 
 namespace Aspire.Hosting;
 
 internal static class LoggingHelpers
 {
-    public static void WriteDashboardUrl(ILogger logger, string? dashboardUrls, string? token, bool isContainer)
+    public static void WriteDashboardSummary(ILogger logger, string? dashboardUrls, string? otlpGrpcUrls, string? otlpHttpUrls, string? token, bool isContainer = false)
     {
         if (!StringUtils.TryGetUriFromDelimitedString(dashboardUrls, ";", out var firstDashboardUrl))
         {
             return;
         }
 
-        if (!string.IsNullOrEmpty(token))
+        static string? GetEndpointAuthority(string? urls)
         {
-            var message = !isContainer
-                ? "Login to the dashboard at {DashboardLoginUrl}"
-                : "Login to the dashboard at {DashboardLoginUrl} . The URL may need changes depending on how network access to the container is configured.";
-
-            var dashboardUrl = $"{firstDashboardUrl.GetLeftPart(UriPartial.Authority)}/login?t={token}";
-            logger.LogInformation(message, dashboardUrl);
+            return StringUtils.TryGetUriFromDelimitedString(urls, ";", out var firstUrl)
+                ? firstUrl.GetLeftPart(UriPartial.Authority)
+                : null;
         }
-        else
+
+        var dashboardUrl = firstDashboardUrl.GetLeftPart(UriPartial.Authority);
+        var otlpGrpcUrl = GetEndpointAuthority(otlpGrpcUrls);
+        var otlpHttpUrl = GetEndpointAuthority(otlpHttpUrls);
+        var loginUrl = !string.IsNullOrEmpty(token)
+            ? $"{dashboardUrl}/login?t={token}"
+            : null;
+
+        var templateBuilder = new StringBuilder();
+        var parameters = new List<object?>();
+
+        templateBuilder
+            .Append("Aspire Dashboard").Append('\n')
+            .Append('\n')
+            .Append("Dashboard:    {DashboardUrl}").Append('\n');
+        parameters.Add(dashboardUrl);
+
+        if (loginUrl is not null)
         {
-            var message = !isContainer
-                ? "The dashboard is available at {DashboardUrl}"
-                : "The dashboard is available at {DashboardUrl} . The URL may need changes depending on how network access to the container is configured.";
-
-            var dashboardUrl = firstDashboardUrl.GetLeftPart(UriPartial.Authority);
-            logger.LogInformation(message, dashboardUrl);
+            templateBuilder.Append("Login URL:    {LoginUrl}").Append('\n');
+            parameters.Add(loginUrl);
         }
+
+        if (otlpGrpcUrl is not null)
+        {
+            templateBuilder.Append("OTLP/gRPC:    {OtlpGrpcUrl}").Append('\n');
+            parameters.Add(otlpGrpcUrl);
+        }
+
+        if (otlpHttpUrl is not null)
+        {
+            templateBuilder.Append("OTLP/HTTP:    {OtlpHttpUrl}").Append('\n');
+            parameters.Add(otlpHttpUrl);
+        }
+
+        if (isContainer)
+        {
+            templateBuilder.Append('\n');
+            templateBuilder.Append("URLs may need changes depending on how network access to the container is configured.").Append('\n');
+        }
+
+        logger.LogInformation(templateBuilder.ToString(), parameters.ToArray());
     }
 }

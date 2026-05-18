@@ -424,13 +424,21 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             if (frontendEndpointInfo != null)
             {
                 var options = _app.Services.GetRequiredService<IOptionsMonitor<DashboardOptions>>().CurrentValue;
+                // Always print a dashboard summary including dashboard and OTLP endpoints.
+                var token = options.Frontend.AuthMode == FrontendAuthMode.BrowserToken ? options.Frontend.BrowserToken : null;
+                var otlpGrpcAddress = _otlpServiceGrpcEndPointAccessor?.Invoke().GetResolvedAddress(replaceIPAnyWithLocalhost: true);
+                var otlpHttpAddress = _otlpServiceHttpEndPointAccessor?.Invoke().GetResolvedAddress(replaceIPAnyWithLocalhost: true);
                 // DOTNET_RUNNING_IN_CONTAINER is a well-known environment variable added by official .NET images.
                 // https://learn.microsoft.com/dotnet/core/tools/dotnet-environment-variables#dotnet_running_in_container-and-dotnet_running_in_containers
                 var isContainer = _app.Configuration.GetBool("DOTNET_RUNNING_IN_CONTAINER") ?? false;
 
-                // Always print the dashboard URL. When using browser token auth, include the login token.
-                var token = options.Frontend.AuthMode == FrontendAuthMode.BrowserToken ? options.Frontend.BrowserToken : null;
-                LoggingHelpers.WriteDashboardUrl(_logger, frontendEndpointInfo.GetResolvedAddress(replaceIPAnyWithLocalhost: true), token, isContainer);
+                LoggingHelpers.WriteDashboardSummary(
+                    _logger,
+                    frontendEndpointInfo.GetResolvedAddress(replaceIPAnyWithLocalhost: true),
+                    otlpGrpcAddress,
+                    otlpHttpAddress,
+                    token,
+                    isContainer);
             }
 
             // One-off async initialization of telemetry service.
