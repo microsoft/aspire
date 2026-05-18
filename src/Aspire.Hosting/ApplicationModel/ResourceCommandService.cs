@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using Aspire.Hosting.Backchannel;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -372,6 +373,89 @@ public class ResourceCommandService
 
         logger.LogInformation("Command '{CommandName}' not available.", commandName);
         return new ExecuteCommandResult { Success = false, Message = $"Command '{commandName}' not available for resource '{resource.GetResolvedDisplayResourceName(resourceId)}'." };
+    }
+
+    internal async Task<LoadDynamicArgumentOptionsResponse> LoadDynamicArgumentOptionsAsync(
+        string resourceId,
+        string commandName,
+        string argumentName,
+        IReadOnlyDictionary<string, string?>? currentValues,
+        CancellationToken cancellationToken)
+    {
+        if (!_resourceNotificationService.TryGetCurrentState(resourceId, out var resourceEvent))
+        {
+            return new LoadDynamicArgumentOptionsResponse { Status = LoadDynamicArgumentOptionsStatus.ResourceNotFound };
+        }
+
+        var resolvedCommandName = commandName;
+        var logger = _resourceLoggerService.GetLogger(resourceId);
+        var annotation = ResolveCommandAnnotation(resourceEvent.Resource, ref resolvedCommandName, logger);
+
+        if (annotation is null)
+        {
+            return new LoadDynamicArgumentOptionsResponse { Status = LoadDynamicArgumentOptionsStatus.CommandNotFound };
+        }
+
+        var targetInput = annotation.Arguments.FirstOrDefault(a =>
+            string.Equals(a.Name, argumentName, StringComparisons.InteractionInputName));
+
+        if (targetInput is null)
+        {
+            return new LoadDynamicArgumentOptionsResponse { Status = LoadDynamicArgumentOptionsStatus.ArgumentNotFound };
+        }
+
+        if (targetInput.DynamicLoading is not { } dynamicLoading)
+        {
+            return new LoadDynamicArgumentOptionsResponse { Status = LoadDynamicArgumentOptionsStatus.NotDynamic };
+        }
+
+        var collection = CreateArguments(annotation.Arguments, currentValues);
+
+        if (!ShouldLoadDynamicCommandArgument(dynamicLoading, collection))
+        {
+            var missing = dynamicLoading.DependsOnInputs?
+                .Where(d => !collection.TryGetByName(d, out var i) || string.IsNullOrEmpty(i.Value))
+                .ToArray();
+
+            return new LoadDynamicArgumentOptionsResponse
+            {
+                Status = LoadDynamicArgumentOptionsStatus.DependenciesNotSatisfied,
+                MissingDependencies = missing
+            };
+        }
+
+        if (!collection.TryGetByName(argumentName, out var inputClone))
+        {
+            return new LoadDynamicArgumentOptionsResponse { Status = LoadDynamicArgumentOptionsStatus.ArgumentNotFound };
+        }
+
+        try
+        {
+            await dynamicLoading.LoadCallback(new LoadInputContext
+            {
+                AllInputs = collection,
+                Input = inputClone,
+                Services = _serviceProvider,
+                CancellationToken = cancellationToken
+            }).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to load dynamic options for argument '{ArgumentName}' on command '{CommandName}'.", argumentName, commandName);
+            return new LoadDynamicArgumentOptionsResponse
+            {
+                Status = LoadDynamicArgumentOptionsStatus.Error,
+                Message = ex.Message
+            };
+        }
+
+        return new LoadDynamicArgumentOptionsResponse
+        {
+            Status = LoadDynamicArgumentOptionsStatus.Loaded,
+            Options = inputClone.Options?
+                .Select(keyValuePair => new KeyValuePair<string, string?>(keyValuePair.Key, keyValuePair.Value))
+                .ToArray()
+        };
     }
 
     internal async Task<ExecuteCommandResult> ValidateCommandArgumentsAsync(string resourceId, string commandName, InteractionInputCollection arguments, CancellationToken cancellationToken)

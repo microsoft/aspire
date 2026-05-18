@@ -5,6 +5,7 @@ using System.Threading.Channels;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using LoadDynamicArgumentOptionsStatus = Aspire.Hosting.Backchannel.LoadDynamicArgumentOptionsStatus;
 
 namespace Aspire.Hosting.Tests;
 
@@ -332,7 +333,7 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
             """, result.Message);
     }
 
-    [Fact] 
+    [Fact]
     public void CommandResults_Canceled_ProducesCorrectResult()
     {
         // Act
@@ -1300,6 +1301,195 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         Assert.NotNull(result.Data);
         Assert.Equal("hello world", result.Data.Value);
         Assert.Equal(CommandResultFormat.Text, result.Data.Format);
+    }
+
+    [Fact]
+    public async Task LoadDynamicArgumentOptionsAsync_LoadsOptions_WhenDependenciesSatisfied()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var loadCount = 0;
+        builder.AddResource(new CustomResource("myResource"))
+            .WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: _ => Task.FromResult(CommandResults.Success()),
+                commandOptions: new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "subscription",
+                            InputType = InputType.Choice,
+                            Required = true,
+                            Options = [KeyValuePair.Create("sub-a", "Subscription A")]
+                        },
+                        new InteractionInput
+                        {
+                            Name = "location",
+                            InputType = InputType.Choice,
+                            Required = true,
+                            DynamicLoading = new InputLoadOptions
+                            {
+                                DependsOnInputs = ["subscription"],
+                                LoadCallback = context =>
+                                {
+                                    loadCount++;
+                                    context.Input.Options = [KeyValuePair.Create("westus", "West US")];
+                                    return Task.CompletedTask;
+                                }
+                            }
+                        }
+                    ]
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var response = await app.ResourceCommands.LoadDynamicArgumentOptionsAsync(
+            "myResource",
+            "mycommand",
+            "location",
+            new Dictionary<string, string?> { ["subscription"] = "sub-a" },
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(LoadDynamicArgumentOptionsStatus.Loaded, response.Status);
+        Assert.Equal(1, loadCount);
+        Assert.NotNull(response.Options);
+        var loaded = Assert.Single(response.Options);
+        Assert.Equal("westus", loaded.Key);
+        Assert.Equal("West US", loaded.Value);
+    }
+
+    [Fact]
+    public async Task LoadDynamicArgumentOptionsAsync_ReturnsDependenciesNotSatisfied_WhenDependencyMissing()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var loadCount = 0;
+        builder.AddResource(new CustomResource("myResource"))
+            .WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: _ => Task.FromResult(CommandResults.Success()),
+                commandOptions: new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "subscription",
+                            InputType = InputType.Choice,
+                            Required = true,
+                            Options = [KeyValuePair.Create("sub-a", "Subscription A")]
+                        },
+                        new InteractionInput
+                        {
+                            Name = "location",
+                            InputType = InputType.Choice,
+                            DynamicLoading = new InputLoadOptions
+                            {
+                                DependsOnInputs = ["subscription"],
+                                LoadCallback = context =>
+                                {
+                                    loadCount++;
+                                    return Task.CompletedTask;
+                                }
+                            }
+                        }
+                    ]
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var response = await app.ResourceCommands.LoadDynamicArgumentOptionsAsync(
+            "myResource",
+            "mycommand",
+            "location",
+            currentValues: null,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(LoadDynamicArgumentOptionsStatus.DependenciesNotSatisfied, response.Status);
+        Assert.Equal(0, loadCount);
+        Assert.NotNull(response.MissingDependencies);
+        Assert.Equal("subscription", Assert.Single(response.MissingDependencies));
+        Assert.Null(response.Options);
+    }
+
+    [Fact]
+    public async Task LoadDynamicArgumentOptionsAsync_ReturnsNotDynamic_WhenArgumentHasNoDynamicLoading()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        builder.AddResource(new CustomResource("myResource"))
+            .WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: _ => Task.FromResult(CommandResults.Success()),
+                commandOptions: new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "subscription",
+                            InputType = InputType.Choice,
+                            Options = [KeyValuePair.Create("sub-a", "Subscription A")]
+                        }
+                    ]
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var response = await app.ResourceCommands.LoadDynamicArgumentOptionsAsync(
+            "myResource",
+            "mycommand",
+            "subscription",
+            currentValues: null,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(LoadDynamicArgumentOptionsStatus.NotDynamic, response.Status);
+        Assert.Null(response.Options);
+    }
+
+    [Fact]
+    public async Task LoadDynamicArgumentOptionsAsync_ReturnsError_WhenLoadCallbackThrows()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        builder.AddResource(new CustomResource("myResource"))
+            .WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: _ => Task.FromResult(CommandResults.Success()),
+                commandOptions: new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "location",
+                            InputType = InputType.Choice,
+                            DynamicLoading = new InputLoadOptions
+                            {
+                                AlwaysLoadOnStart = true,
+                                LoadCallback = _ => throw new InvalidOperationException("kaboom")
+                            }
+                        }
+                    ]
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var response = await app.ResourceCommands.LoadDynamicArgumentOptionsAsync(
+            "myResource",
+            "mycommand",
+            "location",
+            currentValues: null,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(LoadDynamicArgumentOptionsStatus.Error, response.Status);
+        Assert.Equal("kaboom", response.Message);
     }
 
     private static string CreateBuildOutputTestProject(string directoryPath, string buildOutputMarker)

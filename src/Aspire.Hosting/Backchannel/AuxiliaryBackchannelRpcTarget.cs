@@ -323,6 +323,26 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         };
     }
 
+    /// <summary>
+    /// Loads the dynamic Choice options for a single resource command argument given partial input values, without executing the command.
+    /// </summary>
+    /// <param name="request">The load request describing the target argument and the current input values.</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>A response describing the load outcome.</returns>
+    public async Task<LoadDynamicArgumentOptionsResponse> LoadDynamicArgumentOptionsAsync(LoadDynamicArgumentOptionsRequest request, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(LoadDynamicArgumentOptionsAsync), streaming: false, request.TraceContext);
+
+        var resourceCommandService = serviceProvider.GetRequiredService<ResourceCommandService>();
+        return await resourceCommandService.LoadDynamicArgumentOptionsAsync(
+            request.ResourceId,
+            request.CommandName,
+            request.ArgumentName,
+            request.CurrentValues,
+            cancellationToken).ConfigureAwait(false);
+    }
+
     private static (InteractionInputCollection Arguments, string? ErrorMessage) CreateCommandArguments(ResourceCommandService resourceCommandService, ExecuteResourceCommandRequest request)
     {
         var arguments = request.Arguments;
