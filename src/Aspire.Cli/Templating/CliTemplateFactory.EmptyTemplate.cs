@@ -77,7 +77,8 @@ internal sealed partial class CliTemplateFactory
                             new DirectoryInfo(outputPath),
                             projectName,
                             SdkVersion: inputs.Version,
-                            Channel: inputs.Channel);
+                            Channel: inputs.Channel,
+                            PackageSourceOverride: inputs.Source);
                         if (!await _scaffoldingService.ScaffoldAsync(context, cancellationToken))
                         {
                             return new TemplateResult((int)CliExitCodes.FailedToCreateNewProject);

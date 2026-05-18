@@ -422,7 +422,8 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     public async Task<AppHostServerPrepareResult> PrepareAsync(
         string sdkVersion,
         IEnumerable<IntegrationReference> integrations,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? packageSourceOverride = null)
     {
         var (_, channelName) = await CreateProjectFilesAsync(integrations, cancellationToken);
         var (buildSuccess, buildOutput) = await BuildAsync(cancellationToken);

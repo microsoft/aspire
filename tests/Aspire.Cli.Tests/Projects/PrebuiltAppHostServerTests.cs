@@ -19,6 +19,8 @@ namespace Aspire.Cli.Tests.Projects;
 
 public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 {
+    private const string NuGetOrgSource = "https://api.nuget.org/v3/index.json";
+
     [Fact]
     public void GenerateIntegrationProjectFile_WithPackagesOnly_ProducesPackageReferences()
     {
@@ -171,6 +173,26 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void GenerateIntegrationProjectFile_WithRestoreConfigFile_SetsRestoreConfigFile()
+    {
+        var sources = new[] { "/local/packages", "https://my-feed/v3/index.json" };
+
+        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile(
+            [],
+            [],
+            "/tmp/libs",
+            sources,
+            restoreConfigFile: "/tmp/nuget.config");
+        var doc = XDocument.Parse(xml);
+
+        var ns = doc.Root!.GetDefaultNamespace();
+        var restoreConfigFile = doc.Descendants(ns + "RestoreConfigFile").FirstOrDefault()?.Value;
+        var restoreSources = doc.Descendants(ns + "RestoreAdditionalProjectSources").FirstOrDefault();
+        Assert.Equal("/tmp/nuget.config", restoreConfigFile);
+        Assert.Null(restoreSources);
+    }
+
+    [Fact]
     public void GenerateIntegrationProjectFile_WithEmptyAdditionalSources_DoesNotSetRestoreAdditionalProjectSources()
     {
         var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile([], [], "/tmp/libs", Enumerable.Empty<string>());
@@ -179,6 +201,27 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var ns = doc.Root!.GetDefaultNamespace();
         var restoreSources = doc.Descendants(ns + "RestoreAdditionalProjectSources").FirstOrDefault();
         Assert.Null(restoreSources);
+    }
+
+    [Fact]
+    public void GenerateIntegrationProjectFile_WithExactVersions_ExactPinsOnlyAspirePackages()
+    {
+        var packageRefs = new List<IntegrationReference>
+        {
+            IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.4.0-pr.17166.ga49d604d"),
+            IntegrationReference.FromPackage("CommunityToolkit.Aspire.Hosting.Redis", "1.0.0")
+        };
+
+        var xml = PrebuiltAppHostServer.GenerateIntegrationProjectFile(
+            packageRefs,
+            [],
+            "/tmp/libs",
+            useExactPackageVersions: true);
+        var doc = XDocument.Parse(xml);
+
+        var packageElements = doc.Descendants("PackageReference").ToList();
+        Assert.Contains(packageElements, e => e.Attribute("Include")?.Value == "Aspire.Hosting.Redis" && e.Attribute("Version")?.Value == "[13.4.0-pr.17166.ga49d604d]");
+        Assert.Contains(packageElements, e => e.Attribute("Include")?.Value == "CommunityToolkit.Aspire.Hosting.Redis" && e.Attribute("Version")?.Value == "1.0.0");
     }
 
     [Fact]
@@ -485,7 +528,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
         Assert.NotNull(method);
 
-        var task = (Task<TemporaryNuGetConfig?>)method.Invoke(server, [requestedChannel, CancellationToken.None])!;
+        var task = (Task<TemporaryNuGetConfig?>)method.Invoke(server, [requestedChannel, null, CancellationToken.None])!;
         return await task;
     }
 
@@ -583,6 +626,119 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             var startInfo = server.CreateStartInfo(123);
             Assert.Equal(manifestPath, startInfo.Environment[KnownConfigNames.IntegrationProbeManifestPath]);
             Assert.False(startInfo.Environment.ContainsKey(KnownConfigNames.IntegrationLibsPath));
+        }
+        finally
+        {
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task PrepareAsync_WithPackageReferences_UsesPackageSourceOverride()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string packageSourceOverride = "/tmp/aspire-pr-hive/packages";
+        List<string>? restoreArgs = null;
+
+        var (server, executionFactory) = CreatePackageReferenceServer(workspace);
+        executionFactory.AssertionCallback = (args, _, _, _) =>
+        {
+            if (args is ["nuget", "restore", ..])
+            {
+                restoreArgs = [.. args];
+            }
+        };
+
+        var workingDirectory = GetWorkingDirectory(server);
+
+        try
+        {
+            var result = await server.PrepareAsync(
+                "13.4.0-pr.17141.gf142085f",
+                [
+                    IntegrationReference.FromPackage("Aspire.Hosting.CodeGeneration.TypeScript", "13.4.0-pr.17141.gf142085f"),
+                    IntegrationReference.FromPackage("CommunityToolkit.Aspire.Hosting.Redis", "1.0.0")
+                ],
+                packageSourceOverride: packageSourceOverride);
+
+            Assert.True(result.Success);
+            Assert.NotNull(restoreArgs);
+            Assert.Equal([packageSourceOverride, NuGetOrgSource], GetSourceArguments(restoreArgs!));
+            Assert.Contains("Aspire.Hosting.CodeGeneration.TypeScript,[13.4.0-pr.17141.gf142085f]", restoreArgs!);
+            Assert.Contains("CommunityToolkit.Aspire.Hosting.Redis,1.0.0", restoreArgs!);
+            Assert.Contains("--nuget-config", restoreArgs!);
+        }
+        finally
+        {
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task PrepareAsync_WithProjectReferencesAndPackageSourceOverride_UsesNuGetConfig()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string packageSourceOverride = "/tmp/aspire-pr-hive/packages";
+        XDocument? generatedProject = null;
+        bool restoreConfigFileExistedDuringBuild = false;
+
+        var closureFiles = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["MyIntegration.dll"] = "integration-v1"
+        };
+        var dotNetCliRunner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (projectFilePath, _, _, _) =>
+            {
+                generatedProject = XDocument.Load(projectFilePath.FullName);
+                var ns = generatedProject.Root!.GetDefaultNamespace();
+                var restoreConfigFile = generatedProject.Descendants(ns + "RestoreConfigFile").FirstOrDefault()?.Value;
+                restoreConfigFileExistedDuringBuild = restoreConfigFile is not null && File.Exists(restoreConfigFile);
+                WriteClosureInputs(projectFilePath.Directory!, closureFiles, ["MyIntegration"]);
+                return 0;
+            }
+        };
+        var nugetService = new BundleNuGetService(
+            new NullLayoutDiscovery(),
+            new LayoutProcessRunner(new TestProcessExecutionFactory()),
+            new TestFeatures(),
+            TestExecutionContextFactory.CreateTestContext(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
+        var server = new PrebuiltAppHostServer(
+            workspace.WorkspaceRoot.FullName,
+            "test.sock",
+            new LayoutConfiguration(),
+            nugetService,
+            dotNetCliRunner,
+            new TestDotNetSdkInstaller(),
+            MockPackagingServiceFactory.Create(),
+            TestExecutionContextFactory.CreateTestContext(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+        var workingDirectory = GetWorkingDirectory(server);
+
+        try
+        {
+            var result = await server.PrepareAsync(
+                "13.4.0-pr.17166.ga49d604d",
+                [
+                    IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.4.0-pr.17166.ga49d604d"),
+                    IntegrationReference.FromPackage("CommunityToolkit.Aspire.Hosting.Redis", "1.0.0"),
+                    IntegrationReference.FromProject("MyIntegration", "/path/to/MyIntegration.csproj")
+                ],
+                packageSourceOverride: packageSourceOverride);
+
+            Assert.True(result.Success);
+            Assert.NotNull(generatedProject);
+
+            var ns = generatedProject.Root!.GetDefaultNamespace();
+            var restoreConfigFile = generatedProject.Descendants(ns + "RestoreConfigFile").FirstOrDefault()?.Value;
+            Assert.NotNull(restoreConfigFile);
+            Assert.True(restoreConfigFileExistedDuringBuild);
+            Assert.Null(generatedProject.Descendants(ns + "RestoreAdditionalProjectSources").FirstOrDefault());
+
+            var packageElements = generatedProject.Descendants("PackageReference").ToList();
+            Assert.Contains(packageElements, e => e.Attribute("Include")?.Value == "Aspire.Hosting.Redis" && e.Attribute("Version")?.Value == "[13.4.0-pr.17166.ga49d604d]");
+            Assert.Contains(packageElements, e => e.Attribute("Include")?.Value == "CommunityToolkit.Aspire.Hosting.Redis" && e.Attribute("Version")?.Value == "1.0.0");
         }
         finally
         {
@@ -1307,6 +1463,20 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         var startInfo = server.CreateStartInfo(123);
 
         Assert.Equal(executionContext.LogFilePath, startInfo.Environment[KnownConfigNames.CliLogFilePath]);
+    }
+
+    private static string[] GetSourceArguments(IReadOnlyList<string> args)
+    {
+        var sources = new List<string>();
+        for (var i = 0; i < args.Count - 1; i++)
+        {
+            if (args[i] == "--source")
+            {
+                sources.Add(args[i + 1]);
+            }
+        }
+
+        return [.. sources];
     }
 
     private static void DeleteWorkingDirectory(string workingDirectory)
