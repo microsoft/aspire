@@ -38,7 +38,7 @@ public sealed class DashboardCommandExecutorTests
         var notifications = notificationService.GetNotifications();
         var notification = Assert.Single(notifications);
         Assert.Equal(MessageIntent.Warning, notification.Entry.Intent);
-        Assert.Contains("Stop", notification.Entry.Title);
+        Assert.Equal("Localized:ResourceCommandCanceled", notification.Entry.Title);
     }
 
     [Fact]
