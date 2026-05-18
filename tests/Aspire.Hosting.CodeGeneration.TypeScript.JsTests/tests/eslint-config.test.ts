@@ -1,0 +1,196 @@
+// Regression coverage for the TypeScript AppHost scaffold's eslint.config.mjs.
+//
+// The scaffolded ESLint config exists for one purpose: catch unawaited AppHost
+// promises (such as a forgotten `await builder.build().run();`) at lint time so
+// they never reach `aspire run`. Asserting the config *file content* — as the
+// C# unit tests already do — only protects against the static shape. This suite
+// runs ESLint against the actual scaffolded resource files to prove the rule is
+// wired up correctly and fires for thenable AppHost call chains.
+//
+// Strategy:
+// 1. Copy the scaffolded `eslint.config.mjs` + `tsconfig.apphost.json` from
+//    `src/Aspire.Hosting.CodeGeneration.TypeScript/Resources/` into a per-test
+//    fixture directory located *inside* this test project so node_modules
+//    resolution can find `eslint` and `typescript-eslint`.
+// 2. Drop a fixture `apphost.ts` containing the scenario under test.
+// 3. Invoke `ESLint` programmatically with `cwd` set to the fixture dir so the
+//    flat config is loaded exactly as the scaffolded project would load it.
+// 4. Inspect the lint result for `@typescript-eslint/no-floating-promises`
+//    reports.
+
+import { describe, it, expect, beforeAll, beforeEach, afterEach, afterAll } from 'vitest';
+import { ESLint } from 'eslint';
+import {
+    copyFileSync,
+    existsSync,
+    mkdirSync,
+    mkdtempSync,
+    rmSync,
+    writeFileSync,
+} from 'node:fs';
+import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const projectDir = resolve(fileURLToPath(import.meta.url), '..', '..');
+const resourcesDir = resolve(
+    projectDir,
+    '..',
+    '..',
+    'src',
+    'Aspire.Hosting.CodeGeneration.TypeScript',
+    'Resources'
+);
+
+const eslintConfigPath = join(resourcesDir, 'eslint.config.mjs');
+const appHostTsConfigPath = join(resourcesDir, 'tsconfig.apphost.json');
+
+// Per-test fixtures live under .fixtures/ inside the JsTests project so the
+// node_modules lookup chain finds the eslint + typescript-eslint packages
+// installed via this project's package.json.
+const fixturesRoot = join(projectDir, '.fixtures');
+
+const NoFloatingPromises = '@typescript-eslint/no-floating-promises';
+
+function ensureFixtureRoot(): void {
+    if (!existsSync(fixturesRoot)) {
+        mkdirSync(fixturesRoot, { recursive: true });
+    }
+}
+
+function createFixtureDir(): string {
+    ensureFixtureRoot();
+    const dir = mkdtempSync(join(fixturesRoot, 'eslint-config-'));
+    copyFileSync(eslintConfigPath, join(dir, 'eslint.config.mjs'));
+    copyFileSync(appHostTsConfigPath, join(dir, 'tsconfig.apphost.json'));
+    return dir;
+}
+
+function writeAppHost(fixtureDir: string, source: string): void {
+    writeFileSync(join(fixtureDir, 'apphost.ts'), source, 'utf8');
+}
+
+async function lintAppHost(fixtureDir: string): Promise<ESLint.LintResult[]> {
+    const eslint = new ESLint({ cwd: fixtureDir });
+    return eslint.lintFiles(['apphost.ts']);
+}
+
+function collectFloatingPromiseMessages(results: ESLint.LintResult[]): ESLint.LintMessage[] {
+    return results.flatMap((result) =>
+        result.messages.filter((message) => message.ruleId === NoFloatingPromises)
+    );
+}
+
+describe('scaffolded eslint.config.mjs', () => {
+    let fixtureDir: string;
+
+    beforeAll(() => {
+        // Confirm the scaffold resource files actually exist before we promise
+        // regression coverage; this fails loudly if the Resources/ layout moves.
+        expect(existsSync(eslintConfigPath)).toBe(true);
+        expect(existsSync(appHostTsConfigPath)).toBe(true);
+    });
+
+    beforeEach(() => {
+        fixtureDir = createFixtureDir();
+    });
+
+    afterEach(() => {
+        rmSync(fixtureDir, { recursive: true, force: true });
+    });
+
+    afterAll(() => {
+        // Best-effort cleanup of the fixtures root so the working tree stays
+        // tidy when individual fixture cleanups race with vitest teardown.
+        rmSync(fixturesRoot, { recursive: true, force: true });
+    });
+
+    it('flags an unawaited builder.build().run() chain as a floating promise', async () => {
+        writeAppHost(
+            fixtureDir,
+            `// Synthetic AppHost stand-in modelled on the scaffolded apphost.ts.
+declare const builder: {
+    build(): { run(): Promise<void> };
+};
+
+builder.build().run();
+`
+        );
+
+        const results = await lintAppHost(fixtureDir);
+        const messages = collectFloatingPromiseMessages(results);
+
+        expect(messages.length).toBeGreaterThan(0);
+        expect(messages[0].severity).toBe(2);
+    });
+
+    it('flags an unawaited thenable resource-builder call', async () => {
+        writeAppHost(
+            fixtureDir,
+            `// Resource-builder methods return PromiseLike values, so the rule's
+// checkThenables: true setting must catch them too.
+declare const builder: {
+    addContainer(name: string, image: string): PromiseLike<unknown>;
+};
+
+builder.addContainer('cache', 'redis:latest');
+`
+        );
+
+        const results = await lintAppHost(fixtureDir);
+        const messages = collectFloatingPromiseMessages(results);
+
+        expect(messages.length).toBeGreaterThan(0);
+    });
+
+    it('lints clean when the AppHost promise chain is properly awaited', async () => {
+        writeAppHost(
+            fixtureDir,
+            `declare const builder: {
+    build(): { run(): Promise<void> };
+};
+
+await builder.build().run();
+`
+        );
+
+        const results = await lintAppHost(fixtureDir);
+        const messages = collectFloatingPromiseMessages(results);
+
+        expect(messages).toEqual([]);
+    });
+
+    it('only lints apphost.ts (files glob is respected)', async () => {
+        writeAppHost(
+            fixtureDir,
+            `declare const builder: {
+    build(): { run(): Promise<void> };
+};
+
+await builder.build().run();
+`
+        );
+
+        // Sibling .ts file containing an obvious floating promise. The scaffolded
+        // config restricts the rule to apphost.ts so this file must lint clean.
+        writeFileSync(
+            join(fixtureDir, 'other.ts'),
+            `declare const work: () => Promise<void>;
+work();
+`,
+            'utf8'
+        );
+
+        const eslint = new ESLint({ cwd: fixtureDir });
+        const results = await eslint.lintFiles(['apphost.ts', 'other.ts']);
+
+        const appHostFloats = collectFloatingPromiseMessages(
+            results.filter((r) => r.filePath.endsWith('apphost.ts'))
+        );
+        const otherFloats = collectFloatingPromiseMessages(
+            results.filter((r) => r.filePath.endsWith('other.ts'))
+        );
+
+        expect(appHostFloats).toEqual([]);
+        expect(otherFloats).toEqual([]);
+    });
+});

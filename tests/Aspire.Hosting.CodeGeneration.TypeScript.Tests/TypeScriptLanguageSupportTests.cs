@@ -240,6 +240,40 @@ public sealed class TypeScriptLanguageSupportTests
         Assert.Contains("npx --no-install tsc --noEmit -p tsconfig.apphost.json && npx --no-install tsx --tsconfig tsconfig.apphost.json \"{appHostFile}\"", watchExecute.Args);
     }
 
+    [Fact]
+    public async Task Scaffold_GeneratesEslintConfig_MatchesSnapshot()
+    {
+        using var testDir = new TestTempDirectory();
+
+        var files = _languageSupport.Scaffold(new ScaffoldRequest
+        {
+            TargetPath = testDir.Path,
+            ProjectName = "SnapshotApp"
+        });
+
+        Assert.Contains("eslint.config.mjs", files.Keys);
+
+        await Verify(files["eslint.config.mjs"], extension: "mjs")
+            .UseFileName("EslintConfig");
+    }
+
+    [Fact]
+    public async Task Scaffold_GeneratesAppHostTsConfig_MatchesSnapshot()
+    {
+        using var testDir = new TestTempDirectory();
+
+        var files = _languageSupport.Scaffold(new ScaffoldRequest
+        {
+            TargetPath = testDir.Path,
+            ProjectName = "SnapshotApp"
+        });
+
+        Assert.Contains("tsconfig.apphost.json", files.Keys);
+
+        await Verify(files["tsconfig.apphost.json"], extension: "json")
+            .UseFileName("AppHostTsConfig");
+    }
+
     private static JsonObject ParseJson(string content) => JsonNode.Parse(content)!.AsObject();
 
     private static int GetPort(string url) => new Uri(url).Port;
