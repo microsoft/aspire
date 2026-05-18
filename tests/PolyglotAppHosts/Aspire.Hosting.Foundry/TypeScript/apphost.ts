@@ -1,4 +1,4 @@
-import { AzureContainerRegistryRole, FoundryModels, type FoundryModel, createBuilder } from './.modules/aspire.js';
+import { AzureContainerRegistryRole, FoundryModels, FoundryRole, type FoundryModel, createBuilder } from './.modules/aspire.js';
 
 const builder = await createBuilder();
 
@@ -125,6 +125,7 @@ await hostedAgent.publishAsHostedAgent({
 
 const api = await builder.addContainer('api', 'nginx');
 await foundry.withContainerRegistryRoleAssignments(registry, [AzureContainerRegistryRole.AcrPull]);
+await api.withFoundryRoleAssignments(foundry, [FoundryRole.CognitiveServicesOpenAIUser]);
 
 const _deploymentName = await chat.deploymentName.get();
 const _modelName = await chat.modelName.get();
