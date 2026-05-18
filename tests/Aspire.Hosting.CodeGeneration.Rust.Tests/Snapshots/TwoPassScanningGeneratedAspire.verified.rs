@@ -718,6 +718,58 @@ impl ResourceEventDto {
     }
 }
 
+/// ParameterCustomInputOptions
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ParameterCustomInputOptions {
+    #[serde(rename = "InputType", skip_serializing_if = "Option::is_none")]
+    pub input_type: Option<InputType>,
+    #[serde(rename = "Label")]
+    pub label: String,
+    #[serde(rename = "Description")]
+    pub description: String,
+    #[serde(rename = "EnableDescriptionMarkdown", skip_serializing_if = "Option::is_none")]
+    pub enable_description_markdown: Option<bool>,
+    #[serde(rename = "Options")]
+    pub options: HashMap<String, String>,
+    #[serde(rename = "Value")]
+    pub value: String,
+    #[serde(rename = "Placeholder")]
+    pub placeholder: String,
+    #[serde(rename = "AllowCustomChoice", skip_serializing_if = "Option::is_none")]
+    pub allow_custom_choice: Option<bool>,
+    #[serde(rename = "Disabled", skip_serializing_if = "Option::is_none")]
+    pub disabled: Option<bool>,
+    #[serde(rename = "MaxLength", skip_serializing_if = "Option::is_none")]
+    pub max_length: Option<f64>,
+}
+
+impl ParameterCustomInputOptions {
+    pub fn to_map(&self) -> HashMap<String, Value> {
+        let mut map = HashMap::new();
+        if let Some(ref v) = self.input_type {
+            map.insert("InputType".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        map.insert("Label".to_string(), serde_json::to_value(&self.label).unwrap_or(Value::Null));
+        map.insert("Description".to_string(), serde_json::to_value(&self.description).unwrap_or(Value::Null));
+        if let Some(ref v) = self.enable_description_markdown {
+            map.insert("EnableDescriptionMarkdown".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        map.insert("Options".to_string(), serde_json::to_value(&self.options).unwrap_or(Value::Null));
+        map.insert("Value".to_string(), serde_json::to_value(&self.value).unwrap_or(Value::Null));
+        map.insert("Placeholder".to_string(), serde_json::to_value(&self.placeholder).unwrap_or(Value::Null));
+        if let Some(ref v) = self.allow_custom_choice {
+            map.insert("AllowCustomChoice".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.disabled {
+            map.insert("Disabled".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.max_length {
+            map.insert("MaxLength".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        map
+    }
+}
+
 /// ReferenceEnvironmentInjectionOptions
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ReferenceEnvironmentInjectionOptions {
@@ -10599,6 +10651,16 @@ impl ParameterResource {
         Ok(ParameterResource::new(handle, self.client.clone()))
     }
 
+    /// Sets a custom input for the parameter
+    pub fn with_custom_input(&self, options: ParameterCustomInputOptions) -> Result<ParameterResource, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("builder".to_string(), self.handle.to_json());
+        args.insert("options".to_string(), serde_json::to_value(&options).unwrap_or(Value::Null));
+        let result = self.client.invoke_capability("Aspire.Hosting/withCustomInput", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(ParameterResource::new(handle, self.client.clone()))
+    }
+
     /// Adds a required command dependency
     pub fn with_required_command(&self, command: &str, help_link: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -17597,4 +17659,5 @@ pub fn create_builder(options: Option<CreateBuilderOptions>) -> Result<IDistribu
     let handle: Handle = serde_json::from_value(result)?;
     Ok(IDistributedApplicationBuilder::new(handle, client))
 }
+
 
