@@ -2401,6 +2401,8 @@ public class DcpExecutorTests
     public async Task PersistentPlainExecutable_UsesStableCertificateOutputPath()
     {
         var builder = DistributedApplication.CreateBuilder();
+        using var fileSystemService = new FileSystemService(new ConfigurationBuilder().Build());
+        using var aspireStoreDirectory = fileSystemService.TempDirectory.CreateTempSubdirectory("aspire-store");
 
         using var certificate = CreateTestCertificate();
         var certificateAuthorities = builder.AddCertificateAuthorityCollection("certificates")
@@ -2414,6 +2416,7 @@ public class DcpExecutorTests
 
         var configDict = new Dictionary<string, string?>
         {
+            [AspireStore.AspireStorePathKeyName] = aspireStoreDirectory.Path,
             ["AppHost:Sha256"] = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
         };
 
@@ -2429,12 +2432,10 @@ public class DcpExecutorTests
         var exe = Assert.Single(kubernetesService.CreatedResources.OfType<Executable>(), e => e.AppModelResourceName == "TestExecutable");
         var sslCertDir = Assert.Single(exe.Spec.Env!, e => e.Name == "SSL_CERT_DIR").Value;
         var sslCertFile = Assert.Single(exe.Spec.Env!, e => e.Name == "SSL_CERT_FILE").Value;
-        var expectedCertificatesRoot = Path.Join(".aspire", "dcp", "executables", "TestExecutable-12345678", "certificates");
+        var expectedCertificatesRoot = Path.Join(aspireStoreDirectory.Path, ".aspire", "dcp", "executables", "TestExecutable-12345678", "certificates");
 
-        Assert.EndsWith(Path.Join(expectedCertificatesRoot, "certs"), sslCertDir);
-        Assert.EndsWith(Path.Join(expectedCertificatesRoot, "cert.pem"), sslCertFile);
-        Assert.DoesNotContain("aspire-dcp", sslCertDir);
-        Assert.DoesNotContain("aspire-dcp", sslCertFile);
+        Assert.Equal(Path.Join(expectedCertificatesRoot, "certs"), sslCertDir);
+        Assert.Equal(Path.Join(expectedCertificatesRoot, "cert.pem"), sslCertFile);
     }
 
     [Fact]
@@ -4193,8 +4194,13 @@ public class DcpExecutorTests
         var dcpEvts = events ?? new DcpExecutorEvents();
         var fileSystemService = new FileSystemService(configuration);
         var locations = new Locations(fileSystemService);
-        var aspireStoreDirectory = fileSystemService.TempDirectory.CreateTempSubdirectory("aspire-store");
-        var aspireStore = new AspireStore(Path.Join(aspireStoreDirectory.Path, ".aspire"), fileSystemService);
+        var aspireStoreDirectory = configuration[AspireStore.AspireStorePathKeyName];
+        if (string.IsNullOrWhiteSpace(aspireStoreDirectory))
+        {
+            aspireStoreDirectory = fileSystemService.TempDirectory.CreateTempSubdirectory("aspire-store").Path;
+        }
+
+        var aspireStore = new AspireStore(Path.Join(aspireStoreDirectory, ".aspire"), fileSystemService);
         var hostEnv = hostEnvironment ?? new TestHostEnvironment();
         var dcpDependencyCheckService = new TestDcpDependencyCheckService();
         processMonitor ??= new TestDcpProcessMonitor(null);
