@@ -29,27 +29,21 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
     private const string AppHostFileName = "apphost.ts";
     private const string PackageJsonFileName = "package.json";
     private const string AppHostTsConfigFileName = "tsconfig.apphost.json";
+    private const string EslintConfigFileName = "eslint.config.mjs";
 
     /// <summary>
-    /// The default content for tsconfig.apphost.json, shared between scaffolding and migration.
+    /// Cached content of <c>tsconfig.apphost.json</c>, sourced from the embedded resource
+    /// of the same name so the scaffold and the lint regression tests share a single
+    /// source of truth.
     /// </summary>
-    private const string AppHostTsConfigContent = """
-        {
-          "compilerOptions": {
-            "target": "ES2022",
-            "module": "NodeNext",
-            "moduleResolution": "NodeNext",
-            "esModuleInterop": true,
-            "forceConsistentCasingInFileNames": true,
-            "strict": true,
-            "skipLibCheck": true,
-            "outDir": "./dist/apphost",
-            "rootDir": "."
-          },
-          "include": ["apphost.ts", ".modules/**/*.ts"],
-          "exclude": ["node_modules"]
-        }
-        """;
+    private static readonly string s_appHostTsConfigContent = EmbeddedResources.Read(AppHostTsConfigFileName);
+
+    /// <summary>
+    /// Cached content of <c>eslint.config.mjs</c>, sourced from the embedded resource of
+    /// the same name. The scaffolded file enables <c>@typescript-eslint/no-floating-promises</c>
+    /// against <c>apphost.ts</c> so unawaited AppHost promises surface as lint errors.
+    /// </summary>
+    private static readonly string s_eslintConfigContent = EmbeddedResources.Read(EslintConfigFileName);
 
     private static readonly JsonSerializerOptions s_jsonSerializerOptions = new()
     {
@@ -91,29 +85,10 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
         files[PackageJsonFileName] = CreatePackageJson(request);
 
         // Create eslint.config.mjs for catching unawaited promises in apphost.ts
-        files["eslint.config.mjs"] = """
-            // @ts-check
-
-            import { defineConfig } from 'eslint/config';
-            import tseslint from 'typescript-eslint';
-
-            export default defineConfig({
-              files: ['apphost.ts'],
-              extends: [tseslint.configs.base],
-              languageOptions: {
-                parserOptions: {
-                  project: './tsconfig.apphost.json',
-                  tsconfigRootDir: import.meta.dirname,
-                },
-              },
-              rules: {
-                '@typescript-eslint/no-floating-promises': ['error', { checkThenables: true }],
-              },
-            });
-            """;
+        files[EslintConfigFileName] = s_eslintConfigContent;
 
         // Create an apphost-specific tsconfig so existing brownfield TypeScript settings are preserved.
-        files[AppHostTsConfigFileName] = AppHostTsConfigContent;
+        files[AppHostTsConfigFileName] = s_appHostTsConfigContent;
 
         // Create apphost.run.json with random ports
         // Use PortSeed if provided (for testing), otherwise use random
@@ -295,7 +270,7 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
             },
             MigrationFiles = new Dictionary<string, string>
             {
-                [AppHostTsConfigFileName] = AppHostTsConfigContent
+                [AppHostTsConfigFileName] = s_appHostTsConfigContent
             }
         };
     }

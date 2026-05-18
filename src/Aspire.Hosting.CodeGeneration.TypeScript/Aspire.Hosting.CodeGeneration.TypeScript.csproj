@@ -21,6 +21,8 @@
     <EmbeddedResource Include="Resources\transport.ts" LogicalName="Aspire.Hosting.CodeGeneration.TypeScript.Resources.transport.ts" />
     <EmbeddedResource Include="Resources\base.ts" LogicalName="Aspire.Hosting.CodeGeneration.TypeScript.Resources.base.ts" />
     <EmbeddedResource Include="Resources\package.json" LogicalName="Aspire.Hosting.CodeGeneration.TypeScript.Resources.package.json" />
+    <EmbeddedResource Include="Resources\eslint.config.mjs" LogicalName="Aspire.Hosting.CodeGeneration.TypeScript.Resources.eslint.config.mjs" />
+    <EmbeddedResource Include="Resources\tsconfig.apphost.json" LogicalName="Aspire.Hosting.CodeGeneration.TypeScript.Resources.tsconfig.apphost.json" />
   </ItemGroup>
 
   <ItemGroup>
