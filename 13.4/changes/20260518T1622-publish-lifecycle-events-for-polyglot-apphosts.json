@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "TypeScript and other polyglot AppHosts can now subscribe to BeforePublishEvent and AfterPublishEvent lifecycle events, enabling pre/post publish logic in non-C# app hosts — closing the gap with the C# OnBeforePublish and OnAfterPublish APIs.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🔔",
+  "firstMergedAt": "2026-05-18T16:22:41Z",
+  "lastMergedAt": "2026-05-18T16:22:41Z",
+  "name": "Publish lifecycle events for polyglot AppHosts",
+  "owner": "sebastienros",
+  "prs": [
+    17129
+  ]
+}

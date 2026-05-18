@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "WithComputeEnvironment, previously available only to C# app hosts, is now exported to the ATS/polyglot SDK surface. TypeScript and other polyglot AppHosts can now configure the target compute environment for resources, reaching parity with the C# API.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🌐",
+  "firstMergedAt": "2026-05-18T16:23:14Z",
+  "lastMergedAt": "2026-05-18T16:23:14Z",
+  "name": "WithComputeEnvironment support for polyglot AppHosts",
+  "owner": "sebastienros",
+  "prs": [
+    17093
+  ]
+}

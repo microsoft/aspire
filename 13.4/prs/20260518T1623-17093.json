@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Improvement: WithComputeEnvironment now available in polyglot AppHosts",
+  "mergedAt": "2026-05-18T16:23:14Z",
+  "number": 17093,
+  "runDate": "2026-05-18T17:18:30Z",
+  "status": "included",
+  "title": "Expose WithComputeEnvironment to polyglot AppHosts"
+}

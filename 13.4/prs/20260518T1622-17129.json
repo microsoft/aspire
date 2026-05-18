@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "New feature: publish lifecycle events exposed to polyglot AppHosts",
+  "mergedAt": "2026-05-18T16:22:41Z",
+  "number": 17129,
+  "runDate": "2026-05-18T17:18:30Z",
+  "status": "included",
+  "title": "Expose publish lifecycle events to polyglot AppHosts"
+}

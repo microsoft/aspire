@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs site CSS fix for sidebar viewport bug - not a product feature documentation PR",
+  "mergedAt": "2026-05-18T15:17:34Z",
+  "number": 988,
+  "runDate": "2026-05-18T17:18:30Z",
+  "status": "excluded",
+  "title": "Fast-follow: don't squish collapsed sidebar labels at sub-72rem viewports"
+}

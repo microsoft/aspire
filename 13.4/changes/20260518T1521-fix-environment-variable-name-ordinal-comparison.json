@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "EnvironmentVariableName comparisons in StringComparers and StringComparisons were using InvariantCultureIgnoreCase instead of OrdinalIgnoreCase. Environment variable names are programmatic ASCII identifiers, and OrdinalIgnoreCase is the correct choice — it avoids unexpected locale-sensitive case-folding (e.g., Turkish İ/ı rules).",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔤",
+  "firstMergedAt": "2026-05-18T15:21:39Z",
+  "lastMergedAt": "2026-05-18T15:21:39Z",
+  "name": "Fix environment variable name comparison to use OrdinalIgnoreCase",
+  "owner": "JamesNK",
+  "prs": [
+    17194
+  ]
+}

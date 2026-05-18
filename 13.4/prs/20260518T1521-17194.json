@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Bug fix: OrdinalIgnoreCase is correct for environment variable name comparisons",
+  "mergedAt": "2026-05-18T15:21:39Z",
+  "number": 17194,
+  "runDate": "2026-05-18T17:18:30Z",
+  "status": "included",
+  "title": "Use OrdinalIgnoreCase for EnvironmentVariableName comparer"
+}

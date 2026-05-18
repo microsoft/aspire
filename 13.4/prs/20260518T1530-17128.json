@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "New Docker Compose object model helpers for polyglot AppHosts",
+  "mergedAt": "2026-05-18T15:30:01Z",
+  "number": 17128,
+  "runDate": "2026-05-18T17:18:30Z",
+  "status": "included",
+  "title": "Add Docker Compose polyglot helpers"
+}

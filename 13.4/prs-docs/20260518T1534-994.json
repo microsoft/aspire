@@ -1,0 +1,9 @@
+{
+  "author": "eerhardt",
+  "comment": "Docs site AppHost deployment infrastructure change applying Azure Front Door breaking change - not a product documentation PR",
+  "mergedAt": "2026-05-18T15:34:16Z",
+  "number": 994,
+  "runDate": "2026-05-18T17:18:30Z",
+  "status": "excluded",
+  "title": "Remove custom Azure Front Door resource names"
+}
