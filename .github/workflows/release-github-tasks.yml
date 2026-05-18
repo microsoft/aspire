@@ -96,7 +96,6 @@ jobs:
     steps:
       # --- Authorize ---------------------------------------------------------
       - name: Authorize
-        id: authorize
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -165,7 +164,6 @@ jobs:
           fi
 
       - name: Validate Version Format
-        id: validate-version
         run: |
           VERSION="${{ inputs.release_version }}"
           if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.]+)?$ ]]; then
@@ -176,7 +174,6 @@ jobs:
           echo "✓ Version format is valid: $VERSION"
 
       - name: Validate Commit SHA
-        id: validate-sha
         run: |
           SHA="${{ inputs.commit_sha }}"
           if [[ ! "$SHA" =~ ^[a-f0-9]{40}$ ]]; then
