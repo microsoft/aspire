@@ -591,6 +591,92 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PrepareAsync_WithStagingPinnedProjectOutsideLaunchDirectory_UsesStagingSourcesAndNuGetConfig()
+    {
+        const string stagingFeed = "https://example.com/staging/v3/index.json";
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectDirectory = workspace.CreateDirectory("elsewhere");
+        var config = AspireConfigFile.LoadOrCreate(projectDirectory.FullName);
+        config.Channel = PackageChannelNames.Staging;
+        config.Save(projectDirectory.FullName);
+
+        var layout = CreateBundleLayout(workspace);
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(
+            workspace.WorkspaceRoot,
+            identityChannel: PackageChannelNames.Stable);
+
+        string[]? restoreInvocation = null;
+        string? temporaryNuGetConfigContent = null;
+        var executionFactory = new TestProcessExecutionFactory
+        {
+            AssertionCallback = (args, _, _, _) =>
+            {
+                if (args.Length > 1 &&
+                    args[0] == "nuget" &&
+                    args[1] == "restore")
+                {
+                    restoreInvocation = args.ToArray();
+                    temporaryNuGetConfigContent = File.ReadAllText(GetArgumentValue(args, "--nuget-config"));
+                }
+            }
+        };
+
+        var nugetService = new BundleNuGetService(
+            new FixedLayoutDiscovery(layout),
+            new LayoutProcessRunner(executionFactory),
+            new TestFeatures(),
+            executionContext,
+            NullLogger<BundleNuGetService>.Instance);
+
+        var stagingChannel = PackageChannel.CreateExplicitChannel(
+            PackageChannelNames.Staging,
+            PackageChannelQuality.Both,
+            [
+                new PackageMapping("Aspire*", stagingFeed),
+                new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
+            ],
+            new FakeNuGetPackageCache());
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([stagingChannel])
+        };
+
+        var server = new PrebuiltAppHostServer(
+            projectDirectory.FullName,
+            "test.sock",
+            layout,
+            nugetService,
+            new TestDotNetCliRunner(),
+            new TestDotNetSdkInstaller(),
+            packagingService,
+            executionContext,
+            NullLogger.Instance);
+        var workingDirectory = GetWorkingDirectory(server);
+
+        try
+        {
+            var result = await server.PrepareAsync(
+                "13.2.0",
+                [IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.2.0")]);
+
+            Assert.True(result.Success);
+            Assert.Equal(PackageChannelNames.Staging, result.ChannelName);
+
+            Assert.NotNull(restoreInvocation);
+            Assert.Contains(stagingFeed, restoreInvocation!);
+            Assert.Contains(projectDirectory.FullName, restoreInvocation!);
+            Assert.NotNull(temporaryNuGetConfigContent);
+            Assert.Contains(stagingFeed, temporaryNuGetConfigContent!);
+            Assert.Contains("Aspire*", temporaryNuGetConfigContent!);
+        }
+        finally
+        {
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Fact]
     public async Task PrepareAsync_WithOnlyProjectReferences_SetsOnlyProjectLayout()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -1176,6 +1262,22 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             typeof(PrebuiltAppHostServer)
                 .GetField("_workingDirectory", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
                 .GetValue(server));
+    }
+
+    private static string GetArgumentValue(IReadOnlyList<string> arguments, string optionName)
+    {
+        var optionIndex = -1;
+        for (var i = 0; i < arguments.Count; i++)
+        {
+            if (string.Equals(arguments[i], optionName, StringComparison.Ordinal))
+            {
+                optionIndex = i;
+                break;
+            }
+        }
+
+        Assert.True(optionIndex >= 0 && optionIndex < arguments.Count - 1, $"Option '{optionName}' was not found.");
+        return arguments[optionIndex + 1];
     }
 
     [Fact]
