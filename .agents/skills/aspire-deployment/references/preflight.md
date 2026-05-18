@@ -90,6 +90,22 @@ When running a command that may prompt, do not pipe it through `tee`, `tail`, or
 
 Use `--environment <name>` when the user wants a staging/production context other than the default. Deployment state and cached values are scoped by AppHost and environment, so changing the environment changes which cached values are used.
 
+## Destroying deployments
+
+Use `aspire destroy` to tear down resources from a previous Aspire deployment:
+
+```bash
+aspire destroy --environment <name>
+```
+
+Treat destroy as a destructive deployment operation:
+
+- Run it only when the user explicitly asks to tear down or clean up a deployment, or when a test workflow owns temporary infrastructure and teardown is part of that workflow.
+- Confirm the AppHost, environment, target account/subscription/cluster, and resource group/namespace/stack context before applying.
+- Use the same `--apphost <path>` and `--environment <name>` values used for deployment when discovery or environment scope could be ambiguous.
+- Use `--yes` only for non-interactive teardown when destructive intent has already been approved, such as an explicit cleanup job.
+- Keep target-native delete commands as troubleshooting or manual-leftover cleanup, not the primary teardown path for Aspire-owned deployments.
+
 ## Parameters and secrets
 
 Inventory parameter declarations. API casing differs by AppHost language:

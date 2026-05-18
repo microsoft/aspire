@@ -1,13 +1,13 @@
 ---
 name: aspire-deployment
-description: "Deploy Aspire applications to Docker Compose, Kubernetes, Azure, or AWS. Use this before generic cloud deployment guidance for workspaces that are already Aspire apps. Covers target selection, C# or TypeScript AppHost detection, docs-backed API lookup, parameter and secret preflight, publish/deploy preview, and deployment execution. Prefer this skill for requests like deploy an Aspire app, deploy to Azure or AWS as an Aspire app, deploy to Azure Container Apps/App Service/Azure Kubernetes Service (AKS), generate Docker Compose or Kubernetes artifacts, publish Aspire deployment artifacts, or validate an Aspire deployment plan."
+description: "Deploy Aspire applications to Docker Compose, Kubernetes, Azure, or AWS. Use this before generic cloud deployment guidance for workspaces that are already Aspire apps. Covers target selection, C# or TypeScript AppHost detection, docs-backed API lookup, parameter and secret preflight, publish/deploy preview, deployment execution, and teardown. Prefer this skill for requests like deploy an Aspire app, deploy to Azure or AWS as an Aspire app, deploy to Azure Container Apps/App Service/Azure Kubernetes Service (AKS), generate Docker Compose or Kubernetes artifacts, publish Aspire deployment artifacts, tear down an Aspire deployment, or validate an Aspire deployment plan."
 ---
 
 # Aspire Deployment
 
-Use this skill when the task is to publish, preview, validate, or deploy an Aspire application to a deployment target. This skill owns Aspire deployment routing. Do not start with a generic Azure, Docker, Kubernetes, Helm, or Bicep workflow until you have checked whether the workspace is an Aspire app.
+Use this skill when the task is to publish, preview, validate, deploy, or tear down an Aspire application deployment. This skill owns Aspire deployment routing. Do not start with a generic Azure, Docker, Kubernetes, Helm, or Bicep workflow until you have checked whether the workspace is an Aspire app.
 
-Aspire deployment starts from the AppHost model. Treat `aspire deploy`, `aspire publish`, `aspire do`, and the deployment environment resources in the AppHost as the primary path.
+Aspire deployment starts from the AppHost model. Treat `aspire deploy`, `aspire publish`, `aspire destroy`, `aspire do`, and the deployment environment resources in the AppHost as the primary path.
 
 Keep this as one skill with target-specific references. Load only the reference files that match the target you discover or the user requests.
 
@@ -15,7 +15,7 @@ Keep this as one skill with target-specific references. Load only the reference 
 
 This skill wins over generic cloud deployment skills when both conditions are true:
 
-1. The user asks to deploy, publish, generate deployment artifacts, create Bicep/Helm/Compose/CDK output, host on Azure or AWS, deploy to Azure or AWS, deploy to Kubernetes, deploy to Docker Compose, or validate a deployment.
+1. The user asks to deploy, publish, generate deployment artifacts, create Bicep/Helm/Compose/CDK output, host on Azure or AWS, deploy to Azure or AWS, deploy to Kubernetes, deploy to Docker Compose, tear down deployed resources, or validate a deployment.
 2. The workspace has Aspire markers:
    - Aspire workspace configuration
    - C# or TypeScript AppHost files
@@ -60,6 +60,7 @@ aspire publish --list-steps
 aspire deploy --list-steps
 aspire publish
 aspire deploy
+aspire destroy
 aspire do <step>
 ```
 
@@ -143,9 +144,14 @@ The Azure deployment path in this skill is `aspire add <azure-target>`, AppHost 
    - Run `aspire deploy` when the user asked to deploy and preflight is complete.
    - Run a named step with `aspire do <step>` only when the user asked for a specific pipeline step.
    - For published artifacts, explain the target-native apply step.
-9. **Verify the outcome.**
+9. **Destroy only when explicitly requested.**
+   - Run `aspire destroy` to tear down a deployment that Aspire created for the selected AppHost and environment.
+   - Confirm the AppHost, environment, target account/subscription/cluster, and destructive intent before running it.
+   - Use `--yes` only when the user or CI workflow already made teardown intent explicit.
+   - Prefer `aspire destroy` over target-native delete commands unless you are troubleshooting failed teardown or cleaning up unmanaged leftovers.
+10. **Verify the outcome.**
    - Use target output, `aspire describe`, cloud CLI, Docker Compose, kubectl, or endpoint checks appropriate to the target.
-   - Clean up only when explicitly requested or when a test workflow owns temporary infrastructure.
+   - After destroy, verify target resources are removed or record any leftovers that require manual cleanup.
 
 ## AppHost target detection
 
@@ -184,4 +190,4 @@ Use `aspire secret list` for AppHost user secrets when appropriate, but do not p
 - [references/aws.md](references/aws.md) - AWS target selection, AWS CDK prerequisites, publish/deploy workflow, and AWS integration docs.
 - [references/javascript.md](references/javascript.md) - JavaScript app deployment models, including Vite/static assets, Node/SSR servers, Next.js, and gateway/backend serving patterns.
 - [references/cicd.md](references/cicd.md) - CI/CD and GitHub Actions workflow guidance for Aspire publish/deploy, parameters, secrets, registry auth, and cloud auth.
-- [references/preflight.md](references/preflight.md) - Common preflight, preview, parameter, and validation checklist.
+- [references/preflight.md](references/preflight.md) - Common preflight, preview, parameter, destroy, and validation checklist.

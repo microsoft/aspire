@@ -29,6 +29,7 @@ Ask which CI/CD outcome the user wants if it is not clear:
 | Publish artifacts | CI should produce Compose/Helm/CDK/Bicep or other target artifacts for review or later apply | `aspire publish -o <output>` |
 | Push images only | CI should build/push project images but not deploy infrastructure | `aspire do <push-step>` after checking `aspire deploy --list-steps` |
 | Deploy from CI | Protected branch/environment should provision/update target infrastructure | `aspire deploy --environment <name>` |
+| Destroy from CI | Explicit cleanup workflow should tear down an Aspire-owned deployment | `aspire destroy --environment <name> --yes` |
 
 Do not assume `aspire deploy` consumes a previous `aspire publish` output. `aspire deploy` applies directly from the AppHost model and resolves values for the selected environment.
 
@@ -190,6 +191,22 @@ Add target-specific authentication before this step:
 - AWS: configure AWS credentials/region, install CDK prerequisites, and bootstrap the account/region before `aspire deploy`.
 
 Never route Azure deployment through a separate Azure deployment tool from this skill. Keep Azure deployment Aspire-native with `aspire deploy`, and use Azure CLI only for authentication and live state inspection.
+
+## Destroy from CI/CD
+
+Use `aspire destroy` for teardown workflows that intentionally remove Aspire-owned resources:
+
+```yaml
+- name: Destroy with Aspire
+  if: ${{ github.event_name == 'workflow_dispatch' }}
+  env:
+    Azure__SubscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+    Azure__Location: ${{ vars.AZURE_LOCATION }}
+    Azure__ResourceGroup: ${{ vars.AZURE_RESOURCE_GROUP }}
+  run: aspire destroy --environment production --yes --non-interactive
+```
+
+Keep destroy jobs manually triggered or gated by a protected GitHub Environment. Reuse the same target authentication, AppHost path, environment, and parameter conventions as deploy. Do not put destroy into normal validation or deploy jobs unless the workflow owns temporary infrastructure and teardown is part of the tested lifecycle.
 
 ## Azure GitHub Actions auth
 

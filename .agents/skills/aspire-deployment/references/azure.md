@@ -259,6 +259,16 @@ aspire deploy --environment staging
 
 Published Azure artifacts are for preview or handoff. `aspire deploy` resolves parameters and applies the Azure deployment from the AppHost model.
 
+## Destroy
+
+Use Aspire to tear down Azure deployments it created:
+
+```bash
+aspire destroy --environment <name>
+```
+
+Confirm the Azure subscription, resource group, environment name, and AppHost before running destroy. Use `--yes` only after the user has explicitly approved teardown or in an environment-protected cleanup workflow. Use Azure CLI after destroy to verify resource removal or investigate leftovers; do not start with `az group delete` or target-specific delete commands for Aspire-owned deployments unless `aspire destroy` cannot complete.
+
 ## Common troubleshooting
 
 Use Azure CLI to inspect live Azure state that Aspire deployed, while keeping deployment changes in the AppHost and `aspire deploy`.

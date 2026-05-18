@@ -113,6 +113,16 @@ The AWS integration runs the publish step and then uses AWS CDK deployment again
 
 Use `aspire deploy --list-steps` before applying changes when the user asked for validation or when the AppHost has custom AWS publish targets.
 
+## Destroy
+
+Use Aspire to tear down AWS deployments it created:
+
+```bash
+aspire destroy --environment <name>
+```
+
+Confirm the AWS account, region, CDK stack name, AppHost, and environment before running destroy. Use `--yes` only after destructive intent is explicit. Use AWS CLI or CDK destroy commands only to investigate failed teardown or clean up resources that the Aspire deployment did not own.
+
 ## Resource mapping and customization
 
 Current AWS guidance says resources are mapped to AWS services by default and can be overridden with publish extension methods. Keep these rules in mind:

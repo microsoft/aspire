@@ -192,6 +192,16 @@ Aspire provisions Azure resources, builds/pushes images to ACR, generates Helm c
 
 External Helm charts added to a Kubernetes environment install after the main app chart. They are not uninstalled by default during destroy because they may be shared; only treat them as owned by the Aspire app when the AppHost explicitly opts into destroy-time uninstall.
 
+## Destroy
+
+Use Aspire to tear down Kubernetes or Azure Kubernetes Service (AKS) deployments it created:
+
+```bash
+aspire destroy --environment <name>
+```
+
+For an existing Kubernetes cluster, confirm the current `kubectl` context, namespace, Helm release, and AppHost environment before running destroy. For Azure Kubernetes Service (AKS), also confirm the Azure subscription and resource group. Use `--yes` only after destructive intent is explicit. Use Helm/kubectl or Azure CLI delete commands only to diagnose failed teardown or remove leftovers that are not owned by the Aspire deployment.
+
 ## Native artifact handoff
 
 If the user wants to apply published artifacts themselves:
