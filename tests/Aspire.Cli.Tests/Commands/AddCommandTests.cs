@@ -453,11 +453,17 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var implicitCache = new FakeNuGetPackageCache
         {
-            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "1.0.0")])
+            GetPackagesAsyncCallback = (_, query, filter, _, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>(
+                query == HostingIntegrationMetadata.DiscoveryQuery
+                    ? new[] { CreatePackage("Aspire.Hosting.Redis", "1.0.0") }.Where(package => filter?.Invoke(package.Id) ?? true).ToArray()
+                    : Array.Empty<NuGetPackage>())
         };
         var stagingCache = new FakeNuGetPackageCache
         {
-            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "2.0.0")])
+            GetPackagesAsyncCallback = (_, query, filter, _, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>(
+                query == HostingIntegrationMetadata.DiscoveryQuery
+                    ? new[] { CreatePackage("Aspire.Hosting.Redis", "2.0.0") }.Where(package => filter?.Invoke(package.Id) ?? true).ToArray()
+                    : Array.Empty<NuGetPackage>())
         };
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -621,7 +627,10 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var cache = new FakeNuGetPackageCache
         {
-            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "2.0.0")])
+            GetPackagesAsyncCallback = (_, query, filter, _, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>(
+                query == HostingIntegrationMetadata.DiscoveryQuery
+                    ? new[] { CreatePackage("Aspire.Hosting.Redis", "2.0.0") }.Where(package => filter?.Invoke(package.Id) ?? true).ToArray()
+                    : Array.Empty<NuGetPackage>())
         };
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -780,11 +789,17 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var implicitCache = new FakeNuGetPackageCache
         {
-            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "1.0.0")])
+            GetPackagesAsyncCallback = (_, query, filter, _, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>(
+                query == HostingIntegrationMetadata.DiscoveryQuery
+                    ? new[] { CreatePackage("Aspire.Hosting.Redis", "1.0.0") }.Where(package => filter?.Invoke(package.Id) ?? true).ToArray()
+                    : Array.Empty<NuGetPackage>())
         };
         var stagingCache = new FakeNuGetPackageCache
         {
-            GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>([CreatePackage("Aspire.Hosting.Redis", "2.0.0")])
+            GetPackagesAsyncCallback = (_, query, filter, _, _, _, _) => Task.FromResult<IEnumerable<NuGetPackage>>(
+                query == HostingIntegrationMetadata.DiscoveryQuery
+                    ? new[] { CreatePackage("Aspire.Hosting.Redis", "2.0.0") }.Where(package => filter?.Invoke(package.Id) ?? true).ToArray()
+                    : Array.Empty<NuGetPackage>())
         };
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
@@ -4156,6 +4171,29 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AddCommand_WithPrHiveInInteractiveMode_PrefersCurrentCliVersion()
+    {
+        var cliVersion = VersionHelper.GetDefaultSdkVersion();
+
+        var (exitCode, selectedVersion, prompted) = await RunAddRedisWithHiveScenarioAsync(
+            configureHives: workspace =>
+            {
+                var hivesDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives"));
+                hivesDir.Create();
+                hivesDir.CreateSubdirectory("pr-12345");
+            },
+            searchCallback: nugetSource => nugetSource is null
+                ? [new NuGetPackage { Id = "Aspire.Hosting.Redis", Source = "implicit", Version = "13.2.2" }]
+                : [new NuGetPackage { Id = "Aspire.Hosting.Redis", Source = "pr-hive", Version = cliVersion }],
+            promptFailureMessage: "Should not prompt when the current CLI version is available in a PR hive, even in interactive mode.",
+            interactive: true);
+
+        Assert.Equal(0, exitCode);
+        Assert.False(prompted);
+        Assert.Equal(cliVersion, selectedVersion);
+    }
+
+    [Fact]
     public async Task AddCommand_WithLocalHive_PrefersCurrentCliVersion()
     {
         // The local channel enumerates .nupkg files directly from disk and does not call
@@ -4232,7 +4270,8 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     private async Task<(int ExitCode, string SelectedVersion, bool PromptInvoked)> RunAddRedisWithHiveScenarioAsync(
         Action<TemporaryWorkspace> configureHives,
         Func<FileInfo?, NuGetPackage[]> searchCallback,
-        string promptFailureMessage)
+        string promptFailureMessage,
+        bool interactive = false)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         configureHives(workspace);
@@ -4242,6 +4281,9 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
+            options.CliHostEnvironmentFactory = _ => interactive
+                ? TestHelpers.CreateInteractiveHostEnvironment()
+                : TestHelpers.CreateNonInteractiveHostEnvironment();
             options.AddCommandPrompterFactory = (sp) =>
             {
                 var interactionService = sp.GetRequiredService<IInteractionService>();

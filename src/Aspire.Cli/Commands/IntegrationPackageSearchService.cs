@@ -264,7 +264,9 @@ internal sealed class IntegrationPackageSearchService(
 
     private async Task<PackageChannel[]> GetApplicableChannelsAsync(DirectoryInfo workingDirectory, string? configuredChannel, IntegrationDiscoveryScope discoveryScope, CancellationToken cancellationToken, string? requestedSource = null)
     {
-        var allChannels = await packagingService.GetChannelsAsync(cancellationToken);
+        // Pass the project-configured channel through so PackagingService can materialize
+        // gated channels like "staging" before we filter the results below.
+        var allChannels = await packagingService.GetChannelsAsync(cancellationToken, configuredChannel);
 
         if (!string.IsNullOrEmpty(configuredChannel))
         {

@@ -628,30 +628,32 @@ internal sealed class AddCommand : BaseCommand
             throw new EmptyChoicesException(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.SpecifiedVersionNotFoundForPackage, selectedPackage.Package.Id, preferredVersion));
         }
 
-        // In non-interactive mode, prefer the implicit/default channel first to keep
-        // package selection aligned with the project's configured feeds. Then select
-        // the latest version within the chosen channel.
+        var hasHives = ExecutionContext.GetHiveCount() > 0;
+        var localBuildPackageVersions = packageVersions
+            .Where(p => VersionHelper.IsLocalBuildChannel(p.Channel.Name))
+            .ToArray();
+
+        // When local build hives are present, prefer the package that exactly matches the
+        // installed CLI/SDK version so template- and add-generated projects stay on the same
+        // build. Apply this before the interactive prompt so pressing Enter does not
+        // accidentally downgrade to the implicit feed when a matching hive package exists.
+        if (VersionHelper.TryGetCurrentCliVersionMatch(
+            localBuildPackageVersions,
+            p => p.Package.Version,
+            out var cliVersionPackage,
+            channelName: null,
+            hasPrHives: hasHives))
+        {
+            return cliVersionPackage;
+        }
+
+        // Prefer the implicit/default channel first to keep package selection aligned with the
+        // project's configured feeds. Then select the latest version within the chosen channel.
         var orderedPackageVersions = packageVersions
             .OrderByDescending(p => p.Channel.Type is PackageChannelType.Implicit)
             .ThenByDescending(p => SemVersion.Parse(p.Package.Version), SemVersion.PrecedenceComparer);
         if (!_hostEnvironment.SupportsInteractiveInput)
         {
-            // When PR hives are present, prefer the package that exactly matches the installed
-            // CLI/SDK version so template- and add-generated projects stay on the same build.
-            var prChannelPackageVersions = packageVersions
-                .Where(p => VersionHelper.IsLocalBuildChannel(p.Channel.Name))
-                .ToArray();
-
-            if (VersionHelper.TryGetCurrentCliVersionMatch(
-                prChannelPackageVersions,
-                p => p.Package.Version,
-                out var cliVersionPackage,
-                channelName: null,
-                hasPrHives: ExecutionContext.GetHiveCount() > 0))
-            {
-                return cliVersionPackage;
-            }
-
             return orderedPackageVersions.First();
         }
 
