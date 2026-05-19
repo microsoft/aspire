@@ -324,7 +324,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             Title = Loc[nameof(Resources.Layout.MainLayoutNotificationCenterTitle)],
             PrimaryAction = Loc[nameof(Resources.Layout.MainLayoutSettingsDialogClose)].Value,
             SecondaryAction = null,
-            TrapFocus = true,
+            TrapFocus = false, // This dialog launches child dialogs, and multiple dialogs can't trap focus correctly
             Modal = true,
             Alignment = HorizontalAlignment.Right,
             Width = "350px",
