@@ -24,7 +24,7 @@ internal sealed class ConsoleCancellationManager : IDisposable
     private Task<int>? _startedHandler;
     private int _cancelCalled;
 
-    internal readonly TaskCompletionSource<int> _processTerminationCompletionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource<int> _processTerminationCompletionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     /// <summary>
     /// A completion source that is signaled with a native exit code when the running handler

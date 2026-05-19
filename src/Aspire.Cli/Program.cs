@@ -844,6 +844,7 @@ public class Program
                     if (firstCompletedTask != handlerTask)
                     {
                         // The termination signal triggered cancellation and the timeout has completed. Kill the process.
+                        // handlerTask is not awaited because the process is shutting down and we assume the task is hung.
                         logger.LogWarning("Timeout waiting for cancellation from termination signal.");
                     }
 
