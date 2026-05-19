@@ -36,6 +36,21 @@ internal interface IPackagingService
 
 internal class PackagingService(CliExecutionContext executionContext, INuGetPackageCache nuGetPackageCache, IFeatures features, IConfiguration configuration, ILogger<PackagingService> logger) : IPackagingService
 {
+    // Cached result of the staging-channel availability check. The inputs (CLI identity,
+    // overrideStagingFeed, StagingChannelEnabled feature) are effectively static for the
+    // process lifetime, so computing this once avoids re-formatting the localized reason
+    // string on every GetChannelsAsync call (callers fan out across NewCommand,
+    // UpdateCommand, IntegrationPackageSearchService, NuGetPackagePrefetcher, etc.).
+    private Lazy<string?>? _stagingUnavailableReasonCache;
+
+    // One-shot guards so the refusal warning / successful-resolution info line are emitted
+    // at most once per CLI process instead of on every GetChannelsAsync invocation. Many
+    // commands (and the background NuGetPackagePrefetcher) call GetChannelsAsync repeatedly;
+    // logging on each call produced excessive noise — particularly the refusal warning when
+    // a project's aspire.config.json pins `channel: staging` on a daily/local CLI.
+    private int _stagingRefusalLogged;
+    private int _stagingResolutionLogged;
+
     public Task<IEnumerable<PackageChannel>> GetChannelsAsync(CancellationToken cancellationToken = default, string? requestedChannelName = null)
     {
         var defaultChannel = PackageChannel.CreateImplicitChannel(nuGetPackageCache, logger);
@@ -116,7 +131,10 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
         var unavailableReason = GetStagingChannelUnavailableReason();
         if (unavailableReason is not null)
         {
-            logger.LogWarning("Refusing to synthesize 'staging' package channel: {Reason}", unavailableReason);
+            if (Interlocked.Exchange(ref _stagingRefusalLogged, 1) == 0)
+            {
+                logger.LogWarning("Refusing to synthesize 'staging' package channel: {Reason}", unavailableReason);
+            }
             return null;
         }
 
@@ -146,18 +164,37 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
 
         // Surface the resolved staging routing so users can see what `--channel staging` actually
         // picked (the "show what was resolved" suggestion from the issue RCA). Pinned version is
-        // optional and only set when configured via stagingPinToCliVersion.
-        logger.LogInformation(
-            "Resolved 'staging' channel: feed={FeedUrl}, quality={Quality}, pinnedVersion={PinnedVersion}",
-            stagingFeedUrl,
-            stagingQuality,
-            pinnedVersion ?? "(none)");
+        // optional and only set when configured via stagingPinToCliVersion. Emitted once per
+        // process to avoid repeating on every GetChannelsAsync call.
+        if (Interlocked.Exchange(ref _stagingResolutionLogged, 1) == 0)
+        {
+            logger.LogInformation(
+                "Resolved 'staging' channel: feed={FeedUrl}, quality={Quality}, pinnedVersion={PinnedVersion}",
+                stagingFeedUrl,
+                stagingQuality,
+                pinnedVersion ?? "(none)");
+        }
 
         return stagingChannel;
     }
 
     /// <inheritdoc />
     public string? GetStagingChannelUnavailableReason()
+    {
+        // Cache the (possibly null) reason for the process lifetime. Lazy<T> handles the
+        // double-check locking so concurrent first callers don't both pay the format cost.
+        var cache = _stagingUnavailableReasonCache;
+        if (cache is null)
+        {
+            cache = new Lazy<string?>(ComputeStagingChannelUnavailableReason, isThreadSafe: true);
+            Interlocked.CompareExchange(ref _stagingUnavailableReasonCache, cache, null);
+            cache = _stagingUnavailableReasonCache;
+        }
+
+        return cache!.Value;
+    }
+
+    private string? ComputeStagingChannelUnavailableReason()
     {
         if (IsStagingChannelSynthesisAllowed())
         {

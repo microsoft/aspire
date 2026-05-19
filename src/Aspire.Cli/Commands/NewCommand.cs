@@ -344,9 +344,24 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
 
                 if (selectedChannel is null)
                 {
-                    var errorMessage = string.IsNullOrWhiteSpace(configuredChannelName)
-                        ? "No package channels are available."
-                        : $"No channel found matching '{configuredChannelName}'. Valid options are: {string.Join(", ", channels.Select(c => c.Name))}";
+                    string errorMessage;
+                    if (string.IsNullOrWhiteSpace(configuredChannelName))
+                    {
+                        errorMessage = "No package channels are available.";
+                    }
+                    else if (string.Equals(configuredChannelName, PackageChannelNames.Staging, StringComparison.OrdinalIgnoreCase)
+                        && _packagingService.GetStagingChannelUnavailableReason() is { } stagingReason)
+                    {
+                        // Surface the actionable packaging-service reason (e.g. "daily CLI cannot
+                        // synthesize a staging channel; set overrideStagingFeed") instead of the
+                        // generic channel list, mirroring UpdateCommand's behavior.
+                        // See https://github.com/microsoft/aspire/issues/16652.
+                        errorMessage = stagingReason;
+                    }
+                    else
+                    {
+                        errorMessage = $"No channel found matching '{configuredChannelName}'. Valid options are: {string.Join(", ", channels.Select(c => c.Name))}";
+                    }
 
                     return new ResolveTemplateVersionResult { ErrorMessage = errorMessage };
                 }
