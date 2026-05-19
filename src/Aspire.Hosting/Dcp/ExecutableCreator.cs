@@ -107,7 +107,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
         if (configuration.Exception is not null)
         {
-            throw new FailedToApplyEnvironmentException();
+            throw new FailedToApplyEnvironmentException($"Failed to apply configuration to executable {er.ModelResource.Name}", configuration.Exception);
         }
 
         // Invoke the debug configuration callback now that endpoints are allocated.

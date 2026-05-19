@@ -816,9 +816,12 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                 {
                     throw;
                 }
-                catch (FailedToApplyEnvironmentException)
+                catch (FailedToApplyEnvironmentException ex)
                 {
-                    await _executorEvents.PublishAsync(new OnResourceFailedToStartContext(cancellationToken, resourceType, er.ModelResource, er.DcpResource.Metadata.Name)).ConfigureAwait(false);
+                    // For this exception we don't want the noise of the stack trace, we've already
+                    // provided more detail where we detected the issue (e.g. envvar name). To get
+                    // more diagnostic information reduce logging level for DCP log category to Debug.
+                    await _executorEvents.PublishAsync(new OnResourceFailedToStartContext(cancellationToken, resourceType, er.ModelResource, er.DcpResource.Metadata.Name, ex.Message)).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
@@ -1021,12 +1024,12 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
                     throw new InvalidOperationException($"Unexpected resource type: {appResource.DcpResourceKind}");
             }
         }
-        catch (FailedToApplyEnvironmentException)
+        catch (FailedToApplyEnvironmentException ex)
         {
             // For this exception we don't want the noise of the stack trace, we've already
             // provided more detail where we detected the issue (e.g. envvar name). To get
             // more diagnostic information reduce logging level for DCP log category to Debug.
-            await _executorEvents.PublishAsync(new OnResourceFailedToStartContext(cancellationToken, resourceType, resourceReference.ModelResource, resourceReference.DcpResourceName)).ConfigureAwait(false);
+            await _executorEvents.PublishAsync(new OnResourceFailedToStartContext(cancellationToken, resourceType, resourceReference.ModelResource, resourceReference.DcpResourceName, ex.Message)).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
