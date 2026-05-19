@@ -11,6 +11,9 @@ on:
         required: false
         type: string
 
+env:
+  POLYGLOT_ASPIRE_CLI_CHANNEL: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'daily' }}
+
 jobs:
   validate_python:
     name: Python SDK Validation
@@ -62,6 +65,7 @@ jobs:
       - name: Run Python SDK validation
         run: |
           docker run --rm \
+            -e ASPIRE_CLI_CHANNEL="${POLYGLOT_ASPIRE_CLI_CHANNEL}" \
             -v "${{ github.workspace }}:/workspace" \
             -v /var/run/docker.sock:/var/run/docker.sock \
             polyglot-python
@@ -116,6 +120,7 @@ jobs:
       - name: Run Go SDK validation
         run: |
           docker run --rm \
+            -e ASPIRE_CLI_CHANNEL="${POLYGLOT_ASPIRE_CLI_CHANNEL}" \
             -v "${{ github.workspace }}:/workspace" \
             -v /var/run/docker.sock:/var/run/docker.sock \
             polyglot-go
@@ -170,6 +175,7 @@ jobs:
       - name: Run Java SDK validation
         run: |
           docker run --rm \
+            -e ASPIRE_CLI_CHANNEL="${POLYGLOT_ASPIRE_CLI_CHANNEL}" \
             -v "${{ github.workspace }}:/workspace" \
             -v /var/run/docker.sock:/var/run/docker.sock \
             polyglot-java
@@ -226,6 +232,7 @@ jobs:
       - name: Run Rust SDK validation
         run: |
           docker run --rm \
+            -e ASPIRE_CLI_CHANNEL="${POLYGLOT_ASPIRE_CLI_CHANNEL}" \
             -v "${{ github.workspace }}:/workspace" \
             -v /var/run/docker.sock:/var/run/docker.sock \
             polyglot-rust
@@ -285,7 +292,7 @@ jobs:
       - name: Run TypeScript SDK validation
         run: |
           docker run --rm \
-            -e ASPIRE_CLI_CHANNEL=${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'daily' }} \
+            -e ASPIRE_CLI_CHANNEL="${POLYGLOT_ASPIRE_CLI_CHANNEL}" \
             -v "${{ github.workspace }}:/workspace" \
             -v /var/run/docker.sock:/var/run/docker.sock \
             polyglot-typescript-node-${{ matrix.node-version }}
