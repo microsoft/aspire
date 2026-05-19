@@ -87,8 +87,7 @@ public static class BlazorHostedExtensions
 
             // Resolve the HTTP OTLP endpoint for WASM client proxying.
             // WASM clients use HTTP/protobuf (not gRPC), so we need the HTTP endpoint.
-            var httpOtlpEndpointUrl = host.ApplicationBuilder.Configuration["ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"]
-                ?? host.ApplicationBuilder.Configuration["DOTNET_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"];
+            var httpOtlpEndpointUrl = BlazorGatewayExtensions.ResolveHttpOtlpEndpointUrl(context, host.ApplicationBuilder.Configuration);
 
             GatewayConfigurationBuilder.EmitHostedProxyConfiguration(
                 context.EnvironmentVariables,

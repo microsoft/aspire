@@ -2,8 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Immutable;
+using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.ApplicationModel.Docker;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -41,19 +43,21 @@ public static class BlazorGatewayExtensions
             {
                 container.WithDockerfileBuilder(gatewayDir, ctx =>
                 {
+                    var logger = ctx.Services.GetService<ILogger<BlazorWasmAppResource>>();
+
                     ctx.Builder
                         .From("mcr.microsoft.com/dotnet/sdk:10.0", "build")
                         .WorkDir("/src")
                         .Copy("Gateway.cs", ".")
                         .Run("dotnet publish Gateway.cs -c Release -o /app/publish");
 
-                    ctx.Builder.AddContainerFilesStages(ctx.Resource, logger: null);
+                    ctx.Builder.AddContainerFilesStages(ctx.Resource, logger);
 
                     ctx.Builder
                         .From("mcr.microsoft.com/dotnet/aspnet:10.0")
                         .WorkDir("/app")
                         .CopyFrom("build", "/app/publish", ".")
-                        .AddContainerFiles(ctx.Resource, "/app", logger: null)
+                        .AddContainerFiles(ctx.Resource, "/app", logger)
                         .Entrypoint(["dotnet", "Gateway.dll"]);
                 });
             });
@@ -206,8 +210,11 @@ public static class BlazorGatewayExtensions
                     return;
                 }
 
-                var outputDir = Directory.CreateTempSubdirectory($"aspire-blazor-gateway-{gateway.Resource.Name}-")
-                    .FullName;
+                var outputDir = Path.Combine(
+                    gateway.ApplicationBuilder.AppHostDirectory,
+                    "obj", "Aspire.Hosting.Blazor", "gateways", gateway.Resource.Name,
+                    DateTime.UtcNow.ToString("yyyyMMddHHmmssfff", CultureInfo.InvariantCulture));
+                Directory.CreateDirectory(outputDir);
 
                 var manifests = await BuildAndDiscoverManifestsAsync(registeredApps, context.Logger, context.CancellationToken).ConfigureAwait(false);
                 if (manifests == null)
@@ -226,8 +233,10 @@ public static class BlazorGatewayExtensions
 
                 // Resolve the HTTP OTLP endpoint for WASM client proxying.
                 // WASM clients use HTTP/protobuf (not gRPC), so we need the HTTP endpoint.
-                var httpOtlpEndpointUrl = gateway.ApplicationBuilder.Configuration["ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"]
-                    ?? gateway.ApplicationBuilder.Configuration["DOTNET_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"];
+                // First try to resolve from the dashboard resource model (handles randomized ports
+                // and isolated mode). Fall back to configuration for cases where the dashboard
+                // resource isn't in the model (e.g. external dashboard).
+                var httpOtlpEndpointUrl = ResolveHttpOtlpEndpointUrl(context, gateway.ApplicationBuilder.Configuration);
 
                 GatewayConfigurationBuilder.EmitProxyConfiguration(context.EnvironmentVariables, registeredApps, gatewayEndpoint, httpGatewayEndpoint, httpOtlpEndpointUrl);
             });
@@ -519,6 +528,41 @@ public static class BlazorGatewayExtensions
                 IsInternal: false));
         }
         return builder.MoveToImmutable();
+    }
+
+    /// <summary>
+    /// Resolves the HTTP OTLP endpoint for proxying browser telemetry to the dashboard.
+    /// Tries the dashboard resource model first (handles randomized ports), then falls back
+    /// to well-known configuration keys for cases where the dashboard isn't in the model
+    /// (e.g. external or standalone dashboard).
+    /// </summary>
+    internal static object? ResolveHttpOtlpEndpointUrl(EnvironmentCallbackContext context, IConfiguration configuration)
+    {
+        DistributedApplicationModel? model;
+        try
+        {
+            model = context.ExecutionContext.ServiceProvider.GetService<DistributedApplicationModel>();
+        }
+        catch (InvalidOperationException)
+        {
+            // ServiceProvider may not be available if the container hasn't been built yet.
+            model = null;
+        }
+
+        if (model is not null
+            && model.Resources.TryGetByName("aspire-dashboard", out var resource)
+            && resource is IResourceWithEndpoints dashboardResource)
+        {
+            var httpEndpoint = dashboardResource.GetEndpoint("otlp-http");
+            if (httpEndpoint.Exists)
+            {
+                return httpEndpoint;
+            }
+        }
+
+        // Fall back to configuration for external dashboard scenarios.
+        return (object?)configuration["ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"]
+            ?? configuration["DOTNET_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"];
     }
 
     private readonly struct ProjectInfo(string assemblyName, string solutionRoot, string relativeProjectPath)
