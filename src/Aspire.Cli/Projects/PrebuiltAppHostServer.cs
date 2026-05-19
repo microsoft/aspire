@@ -207,6 +207,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         catch (AppHostServerPrepareFailedException ex)
         {
             _logger.LogError(ex, "Failed to prepare prebuilt AppHost server");
+            AppendRestoreContextOnFailure(ex.Output, requestedChannel, packageSourceOverride, packageRefs);
             return new AppHostServerPrepareResult(
                 Success: false,
                 Output: ex.Output,
@@ -218,11 +219,46 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             _logger.LogError(ex, "Failed to prepare prebuilt AppHost server");
             var output = new OutputCollector();
             output.AppendError($"Failed to prepare: {ex.Message}");
+            AppendRestoreContextOnFailure(output, requestedChannel, packageSourceOverride, packageRefs);
             return new AppHostServerPrepareResult(
                 Success: false,
                 Output: output,
                 ChannelName: requestedChannel,
                 NeedsCodeGeneration: false);
+        }
+    }
+
+    // Augment the failure output with the source / channel / requested versions so a user looking
+    // at the displayed error after `aspire new --source <X>` can immediately see which inputs were
+    // in play, instead of having to re-run with diagnostic logging. Called from both prepare
+    // failure paths so every restore failure surfaces the same context shape.
+    private static void AppendRestoreContextOnFailure(
+        OutputCollector output,
+        string? requestedChannel,
+        string? packageSourceOverride,
+        IReadOnlyList<IntegrationReference> packageRefs)
+    {
+        var hasOverride = !string.IsNullOrWhiteSpace(packageSourceOverride);
+        var hasChannel = !string.IsNullOrEmpty(requestedChannel);
+        if (!hasOverride && !hasChannel)
+        {
+            return;
+        }
+
+        if (hasOverride)
+        {
+            output.AppendError($"  --source: {packageSourceOverride}");
+        }
+
+        if (hasChannel)
+        {
+            output.AppendError($"  channel:  {requestedChannel}");
+        }
+
+        if (packageRefs.Count > 0)
+        {
+            var preview = packageRefs.Take(5).Select(static r => $"{r.Name} {r.Version}");
+            output.AppendError($"  packages: {string.Join(", ", preview)}{(packageRefs.Count > 5 ? $", … (+{packageRefs.Count - 5} more)" : string.Empty)}");
         }
     }
 

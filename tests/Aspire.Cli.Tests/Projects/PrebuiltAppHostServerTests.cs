@@ -896,6 +896,134 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PrepareAsync_WithSourceAndChannelHavingAspireMapping_TempConfigDropsChannelAspireMapping()
+    {
+        // End-to-end check that `aspire new --source <pr> --channel <X>` does not let the channel's
+        // Aspire* feed remain co-eligible with the override at restore time. The unit-level
+        // TryCreateTemporaryNuGetConfig_* cases pin the generator; this case pins that PrepareAsync
+        // wires that same temp config through to the actual restore invocation.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string packageSourceOverride = "/tmp/aspire-pr-hive/packages";
+        const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
+
+        var aspireConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(aspireConfigPath, """
+            {
+                "channel": "daily"
+            }
+            """);
+
+        var dailyChannel = PackageChannel.CreateExplicitChannel(
+            name: "daily",
+            quality: PackageChannelQuality.Both,
+            mappings:
+            [
+                new PackageMapping("Aspire*", channelSource),
+                new PackageMapping(PackageMapping.AllPackages, NuGetOrgSource)
+            ],
+            nuGetPackageCache: new FakeNuGetPackageCache());
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel])
+        };
+
+        var (server, executionFactory) = CreatePackageReferenceServer(workspace, packagingService);
+        XDocument? tempConfigDoc = null;
+        executionFactory.AssertionCallback = (args, _, _, _) =>
+        {
+            if (args is ["nuget", "restore", ..])
+            {
+                // Read the temp NuGet.config while it still exists; it is disposed when
+                // PrepareAsync's inner `using var` exits, which races with our assertions.
+                var argsList = (IReadOnlyList<string>)args;
+                var nugetConfigIndex = -1;
+                for (var i = 0; i < argsList.Count - 1; i++)
+                {
+                    if (argsList[i] == "--nuget-config")
+                    {
+                        nugetConfigIndex = i;
+                        break;
+                    }
+                }
+
+                if (nugetConfigIndex >= 0)
+                {
+                    tempConfigDoc = XDocument.Load(argsList[nugetConfigIndex + 1]);
+                }
+            }
+        };
+
+        var workingDirectory = GetWorkingDirectory(server);
+
+        try
+        {
+            var result = await server.PrepareAsync(
+                "13.4.0-pr.17141.gf142085f",
+                [IntegrationReference.FromPackage("Aspire.Hosting.CodeGeneration.TypeScript", "13.4.0-pr.17141.gf142085f")],
+                packageSourceOverride: packageSourceOverride);
+
+            Assert.True(result.Success);
+            Assert.Equal("daily", result.ChannelName);
+            Assert.NotNull(tempConfigDoc);
+
+            // The temp config is the authoritative PSM gate. Verify the channel's Aspire* mapping
+            // was dropped — only the override serves Aspire packages.
+            Assert.Equal(["Aspire*"], GetPackagePatternsForSource(tempConfigDoc!, packageSourceOverride));
+            Assert.Empty(GetPackagePatternsForSource(tempConfigDoc!, channelSource));
+            Assert.Equal([PackageMapping.AllPackages], GetPackagePatternsForSource(tempConfigDoc!, NuGetOrgSource));
+        }
+        finally
+        {
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task PrepareAsync_RestoreFailure_OutputIncludesSourceAndChannelContext()
+    {
+        // When restore fails, the displayed output is the only debugging surface most users see.
+        // Pin that --source and the requested channel are present so a failed
+        // `aspire new --source <X> --channel <Y>` doesn't require re-running with diagnostic logs
+        // just to recover which inputs were in play.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string packageSourceOverride = "/tmp/aspire-pr-hive/packages";
+
+        var aspireConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(aspireConfigPath, """
+            {
+                "channel": "daily"
+            }
+            """);
+
+        var (server, executionFactory) = CreatePackageReferenceServer(workspace);
+        // Fail the restore step itself; BundleNuGetService throws on non-zero exit which
+        // propagates through PrepareAsync's outer catch.
+        executionFactory.DefaultExitCode = 1;
+
+        var workingDirectory = GetWorkingDirectory(server);
+
+        try
+        {
+            var result = await server.PrepareAsync(
+                "13.4.0-pr.17141.gf142085f",
+                [IntegrationReference.FromPackage("Aspire.Hosting.CodeGeneration.TypeScript", "13.4.0-pr.17141.gf142085f")],
+                packageSourceOverride: packageSourceOverride);
+
+            Assert.False(result.Success);
+            Assert.NotNull(result.Output);
+
+            var combined = string.Join('\n', result.Output!.GetLines().Select(static line => line.Line));
+            Assert.Contains(packageSourceOverride, combined);
+            Assert.Contains("daily", combined);
+            Assert.Contains("Aspire.Hosting.CodeGeneration.TypeScript", combined);
+        }
+        finally
+        {
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Fact]
     public async Task PrepareAsync_WithProjectReferencesAndPackageSourceOverride_UsesNuGetConfig()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -1515,6 +1643,13 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 
     private static (PrebuiltAppHostServer Server, TestProcessExecutionFactory ExecutionFactory) CreatePackageReferenceServer(TemporaryWorkspace workspace)
     {
+        return CreatePackageReferenceServer(workspace, MockPackagingServiceFactory.Create());
+    }
+
+    private static (PrebuiltAppHostServer Server, TestProcessExecutionFactory ExecutionFactory) CreatePackageReferenceServer(
+        TemporaryWorkspace workspace,
+        IPackagingService packagingService)
+    {
         var layout = CreateBundleLayout(workspace);
         var executionFactory = new TestProcessExecutionFactory();
         var nugetService = new BundleNuGetService(
@@ -1531,7 +1666,7 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             nugetService,
             new TestDotNetCliRunner(),
             new TestDotNetSdkInstaller(),
-            MockPackagingServiceFactory.Create(),
+            packagingService,
             TestExecutionContextFactory.CreateTestContext(),
             Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
 
