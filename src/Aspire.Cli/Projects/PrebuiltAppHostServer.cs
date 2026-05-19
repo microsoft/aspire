@@ -146,6 +146,11 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             // with a legacy .aspire/settings.json#channel fallback). This is independent of the
             // running CLI's identity hive (CliExecutionContext.IdentityChannel).
             requestedChannel = ResolveRequestedChannel();
+            var effectivePackageSourceOverride = packageSourceOverride;
+            if (string.IsNullOrWhiteSpace(effectivePackageSourceOverride))
+            {
+                effectivePackageSourceOverride = await ResolveLocalPackageSourceOverrideAsync(requestedChannel, cancellationToken).ConfigureAwait(false);
+            }
 
             if (projectRefs.Count > 0)
             {
@@ -165,7 +170,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
                     packageRefs,
                     projectRefs,
                     requestedChannel,
-                    packageSourceOverride,
+                    effectivePackageSourceOverride,
                     cancellationToken).ConfigureAwait(false);
 
                 if (closureManifest.Entries.Any(static entry => entry.IsPackageBacked))
@@ -191,7 +196,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
                 {
                     // NuGet-only — use the bundled NuGet service (no SDK required)
                     _integrationProbeManifestPath = await RestoreNuGetPackagesAsync(
-                        packageRefs, requestedChannel, packageSourceOverride, cancellationToken);
+                        packageRefs, requestedChannel, effectivePackageSourceOverride, cancellationToken);
                 }
 
                 var appSettingsContent = CreateAppSettingsContent(packageRefs, []);
@@ -694,6 +699,72 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         // which could otherwise restore from an unintended feed.
         return await TemporaryNuGetConfig.CreateAsync(channel.Mappings, channel.ConfigureGlobalPackagesFolder);
     }
+
+    private async Task<string?> ResolveLocalPackageSourceOverrideAsync(string? requestedChannel, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrEmpty(requestedChannel))
+        {
+            return null;
+        }
+
+        PackageChannel? channel;
+        try
+        {
+            var channels = await _packagingService.GetChannelsAsync(cancellationToken, requestedChannel);
+            channel = channels.FirstOrDefault(c =>
+                c.Type == PackageChannelType.Explicit &&
+                c.Mappings is { Length: > 0 } &&
+                string.Equals(c.Name, requestedChannel, StringComparison.OrdinalIgnoreCase));
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // A transient packaging-service failure during auto-discovery must not turn
+            // `aspire new` into a hard failure. Returning null falls through to the existing
+            // ambient + channel-sources path, matching the defensive catches in
+            // TryCreateTemporaryNuGetConfigAsync and GetNuGetSourcesAsync.
+            _logger.LogWarning(ex, "Failed to resolve local Aspire package source for channel '{Channel}'.", requestedChannel);
+            return null;
+        }
+
+        var source = channel is null ? null : GetExistingLocalAspirePackageSource(channel);
+
+        if (!string.IsNullOrWhiteSpace(source))
+        {
+            _logger.LogDebug("Using local package source '{Source}' for channel '{Channel}'.", source, requestedChannel);
+        }
+
+        return source;
+    }
+
+    private static string? GetExistingLocalAspirePackageSource(PackageChannel channel)
+    {
+        if (channel.Mappings is null)
+        {
+            return null;
+        }
+
+        foreach (var mapping in channel.Mappings)
+        {
+            if (!IsAspireSpecificMapping(mapping) ||
+                UrlHelper.IsHttpUrl(mapping.Source) ||
+                !Directory.Exists(mapping.Source))
+            {
+                continue;
+            }
+
+            return mapping.Source;
+        }
+
+        return null;
+    }
+
+    private static bool IsAspireSpecificMapping(PackageMapping mapping) =>
+        mapping.PackageFilter != PackageMapping.AllPackages &&
+        mapping.PackageFilter.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase);
 
     private async Task<IEnumerable<PackageChannel>> GetExplicitRestoreChannelsAsync(string? requestedChannel, CancellationToken cancellationToken)
     {
