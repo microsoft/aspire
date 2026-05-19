@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Runtime.InteropServices;
-using Aspire.Dashboard.Extensions;
+using Aspire.Shared;
 
 namespace Aspire.Dashboard.Utils;
 
@@ -10,7 +10,7 @@ public static class VersionHelpers
 {
     private static readonly Lazy<string?> s_cachedRuntimeVersion = new Lazy<string?>(GetRuntimeVersion);
 
-    public static string? DashboardDisplayVersion { get; } = typeof(VersionHelpers).Assembly.GetDisplayVersion();
+    public static string? DashboardDisplayVersion { get; } = AssemblyVersionHelper.GetDisplayVersion(typeof(VersionHelpers).Assembly);
 
     public static string? RuntimeVersion => s_cachedRuntimeVersion.Value;
 

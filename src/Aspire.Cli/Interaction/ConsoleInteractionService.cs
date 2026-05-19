@@ -4,6 +4,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Utils.Markdown;
@@ -35,10 +36,22 @@ internal class ConsoleInteractionService : IInteractionService
     /// <summary>
     /// Console used for human-readable messages; routes to stderr when <see cref="Console"/> is set to <see cref="ConsoleOutput.Error"/>.
     /// </summary>
-    private IAnsiConsole MessageConsole => Console == ConsoleOutput.Error ? _errorConsole : _outConsole;
+    private IAnsiConsole MessageConsole => GetConsoleOutput(null);
 
     // Limit logging to prompts and messages. Don't log raw text output since it may contain sensitive information.
-    private ILogger MessageLogger => Console == ConsoleOutput.Error ? _stderrLogger : _stdoutLogger;
+    private ILogger MessageLogger => GetLogger(null);
+
+    private IAnsiConsole GetConsoleOutput(ConsoleOutput? consoleOverride) => (consoleOverride ?? Console) switch
+    {
+        ConsoleOutput.Error => _errorConsole,
+        _ => _outConsole
+    };
+
+    private ILogger GetLogger(ConsoleOutput? consoleOverride) => (consoleOverride ?? Console) switch
+    {
+        ConsoleOutput.Error => _stderrLogger,
+        _ => _stdoutLogger
+    };
 
     public ConsoleOutput Console { get; set; }
 
@@ -54,8 +67,8 @@ internal class ConsoleInteractionService : IInteractionService
         _errorConsole = consoleEnvironment.Error;
         _executionContext = executionContext;
         _hostEnvironment = hostEnvironment;
-        _stdoutLogger = loggerFactory.CreateLogger("Aspire.Cli.Console.Stdout");
-        _stderrLogger = loggerFactory.CreateLogger("Aspire.Cli.Console.Stderr");
+        _stdoutLogger = loggerFactory.CreateLogger($"Aspire.Cli.Console.{CliLogFormat.Categories.Stdout}");
+        _stderrLogger = loggerFactory.CreateLogger($"Aspire.Cli.Console.{CliLogFormat.Categories.Stderr}");
     }
 
     public async Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action, KnownEmoji? emoji = null, bool allowMarkup = false)
@@ -362,27 +375,47 @@ internal class ConsoleInteractionService : IInteractionService
         MessageConsole.MarkupLine($"\t[bold]{InteractionServiceStrings.AspireCLIVersion}[/]: {cliInformationalVersion.EscapeMarkup()}");
         MessageConsole.MarkupLine($"\t[bold]{InteractionServiceStrings.RequiredCapability}[/]: {ex.RequiredCapability.EscapeMarkup()}");
         MessageConsole.WriteLine();
-        return ExitCodeConstants.AppHostIncompatible;
+        return CliExitCodes.AppHostIncompatible;
     }
 
     public void DisplayError(string errorMessage, bool allowMarkup = false)
     {
         var formatted = allowMarkup ? errorMessage : errorMessage.EscapeMarkup();
-        DisplayMessage(KnownEmojis.CrossMark, $"[red bold]{formatted}[/]", allowMarkup: true);
+        // Always write errors to stderr so callers can capture them separately from stdout.
+        WriteEmojiMessage(_errorConsole, _stderrLogger, KnownEmojis.CrossMark, $"[red bold]{formatted}[/]", allowMarkup: true);
     }
 
-    public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false)
+    public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false, ConsoleOutput? consoleOverride = null)
     {
-        if (MessageLogger.IsEnabled(LogLevel.Information))
+        WriteEmojiMessage(GetConsoleOutput(consoleOverride), GetLogger(consoleOverride), emoji, message, allowMarkup);
+    }
+
+    private static void WriteEmojiMessage(IAnsiConsole target, ILogger logger, KnownEmoji emoji, string message, bool allowMarkup)
+    {
+        if (logger.IsEnabled(LogLevel.Information))
         {
             // Only attempt to parse/remove markup when the message is expected to contain it.
             // Plain text messages may contain characters like '[' that would be rejected by the markup parser.
             var logMessage = allowMarkup ? message.RemoveMarkup() : message;
-            MessageLogger.LogInformation("{Message}", ConsoleHelpers.FormatEmojiPrefix(emoji, MessageConsole, replaceEmoji: true) + logMessage);
+            logger.LogInformation("{Message}", ConsoleHelpers.FormatEmojiPrefix(emoji, target, replaceEmoji: true) + logMessage);
         }
 
         var displayMessage = allowMarkup ? message : message.EscapeMarkup();
-        MessageConsole.MarkupLine(ConsoleHelpers.FormatEmojiPrefix(emoji, MessageConsole) + displayMessage);
+
+        // Use a grid to keep the icon in a fixed first column so long text wraps
+        // without pushing under the emoji prefix.
+        var grid = new Grid();
+        grid.AddColumn();
+        grid.AddColumn();
+        grid.Columns[0].NoWrap = true;
+        grid.Columns[0].Padding = new Padding(0);
+        grid.Columns[1].Padding = new Padding(0);
+
+        grid.AddRow(
+            new Markup(ConsoleHelpers.FormatEmojiPrefix(emoji, target)),
+            new Markup(displayMessage));
+
+        target.Write(grid);
     }
 
     public void DisplayPlainText(string message)
@@ -514,10 +547,10 @@ internal class ConsoleInteractionService : IInteractionService
             });
     }
 
-    public void DisplayCancellationMessage()
+    public void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null)
     {
-        MessageConsole.WriteLine();
-        DisplayMessage(KnownEmojis.StopSign, $"[teal bold]{InteractionServiceStrings.StoppingAspire}[/]", allowMarkup: true);
+        GetConsoleOutput(consoleOverride).WriteLine();
+        DisplayMessage(KnownEmojis.StopSign, $"[teal bold]{InteractionServiceStrings.StoppingAspire}[/]", allowMarkup: true, consoleOverride: consoleOverride);
     }
 
     public async Task<bool> PromptConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default)

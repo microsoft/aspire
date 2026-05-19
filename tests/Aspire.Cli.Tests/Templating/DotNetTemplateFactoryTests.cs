@@ -347,9 +347,7 @@ public class DotNetTemplateFactoryTests
         var packagingService = new TestPackagingService();
         var prompter = new TestNewCommandPrompter();
         var workingDirectory = new DirectoryInfo("/tmp");
-        var hivesDirectory = new DirectoryInfo("/tmp/hives");
-        var cacheDirectory = new DirectoryInfo("/tmp/cache");
-        var executionContext = new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(workingDirectory);
         sdkInstaller ??= new TestDotNetSdkInstaller();
         var telemetry = TestTelemetryHelper.CreateInitializedTelemetry();
         var hostEnvironment = new FakeCliHostEnvironment(nonInteractive);
@@ -399,9 +397,9 @@ public class DotNetTemplateFactoryTests
 
         public void DisplaySuccess(string message, bool allowMarkup = false) { }
         public void DisplayError(string message, bool allowMarkup = false) { }
-        public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false) { }
+        public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false, ConsoleOutput? consoleOverride = null) { }
         public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines) { }
-        public void DisplayCancellationMessage() { }
+        public void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null) { }
         public int DisplayIncompatibleVersionError(AppHostIncompatibleException ex, string appHostHostingVersion) => 0;
         public void DisplayPlainText(string text) { }
         public void DisplayRawText(string text, ConsoleOutput? consoleOverride = null) { }

@@ -320,6 +320,10 @@ jobs:
     name: TypeScript SDK Unit Tests
     uses: ./.github/workflows/typescript-sdk-tests.yml
 
+  typescript_api_compat:
+    name: TypeScript API Compatibility
+    uses: ./.github/workflows/typescript-api-compat.yml
+
   results:
     if: ${{ always() && github.repository_owner == 'microsoft' }}
     runs-on: ubuntu-latest
@@ -336,6 +340,7 @@ jobs:
       extension_tests_win,
       cli_starter_validation_windows,
       typescript_sdk_tests,
+      typescript_api_compat,
       tests_no_nugets,
       tests_no_nugets_overflow,
       tests_requires_nugets_linux,
@@ -420,6 +425,7 @@ jobs:
                 (needs.extension_tests_win.result == 'skipped' ||
                  needs.cli_starter_validation_windows.result == 'skipped' ||
                  needs.typescript_sdk_tests.result == 'skipped' ||
+                 needs.typescript_api_compat.result == 'skipped' ||
                  needs.tests_no_nugets.result == 'skipped' ||
                  needs.tests_requires_nugets_linux.result == 'skipped' ||
                  needs.tests_requires_nugets_windows.result == 'skipped' ||

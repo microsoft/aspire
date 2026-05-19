@@ -62,7 +62,7 @@ internal sealed class CacheCommand : ParentCommand
                 var errorMessage = string.Format(CultureInfo.CurrentCulture, CacheCommandStrings.CacheClearFailed, ex.Message);
                 Telemetry.RecordError(errorMessage, ex);
                 InteractionService.DisplayError(errorMessage);
-                return Task.FromResult(CommandResult.Failure(ExitCodeConstants.InvalidCommand));
+                return Task.FromResult(CommandResult.Failure(CliExitCodes.InvalidCommand));
             }
         }
 

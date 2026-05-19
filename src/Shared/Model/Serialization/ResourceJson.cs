@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json.Serialization;
+using System.Text.Json.Nodes;
 
 namespace Aspire.Shared.Model.Serialization;
 
@@ -35,6 +36,11 @@ internal sealed class ResourceJson
     /// The state of the resource.
     /// </summary>
     public string? State { get; set; }
+
+    /// <summary>
+    /// The display names of resources this resource is waiting for.
+    /// </summary>
+    public string[]? WaitingFor { get; set; }
 
     /// <summary>
     /// The state style hint (e.g., "success", "error", "warning").
@@ -95,7 +101,7 @@ internal sealed class ResourceJson
     /// The properties of the resource.
     /// Dictionary key is the property name, value is the property value.
     /// </summary>
-    public Dictionary<string, string?>? Properties { get; set; }
+    public Dictionary<string, JsonNode?>? Properties { get; set; }
 
     /// <summary>
     /// The environment variables associated with the resource.
@@ -213,6 +219,11 @@ internal sealed class ResourceRelationshipJson
 internal sealed class ResourceCommandJson
 {
     /// <summary>
+    /// The display name of the command.
+    /// </summary>
+    public string? DisplayName { get; set; }
+
+    /// <summary>
     /// The description of the command.
     /// </summary>
     public string? Description { get; set; }
@@ -232,6 +243,8 @@ internal sealed class ResourceCommandJson
 
 /// <summary>
 /// Represents a command invocation argument input in JSON format.
+/// Keep this contract in sync with the VS Code extension's ResourceCommandArgumentInputJson
+/// in extension/src/views/AppHostDataRepository.ts.
 /// </summary>
 internal sealed class ResourceCommandArgumentJson
 {

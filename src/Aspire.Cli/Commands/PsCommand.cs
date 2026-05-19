@@ -4,6 +4,7 @@
 using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
@@ -30,6 +31,9 @@ internal sealed class AppHostDisplayInfo
     public string? DashboardUrl { get; init; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? LogFilePath { get; init; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<ResourceJson>? Resources { get; set; }
 }
 
@@ -41,6 +45,8 @@ internal sealed class AppHostDisplayInfo
 [JsonSerializable(typeof(ResourceHealthReportJson))]
 [JsonSerializable(typeof(ResourceCommandJson))]
 [JsonSerializable(typeof(ResourceCommandArgumentJson[]))]
+[JsonSerializable(typeof(JsonNode))]
+[JsonSerializable(typeof(Dictionary<string, JsonNode?>))]
 [JsonSerializable(typeof(Dictionary<string, string?>))]
 [JsonSerializable(typeof(Dictionary<string, ResourceHealthReportJson>))]
 [JsonSerializable(typeof(Dictionary<string, ResourceCommandJson>))]
@@ -164,6 +170,7 @@ internal sealed class PsCommand : BaseCommand
             var appHostPath = info.AppHostPath;
             var appHostPid = info.ProcessId;
             var cliPid = info.CliProcessId;
+            var cliLogFilePath = info.CliLogFilePath;
 
             try
             {
@@ -175,6 +182,7 @@ internal sealed class PsCommand : BaseCommand
                         sdkVersion = GetSdkVersion(v2Info.AspireHostVersion);
                         appHostPath = string.IsNullOrWhiteSpace(v2Info.AppHostPath) ? appHostPath : v2Info.AppHostPath;
                         cliPid = v2Info.CliProcessId ?? cliPid;
+                        cliLogFilePath = v2Info.CliLogFilePath ?? cliLogFilePath;
 
                         if (int.TryParse(v2Info.Pid, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedPid))
                         {
@@ -221,6 +229,7 @@ internal sealed class PsCommand : BaseCommand
                 SdkVersion = sdkVersion,
                 CliPid = cliPid,
                 DashboardUrl = dashboardUrl,
+                LogFilePath = cliLogFilePath,
                 Resources = resources
             });
         }
@@ -248,11 +257,20 @@ internal sealed class PsCommand : BaseCommand
 
         var shortPaths = FileSystemHelper.ShortenPaths(appHosts.Select(a => a.AppHostPath).ToList());
 
+        // Only show the CLI Log column when at least one app host has a log file path.
+        var includeCliLog = appHosts.Any(a => !string.IsNullOrEmpty(a.LogFilePath));
+
         var table = new Table();
         table.AddBoldColumn(PsCommandStrings.HeaderPath);
         table.AddBoldColumn(PsCommandStrings.HeaderSdk);
         table.AddBoldColumn(PsCommandStrings.HeaderPid);
         table.AddBoldColumn(PsCommandStrings.HeaderCliPid);
+
+        if (includeCliLog)
+        {
+            table.AddBoldColumn(PsCommandStrings.HeaderCliLog);
+        }
+
         table.AddBoldColumn(PsCommandStrings.HeaderDashboard);
 
         foreach (var appHost in appHosts)
@@ -272,12 +290,28 @@ internal sealed class PsCommand : BaseCommand
                 }
             }
 
-            table.AddRow(
+            var columns = new List<string>
+            {
                 Markup.Escape(shortPath),
                 Markup.Escape(appHost.SdkVersion ?? "-"),
                 appHost.AppHostPid.ToString(CultureInfo.InvariantCulture),
                 cliPid,
-                dashboard);
+            };
+
+            if (includeCliLog)
+            {
+                var logDisplay = "-";
+                if (!string.IsNullOrEmpty(appHost.LogFilePath))
+                {
+                    logDisplay = MarkupHelpers.SafeFileLink(_interactionService, appHost.LogFilePath, Path.GetFileName(appHost.LogFilePath));
+                }
+
+                columns.Add(logDisplay);
+            }
+
+            columns.Add(dashboard);
+
+            table.AddRow(columns.ToArray());
         }
 
         _interactionService.DisplayRenderable(table);

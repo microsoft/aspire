@@ -61,6 +61,13 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     Task<DashboardUrlsState?> GetDashboardUrlsAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Waits until the AppHost reaches its startup readiness point.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The AppHost startup readiness response, or null if unavailable.</returns>
+    Task<WaitForAppHostReadyResponse?> WaitForAppHostReadyAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Gets the current resource snapshots from the AppHost.
     /// </summary>
     /// <param name="includeHidden">When <see langword="true"/>, includes resources with hidden state.</param>

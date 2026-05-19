@@ -43,6 +43,7 @@ void main() throws Exception {
         ingress.withHostname("ingress.example.com");
         ingress.withTls("ingress-tls");
         var serviceContainer = builder.addContainer("kube-service", "redis:alpine");
+        serviceContainer.withComputeEnvironment(kubernetes);
         serviceContainer.publishAsKubernetesService((service) -> {
             var _serviceName = service.name();
             var _serviceParent = service.parent();

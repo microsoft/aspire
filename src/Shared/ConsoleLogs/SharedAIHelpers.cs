@@ -19,9 +19,9 @@ namespace Aspire.Shared.ConsoleLogs;
 /// </summary>
 internal static class SharedAIHelpers
 {
-    public const int TracesLimit = 200;
-    public const int StructuredLogsLimit = 200;
-    public const int ConsoleLogsLimit = 500;
+    public const int TracesLimit = 800;
+    public const int StructuredLogsLimit = 800;
+    public const int ConsoleLogsLimit = 2000;
     public const int MaximumListTokenLength = 8192;
     public const int MaximumStringLength = 2048;
 

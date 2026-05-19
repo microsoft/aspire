@@ -2,13 +2,14 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading.Channels;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Diagnostics;
+using Aspire.Shared;
 using Aspire.Shared.ConsoleLogs;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -69,44 +70,12 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
         return new GetAppHostInfoResponse
         {
             Pid = legacyInfo.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            AspireHostVersion = GetAspireHostVersion(),
+            AspireHostVersion = AssemblyVersionHelper.GetDisplayVersion(typeof(AuxiliaryBackchannelRpcTarget).Assembly) ?? "unknown",
             AppHostPath = legacyInfo.AppHostPath,
             CliProcessId = legacyInfo.CliProcessId,
-            StartedAt = legacyInfo.StartedAt
+            StartedAt = legacyInfo.StartedAt,
+            CliLogFilePath = legacyInfo.CliLogFilePath
         };
-    }
-
-    private static string GetAspireHostVersion()
-    {
-        return GetDisplayVersion(typeof(AuxiliaryBackchannelRpcTarget).Assembly) ?? "unknown";
-    }
-
-    internal static string? GetDisplayVersion(Assembly assembly)
-    {
-        // The package version is stamped into the assembly's AssemblyInformationalVersionAttribute at build time, followed by a '+' and
-        // the commit hash, e.g.:
-        // [assembly: AssemblyInformationalVersion("8.0.0-preview.2.23604.7+e7762a46d31842884a0bc72c92e07ba700c99bf5")]
-
-        var version = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
-
-        if (version is not null)
-        {
-            var plusIndex = version.IndexOf('+');
-
-            if (plusIndex > 0)
-            {
-                return version[..plusIndex];
-            }
-
-            return version;
-        }
-
-        // Fallback to the file version, which is based on the CI build number, and then fallback to the assembly version, which is
-        // product stable version, e.g. 8.0.0.0
-        version = assembly.GetCustomAttribute<AssemblyFileVersionAttribute>()?.Version
-            ?? assembly.GetCustomAttribute<AssemblyVersionAttribute>()?.Version;
-
-        return version;
     }
 
     /// <summary>
@@ -695,7 +664,8 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             ProcessId = Environment.ProcessId,
             CliProcessId = cliProcessId,
             StartedAt = new DateTimeOffset(Process.GetCurrentProcess().StartTime),
-            CliStartedAt = cliStartedAt
+            CliStartedAt = cliStartedAt,
+            CliLogFilePath = configuration[KnownConfigNames.CliLogFilePath]
         });
     }
 
@@ -706,8 +676,34 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     /// <returns>The dashboard URL state including health and resolved dashboard URLs.</returns>
     public async Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken = default)
     {
+        using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(GetDashboardUrlsAsync), streaming: false);
         logger.LogDebug("GetDashboardUrlsAsync called on auxiliary backchannel");
-        return await DashboardUrlsHelper.GetDashboardUrlsAsync(serviceProvider, logger, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var urls = await DashboardUrlsHelper.GetDashboardUrlsAsync(serviceProvider, logger, cancellationToken).ConfigureAwait(false);
+            activity.SetDashboardHealthy(urls.DashboardHealthy);
+            return urls;
+        }
+        catch (Exception ex)
+        {
+            activity.SetError(ex);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Waits until the AppHost has reached its startup readiness point.
+    /// </summary>
+    /// <param name="request">The request (currently unused, for future expansion).</param>
+    /// <param name="cancellationToken">A cancellation token.</param>
+    /// <returns>The startup readiness state.</returns>
+    public async Task<WaitForAppHostReadyResponse> WaitForAppHostReadyAsync(WaitForAppHostReadyRequest? request = null, CancellationToken cancellationToken = default)
+    {
+        using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(WaitForAppHostReadyAsync), streaming: false, request?.TraceContext);
+
+        var startupState = serviceProvider.GetRequiredService<AppHostStartupState>();
+        await startupState.WaitForReadyAsync(cancellationToken).ConfigureAwait(false);
+        return new WaitForAppHostReadyResponse { IsReady = true };
     }
 
     /// <summary>
@@ -864,7 +860,8 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
 
         // Build properties dictionary from ResourcePropertySnapshot
         // Redact sensitive property values to avoid leaking secrets
-        var properties = new Dictionary<string, string?>();
+        var properties = new Dictionary<string, JsonNode?>();
+        string[]? waitingFor = null;
         foreach (var prop in snapshot.Properties)
         {
             // Redact sensitive property values
@@ -874,16 +871,12 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
                 continue;
             }
 
-            // Convert value to string representation
-            var stringValue = prop.Value switch
+            properties[prop.Name] = ConvertPropertyValueToJsonNode(prop.Value);
+
+            if (string.Equals(prop.Name, KnownProperties.Resource.WaitingFor, StringComparisons.ResourcePropertyName))
             {
-                null => null,
-                string s => s,
-                IEnumerable<object> enumerable => string.Join(", ", enumerable),
-                System.Collections.IEnumerable enumerable => string.Join(", ", enumerable.Cast<object>()),
-                _ => prop.Value.ToString()
-            };
-            properties[prop.Name] = stringValue;
+                waitingFor = GetStringArrayPropertyValue(prop.Value);
+            }
         }
 
         // Build commands
@@ -919,6 +912,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             DisplayName = resource.Name,
             ResourceType = snapshot.ResourceType,
             State = snapshot.State?.Text,
+            WaitingFor = waitingFor,
             StateStyle = snapshot.State?.Style,
             IsHidden = snapshot.IsHidden,
             HealthStatus = snapshot.HealthStatus?.ToString(),
@@ -935,6 +929,56 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
             McpServer = mcpServer,
             Commands = commands
         };
+    }
+
+    private static JsonNode? ConvertPropertyValueToJsonNode(object? value)
+    {
+        return value switch
+        {
+            null => null,
+            JsonNode jsonNode => jsonNode.DeepClone(),
+            string stringValue => JsonValue.Create(stringValue),
+            bool boolValue => JsonValue.Create(boolValue),
+            byte byteValue => JsonValue.Create(byteValue),
+            sbyte sbyteValue => JsonValue.Create(sbyteValue),
+            short shortValue => JsonValue.Create(shortValue),
+            ushort ushortValue => JsonValue.Create(ushortValue),
+            int intValue => JsonValue.Create(intValue),
+            uint uintValue => JsonValue.Create(uintValue),
+            long longValue => JsonValue.Create(longValue),
+            ulong ulongValue => JsonValue.Create(ulongValue),
+            float floatValue => JsonValue.Create(floatValue),
+            double doubleValue => JsonValue.Create(doubleValue),
+            decimal decimalValue => JsonValue.Create(decimalValue),
+            System.Collections.IEnumerable enumerable => ConvertEnumerablePropertyValueToJsonArray(enumerable),
+            _ => JsonValue.Create(value.ToString())
+        };
+    }
+
+    private static JsonArray ConvertEnumerablePropertyValueToJsonArray(System.Collections.IEnumerable enumerable)
+    {
+        var array = new JsonArray();
+        foreach (var value in enumerable)
+        {
+            array.Add(ConvertPropertyValueToJsonNode(value));
+        }
+
+        return array;
+    }
+
+    private static string[]? GetStringArrayPropertyValue(object? value)
+    {
+        return value switch
+        {
+            null => null,
+            string s => [s],
+            IEnumerable<string> strings => strings.Where(static s => !string.IsNullOrEmpty(s)).ToArray(),
+            IEnumerable<object> objects => objects.OfType<string>().Where(static s => !string.IsNullOrEmpty(s)).ToArray(),
+            System.Collections.IEnumerable enumerable => enumerable.Cast<object>().OfType<string>().Where(static s => !string.IsNullOrEmpty(s)).ToArray(),
+            _ => null
+        } is { Length: > 0 } values
+            ? values
+            : null;
     }
 
     private static Dictionary<string, string?>? CreateOptionsDictionary(IReadOnlyList<KeyValuePair<string, string>>? options)
@@ -1376,7 +1420,7 @@ internal sealed class AuxiliaryBackchannelRpcTarget(
     public IAsyncEnumerable<BackchannelLogEntry> GetAppHostLogEntriesAsync(CancellationToken cancellationToken = default)
     {
         var rpcTarget = serviceProvider.GetRequiredService<AppHostRpcTarget>();
-        return rpcTarget.GetAppHostLogEntriesAsync(cancellationToken);
+        return rpcTarget.GetAppHostLogEntriesAsync(cancellationToken: cancellationToken);
     }
 
     /// <summary>

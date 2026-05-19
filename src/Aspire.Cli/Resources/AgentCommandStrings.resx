@@ -120,6 +120,9 @@
   <data name="SkillDescription_Aspire" xml:space="preserve">
     <value>Aspire CLI commands and workflows for distributed apps</value>
   </data>
+  <data name="SkillDescription_AspireDeployment" xml:space="preserve">
+    <value>Aspire deployment target selection, preflight, publish, and deploy workflows</value>
+  </data>
   <data name="SkillDescription_PlaywrightCli" xml:space="preserve">
     <value>Browser automation and functional testing</value>
   </data>

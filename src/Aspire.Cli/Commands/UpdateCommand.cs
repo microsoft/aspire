@@ -84,7 +84,7 @@ internal sealed class UpdateCommand : BaseCommand
         AddNonInteractiveRequiresYesValidator(this, s_yesOption);
 
         // Customize description based on whether staging channel is enabled
-        var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(_features, _configuration);
+        var isStagingEnabled = IsStagingChannelAvailable();
 
         _channelOption = new Option<string?>("--channel")
         {
@@ -130,7 +130,7 @@ internal sealed class UpdateCommand : BaseCommand
 
             if (_cliDownloader is null)
             {
-                return CommandResult.Failure(ExitCodeConstants.InvalidCommand, "CLI self-update is not available in this environment.");
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, "CLI self-update is not available in this environment.");
             }
 
             try
@@ -147,10 +147,26 @@ internal sealed class UpdateCommand : BaseCommand
         try
         {
             var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
-            var projectFile = await _projectLocator.UseOrFindAppHostProjectFileAsync(passedAppHostProjectFile, createSettingsFile: true, cancellationToken);
+
+            // `aspire update` is a recovery tool: when the AppHost's pinned Aspire.AppHost.Sdk
+            // can no longer be resolved (e.g. updating from one PR build to another after the
+            // hive was refreshed) the configured AppHost path must still be locatable, because
+            // rewriting that pin is precisely what this command does. Prefer the settings
+            // lookup, which does not MSBuild-validate the path, and only fall through to the
+            // strict discovery path when no AppHost is recorded in settings.
+            FileInfo? projectFile;
+            if (passedAppHostProjectFile is not null)
+            {
+                projectFile = await _projectLocator.UseOrFindAppHostProjectFileAsync(passedAppHostProjectFile, createSettingsFile: true, cancellationToken);
+            }
+            else
+            {
+                projectFile = await _projectLocator.GetAppHostFromSettingsAsync(cancellationToken)
+                    ?? await _projectLocator.UseOrFindAppHostProjectFileAsync(null, createSettingsFile: true, cancellationToken);
+            }
             if (projectFile is null)
             {
-                return CommandResult.Failure(ExitCodeConstants.FailedToFindProject);
+                return CommandResult.Failure(CliExitCodes.FailedToFindProject);
             }
 
             var project = _projectFactory.GetProject(projectFile);
@@ -167,11 +183,12 @@ internal sealed class UpdateCommand : BaseCommand
             // process-wide IConfiguration is rooted at the launch cwd at startup, so using
             // it here would silently read the wrong app's local config (issue #16650).
             //
-            // Step 3 (global config "channel") is a transitional read-only path: the CLI no
-            // longer WRITES the global channel (acquisition scripts and `aspire update --self`
-            // both stopped seeding it), and identity-channel is baked into the binary via
-            // AspireCliChannel metadata. The global read remains so users who deliberately ran
-            // `aspire config set -g channel <x>` on the new CLI keep their preference honored.
+            // Step 3 (global config "channel") is intentionally a read-only path: no CLI
+            // code path seeds the global "channel" config (neither the acquisition scripts
+            // nor `aspire update --self` write it), and the running CLI's channel is
+            // already discoverable via the AspireCliChannel assembly metadata. The global
+            // read remains so users who explicitly ran `aspire config set -g channel <x>`
+            // continue to have their preference honored.
             // TODO: revisit removing the step-3 fallback once telemetry confirms global
             // channel usage is negligible.
             var channelName = parseResult.GetValue(_channelOption) ?? parseResult.GetValue(_qualityOption);
@@ -187,13 +204,36 @@ internal sealed class UpdateCommand : BaseCommand
 
             var allChannels = await InteractionService.ShowStatusAsync(
                 UpdateCommandStrings.CheckingForUpdates,
-                async () => await _packagingService.GetChannelsAsync(cancellationToken));
+                async () => await _packagingService.GetChannelsAsync(cancellationToken, channelName));
 
             if (!string.IsNullOrWhiteSpace(channelName))
             {
                 // Try to find a channel matching the provided channel/quality
-                channel = allChannels.FirstOrDefault(c => string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase))
-                    ?? throw new ChannelNotFoundException($"No channel found matching '{channelName}'. Valid options are: {string.Join(", ", allChannels.Select(c => c.Name))}");
+                var matchedChannel = allChannels.FirstOrDefault(c => string.Equals(c.Name, channelName, StringComparisons.ChannelName));
+                if (matchedChannel is null)
+                {
+                    // When the user explicitly asked for the 'staging' channel and the packaging
+                    // service refused to synthesize it (daily/local/pr-N CLI without an override),
+                    // surface the packaging-service reason instead of the generic "no channel
+                    // matching" message — the generic message hides the actual fix from the user.
+                    // See https://github.com/microsoft/aspire/issues/16652.
+                    if (string.Equals(channelName, PackageChannelNames.Staging, StringComparisons.ChannelName))
+                    {
+                        var stagingUnavailableReason = _packagingService.GetStagingChannelUnavailableReason();
+                        if (stagingUnavailableReason is not null)
+                        {
+                            throw new ChannelNotFoundException(stagingUnavailableReason);
+                        }
+                    }
+
+                    throw new ChannelNotFoundException(string.Format(
+                        CultureInfo.CurrentCulture,
+                        UpdateCommandStrings.NoChannelFoundMatching,
+                        channelName,
+                        string.Join(", ", allChannels.Select(c => c.Name))));
+                }
+
+                channel = matchedChannel;
 
                 if (channelFromConfig)
                 {
@@ -207,26 +247,56 @@ internal sealed class UpdateCommand : BaseCommand
             }
             else
             {
-                // If there are hives (PR build directories), prompt for channel selection.
-                // Otherwise, use the implicit/default channel automatically.
-                var hasHives = ExecutionContext.GetHiveCount() > 0;
-
-                if (hasHives)
+                // Before falling through to the hives prompt, default to the running CLI's
+                // identity channel (the value baked into the assembly via the
+                // AspireCliChannel metadata) when it matches a registered channel. Without
+                // this, a `pr-<N>` or `daily` CLI updating an AppHost that has no
+                // per-project `channel` and no global `channel` config would silently land
+                // on the Implicit ("default") channel, which resolves Aspire packages from
+                // public NuGet and effectively moves the project to daily even though the
+                // running CLI knows which channel it shipped from.
+                //
+                // `local` is intentionally skipped: a developer-built CLI must not silently
+                // pin a real project to a hive that only exists on that machine. We also
+                // require the identity to match an entry in `allChannels`, so a stale
+                // `pr-<N>` identity (e.g. the matching hive was deleted) falls through to
+                // the existing prompt/implicit logic instead of failing.
+                var identityChannel = ExecutionContext.IdentityChannel;
+                PackageChannel? identityMatch = null;
+                if (!string.IsNullOrWhiteSpace(identityChannel)
+                    && !string.Equals(identityChannel, PackageChannelNames.Local, StringComparisons.ChannelName))
                 {
-                    // Prompt for channel selection
-                    var channelBinding = PromptBinding.Create(parseResult, _channelOption);
-                    channel = await InteractionService.PromptForSelectionAsync(
-                        UpdateCommandStrings.SelectChannelPrompt,
-                        allChannels,
-                        (c) => $"{c.Name.EscapeMarkup()} ({c.SourceDetails.EscapeMarkup()})",
-                        binding: channelBinding,
-                        cancellationToken: cancellationToken);
+                    identityMatch = allChannels.FirstOrDefault(c => string.Equals(c.Name, identityChannel, StringComparisons.ChannelName));
+                }
+
+                if (identityMatch is not null)
+                {
+                    _logger.LogDebug("Defaulting to identity channel '{ChannelName}'.", identityMatch.Name);
+                    channel = identityMatch;
                 }
                 else
                 {
-                    // Use the default (implicit) channel
-                    channel = allChannels.FirstOrDefault(c => c.Type is PackageChannelType.Implicit)
-                        ?? allChannels.First();
+                    // If there are hives (PR build directories), prompt for channel selection.
+                    // Otherwise, use the implicit/default channel automatically.
+                    var hasHives = ExecutionContext.GetHiveCount() > 0;
+
+                    if (hasHives)
+                    {
+                        // Prompt for channel selection
+                        var channelBinding = PromptBinding.Create(parseResult, _channelOption);
+                        channel = await InteractionService.PromptForSelectionAsync(
+                            UpdateCommandStrings.SelectChannelPrompt,
+                            allChannels,
+                            (c) => $"{c.Name.EscapeMarkup()} ({c.SourceDetails.EscapeMarkup()})",
+                            binding: channelBinding,
+                            cancellationToken: cancellationToken);
+                    }
+                    else
+                    {
+                        // Use the default (implicit) channel
+                        channel = allChannels.FirstOrDefault(c => c.Type is PackageChannelType.Implicit)
+                            ?? allChannels.First();
+                    }
                 }
             }
 
@@ -281,13 +351,13 @@ internal sealed class UpdateCommand : BaseCommand
         {
             var message = Markup.Escape(ex.Message);
             Telemetry.RecordError(message, ex);
-            return CommandResult.Failure(ExitCodeConstants.FailedToUpgradeProject, message);
+            return CommandResult.Failure(CliExitCodes.FailedToUpgradeProject, message);
         }
         catch (ChannelNotFoundException ex)
         {
             var message = Markup.Escape(ex.Message);
             Telemetry.RecordError(message, ex);
-            return CommandResult.Failure(ExitCodeConstants.FailedToUpgradeProject, message);
+            return CommandResult.Failure(CliExitCodes.FailedToUpgradeProject, message);
         }
         catch (ProjectLocatorException ex)
         {
@@ -363,7 +433,7 @@ internal sealed class UpdateCommand : BaseCommand
         }
 
         var selfUpdateResult = await ExecuteSelfUpdateAsync(parseResult, cancellationToken, channel.Name);
-        if (selfUpdateResult.ExitCode == ExitCodeConstants.Success)
+        if (selfUpdateResult.ExitCode == CliExitCodes.Success)
         {
             InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.ProjectUpdateSkippedAfterCliUpdateMessage);
         }
@@ -391,6 +461,12 @@ internal sealed class UpdateCommand : BaseCommand
         }
     }
 
+    private bool IsStagingChannelAvailable()
+    {
+        return KnownFeatures.IsStagingChannelEnabled(_features, _configuration)
+            || string.Equals(ExecutionContext.IdentityChannel, PackageChannelNames.Staging, StringComparisons.ChannelName);
+    }
+
     private async Task<CommandResult> ExecuteSelfUpdateAsync(ParseResult parseResult, CancellationToken cancellationToken, string? selectedChannel = null)
     {
         var channel = selectedChannel ?? parseResult.GetValue(_channelOption) ?? parseResult.GetValue(_qualityOption);
@@ -401,7 +477,7 @@ internal sealed class UpdateCommand : BaseCommand
         // aspire.config.json, not from any global setting.
         if (string.IsNullOrEmpty(channel))
         {
-            var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(_features, _configuration);
+            var isStagingEnabled = IsStagingChannelAvailable();
             var channels = isStagingEnabled
                 ? new[] { PackageChannelNames.Stable, PackageChannelNames.Staging, PackageChannelNames.Daily }
                 : new[] { PackageChannelNames.Stable, PackageChannelNames.Daily };
@@ -420,7 +496,7 @@ internal sealed class UpdateCommand : BaseCommand
             var currentExePath = Environment.ProcessPath;
             if (string.IsNullOrEmpty(currentExePath))
             {
-                return CommandResult.Failure(ExitCodeConstants.InvalidCommand, "Unable to determine the current executable path.");
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, "Unable to determine the current executable path.");
             }
 
             InteractionService.DisplayMessage(KnownEmojis.Package, $"Current CLI location: {currentExePath}");
@@ -442,7 +518,7 @@ internal sealed class UpdateCommand : BaseCommand
         {
             Telemetry.RecordError("Failed to update CLI", ex);
             var errorMessage = $"Failed to update CLI: {ex.Message}";
-            return CommandResult.Failure(ExitCodeConstants.InvalidCommand, errorMessage);
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, errorMessage);
         }
     }
 

@@ -1,4 +1,4 @@
-// aspire.go - Capability-based Aspire SDK
+﻿// aspire.go - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -22,6 +22,14 @@ var _ = time.Second
 // ============================================================================
 // Enums
 // ============================================================================
+
+// ContainerMountType represents ContainerMountType.
+type ContainerMountType string
+
+const (
+	ContainerMountTypeBindMount ContainerMountType = "BindMount"
+	ContainerMountTypeVolume ContainerMountType = "Volume"
+)
 
 // ContainerLifetime represents ContainerLifetime.
 type ContainerLifetime string
@@ -759,9 +767,9 @@ var WellKnownPipelineTags = struct {
 // Marker interfaces (from interface-metadata types)
 // ============================================================================
 
-// ConfigurationSection marks types implementing IConfigurationSection.
+// ComputeEnvironmentResource marks types implementing IComputeEnvironmentResource.
 // Marker interface.
-type ConfigurationSection interface {
+type ComputeEnvironmentResource interface {
 	handleReference
 }
 
@@ -835,6 +843,62 @@ type TestVaultResource interface {
 // Handle wrappers
 // ============================================================================
 
+// AfterPublishEvent is the public interface for handle type AfterPublishEvent.
+type AfterPublishEvent interface {
+	handleReference
+	Model() DistributedApplicationModel
+	Services() ServiceProvider
+	Err() error
+}
+
+// afterPublishEvent is the unexported impl of AfterPublishEvent.
+type afterPublishEvent struct {
+	*resourceBuilderBase
+}
+
+// newAfterPublishEventFromHandle wraps an existing handle as AfterPublishEvent.
+func newAfterPublishEventFromHandle(h *handle, c *client) AfterPublishEvent {
+	return &afterPublishEvent{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// Model gets the Model property
+func (s *afterPublishEvent) Model() DistributedApplicationModel {
+	if s.err != nil { return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Publishing/AfterPublishEvent.model", reqArgs)
+	if err != nil {
+		return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.Publishing/AfterPublishEvent.model returned unexpected type %T", result)
+		return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &distributedApplicationModel{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// Services gets the Services property
+func (s *afterPublishEvent) Services() ServiceProvider {
+	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Publishing/AfterPublishEvent.services", reqArgs)
+	if err != nil {
+		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.Publishing/AfterPublishEvent.services returned unexpected type %T", result)
+		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
 // AfterResourcesCreatedEvent is the public interface for handle type AfterResourcesCreatedEvent.
 type AfterResourcesCreatedEvent interface {
 	handleReference
@@ -894,6 +958,7 @@ func (s *afterResourcesCreatedEvent) Services() ServiceProvider {
 // AspireStore is the public interface for handle type AspireStore.
 type AspireStore interface {
 	handleReference
+	BasePath() (string, error)
 	GetFileNameWithContent(filenameTemplate string, sourceFilename string) (string, error)
 	Err() error
 }
@@ -906,6 +971,21 @@ type aspireStore struct {
 // newAspireStoreFromHandle wraps an existing handle as AspireStore.
 func newAspireStoreFromHandle(h *handle, c *client) AspireStore {
 	return &aspireStore{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// BasePath gets the BasePath property
+func (s *aspireStore) BasePath() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/IAspireStore.basePath", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
 }
 
 // GetFileNameWithContent gets a deterministic file path for the specified file contents
@@ -955,6 +1035,7 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	WithCertificateTrustScope(scope CertificateTrustScope) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithChildRelationship(child Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithConfig(config *TestConfigDto) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithContainerCertificatePaths(options ...*WithContainerCertificatePathsOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithContainerName(name string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
@@ -1491,6 +1572,19 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCommand(na
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withCommand", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithComputeEnvironment configures the compute environment for the compute resource
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	if computeEnvironmentResource != nil { if err := computeEnvironmentResource.Err(); err != nil { s.setErr(err); return s } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["computeEnvironmentResource"] = serializeValue(computeEnvironmentResource)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withComputeEnvironment", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -2712,6 +2806,62 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithoutHttpsCe
 	return s
 }
 
+// BeforePublishEvent is the public interface for handle type BeforePublishEvent.
+type BeforePublishEvent interface {
+	handleReference
+	Model() DistributedApplicationModel
+	Services() ServiceProvider
+	Err() error
+}
+
+// beforePublishEvent is the unexported impl of BeforePublishEvent.
+type beforePublishEvent struct {
+	*resourceBuilderBase
+}
+
+// newBeforePublishEventFromHandle wraps an existing handle as BeforePublishEvent.
+func newBeforePublishEventFromHandle(h *handle, c *client) BeforePublishEvent {
+	return &beforePublishEvent{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// Model gets the Model property
+func (s *beforePublishEvent) Model() DistributedApplicationModel {
+	if s.err != nil { return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Publishing/BeforePublishEvent.model", reqArgs)
+	if err != nil {
+		return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.Publishing/BeforePublishEvent.model returned unexpected type %T", result)
+		return &distributedApplicationModel{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &distributedApplicationModel{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// Services gets the Services property
+func (s *beforePublishEvent) Services() ServiceProvider {
+	if s.err != nil { return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Publishing/BeforePublishEvent.services", reqArgs)
+	if err != nil {
+		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting.Publishing/BeforePublishEvent.services returned unexpected type %T", result)
+		return &serviceProvider{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &serviceProvider{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
 // BeforeResourceStartedEvent is the public interface for handle type BeforeResourceStartedEvent.
 type BeforeResourceStartedEvent interface {
 	handleReference
@@ -2850,6 +3000,7 @@ type CSharpAppResource interface {
 	WithCertificateTrustScope(scope CertificateTrustScope) CSharpAppResource
 	WithChildRelationship(child Resource) CSharpAppResource
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) CSharpAppResource
+	WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) CSharpAppResource
 	WithConfig(config *TestConfigDto) CSharpAppResource
 	WithContainerRegistry(registry Resource) CSharpAppResource
 	WithCorrelationId(correlationId string) CSharpAppResource
@@ -3346,6 +3497,19 @@ func (s *cSharpAppResource) WithCommand(name string, displayName string, execute
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withCommand", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithComputeEnvironment configures the compute environment for the compute resource
+func (s *cSharpAppResource) WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) CSharpAppResource {
+	if s.err != nil { return s }
+	if computeEnvironmentResource != nil { if err := computeEnvironmentResource.Err(); err != nil { s.setErr(err); return s } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["computeEnvironmentResource"] = serializeValue(computeEnvironmentResource)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withComputeEnvironment", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -4561,20 +4725,99 @@ func (s *configuration) GetConnectionString(name string) (string, error) {
 
 // GetSection gets a configuration section by key
 func (s *configuration) GetSection(key string) ConfigurationSection {
-	if s.err != nil { return nil }
+	if s.err != nil { return &configurationSection{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
 	reqArgs := map[string]any{
 		"configuration": s.handle.ToJSON(),
 	}
 	reqArgs["key"] = serializeValue(key)
 	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/getSection", reqArgs)
-	if err != nil { s.setErr(err); return nil }
-	typed, ok := result.(ConfigurationSection)
-	if !ok {
-		s.setErr(fmt.Errorf("aspire: Aspire.Hosting/getSection returned unexpected type %T", result))
-		return nil
+	if err != nil {
+		return &configurationSection{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
-	return typed
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting/getSection returned unexpected type %T", result)
+		return &configurationSection{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &configurationSection{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// ConfigurationSection is the public interface for handle type ConfigurationSection.
+type ConfigurationSection interface {
+	handleReference
+	Key() (string, error)
+	Path() (string, error)
+	SetValue(value string) ConfigurationSection
+	Value() (string, error)
+	Err() error
+}
+
+// configurationSection is the unexported impl of ConfigurationSection.
+type configurationSection struct {
+	*resourceBuilderBase
+}
+
+// newConfigurationSectionFromHandle wraps an existing handle as ConfigurationSection.
+func newConfigurationSectionFromHandle(h *handle, c *client) ConfigurationSection {
+	return &configurationSection{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// Key gets the Key property
+func (s *configurationSection) Key() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Microsoft.Extensions.Configuration/IConfigurationSection.key", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// Path gets the Path property
+func (s *configurationSection) Path() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Microsoft.Extensions.Configuration/IConfigurationSection.path", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// SetValue sets the Value property
+func (s *configurationSection) SetValue(value string) ConfigurationSection {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Microsoft.Extensions.Configuration/IConfigurationSection.setValue", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// Value gets the Value property
+func (s *configurationSection) Value() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Microsoft.Extensions.Configuration/IConfigurationSection.value", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
 }
 
 // ConnectionStringAvailableEvent is the public interface for handle type ConnectionStringAvailableEvent.
@@ -4778,6 +5021,8 @@ func (s *containerImagePushOptionsCallbackContext) Resource() Resource {
 // ContainerImageReference is the public interface for handle type ContainerImageReference.
 type ContainerImageReference interface {
 	handleReference
+	Resource() Resource
+	ValueExpression() (string, error)
 	Err() error
 }
 
@@ -4791,9 +5036,45 @@ func newContainerImageReferenceFromHandle(h *handle, c *client) ContainerImageRe
 	return &containerImageReference{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
+// Resource gets the Resource property
+func (s *containerImageReference) Resource() Resource {
+	if s.err != nil { return nil }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ContainerImageReference.resource", reqArgs)
+	if err != nil { s.setErr(err); return nil }
+	typed, ok := result.(Resource)
+	if !ok {
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/ContainerImageReference.resource returned unexpected type %T", result))
+		return nil
+	}
+	return typed
+}
+
+// ValueExpression gets the ValueExpression property
+func (s *containerImageReference) ValueExpression() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ContainerImageReference.valueExpression", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
 // ContainerMountAnnotation is the public interface for handle type ContainerMountAnnotation.
 type ContainerMountAnnotation interface {
 	handleReference
+	IsReadOnly() (bool, error)
+	Source() (string, error)
+	Target() (string, error)
+	Type() (ContainerMountType, error)
 	Err() error
 }
 
@@ -4807,9 +5088,71 @@ func newContainerMountAnnotationFromHandle(h *handle, c *client) ContainerMountA
 	return &containerMountAnnotation{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
+// IsReadOnly gets the IsReadOnly property
+func (s *containerMountAnnotation) IsReadOnly() (bool, error) {
+	if s.err != nil { var zero bool; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ContainerMountAnnotation.isReadOnly", reqArgs)
+	if err != nil {
+		var zero bool
+		return zero, err
+	}
+	return decodeAs[bool](result)
+}
+
+// Source gets the Source property
+func (s *containerMountAnnotation) Source() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ContainerMountAnnotation.source", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// Target gets the Target property
+func (s *containerMountAnnotation) Target() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ContainerMountAnnotation.target", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// Type gets the Type property
+func (s *containerMountAnnotation) Type() (ContainerMountType, error) {
+	if s.err != nil { var zero ContainerMountType; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ContainerMountAnnotation.type", reqArgs)
+	if err != nil {
+		var zero ContainerMountType
+		return zero, err
+	}
+	return decodeAs[ContainerMountType](result)
+}
+
 // ContainerPortReference is the public interface for handle type ContainerPortReference.
 type ContainerPortReference interface {
 	handleReference
+	Resource() Resource
+	ValueExpression() (string, error)
 	Err() error
 }
 
@@ -4821,6 +5164,38 @@ type containerPortReference struct {
 // newContainerPortReferenceFromHandle wraps an existing handle as ContainerPortReference.
 func newContainerPortReferenceFromHandle(h *handle, c *client) ContainerPortReference {
 	return &containerPortReference{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// Resource gets the Resource property
+func (s *containerPortReference) Resource() Resource {
+	if s.err != nil { return nil }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ContainerPortReference.resource", reqArgs)
+	if err != nil { s.setErr(err); return nil }
+	typed, ok := result.(Resource)
+	if !ok {
+		s.setErr(fmt.Errorf("aspire: Aspire.Hosting.ApplicationModel/ContainerPortReference.resource returned unexpected type %T", result))
+		return nil
+	}
+	return typed
+}
+
+// ValueExpression gets the ValueExpression property
+func (s *containerPortReference) ValueExpression() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/ContainerPortReference.valueExpression", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
 }
 
 // ContainerRegistryResource is the public interface for handle type ContainerRegistryResource.
@@ -5694,6 +6069,7 @@ type ContainerResource interface {
 	WithCertificateTrustScope(scope CertificateTrustScope) ContainerResource
 	WithChildRelationship(child Resource) ContainerResource
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) ContainerResource
+	WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) ContainerResource
 	WithConfig(config *TestConfigDto) ContainerResource
 	WithContainerCertificatePaths(options ...*WithContainerCertificatePathsOptions) ContainerResource
 	WithContainerName(name string) ContainerResource
@@ -6229,6 +6605,19 @@ func (s *containerResource) WithCommand(name string, displayName string, execute
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withCommand", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithComputeEnvironment configures the compute environment for the compute resource
+func (s *containerResource) WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) ContainerResource {
+	if s.err != nil { return s }
+	if computeEnvironmentResource != nil { if err := computeEnvironmentResource.Err(); err != nil { s.setErr(err); return s } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["computeEnvironmentResource"] = serializeValue(computeEnvironmentResource)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withComputeEnvironment", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -7504,7 +7893,9 @@ type DistributedApplicationBuilder interface {
 	ExecutionContext() DistributedApplicationExecutionContext
 	GetConfiguration() Configuration
 	Pipeline() DistributedApplicationPipeline
+	SubscribeAfterPublish(callback func(arg AfterPublishEvent)) DistributedApplicationEventSubscription
 	SubscribeAfterResourcesCreated(callback func(arg AfterResourcesCreatedEvent)) DistributedApplicationEventSubscription
+	SubscribeBeforePublish(callback func(arg BeforePublishEvent)) DistributedApplicationEventSubscription
 	SubscribeBeforeStart(callback func(arg BeforeStartEvent)) DistributedApplicationEventSubscription
 	TryAddEventingSubscriber(subscribe func(arg EventingSubscriberRegistrationContext)) error
 	UserSecretsManager() UserSecretsManager
@@ -8061,6 +8452,33 @@ func (s *distributedApplicationBuilder) Pipeline() DistributedApplicationPipelin
 	return &distributedApplicationPipeline{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
+// SubscribeAfterPublish subscribes to the AfterPublish event
+func (s *distributedApplicationBuilder) SubscribeAfterPublish(callback func(arg AfterPublishEvent)) DistributedApplicationEventSubscription {
+	if s.err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[AfterPublishEvent](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/subscribeAfterPublish", reqArgs)
+	if err != nil {
+		return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting/subscribeAfterPublish returned unexpected type %T", result)
+		return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &distributedApplicationEventSubscription{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
 // SubscribeAfterResourcesCreated subscribes to the AfterResourcesCreated event
 func (s *distributedApplicationBuilder) SubscribeAfterResourcesCreated(callback func(arg AfterResourcesCreatedEvent)) DistributedApplicationEventSubscription {
 	if s.err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
@@ -8083,6 +8501,33 @@ func (s *distributedApplicationBuilder) SubscribeAfterResourcesCreated(callback 
 	href, ok := result.(handleReference)
 	if !ok {
 		err := fmt.Errorf("aspire: Aspire.Hosting/subscribeAfterResourcesCreated returned unexpected type %T", result)
+		return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &distributedApplicationEventSubscription{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// SubscribeBeforePublish subscribes to the BeforePublish event
+func (s *distributedApplicationBuilder) SubscribeBeforePublish(callback func(arg BeforePublishEvent)) DistributedApplicationEventSubscription {
+	if s.err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[BeforePublishEvent](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/subscribeBeforePublish", reqArgs)
+	if err != nil {
+		return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting/subscribeBeforePublish returned unexpected type %T", result)
 		return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	return &distributedApplicationEventSubscription{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
@@ -8904,6 +9349,7 @@ type DotnetToolResource interface {
 	WithCertificateTrustScope(scope CertificateTrustScope) DotnetToolResource
 	WithChildRelationship(child Resource) DotnetToolResource
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) DotnetToolResource
+	WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) DotnetToolResource
 	WithConfig(config *TestConfigDto) DotnetToolResource
 	WithContainerRegistry(registry Resource) DotnetToolResource
 	WithCorrelationId(correlationId string) DotnetToolResource
@@ -9375,6 +9821,19 @@ func (s *dotnetToolResource) WithCommand(name string, displayName string, execut
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withCommand", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithComputeEnvironment configures the compute environment for the compute resource
+func (s *dotnetToolResource) WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) DotnetToolResource {
+	if s.err != nil { return s }
+	if computeEnvironmentResource != nil { if err := computeEnvironmentResource.Err(); err != nil { s.setErr(err); return s } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["computeEnvironmentResource"] = serializeValue(computeEnvironmentResource)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withComputeEnvironment", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -11311,7 +11770,9 @@ type EventingSubscriberRegistrationContext interface {
 	handleReference
 	CancellationToken() (*CancellationToken, error)
 	ExecutionContext() DistributedApplicationExecutionContext
+	OnAfterPublish(callback func(arg AfterPublishEvent)) DistributedApplicationEventSubscription
 	OnAfterResourcesCreated(callback func(arg AfterResourcesCreatedEvent)) DistributedApplicationEventSubscription
+	OnBeforePublish(callback func(arg BeforePublishEvent)) DistributedApplicationEventSubscription
 	OnBeforeStart(callback func(arg BeforeStartEvent)) DistributedApplicationEventSubscription
 	Err() error
 }
@@ -11360,6 +11821,33 @@ func (s *eventingSubscriberRegistrationContext) ExecutionContext() DistributedAp
 	return &distributedApplicationExecutionContext{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
+// OnAfterPublish subscribes an eventing subscriber to the AfterPublish event
+func (s *eventingSubscriberRegistrationContext) OnAfterPublish(callback func(arg AfterPublishEvent)) DistributedApplicationEventSubscription {
+	if s.err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[AfterPublishEvent](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/eventingSubscriberOnAfterPublish", reqArgs)
+	if err != nil {
+		return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting/eventingSubscriberOnAfterPublish returned unexpected type %T", result)
+		return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &distributedApplicationEventSubscription{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
 // OnAfterResourcesCreated subscribes an eventing subscriber to the AfterResourcesCreated event
 func (s *eventingSubscriberRegistrationContext) OnAfterResourcesCreated(callback func(arg AfterResourcesCreatedEvent)) DistributedApplicationEventSubscription {
 	if s.err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
@@ -11382,6 +11870,33 @@ func (s *eventingSubscriberRegistrationContext) OnAfterResourcesCreated(callback
 	href, ok := result.(handleReference)
 	if !ok {
 		err := fmt.Errorf("aspire: Aspire.Hosting/eventingSubscriberOnAfterResourcesCreated returned unexpected type %T", result)
+		return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	return &distributedApplicationEventSubscription{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
+}
+
+// OnBeforePublish subscribes an eventing subscriber to the BeforePublish event
+func (s *eventingSubscriberRegistrationContext) OnBeforePublish(callback func(arg BeforePublishEvent)) DistributedApplicationEventSubscription {
+	if s.err != nil { return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	if callback != nil {
+		cb := callback
+		shim := func(args ...any) any {
+			cb(callbackArg[BeforePublishEvent](args, 0))
+			return nil
+		}
+		reqArgs["callback"] = s.client.registerCallback(shim)
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/eventingSubscriberOnBeforePublish", reqArgs)
+	if err != nil {
+		return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
+	}
+	href, ok := result.(handleReference)
+	if !ok {
+		err := fmt.Errorf("aspire: Aspire.Hosting/eventingSubscriberOnBeforePublish returned unexpected type %T", result)
 		return &distributedApplicationEventSubscription{resourceBuilderBase: newErroredResourceBuilder(err, s.client)}
 	}
 	return &distributedApplicationEventSubscription{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
@@ -11440,6 +11955,7 @@ type ExecutableResource interface {
 	WithCertificateTrustScope(scope CertificateTrustScope) ExecutableResource
 	WithChildRelationship(child Resource) ExecutableResource
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) ExecutableResource
+	WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) ExecutableResource
 	WithConfig(config *TestConfigDto) ExecutableResource
 	WithContainerRegistry(registry Resource) ExecutableResource
 	WithCorrelationId(correlationId string) ExecutableResource
@@ -11905,6 +12421,19 @@ func (s *executableResource) WithCommand(name string, displayName string, execut
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withCommand", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithComputeEnvironment configures the compute environment for the compute resource
+func (s *executableResource) WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) ExecutableResource {
+	if s.err != nil { return s }
+	if computeEnvironmentResource != nil { if err := computeEnvironmentResource.Err(); err != nil { s.setErr(err); return s } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["computeEnvironmentResource"] = serializeValue(computeEnvironmentResource)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withComputeEnvironment", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -14048,10 +14577,16 @@ func (s *externalServiceResource) WithValidator(validator func(arg TestResourceC
 // HostEnvironment is the public interface for handle type HostEnvironment.
 type HostEnvironment interface {
 	handleReference
+	ApplicationName() (string, error)
+	ContentRootPath() (string, error)
+	EnvironmentName() (string, error)
 	IsDevelopment() (bool, error)
 	IsEnvironment(environmentName string) (bool, error)
 	IsProduction() (bool, error)
 	IsStaging() (bool, error)
+	SetApplicationName(value string) HostEnvironment
+	SetContentRootPath(value string) HostEnvironment
+	SetEnvironmentName(value string) HostEnvironment
 	Err() error
 }
 
@@ -14063,6 +14598,51 @@ type hostEnvironment struct {
 // newHostEnvironmentFromHandle wraps an existing handle as HostEnvironment.
 func newHostEnvironmentFromHandle(h *handle, c *client) HostEnvironment {
 	return &hostEnvironment{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// ApplicationName gets the ApplicationName property
+func (s *hostEnvironment) ApplicationName() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Microsoft.Extensions.Hosting/IHostEnvironment.applicationName", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// ContentRootPath gets the ContentRootPath property
+func (s *hostEnvironment) ContentRootPath() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Microsoft.Extensions.Hosting/IHostEnvironment.contentRootPath", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
+}
+
+// EnvironmentName gets the EnvironmentName property
+func (s *hostEnvironment) EnvironmentName() (string, error) {
+	if s.err != nil { var zero string; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Microsoft.Extensions.Hosting/IHostEnvironment.environmentName", reqArgs)
+	if err != nil {
+		var zero string
+		return zero, err
+	}
+	return decodeAs[string](result)
 }
 
 // IsDevelopment checks if running in Development environment
@@ -14124,6 +14704,42 @@ func (s *hostEnvironment) IsStaging() (bool, error) {
 		return zero, err
 	}
 	return decodeAs[bool](result)
+}
+
+// SetApplicationName sets the ApplicationName property
+func (s *hostEnvironment) SetApplicationName(value string) HostEnvironment {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Microsoft.Extensions.Hosting/IHostEnvironment.setApplicationName", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// SetContentRootPath sets the ContentRootPath property
+func (s *hostEnvironment) SetContentRootPath(value string) HostEnvironment {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Microsoft.Extensions.Hosting/IHostEnvironment.setContentRootPath", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// SetEnvironmentName sets the EnvironmentName property
+func (s *hostEnvironment) SetEnvironmentName(value string) HostEnvironment {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	reqArgs["value"] = serializeValue(value)
+	if _, err := s.client.invokeCapability(ctx, "Microsoft.Extensions.Hosting/IHostEnvironment.setEnvironmentName", reqArgs); err != nil { s.setErr(err) }
+	return s
 }
 
 // IComputeResource is the public interface for handle type IComputeResource.
@@ -16082,6 +16698,7 @@ type ProjectResource interface {
 	WithCertificateTrustScope(scope CertificateTrustScope) ProjectResource
 	WithChildRelationship(child Resource) ProjectResource
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) ProjectResource
+	WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) ProjectResource
 	WithConfig(config *TestConfigDto) ProjectResource
 	WithContainerRegistry(registry Resource) ProjectResource
 	WithCorrelationId(correlationId string) ProjectResource
@@ -16578,6 +17195,19 @@ func (s *projectResource) WithCommand(name string, displayName string, executeCo
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withCommand", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithComputeEnvironment configures the compute environment for the compute resource
+func (s *projectResource) WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) ProjectResource {
+	if s.err != nil { return s }
+	if computeEnvironmentResource != nil { if err := computeEnvironmentResource.Err(); err != nil { s.setErr(err); return s } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["computeEnvironmentResource"] = serializeValue(computeEnvironmentResource)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withComputeEnvironment", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -18979,6 +19609,7 @@ type TestDatabaseResource interface {
 	WithCertificateTrustScope(scope CertificateTrustScope) TestDatabaseResource
 	WithChildRelationship(child Resource) TestDatabaseResource
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) TestDatabaseResource
+	WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) TestDatabaseResource
 	WithConfig(config *TestConfigDto) TestDatabaseResource
 	WithContainerCertificatePaths(options ...*WithContainerCertificatePathsOptions) TestDatabaseResource
 	WithContainerName(name string) TestDatabaseResource
@@ -19514,6 +20145,19 @@ func (s *testDatabaseResource) WithCommand(name string, displayName string, exec
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withCommand", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithComputeEnvironment configures the compute environment for the compute resource
+func (s *testDatabaseResource) WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) TestDatabaseResource {
+	if s.err != nil { return s }
+	if computeEnvironmentResource != nil { if err := computeEnvironmentResource.Err(); err != nil { s.setErr(err); return s } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["computeEnvironmentResource"] = serializeValue(computeEnvironmentResource)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withComputeEnvironment", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -20924,6 +21568,7 @@ type TestRedisResource interface {
 	WithCertificateTrustScope(scope CertificateTrustScope) TestRedisResource
 	WithChildRelationship(child Resource) TestRedisResource
 	WithCommand(name string, displayName string, executeCommand func(arg ExecuteCommandContext) *ExecuteCommandResult, options ...*WithCommandOptions) TestRedisResource
+	WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) TestRedisResource
 	WithConfig(config *TestConfigDto) TestRedisResource
 	WithConnectionProperty(name string, value any) TestRedisResource
 	WithConnectionString(connectionString *ReferenceExpression) TestRedisResource
@@ -21622,6 +22267,19 @@ func (s *testRedisResource) WithCommand(name string, displayName string, execute
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withCommand", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithComputeEnvironment configures the compute environment for the compute resource
+func (s *testRedisResource) WithComputeEnvironment(computeEnvironmentResource ComputeEnvironmentResource) TestRedisResource {
+	if s.err != nil { return s }
+	if computeEnvironmentResource != nil { if err := computeEnvironmentResource.Err(); err != nil { s.setErr(err); return s } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["computeEnvironmentResource"] = serializeValue(computeEnvironmentResource)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withComputeEnvironment", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -24234,6 +24892,9 @@ func registerWrappers(c *client) {
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression", func(h *handle, c *client) any {
 		return newHandleBackedReferenceExpression(h, c)
 	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Publishing.AfterPublishEvent", func(h *handle, c *client) any {
+		return newAfterPublishEventFromHandle(h, c)
+	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.AfterResourcesCreatedEvent", func(h *handle, c *client) any {
 		return newAfterResourcesCreatedEventFromHandle(h, c)
 	})
@@ -24242,6 +24903,9 @@ func registerWrappers(c *client) {
 	})
 	c.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Go.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestVaultResource", func(h *handle, c *client) any {
 		return newAspire_Hosting_CodeGeneration_Go_TestsTestVaultResourceFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.Publishing.BeforePublishEvent", func(h *handle, c *client) any {
+		return newBeforePublishEventFromHandle(h, c)
 	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.BeforeResourceStartedEvent", func(h *handle, c *client) any {
 		return newBeforeResourceStartedEventFromHandle(h, c)
@@ -24260,6 +24924,9 @@ func registerWrappers(c *client) {
 	})
 	c.registerHandleWrapper("Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfiguration", func(h *handle, c *client) any {
 		return newConfigurationFromHandle(h, c)
+	})
+	c.registerHandleWrapper("Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfigurationSection", func(h *handle, c *client) any {
+		return newConfigurationSectionFromHandle(h, c)
 	})
 	c.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ConnectionStringAvailableEvent", func(h *handle, c *client) any {
 		return newConnectionStringAvailableEventFromHandle(h, c)
@@ -24516,7 +25183,11 @@ func CreateBuilder(options ...*CreateBuilderOptions) (DistributedApplicationBuil
 	}
 	if _, ok := resolved["Args"]; !ok { resolved["Args"] = os.Args[1:] }
 	if projectDirectory, ok := resolved["ProjectDirectory"].(string); !ok || projectDirectory == "" {
-		if pwd, err := os.Getwd(); err == nil { resolved["ProjectDirectory"] = pwd }
+		if projectDirectory := os.Getenv("ASPIRE_PROJECT_DIRECTORY"); projectDirectory != "" {
+			resolved["ProjectDirectory"] = projectDirectory
+		} else if pwd, err := os.Getwd(); err == nil {
+			resolved["ProjectDirectory"] = pwd
+		}
 	}
 	if appHostFilePath, ok := resolved["AppHostFilePath"].(string); !ok || appHostFilePath == "" {
 		if appHostFilePath := os.Getenv("ASPIRE_APPHOST_FILEPATH"); appHostFilePath != "" { resolved["AppHostFilePath"] = appHostFilePath }

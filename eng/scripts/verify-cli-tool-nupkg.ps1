@@ -151,13 +151,27 @@ try {
     Expand-Nupkg $ridPackage $ridExtract
     Expand-Nupkg $pointerPackage $pointerExtract
 
+    # Discover the TFM from the nupkg layout (tools/<tfm>/<rid>/) rather than
+    # hardcoding it. dotnet pack produces exactly one tfm directory per RID nupkg.
+    $toolsDir = Join-Path $ridExtract 'tools'
+    if (-not (Test-Path -LiteralPath $toolsDir -PathType Container)) {
+        throw "RID package $($ridPackage.Name) is missing the 'tools/' directory."
+    }
+    $tfmDirs = Get-ChildItem -Path $toolsDir -Directory -ErrorAction SilentlyContinue
+    if (-not $tfmDirs -or $tfmDirs.Count -ne 1) {
+        $found = if ($tfmDirs) { ($tfmDirs.Name -join ', ') } else { '(none)' }
+        throw "RID package $($ridPackage.Name) must contain exactly one tools/<tfm>/ directory; found: $found."
+    }
+    $tfm = $tfmDirs[0].Name
+    Write-Step "Detected TFM: $tfm"
+
     $binaryName = if ($Rid -like 'win-*') { 'aspire.exe' } else { 'aspire' }
     $toolBinary = Get-ChildItem -Path $ridExtract -Recurse -File -Filter $binaryName -ErrorAction SilentlyContinue | Select-Object -First 1
     if (-not $toolBinary) {
         throw "Could not find $binaryName in RID package $($ridPackage.Name)."
     }
 
-    $expectedBinaryPath = "tools/net10.0/$Rid/$binaryName"
+    $expectedBinaryPath = "tools/$tfm/$Rid/$binaryName"
     $relativeBinaryPath = $toolBinary.FullName.Substring($ridExtract.Length + 1).Replace('\', '/')
     if ($relativeBinaryPath -ne $expectedBinaryPath) {
         throw "Expected binary at '$expectedBinaryPath', but found '$relativeBinaryPath'."
@@ -189,11 +203,54 @@ try {
         throw "RID package contains managed publish artifacts: $($managedArtifacts.Name -join ', ')"
     }
 
+    # The install-source sidecar (.aspire-install.json) MUST live next to the
+    # binary in the RID-specific nupkg at tools/<tfm>/<rid>/. The CLI reads it
+    # to identify the install source; a missing sidecar leaves
+    # 'aspire update --self' unable to delegate.
+    $expectedSidecarPath = "tools/$tfm/$Rid/.aspire-install.json"
+    $sidecarFullPath = Join-Path $ridExtract $expectedSidecarPath.Replace('/', [System.IO.Path]::DirectorySeparatorChar)
+    if (-not (Test-Path -LiteralPath $sidecarFullPath)) {
+        throw "RID package $($ridPackage.Name) is missing the source sidecar at '$expectedSidecarPath'."
+    }
+
+    $sidecarRaw = Get-Content -LiteralPath $sidecarFullPath -Raw
+    try {
+        $sidecarJson = $sidecarRaw | ConvertFrom-Json -ErrorAction Stop
+    }
+    catch {
+        throw "RID package sidecar at '$expectedSidecarPath' is not valid JSON: $($_.Exception.Message)"
+    }
+
+    if (-not $sidecarJson.PSObject.Properties.Match('source') -or [string]::IsNullOrWhiteSpace([string]$sidecarJson.source)) {
+        throw "RID package sidecar at '$expectedSidecarPath' is missing the required 'source' field."
+    }
+
+    # The RID-specific tool nupkg is always installed via `dotnet tool install -g`.
+    # The sidecar's source must pin to 'dotnet-tool' so the CLI can route
+    # `aspire update --self` to the correct delegating command. Other source
+    # values would mis-identify the install and break self-update.
+    if ([string]$sidecarJson.source -ne 'dotnet-tool') {
+        throw "RID package sidecar at '$expectedSidecarPath' has source='$($sidecarJson.source)'; expected 'dotnet-tool' for the dotnet-tool nupkg."
+    }
+
+    Write-Step "RID package contains valid sidecar (source='dotnet-tool')."
+
     $pointerBinary = Get-ChildItem -Path $pointerExtract -Recurse -File -Filter 'aspire*' -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -eq 'aspire' -or $_.Name -eq 'aspire.exe' }
     if ($pointerBinary) {
         throw "Pointer package should not contain native binaries: $($pointerBinary.Name -join ', ')"
     }
+
+    # The pointer nupkg is a routing stub. It must NOT carry the source sidecar:
+    # presence here would make the SDK consider the pointer a self-contained
+    # install and break source discovery on the consumer side.
+    $pointerSidecar = Get-ChildItem -Path $pointerExtract -Recurse -File -Filter '.aspire-install.json' -Force -ErrorAction SilentlyContinue
+    if ($pointerSidecar) {
+        $pointerSidecarPaths = $pointerSidecar | ForEach-Object { $_.FullName.Substring($pointerExtract.Length + 1).Replace('\', '/') }
+        throw "Pointer package $($pointerPackage.Name) must not contain '.aspire-install.json'. Found: $($pointerSidecarPaths -join ', ')"
+    }
+
+    Write-Step "Pointer package correctly omits the source sidecar."
 
     $pointerNuspec = Get-ChildItem -Path $pointerExtract -Filter '*.nuspec' -File | Select-Object -First 1
     if (-not $pointerNuspec) {

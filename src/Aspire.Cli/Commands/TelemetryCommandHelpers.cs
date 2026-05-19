@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Mcp.Tools;
 using Aspire.Cli.Resources;
@@ -201,7 +202,7 @@ internal static class TelemetryCommandHelpers
         if (projectFile is not null && dashboardUrl is not null)
         {
             interactionService.DisplayError(TelemetryCommandStrings.DashboardUrlAndAppHostExclusive);
-            return DashboardApiResult.Failure(ExitCodeConstants.InvalidCommand);
+            return DashboardApiResult.Failure(CliExitCodes.InvalidCommand);
         }
 
         // Direct dashboard URL mode — bypass AppHost discovery
@@ -220,7 +221,7 @@ internal static class TelemetryCommandHelpers
                     new TelemetryErrorInfo(
                         string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardUrlInvalid, dashboardUrl),
                         TelemetryCommandStrings.DashboardUrlInvalidHint));
-                return DashboardApiResult.Failure(ExitCodeConstants.InvalidCommand);
+                return DashboardApiResult.Failure(CliExitCodes.InvalidCommand);
             }
 
             // If no explicit --api-key was provided but a login token was found in the URL,
@@ -245,7 +246,7 @@ internal static class TelemetryCommandHelpers
                             TelemetryCommandStrings.DashboardLoginTokenFailedAnonymousHint),
                     };
                     DisplayTelemetryError(interactionService, errorInfo);
-                    return DashboardApiResult.Failure(ExitCodeConstants.DashboardFailure);
+                    return DashboardApiResult.Failure(CliExitCodes.DashboardFailure);
                 }
 
                 apiKey = exchangeResult.ApiKey;
@@ -279,7 +280,7 @@ internal static class TelemetryCommandHelpers
                     new TelemetryErrorInfo(
                         TelemetryCommandStrings.DashboardNotAvailable,
                         TelemetryCommandStrings.DashboardNotAvailableHint));
-                return DashboardApiResult.Failure(ExitCodeConstants.DashboardFailure);
+                return DashboardApiResult.Failure(CliExitCodes.DashboardFailure);
             }
 
             // Dashboard is optional — return success with null API info
@@ -573,12 +574,12 @@ internal static class TelemetryCommandHelpers
     {
         return severityNumber switch
         {
-            >= 21 => "CRIT",
-            >= 17 => "FAIL",
-            >= 13 => "WARN",
-            >= 9 => "INFO",
-            >= 5 => "DBUG",
-            >= 1 => "TRCE",
+            >= 21 => CliLogFormat.FileLevelTokens.Critical,
+            >= 17 => CliLogFormat.FileLevelTokens.Error,
+            >= 13 => CliLogFormat.FileLevelTokens.Warning,
+            >= 9 => CliLogFormat.FileLevelTokens.Information,
+            >= 5 => CliLogFormat.FileLevelTokens.Debug,
+            >= 1 => CliLogFormat.FileLevelTokens.Trace,
             _ => "-"
         };
     }

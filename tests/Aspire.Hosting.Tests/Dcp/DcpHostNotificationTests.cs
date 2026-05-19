@@ -593,6 +593,30 @@ public sealed class DcpHostNotificationTests
         }, options).Dispose();
     }
 
+    [Fact]
+    public void CreateDcpProcessSpec_MapsAspireProfilingConfigurationToDcpOtelEnvironmentVariables()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [KnownConfigNames.ProfilingEnabled] = "true",
+                [KnownConfigNames.ProfilingSessionId] = "profile-session",
+                [KnownConfigNames.Legacy.StartupTraceParent] = "00-11111111111111111111111111111111-2222222222222222-01",
+                [KnownConfigNames.Legacy.StartupTraceState] = "vendor=value"
+            })
+            .Build();
+
+        var dcpHost = CreateDcpHostForProcessSpecTests(configuration: configuration);
+        var locations = CreateTestLocations();
+
+        var processSpec = dcpHost.CreateDcpProcessSpec(locations);
+
+        Assert.Equal("true", processSpec.EnvironmentVariables[KnownConfigNames.DcpOtelStartupProfilingEnabled]);
+        Assert.Equal("profile-session", processSpec.EnvironmentVariables[KnownConfigNames.DcpOtelProfilingSessionId]);
+        Assert.Equal("00-11111111111111111111111111111111-2222222222222222-01", processSpec.EnvironmentVariables[KnownConfigNames.DcpOtelStartupTraceParent]);
+        Assert.Equal("vendor=value", processSpec.EnvironmentVariables[KnownConfigNames.DcpOtelStartupTraceState]);
+    }
+
     private static DcpHost CreateDcpHostForProcessSpecTests(
         IDeveloperCertificateService? developerCertificateService = null,
         IConfiguration? configuration = null,

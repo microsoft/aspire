@@ -24,7 +24,7 @@ public class ApiCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("docs api");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
     }
 
     [Fact]
@@ -41,7 +41,7 @@ public class ApiCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("docs api list csharp");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -58,7 +58,7 @@ public class ApiCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("docs api search emulator --language typescript --format json");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -75,7 +75,7 @@ public class ApiCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("docs api get csharp/aspire.test.package/testtype");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -92,7 +92,7 @@ public class ApiCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("docs api get missing/id");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.NotEqual(ExitCodeConstants.Success, exitCode);
+        Assert.NotEqual(CliExitCodes.Success, exitCode);
     }
 }
 

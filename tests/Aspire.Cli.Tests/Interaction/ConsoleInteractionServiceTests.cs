@@ -611,6 +611,63 @@ public class ConsoleInteractionServiceTests
     }
 
     [Fact]
+    public void DisplayError_WritesToStderr_RegardlessOfConsoleSetting()
+    {
+        var stdoutOutput = new StringBuilder();
+        var stderrOutput = new StringBuilder();
+        var stdoutConsole = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(stdoutOutput))
+        });
+        var stderrConsole = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(stderrOutput))
+        });
+
+        var executionContext = CreateExecutionContext();
+        var consoleEnvironment = new ConsoleEnvironment(stdoutConsole, stderrConsole);
+        var interactionService = new ConsoleInteractionService(consoleEnvironment, executionContext, TestHelpers.CreateInteractiveHostEnvironment(), NullLoggerFactory.Instance);
+
+        // Console defaults to Standard (stdout), but errors should still go to stderr
+        interactionService.DisplayError("Something went wrong");
+
+        Assert.Empty(stdoutOutput.ToString());
+        Assert.Contains("Something went wrong", stderrOutput.ToString());
+    }
+
+    [Fact]
+    public void DisplayMessage_WritesToStdout_WhenConsoleIsStandard()
+    {
+        var stdoutOutput = new StringBuilder();
+        var stderrOutput = new StringBuilder();
+        var stdoutConsole = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(stdoutOutput))
+        });
+        var stderrConsole = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(stderrOutput))
+        });
+
+        var executionContext = CreateExecutionContext();
+        var consoleEnvironment = new ConsoleEnvironment(stdoutConsole, stderrConsole);
+        var interactionService = new ConsoleInteractionService(consoleEnvironment, executionContext, TestHelpers.CreateInteractiveHostEnvironment(), NullLoggerFactory.Instance);
+
+        interactionService.DisplayMessage(KnownEmojis.Information, "Status update");
+
+        Assert.Contains("Status update", stdoutOutput.ToString());
+        Assert.Empty(stderrOutput.ToString());
+    }
+
+    [Fact]
     public void DisplayMessage_WithUnescapedMarkup_AutoEscapesAndDoesNotThrow()
     {
         // Arrange - verifies that DisplayMessage auto-escapes by default

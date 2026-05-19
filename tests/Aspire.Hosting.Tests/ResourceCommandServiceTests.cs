@@ -412,6 +412,26 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         Assert.True(result.Success);
     }
 
+    [Theory]
+    [InlineData("set-parameter", "parameter-set")]
+    [InlineData("delete-parameter", "parameter-delete")]
+    public async Task ExecuteCommandAsync_LegacyParameterCommandName_FallsBackToCurrentName(string currentCommandName, string legacyCommandName)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: currentCommandName,
+                displayName: "Parameter command",
+                executeCommand: _ => Task.FromResult(new ExecuteCommandResult { Success = true }));
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(custom.Resource, legacyCommandName);
+
+        Assert.True(result.Success);
+    }
+
     [Fact]
     public async Task ExecuteCommandAsync_SuccessWithResult_ReturnsResultData()
     {
@@ -662,6 +682,70 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
 
         Assert.Equal("Unknown argument 'selecter' for command 'mycommand'.", errorMessage);
         Assert.Null(arguments.GetString("selector"));
+    }
+
+    [Fact]
+    public async Task CreateCommandArguments_DisabledNamedArgumentValues_ReturnsError()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: _ => Task.FromResult(CommandResults.Success()),
+                commandOptions: new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "saveToUserSecrets",
+                            InputType = InputType.Boolean,
+                            Disabled = true
+                        }
+                    ]
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var argumentValues = new Dictionary<string, string?> { ["saveToUserSecrets"] = "true" };
+        var (arguments, errorMessage) = app.ResourceCommands.CreateCommandArguments("myResource", "mycommand", argumentValues);
+
+        Assert.Equal("Argument 'saveToUserSecrets' for command 'mycommand' is disabled.", errorMessage);
+        Assert.Equal("true", arguments.GetString("saveToUserSecrets"));
+    }
+
+    [Fact]
+    public async Task CreateCommandArguments_DisabledOrderedArgumentValues_ReturnsError()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: _ => Task.FromResult(CommandResults.Success()),
+                commandOptions: new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "saveToUserSecrets",
+                            InputType = InputType.Boolean,
+                            Disabled = true
+                        }
+                    ]
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        IReadOnlyList<string?> argumentValues = ["true"];
+        var (arguments, errorMessage) = app.ResourceCommands.CreateCommandArguments("myResource", "mycommand", argumentValues);
+
+        Assert.Equal("Argument 'saveToUserSecrets' for command 'mycommand' is disabled.", errorMessage);
+        Assert.Equal("true", arguments.GetString("saveToUserSecrets"));
     }
 
     [Fact]

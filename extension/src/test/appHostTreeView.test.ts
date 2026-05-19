@@ -351,21 +351,21 @@ suite('getResourceContextValue', () => {
 
     test('resource with start command', () => {
         const result = getResourceContextValue(makeResource({
-            commands: { 'start': { description: null } },
+            commands: { 'start': { displayName: null, description: null } },
         }));
         assert.strictEqual(result, 'resource:canStart');
     });
 
     test('resource with resource-start command', () => {
         const result = getResourceContextValue(makeResource({
-            commands: { 'resource-start': { description: null } },
+            commands: { 'resource-start': { displayName: null, description: null } },
         }));
         assert.strictEqual(result, 'resource:canStart');
     });
 
     test('resource with stop command', () => {
         const result = getResourceContextValue(makeResource({
-            commands: { 'stop': { description: null } },
+            commands: { 'stop': { displayName: null, description: null } },
         }));
         assert.strictEqual(result, 'resource:canStop');
     });
@@ -373,9 +373,9 @@ suite('getResourceContextValue', () => {
     test('resource with all lifecycle commands', () => {
         const result = getResourceContextValue(makeResource({
             commands: {
-                'start': { description: null },
-                'stop': { description: null },
-                'restart': { description: null },
+                'start': { displayName: null, description: null },
+                'stop': { displayName: null, description: null },
+                'restart': { displayName: null, description: null },
             },
         }));
         assert.strictEqual(result, 'resource:canStart:canStop:canRestart');
@@ -383,7 +383,7 @@ suite('getResourceContextValue', () => {
 
     test('resource with non-lifecycle commands has base context only', () => {
         const result = getResourceContextValue(makeResource({
-            commands: { 'custom-action': { description: 'do something' } },
+            commands: { 'custom-action': { displayName: null, description: 'do something' } },
         }));
         assert.strictEqual(result, 'resource');
     });
@@ -391,8 +391,8 @@ suite('getResourceContextValue', () => {
     test('resource with mixed lifecycle and custom commands', () => {
         const result = getResourceContextValue(makeResource({
             commands: {
-                'restart': { description: null },
-                'custom-action': { description: null },
+                'restart': { displayName: null, description: null },
+                'custom-action': { displayName: null, description: null },
             },
         }));
         assert.strictEqual(result, 'resource:canRestart');
@@ -629,6 +629,69 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
 
         // Workspace tree builds no top-level item when there are no resources, so no match.
         assert.strictEqual(result, undefined);
+        provider.dispose();
+    });
+
+    test('workspace mode renders a running AppHost with no resources', () => {
+        const hostPath = '/repo/AppHost/AppHost.csproj';
+        const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
+        const repository = {
+            viewMode: 'workspace' as ViewMode,
+            appHosts: [],
+            workspaceResources: [],
+            workspaceAppHost: makeAppHost({
+                appHostPath: hostPath,
+                appHostPid: 1234,
+                cliPid: 5678,
+                dashboardUrl: 'https://localhost:17193/login?t=token',
+                resources: [],
+            }),
+            workspaceAppHostPath: hostPath,
+            workspaceAppHostName: 'AppHost.csproj',
+            onDidChangeData,
+        } as unknown as AppHostDataRepository;
+        const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider());
+
+        const [appHostItem] = provider.getChildren();
+        const appHostChildren = provider.getChildren(appHostItem);
+        const result = provider.findAppHostElement(hostPath);
+
+        assert.ok(appHostItem, 'Expected a workspace AppHost item');
+        assert.strictEqual(appHostItem.label, 'AppHost.csproj');
+        assert.strictEqual(appHostChildren.length, 3);
+        assert.ok(result, 'Expected to find the zero-resource workspace AppHost');
+        provider.dispose();
+    });
+
+    test('workspace mode does not render ps resources before describe resources arrive', () => {
+        const hostPath = '/repo/AppHost/AppHost.csproj';
+        const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
+        const repository = {
+            viewMode: 'workspace' as ViewMode,
+            appHosts: [],
+            workspaceResources: [],
+            workspaceAppHost: makeAppHost({
+                appHostPath: hostPath,
+                appHostPid: 1234,
+                cliPid: 5678,
+                dashboardUrl: 'https://localhost:17193/login?t=token',
+                resources: [
+                    makeResource({ name: 'api', displayName: 'api' }),
+                    makeResource({ name: 'api-child', displayName: 'api-child', properties: { 'resource.parentName': 'api' } }),
+                ],
+            }),
+            workspaceAppHostPath: hostPath,
+            workspaceAppHostName: 'AppHost.csproj',
+            onDidChangeData,
+        } as unknown as AppHostDataRepository;
+        const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider());
+
+        const [appHostItem] = provider.getChildren();
+        const appHostChildren = provider.getChildren(appHostItem);
+
+        assert.ok(appHostItem, 'Expected a workspace AppHost item');
+        assert.strictEqual(appHostChildren.length, 3);
+        assert.ok(!appHostChildren.some(child => child.label === 'api'));
         provider.dispose();
     });
 

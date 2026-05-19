@@ -49,7 +49,7 @@ RUN if [ "$SKIP_SOURCE_BUILD" != "true" ]; then \
 # ============================================================
 # Stage 2: Polyglot test runtime environment (no .NET SDK)
 # ============================================================
-FROM ubuntu:24.04 AS runtime
+FROM mcr.microsoft.com/mirror/docker/library/ubuntu:24.04 AS runtime
 
 ARG UBUNTU_APT_MIRROR=
 

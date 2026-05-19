@@ -38,7 +38,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.DashboardFailure, exitCode);
+        Assert.Equal(CliExitCodes.DashboardFailure, exitCode);
         var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
         Assert.Equal(DashboardCommandStrings.BundleLayoutNotFound, errorMessage);
     }
@@ -55,7 +55,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Theory]
@@ -147,7 +147,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.NotNull(capturedArgs);
         Assert.DoesNotContain(capturedArgs, arg => arg.Contains("ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS"));
     }
@@ -167,7 +167,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.NotNull(capturedArgs);
         Assert.Collection(capturedArgs,
             arg => Assert.Equal("dashboard", arg),
@@ -197,7 +197,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.NotNull(capturedArgs);
         Assert.Contains(expectedArg, capturedArgs);
     }
@@ -217,7 +217,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.NotNull(capturedEnv);
         Assert.True(capturedEnv.ContainsKey("DASHBOARD__FRONTEND__BROWSERTOKEN"));
         Assert.False(string.IsNullOrEmpty(capturedEnv["DASHBOARD__FRONTEND__BROWSERTOKEN"]));
@@ -241,7 +241,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.NotNull(capturedArgs);
         Assert.Collection(capturedArgs,
             arg => Assert.Equal("dashboard", arg),
@@ -267,7 +267,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.NotNull(capturedArgs);
         Assert.Collection(capturedArgs,
             arg => Assert.Equal("dashboard", arg),
@@ -294,7 +294,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.DashboardFailure, exitCode);
+        Assert.Equal(CliExitCodes.DashboardFailure, exitCode);
     }
 
     [Fact]
@@ -325,7 +325,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.DashboardFailure, exitCode);
+        Assert.Equal(CliExitCodes.DashboardFailure, exitCode);
         var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
         var expectedMessage = string.Format(CultureInfo.CurrentCulture, DashboardCommandStrings.DashboardFailedToStart, $"Failed to start process: {managedPath}");
         Assert.Equal(expectedMessage, errorMessage);
@@ -363,8 +363,8 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await pendingRun.DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
-        Assert.Equal(1, testInteractionService.DisplayCancellationMessageCount);
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Single(testInteractionService.DisplayedCancellations);
     }
 
     [Theory]
@@ -484,13 +484,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var logFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "cli [dashboard].log");
-        var executionContext = new CliExecutionContext(
-            workingDirectory: workspace.WorkspaceRoot,
-            hivesDirectory: workspace.WorkspaceRoot,
-            cacheDirectory: workspace.WorkspaceRoot,
-            sdksDirectory: workspace.WorkspaceRoot,
-            logsDirectory: workspace.WorkspaceRoot,
-            logFilePath: logFilePath);
+        var executionContext = workspace.CreateExecutionContext(logFilePath: logFilePath);
 
         var interactionService = new ConsoleInteractionService(
             new ConsoleEnvironment(console, console),
@@ -549,12 +543,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
     private static CliExecutionContext CreateExecutionContext(TemporaryWorkspace workspace, Dictionary<string, string?> envVars)
     {
-        var dir = workspace.WorkspaceRoot;
-        var hivesDir = new DirectoryInfo(Path.Combine(dir.FullName, ".aspire", "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(dir.FullName, ".aspire", "cache"));
-        var logsDir = new DirectoryInfo(Path.Combine(dir.FullName, ".aspire", "logs"));
-        var logFile = Path.Combine(logsDir.FullName, "test.log");
-        return new CliExecutionContext(dir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-sdks")), logsDir, logFile, environmentVariables: envVars);
+        return workspace.CreateExecutionContext(environmentVariables: envVars);
     }
 
     private sealed class FakeLayoutDiscovery(LayoutConfiguration layout) : ILayoutDiscovery

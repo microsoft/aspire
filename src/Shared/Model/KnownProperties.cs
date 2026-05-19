@@ -30,6 +30,7 @@ internal static class KnownProperties
         public const string AppArgs = "resource.appArgs";
         public const string AppArgsSensitivity = "resource.appArgsSensitivity";
         public const string ExcludeFromMcp = "resource.excludeFromMcp";
+        public const string WaitingFor = "resource.waitingFor";
     }
 
     public static class Container

@@ -13,6 +13,7 @@ using System.Threading.Channels;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
+using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Tests.Utils;
 using k8s.Models;
 using Microsoft.AspNetCore.InternalTesting;
@@ -3823,7 +3824,8 @@ public class DcpExecutorTests
             dcpEvts,
             appResources,
             executableCreator,
-            containerCreator);
+            containerCreator,
+            new ProfilingTelemetry(configuration));
     }
 
     private static bool RetryTillTrueOrTimeout(Func<bool> check, int timeoutMilliseconds)

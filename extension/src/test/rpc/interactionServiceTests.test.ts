@@ -173,6 +173,23 @@ suite('InteractionService endpoints', () => {
 		showInformationMessageSpy.restore();
 	});
 
+	test("displaySuccess clears active progress notification", async () => {
+		const testInfo = await createTestRpcServer();
+		const showInformationMessageStub = sinon.stub(vscode.window, 'showInformationMessage').resolves();
+
+		try {
+			testInfo.interactionService.showStatus('Executing test command...');
+			assert.strictEqual((testInfo.interactionService as any)._progressNotifier.isActive, true);
+
+			testInfo.interactionService.displaySuccess('Test success message');
+
+			assert.strictEqual((testInfo.interactionService as any)._progressNotifier.isActive, false);
+		}
+		finally {
+			showInformationMessageStub.restore();
+		}
+	});
+
 	test("displaySubtleMessage endpoint", async () => {
 		const testInfo = await createTestRpcServer();
 		const setStatusBarMessageSpy = sinon.spy(vscode.window, 'setStatusBarMessage');

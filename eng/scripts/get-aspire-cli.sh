@@ -1053,6 +1053,18 @@ main() {
         exit 1
     fi
 
+    # Write the script-route install-source sidecar next to the binary.
+    # Under --dry-run, print the target path and skip the write.
+    # Authorship contract: docs/specs/install-routes.md.
+    local sidecar_path
+    sidecar_path="$INSTALL_PATH/.aspire-install.json"
+    if [[ "$DRY_RUN" == true ]]; then
+        printf 'DRYRUN: would write route sidecar to: %s\n' "$sidecar_path"
+    else
+        mkdir -p "$INSTALL_PATH"
+        printf '{"source":"script"}\n' > "$sidecar_path"
+    fi
+
     # Skip PATH configuration if --skip-path is set
     if [[ "$SKIP_PATH" != true ]]; then
         # Handle GitHub Actions environment

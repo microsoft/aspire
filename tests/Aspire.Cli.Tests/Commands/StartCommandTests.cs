@@ -1,12 +1,17 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Projects;
+using Aspire.Cli.Resources;
+using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -24,7 +29,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -38,7 +43,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("start --no-build --help");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -52,7 +57,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("start --format json --help");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -66,7 +71,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
         var result = command.Parse("start --isolated --help");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]
@@ -112,7 +117,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.FailedToFindProject, exitCode);
+        Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
     }
 
     [Fact]
@@ -142,6 +147,78 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.FailedToFindProject, exitCode);
+        Assert.Equal(CliExitCodes.FailedToFindProject, exitCode);
+    }
+
+    [Fact]
+    public async Task StartCommand_LaunchFailure_DisplaysBothLogPaths()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+
+        // Create a fake .csproj file so the path exists on disk for the process launcher.
+        var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+
+        // Use TestProjectLocator to bypass msbuild evaluation and return the fake project directly.
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.CliHostEnvironmentFactory = sp =>
+            {
+                var configuration = sp.GetRequiredService<IConfiguration>();
+                return new CliHostEnvironment(configuration, nonInteractive: true);
+            };
+        });
+
+        // Replace TimeProvider with one that immediately exceeds the backchannel wait
+        // timeout so the test doesn't wait for a real process to exit.
+        services.Replace(ServiceDescriptor.Singleton<TimeProvider>(new InstantTimeoutTimeProvider()));
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"start --apphost {appHostFile.FullName}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+
+        var executionContext = provider.GetRequiredService<CliExecutionContext>();
+        var expectedCliLogMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, executionContext.LogFilePath);
+
+        // The AppHost log path should have been set on the execution context and
+        // BaseCommand's shared error handling should display both paths.
+        Assert.NotNull(executionContext.AppHostCliLogFilePath);
+        Assert.Contains(interactionService.DisplayedMessages, m => m.Message == expectedCliLogMessage);
+
+        var expectedAppHostLogMessage = string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeAppHostLogsAt, executionContext.AppHostCliLogFilePath);
+        Assert.Contains(interactionService.DisplayedMessages, m => m.Message == expectedAppHostLogMessage);
+    }
+
+    /// <summary>
+    /// A TimeProvider that causes the backchannel wait loop to time out immediately.
+    /// The first call (used for <c>startTime</c>) returns the base time; subsequent
+    /// calls return a time 200 seconds later, exceeding the 120-second timeout.
+    /// </summary>
+    private sealed class InstantTimeoutTimeProvider : TimeProvider
+    {
+        private int _callCount;
+        private readonly DateTimeOffset _start = DateTimeOffset.UtcNow;
+
+        public override DateTimeOffset GetUtcNow()
+        {
+            return Interlocked.Increment(ref _callCount) <= 1
+                ? _start
+                : _start.AddSeconds(200);
+        }
     }
 }

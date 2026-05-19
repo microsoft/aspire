@@ -61,7 +61,7 @@ internal sealed class DocsListCommand : BaseCommand
 
         if (docs.Count is 0)
         {
-            return CommandResult.Failure(ExitCodeConstants.InvalidCommand, DocsCommandStrings.NoDocumentationAvailable);
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, DocsCommandStrings.NoDocumentationAvailable);
         }
 
         if (format is OutputFormat.Json)

@@ -302,6 +302,34 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
     }
 
     /// <inheritdoc />
+    public async Task<WaitForAppHostReadyResponse?> WaitForAppHostReadyAsync(CancellationToken cancellationToken = default)
+    {
+        if (!SupportsV3)
+        {
+            return null;
+        }
+
+        var rpc = EnsureConnected();
+
+        _logger.LogDebug("Waiting for AppHost startup readiness");
+
+        try
+        {
+            return await rpc.InvokeWithProfilingAsync<WaitForAppHostReadyResponse>(
+                _profilingTelemetry,
+                "auxiliary",
+                "WaitForAppHostReadyAsync",
+                [new WaitForAppHostReadyRequest()],
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (RemoteMethodNotFoundException ex)
+        {
+            _logger.LogDebug(ex, "WaitForAppHostReadyAsync RPC method not available on the remote AppHost. The AppHost may be running an older version.");
+            return null;
+        }
+    }
+
+    /// <inheritdoc />
     public async Task<List<ResourceSnapshot>> GetResourceSnapshotsAsync(bool includeHidden, CancellationToken cancellationToken = default)
     {
         var rpc = EnsureConnected();
@@ -457,7 +485,8 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
                 AspireHostVersion = "unknown",
                 AppHostPath = legacyInfo.AppHostPath,
                 CliProcessId = legacyInfo.CliProcessId,
-                StartedAt = legacyInfo.StartedAt
+                StartedAt = legacyInfo.StartedAt,
+                CliLogFilePath = legacyInfo.CliLogFilePath
             };
         }
 
