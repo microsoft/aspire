@@ -1465,6 +1465,168 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PrepareAsync_WithProjectReferencesAndExplicitChannelButNoOverride_UsesAdditionalSourcesNotRestoreConfigFile()
+    {
+        // Regression for finding #1 of the 2026-05-19 post-merge review: a project-ref restore
+        // with an explicit channel pin (daily/staging/pr-*) and NO --source must not replace the
+        // user's ambient nuget.config via <RestoreConfigFile>. The channel sources flow through
+        // additively via <RestoreAdditionalProjectSources> so private/internal feeds the user
+        // has configured in nuget.config remain reachable for non-Aspire transitives.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
+        XDocument? generatedProject = null;
+
+        var aspireConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(aspireConfigPath, """
+            {
+                "channel": "daily"
+            }
+            """);
+
+        var closureFiles = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["MyIntegration.dll"] = "integration-v1"
+        };
+        var dotNetCliRunner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (projectFilePath, _, _, _) =>
+            {
+                generatedProject = XDocument.Load(projectFilePath.FullName);
+                WriteClosureInputs(projectFilePath.Directory!, closureFiles, ["MyIntegration"]);
+                return 0;
+            }
+        };
+
+        var dailyChannel = PackageChannel.CreateExplicitChannel(
+            name: "daily",
+            quality: PackageChannelQuality.Both,
+            mappings: [new PackageMapping("Aspire*", channelSource)],
+            nuGetPackageCache: new FakeNuGetPackageCache());
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel])
+        };
+
+        var nugetService = new BundleNuGetService(
+            new NullLayoutDiscovery(),
+            new LayoutProcessRunner(new TestProcessExecutionFactory()),
+            new TestFeatures(),
+            TestExecutionContextFactory.CreateTestContext(),
+            NullLogger<BundleNuGetService>.Instance);
+        var server = new PrebuiltAppHostServer(
+            workspace.WorkspaceRoot.FullName,
+            "test.sock",
+            new LayoutConfiguration(),
+            nugetService,
+            dotNetCliRunner,
+            new TestDotNetSdkInstaller(),
+            packagingService,
+            TestExecutionContextFactory.CreateTestContext(),
+            NullLogger.Instance);
+        var workingDirectory = GetWorkingDirectory(server);
+
+        try
+        {
+            var result = await server.PrepareAsync(
+                "13.4.0-pr.17141.gf142085f",
+                [
+                    IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.4.0-pr.17141.gf142085f"),
+                    IntegrationReference.FromProject("MyIntegration", "/path/to/MyIntegration.csproj")
+                ]);
+
+            Assert.True(result.Success);
+            Assert.NotNull(generatedProject);
+
+            var ns = generatedProject!.Root!.GetDefaultNamespace();
+            Assert.Null(generatedProject.Descendants(ns + "RestoreConfigFile").FirstOrDefault());
+
+            var restoreSources = generatedProject.Descendants(ns + "RestoreAdditionalProjectSources").FirstOrDefault()?.Value;
+            Assert.NotNull(restoreSources);
+            Assert.Contains(channelSource, restoreSources!);
+
+            // Aspire package versions remain in their original (non-pinned) form when no override
+            // is in play; the exact-version pinning only fires when a single source is selected.
+            var packageElements = generatedProject.Descendants("PackageReference").ToList();
+            Assert.Contains(packageElements, e =>
+                e.Attribute("Include")?.Value == "Aspire.Hosting.Redis" &&
+                e.Attribute("Version")?.Value == "13.4.0-pr.17141.gf142085f");
+        }
+        finally
+        {
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task PrepareAsync_RestoreFailure_WithAutoDiscoveredLocalSource_FooterShowsEffectiveSource()
+    {
+        // Regression for finding #3 of the 2026-05-19 post-merge review: when the caller passes
+        // no --source but ResolveLocalPackageSourceOverrideAsync auto-discovers a local hive,
+        // the failure footer must reflect the source actually used by restore. Previously the
+        // catch blocks read the original (unset) `packageSourceOverride` argument and the user
+        // saw only the channel name, hiding that a local hive participated in the failed
+        // restore.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var localHive = workspace.CreateDirectory("local-aspire-hive").FullName;
+
+        var aspireConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(aspireConfigPath, """
+            {
+                "channel": "pr-12345"
+            }
+            """);
+
+        var prChannel = PackageChannel.CreateExplicitChannel(
+            name: "pr-12345",
+            quality: PackageChannelQuality.Both,
+            mappings: [new PackageMapping("Aspire*", localHive)],
+            nuGetPackageCache: new FakeNuGetPackageCache());
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([prChannel])
+        };
+
+        var (server, executionFactory) = CreatePackageReferenceServer(workspace, packagingService);
+        executionFactory.DefaultExitCode = 1;
+
+        var workingDirectory = GetWorkingDirectory(server);
+
+        try
+        {
+            var result = await server.PrepareAsync(
+                "13.4.0-pr.12345.gabcdef00",
+                [IntegrationReference.FromPackage("Aspire.Hosting.CodeGeneration.TypeScript", "13.4.0-pr.12345.gabcdef00")]);
+
+            Assert.False(result.Success);
+            Assert.NotNull(result.Output);
+
+            var combined = string.Join('\n', result.Output!.GetLines().Select(static line => line.Line));
+            Assert.Contains($"--source: {localHive}", combined);
+            Assert.Contains("channel:  pr-12345", combined);
+        }
+        finally
+        {
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Theory]
+    [InlineData("https://user:p@ss@host/path", "<unparseable http source>")]
+    [InlineData("https://user:p#word@host/", "<unparseable http source>")]
+    [InlineData("http://foo bar/path", "<unparseable http source>")]
+    [InlineData("HTTPS://user:p@ss@host/path", "<unparseable http source>")]
+    [InlineData("/tmp/aspire/some path with [brackets]", "/tmp/aspire/some path with [brackets]")]
+    public void RedactSourceForDisplay_FailsClosedForMalformedHttpButPassesThroughLocalPaths(string input, string expected)
+    {
+        // Regression for finding #5 of the 2026-05-19 post-merge review: HTTP-looking inputs that
+        // Uri.TryCreate cannot parse (e.g. unescaped @ or # in user-info, embedded whitespace)
+        // must return the sentinel rather than the raw input, otherwise credentials embedded in
+        // the malformed URL would leak through the failure footer / bug reports. Plain non-HTTP
+        // inputs continue to pass through unchanged because they don't carry credentials.
+        Assert.Equal(expected, PrebuiltAppHostServer.RedactSourceForDisplay(input));
+    }
+
+    [Fact]
     public async Task PrepareAsync_WithProjectReferencesAndPackageSourceOverride_UsesNuGetConfig()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

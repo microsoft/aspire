@@ -259,7 +259,8 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     /// </summary>
     public async Task<(string ProjectPath, string? ChannelName)> CreateProjectFilesAsync(
         IEnumerable<IntegrationReference> integrations,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? packageSourceOverride = null)
     {
         // Clean obj folder to ensure fresh NuGet restore
         var objPath = Path.Combine(_projectModelPath, "obj");
@@ -351,6 +352,20 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
             }
         }
 
+        // Thread an explicit `--source` override into the restore sources so the dogfood
+        // `aspire new --source <pr-hive>` flow is honored in dev mode (in-repo). Prepending
+        // makes the override the first source NuGet evaluates, which matters when the same
+        // Aspire package version exists in both the hive and a channel feed. Note: unlike
+        // PrebuiltAppHostServer this path does not emit Package Source Mappings, so NuGet
+        // may still consult other sources if the override does not satisfy a request — the
+        // override is best-effort here, sufficient for the in-repo developer scenario where
+        // most Aspire.* dependencies come from ProjectReference, not PackageReference.
+        if (!string.IsNullOrWhiteSpace(packageSourceOverride) &&
+            !channelSources.Contains(packageSourceOverride, StringComparer.OrdinalIgnoreCase))
+        {
+            channelSources.Insert(0, packageSourceOverride);
+        }
+
         // Create the project file
         var doc = CreateProjectFile(integrations);
 
@@ -425,7 +440,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         CancellationToken cancellationToken = default,
         string? packageSourceOverride = null)
     {
-        var (_, channelName) = await CreateProjectFilesAsync(integrations, cancellationToken);
+        var (_, channelName) = await CreateProjectFilesAsync(integrations, cancellationToken, packageSourceOverride);
         var (buildSuccess, buildOutput) = await BuildAsync(cancellationToken);
 
         if (!buildSuccess)

@@ -134,6 +134,11 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         var packageRefs = integrationList.Where(r => r.IsPackageReference).ToList();
         var projectRefs = integrationList.Where(r => r.IsProjectReference).ToList();
         string? requestedChannel = null;
+        // Lifted to outer scope so the failure footer reflects the source actually used by
+        // restore — including the auto-discovered local hive resolved by
+        // ResolveLocalPackageSourceOverrideAsync — rather than the unset --source the user
+        // originally passed in.
+        var effectivePackageSourceOverride = packageSourceOverride;
 
         try
         {
@@ -146,7 +151,6 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             // with a legacy .aspire/settings.json#channel fallback). This is independent of the
             // running CLI's identity hive (CliExecutionContext.IdentityChannel).
             requestedChannel = ResolveRequestedChannel();
-            var effectivePackageSourceOverride = packageSourceOverride;
             if (string.IsNullOrWhiteSpace(effectivePackageSourceOverride))
             {
                 effectivePackageSourceOverride = await ResolveLocalPackageSourceOverrideAsync(requestedChannel, cancellationToken).ConfigureAwait(false);
@@ -212,7 +216,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         catch (AppHostServerPrepareFailedException ex)
         {
             _logger.LogError(ex, "Failed to prepare prebuilt AppHost server");
-            AppendRestoreContextOnFailure(ex.Output, requestedChannel, packageSourceOverride, packageRefs);
+            AppendRestoreContextOnFailure(ex.Output, requestedChannel, effectivePackageSourceOverride, packageRefs);
             return new AppHostServerPrepareResult(
                 Success: false,
                 Output: ex.Output,
@@ -224,7 +228,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             _logger.LogError(ex, "Failed to prepare prebuilt AppHost server");
             var output = new OutputCollector();
             output.AppendError($"Failed to prepare: {ex.Message}");
-            AppendRestoreContextOnFailure(output, requestedChannel, packageSourceOverride, packageRefs);
+            AppendRestoreContextOnFailure(output, requestedChannel, effectivePackageSourceOverride, packageRefs);
             return new AppHostServerPrepareResult(
                 Success: false,
                 Output: output,
@@ -314,9 +318,17 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         var restoreDir = Path.Combine(_workingDirectory, "integration-restore");
         Directory.CreateDirectory(restoreDir);
 
-        using var temporaryNuGetConfig = await TryCreateTemporaryNuGetConfigAsync(requestedChannel, packageSourceOverride, cancellationToken);
+        // Only synthesize a temp NuGet.config (replacing nuget.config discovery via
+        // RestoreConfigFile) when the user explicitly opted into a single source via --source.
+        // The explicit-channel-no-override path keeps the user's ambient nuget.config in place
+        // and contributes channel mappings additively via RestoreAdditionalProjectSources so
+        // private/internal feeds the user has configured remain reachable for non-Aspire
+        // transitives during project-ref restore.
+        using var temporaryNuGetConfig = !string.IsNullOrWhiteSpace(packageSourceOverride)
+            ? await TryCreateTemporaryNuGetConfigAsync(requestedChannel, packageSourceOverride, cancellationToken)
+            : null;
         var channelSources = temporaryNuGetConfig is null
-            ? await GetNuGetSourcesAsync(requestedChannel, packageSourceOverride, cancellationToken)
+            ? await GetNuGetSourcesAsync(requestedChannel, packageSourceOverride: null, cancellationToken)
             : null;
         var projectContent = GenerateIntegrationProjectFile(
             packageRefs,
@@ -827,42 +839,10 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         return $"[{version}]";
     }
 
-    // Returns a display-safe form of a NuGet source for inclusion in user-visible output.
-    // For http/https feeds we strip the UserInfo, query, and fragment because users commonly
-    // pass `https://user:pat@host/...` or SAS-token URLs (`?sv=...&sig=...`) and the failure
-    // output flows into bug reports and CI logs. Local paths and other source forms (file://,
-    // bare paths on Windows/Unix) pass through unchanged — they don't carry credentials.
-    internal static string RedactSourceForDisplay(string source)
-    {
-        if (string.IsNullOrEmpty(source))
-        {
-            return source;
-        }
-
-        if (!Uri.TryCreate(source, UriKind.Absolute, out var uri) ||
-            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
-        {
-            return source;
-        }
-
-        var hasUserInfo = !string.IsNullOrEmpty(uri.UserInfo);
-        var hasQuery = !string.IsNullOrEmpty(uri.Query);
-        var hasFragment = !string.IsNullOrEmpty(uri.Fragment);
-        if (!hasUserInfo && !hasQuery && !hasFragment)
-        {
-            return source;
-        }
-
-        var builder = new UriBuilder(uri)
-        {
-            UserName = hasUserInfo ? "***" : string.Empty,
-            Password = string.Empty,
-            Query = string.Empty,
-            Fragment = string.Empty
-        };
-
-        return builder.Uri.ToString();
-    }
+    // Display-safe form of a NuGet source used in user-visible error footers. Delegates to the
+    // shared helper so the same redaction is applied wherever sources appear (failure context,
+    // debug logs in BundleNuGetService, etc.).
+    internal static string RedactSourceForDisplay(string source) => PackageSourceRedactor.RedactForDisplay(source);
 
     /// <inheritdoc />
     public (string SocketPath, Process Process, OutputCollector OutputCollector) Run(
