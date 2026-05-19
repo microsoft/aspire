@@ -172,7 +172,7 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
         var env = new Dictionary<string, object>();
         var gatewayEndpoint = gateway.GetEndpoint("https");
 
-        GatewayConfigurationBuilder.EmitProxyConfiguration(env, apps, gatewayEndpoint, httpOtlpEndpointUrl: "http://localhost:4317");
+        GatewayConfigurationBuilder.EmitProxyConfiguration(env, apps, gatewayEndpoint, httpOtlpEndpoint: "http://localhost:4317");
 
         Assert.Equal("http://localhost:4317", env["ReverseProxy__Clusters__cluster-otlp-dashboard__Destinations__d1__Address"]);
     }
@@ -321,7 +321,7 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
         };
         var env = new Dictionary<string, object>();
 
-        GatewayConfigurationBuilder.EmitProxyConfiguration(env, apps, gateway.GetEndpoint("https"), gateway.GetEndpoint("http"), httpOtlpEndpointUrl: "http://localhost:18890");
+        GatewayConfigurationBuilder.EmitProxyConfiguration(env, apps, gateway.GetEndpoint("https"), gateway.GetEndpoint("http"), httpOtlpEndpoint: "http://localhost:18890");
 
         // Each app gets its own routes — no collision between store and admin for the same service
         Assert.Equal("/store/_api/weatherapi/{**catch-all}", env["ReverseProxy__Routes__route-store-weatherapi__Match__Path"]);
@@ -411,7 +411,7 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
         var gatewayEndpoint = gateway.GetEndpoint("https");
 
         // Pass null for httpOtlpEndpointUrl — should NOT fall back to a gRPC endpoint.
-        GatewayConfigurationBuilder.EmitProxyConfiguration(env, apps, gatewayEndpoint, httpOtlpEndpointUrl: null);
+        GatewayConfigurationBuilder.EmitProxyConfiguration(env, apps, gatewayEndpoint, httpOtlpEndpoint: null);
 
         Assert.False(env.ContainsKey("ReverseProxy__Clusters__cluster-otlp-dashboard__Destinations__d1__Address"));
     }
@@ -456,7 +456,7 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
 
         GatewayConfigurationBuilder.EmitHostedProxyConfiguration(
             env, hostEndpoint, httpHostEndpoint: null, "blazorapp",
-            services, proxyTelemetry: true, httpOtlpEndpointUrl: "http://localhost:18889");
+            services, proxyTelemetry: true, httpOtlpEndpoint: "http://localhost:18889");
 
         Assert.Equal("http://localhost:18889",
             env["ReverseProxy__Clusters__cluster-otlp-dashboard__Destinations__d1__Address"]);
