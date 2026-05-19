@@ -113,9 +113,9 @@ public static class EFMigrationResourceBuilderExtensions
     /// <param name="targetRuntime">
     /// The target runtime identifier for the bundle (e.g., <c>linux-x64</c>, <c>win-x64</c>).
     /// If <see langword="null"/> and <paramref name="publishContainer"/> is <see langword="true"/>,
-    /// defaults to <c>linux-x64</c> so the bundle can run inside a Linux container image. If
-    /// <see langword="null"/> and <paramref name="publishContainer"/> is <see langword="false"/>,
-    /// the bundle targets the runtime hosting <c>aspire publish</c>.
+    /// defaults to <c>linux-x64</c> to match the default Linux base container image used for the
+    /// generated <c>Dockerfile</c>. If <see langword="null"/> and <paramref name="publishContainer"/>
+    /// is <see langword="false"/>, the bundle targets the runtime hosting <c>aspire publish</c>.
     /// </param>
     /// <param name="selfContained">
     /// If <see langword="true"/>, creates a self-contained bundle that includes the .NET runtime.
@@ -136,12 +136,23 @@ public static class EFMigrationResourceBuilderExtensions
     /// </param>
     /// <returns>The resource builder for chaining.</returns>
     /// <remarks>
+    /// <para>
     /// During <c>aspire publish</c>, the bundle executable is written to the publish output directory
     /// under the <c>efmigrations</c> folder. When <paramref name="publishContainer"/> is
     /// <see langword="true"/>, Aspire also generates a <c>Dockerfile</c> that packages the bundle into
     /// a container image; the container reads the connection string from a
     /// <c>ConnectionStrings__&lt;name&gt;</c> environment variable injected automatically for a
     /// <see cref="IResourceWithConnectionString"/> that the migration resource references or waits on.
+    /// </para>
+    /// <para>
+    /// The startup project (the project on which <c>AddEFMigrations</c> was invoked) and the
+    /// migrations project (configured via <see cref="WithMigrationsProject(IResourceBuilder{EFMigrationResource}, string)"/>
+    /// or <see cref="WithMigrationsProject{TProject}(IResourceBuilder{EFMigrationResource})"/>, if
+    /// different) must both list the target runtime in their <c>&lt;RuntimeIdentifiers&gt;</c> MSBuild property.
+    /// If <paramref name="publishContainer"/> = <see langword="true"/>, by default this means
+    /// adding at minimum <c>&lt;RuntimeIdentifiers&gt;linux-x64&lt;/RuntimeIdentifiers&gt;</c> to
+    /// both projects.
+    /// </para>
     /// </remarks>
     [AspireExport]
     public static IResourceBuilder<EFMigrationResource> PublishAsMigrationBundle(
