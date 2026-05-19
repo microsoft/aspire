@@ -1034,6 +1034,26 @@ public class AspireExportAnalyzerTests
     }
 
     [Fact]
+    public async Task DtoWithIgnoredGetOnlyMutableCollectionProperties_NoDiagnostics()
+    {
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+            using System.Collections.Generic;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            [AspireDto]
+            public class MyDtoType
+            {
+                [AspireExportIgnore(Reason = "Not part of the ATS surface.")]
+                public List<string> Items { get; } = new();
+            }
+            """, []);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
     public async Task UnionWithPrimitives_NoDiagnostics()
     {
         var test = AnalyzerTest.Create<AspireExportAnalyzer>("""

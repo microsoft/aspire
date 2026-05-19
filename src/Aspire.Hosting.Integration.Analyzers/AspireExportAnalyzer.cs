@@ -379,7 +379,7 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         ConcurrentDictionary<(string MethodName, string TargetType), ConcurrentBag<GeneratedMethodNameExport>> generatedMethodNames)
     {
         var type = (INamedTypeSymbol)context.Symbol;
-        AnalyzeDtoType(type, wellKnownTypes, context);
+        AnalyzeDtoType(type, wellKnownTypes, aspireExportIgnoreAttribute, context);
 
         var typeExportAttribute = GetContainingTypeAspireExportAttribute(type, aspireExportAttribute);
         AnalyzeContextType(type, typeExportAttribute, context.Compilation.Assembly.Identity.Name, aspireExportAttribute, aspireExportIgnoreAttribute, capabilityIds, generatedMethodNames, context.CancellationToken);
@@ -388,6 +388,7 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
     private static void AnalyzeDtoType(
         INamedTypeSymbol type,
         WellKnownTypes wellKnownTypes,
+        INamedTypeSymbol? aspireExportIgnoreAttribute,
         SymbolAnalysisContext context)
     {
         if (!HasAspireDtoAttribute(type))
@@ -397,18 +398,17 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
 
         foreach (var property in GetInstanceProperties(type))
         {
-            if (property.IsStatic ||
-                property.GetMethod?.DeclaredAccessibility != Accessibility.Public ||
-                property.SetMethod is not null ||
-                !IsMutableCollectionType(property.Type, wellKnownTypes))
+            if (IsMutableCollectionType(property.Type, wellKnownTypes) &&
+                property.SetMethod is null &&
+                !property.IsStatic &&
+                property.GetMethod?.DeclaredAccessibility == Accessibility.Public &&
+                !HasAspireExportIgnoreAttribute(property, aspireExportIgnoreAttribute))
             {
-                continue;
+                context.ReportDiagnostic(Diagnostic.Create(
+                    Diagnostics.s_dtoMutableCollectionPropertyMustBeInitSettable,
+                    property.Locations.FirstOrDefault() ?? type.Locations.FirstOrDefault() ?? Location.None,
+                    $"{type.Name}.{property.Name}"));
             }
-
-            context.ReportDiagnostic(Diagnostic.Create(
-                Diagnostics.s_dtoMutableCollectionPropertyMustBeInitSettable,
-                property.Locations.FirstOrDefault() ?? type.Locations.FirstOrDefault() ?? Location.None,
-                $"{type.Name}.{property.Name}"));
         }
     }
 

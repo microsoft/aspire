@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
@@ -19,6 +20,7 @@ internal sealed class AtsMarshaller
     private readonly AtsContext _context;
     private readonly CancellationTokenRegistry _cancellationTokenRegistry;
     private readonly Lazy<AtsCallbackProxyFactory> _callbackProxyFactory;
+    private readonly ConditionalWeakTable<UnmarshalContext, JsonSerializerOptions> _dtoJsonOptionsByContext = new();
 
     /// <summary>
     /// Creates a new marshaller instance.
@@ -233,7 +235,7 @@ internal sealed class AtsMarshaller
     {
         try
         {
-            return jsonObj.Deserialize(targetType, CreateDtoJsonOptions(context));
+            return jsonObj.Deserialize(targetType, GetDtoJsonOptions(context));
         }
         catch (Exception ex) when (ex is JsonException or NotSupportedException)
         {
@@ -242,6 +244,11 @@ internal sealed class AtsMarshaller
                 context.ParameterName ?? "unknown",
                 $"Failed to deserialize DTO '{targetType.Name}': {ex.Message}");
         }
+    }
+
+    private JsonSerializerOptions GetDtoJsonOptions(UnmarshalContext context)
+    {
+        return _dtoJsonOptionsByContext.GetValue(context, CreateDtoJsonOptions);
     }
 
     private JsonSerializerOptions CreateDtoJsonOptions(UnmarshalContext context)
