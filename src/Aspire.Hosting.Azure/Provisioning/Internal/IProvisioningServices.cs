@@ -4,6 +4,8 @@
 using Azure;
 using Azure.Core;
 using Azure.ResourceManager;
+using Azure.ResourceManager.Authorization;
+using Azure.ResourceManager.Authorization.Models;
 using Azure.ResourceManager.Resources;
 using Azure.ResourceManager.Resources.Models;
 using Azure.Security.KeyVault.Secrets;
@@ -95,6 +97,11 @@ internal interface IArmClient
     /// Gets detailed information about available resource groups including their locations.
     /// </summary>
     Task<IEnumerable<(string Name, string Location)>> GetAvailableResourceGroupsWithLocationAsync(string subscriptionId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets role assignments collection for the specified scope.
+    /// </summary>
+    IRoleAssignmentCollection GetRoleAssignments(ResourceIdentifier scope);
 }
 
 /// <summary>
@@ -163,6 +170,32 @@ internal interface IResourceGroupResource
     /// Gets ARM deployments collection.
     /// </summary>
     IArmDeploymentCollection GetArmDeployments();
+
+    /// <summary>
+    /// Deletes the resource group.
+    /// </summary>
+    Task DeleteAsync(WaitUntil waitUntil, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Lists all resources in the resource group.
+    /// </summary>
+    /// <returns>A list of resources with their name and type.</returns>
+    IAsyncEnumerable<(string Name, string ResourceType)> GetResourcesAsync(CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Abstraction for Azure RoleAssignmentCollection.
+/// </summary>
+internal interface IRoleAssignmentCollection
+{
+    /// <summary>
+    /// Creates or updates a role assignment.
+    /// </summary>
+    Task<ArmOperation<RoleAssignmentResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string roleAssignmentName,
+        RoleAssignmentCreateOrUpdateContent content,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>

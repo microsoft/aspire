@@ -10,10 +10,10 @@ await valkey
     .withPersistence({ interval: 100000000, keysChangedThreshold: 1 });
 
 // ---- Property access on ValkeyResource ----
-const _endpoint = await valkey.primaryEndpoint.get();
-const _host = await valkey.host.get();
-const _port = await valkey.port.get();
-const _uri = await valkey.uriExpression.get();
+const _endpoint = await valkey.primaryEndpoint();
+const _host = await valkey.host();
+const _port = await valkey.port();
+const _uri = await valkey.uriExpression();
 
-const _cstr = await valkey.connectionStringExpression.get();
+const _cstr = await valkey.connectionStringExpression();
 await builder.build().run();

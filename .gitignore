@@ -2,6 +2,7 @@ syntax: glob
 
 ### GitHub Agentic Workflows ###
 .github/aw/logs/
+.worktrees/
 
 ### VisualStudio ###
 
@@ -20,6 +21,7 @@ syntax: glob
 
 artifacts/
 artifacts_stage_1/
+BenchmarkDotNet.Artifacts/
 [Dd]ebug/
 [Rr]elease/
 x64/ !eng/common/cross/x64/
@@ -171,10 +173,16 @@ tests/PolyglotAppHosts/**/Java/**/*.class
 
 # Publisher Outputs
 playground/**/publish/
+playground/**/aspire-output/
+playground/**/aspire-manifest.json
 
 # TypeScript AppHost
 playground/**/dist/
 tests/PolyglotAppHosts/**/TypeScript/dist/
+
+# Go AppHost
+tests/PolyglotAppHosts/**/Go/apphost
+tests/PolyglotAppHosts/**/Go/apphost.exe
 
 # Verify
 *.received.*
@@ -191,7 +199,7 @@ extension/dist/
 extension/.localization/
 extension/out/
 extension/node_modules/
-extension/.vscode-test/
+**/.vscode-test/
 extension/.version
 
 # Generated extension localization files (regenerated from XLF during build)
@@ -205,3 +213,5 @@ extension/package.nls.*.json
 # Azure Functions local settings (may contain encrypted secrets)
 local.settings.json
 diagnostics.log
+.squad/
+tags

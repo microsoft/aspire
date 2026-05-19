@@ -17,7 +17,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("--help");
@@ -31,13 +31,54 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("--nologo --help");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task CaptureProfileOptions_AreHiddenFromHelp()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = outputWriter;
+            options.DisableAnsi = true;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("--help");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        var help = string.Join(Environment.NewLine, outputWriter.Logs);
+        Assert.DoesNotContain("--capture-profile", help, StringComparison.Ordinal);
+        Assert.DoesNotContain("--capture-profile-output", help, StringComparison.Ordinal);
+        Assert.DoesNotContain("--capture-profile-delay", help, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CaptureProfileOptions_ParseOnSubcommands()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("run --capture-profile --capture-profile-output profile.zip --capture-profile-delay 1");
+
+        Assert.Empty(result.Errors);
+        Assert.True(result.GetValue(RootCommand.CaptureProfileOption));
+        Assert.Equal("profile.zip", result.GetValue(RootCommand.CaptureProfileOutputOption)?.Name);
+        Assert.Equal(1, result.GetValue(RootCommand.CaptureProfileDelayOption));
+        Assert.DoesNotContain("--capture-profile", result.UnmatchedTokens);
     }
 
     [Theory]
@@ -59,7 +100,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
                 config[CliConfigNames.NoLogo] = value;
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var configuration = provider.GetRequiredService<IConfiguration>();
         var isNoLogo = configuration.GetBool(CliConfigNames.NoLogo, defaultValue: false);
@@ -88,7 +129,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
             options.BannerServiceFactory = _ => bannerService;
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, []);
 
@@ -110,7 +151,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
             options.FirstTimeUseNoticeSentinelFactory = _ => sentinel;
             options.BannerServiceFactory = _ => bannerService;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, []);
 
@@ -132,7 +173,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
             options.FirstTimeUseNoticeSentinelFactory = _ => sentinel;
             options.BannerServiceFactory = _ => bannerService;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, [CommonOptionNames.NoLogo]);
 
@@ -158,7 +199,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
                 config[CliConfigNames.NoLogo] = "1";
             };
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var configuration = provider.GetRequiredService<IConfiguration>();
         var noLogo = configuration.GetBool(CliConfigNames.NoLogo, defaultValue: false);
@@ -184,7 +225,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
             options.FirstTimeUseNoticeSentinelFactory = _ => sentinel;
             options.BannerServiceFactory = _ => bannerService;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, [CommonOptionNames.Banner]);
 
@@ -204,7 +245,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
         {
             options.BannerServiceFactory = _ => bannerService;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         // Invoke multiple times (simulating multiple --banner calls)
         await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, [CommonOptionNames.Banner]);
@@ -238,7 +279,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
             options.FirstTimeUseNoticeSentinelFactory = _ => sentinel;
             options.BannerServiceFactory = _ => bannerService;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, [CommonOptionNames.Banner]);
 
@@ -264,7 +305,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
             options.BannerServiceFactory = _ => bannerService;
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, []);
 
@@ -286,7 +327,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
             options.FirstTimeUseNoticeSentinelFactory = _ => sentinel;
             options.BannerServiceFactory = _ => bannerService;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, []);
 
@@ -310,7 +351,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
             options.FirstTimeUseNoticeSentinelFactory = _ => sentinel;
             options.BannerServiceFactory = _ => bannerService;
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, [flag]);
 
@@ -335,7 +376,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
             options.BannerServiceFactory = _ => bannerService;
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         // First invocation with --version: should not create sentinel
         await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, ["--version"]);
@@ -360,7 +401,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
             options.BannerServiceFactory = _ => bannerService;
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, []);
 
@@ -381,7 +422,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
             options.BannerServiceFactory = _ => bannerService;
             options.CliHostEnvironmentFactory = _ => TestHelpers.CreateNonInteractiveHostEnvironment();
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         await Program.DisplayFirstTimeUseNoticeIfNeededAsync(provider, [CommonOptionNames.Banner]);
 
@@ -393,7 +434,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var hasSetupCommand = command.Subcommands.Any(cmd => cmd.Name == "setup");
@@ -409,7 +450,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
         {
             options.BundleServiceFactory = _ => new TestBundleService(isBundle: true);
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var hasSetupCommand = command.Subcommands.Any(cmd => cmd.Name == "setup");
@@ -425,7 +466,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
         {
             options.BundleServiceFactory = _ => new TestBundleService(isBundle: true);
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
 
@@ -449,7 +490,7 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
         {
             options.BundleServiceFactory = _ => new TestBundleService(isBundle: true);
         });
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var helpWriter = new StringWriter();
@@ -462,5 +503,17 @@ public class RootCommandTests(ITestOutputHelper outputHelper)
         {
             Assert.Contains(sub.Name, helpOutput);
         }
+    }
+
+    [Fact]
+    public void RootCommand_DoesNotExposeRemovedExecSubcommand()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+
+        Assert.DoesNotContain(command.Subcommands, subcommand => subcommand.Name == "exec");
     }
 }

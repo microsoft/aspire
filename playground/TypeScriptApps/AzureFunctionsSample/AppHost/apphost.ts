@@ -6,7 +6,7 @@ import { createBuilder } from './.modules/aspire.js';
 const builder = await createBuilder();
 
 // Azure Storage with emulator (queues + blobs)
-const storage = builder.addAzureStorage("storage").runAsEmulator();
+const storage = await builder.addAzureStorage("storage").runAsEmulator();
 const queue = await storage.addQueues("queue");
 const blob = await storage.addBlobs("blob");
 const myBlobContainer = await storage.addBlobContainer("myblobcontainer");

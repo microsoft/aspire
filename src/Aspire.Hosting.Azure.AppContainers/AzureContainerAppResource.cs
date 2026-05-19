@@ -48,18 +48,22 @@ public class AzureContainerAppResource : AzureProvisioningResource
                     var containerAppEnv = (AzureContainerAppEnvironmentResource)deploymentTargetAnnotation.ComputeEnvironment!;
 
                     var domainValue = await containerAppEnv.ContainerAppDomain.GetValueAsync(ctx.CancellationToken).ConfigureAwait(false);
+                    var portalLink = await ContainerAppUrls.GetPortalLinkAsync(containerAppEnv, targetResource.Name.ToLowerInvariant(), ctx.CancellationToken).ConfigureAwait(false);
 
                     if (targetResource.TryGetEndpoints(out var endpoints) && endpoints.Any(e => e.IsExternal))
                     {
                         var endpoint = $"https://{targetResource.Name.ToLowerInvariant()}.{domainValue}";
+                        var summaryValue = $"[{endpoint}]({endpoint}) ({portalLink})";
 
-                        ctx.ReportingStep.Log(LogLevel.Information, new MarkdownString($"Successfully deployed **{targetResource.Name}** to [{endpoint}]({endpoint})"));
-                        ctx.Summary.Add(targetResource.Name, new MarkdownString($"[{endpoint}]({endpoint})"));
+                        ctx.ReportingStep.Log(LogLevel.Information, new MarkdownString($"Successfully deployed **{targetResource.Name}** to {summaryValue}"));
+                        ctx.Summary.Add(targetResource.Name, new MarkdownString(summaryValue));
                     }
                     else
                     {
-                        ctx.ReportingStep.Log(LogLevel.Information, new MarkdownString($"Successfully deployed **{targetResource.Name}** to Azure Container Apps environment **{containerAppEnv.Name}**. No public endpoints were configured."));
-                        ctx.Summary.Add(targetResource.Name, "No public endpoints");
+                        var summaryValue = $"No public endpoints ({portalLink})";
+
+                        ctx.ReportingStep.Log(LogLevel.Information, new MarkdownString($"Successfully deployed **{targetResource.Name}** to Azure Container Apps environment **{containerAppEnv.Name}**. {summaryValue}"));
+                        ctx.Summary.Add(targetResource.Name, new MarkdownString(summaryValue));
                     }
                 },
                 Tags = ["print-summary"],

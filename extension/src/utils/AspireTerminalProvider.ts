@@ -19,6 +19,40 @@ export interface AspireTerminal {
     dispose: () => void;
 }
 
+export interface SendAspireCommandOptions {
+    redactAdditionalArgs?: boolean;
+}
+
+/**
+ * Quotes a single argument for safe interpolation into a shell command line.
+ *
+ * Windows: The output targets PowerShell (powershell.exe / pwsh.exe), which is
+ * VS Code's default integrated terminal on Windows. The argument is wrapped in
+ * double quotes and the interpolation-significant characters (backtick, double
+ * quote, dollar sign) are backtick-escaped. This form is NOT safe for cmd.exe;
+ * users who have configured cmd.exe as their default terminal may see
+ * unexpected behavior. End-to-end coverage through a real child process is
+ * out of scope for this helper.
+ *
+ * Unix: The output uses POSIX single-quote quoting, which is interpreted the
+ * same way by bash, zsh, dash, sh, and fish. Embedded single quotes are split
+ * out and rejoined with a double-quoted single quote.
+ *
+ * @param arg The raw argument value to quote.
+ * @param platform Override for the target platform. Defaults to
+ * `process.platform`, but tests pass an explicit value to validate both
+ * branches regardless of the host OS.
+ */
+export function quoteShellArg(arg: string, platform: NodeJS.Platform = process.platform): string {
+    if (platform === 'win32') {
+        // Order matters: escape backticks first so that the backticks we
+        // introduce when escaping " and $ are not themselves re-escaped.
+        return `"${arg.replace(/`/g, '``').replace(/"/g, '`"').replace(/\$/g, '`$')}"`;
+    }
+
+    return `'${arg.replace(/'/g, "'\"'\"'")}'`;
+}
+
 export class AspireTerminalProvider implements vscode.Disposable {
     private _terminalByDebugSessionId: Map<string | null, AspireTerminal> = new Map();
     private _rpcServerConnectionInfo?: RpcServerConnectionInfo;
@@ -59,7 +93,7 @@ export class AspireTerminalProvider implements vscode.Disposable {
         this._dcpServerConnectionInfo = value;
     }
 
-    async sendAspireCommandToAspireTerminal(subcommand: string, showTerminal: boolean = true, additionalArgs?: string[]) {
+    async sendAspireCommandToAspireTerminal(subcommand: string, showTerminal: boolean = true, additionalArgs?: string[], options?: SendAspireCommandOptions) {
         const cliPath = await this.getAspireCliExecutablePath();
 
         // On Windows, use & to execute paths, especially those with special characters
@@ -73,43 +107,49 @@ export class AspireTerminalProvider implements vscode.Disposable {
             const quotedPath = /[\s"'`$!*?()&|<>;]/.test(cliPath) ? `'${cliPath.replace(/'/g, `'\"'\"'`)}'` : cliPath;
             command = `${quotedPath} ${subcommand}`;
         }
+        const baseCommand = command;
 
-        if (additionalArgs && additionalArgs.length > 0) {
-            const quotedArgs = additionalArgs.map(arg => {
-                if (process.platform === 'win32') {
-                    // On Windows PowerShell, wrap in double quotes and escape inner double quotes
-                    return `"${arg.replace(/"/g, '`"')}"`;
-                } else {
-                    // On Unix, wrap in single quotes and escape inner single quotes
-                    return `'${arg.replace(/'/g, "'\"'\"'")}'`;
-                }
-            });
-            command += ' ' + quotedArgs.join(' ');
-        }
-
+        const extensionArgs: string[] = [];
         if (this.isCliDebugLoggingEnabled()) {
-            command += ' --debug';
+            extensionArgs.push('--debug');
         }
 
         if (process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY] === 'true') {
-            command += ' --cli-wait-for-debugger';
+            extensionArgs.push('--cli-wait-for-debugger');
+        }
+
+        const cliArgs = additionalArgs && additionalArgs.length > 0
+            ? [...extensionArgs, ...additionalArgs]
+            : extensionArgs;
+
+        if (cliArgs.length > 0) {
+            const quotedArgs = cliArgs.map(arg => quoteShellArg(arg));
+            command += ' ' + quotedArgs.join(' ');
         }
 
         const aspireTerminal = this.getAspireTerminal();
-        extensionLogOutputChannel.info(`Sending command to Aspire terminal: ${command}`);
+        let logCommand = command;
+        if (options?.redactAdditionalArgs && additionalArgs && additionalArgs.length > 0) {
+            const logArgs = extensionArgs.map(arg => quoteShellArg(arg));
+            logArgs.push('[redacted command arguments]');
+            logCommand = `${baseCommand} ${logArgs.join(' ')}`;
+        }
+        extensionLogOutputChannel.info(`Sending command to Aspire terminal: ${logCommand}`);
 
-        // Clear any pre-existing text in the terminal input buffer before sending the command.
-        // Unix (bash/zsh): Ctrl+U (\x15) clears the current line via unix-line-discard.
-        // Windows (PowerShell): Escape (\x1b) clears the current line in PSReadLine's default Windows edit mode.
-        // Sending \x1b alone (without a trailing bracket sequence) via a separate sendText call is safe —
-        // PSReadLine's escape-sequence timeout ensures it is processed as a standalone Escape keypress.
-        const clearSequence = process.platform === 'win32' ? '\x1b' : '\x15';
-        aspireTerminal.terminal.sendText(clearSequence, false);
-
-        aspireTerminal.terminal.sendText(command);
         if (showTerminal) {
             aspireTerminal.terminal.show();
         }
+
+        if (aspireTerminal.terminal.shellIntegration) {
+            aspireTerminal.terminal.shellIntegration.executeCommand(command);
+        }
+        else {
+            // Without shell integration, VS Code can't tell whether the terminal is idle or
+            // a foreground process is running, so keep the previous safe interruption behavior.
+            aspireTerminal.terminal.sendText('\x03', false);
+            aspireTerminal.terminal.sendText(command);
+        }
+
     }
 
     getAspireTerminal(forceCreate?: boolean): AspireTerminal {

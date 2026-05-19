@@ -10,7 +10,7 @@ with create_builder() as builder:
     resource_group = builder.add_parameter("parameter")
     existing_name = builder.add_parameter("parameter")
     existing_resource_group = builder.add_parameter("parameter")
-    connection_string = builder.add_connection_string("connection-string")
+    connection_string = builder.add_connection_string("connection-string", env_var_name="AZURE_VALIDATION_CONNECTION_STRING")
     azure_environment = builder.add_azure_environment("resource")
     azure_environment.with_location()
     container = builder.add_container("resource", "image")

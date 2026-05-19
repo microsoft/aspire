@@ -61,6 +61,14 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string DotNetSdkUnavailableAppHostDiscoveryWarning
+        {
+            get
+            {
+                return ResourceManager.GetString("DotNetSdkUnavailableAppHostDiscoveryWarning", resourceCulture);
+            }
+        }
+
         public static string InvalidLocaleProvided
         {
             get
@@ -109,6 +117,22 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string CertificatesNotTrustedNonInteractive
+        {
+            get
+            {
+                return ResourceManager.GetString("CertificatesNotTrustedNonInteractive", resourceCulture);
+            }
+        }
+
+        public static string CertificatesPartiallyTrustedNonInteractive
+        {
+            get
+            {
+                return ResourceManager.GetString("CertificatesPartiallyTrustedNonInteractive", resourceCulture);
+            }
+        }
+
         public static string FailedToRetrieveCachedTemplatePackages
         {
             get
@@ -130,6 +154,14 @@ namespace Aspire.Cli.Resources {
             get
             {
                 return ResourceManager.GetString("FailedToSearchForPackages", resourceCulture);
+            }
+        }
+
+        public static string FailedToParsePackageSearchResults
+        {
+            get
+            {
+                return ResourceManager.GetString("FailedToParsePackageSearchResults", resourceCulture);
             }
         }
 
@@ -250,6 +282,30 @@ namespace Aspire.Cli.Resources {
             get
             {
                 return ResourceManager.GetString("ConfigurationValueRequired", resourceCulture);
+            }
+        }
+
+        public static string GlobalAppHostPathCannotBeSetWithConfigCommand
+        {
+            get
+            {
+                return ResourceManager.GetString("GlobalAppHostPathCannotBeSetWithConfigCommand", resourceCulture);
+            }
+        }
+
+        public static string LegacyAppHostPathCannotBeSetWithConfigCommand
+        {
+            get
+            {
+                return ResourceManager.GetString("LegacyAppHostPathCannotBeSetWithConfigCommand", resourceCulture);
+            }
+        }
+
+        public static string GlobalAppHostPathIgnored
+        {
+            get
+            {
+                return ResourceManager.GetString("GlobalAppHostPathIgnored", resourceCulture);
             }
         }
 

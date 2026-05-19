@@ -1,6 +1,6 @@
 {
   "author": "Майкрософт",
-  "name": "Начальное приложение Aspire (ASP.NET Core/React)",
+  "name": "Начальное приложение Aspire (ASP.NET Core/React, C# AppHost)",
   "description": "Шаблон проекта для создания приложения Aspire с интерфейсной частью React и серверной службой минимального API на C# с необязательным кэшированием Redis.",
   "symbols/Framework/description": "Целевая платформа для проекта.",
   "symbols/Framework/choices/net8.0/description": "Целевая среда net8.0",

@@ -120,11 +120,17 @@
   <data name="SkillDescription_Aspire" xml:space="preserve">
     <value>Aspire CLI commands and workflows for distributed apps</value>
   </data>
+  <data name="SkillDescription_AspireDeployment" xml:space="preserve">
+    <value>Aspire deployment target selection, preflight, publish, and deploy workflows</value>
+  </data>
   <data name="SkillDescription_PlaywrightCli" xml:space="preserve">
     <value>Browser automation and functional testing</value>
   </data>
   <data name="SkillDescription_DotnetInspect" xml:space="preserve">
     <value>Query .NET API surfaces across NuGet packages and platform libraries</value>
+  </data>
+  <data name="SkillDescription_Aspireify" xml:space="preserve">
+    <value>One-time setup: wire up AppHost with discovered projects</value>
   </data>
   <data name="SkillLocation_StandardName" xml:space="preserve">
     <value>Standard (.agents/skills/)</value>
@@ -173,5 +179,14 @@
   </data>
   <data name="PlaywrightCliInstaller_InstalledWithMirrorWarnings" xml:space="preserve">
     <value>Installed Playwright CLI (some locations failed to mirror).</value>
+  </data>
+  <data name="InitCommand_WorkspaceRootOptionDescription" xml:space="preserve">
+    <value>Path to the workspace root directory</value>
+  </data>
+  <data name="InitCommand_SkillLocationsOptionDescription" xml:space="preserve">
+    <value>Comma-separated list of skill locations to install (e.g. {0}), '{1}', or '{2}'</value>
+  </data>
+  <data name="InitCommand_SkillsOptionDescription" xml:space="preserve">
+    <value>Comma-separated list of skills to install (e.g. {0}), '{1}', or '{2}'</value>
   </data>
 </root>

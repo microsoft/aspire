@@ -13,7 +13,7 @@ void main() throws Exception {
         builder.addSqlServer("sql-port")
             .withHostPort(11433.0);
         // Test 5: Test password parameter with addParameter
-        var customPassword = builder.addParameter("sql-password", true);
+        var customPassword = builder.addParameter("sql-password", new AddParameterOptions().secret(true));
         builder.addSqlServer("sql-custom-pass", new AddSqlServerOptions().password(customPassword));
         // Test 6: Chained configuration - multiple With* methods
         var sqlChained = builder.addSqlServer("sql-chained");

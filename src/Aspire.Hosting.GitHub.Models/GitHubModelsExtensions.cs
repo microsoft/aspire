@@ -164,6 +164,7 @@ public static class GitHubModelsExtensions
         return builder;
     }
 
+    // The default export id would be "withHealthCheck", which collides with the core Aspire.Hosting IResource health check export.
     /// <summary>
     /// Adds a health check to the GitHub Model resource.
     /// </summary>

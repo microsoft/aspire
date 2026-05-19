@@ -108,4 +108,20 @@ public class TemporaryNuGetConfigTests
         var packageSourceMappingNode = xmlDoc.SelectSingleNode("//packageSourceMapping");
         Assert.Null(packageSourceMappingNode);
     }
+
+    [Fact]
+    public async Task CreateAsync_WithConfiguredGlobalPackagesFolder_AddsConfigEntry()
+    {
+        using var tempConfig = await TemporaryNuGetConfig.CreateAsync(
+            [new PackageMapping("Aspire.*", "https://example.com/feed")],
+            configureGlobalPackagesFolder: true);
+
+        var configContent = await File.ReadAllTextAsync(tempConfig.ConfigFile.FullName);
+        var xmlDoc = new XmlDocument();
+        xmlDoc.LoadXml(configContent);
+
+        var globalPackagesFolder = xmlDoc.SelectSingleNode("//config/add[@key='globalPackagesFolder']");
+        Assert.NotNull(globalPackagesFolder);
+        Assert.Equal(".nugetpackages", globalPackagesFolder!.Attributes!["value"]!.Value);
+    }
 }

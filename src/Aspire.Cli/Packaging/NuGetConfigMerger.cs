@@ -241,6 +241,48 @@ internal class NuGetConfigMerger
         FixUrlBasedPackageSourceKeys(packageSourceMapping, context.UrlToExistingKey, sourcesInUse);
         HandleWildcardMappingForExistingSources(packageSourceMapping, context, sourcesInUse);
         RemoveEmptyPackageSourceElements(packageSourceMapping, context.PackageSources, context.UrlToExistingKey, sourcesInUse);
+        RemoveOrphanedSafeToRemoveSources(context, sourcesInUse);
+    }
+
+    // Strip safe-to-remove sources (e.g. ~/.aspire/hives/pr-<N>/packages) from <packageSources>
+    // when they have no corresponding <packageSourceMapping> entry after the merge and are not
+    // required by the new channel. Without this, a previous PR hive that was listed in
+    // <packageSources> but never mapped (or whose mapping was rewritten by an earlier merge)
+    // would linger forever and break `dotnet restore` with NU1301 once the hive directory is
+    // cleaned up on disk.
+    private static void RemoveOrphanedSafeToRemoveSources(NuGetConfigContext context, HashSet<string> sourcesInUse)
+    {
+        var requiredSources = new HashSet<string>(context.RequiredSources, StringComparer.OrdinalIgnoreCase);
+
+        var orphanedSources = context.PackageSources.Elements("add")
+            .Where(add =>
+            {
+                var key = (string?)add.Attribute("key");
+                var value = (string?)add.Attribute("value");
+
+                if (string.IsNullOrEmpty(key))
+                {
+                    return false;
+                }
+
+                if (sourcesInUse.Contains(key))
+                {
+                    return false;
+                }
+
+                if (requiredSources.Contains(key) || (!string.IsNullOrEmpty(value) && requiredSources.Contains(value)))
+                {
+                    return false;
+                }
+
+                return IsSourceSafeToRemove(key, value);
+            })
+            .ToArray();
+
+        foreach (var orphan in orphanedSources)
+        {
+            orphan.Remove();
+        }
     }
 
     private static List<(string pattern, string newSource)> RemapExistingPatterns(
@@ -960,7 +1002,7 @@ internal class NuGetConfigMerger
         AddGlobalPackagesFolderConfiguration(configContext.Configuration);
     }
 
-    private static void AddGlobalPackagesFolderConfiguration(XElement configuration)
+    internal static void AddGlobalPackagesFolderConfiguration(XElement configuration)
     {
         // Check if config section already exists
         var config = configuration.Element("config");

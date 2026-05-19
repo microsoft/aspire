@@ -13,6 +13,23 @@
     <RunOnGithubActionsMacOS>true</RunOnGithubActionsMacOS>
   </PropertyGroup>
 
+  <!-- The CLI bootstrap reads AspireCliChannel from typeof(Aspire.Cli.Program).Assembly — the
+       production DLL — via IdentityChannelReader, registered as IIdentityChannelReader in Program.cs.
+       Mirror that metadata here so any test resolving CliExecutionContext from the real bootstrap
+       host sees a coherent channel value.
+
+       CliBootstrapTests reads Assembly.GetEntryAssembly() directly and compares it against
+       context.IdentityChannel. That comparison is meaningful because both this csproj and Aspire.Cli.csproj
+       forward the same $(AspireCliChannel) MSBuild property — keeping both assemblies in lockstep.
+       Under /p:AspireCliChannel=stable both pick up "stable"; under no override both default to
+       "local" via the production csproj's fallback. -->
+  <PropertyGroup>
+    <AspireCliChannel Condition="'$(AspireCliChannel)' == ''">local</AspireCliChannel>
+  </PropertyGroup>
+  <ItemGroup>
+    <AssemblyMetadata Include="AspireCliChannel" Value="$(AspireCliChannel)" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\Aspire.Cli\Aspire.Cli.csproj" />
     <ProjectReference Include="..\Aspire.TestUtilities\Aspire.TestUtilities.csproj" />

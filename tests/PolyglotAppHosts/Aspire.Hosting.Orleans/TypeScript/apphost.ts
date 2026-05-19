@@ -2,7 +2,7 @@ import { createBuilder } from './.modules/aspire.js';
 
 const builder = await createBuilder();
 
-const provider = await builder.addConnectionString("provider", { environmentVariableName: "ORLEANS_PROVIDER_CONNECTION_STRING" });
+const provider = await builder.addConnectionString("provider");
 
 const orleans = await builder.addOrleans("orleans")
     .withClusterId("cluster-id")

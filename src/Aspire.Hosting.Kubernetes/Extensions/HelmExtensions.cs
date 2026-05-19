@@ -116,11 +116,26 @@ internal static partial class HelmExtensions
         return (true, null);
     }
 
+    /// <summary>
+    /// Preserves numeric Helm conversions while ensuring the rendered value is written as a string.
+    /// </summary>
+    public static string EnsureStringOutput(this string value)
+    {
+        return EndWithNonStringTypePattern().Replace(value, match =>
+        {
+            var endDelimiterIndex = match.Value.LastIndexOf(EndDelimiter, StringComparison.Ordinal);
+
+            return endDelimiterIndex >= 0
+                ? $"{match.Value[..endDelimiterIndex].TrimEnd()} {PipelineDelimiter} toString {EndDelimiter}"
+                : match.Value;
+        });
+    }
+
     [GeneratedRegex(@"^\{\{\s*if\b")]
     internal static partial Regex HelmFlowControlPattern();
 
     [GeneratedRegex(@"\{\{[^}]*\|\s*(int|int64|float64)\s*\}\}")]
-    private static partial Regex EndWithNonStringTypePattern();
+    internal static partial Regex EndWithNonStringTypePattern();
 
     [GeneratedRegex(@"((?<=^\{\{\s*)(?:[^{}]+?)(?=(?:\}\}$)))")]
     internal static partial Regex ScalarExpressionPattern();

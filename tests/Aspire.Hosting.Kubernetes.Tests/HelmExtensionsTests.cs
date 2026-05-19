@@ -14,6 +14,7 @@ public class HelmExtensionsTests
     [InlineData("{{ .Values.config.myapp.port | int }}", false, ScalarStyle.ForcePlain)]
     [InlineData("{{ .Values.config.myapp.count | int64 }}", false, ScalarStyle.ForcePlain)]
     [InlineData("{{ .Values.config.myapp.rate | float64 }}", false, ScalarStyle.ForcePlain)]
+    [InlineData("{{ .Values.config.myapp.port | int | toString }}", true, null)]
     [InlineData("{{ if eq (.Values.parameters.myapp.enable_tls | lower) \"true\" }},ssl=true{{ else }},ssl=false{{ end }}", false, ScalarStyle.ForcePlain)]
     public void ShouldDoubleQuoteString_ReturnsExpectedResult(string value, bool expectedShouldApply, ScalarStyle? expectedStyle)
     {
@@ -37,5 +38,15 @@ public class HelmExtensionsTests
     public void HelmFlowControlPattern_DoesNotMatchNonFlowControlExpressions(string value)
     {
         Assert.DoesNotMatch(HelmExtensions.HelmFlowControlPattern(), value);
+    }
+
+    [Theory]
+    [InlineData("{{ .Values.config.myapp.port | int }}", "{{ .Values.config.myapp.port | int | toString }}")]
+    [InlineData("{{ .Values.config.myapp.count | int64 }}", "{{ .Values.config.myapp.count | int64 | toString }}")]
+    [InlineData("{{ .Values.config.myapp.rate | float64 }}", "{{ .Values.config.myapp.rate | float64 | toString }}")]
+    [InlineData("{{ .Values.config.myapp.key }}", "{{ .Values.config.myapp.key }}")]
+    public void EnsureStringOutput_PreservesNumericConversion(string value, string expected)
+    {
+        Assert.Equal(expected, HelmExtensions.EnsureStringOutput(value));
     }
 }

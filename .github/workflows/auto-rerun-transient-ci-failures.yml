@@ -53,6 +53,7 @@ jobs:
       rerun_execution_eligible: ${{ steps.analyze.outputs.rerun_execution_eligible }}
       dry_run: ${{ steps.analyze.outputs.dry_run }}
       max_retryable_jobs: ${{ steps.analyze.outputs.max_retryable_jobs }}
+      test_pattern_matched_tests: ${{ steps.analyze.outputs.test_pattern_matched_tests }}
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -67,6 +68,10 @@ jobs:
         with:
           script: |
             const rerunWorkflow = require('./.github/workflows/auto-rerun-transient-ci-failures.js');
+            const path = require('node:path');
+            const fs = require('node:fs');
+            const { execSync } = require('node:child_process');
+            const os = require('node:os');
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const isWorkflowDispatch = context.eventName === 'workflow_dispatch';
@@ -203,6 +208,7 @@ jobs:
             core.setOutput('skipped_count', '0');
             core.setOutput('rerun_eligible', 'false');
             core.setOutput('rerun_execution_eligible', 'false');
+            core.setOutput('test_pattern_matched_tests', '[]');
 
             if (workflowRun.name && workflowRun.name !== 'CI') {
               console.log(`Workflow run ${workflowRun.id} is '${workflowRun.name}', not 'CI'. Skipping.`);
@@ -226,12 +232,101 @@ jobs:
             const runId = workflowRun.id;
             const runAttempt = workflowRun.run_attempt;
             const jobs = await listJobsForAttempt(runId, runAttempt);
-            const { failedJobs, retryableJobs, skippedJobs } = await rerunWorkflow.analyzeFailedJobs({
+
+            // Load test retry patterns config
+            const configPath = path.join(process.env.GITHUB_WORKSPACE, 'eng', 'test-retry-patterns.json');
+            const { config: retryPatternsConfig, errors: configErrors } = rerunWorkflow.loadRetryPatternsConfig(configPath);
+            if (configErrors.length > 0) {
+              core.warning(`Test retry patterns config has errors: ${configErrors.join('; ')}`);
+            }
+
+            let { failedJobs, retryableJobs, skippedJobs } = await rerunWorkflow.analyzeFailedJobs({
               jobs,
               getAnnotationsForJob: async job => listAnnotations(job),
               getJobLogTextForJob: async job => getJobLogText(job.id),
               maxRetryableJobs,
+              retryPatternsConfig,
             });
+
+            // TRX-based analysis: check test output for transient patterns
+            let testPatternMatchedTests = [];
+            const hasSkippedTestExecJobs = skippedJobs.some(job =>
+              rerunWorkflow.hasTestExecutionFailureStep(job.failedSteps)
+            );
+            const testFailurePatterns = retryPatternsConfig?.testFailurePatterns;
+
+            if (hasSkippedTestExecJobs && Array.isArray(testFailurePatterns) && testFailurePatterns.length > 0) {
+              try {
+                const artifacts = await paginate(
+                  'GET /repos/{owner}/{repo}/actions/runs/{run_id}/artifacts',
+                  { owner, repo, run_id: runId },
+                  data => data.artifacts || []);
+                const testArtifact = rerunWorkflow.selectTestResultsArtifact(artifacts);
+
+                if (testArtifact) {
+                  console.log(`Downloading test results artifact '${testArtifact.name}' (${testArtifact.size_in_bytes} bytes)...`);
+                  const download = await github.rest.actions.downloadArtifact({
+                    owner,
+                    repo,
+                    artifact_id: testArtifact.id,
+                    archive_format: 'zip',
+                  });
+
+                  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'test-results-'));
+                  try {
+                    const zipPath = path.join(tmpDir, 'test-results.zip');
+                    fs.writeFileSync(zipPath, Buffer.from(download.data));
+                    const trxDir = path.join(tmpDir, 'trx');
+                    fs.mkdirSync(trxDir, { recursive: true });
+                    execSync(`unzip -qo "${zipPath}" -d "${trxDir}"`, { timeout: 30_000 });
+
+                    const trxFileContents = [];
+                    const maxTrxFiles = 200;
+                    const maxTrxFileBytes = 50 * 1024 * 1024; // 50MB per file cap
+                    const resolvedTrxDir = fs.realpathSync(trxDir);
+                    const findTrxFiles = (dir) => {
+                      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+                        if (entry.isSymbolicLink()) {
+                          continue;
+                        }
+                        const fullPath = path.join(dir, entry.name);
+                        const resolvedPath = fs.realpathSync(fullPath);
+                        if (!resolvedPath.startsWith(resolvedTrxDir + path.sep) && resolvedPath !== resolvedTrxDir) {
+                          continue;
+                        }
+                        if (entry.isDirectory()) {
+                          findTrxFiles(fullPath);
+                        } else if (entry.name.endsWith('.trx') && trxFileContents.length < maxTrxFiles) {
+                          const stat = fs.statSync(fullPath);
+                          if (stat.size <= maxTrxFileBytes) {
+                            trxFileContents.push({
+                              fileName: entry.name,
+                              content: fs.readFileSync(fullPath, 'utf8'),
+                            });
+                          }
+                        }
+                      }
+                    };
+                    findTrxFiles(trxDir);
+
+                    if (trxFileContents.length > 0) {
+                      const { allMatchedTests } = rerunWorkflow.analyzeTrxFiles(trxFileContents, testFailurePatterns);
+                      if (allMatchedTests.length > 0) {
+                        console.log(`Found ${allMatchedTests.length} test(s) matching transient failure patterns.`);
+                        const promoted = rerunWorkflow.promoteTestExecutionFailureJobs(retryableJobs, skippedJobs, allMatchedTests);
+                        retryableJobs = promoted.retryableJobs;
+                        skippedJobs = promoted.skippedJobs;
+                        testPatternMatchedTests = allMatchedTests;
+                      }
+                    }
+                  } finally {
+                    fs.rmSync(tmpDir, { recursive: true, force: true });
+                  }
+                }
+              } catch (trxError) {
+                core.warning(`TRX analysis failed (non-fatal): ${trxError.message}`);
+              }
+            }
 
             core.setOutput('retryable_jobs', JSON.stringify(retryableJobs.map(job => ({
               id: job.id,
@@ -255,6 +350,10 @@ jobs:
             });
             core.setOutput('rerun_eligible', String(rerunEligible));
             core.setOutput('rerun_execution_eligible', String(rerunExecutionEligible));
+            core.setOutput('test_pattern_matched_tests', JSON.stringify(testPatternMatchedTests.slice(0, 50).map(t => ({
+              testName: t.testName,
+              reason: t.reason,
+            }))));
 
             await rerunWorkflow.writeAnalysisSummary({
               summary: core.summary,
@@ -266,6 +365,7 @@ jobs:
               rerunEligible,
               sourceRunUrl,
               sourceRunAttempt: runAttempt,
+              testPatternMatchedTests,
             });
 
             if (retryableJobs.length === 0) {
@@ -295,6 +395,7 @@ jobs:
           SOURCE_RUN_ID: ${{ needs.analyze-transient-failures.outputs.source_run_id }}
           SOURCE_RUN_ATTEMPT: ${{ needs.analyze-transient-failures.outputs.source_run_attempt }}
           SOURCE_RUN_URL: ${{ needs.analyze-transient-failures.outputs.source_run_url }}
+          TEST_PATTERN_MATCHED_TESTS: ${{ needs.analyze-transient-failures.outputs.test_pattern_matched_tests }}
         with:
           script: |
             const rerunWorkflow = require('./.github/workflows/auto-rerun-transient-ci-failures.js');
@@ -305,6 +406,7 @@ jobs:
             const sourceRunId = Number(process.env.SOURCE_RUN_ID);
             const sourceRunAttempt = Number(process.env.SOURCE_RUN_ATTEMPT);
             const sourceRunUrl = process.env.SOURCE_RUN_URL;
+            const testPatternMatchedTests = JSON.parse(process.env.TEST_PATTERN_MATCHED_TESTS || '[]');
 
             if (retryableJobs.length === 0) {
               console.log('No retryable jobs were provided to the rerun job.');
@@ -321,4 +423,5 @@ jobs:
               sourceRunId,
               sourceRunAttempt,
               sourceRunUrl,
+              testPatternMatchedTests,
             });

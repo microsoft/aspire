@@ -5,6 +5,7 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Telemetry;
 using Aspire.Hosting.Backchannel;
+using Semver;
 using System.Diagnostics;
 using System.Globalization;
 using Aspire.Cli.Resources;
@@ -36,7 +37,7 @@ internal static class AppHostHelper
         }
 
         var minimumVersion = SemVersion.Parse("9.2.0");
-        if (aspireVersion.IsOlderThan(minimumVersion))
+        if (aspireVersion.ComparePrecedenceTo(minimumVersion) < 0)
         {
             interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, ErrorStrings.AspireSDKVersionNotSupported, appHostInformation.AspireHostingVersion));
             return (false, false, appHostInformation.AspireHostingVersion);
@@ -92,6 +93,14 @@ internal static class AppHostHelper
     /// <returns>The computed socket path prefix (without PID suffix).</returns>
     internal static string ComputeAuxiliarySocketPrefix(string appHostPath, string homeDirectory)
         => BackchannelConstants.ComputeSocketPrefix(appHostPath, homeDirectory);
+
+    /// <summary>
+    /// Computes the legacy (pre-normalization) hash for backward compatibility with older AppHosts.
+    /// </summary>
+    /// <param name="appHostPath">The full path to the AppHost project file or assembly.</param>
+    /// <returns>The legacy hash, or <c>null</c> if it is identical to the current hash.</returns>
+    internal static string? ComputeLegacyHash(string appHostPath)
+        => BackchannelConstants.ComputeLegacyHash(appHostPath);
 
     /// <summary>
     /// Finds all socket files matching the given AppHost path.

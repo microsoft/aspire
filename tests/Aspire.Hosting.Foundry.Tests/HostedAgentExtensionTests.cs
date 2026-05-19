@@ -29,6 +29,43 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
+    public void PublishAsHostedAgent_InRunMode_PreservesExistingHttpEndpointTargetPort()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var app = builder.AddPythonApp("agent", "./app.py", "main:app")
+            .WithHttpEndpoint(targetPort: 5000)
+            .PublishAsHostedAgent(project);
+
+        builder.Build();
+
+        Assert.True(app.Resource.TryGetEndpoints(out var endpoints));
+        var httpEndpoints = endpoints.Where(e => e.Name == "http").ToList();
+        Assert.Single(httpEndpoints);
+        Assert.Equal(5000, httpEndpoints[0].TargetPort);
+        Assert.True(httpEndpoints[0].IsProxied);
+    }
+
+    [Fact]
+    public void PublishAsHostedAgent_InRunMode_DoesNotHardCodePort()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        var app = builder.AddPythonApp("agent", "./app.py", "main:app")
+            .PublishAsHostedAgent(project);
+
+        builder.Build();
+
+        Assert.True(app.Resource.TryGetEndpoints(out var endpoints));
+        var httpEndpoint = endpoints.Single(e => e.Name == "http");
+        Assert.Null(httpEndpoint.Port);
+    }
+
+    [Fact]
     public void PublishAsHostedAgent_InRunMode_ConfiguresHealthCheck()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);

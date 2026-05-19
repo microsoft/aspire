@@ -291,7 +291,7 @@ public static class AzurePostgresExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Configures password authentication for Azure PostgreSQL Flexible Server")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withPasswordAuthentication dispatcher export.")]
     public static IResourceBuilder<AzurePostgresFlexibleServerResource> WithPasswordAuthentication(
         this IResourceBuilder<AzurePostgresFlexibleServerResource> builder,
         IResourceBuilder<ParameterResource>? userName = null,
@@ -319,6 +319,20 @@ public static class AzurePostgresExtensions
         return builder.WithPasswordAuthentication(kv, userName, password);
     }
 
+    [AspireExport("withPasswordAuthentication", Description = "Configures password authentication for Azure PostgreSQL Flexible Server")]
+    internal static IResourceBuilder<AzurePostgresFlexibleServerResource> WithPasswordAuthenticationForPolyglot(
+        this IResourceBuilder<AzurePostgresFlexibleServerResource> builder,
+        IResourceBuilder<IAzureKeyVaultResource>? keyVaultBuilder = null,
+        IResourceBuilder<ParameterResource>? userName = null,
+        IResourceBuilder<ParameterResource>? password = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return keyVaultBuilder is null
+            ? builder.WithPasswordAuthentication(userName, password)
+            : builder.WithPasswordAuthentication(keyVaultBuilder, userName, password);
+    }
+
     /// <summary>
     /// Configures the resource to use password authentication for Azure PostgreSQL Flexible Server.
     /// This overload is used when the PostgreSQL resource is created in a container and the password is stored in an Azure Key Vault secret.
@@ -328,7 +342,7 @@ public static class AzurePostgresExtensions
     /// <param name="userName">The parameter used to provide the user name for the PostgreSQL resource. If <see langword="null"/> a default value will be used.</param>
     /// <param name="password">The parameter used to provide the administrator password for the PostgreSQL resource. If <see langword="null"/> a random password will be generated.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> builder.</returns>
-    [AspireExport("withPasswordAuthenticationWithKeyVault", Description = "Configures password authentication using a specified Azure Key Vault resource")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withPasswordAuthentication dispatcher export.")]
     public static IResourceBuilder<AzurePostgresFlexibleServerResource> WithPasswordAuthentication(
         this IResourceBuilder<AzurePostgresFlexibleServerResource> builder,
         IResourceBuilder<IAzureKeyVaultResource> keyVaultBuilder,

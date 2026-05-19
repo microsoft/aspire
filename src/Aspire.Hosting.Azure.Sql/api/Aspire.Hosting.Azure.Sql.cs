@@ -26,11 +26,11 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<Azure.AzureSqlServerResource> RunAsContainer(this ApplicationModel.IResourceBuilder<Azure.AzureSqlServerResource> builder, System.Action<ApplicationModel.IResourceBuilder<ApplicationModel.SqlServerServerResource>>? configureContainer = null) { throw null; }
 
         [AspireExport("withAdminDeploymentScriptStorage", Description = "Configures the Azure SQL server to use a specific storage account for deployment scripts")]
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/dotnet/aspire/diagnostics#{0}")]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureSqlServerResource> WithAdminDeploymentScriptStorage(this ApplicationModel.IResourceBuilder<Azure.AzureSqlServerResource> builder, ApplicationModel.IResourceBuilder<Azure.AzureStorageResource> storage) { throw null; }
 
         [AspireExport("withAdminDeploymentScriptSubnet", Description = "Configures the Azure SQL server to use a specific subnet for deployment scripts")]
-        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/dotnet/aspire/diagnostics#{0}")]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
         public static ApplicationModel.IResourceBuilder<Azure.AzureSqlServerResource> WithAdminDeploymentScriptSubnet(this ApplicationModel.IResourceBuilder<Azure.AzureSqlServerResource> builder, ApplicationModel.IResourceBuilder<Azure.AzureSubnetResource> subnet) { throw null; }
 
         [AspireExport("withDefaultAzureSku", Description = "Configures the Azure SQL database to use the default Azure SKU")]

@@ -38,6 +38,7 @@ export interface PythonLaunchConfiguration extends ExecutableLaunchConfiguration
 
     module?: string;
     interpreter_path?: string;
+    working_directory?: string;
 }
 
 export function isPythonLaunchConfiguration(obj: any): obj is PythonLaunchConfiguration {
@@ -163,6 +164,7 @@ export interface AspireExtendedDebugConfiguration extends vscode.DebugConfigurat
     command?: AspireCommandType;
     args?: string[];
     step?: string;
+    env?: { [key: string]: string };
 }
 
 interface AspireDebuggersConfiguration {

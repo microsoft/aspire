@@ -1,0 +1,62 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="zh-Hant" original="../ConsoleActivityLoggerStrings.resx">
+    <body>
+      <trans-unit id="ActivityStarting">
+        <source>Starting...</source>
+        <target state="new">Starting...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ActivityStartingWithName">
+        <source>Starting {0}...</source>
+        <target state="new">Starting {0}...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PipelineFailed">
+        <source>Pipeline failed</source>
+        <target state="new">Pipeline failed</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="PipelineSucceeded">
+        <source>Pipeline succeeded</source>
+        <target state="new">Pipeline succeeded</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SummaryFailed">
+        <source>{0} failed</source>
+        <target state="new">{0} failed</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SummaryLogLevelHelp">
+        <source>For more details, add --log-level debug/trace to the command.</source>
+        <target state="new">For more details, add --log-level debug/trace to the command.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SummaryStepsSucceeded">
+        <source>{0} steps succeeded</source>
+        <target state="new">{0} steps succeeded</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SummaryStepsSucceededWithTotal">
+        <source>{0}/{1} steps succeeded</source>
+        <target state="new">{0}/{1} steps succeeded</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SummaryTotalTime">
+        <source>Total time: {0}</source>
+        <target state="new">Total time: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SummaryWarningsPlural">
+        <source>{0} warnings</source>
+        <target state="new">{0} warnings</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SummaryWarningsSingular">
+        <source>{0} warning</source>
+        <target state="new">{0} warning</target>
+        <note />
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

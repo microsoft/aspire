@@ -10,10 +10,10 @@ await seq.withDataVolume({ name: "seq-data", isReadOnly: false });
 await seq.withDataBindMount("./seq-data", { isReadOnly: true });
 
 // ---- Property access on SeqResource ----
-const _endpoint = await seq.primaryEndpoint.get();
-const _host = await seq.host.get();
-const _port = await seq.port.get();
-const _uri = await seq.uriExpression.get();
+const _endpoint = await seq.primaryEndpoint();
+const _host = await seq.host();
+const _port = await seq.port();
+const _uri = await seq.uriExpression();
 
-const _cstr = await seq.connectionStringExpression.get();
+const _cstr = await seq.connectionStringExpression();
 await builder.build().run();

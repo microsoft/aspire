@@ -32,6 +32,7 @@ public class ContainerImageReference : IManifestExpressionProvider, IValueWithRe
     public string ValueExpression => $"{{{Resource.Name}.containerImage}}";
 
     /// <inheritdoc/>
+    [global::Aspire.Hosting.AspireExportIgnore(Reason = "Reference enumeration is not needed in the ATS surface for container image provenance.")]
     public IEnumerable<object> References => [Resource];
 
     /// <inheritdoc/>

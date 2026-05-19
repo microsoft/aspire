@@ -216,5 +216,5 @@ public class AzureEventHubsResource(string name, Action<AzureResourceInfrastruct
 
     IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["namespace"];
 
-    string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() => "privatelink.servicebus.windows.net";
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() => ["privatelink.servicebus.windows.net"];
 }

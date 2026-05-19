@@ -20,7 +20,6 @@ internal static class KnownFeatures
 {
     public static string FeaturePrefix => "features";
     public static string UpdateNotificationsEnabled => "updateNotificationsEnabled";
-    public static string ExecCommandEnabled => "execCommandEnabled";
     public static string ShowDeprecatedPackages => "showDeprecatedPackages";
     public static string StagingChannelEnabled => "stagingChannelEnabled";
     public static string DefaultWatchEnabled => "defaultWatchEnabled";
@@ -29,6 +28,7 @@ internal static class KnownFeatures
     public static string ExperimentalPolyglotJava => "experimentalPolyglot:java";
     public static string ExperimentalPolyglotGo => "experimentalPolyglot:go";
     public static string ExperimentalPolyglotPython => "experimentalPolyglot:python";
+    public static string NuGetSignatureVerificationEnabled => "nugetSignatureVerificationEnabled";
 
     private static readonly Dictionary<string, FeatureMetadata> s_featureMetadata = new()
     {
@@ -36,12 +36,7 @@ internal static class KnownFeatures
             UpdateNotificationsEnabled,
             "Check if update notifications are disabled and set version check environment variable",
             DefaultValue: true),
-        
-        [ExecCommandEnabled] = new(
-            ExecCommandEnabled,
-            "Enable or disable the 'aspire exec' command for executing commands inside running resources",
-            DefaultValue: false),
-        
+
         [ShowDeprecatedPackages] = new(
             ShowDeprecatedPackages,
             "Show or hide deprecated packages in 'aspire add' search results",
@@ -80,7 +75,12 @@ internal static class KnownFeatures
         [ExperimentalPolyglotPython] = new(
             ExperimentalPolyglotPython,
             "Enable or disable experimental Python language support for polyglot Aspire applications",
-            DefaultValue: false)
+            DefaultValue: false),
+
+        [NuGetSignatureVerificationEnabled] = new(
+            NuGetSignatureVerificationEnabled,
+            "Enable or disable defaulting the DOTNET_NUGET_SIGNATURE_VERIFICATION environment variable for spawned processes",
+            DefaultValue: true)
     };
 
     /// <summary>
@@ -116,9 +116,17 @@ internal static class KnownFeatures
     /// <param name="features">The feature flags service.</param>
     /// <param name="configuration">The configuration to check for the channel setting.</param>
     /// <returns><c>true</c> if the staging channel should be available; otherwise, <c>false</c>.</returns>
+    /// <remarks>
+    /// Note that the channel check reads <c>configuration["channel"]</c> (the layered .NET
+    /// configuration — environment variables, command-line, global / per-project
+    /// <c>aspire.config.json#channel</c>), NOT
+    /// <see cref="CliExecutionContext.IdentityChannel"/>. Callers that also need to expose
+    /// staging for a CLI baked with <c>AspireCliChannel=staging</c> should combine this
+    /// helper with an identity-channel check.
+    /// </remarks>
     public static bool IsStagingChannelEnabled(IFeatures features, IConfiguration configuration)
     {
         return features.IsFeatureEnabled(StagingChannelEnabled, false)
-            || string.Equals(configuration["channel"], PackageChannelNames.Staging, StringComparison.OrdinalIgnoreCase);
+            || string.Equals(configuration["channel"], PackageChannelNames.Staging, StringComparisons.ChannelName);
     }
 }

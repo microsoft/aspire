@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Commands;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
@@ -23,7 +25,9 @@ internal sealed class ExecuteResourceCommandTool(
 
     public override JsonElement GetInputSchema()
     {
-        return JsonDocument.Parse("""
+        // MCP input schema JSON accepts optional nested command arguments:
+        // { "resourceName": "web", "commandName": "click", "arguments": { "selector": "#submit", "urgent": true, "optional": null } }
+        using var document = JsonDocument.Parse("""
             {
               "type": "object",
               "properties": {
@@ -34,19 +38,28 @@ internal sealed class ExecuteResourceCommandTool(
                 "commandName": {
                   "type": "string",
                   "description": "The command name"
+                },
+                "arguments": {
+                  "type": "object",
+                  "description": "Optional invocation arguments to pass to the resource command",
+                  "additionalProperties": {
+                    "type": ["string", "number", "boolean", "null"],
+                    "description": "Argument values must be strings, numbers, booleans, or null."
+                  }
                 }
               },
               "required": ["resourceName", "commandName"]
             }
-            """).RootElement;
+            """);
+        return document.RootElement.Clone();
     }
 
     public override async ValueTask<CallToolResult> CallToolAsync(CallToolContext context, CancellationToken cancellationToken)
     {
-        var arguments = context.Arguments;
-        if (arguments is null ||
-            !arguments.TryGetValue("resourceName", out var resourceNameElement) ||
-            !arguments.TryGetValue("commandName", out var commandNameElement))
+        var toolArguments = context.Arguments;
+        if (toolArguments is null ||
+            !toolArguments.TryGetValue("resourceName", out var resourceNameElement) ||
+            !toolArguments.TryGetValue("commandName", out var commandNameElement))
         {
             throw new McpProtocolException("Missing required arguments 'resourceName' and 'commandName'.", McpErrorCode.InvalidParams);
         }
@@ -57,6 +70,17 @@ internal sealed class ExecuteResourceCommandTool(
         if (string.IsNullOrEmpty(resourceName) || string.IsNullOrEmpty(commandName))
         {
             throw new McpProtocolException("Arguments 'resourceName' and 'commandName' cannot be empty.", McpErrorCode.InvalidParams);
+        }
+
+        JsonNode? commandArguments = null;
+        if (toolArguments.TryGetValue("arguments", out var commandArgumentsElement))
+        {
+            if (commandArgumentsElement.ValueKind != JsonValueKind.Object)
+            {
+                throw new McpProtocolException("Argument 'arguments' must be a JSON object.", McpErrorCode.InvalidParams);
+            }
+
+            commandArguments = CreateCommandArguments(commandArgumentsElement);
         }
 
         var connection = await AppHostConnectionHelper.GetSelectedConnectionAsync(auxiliaryBackchannelMonitor, logger, cancellationToken).ConfigureAwait(false);
@@ -70,7 +94,15 @@ internal sealed class ExecuteResourceCommandTool(
         {
             logger.LogDebug("Executing command '{CommandName}' on resource '{ResourceName}' via backchannel", commandName, resourceName);
 
-            var response = await connection.ExecuteResourceCommandAsync(resourceName, commandName, cancellationToken).ConfigureAwait(false);
+            var response = await connection.ExecuteResourceCommandAsync(
+                resourceName,
+                commandName,
+                new ExecuteResourceCommandOptions
+                {
+                    Arguments = commandArguments,
+                    NonInteractive = true
+                },
+                cancellationToken).ConfigureAwait(false);
 
             if (response.Success)
             {
@@ -98,6 +130,10 @@ internal sealed class ExecuteResourceCommandTool(
 #pragma warning disable CS0618 // Type or member is obsolete
                 var message = (response.Message ?? response.ErrorMessage) is { Length: > 0 } errorMsg ? errorMsg : "Unknown error. See logs for details.";
 #pragma warning restore CS0618 // Type or member is obsolete
+                if (response.ValidationErrors is { Length: > 0 })
+                {
+                    message = $"{message}{Environment.NewLine}{string.Join(Environment.NewLine, response.ValidationErrors.Select(error => $"{ResourceCommandHelper.FormatArgumentNameForDisplay(error.ArgumentName)}: {error.ErrorMessage}"))}";
+                }
 
                 var content = new List<TextContentBlock>
                 {
@@ -125,5 +161,24 @@ internal sealed class ExecuteResourceCommandTool(
             logger.LogError(ex, "Error executing command '{CommandName}' on resource '{ResourceName}'", commandName, resourceName);
             throw new McpProtocolException($"Error executing command '{commandName}' for resource '{resourceName}': {ex.Message}", McpErrorCode.InternalError);
         }
+    }
+
+    private static JsonObject CreateCommandArguments(JsonElement commandArgumentsElement)
+    {
+        var arguments = new JsonObject();
+        foreach (var property in commandArgumentsElement.EnumerateObject())
+        {
+            arguments[property.Name] = property.Value.ValueKind switch
+            {
+                JsonValueKind.String => JsonValue.Create(property.Value.GetString()),
+                JsonValueKind.Number => JsonValue.Create(property.Value.GetRawText()),
+                JsonValueKind.True => JsonValue.Create("true"),
+                JsonValueKind.False => JsonValue.Create("false"),
+                JsonValueKind.Null => null,
+                _ => throw new McpProtocolException($"Argument 'arguments.{property.Name}' must be a string, number, boolean, or null.", McpErrorCode.InvalidParams)
+            };
+        }
+
+        return arguments;
     }
 }

@@ -14,7 +14,7 @@ namespace Aspire.Hosting.Azure;
 /// that support Network Security Perimeter association via the
 /// <c>Microsoft.Network/networkSecurityPerimeters/resourceAssociations</c> resource type.
 /// </remarks>
-[Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/dotnet/aspire/diagnostics#{0}")]
+[Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 public interface IAzureNspAssociationTarget : IResource
 {
     /// <summary>

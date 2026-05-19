@@ -3,6 +3,7 @@
 
 using Azure.Core;
 using Azure.ResourceManager;
+using Azure.ResourceManager.Authorization;
 using Azure.ResourceManager.Resources;
 
 namespace Aspire.Hosting.Azure.Provisioning.Internal;
@@ -119,6 +120,11 @@ internal sealed class DefaultArmClientProvider : IArmClientProvider
             }
 
             return resourceGroups.OrderBy(rg => rg.Name);
+        }
+
+        public IRoleAssignmentCollection GetRoleAssignments(ResourceIdentifier scope)
+        {
+            return new DefaultRoleAssignmentCollection(armClient.GetRoleAssignments(scope));
         }
 
         private sealed class DefaultTenantResource(TenantResource tenantResource) : ITenantResource

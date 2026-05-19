@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="cs" original="../DescribeCommandStrings.resx">
     <body>
@@ -10,11 +10,6 @@
       <trans-unit id="FollowOptionDescription">
         <source>Continuously stream resource state changes</source>
         <target state="new">Continuously stream resource state changes</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="HeaderEndpoints">
-        <source>Endpoints</source>
-        <target state="translated">Koncové body</target>
         <note />
       </trans-unit>
       <trans-unit id="HeaderHealth">
@@ -35,6 +30,16 @@
       <trans-unit id="HeaderType">
         <source>Type</source>
         <target state="translated">Typ</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderURLs">
+        <source>URLs</source>
+        <target state="new">URLs</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="IncludeHiddenOptionDescription">
+        <source>Include hidden resources in the output</source>
+        <target state="new">Include hidden resources in the output</target>
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">

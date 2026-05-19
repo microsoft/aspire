@@ -16,7 +16,7 @@ The Aspire MCP server provides tools for interacting with Aspire applications, b
 
 ### Prior Art
 
-- **aspire.dev/llms-small.txt** - The Aspire documentation site exposes an LLM-friendly documentation file at `https://aspire.dev/llms-small.txt` containing abridged documentation suitable for AI agent consumption
+- **aspire.dev/llms-full.txt** - The Aspire documentation site exposes an LLM-friendly documentation file at `https://aspire.dev/llms-full.txt` containing the full documentation suitable for AI agent consumption
 
 ## Design Goals
 
@@ -55,7 +55,7 @@ The Aspire MCP server provides tools for interacting with Aspire applications, b
 │  └─ IDocsSearchService- High-level search API                       │
 ├─────────────────────────────────────────────────────────────────────┤
 │  Parsers                                                            │
-│  └─ LlmsTxtParser     - Async parallel parser for llms.txt format   │
+│  └─ LlmsTxtParser     - Parser for llms.txt format                  │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -84,7 +84,7 @@ flowchart TB
     end
 
     subgraph External["External"]
-        AspireDev["aspire.dev/llms-small.txt"]
+        AspireDev["aspire.dev/llms-full.txt"]
         MemoryCache["IMemoryCache"]
     end
 
@@ -123,7 +123,7 @@ sequenceDiagram
         Fetcher->>Cache: GetETagAsync()
         Cache-->>Fetcher: cached ETag
 
-        Fetcher->>Web: GET /llms-small.txt<br/>If-None-Match: ETag
+        Fetcher->>Web: GET /llms-full.txt<br/>If-None-Match: ETag
 
         alt 200 OK (New Content)
             Web-->>Fetcher: content + new ETag
@@ -159,7 +159,7 @@ internal interface IDocsFetcher
 
 **Implementation details:**
 - Base URL: `https://aspire.dev/`
-- Endpoint: `llms-small.txt`
+- Endpoint: `llms-full.txt`
 - Uses `HttpClient` with conditional requests (`If-None-Match` header)
 - Returns cached content on `304 Not Modified` response
 - Falls back to cached content on network errors
@@ -199,27 +199,27 @@ internal interface IDocsIndexService
 ```
 
 **Implementation details:**
-- Parses llms.txt using `LlmsTxtParser.ParseAsync` with parallel document processing
+- Parses llms.txt using `LlmsTxtParser.ParseAsync`
 - Pre-indexes documents with lowercase text for faster case-insensitive matching
 - Extracts code identifiers for bonus scoring
 - Uses `ValueTask` for efficient async operations
 
 ### LlmsTxtParser
 
-Async parallel parser for llms.txt format documentation:
+Parser for llms.txt format documentation:
 
 ```csharp
 internal static partial class LlmsTxtParser
 {
-    public static async Task<IReadOnlyList<LlmsDocument>> ParseAsync(
+    public static Task<IReadOnlyList<LlmsDocument>> ParseAsync(
         string content,
         CancellationToken cancellationToken = default);
 }
 ```
 
 **Implementation details:**
-- Finds document boundaries (H1 headers) in single pass
-- Parses each document in parallel using `Task.WhenAll`
+- Computes fenced-code-block regions once, then reuses them while finding document and section boundaries
+- Iterates documents sequentially, slicing the precomputed fence regions per document so `ParseSections` doesn't re-scan for ``` runs
 - Uses `ReadOnlySpan<char>` throughout for zero-allocation parsing
 - Uses `ArrayPool<char>` for slug generation
 
@@ -273,7 +273,7 @@ Search uses weighted field scoring for relevance ranking:
 - Pre-computed lowercase text in `IndexedDocument` and `IndexedSection` classes
 - Pre-computed lowercase slug for fast slug matching
 - Pre-computed slug segments (`SlugSegments`) to avoid per-score allocations during slug relevance scoring
-- Span-based `CountOccurrences` method for zero-allocation matching
+- Span-based scoring for zero-allocation matching
 - Static lambdas to avoid closure allocations
 - Pre-extracted code spans and identifiers
 
@@ -362,11 +362,9 @@ This ensures the index is ready by the time a user makes their first docs-relate
 
 ## Future Considerations
 
-### Full Documentation Support
+### Configurable Doc Source
 
-Currently uses `llms-small.txt` for abridged documentation. Could add support for:
-- `llms-full.txt` for comprehensive documentation
-- Configurable doc source selection
+Defaults to `llms-full.txt` for the complete documentation set with preserved code-block formatting. The `docs.llmsTxtUrl` configuration setting allows pointing the CLI at any compatible llms.txt-shaped source — a local mirror, a custom corpus, or the abridged `llms-small.txt` if bandwidth is the priority.
 
 ### Disk Persistence
 
@@ -418,5 +416,5 @@ Potential search enhancements:
 
 ## References
 
-- [aspire.dev/llms-small.txt](https://aspire.dev/llms-small.txt) - Abridged documentation for LLMs
+- [aspire.dev/llms-full.txt](https://aspire.dev/llms-full.txt) - Full documentation for LLMs
 - [MCP Specification](https://modelcontextprotocol.io/) - Model Context Protocol

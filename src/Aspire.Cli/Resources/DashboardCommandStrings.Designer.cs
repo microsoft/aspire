@@ -123,12 +123,6 @@ namespace Aspire.Cli.Resources {
             }
         }
 
-        public static string EnableApiOptionDescription {
-            get {
-                return ResourceManager.GetString("EnableApiOptionDescription", resourceCulture);
-            }
-        }
-
         public static string ConfigFilePathOptionDescription {
             get {
                 return ResourceManager.GetString("ConfigFilePathOptionDescription", resourceCulture);

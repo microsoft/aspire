@@ -14,13 +14,22 @@ namespace Aspire.Hosting.Pipelines;
 /// </summary>
 [Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 [DebuggerDisplay("{DebuggerToString(),nq}")]
-[AspireExport(ExposeProperties = true)]
+[AspireExport]
 public class PipelineStep
 {
     /// <summary>
     /// Gets or initializes the unique name of the step.
     /// </summary>
     public required string Name { get; init; }
+
+    /// <summary>
+    /// Gets the exported name projection for polyglot SDKs.
+    /// </summary>
+    /// <remarks>
+    /// This projection avoids exporting an ATS setter for the public init-only <see cref="Name"/> property.
+    /// </remarks>
+    [AspireExport(MethodName = "name", Description = "Gets the unique name of the step")]
+    internal string ExportedName => Name;
 
     /// <summary>
     /// Gets or initializes the description of the step.
@@ -30,6 +39,15 @@ public class PipelineStep
     /// helping users and tools understand the purpose of the step.
     /// </remarks>
     public string? Description { get; init; }
+
+    /// <summary>
+    /// Gets the exported description projection for polyglot SDKs.
+    /// </summary>
+    /// <remarks>
+    /// This projection avoids exporting an ATS setter for the public init-only <see cref="Description"/> property.
+    /// </remarks>
+    [AspireExport(MethodName = "description", Description = "Gets the human-readable description of the step")]
+    internal string? ExportedDescription => Description;
 
     /// <summary>
     /// Gets or initializes the action to execute for this step.
@@ -88,6 +106,17 @@ public class PipelineStep
     }
 
     /// <summary>
+    /// Adds a tag to the step.
+    /// </summary>
+    /// <param name="tag">The tag to add.</param>
+    [AspireExport(Description = "Adds a tag to the step")]
+    internal void AddTag(string tag)
+    {
+        ArgumentNullException.ThrowIfNull(tag);
+        Tags.Add(tag);
+    }
+
+    /// <summary>
     /// Specifies that this step is required by another step.
     /// This creates the inverse relationship where the other step will depend on this step.
     /// </summary>
@@ -95,6 +124,26 @@ public class PipelineStep
     public void RequiredBy(PipelineStep step)
     {
         RequiredBySteps.Add(step.Name);
+    }
+
+    /// <summary>
+    /// Creates a shallow clone of this step with fresh copies of its
+    /// <see cref="DependsOnSteps"/>, <see cref="RequiredBySteps"/>, and
+    /// <see cref="Tags"/> lists. Used by <see cref="DistributedApplicationPipeline"/>
+    /// when isolating step-graph mutations during a phase such as BeforeStart.
+    /// </summary>
+    internal PipelineStep Clone()
+    {
+        return new PipelineStep
+        {
+            Name = Name,
+            Description = Description,
+            Action = Action,
+            DependsOnSteps = [.. DependsOnSteps],
+            RequiredBySteps = [.. RequiredBySteps],
+            Tags = [.. Tags],
+            Resource = Resource,
+        };
     }
 
     private string DebuggerToString()

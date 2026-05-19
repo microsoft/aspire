@@ -45,21 +45,24 @@ internal sealed class GoLanguageSupport : ILanguageSupport
             )
 
             func main() {
-            	builder, err := aspire.CreateBuilder(nil)
+            	builder, err := aspire.CreateBuilder()
             	if err != nil {
-            		log.Fatalf("Failed to create builder: %v", err)
+            		log.Fatal(aspire.FormatError(err))
             	}
 
             	// Add your resources here, for example:
-            	// redis, _ := builder.AddRedis("cache")
-            	// postgres, _ := builder.AddPostgres("db")
+            	// cache := builder.AddRedis("cache")
+            	// db := builder.AddPostgres("db")
+            	// if err := builder.Err(); err != nil {
+            	// 	log.Fatal(aspire.FormatError(err))
+            	// }
 
             	app, err := builder.Build()
             	if err != nil {
-            		log.Fatalf("Failed to build: %v", err)
+            		log.Fatal(aspire.FormatError(err))
             	}
-            	if err := app.Run(nil); err != nil {
-            		log.Fatalf("Failed to run: %v", err)
+            	if err := app.Run(); err != nil {
+            		log.Fatal(aspire.FormatError(err))
             	}
             }
             """;
@@ -69,7 +72,7 @@ internal sealed class GoLanguageSupport : ILanguageSupport
         files["go.mod"] = """
             module apphost
 
-            go 1.23
+            go 1.26
 
             require apphost/modules/aspire v0.0.0
 

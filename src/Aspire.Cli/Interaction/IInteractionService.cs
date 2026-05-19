@@ -12,24 +12,24 @@ internal interface IInteractionService
 {
     Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action, KnownEmoji? emoji = null, bool allowMarkup = false);
     void ShowStatus(string statusText, Action action, KnownEmoji? emoji = null, bool allowMarkup = false);
-    Task<string> PromptForStringAsync(string promptText, string? defaultValue = null, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, CancellationToken cancellationToken = default);
-    Task<string> PromptForFilePathAsync(string promptText, string? defaultValue = null, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, CancellationToken cancellationToken = default);
-    public Task<bool> ConfirmAsync(string promptText, bool defaultValue = true, CancellationToken cancellationToken = default);
-    Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, CancellationToken cancellationToken = default) where T : notnull;
-    Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, CancellationToken cancellationToken = default) where T : notnull;
+    Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default);
+    Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default);
+    public Task<bool> PromptConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default);
+    Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull;
+    Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull;
     int DisplayIncompatibleVersionError(AppHostIncompatibleException ex, string appHostHostingVersion);
-    void DisplayError(string errorMessage);
-    void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false);
+    void DisplayError(string errorMessage, bool allowMarkup = false);
+    void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false, ConsoleOutput? consoleOverride = null);
     void DisplayPlainText(string text);
     void DisplayRawText(string text, ConsoleOutput? consoleOverride = null);
-    void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null);
+    void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null, int? maxWidth = null);
     void DisplayMarkupLine(string markup);
     void DisplaySuccess(string message, bool allowMarkup = false);
     void DisplaySubtleMessage(string message, bool allowMarkup = false);
     void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines);
     void DisplayRenderable(IRenderable renderable);
     Task DisplayLiveAsync(IRenderable initialRenderable, Func<Action<IRenderable>, Task> callback);
-    void DisplayCancellationMessage();
+    void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null);
     void DisplayEmptyLine();
 
     /// <summary>
@@ -38,6 +38,11 @@ internal interface IInteractionService
     /// so that structured output (e.g., JSON) on stdout remains parseable.
     /// </summary>
     ConsoleOutput Console { get; set; }
+
+    /// <summary>
+    /// Gets a value indicating whether the current console supports clickable hyperlinks.
+    /// </summary>
+    bool SupportsLinks { get; }
 
     void DisplayVersionUpdateNotification(string newerVersion, string? updateCommand = null);
     // The semantic type is stringly-typed because some values originate from backchannel payloads.

@@ -4,6 +4,7 @@
 using System.CommandLine;
 using System.Diagnostics;
 using System.Globalization;
+using System.Text;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
@@ -15,6 +16,7 @@ using Aspire.Cli.Telemetry;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Aspire.Cli.Utils;
+using Aspire.Cli.Utils.Markdown;
 using Aspire.Hosting;
 using Spectre.Console;
 using StreamJsonRpc;
@@ -60,6 +62,11 @@ internal abstract class PipelineCommandBase : BaseCommand
         Description = PublishCommandStrings.NoBuildArgumentDescription
     };
 
+    protected static readonly Option<bool> s_listStepsOption = new("--list-steps")
+    {
+        Description = "List the pipeline steps that would be executed, without running them."
+    };
+
     protected abstract string OperationCompletedPrefix { get; }
     protected abstract string OperationFailedPrefix { get; }
 
@@ -95,6 +102,7 @@ internal abstract class PipelineCommandBase : BaseCommand
         Options.Add(s_environmentOption);
         Options.Add(s_includeExceptionDetailsOption);
         Options.Add(s_noBuildOption);
+        Options.Add(s_listStepsOption);
 
         if (ExtensionHelper.IsExtensionHost(interactionService, out _, out _))
         {
@@ -116,13 +124,19 @@ internal abstract class PipelineCommandBase : BaseCommand
     protected abstract string GetProgressMessage(ParseResult parseResult);
 
     /// <summary>
+    /// Gets the target pipeline step name for this command, used for --list-steps filtering.
+    /// Returns null to show all steps.
+    /// </summary>
+    protected virtual string? GetTargetStepName(ParseResult parseResult) => null;
+
+    /// <summary>
     /// Gets command-specific arguments to forward when starting a debug session from the extension context.
     /// Subclasses should override to include their specific positional arguments.
     /// Unmatched tokens are always included automatically.
     /// </summary>
     protected virtual string[] GetCommandArgs(ParseResult parseResult) => [];
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         // If running in the extension context (Aspire terminal) without a debug session,
         // intercept and tell VS Code to start a proper debug session for this command.
@@ -139,7 +153,7 @@ internal abstract class PipelineCommandBase : BaseCommand
 
                 if (passedAppHostProjectFile is null)
                 {
-                    return ExitCodeConstants.FailedToFindProject;
+                    return CommandResult.Failure(CliExitCodes.FailedToFindProject);
                 }
             }
 
@@ -147,7 +161,7 @@ internal abstract class PipelineCommandBase : BaseCommand
 
             extensionInteractionService.DisplayConsolePlainText($"Detected aspire {Name} inside the Aspire extension, starting a debug session in VS Code...");
             await extensionInteractionService.StartDebugSessionAsync(ExecutionContext.WorkingDirectory.FullName, passedAppHostProjectFile?.FullName, debug: true, new DebugSessionOptions { Command = Name, Args = commandArgs.Length > 0 ? commandArgs : null });
-            return ExitCodeConstants.Success;
+            return CommandResult.Success();
         }
 
         var debugMode = parseResult.GetValue(RootCommand.DebugOption);
@@ -172,7 +186,7 @@ internal abstract class PipelineCommandBase : BaseCommand
             {
                 // Send terminal progress bar stop sequence
                 StopTerminalProgressBar();
-                return ExitCodeConstants.FailedToFindProject;
+                return CommandResult.Failure(CliExitCodes.FailedToFindProject);
             }
 
             var project = _projectFactory.GetProject(effectiveAppHostFile);
@@ -220,7 +234,7 @@ internal abstract class PipelineCommandBase : BaseCommand
                 InteractionService.DisplayMessage(KnownEmojis.Bug, InteractionServiceStrings.WaitingForDebuggerToAttachToAppHost);
             }
 
-            var backchannel = await InteractionService.ShowStatusAsync(GetProgressMessage(parseResult), async () =>
+            var backchannel = await InteractionService.ShowStatusAsync(GetProgressMessage(parseResult), (Func<Task<IAppHostCliBackchannel>>)(async () =>
             {
                 var completedTask = await Task.WhenAny(backchannelCompletionSource.Task, pendingRun);
                 if (completedTask == backchannelCompletionSource.Task)
@@ -238,7 +252,7 @@ internal abstract class PipelineCommandBase : BaseCommand
                 // DotNetCliRunner returns Success immediately after delegating to LaunchAppHostAsync,
                 // so pendingRun completes before the backchannel is established. In this case,
                 // continue waiting for the backchannel rather than throwing.
-                if (!completedTask.IsFaulted && await pendingRun == ExitCodeConstants.Success
+                if (!completedTask.IsFaulted && await pendingRun == CliExitCodes.Success
                     && ExtensionHelper.IsExtensionHost(InteractionService, out _, out _))
                 {
                     return await backchannelCompletionSource.Task;
@@ -248,7 +262,31 @@ internal abstract class PipelineCommandBase : BaseCommand
                 // Include possible error if the run task faulted.
                 var innerException = completedTask.IsFaulted ? completedTask.Exception : null;
                 throw new InvalidOperationException("Run completed without returning a backchannel.", innerException);
-            }, emoji: KnownEmojis.HammerAndWrench);
+            }), emoji: KnownEmojis.HammerAndWrench);
+
+            // If --list-steps was specified, get pipeline steps and print them instead of executing
+            var listSteps = parseResult.GetValue(s_listStepsOption);
+            if (listSteps)
+            {
+                StopTerminalProgressBar();
+
+                // Check that the AppHost supports this capability before calling
+                var capabilities = await backchannel.GetCapabilitiesAsync(cancellationToken);
+                if (!capabilities.Contains("pipeline-steps.v1"))
+                {
+                    throw new AppHostIncompatibleException(
+                        "The AppHost does not support --list-steps. Update the AppHost to a newer version of Aspire.",
+                        "pipeline-steps.v1");
+                }
+
+                var targetStep = GetTargetStepName(parseResult);
+                var response = await backchannel.GetPipelineStepsAsync(targetStep, cancellationToken);
+                PrintPipelineSteps(response.Steps);
+
+                await backchannel.RequestStopAsync(cancellationToken).ConfigureAwait(false);
+                await pendingRun;
+                return CommandResult.Success();
+            }
 
             var publishingActivities = backchannel.GetPublishingActivitiesAsync(cancellationToken);
 
@@ -277,18 +315,18 @@ internal abstract class PipelineCommandBase : BaseCommand
                 {
                     InteractionService.DisplayLines(outputCollector.GetLines());
                 }
-                return exitCode;
+                return CommandResult.FromExitCode(exitCode);
             }
 
             // If the apphost exited successfully (0) but reported failures via backchannel,
             // return a failure exit code.
             if (!noFailuresReported)
             {
-                return ExitCodeConstants.FailedToBuildArtifacts;
+                return CommandResult.Failure(CliExitCodes.FailedToBuildArtifacts);
             }
 
             // Both apphost exit code and backchannel indicate success
-            return ExitCodeConstants.Success;
+            return CommandResult.Success();
         }
         catch (OperationCanceledException ex)
         {
@@ -297,8 +335,7 @@ internal abstract class PipelineCommandBase : BaseCommand
             _logger.LogDebug(ex, "Operation was cancelled.");
             var canceledMessage = GetCanceledMessage();
             Telemetry.RecordError(canceledMessage, ex);
-            InteractionService.DisplayError(canceledMessage);
-            return ExitCodeConstants.FailedToBuildArtifacts;
+            return CommandResult.Failure(CliExitCodes.FailedToBuildArtifacts, canceledMessage);
         }
         catch (ProjectLocatorException ex)
         {
@@ -310,15 +347,14 @@ internal abstract class PipelineCommandBase : BaseCommand
         {
             // SDK not installed - message already displayed by EnsureSdkInstalledAsync
             StopTerminalProgressBar();
-            return ExitCodeConstants.SdkNotInstalled;
+            return CommandResult.Failure(CliExitCodes.SdkNotInstalled);
         }
         catch (AppHostIncompatibleException ex)
         {
             // Send terminal progress bar stop sequence on exception
             StopTerminalProgressBar();
             Telemetry.RecordError($"AppHost is incompatible. Required capability: {ex.RequiredCapability}", ex);
-            InteractionService.DisplayError(ex.Message);
-            return ExitCodeConstants.AppHostIncompatible;
+            return CommandResult.Failure(CliExitCodes.AppHostIncompatible, ex.Message);
         }
         catch (FailedToConnectBackchannelConnection ex)
         {
@@ -331,7 +367,7 @@ internal abstract class PipelineCommandBase : BaseCommand
             {
                 InteractionService.DisplayLines(outputCollector.GetLines());
             }
-            return ExitCodeConstants.FailedToBuildArtifacts;
+            return CommandResult.Failure(CliExitCodes.FailedToBuildArtifacts);
         }
         catch (ConnectionLostException ex)
         {
@@ -344,7 +380,7 @@ internal abstract class PipelineCommandBase : BaseCommand
             {
                 InteractionService.DisplayLines(outputCollector.GetLines());
             }
-            return pendingRun is { } && debugMode ? await pendingRun : ExitCodeConstants.FailedToBuildArtifacts;
+            return CommandResult.FromExitCode(pendingRun is { } && debugMode ? await pendingRun : CliExitCodes.FailedToBuildArtifacts);
         }
         catch (Exception ex)
         {
@@ -357,8 +393,105 @@ internal abstract class PipelineCommandBase : BaseCommand
             {
                 InteractionService.DisplayLines(outputCollector.GetLines());
             }
-            return ExitCodeConstants.FailedToBuildArtifacts;
+            return CommandResult.Failure(CliExitCodes.FailedToBuildArtifacts);
         }
+    }
+
+    /// <summary>
+    /// Prints pipeline steps in a numbered tree format showing dependencies and tags.
+    /// </summary>
+    internal void PrintPipelineSteps(PipelineStepInfo[] steps)
+    {
+        if (steps.Length == 0)
+        {
+            _ansiConsole.MarkupLine("[dim]No pipeline steps found.[/]");
+            return;
+        }
+
+        for (var i = 0; i < steps.Length; i++)
+        {
+            var step = steps[i];
+
+            _ansiConsole.MarkupLine($"[bold green]{i + 1}.[/] [cyan]{step.Name.EscapeMarkup()}[/]");
+
+            var hasDeps = step.DependsOn.Length > 0;
+            var hasTags = step.Tags.Length > 0;
+
+            if (!hasDeps && !hasTags)
+            {
+                _ansiConsole.MarkupLine("[dim]   └─ No dependencies[/]");
+            }
+            else
+            {
+                if (hasDeps)
+                {
+                    var connector = hasTags ? "├" : "└";
+                    var continuation = hasTags ? "│" : " ";
+                    var firstLinePrefix = $"   {connector}─ [blue]Depends on:[/] ";
+                    // Build continuation prefix that aligns wrapped items under the first dep value.
+                    // Replace the connector with the continuation char and pad the rest with spaces.
+                    var visibleWidth = StripMarkup(firstLinePrefix).Length;
+                    var continuationPrefix = "   " + continuation + new string(' ', visibleWidth - 4);
+                    var wrappedDeps = FormatWithHangingIndent(step.DependsOn, firstLinePrefix, continuationPrefix);
+                    _ansiConsole.MarkupLine(wrappedDeps);
+                }
+
+                if (hasTags)
+                {
+                    var tagsText = string.Join(", ", step.Tags);
+                    _ansiConsole.MarkupLine($"   └─ [yellow]Tags:[/] {tagsText.EscapeMarkup()}");
+                }
+            }
+
+            if (i < steps.Length - 1)
+            {
+                _ansiConsole.WriteLine();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Formats a list of items with a prefix on the first line and hanging indent on continuation lines.
+    /// Items are comma-separated and wrapped so each line stays readable.
+    /// </summary>
+    private static string FormatWithHangingIndent(string[] items, string firstLinePrefix, string continuationPrefix, int maxLineLength = 100)
+    {
+        if (items.Length == 0)
+        {
+            return firstLinePrefix;
+        }
+
+        var sb = new StringBuilder();
+        sb.Append(firstLinePrefix);
+
+        // Track visible length (without markup tags) for line wrapping
+        var visiblePrefixLength = StripMarkup(firstLinePrefix).Length;
+        var currentLineLength = visiblePrefixLength;
+
+        for (var i = 0; i < items.Length; i++)
+        {
+            var item = items[i].EscapeMarkup();
+            var separator = i < items.Length - 1 ? ", " : "";
+            var chunk = item + separator;
+
+            if (i > 0 && currentLineLength + chunk.Length > maxLineLength)
+            {
+                sb.AppendLine();
+                sb.Append(continuationPrefix);
+                currentLineLength = StripMarkup(continuationPrefix).Length;
+            }
+
+            sb.Append(chunk);
+            currentLineLength += chunk.Length;
+        }
+
+        return sb.ToString();
+    }
+
+    private static string StripMarkup(string text)
+    {
+        // Remove Spectre markup tags like [bold], [/], [blue], etc.
+        return System.Text.RegularExpressions.Regex.Replace(text, @"\[/?[^\]]*\]", "");
     }
 
     /// <summary>
@@ -412,27 +545,14 @@ internal abstract class PipelineCommandBase : BaseCommand
             else if (activity.Type == PublishingActivityTypes.Log)
             {
                 // Log activity - display the log message
-                var logLevel = activity.Data.LogLevel ?? "Information";
+                var (parsedLogLevel, logPrefix) = ParseLogLevel(activity.Data.LogLevel);
                 var message = ConvertTextWithMarkdownFlag(activity.Data.StatusText, activity.Data);
                 var timestamp = activity.Data.Timestamp?.ToString("HH:mm:ss", CultureInfo.InvariantCulture) ?? DateTimeOffset.UtcNow.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
 
-                // Use 3-letter prefixes for log levels
-                var logPrefix = logLevel.ToUpperInvariant() switch
-                {
-                    "DEBUG" => "DBG",
-                    "TRACE" => "TRC",
-                    "INFORMATION" => "INF",
-                    "WARNING" => "WRN",
-                    "ERROR" => "ERR",
-                    "CRITICAL" => "CRT",
-                    _ => "INF"
-                };
-
                 // Make debug and trace logs more subtle
-                var formattedMessage = logLevel.ToUpperInvariant() switch
+                var formattedMessage = parsedLogLevel switch
                 {
-                    "DEBUG" => $"[[{timestamp}]] [dim][[{logPrefix}]] {message}[/]",
-                    "TRACE" => $"[[{timestamp}]] [dim][[{logPrefix}]] {message}[/]",
+                    LogLevel.Debug or LogLevel.Trace => $"[[{timestamp}]] [dim][[{logPrefix}]] {message}[/]",
                     _ => $"[[{timestamp}]] [[{logPrefix}]] {message}"
                 };
 
@@ -550,42 +670,25 @@ internal abstract class PipelineCommandBase : BaseCommand
                     var stepId = activity.Data.StepId;
                     if (stepId != null && steps.TryGetValue(stepId, out var stepInfo))
                     {
-                        var logLevel = activity.Data.LogLevel ?? "Information";
+                        var (parsedLogLevel, logPrefix) = ParseLogLevel(activity.Data.LogLevel);
                         var message = ConvertTextWithMarkdownFlag(activity.Data.StatusText, activity.Data);
-
-                        // Add 3-letter prefix to message for consistency
-                        var logPrefix = logLevel.ToUpperInvariant() switch
-                        {
-                            "DEBUG" => "DBG",
-                            "TRACE" => "TRC",
-                            "INFORMATION" => "INF",
-                            "WARNING" => "WRN",
-                            "ERROR" => "ERR",
-                            "CRITICAL" => "CRT",
-                            _ => "INF"
-                        };
 
                         var prefixedMessage = $"[[{logPrefix}]] {message}";
 
-                        // Map log levels to appropriate console logger methods
-                        switch (logLevel.ToUpperInvariant())
+                        switch (parsedLogLevel)
                         {
-                            case "ERROR":
-                            case "CRITICAL":
+                            case LogLevel.Error:
+                            case LogLevel.Critical:
                                 logger.Failure(stepInfo.Id, prefixedMessage);
                                 break;
-                            case "WARNING":
-                            case "WARN":
+                            case LogLevel.Warning:
                                 logger.Warning(stepInfo.Id, prefixedMessage);
                                 break;
-                            case "DEBUG":
-                            case "TRACE":
-                                // Use a more subtle approach for debug/trace - prefix with dim formatting
-                                var subtleMessage = $"[dim]{prefixedMessage}[/]";
-                                logger.Info(stepInfo.Id, subtleMessage);
+                            case LogLevel.Debug:
+                            case LogLevel.Trace:
+                                logger.Info(stepInfo.Id, prefixedMessage, dim: true);
                                 break;
-                            case "INFORMATION":
-                            case "INFO":
+                            case LogLevel.Information:
                             default:
                                 logger.Info(stepInfo.Id, prefixedMessage);
                                 break;
@@ -828,24 +931,24 @@ internal abstract class PipelineCommandBase : BaseCommand
         {
             InputType.Text => await InteractionService.PromptForStringAsync(
                 promptText,
-                defaultValue: input.Value?.EscapeMarkup(),
+                binding: PromptBinding.CreateDefault(input.Value),
                 required: input.Required,
                 cancellationToken: cancellationToken),
 
             InputType.SecretText => await InteractionService.PromptForStringAsync(
                 promptText,
-                defaultValue: input.Value?.EscapeMarkup(),
+                binding: PromptBinding.CreateDefault(input.Value),
                 isSecret: true,
                 required: input.Required,
                 cancellationToken: cancellationToken),
 
             InputType.Choice => await HandleSelectInputAsync(input, promptText, cancellationToken),
 
-            InputType.Boolean => (await InteractionService.ConfirmAsync(promptText, defaultValue: ParseBooleanValue(input.Value), cancellationToken: cancellationToken)).ToString().ToLowerInvariant(),
+            InputType.Boolean => (await InteractionService.PromptConfirmAsync(promptText, binding: PromptBinding.CreateDefault(ParseBooleanValue(input.Value)), cancellationToken: cancellationToken)).ToString().ToLowerInvariant(),
 
             InputType.Number => await HandleNumberInputAsync(input, promptText, cancellationToken),
 
-            _ => await InteractionService.PromptForStringAsync(promptText, defaultValue: input.Value?.EscapeMarkup(), required: input.Required, cancellationToken: cancellationToken)
+            _ => await InteractionService.PromptForStringAsync(promptText, binding: PromptBinding.CreateDefault(input.Value), required: input.Required, cancellationToken: cancellationToken)
         };
     }
 
@@ -853,7 +956,7 @@ internal abstract class PipelineCommandBase : BaseCommand
     {
         if (input.Options is null || input.Options.Count == 0)
         {
-            return await InteractionService.PromptForStringAsync(promptText, defaultValue: input.Value?.EscapeMarkup(), required: input.Required, cancellationToken: cancellationToken);
+            return await InteractionService.PromptForStringAsync(promptText, binding: PromptBinding.CreateDefault(input.Value), required: input.Required, cancellationToken: cancellationToken);
         }
 
         // If AllowCustomChoice is enabled then add an "Other" option to the list.
@@ -871,11 +974,11 @@ internal abstract class PipelineCommandBase : BaseCommand
             promptText,
             options,
             choice => choice.Value.EscapeMarkup(),
-            cancellationToken);
+            cancellationToken: cancellationToken);
 
         if (value == CustomChoiceValue)
         {
-            return await InteractionService.PromptForStringAsync(promptText, defaultValue: input.Value?.EscapeMarkup(), required: input.Required, cancellationToken: cancellationToken);
+            return await InteractionService.PromptForStringAsync(promptText, binding: PromptBinding.CreateDefault(input.Value), required: input.Required, cancellationToken: cancellationToken);
         }
 
         AnsiConsole.MarkupLine($"{promptText} {displayText.EscapeMarkup()}");
@@ -897,7 +1000,7 @@ internal abstract class PipelineCommandBase : BaseCommand
 
         return await InteractionService.PromptForStringAsync(
             promptText,
-            defaultValue: input.Value?.EscapeMarkup(),
+            binding: PromptBinding.CreateDefault(input.Value),
             validator: Validator,
             required: input.Required,
             cancellationToken: cancellationToken);
@@ -907,6 +1010,17 @@ internal abstract class PipelineCommandBase : BaseCommand
     {
         return bool.TryParse(value, out var result) && result;
     }
+
+    private static (LogLevel Level, string Prefix) ParseLogLevel(string? logLevel) => logLevel?.ToUpperInvariant() switch
+    {
+        "TRACE" => (LogLevel.Trace, "TRC"),
+        "DEBUG" => (LogLevel.Debug, "DBG"),
+        "INFORMATION" or "INFO" => (LogLevel.Information, "INF"),
+        "WARNING" or "WARN" => (LogLevel.Warning, "WRN"),
+        "ERROR" => (LogLevel.Error, "ERR"),
+        "CRITICAL" => (LogLevel.Critical, "CRT"),
+        null or _ => (LogLevel.Information, "INF")
+    };
 
     private class StepInfo
     {

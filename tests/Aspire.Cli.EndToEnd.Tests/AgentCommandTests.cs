@@ -26,10 +26,10 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
     public async Task AgentCommands_AllHelpOutputs_AreCorrect()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, workspace: workspace);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
@@ -38,7 +38,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Test 1: aspire agent --help
         await auto.TypeAsync("aspire agent --help");
@@ -88,10 +88,10 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
     public async Task AgentInitCommand_MigratesDeprecatedConfig()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, workspace: workspace);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
@@ -105,7 +105,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Step 1: Create deprecated config file using Claude Code format (.mcp.json)
         // This simulates a config that was created by an older version of the CLI
@@ -138,7 +138,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
             s => s.ContainsText("skills should be installed"),
             timeout: TimeSpan.FromSeconds(30), description: "skill selection prompt");
         // Playwright and dotnet-inspect are no longer pre-selected, so just accept
-        // the defaults (only the aspire skill is selected).
+        // the default built-in Aspire skills.
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptFailFastAsync(counter);
@@ -163,10 +163,10 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
     public async Task DoctorCommand_DetectsDeprecatedAgentConfig()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, workspace: workspace);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
@@ -177,7 +177,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Create deprecated config file
         File.WriteAllText(configPath, """{"mcpServers":{"aspire":{"command":"aspire","args":["mcp","start"]}}}""");
@@ -196,17 +196,17 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
 
     /// <summary>
     /// Tests that aspire agent init with a .vscode folder shows skill location and skill selection
-    /// prompts, and that accepting the defaults (Standard location + all skills) completes
-    /// successfully and creates the skill file in the .agents/skills/ directory.
+    /// prompts, and that accepting the defaults completes successfully and creates the default
+    /// skill files in the .agents/skills/ directory.
     /// </summary>
     [Fact]
-    public async Task AgentInitCommand_DefaultSelection_InstallsSkillOnly()
+    public async Task AgentInitCommand_DefaultSelection_InstallsDefaultSkills()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
-        var installMode = CliE2ETestHelpers.DetectDockerInstallMode(repoRoot);
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
         var workspace = TemporaryWorkspace.Create(output);
 
-        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, installMode, output, workspace: workspace);
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, workspace: workspace);
 
         var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
 
@@ -218,7 +218,7 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
 
         await auto.PrepareDockerEnvironmentAsync(counter, workspace);
 
-        await auto.InstallAspireCliInDockerAsync(installMode, counter);
+        await auto.InstallAspireCliAsync(strategy, counter);
 
         // Create .vscode folder so the scanner detects VS Code environment
         Directory.CreateDirectory(vscodePath);
@@ -238,15 +238,18 @@ public sealed class AgentCommandTests(ITestOutputHelper output)
             s => s.ContainsText("skills should be installed"),
             timeout: TimeSpan.FromSeconds(30), description: "skill selection prompt");
         // Playwright and dotnet-inspect are no longer pre-selected, so just accept
-        // the defaults (only the aspire skill is selected).
+        // the default built-in Aspire skills.
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("configuration complete", timeout: TimeSpan.FromSeconds(30));
         await auto.WaitForSuccessPromptFailFastAsync(counter);
 
-        // Verify skill file was created (skills are now installed at .agents/skills/ by StandardLocationAgentEnvironmentScanner)
+        // Verify skill files were created (skills are now installed at .agents/skills/ by StandardLocationAgentEnvironmentScanner)
         var skillFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire", "SKILL.md");
         var fileContent = File.ReadAllText(skillFilePath);
         Assert.Contains("aspire start", fileContent);
+        var deploymentSkillFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire-deployment", "SKILL.md");
+        var deploymentFileContent = File.ReadAllText(deploymentSkillFilePath);
+        Assert.Contains("Aspire Deployment", deploymentFileContent);
 
         await auto.TypeAsync("exit");
         await auto.EnterAsync();

@@ -1,15 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.CommandLine;
 using Microsoft.AspNetCore.InternalTesting;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Commands;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
-using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.Telemetry;
@@ -29,26 +28,6 @@ public class DotNetTemplateFactoryTests
     public DotNetTemplateFactoryTests(ITestOutputHelper outputHelper)
     {
         _outputHelper = outputHelper;
-    }
-
-    private sealed class FakeNuGetPackageCache : INuGetPackageCache
-    {
-        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetTemplatePackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
-        {
-            _ = workingDirectory; _ = prerelease; _ = nugetConfigFile; _ = cancellationToken; return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>([]);
-        }
-        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetIntegrationPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
-        {
-            _ = workingDirectory; _ = prerelease; _ = nugetConfigFile; _ = cancellationToken; return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>([]);
-        }
-        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetCliPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
-        {
-            _ = workingDirectory; _ = prerelease; _ = nugetConfigFile; _ = cancellationToken; return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>([]);
-        }
-        public Task<IEnumerable<Aspire.Shared.NuGetPackageCli>> GetPackagesAsync(DirectoryInfo workingDirectory, string packageId, Func<string, bool>? filter, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)
-        {
-            _ = workingDirectory; _ = packageId; _ = filter; _ = prerelease; _ = nugetConfigFile; _ = useCache; _ = cancellationToken; return Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>([]);
-        }
     }
 
     private static PackageChannel CreateExplicitChannel(PackageMapping[] mappings) =>
@@ -368,86 +347,43 @@ public class DotNetTemplateFactoryTests
         var packagingService = new TestPackagingService();
         var prompter = new TestNewCommandPrompter();
         var workingDirectory = new DirectoryInfo("/tmp");
-        var hivesDirectory = new DirectoryInfo("/tmp/hives");
-        var cacheDirectory = new DirectoryInfo("/tmp/cache");
-        var executionContext = new CliExecutionContext(workingDirectory, hivesDirectory, cacheDirectory, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var executionContext = TestExecutionContextHelper.CreateExecutionContext(workingDirectory);
         sdkInstaller ??= new TestDotNetSdkInstaller();
-        var configurationService = new FakeConfigurationService();
         var telemetry = TestTelemetryHelper.CreateInitializedTelemetry();
         var hostEnvironment = new FakeCliHostEnvironment(nonInteractive);
-        var templateNuGetConfigService = new TemplateNuGetConfigService(interactionService, executionContext, packagingService, configurationService);
+        var templateNuGetConfigService = new TemplateNuGetConfigService(interactionService, executionContext, packagingService, prompter, hostEnvironment);
 
         return new DotNetTemplateFactory(
             interactionService,
             runner,
             certificateService,
-            packagingService,
-            prompter,
             prompter,
             executionContext,
             sdkInstaller,
             features,
-            configurationService,
             telemetry,
             hostEnvironment,
             templateNuGetConfigService);
     }
 
-    private sealed class FakeConfigurationService : IConfigurationService
-    {
-        public Task SetConfigurationAsync(string key, string value, bool isGlobal = false, CancellationToken cancellationToken = default)
-        {
-            return Task.CompletedTask;
-        }
-
-        public Task<bool> DeleteConfigurationAsync(string key, bool isGlobal = false, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(false);
-        }
-
-        public Task<Dictionary<string, string>> GetAllConfigurationAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(new Dictionary<string, string>());
-        }
-
-        public Task<Dictionary<string, string>> GetLocalConfigurationAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(new Dictionary<string, string>());
-        }
-
-        public Task<Dictionary<string, string>> GetGlobalConfigurationAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult(new Dictionary<string, string>());
-        }
-
-        public Task<string?> GetConfigurationAsync(string key, CancellationToken cancellationToken = default)
-        {
-            return Task.FromResult<string?>(null);
-        }
-
-        public string GetSettingsFilePath(bool isGlobal)
-        {
-            return "/tmp/settings.json";
-        }
-    }
-
     private sealed class TestInteractionService : IInteractionService
     {
         public ConsoleOutput Console { get; set; }
+        public bool SupportsLinks { get; set; }
 
-        public Task<T> PromptForSelectionAsync<T>(string prompt, IEnumerable<T> choices, Func<T, string> displaySelector, CancellationToken cancellationToken) where T : notnull
+        public Task<T> PromptForSelectionAsync<T>(string prompt, IEnumerable<T> choices, Func<T, string> displaySelector, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
             => throw new NotImplementedException();
 
-        public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, CancellationToken cancellationToken = default) where T : notnull
+        public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
             => throw new NotImplementedException();
 
-        public Task<string> PromptForStringAsync(string promptText, string? defaultValue = null, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, CancellationToken cancellationToken = default)
+        public Task<string> PromptForStringAsync(string promptText, Func<string, ValidationResult>? validator = null, bool isSecret = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
 
-        public Task<string> PromptForFilePathAsync(string promptText, string? defaultValue = null, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, CancellationToken cancellationToken = default)
+        public Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
 
-        public Task<bool> ConfirmAsync(string prompt, bool defaultAnswer, CancellationToken cancellationToken)
+        public Task<bool> PromptConfirmAsync(string prompt, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
 
         public Task<TResult> ShowStatusAsync<TResult>(string message, Func<Task<TResult>> work, KnownEmoji? emoji = null, bool allowMarkup = false)
@@ -460,14 +396,14 @@ public class DotNetTemplateFactoryTests
             => throw new NotImplementedException();
 
         public void DisplaySuccess(string message, bool allowMarkup = false) { }
-        public void DisplayError(string message) { }
-        public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false) { }
+        public void DisplayError(string message, bool allowMarkup = false) { }
+        public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false, ConsoleOutput? consoleOverride = null) { }
         public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines) { }
-        public void DisplayCancellationMessage() { }
+        public void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null) { }
         public int DisplayIncompatibleVersionError(AppHostIncompatibleException ex, string appHostHostingVersion) => 0;
         public void DisplayPlainText(string text) { }
         public void DisplayRawText(string text, ConsoleOutput? consoleOverride = null) { }
-        public void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null) { }
+        public void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null, int? maxWidth = null) { }
         public void DisplayMarkupLine(string markup) { }
         public void DisplaySubtleMessage(string message, bool allowMarkup = false) { }
         public void DisplayEmptyLine() { }
@@ -503,7 +439,7 @@ public class DotNetTemplateFactoryTests
         public Task<int> AddProjectReferenceAsync(FileInfo projectFile, FileInfo referencedProjectFile, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
-        public Task<(int ExitCode, NuGetPackageCli[]? Packages)> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, CancellationToken cancellationToken)
+        public Task<(int ExitCode, NuGetPackageCli[]? Packages)> SearchPackagesAsync(DirectoryInfo workingDirectory, string query, bool exactMatch, bool prerelease, int take, int skip, FileInfo? nugetConfigFile, bool useCache, ProcessInvocationOptions options, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
         public Task<(int ExitCode, bool IsAspireHost, string? AspireHostingVersion)> GetAppHostInformationAsync(FileInfo projectFile, ProcessInvocationOptions options, CancellationToken cancellationToken)
@@ -525,21 +461,19 @@ public class DotNetTemplateFactoryTests
     private sealed class TestCertificateService : ICertificateService
     {
         public Task<EnsureCertificatesTrustedResult> EnsureCertificatesTrustedAsync(CancellationToken cancellationToken)
-            => Task.FromResult(new EnsureCertificatesTrustedResult { EnvironmentVariables = new Dictionary<string, string>() });
-    }
-
-    private sealed class TestPackagingService : IPackagingService
-    {
-        public Task<IEnumerable<PackageChannel>> GetChannelsAsync(CancellationToken cancellationToken)
-            => throw new NotImplementedException();
+            => Task.FromResult(new EnsureCertificatesTrustedResult
+            {
+                EnvironmentVariables = new Dictionary<string, string>(),
+                Success = true
+            });
     }
 
     private sealed class TestNewCommandPrompter : INewCommandPrompter, ITemplateVersionPrompter
     {
-        public Task<string> PromptForProjectNameAsync(string defaultName, CancellationToken cancellationToken)
+        public Task<string> PromptForProjectNameAsync(string defaultName, ParseResult parseResult, CancellationToken cancellationToken)
             => throw new NotImplementedException();
 
-        public Task<string> PromptForOutputPath(string defaultPath, CancellationToken cancellationToken)
+        public Task<string> PromptForOutputPath(string defaultPath, ParseResult parseResult, Func<string, ValidationResult>? validator = null, CancellationToken cancellationToken = default)
             => throw new NotImplementedException();
 
         public Task<(Aspire.Shared.NuGetPackageCli Package, PackageChannel Channel)> PromptForTemplatesVersionAsync(IEnumerable<(Aspire.Shared.NuGetPackageCli Package, PackageChannel Channel)> packages, CancellationToken cancellationToken)

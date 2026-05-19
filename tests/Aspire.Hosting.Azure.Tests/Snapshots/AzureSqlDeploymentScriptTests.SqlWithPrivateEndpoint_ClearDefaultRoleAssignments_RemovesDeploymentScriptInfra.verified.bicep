@@ -103,6 +103,8 @@ output name string = env_acr.name
 
 output loginServer string = env_acr.properties.loginServer
 
+output id string = env_acr.id
+
 // Resource: myvnet
 @description('The location for the resource(s) to be deployed.')
 param location string = resourceGroup().location

@@ -61,7 +61,7 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Execute a specific pipeline step and its dependencies. (Preview).
+        ///   Looks up a localized string similar to Execute a specific pipeline step and its dependencies.
         /// </summary>
         public static string Description {
             get {

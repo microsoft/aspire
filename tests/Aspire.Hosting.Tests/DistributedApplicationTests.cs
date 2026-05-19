@@ -3,9 +3,12 @@
 
 #pragma warning disable ASPIRECERTIFICATES001
 
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Threading.Channels;
+using Aspire.Hosting.Diagnostics;
 using Aspire.TestUtilities;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Dcp.Model;
@@ -20,10 +23,12 @@ using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
 using k8s.Models;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Xunit.Sdk;
 using TestConstants = Microsoft.AspNetCore.InternalTesting.TestConstants;
@@ -119,6 +124,61 @@ public class DistributedApplicationTests
         Assert.Equal(exceptionMessage, ex.Message);
         Assert.True(signal.FirstHookExecuted);
         Assert.True(signal.SecondHookExecuted);
+    }
+
+    [Fact]
+    public async Task RunAsync_RecordsAppHostStartActivityForBeforeStartFailure()
+    {
+        var exceptionMessage = "Exception from lifecycle hook to prove startup failures are traced!";
+        var activities = new ConcurrentBag<Activity>();
+        using var listener = CreateActivityListener(ProfilingTelemetry.ActivitySourceName, activities.Add);
+
+        using var testProgram = CreateTestProgram("runasync-start-activity-before-start-failure", includeIntegrationServices: false);
+        testProgram.AppBuilder.Configuration[KnownConfigNames.ProfilingEnabled] = "true";
+#pragma warning disable CS0618 // Lifecycle hooks are obsolete, but still need to be tested until removed.
+        testProgram.AppBuilder.Services.AddLifecycleHook(_ =>
+        {
+            return new CallbackLifecycleHook((_, _) =>
+            {
+                throw new DistributedApplicationException(exceptionMessage);
+            });
+        });
+#pragma warning restore CS0618 // Lifecycle hooks are obsolete, but still need to be tested until removed.
+
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(async () =>
+        {
+            await testProgram.RunAsync();
+        }).DefaultTimeout(TestConstants.DefaultOrchestratorTestTimeout);
+
+        Assert.Equal(exceptionMessage, ex.Message);
+
+        var appHostStartActivity = Assert.Single(activities, activity => activity.OperationName == ProfilingTelemetry.Activities.AppHostStart);
+        Assert.Equal(nameof(DistributedApplication.RunAsync), appHostStartActivity.GetTagItem(ProfilingTelemetry.Tags.AppHostEntryPoint));
+        Assert.Equal(ActivityStatusCode.Error, appHostStartActivity.Status);
+        Assert.Contains(appHostStartActivity.Events, @event => @event.Name == ProfilingTelemetry.Events.Exception);
+    }
+
+    [Fact]
+    public async Task DistributedApplicationLifecycle_StopAsyncDisposesHostStartupActivityWhenStartupDoesNotComplete()
+    {
+        var configuration = CreateConfiguration((KnownConfigNames.ProfilingEnabled, "true"));
+        var activities = new ConcurrentBag<Activity>();
+        using var listener = CreateActivityListener(ProfilingTelemetry.ActivitySourceName, activities.Add);
+        var lifecycle = new DistributedApplicationLifecycle(
+            NullLogger<DistributedApplication>.Instance,
+            configuration,
+            new ProfilingTelemetry(configuration),
+            new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
+            new LocaleOverrideContext());
+
+        await lifecycle.StartingAsync(CancellationToken.None);
+
+        Assert.Empty(activities);
+
+        await lifecycle.StopAsync(CancellationToken.None);
+
+        var hostStartupActivity = Assert.Single(activities, activity => activity.OperationName == ProfilingTelemetry.Activities.AppHostHostStartup);
+        Assert.DoesNotContain(hostStartupActivity.Events, @event => @event.Name == ProfilingTelemetry.Events.AppHostHostStarted);
     }
 
     [Fact]
@@ -1982,6 +2042,34 @@ public class DistributedApplicationTests
         await app.StopAsync(token).DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
     }
 
+    [Theory]
+    [RequiresFeature(TestFeature.Docker)]
+    [InlineData(0)] // Success exit code
+    [InlineData(100)] // Failing (non-zero) exit code
+    public async Task ContainerExitsImmediatelyAfterStart(int exitCode)
+    {
+        const string testName = "container-exits-immediately";
+        using var testProgram = CreateTestProgram(testName);
+        
+        var containerResourceName = testName;
+        _ = testProgram.AppBuilder.AddContainer(containerResourceName, "alpine")
+            .WithEntrypoint("sh")
+            .WithArgs("-c", $"echo Hello World;exit {exitCode}");
+
+        using var app = testProgram.Build();
+        var rns = app.Services.GetRequiredService<ResourceNotificationService>();
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource(TestConstants.ExtraLongTimeoutDuration);
+        var token = cts.Token;
+
+        var startTask = app.StartAsync(cts.Token);
+
+        // Should reach Exited state, not FailedToStart.
+        await rns.WaitForResourceAsync(containerResourceName, KnownResourceStates.Exited, token).DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
+
+        await startTask.DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
+        await app.StopAsync(token).DefaultTimeout(TestConstants.ExtraLongTimeoutTimeSpan);
+    }
+
     private static async Task EnsureLogLines(Stream stream, CancellationToken ct, long nlines, Func<long, bool>? validateLineNumber = default)
     {
         using var reader = new StreamReader(stream);
@@ -2062,5 +2150,24 @@ public class DistributedApplicationTests
         testProgram.AppBuilder.WithTestAndResourceLogging(_testOutputHelper);
 
         return testProgram;
+    }
+
+    private static ActivityListener CreateActivityListener(string sourceName, Action<Activity> activityStopped)
+    {
+        var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == sourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = activityStopped
+        };
+        ActivitySource.AddActivityListener(listener);
+        return listener;
+    }
+
+    private static IConfiguration CreateConfiguration(params (string Key, string? Value)[] values)
+    {
+        return new ConfigurationBuilder()
+            .AddInMemoryCollection(values.Select(value => new KeyValuePair<string, string?>(value.Key, value.Value)))
+            .Build();
     }
 }

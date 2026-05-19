@@ -411,6 +411,26 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task ValidateAzureAppService_DoesNotThrowInRunMode()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/16940.
+        // In run mode, AddAzureAppServiceEnvironment does not add the env resource to the model.
+        // If a compute resource still ends up with an AzureAppServiceWebsiteCustomizationAnnotation
+        // (e.g. via WithAnnotation), the validation step should not throw at 'aspire run' time —
+        // PublishAs* customizations are only meaningful at publish/deploy time.
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        builder.AddAzureAppServiceEnvironment("env");
+
+        builder.AddContainer("api", "myimage")
+            .WithAnnotation(new AzureAppServiceWebsiteCustomizationAnnotation((_, _) => { }));
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+    }
+
+    [Fact]
     [ActiveIssue("https://github.com/microsoft/aspire/issues/11818", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public async Task MultipleAzureAppServiceEnvironmentsSupported()
     {
@@ -603,6 +623,44 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task CanPreserveHttpSchemeUsingWithHttpsUpgrade()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureAppServiceEnvironment("env")
+               .WithHttpsUpgrade(false);
+
+        var project1 = builder.AddProject<Project>("project1", launchProfileName: null)
+            .WithHttpsEndpoint(targetPort: 8000)
+            .WithHttpEndpoint(targetPort: 8000)
+            .WithExternalHttpEndpoints();
+
+        // Add a second project that references project1 so we can verify
+        // the resolved endpoint URLs use http:// (not upgraded to https://)
+        var project2 = builder.AddProject<Project>("project2", launchProfileName: null)
+            .WithHttpEndpoint(targetPort: 9000)
+            .WithExternalHttpEndpoints()
+            .WithReference(project1);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        project2.Resource.TryGetLastAnnotation<DeploymentTargetAnnotation>(out var target);
+
+        var resource = target?.DeploymentTarget as AzureProvisioningResource;
+
+        Assert.NotNull(resource);
+
+        var (manifest, bicep) = await GetManifestWithBicep(resource);
+
+        await Verify(manifest.ToString(), "json")
+                .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Fact]
     public async Task AddAppServiceWithTargetPortMultipleEndpoints()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -656,7 +714,8 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
 
         using var app = builder.Build();
 
-        var ex = await Assert.ThrowsAsync<NotSupportedException>(() => ExecuteBeforeStartHooksAsync(app, default));
+        var outer = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteBeforeStartHooksAsync(app, default));
+        var ex = Assert.IsType<NotSupportedException>(outer.InnerException);
 
         Assert.Equal("App Service does not support resources with multiple external endpoints.", ex.Message);
     }
@@ -676,7 +735,8 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
 
         using var app = builder.Build();
 
-        var ex = await Assert.ThrowsAsync<NotSupportedException>(() => ExecuteBeforeStartHooksAsync(app, default));
+        var outer = await Assert.ThrowsAsync<InvalidOperationException>(() => ExecuteBeforeStartHooksAsync(app, default));
+        var ex = Assert.IsType<NotSupportedException>(outer.InnerException);
 
         Assert.Equal("App Service does not support resources with multiple external endpoints.", ex.Message);
     }
@@ -764,6 +824,34 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("webSiteSuffix", output.Name);
     }
 
+    [Theory]
+    [InlineData(EndpointProperty.Url, "https://project1-website123.azurewebsites.net")]
+    [InlineData(EndpointProperty.Host, "project1-website123.azurewebsites.net")]
+    [InlineData(EndpointProperty.IPV4Host, "project1-website123.azurewebsites.net")]
+    [InlineData(EndpointProperty.Port, "443")]
+    [InlineData(EndpointProperty.TargetPort, "5000")]
+    [InlineData(EndpointProperty.Scheme, "https")]
+    [InlineData(EndpointProperty.HostAndPort, "project1-website123.azurewebsites.net")]
+    [InlineData(EndpointProperty.TlsEnabled, "True")]
+    public async Task GetEndpointPropertyExpression_ReturnsAppServiceEndpointPropertyExpression(EndpointProperty property, string expected)
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var env = builder.AddAzureAppServiceEnvironment("env");
+        env.Resource.Outputs["webSiteSuffix"] = "website123";
+        env.Resource.ProvisioningTaskCompletionSource?.TrySetResult();
+
+        var project = builder
+            .AddProject<Project>("project1", launchProfileName: null)
+            .WithEndpoint(port: 8080, targetPort: 5000, scheme: "http", name: "http", isExternal: true);
+
+#pragma warning disable ASPIRECOMPUTE002
+        var expression = env.Resource.GetEndpointPropertyExpression(project.GetEndpoint("http").Property(property));
+#pragma warning restore ASPIRECOMPUTE002
+
+        Assert.Equal(expected, await expression.GetValueAsync(default));
+    }
+
     [Fact]
     public async Task AddAppServiceWithApplicationInsightsLocation()
     {
@@ -804,6 +892,26 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
 
         await Verify(manifest.ToString(), "json")
               .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task AddAppServiceWithApplicationInsightsNormalizesBicepIdentifiers()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureAppServiceEnvironment("env-1").WithAzureApplicationInsights();
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var environment = Assert.Single(model.Resources.OfType<AzureAppServiceEnvironmentResource>());
+
+        var (_, bicep) = await GetManifestWithBicep(environment);
+
+        await Verify(bicep, "bicep");
     }
 
     [Fact]

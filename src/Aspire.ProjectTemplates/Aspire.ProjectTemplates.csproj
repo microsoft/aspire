@@ -65,7 +65,6 @@
     </ItemGroup>
   </Target>
 
-  <!-- Replaces the versions referenced by the templates projects to use the version of the packages being live-built -->
   <Target Name="ReplacePackageVersionOnTemplates"
           DependsOnTargets="CopyTemplatesToIntermediateOutputPath">
 

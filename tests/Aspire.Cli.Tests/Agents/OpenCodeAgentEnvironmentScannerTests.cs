@@ -9,6 +9,7 @@ using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
+using Semver;
 
 namespace Aspire.Cli.Tests.Agents;
 

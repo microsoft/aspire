@@ -4,18 +4,20 @@ Use this when the AppHost is implemented in C# and the task involves understandi
 
 ## Scenario: I Need Official Docs For An Unfamiliar C# AppHost API
 
-Use these commands when you need the documented Aspire pattern before changing C# AppHost code.
+Use these commands when you need the documented Aspire pattern and the C# API reference before changing AppHost code.
 
 ```bash
 aspire docs search <query>
 aspire docs get <slug>
+aspire docs api search <query> --language csharp
+aspire docs api get <id>
 ```
 
 Keep these points in mind:
 
-- Use Aspire docs first when the task is about understanding an unfamiliar resource builder API, extension method, dashboard command pattern, or integration workflow.
+- Use Aspire docs first when the task is about understanding an unfamiliar integration workflow or dashboard command pattern.
+- Use `aspire docs api` when the task is about finding the C# reference entry for a resource builder API, extension method, or member.
 - Search for the resource or pattern name before guessing the C# API shape.
-- Use the docs to confirm the recommended pattern before editing the AppHost.
 
 ## Scenario: I Need To Read The Local C# API Surface More Closely
 

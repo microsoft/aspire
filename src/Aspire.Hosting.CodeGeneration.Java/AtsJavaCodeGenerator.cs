@@ -4,9 +4,18 @@
 using System.Globalization;
 using System.Reflection;
 using System.Text;
+using System.Text.Json.Nodes;
+using Aspire.Shared.Json;
 using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.Java;
+
+internal sealed class JavaExportedValueTreeNode
+{
+    public Dictionary<string, JavaExportedValueTreeNode> Children { get; } = new(StringComparer.Ordinal);
+
+    public AtsExportedValueInfo? Value { get; set; }
+}
 
 /// <summary>
 /// Generates a Java SDK using the ATS (Aspire Type System) capability-based API.
@@ -395,6 +404,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         var capabilities = context.Capabilities;
         var dtoTypes = context.DtoTypes;
         var enumTypes = context.EnumTypes;
+        var exportedValues = context.ExportedValues;
 
         _enumNames.Clear();
         foreach (var enumType in enumTypes)
@@ -419,6 +429,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         WriteHeader();
         GenerateEnumTypes(enumTypes);
         GenerateDtoTypes(dtoTypes);
+        GenerateExportedValues(exportedValues, dtoTypes.ToDictionary(dto => dto.TypeId, StringComparer.Ordinal));
         GenerateOptionTypes();
         GenerateHandleTypes(handleTypes, capabilitiesByTarget);
         GenerateHandleWrapperRegistrations(handleTypes, collectionTypes);
@@ -517,7 +528,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
 
             var dtoName = _dtoNames[dto.TypeId];
             WriteLine($"/** {dto.Name} DTO. */");
-            WriteLine($"class {dtoName} {{");
+            WriteLine($"class {dtoName} implements JsonSerializable {{");
             
             // Fields
             foreach (var property in dto.Properties)
@@ -554,6 +565,144 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
             WriteLine("}");
             WriteLine();
         }
+    }
+
+    private void GenerateExportedValues(
+        IReadOnlyList<AtsExportedValueInfo> exportedValues,
+        IReadOnlyDictionary<string, AtsDtoTypeInfo> dtoTypesById)
+    {
+        if (exportedValues.Count == 0)
+        {
+            return;
+        }
+
+        var root = BuildExportedValueTree(exportedValues);
+
+        WriteLine("// ============================================================================");
+        WriteLine("// Exported Values");
+        WriteLine("// ============================================================================");
+        WriteLine();
+
+        foreach (var (name, node) in root.Children.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            WriteLine($"final class {name} {{");
+            WriteLine($"    private {name}() {{ }}");
+            WriteLine();
+            WriteJavaExportedValueChildren(node, dtoTypesById, indentLevel: 1);
+            WriteLine("}");
+            WriteLine();
+        }
+    }
+
+    private void WriteJavaExportedValueChildren(
+        JavaExportedValueTreeNode node,
+        IReadOnlyDictionary<string, AtsDtoTypeInfo> dtoTypesById,
+        int indentLevel)
+    {
+        var indent = new string(' ', indentLevel * 4);
+
+        foreach (var (name, child) in node.Children.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            if (child.Value is { } valueInfo)
+            {
+                if (!string.IsNullOrWhiteSpace(valueInfo.Description))
+                {
+                    WriteLine($"{indent}/** {valueInfo.Description} */");
+                }
+
+                var javaType = MapTypeRefToJava(valueInfo.Type, isOptional: false, useBoxedTypes: true);
+                var expression = RenderJavaExportedValue(valueInfo.Value, valueInfo.Type, dtoTypesById);
+                WriteLine($"{indent}public static final {javaType} {name} = {expression};");
+            }
+            else
+            {
+                WriteLine($"{indent}public static final class {name} {{");
+                WriteLine($"{indent}    private {name}() {{ }}");
+                WriteLine();
+                WriteJavaExportedValueChildren(child, dtoTypesById, indentLevel + 1);
+                WriteLine($"{indent}}}");
+            }
+
+            WriteLine();
+        }
+    }
+
+    private string RenderJavaExportedValue(
+        JsonNode? value,
+        AtsTypeRef typeRef,
+        IReadOnlyDictionary<string, AtsDtoTypeInfo> dtoTypesById)
+    {
+        if (value is null)
+        {
+            return "null";
+        }
+
+        return typeRef.Category switch
+        {
+            AtsTypeCategory.Primitive => value.ToRelaxedJsonString(),
+            AtsTypeCategory.Enum => $"{MapTypeRefToJava(typeRef, false)}.fromValue({value.ToRelaxedJsonString()})",
+            AtsTypeCategory.Dto when value is JsonObject obj && dtoTypesById.TryGetValue(typeRef.TypeId, out var dtoInfo)
+                => RenderJavaDtoValue(obj, dtoInfo, dtoTypesById),
+            AtsTypeCategory.Array when value is JsonArray arr
+                => $"new {MapTypeRefToJava(typeRef.ElementType, false)}[] {{ {string.Join(", ", arr.Select(item => RenderJavaExportedValue(item, typeRef.ElementType!, dtoTypesById)))} }}",
+            AtsTypeCategory.List when value is JsonArray arr
+                => $"({MapTypeRefToJava(typeRef, false, useBoxedTypes: true)})(Object)new ArrayList<>(List.of({string.Join(", ", arr.Select(item => RenderJavaExportedValue(item, typeRef.ElementType!, dtoTypesById)))}))",
+            AtsTypeCategory.Dict when value is JsonObject obj
+                => $"({MapTypeRefToJava(typeRef, false, useBoxedTypes: true)})(Object)new HashMap<>(Map.ofEntries({string.Join(", ", obj.Select(pair => $"Map.entry({AtsJsonCodeWriter.ToRelaxedJsonString(pair.Key)}, {RenderJavaExportedValue(pair.Value, typeRef.ValueType!, dtoTypesById)})"))}))",
+            _ => value.ToRelaxedJsonString()
+        };
+    }
+
+    private string RenderJavaDtoValue(
+        JsonObject value,
+        AtsDtoTypeInfo dtoInfo,
+        IReadOnlyDictionary<string, AtsDtoTypeInfo> dtoTypesById)
+    {
+        var sb = new StringBuilder();
+        sb.Append("new ");
+        sb.Append(_dtoNames[dtoInfo.TypeId]);
+        sb.Append("() {{ ");
+
+        foreach (var property in dtoInfo.Properties)
+        {
+            if (!value.TryGetPropertyValue(property.Name, out var propertyValue))
+            {
+                continue;
+            }
+
+            sb.Append("set");
+            sb.Append(ToPascalCase(property.Name));
+            sb.Append('(');
+            sb.Append(RenderJavaExportedValue(propertyValue, property.Type, dtoTypesById));
+            sb.Append("); ");
+        }
+
+        sb.Append("}}");
+        return sb.ToString();
+    }
+
+    private static JavaExportedValueTreeNode BuildExportedValueTree(IReadOnlyList<AtsExportedValueInfo> exportedValues)
+    {
+        var root = new JavaExportedValueTreeNode();
+
+        foreach (var exportedValue in exportedValues)
+        {
+            var current = root;
+            foreach (var segment in exportedValue.PathSegments)
+            {
+                if (!current.Children.TryGetValue(segment, out var child))
+                {
+                    child = new JavaExportedValueTreeNode();
+                    current.Children[segment] = child;
+                }
+
+                current = child;
+            }
+
+            current.Value = exportedValue;
+        }
+
+        return root;
     }
 
     private void CollectOptionsClasses(IReadOnlyList<AtsCapabilityInfo> capabilities)
@@ -869,9 +1018,8 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
 
         foreach (var handleType in handleTypes.OrderBy(t => t.ClassName, StringComparer.Ordinal))
         {
-            var baseClass = handleType.IsResourceBuilder ? "ResourceBuilderBase" : "HandleWrapperBase";
             WriteLine($"/** Wrapper for {handleType.TypeId}. */");
-            WriteLine($"class {handleType.ClassName} extends {baseClass} {{");
+            WriteLine($"class {handleType.ClassName} extends {handleType.BaseClassName} {{");
             WriteLine($"    {handleType.ClassName}(Handle handle, AspireClient client) {{");
             WriteLine("        super(handle, client);");
             WriteLine("    }");
@@ -1122,7 +1270,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
                 }
                 else
                 {
-                    callArguments.Add("null");
+                    callArguments.Add(GetOmittedOptionalArgument(parameter));
                 }
             }
 
@@ -1143,6 +1291,11 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
                 CreateMethodParameters(visibleParameters),
                 returnInfo.HasReturn);
         }
+    }
+
+    private static string GetOmittedOptionalArgument(AtsParameterInfo parameter)
+    {
+        return IsUnionType(parameter.Type) ? "(AspireUnion) null" : "null";
     }
 
     private void GenerateUnionOverloadsWithOptions(
@@ -1687,8 +1840,14 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         WriteLine("            // Note: Java doesn't have easy access to command line args from here");
         WriteLine("            resolvedOptions.put(\"Args\", new String[0]);");
         WriteLine("        }");
+        // ASPIRE_PROJECT_DIRECTORY is set by the CLI so the host reports the correct project
+        // directory (not the JVM's user.dir) when matching --apphost <directory> requests.
         WriteLine("        if (resolvedOptions.get(\"ProjectDirectory\") == null) {");
-        WriteLine("            resolvedOptions.put(\"ProjectDirectory\", System.getProperty(\"user.dir\"));");
+        WriteLine("            String projectDirectory = System.getenv(\"ASPIRE_PROJECT_DIRECTORY\");");
+        WriteLine("            if (projectDirectory == null || projectDirectory.isEmpty()) {");
+        WriteLine("                projectDirectory = System.getProperty(\"user.dir\");");
+        WriteLine("            }");
+        WriteLine("            resolvedOptions.put(\"ProjectDirectory\", projectDirectory);");
         WriteLine("        }");
         WriteLine("        if (resolvedOptions.get(\"AppHostFilePath\") == null) {");
         WriteLine("            String appHostFilePath = System.getenv(\"ASPIRE_APPHOST_FILEPATH\");");
@@ -1697,8 +1856,8 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         WriteLine("            }");
         WriteLine("        }");
         WriteLine("        Map<String, Object> args = new HashMap<>();");
-        WriteLine("        args.put(\"options\", resolvedOptions);");
-        WriteLine($"        return ({builderClassName}) client.invokeCapability(\"Aspire.Hosting/createBuilderWithOptions\", args);");
+        WriteLine("        args.put(\"argsOrOptions\", resolvedOptions);");
+        WriteLine($"        return ({builderClassName}) client.invokeCapability(\"Aspire.Hosting/createBuilder\", args);");
         WriteLine("    }");
         WriteLine("}");
         WriteLine();
@@ -1747,18 +1906,43 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
             _classNames[typeId] = CreateClassName(typeId);
         }
 
-        var handleTypeMap = context.HandleTypes.ToDictionary(t => t.AtsTypeId, StringComparer.Ordinal);
+        var handleTypeMap = context.HandleTypes
+            .GroupBy(t => t.AtsTypeId, StringComparer.Ordinal)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Any(t => t.IsResourceBuilder),
+                StringComparer.Ordinal);
+        var handleTypeInfoMap = context.HandleTypes
+            .GroupBy(t => t.AtsTypeId, StringComparer.Ordinal)
+            .ToDictionary(
+                g => g.Key,
+                g => g.First(),
+                StringComparer.Ordinal);
         var results = new List<JavaHandleType>();
         foreach (var typeId in handleTypeIds)
         {
             var isResourceBuilder = false;
             if (handleTypeMap.TryGetValue(typeId, out var typeInfo))
             {
-                isResourceBuilder = typeInfo.IsResourceBuilder;
+                isResourceBuilder = typeInfo;
             }
 
             var className = _classNames[typeId];
-            results.Add(new JavaHandleType(typeId, className, isResourceBuilder));
+            var baseClassName = isResourceBuilder ? "ResourceBuilderBase" : "HandleWrapperBase";
+
+            if (handleTypeInfoMap.TryGetValue(typeId, out var handleTypeInfo))
+            {
+                var exportedBaseType = handleTypeInfo.BaseTypeHierarchy
+                    .FirstOrDefault(baseType => !string.Equals(baseType.TypeId, typeId, StringComparison.Ordinal)
+                        && _classNames.ContainsKey(baseType.TypeId));
+
+                if (exportedBaseType is not null)
+                {
+                    baseClassName = _classNames[exportedBaseType.TypeId];
+                }
+            }
+
+            results.Add(new JavaHandleType(typeId, className, isResourceBuilder, baseClassName));
             if (isResourceBuilder)
             {
                 _resourceBuilderHandleClasses.Add(className);
@@ -2081,7 +2265,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         _writer.WriteLine(value);
     }
 
-    private sealed record JavaHandleType(string TypeId, string ClassName, bool IsResourceBuilder);
+    private sealed record JavaHandleType(string TypeId, string ClassName, bool IsResourceBuilder, string BaseClassName);
     private sealed record JavaMethodParameter(
         string Type,
         string Name,

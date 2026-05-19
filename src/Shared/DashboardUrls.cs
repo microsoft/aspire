@@ -201,8 +201,9 @@ internal static class DashboardUrls
     /// <param name="severity">Optional minimum severity level filter.</param>
     /// <param name="limit">Optional maximum number of results to return.</param>
     /// <param name="follow">Optional flag to enable streaming mode.</param>
+    /// <param name="search">Optional full-text search string to filter results.</param>
     /// <returns>The full API URL.</returns>
-    public static string TelemetryLogsApiUrl(string baseUrl, List<string>? resources = null, string? traceId = null, string? severity = null, int? limit = null, bool? follow = null)
+    public static string TelemetryLogsApiUrl(string baseUrl, List<string>? resources = null, string? traceId = null, string? severity = null, int? limit = null, bool? follow = null, string? search = null)
     {
         var url = $"/{TelemetryApiBasePath}/logs";
         url = AddResourceParams(url, resources);
@@ -222,6 +223,10 @@ internal static class DashboardUrls
         {
             url = AddQueryString(url, "follow", "true");
         }
+        if (search is not null)
+        {
+            url = AddQueryString(url, "search", search);
+        }
         return CombineUrl(baseUrl, url);
     }
 
@@ -234,8 +239,9 @@ internal static class DashboardUrls
     /// <param name="hasError">Optional filter for error status.</param>
     /// <param name="limit">Optional maximum number of results to return.</param>
     /// <param name="follow">Optional flag to enable streaming mode.</param>
+    /// <param name="search">Optional full-text search string to filter results.</param>
     /// <returns>The full API URL.</returns>
-    public static string TelemetrySpansApiUrl(string baseUrl, List<string>? resources = null, string? traceId = null, bool? hasError = null, int? limit = null, bool? follow = null)
+    public static string TelemetrySpansApiUrl(string baseUrl, List<string>? resources = null, string? traceId = null, bool? hasError = null, int? limit = null, bool? follow = null, string? search = null)
     {
         var url = $"/{TelemetryApiBasePath}/spans";
         url = AddResourceParams(url, resources);
@@ -255,6 +261,10 @@ internal static class DashboardUrls
         {
             url = AddQueryString(url, "follow", "true");
         }
+        if (search is not null)
+        {
+            url = AddQueryString(url, "search", search);
+        }
         return CombineUrl(baseUrl, url);
     }
 
@@ -265,8 +275,9 @@ internal static class DashboardUrls
     /// <param name="resources">Optional list of resource names to filter by.</param>
     /// <param name="hasError">Optional filter for error status.</param>
     /// <param name="limit">Optional maximum number of results to return.</param>
+    /// <param name="search">Optional full-text search string to filter results.</param>
     /// <returns>The full API URL.</returns>
-    public static string TelemetryTracesApiUrl(string baseUrl, List<string>? resources = null, bool? hasError = null, int? limit = null)
+    public static string TelemetryTracesApiUrl(string baseUrl, List<string>? resources = null, bool? hasError = null, int? limit = null, string? search = null)
     {
         var url = $"/{TelemetryApiBasePath}/traces";
         url = AddResourceParams(url, resources);
@@ -277,6 +288,10 @@ internal static class DashboardUrls
         if (limit is not null)
         {
             url = AddQueryString(url, "limit", limit.Value.ToString(CultureInfo.InvariantCulture));
+        }
+        if (search is not null)
+        {
+            url = AddQueryString(url, "search", search);
         }
         return CombineUrl(baseUrl, url);
     }
@@ -302,6 +317,16 @@ internal static class DashboardUrls
     {
         var path = $"/{TelemetryApiBasePath}/resources";
         return CombineUrl(baseUrl, path);
+    }
+
+    /// <summary>
+    /// Builds the URL for the telemetry API key exchange endpoint.
+    /// </summary>
+    /// <param name="baseUrl">The dashboard base URL.</param>
+    /// <returns>The full API URL.</returns>
+    public static string TelemetryApiKeyUrl(string baseUrl)
+    {
+        return CombineUrl(baseUrl, "/api/telemetry/validateToken");
     }
 
     /// <summary>

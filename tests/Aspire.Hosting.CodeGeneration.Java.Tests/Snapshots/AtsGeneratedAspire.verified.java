@@ -1,4 +1,4 @@
-// ===== Aspire.java =====
+﻿// ===== Aspire.java =====
 // Aspire.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
@@ -39,7 +39,11 @@ public class Aspire {
             resolvedOptions.put("Args", new String[0]);
         }
         if (resolvedOptions.get("ProjectDirectory") == null) {
-            resolvedOptions.put("ProjectDirectory", System.getProperty("user.dir"));
+            String projectDirectory = System.getenv("ASPIRE_PROJECT_DIRECTORY");
+            if (projectDirectory == null || projectDirectory.isEmpty()) {
+                projectDirectory = System.getProperty("user.dir");
+            }
+            resolvedOptions.put("ProjectDirectory", projectDirectory);
         }
         if (resolvedOptions.get("AppHostFilePath") == null) {
             String appHostFilePath = System.getenv("ASPIRE_APPHOST_FILEPATH");
@@ -48,8 +52,8 @@ public class Aspire {
             }
         }
         Map<String, Object> args = new HashMap<>();
-        args.put("options", resolvedOptions);
-        return (IDistributedApplicationBuilder) client.invokeCapability("Aspire.Hosting/createBuilderWithOptions", args);
+        args.put("argsOrOptions", resolvedOptions);
+        return (IDistributedApplicationBuilder) client.invokeCapability("Aspire.Hosting/createBuilder", args);
     }
 }
 
@@ -360,7 +364,7 @@ public class AspireClient {
     private void handleServerRequest(Map<String, Object> request) throws IOException {
         String method = (String) request.get("method");
         Object idObj = request.get("id");
-        Map<String, Object> params = (Map<String, Object>) request.get("params");
+        Object params = request.get("params");
 
         debug("Received server request: " + method);
 
@@ -369,25 +373,33 @@ public class AspireClient {
 
         try {
             if ("invokeCallback".equals(method)) {
-                String callbackId = (String) params.get("callbackId");
-                List<Object> args = (List<Object>) params.get("args");
-                
-                Function<Object[], Object> callback = callbacks.get(callbackId);
-                if (callback != null) {
-                    Object[] unwrappedArgs = args.stream()
-                        .map(this::unwrapResult)
-                        .toArray();
-                    result = awaitValue(callback.apply(unwrappedArgs));
+                String callbackId = getCallbackId(params);
+                if (callbackId == null) {
+                    error = createError(-32602, "Invalid params: callbackId is required.");
                 } else {
-                    error = createError(-32601, "Callback not found: " + callbackId);
+                    List<Object> args = getCallbackArgs(params);
+
+                    Function<Object[], Object> callback = callbacks.get(callbackId);
+                    if (callback != null) {
+                        Object[] unwrappedArgs = args.stream()
+                            .map(this::unwrapResult)
+                            .toArray();
+                        result = awaitValue(callback.apply(unwrappedArgs));
+                    } else {
+                        error = createError(-32601, "Callback not found: " + callbackId);
+                    }
                 }
             } else if ("cancel".equals(method)) {
-                String cancellationId = (String) params.get("cancellationId");
-                Consumer<Void> handler = cancellations.get(cancellationId);
-                if (handler != null) {
-                    handler.accept(null);
+                String cancellationId = getCancellationId(params);
+                if (cancellationId == null) {
+                    error = createError(-32602, "Invalid params: cancellationId is required.");
+                } else {
+                    Consumer<Void> handler = cancellations.get(cancellationId);
+                    if (handler != null) {
+                        handler.accept(null);
+                    }
+                    result = true;
                 }
-                result = true;
             } else {
                 error = createError(-32601, "Unknown method: " + method);
             }
@@ -406,6 +418,64 @@ public class AspireClient {
         }
         
         sendMessage(response);
+    }
+
+    @SuppressWarnings("unchecked")
+    private String getCallbackId(Object params) {
+        if (params instanceof List<?> list && !list.isEmpty()) {
+            return asString(list.get(0));
+        }
+
+        if (params instanceof Map<?, ?> map) {
+            return asString(map.get("callbackId"));
+        }
+
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Object> getCallbackArgs(Object params) {
+        Object args = null;
+        if (params instanceof List<?> list && list.size() > 1) {
+            args = list.get(1);
+        } else if (params instanceof Map<?, ?> map) {
+            args = map.get("args");
+        }
+
+        if (args instanceof Map<?, ?> map) {
+            List<Object> positionalArgs = new ArrayList<>();
+            for (var i = 0; ; i++) {
+                var key = "p" + i;
+                if (map.containsKey(key)) {
+                    positionalArgs.add(map.get(key));
+                } else {
+                    break;
+                }
+            }
+            return positionalArgs;
+        }
+
+        if (args instanceof List<?> list) {
+            return (List<Object>) list;
+        }
+
+        return args == null ? List.of() : List.of(args);
+    }
+
+    private String getCancellationId(Object params) {
+        if (params instanceof List<?> list && !list.isEmpty()) {
+            return asString(list.get(0));
+        }
+
+        if (params instanceof Map<?, ?> map) {
+            return asString(map.get("cancellationId"));
+        }
+
+        return null;
+    }
+
+    private String asString(Object value) {
+        return value instanceof String string ? string : null;
     }
 
     private Map<String, Object> createError(int code, String message) {
@@ -507,6 +577,9 @@ public class AspireClient {
         }
         if (value instanceof AspireUnion union) {
             return serializeValue(union.getValue());
+        }
+        if (value instanceof JsonSerializable jsonSerializable) {
+            return jsonSerializable.toMap();
         }
         if (value instanceof Map) {
             @SuppressWarnings("unchecked")
@@ -830,6 +903,49 @@ public class AspireDict<K, V> extends HandleWrapperBase {
         }
         return resolvedHandle;
     }
+
+    public int size() {
+        Object result = getClient().invokeCapability("Aspire.Hosting/Dict.count", Map.of("dict", ensureHandle().toJson()));
+        return ((Number) result).intValue();
+    }
+
+    @SuppressWarnings("unchecked")
+    public V get(K key) {
+        Map<String, Object> args = new HashMap<>();
+        args.put("dict", ensureHandle().toJson());
+        args.put("key", AspireClient.serializeValue(key));
+        return (V) getClient().invokeCapability("Aspire.Hosting/Dict.get", args);
+    }
+
+    public void put(K key, V value) {
+        Map<String, Object> args = new HashMap<>();
+        args.put("dict", ensureHandle().toJson());
+        args.put("key", AspireClient.serializeValue(key));
+        args.put("value", AspireClient.serializeValue(value));
+        getClient().invokeCapability("Aspire.Hosting/Dict.set", args);
+    }
+
+    public boolean remove(K key) {
+        Map<String, Object> args = new HashMap<>();
+        args.put("dict", ensureHandle().toJson());
+        args.put("key", AspireClient.serializeValue(key));
+        Object result = getClient().invokeCapability("Aspire.Hosting/Dict.remove", args);
+        return Boolean.TRUE.equals(result);
+    }
+
+    public boolean containsKey(K key) {
+        Map<String, Object> args = new HashMap<>();
+        args.put("dict", ensureHandle().toJson());
+        args.put("key", AspireClient.serializeValue(key));
+        Object result = getClient().invokeCapability("Aspire.Hosting/Dict.has", args);
+        return Boolean.TRUE.equals(result);
+    }
+
+    @SuppressWarnings("unchecked")
+    public List<K> keys() {
+        Object result = getClient().invokeCapability("Aspire.Hosting/Dict.keys", Map.of("dict", ensureHandle().toJson()));
+        return (List<K>) result;
+    }
 }
 
 // ===== AspireFunc0.java =====
@@ -952,6 +1068,7 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext", (h, c) -> new TestResourceContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext", (h, c) -> new TestEnvironmentContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCollectionContext", (h, c) -> new TestCollectionContext(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext", (h, c) -> new TestMutableCollectionContext(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource", (h, c) -> new TestRedisResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestDatabaseResource", (h, c) -> new TestDatabaseResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource", (h, c) -> new IResource(h, c));
@@ -962,6 +1079,7 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment", (h, c) -> new IResourceWithEnvironment(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/List<string>", (h, c) -> new AspireList(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Dict<string,string>", (h, c) -> new AspireDict(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Dict<string,number>", (h, c) -> new AspireDict(h, c));
     }
 
     static void ensureRegistered() {
@@ -1279,6 +1397,23 @@ public class ITestVaultResource extends ResourceBuilderBase {
 
 }
 
+// ===== JsonSerializable.java =====
+// JsonSerializable.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.io.*;
+import java.net.*;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.*;
+import java.util.function.*;
+
+public interface JsonSerializable {
+    Map<String, Object> toMap();
+}
+
 // ===== ReferenceExpression.java =====
 // ReferenceExpression.java - GENERATED CODE - DO NOT EDIT
 
@@ -1529,7 +1664,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** TestConfigDto DTO. */
-public class TestConfigDto {
+public class TestConfigDto implements JsonSerializable {
     private String name;
     private double port;
     private boolean enabled;
@@ -1552,6 +1687,32 @@ public class TestConfigDto {
         map.put("OptionalField", AspireClient.serializeValue(optionalField));
         return map;
     }
+}
+
+// ===== TestConfigs.java =====
+// TestConfigs.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+public final class TestConfigs {
+    private TestConfigs() { }
+
+    public static final TestConfigDto Default = new TestConfigDto() {{ setName("default"); setPort(6379); setEnabled(true); setOptionalField("cache"); }};
+
+    public static final class Profiles {
+        private Profiles() { }
+
+        public static final TestConfigDto Development = new TestConfigDto() {{ setName("development"); setPort(5001); setEnabled(false); setOptionalField(null); }};
+
+    }
+
+    public static final TestConfigDto Secure = new TestConfigDto() {{ setName("secure"); setPort(6380); setEnabled(true); setOptionalField(null); }};
+
+    public static final String UnicodeGreeting = "你好こんにちは";
+
 }
 
 // ===== TestDatabaseResource.java =====
@@ -1929,7 +2090,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** TestDeeplyNestedDto DTO. */
-public class TestDeeplyNestedDto {
+public class TestDeeplyNestedDto implements JsonSerializable {
     private AspireDict<String, AspireList<TestConfigDto>> nestedData;
     private AspireDict<String, String>[] metadataArray;
 
@@ -2007,6 +2168,56 @@ public class TestEnvironmentContext extends HandleWrapperBase {
 
 }
 
+// ===== TestMutableCollectionContext.java =====
+// TestMutableCollectionContext.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext. */
+public class TestMutableCollectionContext extends HandleWrapperBase {
+    TestMutableCollectionContext(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets the Tags property */
+    private AspireList<String> tagsField;
+    public AspireList<String> tags() {
+        if (tagsField == null) {
+            tagsField = new AspireList<>(getHandle(), getClient(), "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.tags");
+        }
+        return tagsField;
+    }
+
+    /** Sets the Tags property */
+    public TestMutableCollectionContext setTags(AspireList<String> value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        return (TestMutableCollectionContext) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.setTags", reqArgs);
+    }
+
+    /** Gets the Counts property */
+    private AspireDict<String, Double> countsField;
+    public AspireDict<String, Double> counts() {
+        if (countsField == null) {
+            countsField = new AspireDict<>(getHandle(), getClient(), "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.counts");
+        }
+        return countsField;
+    }
+
+    /** Sets the Counts property */
+    public TestMutableCollectionContext setCounts(AspireDict<String, Double> value) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("value", AspireClient.serializeValue(value));
+        return (TestMutableCollectionContext) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.setCounts", reqArgs);
+    }
+
+}
+
 // ===== TestNestedDto.java =====
 // TestNestedDto.java - GENERATED CODE - DO NOT EDIT
 
@@ -2016,7 +2227,7 @@ import java.util.*;
 import java.util.function.*;
 
 /** TestNestedDto DTO. */
-public class TestNestedDto {
+public class TestNestedDto implements JsonSerializable {
     private String id;
     private TestConfigDto config;
     private AspireList<String> tags;
@@ -3171,14 +3382,17 @@ public final class WithOptionalStringOptions {
 .modules/IResourceWithConnectionString.java
 .modules/IResourceWithEnvironment.java
 .modules/ITestVaultResource.java
+.modules/JsonSerializable.java
 .modules/ReferenceExpression.java
 .modules/ResourceBuilderBase.java
 .modules/TestCallbackContext.java
 .modules/TestCollectionContext.java
 .modules/TestConfigDto.java
+.modules/TestConfigs.java
 .modules/TestDatabaseResource.java
 .modules/TestDeeplyNestedDto.java
 .modules/TestEnvironmentContext.java
+.modules/TestMutableCollectionContext.java
 .modules/TestNestedDto.java
 .modules/TestPersistenceMode.java
 .modules/TestRedisResource.java

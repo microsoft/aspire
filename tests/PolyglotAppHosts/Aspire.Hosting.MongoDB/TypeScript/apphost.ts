@@ -48,13 +48,13 @@ await mongoChained.addDatabase("app-db");
 await mongoChained.addDatabase("analytics-db", { databaseName: "analytics" });
 
 // ---- Property access on MongoDBServerResource ----
-const _endpoint = await mongo.primaryEndpoint.get();
-const _host = await mongo.host.get();
-const _port = await mongo.port.get();
-const _uri = await mongo.uriExpression.get();
-const _userName = await mongo.userNameReference.get();
+const _endpoint = await mongo.primaryEndpoint();
+const _host = await mongo.host();
+const _port = await mongo.port();
+const _uri = await mongo.uriExpression();
+const _userName = await mongo.userNameReference();
 
 // Build and run the app
-const _cstr = await mongo.connectionStringExpression.get();
+const _cstr = await mongo.connectionStringExpression();
 const _databases = mongo.databases;
 await builder.build().run();

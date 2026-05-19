@@ -173,6 +173,7 @@ public class HttpsCertificateExecutionConfigurationData : IExecutionConfiguratio
 /// Configuration context for server authentication certificate configuration.
 /// </summary>
 [Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireDto]
 public class HttpsCertificateExecutionConfigurationContext
 {
     /// <summary>

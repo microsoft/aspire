@@ -1,8 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections;
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.TypeSystem;
 using Xunit;
@@ -127,6 +129,22 @@ public class AtsCapabilityScannerTests
 
         // System.Object maps to 'any'
         Assert.Equal("any", result);
+    }
+
+    [Fact]
+    public void MapToAtsTypeId_NonGenericIDictionary_ReturnsStringAnyDict()
+    {
+        var result = AtsCapabilityScanner.MapToAtsTypeId(typeof(IDictionary));
+
+        Assert.Equal("Aspire.Hosting/Dict<string,any>", result);
+    }
+
+    [Fact]
+    public void MapToAtsTypeId_NonGenericIList_ReturnsAnyList()
+    {
+        var result = AtsCapabilityScanner.MapToAtsTypeId(typeof(IList));
+
+        Assert.Equal("Aspire.Hosting/List<any>", result);
     }
 
     [Fact]
@@ -296,6 +314,109 @@ public class AtsCapabilityScannerTests
         Assert.Contains(result.Capabilities, capability => capability.CapabilityId.EndsWith("/PipelineSummary.add", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void ScanAssembly_HostingAssembly_ExportsWithHttpCommandCapabilityWithAtsFriendlyOptions()
+    {
+        var hostingAssembly = typeof(DistributedApplication).Assembly;
+        var result = AtsCapabilityScanner.ScanAssembly(hostingAssembly);
+
+        var capability = Assert.Single(result.Capabilities,
+            c => c.CapabilityId == "Aspire.Hosting/withHttpCommand");
+
+        Assert.Equal("withHttpCommand", capability.MethodName);
+        Assert.Equal(3, capability.Parameters.Count);
+        Assert.DoesNotContain(capability.Parameters, p => p.Name == "endpointName");
+        Assert.DoesNotContain(capability.Parameters, p => p.Name == "commandName");
+
+        var optionsParameter = Assert.Single(capability.Parameters, p => p.Name == "options");
+        Assert.Equal("options", optionsParameter.Name);
+        Assert.NotNull(optionsParameter.Type);
+        Assert.Equal(AtsTypeCategory.Dto, optionsParameter.Type.Category);
+        Assert.Equal(AtsTypeMapping.DeriveTypeId(typeof(HttpCommandExportOptions)), optionsParameter.Type.TypeId);
+
+        var dto = Assert.Single(result.DtoTypes, d => d.TypeId == AtsTypeMapping.DeriveTypeId(typeof(HttpCommandExportOptions)));
+        Assert.Equal(nameof(HttpCommandExportOptions), dto.Name);
+        Assert.Contains(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.CommandName));
+        Assert.Contains(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.EndpointName));
+        Assert.Contains(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.MethodName));
+        Assert.Contains(dto.Properties, p => p.Name == nameof(HttpCommandExportOptions.ResultMode));
+        Assert.DoesNotContain(dto.Properties, p => p.Name == "Parameter");
+        Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(HttpCommandOptions.HttpClientName));
+        Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(HttpCommandOptions.PrepareRequest));
+        Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(HttpCommandOptions.Method));
+        Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(HttpCommandOptions.EndpointSelector));
+        Assert.DoesNotContain(dto.Properties, p => p.Name == nameof(HttpCommandOptions.GetCommandResult));
+    }
+
+    [Fact]
+    public void ScanAssembly_DerivedExportedType_DoesNotRegenerateInheritedProperties()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        var baseNameCapability = Assert.Single(result.Capabilities,
+            c => c.CapabilityId.EndsWith("/BaseExportedProperties.name", StringComparison.Ordinal));
+
+        Assert.Contains(baseNameCapability.ExpandedTargetTypes,
+            t => t.TypeId == AtsTypeMapping.DeriveTypeId(typeof(DerivedExportedProperties)));
+        Assert.Contains(result.Capabilities,
+            c => c.CapabilityId.EndsWith("/DerivedExportedProperties.framework", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Capabilities,
+            c => c.CapabilityId.EndsWith("/DerivedExportedProperties.name", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.Diagnostics,
+            d => d.Message.Contains(nameof(DerivedExportedProperties), StringComparison.Ordinal)
+                && d.Message.Contains("has collisions", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ScanAssembly_DtoNullableScalarProperties_SetTypeRefNullability()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        var dto = Assert.Single(result.DtoTypes, d => d.ClrType == typeof(NullableScalarDto));
+
+        var nullableString = Assert.Single(dto.Properties, p => p.Name == nameof(NullableScalarDto.NullableString));
+        Assert.Equal(AtsConstants.String, nullableString.Type.TypeId);
+        Assert.True(nullableString.Type.IsNullable);
+        Assert.False(nullableString.IsOptional);
+
+        var requiredString = Assert.Single(dto.Properties, p => p.Name == nameof(NullableScalarDto.RequiredString));
+        Assert.Equal(AtsConstants.String, requiredString.Type.TypeId);
+        Assert.NotEqual(true, requiredString.Type.IsNullable);
+        Assert.False(requiredString.IsOptional);
+
+        var nullableNumber = Assert.Single(dto.Properties, p => p.Name == nameof(NullableScalarDto.NullableNumber));
+        Assert.Equal(AtsConstants.Number, nullableNumber.Type.TypeId);
+        Assert.True(nullableNumber.Type.IsNullable);
+        Assert.True(nullableNumber.IsOptional);
+
+        var requiredNumber = Assert.Single(dto.Properties, p => p.Name == nameof(NullableScalarDto.RequiredNumber));
+        Assert.Equal(AtsConstants.Number, requiredNumber.Type.TypeId);
+        Assert.NotEqual(true, requiredNumber.Type.IsNullable);
+        Assert.False(requiredNumber.IsOptional);
+    }
+
+    [Fact]
+    public void ScanAssembly_TargetSpecificMethodShadowsGenericExpandedMethodOnlyForThatTarget()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+        var shadowedTypeId = AtsTypeMapping.DeriveTypeId(typeof(ShadowedEnvironmentResource));
+        var otherTypeId = AtsTypeMapping.DeriveTypeId(typeof(OtherEnvironmentResource));
+
+        var genericCapability = Assert.Single(result.Capabilities,
+            c => c.CapabilityId.EndsWith("/shadowedExporter", StringComparison.Ordinal));
+        var specificCapability = Assert.Single(result.Capabilities,
+            c => c.CapabilityId.EndsWith("/specificShadowedExporter", StringComparison.Ordinal));
+
+        Assert.Equal("shadowedExporter", genericCapability.MethodName);
+        Assert.Equal("shadowedExporter", specificCapability.MethodName);
+        Assert.DoesNotContain(genericCapability.ExpandedTargetTypes, t => t.TypeId == shadowedTypeId);
+        Assert.Contains(genericCapability.ExpandedTargetTypes, t => t.TypeId == otherTypeId);
+        Assert.Contains(specificCapability.ExpandedTargetTypes, t => t.TypeId == shadowedTypeId);
+        Assert.DoesNotContain(result.Diagnostics,
+            d => d.Message.Contains("shadowedExporter", StringComparison.Ordinal)
+                && d.Message.Contains("has collisions", StringComparison.Ordinal));
+    }
+
     #endregion
 
     #region Callback Parameter Type Resolution Tests
@@ -385,6 +506,93 @@ public class AtsCapabilityScannerTests
 
     #endregion
 
+    #region Exported Value Tests
+
+    [Fact]
+    public void ScanAssembly_MutableDictionaryExportedValue_IsSkipped()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        Assert.DoesNotContain(result.ExportedValues, value =>
+            string.Join(".", value.PathSegments) == "InvalidValues.InvalidExportedValues.MutableMetadata");
+        Assert.DoesNotContain(result.ExportedValues, value =>
+            string.Join(".", value.PathSegments) == "InvalidValues.InvalidExportedValues.DtoWithMutableList");
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Severity == AtsDiagnosticSeverity.Warning
+            && diagnostic.Message.Contains("copied shapes", StringComparison.Ordinal)
+            && diagnostic.Location == "Aspire.Hosting.RemoteHost.Tests.AtsCapabilityScannerTests+InvalidExportedValues.MutableMetadata");
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Severity == AtsDiagnosticSeverity.Warning
+            && diagnostic.Message.Contains("copied shapes", StringComparison.Ordinal)
+            && diagnostic.Location == "Aspire.Hosting.RemoteHost.Tests.AtsCapabilityScannerTests+InvalidExportedValues.DtoWithMutableList");
+    }
+
+    [Fact]
+    public void ScanAssembly_ExportedDtoValueWithIgnoredMutableProperty_IsIncluded()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        var exportedValue = Assert.Single(result.ExportedValues,
+            value => string.Join(".", value.PathSegments) == "IgnoredPropertyValues.IgnoredPropertyExportedValues.Value");
+        var valueObject = Assert.IsType<JsonObject>(exportedValue.Value);
+        Assert.True(valueObject.ContainsKey(nameof(ExportedDtoWithIgnoredMutableProperty.Name)));
+        Assert.False(valueObject.ContainsKey(nameof(ExportedDtoWithIgnoredMutableProperty.Items)));
+    }
+
+    [Fact]
+    public void ScanAssembly_InvalidExportedValuePath_EmitsWarningAndSkipsValue()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        Assert.DoesNotContain(result.ExportedValues, value =>
+            string.Join(".", value.PathSegments).Contains("Invalid-Values", StringComparison.Ordinal));
+        Assert.DoesNotContain(result.ExportedValues, value =>
+            string.Join(".", value.PathSegments).Contains("123Name", StringComparison.Ordinal));
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Severity == AtsDiagnosticSeverity.Warning
+            && diagnostic.Message.Contains("path segment 'Invalid-Values'", StringComparison.Ordinal)
+            && diagnostic.Location == "Aspire.Hosting.RemoteHost.Tests.AtsCapabilityScannerTests+InvalidExportedValuePaths.BadCatalog");
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Severity == AtsDiagnosticSeverity.Warning
+            && diagnostic.Message.Contains("path segment '123Name'", StringComparison.Ordinal)
+            && diagnostic.Location == "Aspire.Hosting.RemoteHost.Tests.AtsCapabilityScannerTests+InvalidExportedValuePaths.BadName");
+    }
+
+    [Fact]
+    public void ScanAssembly_DuplicateExportedValuePath_EmitsWarningAndSkipsLaterValue()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        Assert.Single(result.ExportedValues,
+            value => string.Join(".", value.PathSegments) == "DuplicateValues.DuplicateExportedValues.Shared");
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Severity == AtsDiagnosticSeverity.Warning
+            && diagnostic.Message.Contains(
+                "Duplicate exported value path 'DuplicateValues.DuplicateExportedValues.Shared'",
+                StringComparison.Ordinal)
+            && diagnostic.Location == "DuplicateValues.DuplicateExportedValues.Shared");
+    }
+
+    [Fact]
+    public void ScanAssembly_PrefixConflictingExportedValuePath_EmitsWarningAndSkipsLaterValue()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+
+        Assert.DoesNotContain(result.ExportedValues, value =>
+            string.Join(".", value.PathSegments) == "ConflictingValues.PrefixConflictingExportedValues.Node.Child");
+        Assert.Contains(result.Diagnostics, diagnostic =>
+            diagnostic.Severity == AtsDiagnosticSeverity.Warning
+            && diagnostic.Message.Contains(
+                "Conflicting exported value path 'ConflictingValues.PrefixConflictingExportedValues.Node.Child'",
+                StringComparison.Ordinal)
+            && diagnostic.Message.Contains(
+                "Existing path 'ConflictingValues.PrefixConflictingExportedValues.Node'",
+                StringComparison.Ordinal)
+            && diagnostic.Location == "ConflictingValues.PrefixConflictingExportedValues.Node.Child");
+    }
+
+    #endregion
+
     #region Test Types
 
     private sealed class TestResource : Resource
@@ -392,6 +600,34 @@ public class AtsCapabilityScannerTests
         public TestResource(string name) : base(name)
         {
         }
+    }
+
+    private sealed class ShadowedEnvironmentResource(string name) : Resource(name), IResourceWithEnvironment;
+
+    private sealed class OtherEnvironmentResource(string name) : Resource(name), IResourceWithEnvironment;
+
+    [AspireDto]
+    private sealed class NullableScalarDto
+    {
+        public string? NullableString { get; set; }
+
+        public string RequiredString { get; set; } = "";
+
+        public int? NullableNumber { get; set; }
+
+        public int RequiredNumber { get; set; }
+    }
+
+    [AspireExport(ExposeProperties = true)]
+    private class BaseExportedProperties
+    {
+        public string Name { get; } = "";
+    }
+
+    [AspireExport(ExposeProperties = true)]
+    private sealed class DerivedExportedProperties : BaseExportedProperties
+    {
+        public string Framework { get; } = "";
     }
 
     public sealed class AssemblyLevelExportedTestType
@@ -421,6 +657,89 @@ public class AtsCapabilityScannerTests
         {
             _ = callback;
             return builder;
+        }
+
+        [AspireExport("shadowedExporter")]
+        public static IResourceBuilder<T> ShadowedExporter<T>(IResourceBuilder<T> builder)
+            where T : IResourceWithEnvironment
+        {
+            return builder;
+        }
+
+        [AspireExport("specificShadowedExporter", MethodName = "shadowedExporter")]
+        public static IResourceBuilder<ShadowedEnvironmentResource> SpecificShadowedExporter(IResourceBuilder<ShadowedEnvironmentResource> builder)
+        {
+            return builder;
+        }
+
+        [AspireExport("otherEnvironmentProbe")]
+        public static IResourceBuilder<OtherEnvironmentResource> OtherEnvironmentProbe(IResourceBuilder<OtherEnvironmentResource> builder)
+        {
+            return builder;
+        }
+    }
+
+    private static class InvalidExportedValues
+    {
+        [AspireValue("InvalidValues")]
+        public static Dictionary<string, string> MutableMetadata { get; } = [];
+
+        [AspireValue("InvalidValues")]
+        public static InvalidExportedDto DtoWithMutableList { get; } = new();
+    }
+
+    [AspireDto]
+    private sealed class InvalidExportedDto
+    {
+        public List<string> Items { get; set; } = [];
+    }
+
+    private static class IgnoredPropertyExportedValues
+    {
+        [AspireValue("IgnoredPropertyValues")]
+        public static ExportedDtoWithIgnoredMutableProperty Value { get; } = new()
+        {
+            Name = "valid",
+            Items = ["ignored"]
+        };
+    }
+
+    [AspireDto]
+    private sealed class ExportedDtoWithIgnoredMutableProperty
+    {
+        public string Name { get; init; } = "";
+
+        [AspireExportIgnore]
+        public List<string> Items { get; init; } = [];
+    }
+
+    private static class InvalidExportedValuePaths
+    {
+        [AspireValue("Invalid-Values")]
+        public static string BadCatalog { get; } = "bad";
+
+        [AspireValue("InvalidValues", Name = "123Name")]
+        public static string BadName { get; } = "bad";
+    }
+
+    private static class DuplicateExportedValues
+    {
+        [AspireValue("DuplicateValues", Name = "Shared")]
+        public static string FirstShared { get; } = "first";
+
+        [AspireValue("DuplicateValues", Name = "Shared")]
+        public static string SecondShared { get; } = "second";
+    }
+
+    private static class PrefixConflictingExportedValues
+    {
+        [AspireValue("ConflictingValues", Name = "Node")]
+        public static string NodeValue { get; } = "root";
+
+        public static class Node
+        {
+            [AspireValue("ConflictingValues", Name = "Child")]
+            public static string ChildValue { get; } = "child";
         }
     }
 

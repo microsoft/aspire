@@ -11,6 +11,6 @@ internal static class NatsContainerImageTags
     /// <remarks>library/nats</remarks>
     public const string Image = "library/nats";
 
-    /// <remarks>2.12</remarks>
-    public const string Tag = "2.12";
+    /// <remarks>2.14</remarks>
+    public const string Tag = "2.14";
 }

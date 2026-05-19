@@ -15,7 +15,7 @@ const namedSecretParam = await builder.addParameter("named-secret-param", { secr
 const exprSecretValue = refExpr`secret-value-${secretParam}`;
 const namedExprSecretValue = refExpr`named-secret-value-${namedSecretParam}`;
 
-// ── 2. withRoleAssignments ───────────────────────────────────────────────────
+// ── 2. withKeyVaultRoleAssignments ───────────────────────────────────────────
 await vault.withKeyVaultRoleAssignments(vault, [
     AzureKeyVaultRole.KeyVaultReader,
     AzureKeyVaultRole.KeyVaultSecretsUser,
@@ -25,13 +25,13 @@ await vault.withKeyVaultRoleAssignments(vault, [
 const secretFromParameter = await vault.addSecret("param-secret", secretParam);
 
 // ── 4. addSecretFromExpression ───────────────────────────────────────────────
-const secretFromExpression = await vault.addSecretFromExpression("expr-secret", exprSecretValue);
+const secretFromExpression = await vault.addSecret("expr-secret", exprSecretValue);
 
 // ── 5. addSecretWithName ─────────────────────────────────────────────────────
-const namedSecretFromParameter = await vault.addSecretWithName("secret-resource-param", "named-param-secret", namedSecretParam);
+const namedSecretFromParameter = await vault.addSecret("secret-resource-param", namedSecretParam, { secretName: "named-param-secret" });
 
 // ── 6. addSecretWithNameFromExpression ───────────────────────────────────────
-const namedSecretFromExpression = await vault.addSecretWithNameFromExpression("secret-resource-expr", "named-expr-secret", namedExprSecretValue);
+const namedSecretFromExpression = await vault.addSecret("secret-resource-expr", namedExprSecretValue, { secretName: "named-expr-secret" });
 
 // ── 7. getSecret ─────────────────────────────────────────────────────────────
 const _existingSecretRef = await vault.getSecret("param-secret");

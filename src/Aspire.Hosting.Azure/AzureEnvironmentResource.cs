@@ -11,8 +11,10 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.Provisioning;
 using Aspire.Hosting.Azure.Provisioning.Internal;
 using Aspire.Hosting.Pipelines;
+using Azure;
 using Azure.Core;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Azure;
@@ -21,13 +23,19 @@ namespace Aspire.Hosting.Azure;
 /// Represents the root Azure deployment target for an Aspire application.
 /// Manages deployment parameters and context for Azure resources.
 /// </summary>
-[Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/dotnet/aspire/diagnostics#{0}")]
+[Experimental("ASPIREAZURE001", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 public sealed class AzureEnvironmentResource : Resource
 {
     /// <summary>
     /// The name of the step that creates the provisioning context.
     /// </summary>
     internal const string CreateProvisioningContextStepName = "create-provisioning-context";
+
+    /// <summary>
+    /// The name of the step that prepares Azure resources (e.g. materializes role-assignment
+    /// resources) so that downstream steps can reference them.
+    /// </summary>
+    public const string PrepareResourcesStepName = "azure-prepare-resources";
 
     /// <summary>
     /// The name of the step that provisions Azure infrastructure resources.
@@ -68,6 +76,38 @@ public sealed class AzureEnvironmentResource : Resource
     {
         Annotations.Add(new PipelineStepAnnotation((factoryContext) =>
         {
+            var steps = new List<PipelineStep>();
+
+            var prepareResourcesStep = new PipelineStep
+            {
+                Name = PrepareResourcesStepName,
+                Description = "Prepares the Azure resources.",
+                Action = static async context =>
+                {
+                    var preparer = context.Services.GetRequiredService<AzureResourcePreparer>();
+                    await preparer.PrepareResourcesAsync(context.Model, context.CancellationToken).ConfigureAwait(false);
+                },
+                RequiredBySteps = [WellKnownPipelineSteps.BeforeStart]
+            };
+            steps.Add(prepareResourcesStep);
+
+            if (factoryContext.PipelineContext.ExecutionContext.IsRunMode)
+            {
+                var runModeProvisionStep = new PipelineStep
+                {
+                    Name = "run-mode-azure-provision",
+                    Description = $"Provisions the Azure resources for {Name}.",
+                    Action = static async context =>
+                    {
+                        var provisioner = context.Services.GetRequiredService<AzureProvisioner>();
+                        await provisioner.ProvisionResourcesAsync(context.Model, context.CancellationToken).ConfigureAwait(false);
+                    },
+                    RequiredBySteps = [WellKnownPipelineSteps.BeforeStart],
+                    DependsOnSteps = [prepareResourcesStep.Name]
+                };
+                steps.Add(runModeProvisionStep);
+            }
+
             var publishStep = new PipelineStep
             {
                 Name = $"publish-{Name}",
@@ -76,6 +116,7 @@ public sealed class AzureEnvironmentResource : Resource
                 RequiredBySteps = [WellKnownPipelineSteps.Publish],
                 DependsOnSteps = [WellKnownPipelineSteps.PublishPrereq]
             };
+            steps.Add(publishStep);
 
             var validateStep = new PipelineStep
             {
@@ -85,6 +126,7 @@ public sealed class AzureEnvironmentResource : Resource
                 RequiredBySteps = [WellKnownPipelineSteps.Deploy],
                 DependsOnSteps = [WellKnownPipelineSteps.DeployPrereq]
             };
+            steps.Add(validateStep);
 
             var createContextStep = new PipelineStep
             {
@@ -102,6 +144,7 @@ public sealed class AzureEnvironmentResource : Resource
                 RequiredBySteps = [WellKnownPipelineSteps.Deploy],
                 DependsOnSteps = [WellKnownPipelineSteps.DeployPrereq]
             };
+            steps.Add(createContextStep);
             createContextStep.DependsOn(validateStep);
 
             var provisionStep = new PipelineStep
@@ -113,10 +156,20 @@ public sealed class AzureEnvironmentResource : Resource
                 RequiredBySteps = [WellKnownPipelineSteps.Deploy],
                 DependsOnSteps = [WellKnownPipelineSteps.DeployPrereq]
             };
-
+            steps.Add(provisionStep);
             provisionStep.DependsOn(createContextStep);
 
-            return [publishStep, validateStep, createContextStep, provisionStep];
+            var destroyStep = new PipelineStep
+            {
+                Name = $"destroy-azure-{Name}",
+                Description = $"Destroys the Azure resource group and all resources for {Name}.",
+                Action = ctx => DestroyAzureResourcesAsync(ctx),
+                RequiredBySteps = [WellKnownPipelineSteps.Destroy],
+                DependsOnSteps = [WellKnownPipelineSteps.DestroyPrereq]
+            };
+            steps.Add(destroyStep);
+
+            return steps;
         }));
 
         Annotations.Add(ManifestPublishingCallbackAnnotation.Ignore);
@@ -138,12 +191,10 @@ public sealed class AzureEnvironmentResource : Resource
         var location = provisioningContext.Location.Name;
 
         var tenantId = provisioningContext.Tenant.TenantId;
-        var tenantSegment = tenantId.HasValue ? $"#@{tenantId.Value}" : "#";
-        var portalUrl = $"https://portal.azure.com/{tenantSegment}/resource/subscriptions/{subscriptionId}/resourceGroups/{resourceGroupName}/overview";
-        var resourceGroupValue = $"[{resourceGroupName}]({portalUrl})";
 
         ctx.Summary.Add("☁️ Target", "Azure");
-        ctx.Summary.Add("📦 Resource Group", new MarkdownString(resourceGroupValue));
+        ctx.Summary.Add("📦 Resource Group", AzurePortalUrls.GetResourceGroupLink(subscriptionId, resourceGroupName, tenantId));
+        ctx.Summary.Add("📜 Deployments", AzurePortalUrls.GetResourceGroupDeploymentsLink(subscriptionId, resourceGroupName, tenantId));
         ctx.Summary.Add("🔑 Subscription", subscriptionId);
         ctx.Summary.Add("🌐 Location", location);
     }
@@ -181,6 +232,170 @@ public sealed class AzureEnvironmentResource : Resource
         {
             await context.ReportingStep.CompleteAsync(
                 new MarkdownString("Azure CLI authentication failed. Please run `az login` to authenticate before deploying. Learn more at [Azure CLI documentation](https://learn.microsoft.com/cli/azure/authenticate-azure-cli)."),
+                CompletionState.CompletedWithError,
+                context.CancellationToken).ConfigureAwait(false);
+            throw;
+        }
+    }
+
+    private static async Task DestroyAzureResourcesAsync(PipelineStepContext context)
+    {
+        var deploymentStateManager = context.Services.GetRequiredService<IDeploymentStateManager>();
+        var tokenCredentialProvider = context.Services.GetRequiredService<ITokenCredentialProvider>();
+        var armClientProvider = context.Services.GetRequiredService<IArmClientProvider>();
+
+        // Read deployment state to find the resource group
+        var azureStateSection = await deploymentStateManager.AcquireSectionAsync("Azure", context.CancellationToken).ConfigureAwait(false);
+
+        var resourceGroupName = azureStateSection.Data["ResourceGroup"]?.ToString();
+        var subscriptionId = azureStateSection.Data["SubscriptionId"]?.ToString();
+
+        if (string.IsNullOrEmpty(resourceGroupName) || string.IsNullOrEmpty(subscriptionId))
+        {
+            await context.ReportingStep.CompleteAsync(
+                "No Azure deployment state found. Nothing to destroy.",
+                CompletionState.Completed,
+                context.CancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        // Fail fast in non-interactive mode without --yes before doing any Azure work
+        var options = context.Services.GetRequiredService<IOptions<PipelineOptions>>();
+        if (!options.Value.SkipConfirmation)
+        {
+            var interactionService = context.Services.GetRequiredService<IInteractionService>();
+            if (!interactionService.IsAvailable)
+            {
+                throw new InvalidOperationException(
+                    "Cannot perform destructive operation without confirmation. Use --yes to skip the confirmation prompt in non-interactive mode.");
+            }
+        }
+
+        var credential = tokenCredentialProvider.TokenCredential;
+        var armClient = armClientProvider.GetArmClient(credential, subscriptionId);
+        var (subscription, _) = await armClient.GetSubscriptionAndTenantAsync(context.CancellationToken).ConfigureAwait(false);
+
+        var resourceGroups = subscription.GetResourceGroups();
+
+        IResourceGroupResource resourceGroup;
+        try
+        {
+            var rgResponse = await resourceGroups.GetAsync(resourceGroupName, context.CancellationToken).ConfigureAwait(false);
+            resourceGroup = rgResponse.Value;
+        }
+        catch (RequestFailedException ex) when (ex.Status == 404)
+        {
+            // Resource group already deleted
+            await context.ReportingStep.CompleteAsync(
+                new MarkdownString($"Resource group **{resourceGroupName}** not found (already deleted)"),
+                CompletionState.Completed,
+                context.CancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        // Enumerate resources in the resource group so the user can see what will be destroyed
+        var resources = new List<(string Name, string ResourceType)>();
+
+        {
+            var discoveryTask = await context.ReportingStep.CreateTaskAsync(
+                new MarkdownString($"Discovering resources in **{resourceGroupName}**"),
+                context.CancellationToken).ConfigureAwait(false);
+            await using var _ = discoveryTask.ConfigureAwait(false);
+
+            try
+            {
+                await foreach (var resource in resourceGroup.GetResourcesAsync(context.CancellationToken).ConfigureAwait(false))
+                {
+                    resources.Add(resource);
+                }
+
+                if (resources.Count == 0)
+                {
+                    await discoveryTask.CompleteAsync(
+                        new MarkdownString($"Resource group **{resourceGroupName}** is empty"),
+                        CompletionState.Completed,
+                        context.CancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    foreach (var (name, type) in resources)
+                    {
+                        var shortType = type.StartsWith("Microsoft.", StringComparison.OrdinalIgnoreCase)
+                            ? type["Microsoft.".Length..]
+                            : type;
+                        context.Logger.LogInformation("  {Type}: {Name}", shortType, name);
+                    }
+
+                    await discoveryTask.CompleteAsync(
+                        new MarkdownString($"Found **{resources.Count}** resource(s) in **{resourceGroupName}**"),
+                        CompletionState.Completed,
+                        context.CancellationToken).ConfigureAwait(false);
+                }
+            }
+            catch (Exception ex)
+            {
+                // Non-fatal — proceed with deletion even if enumeration fails
+                context.Logger.LogWarning(ex, "Failed to enumerate resources in resource group '{ResourceGroupName}'", resourceGroupName);
+                await discoveryTask.CompleteAsync(
+                    "Could not enumerate resources (will proceed with deletion)",
+                    CompletionState.Completed,
+                    context.CancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        // Confirm destruction with the user (unless --yes was specified)
+        if (!options.Value.SkipConfirmation)
+        {
+            var interactionService = context.Services.GetRequiredService<IInteractionService>();
+
+            var confirmMessage = resources.Count > 0
+                ? $"Delete resource group '{resourceGroupName}' with {resources.Count} resource(s)? This action cannot be undone."
+                : $"Delete resource group '{resourceGroupName}'? This action cannot be undone.";
+
+            var result = await interactionService.PromptNotificationAsync(
+                "Destroy Azure resources",
+                confirmMessage,
+                new NotificationInteractionOptions
+                {
+                    Intent = MessageIntent.Confirmation,
+                    ShowSecondaryButton = true,
+                    ShowDismiss = false,
+                    PrimaryButtonText = "Destroy",
+                    SecondaryButtonText = "Cancel"
+                },
+                context.CancellationToken).ConfigureAwait(false);
+
+            if (result.Canceled || !result.Data)
+            {
+                context.Logger.LogInformation("User canceled the destroy operation.");
+                throw new OperationCanceledException("Destroy operation canceled by user.");
+            }
+        }
+
+        // Delete the resource group
+        var deleteTask = await context.ReportingStep.CreateTaskAsync(
+            new MarkdownString($"Deleting resource group **{resourceGroupName}** ({resources.Count} resource(s))"),
+            context.CancellationToken).ConfigureAwait(false);
+        await using var __ = deleteTask.ConfigureAwait(false);
+
+        try
+        {
+            await resourceGroup.DeleteAsync(WaitUntil.Started, context.CancellationToken).ConfigureAwait(false);
+
+            var portalUrl = AzurePortalUrls.GetResourceGroupUrl(subscriptionId, resourceGroupName, subscription.TenantId);
+            context.Summary.Add("🗑️ Resource Group", new MarkdownString($"[{resourceGroupName}]({portalUrl})"));
+            context.Summary.Add("🔑 Subscription", subscriptionId);
+            context.Summary.Add("⏳ Status", new MarkdownString($"Deletion in progress. Monitor [here]({portalUrl})"));
+
+            await deleteTask.CompleteAsync(
+                new MarkdownString($"Resource group **{resourceGroupName}** deletion in progress. Monitor in the [Azure portal]({portalUrl})."),
+                CompletionState.Completed,
+                context.CancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            await deleteTask.CompleteAsync(
+                $"Failed to delete resource group '{resourceGroupName}': {ex.Message}",
                 CompletionState.CompletedWithError,
                 context.CancellationToken).ConfigureAwait(false);
             throw;

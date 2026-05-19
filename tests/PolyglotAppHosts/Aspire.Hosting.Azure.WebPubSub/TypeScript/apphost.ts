@@ -17,7 +17,7 @@ await hub.addEventHandler(refExpr`https://example.com/handler2`, {
     systemEvents: ["connect", "connected"],
 });
 
-// withRoleAssignments — assigns roles on a container resource
+// withWebPubSubRoleAssignments — assigns roles on a container resource
 const container = await builder.addContainer("mycontainer", "mcr.microsoft.com/dotnet/samples:aspnetapp");
 await container.withWebPubSubRoleAssignments(webpubsub, [
     AzureWebPubSubRole.WebPubSubServiceOwner,
@@ -25,7 +25,7 @@ await container.withWebPubSubRoleAssignments(webpubsub, [
     AzureWebPubSubRole.WebPubSubContributor,
 ]);
 
-// withRoleAssignments — also available directly on AzureWebPubSubResource builder
+// withWebPubSubRoleAssignments — also available directly on AzureWebPubSubResource builder
 await webpubsub.withWebPubSubRoleAssignments(webpubsub, [AzureWebPubSubRole.WebPubSubServiceReader]);
 
 // withReference — generic, works via IResourceWithConnectionString

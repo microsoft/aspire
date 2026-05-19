@@ -59,6 +59,8 @@ Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepContext [ExposeProperties]
 Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepFactoryContext [ExposeProperties]
 Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineSummary [ExposeMethods]
 Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions [ExposeProperties]
+Aspire.Hosting/Aspire.Hosting.Publishing.AfterPublishEvent [ExposeProperties]
+Aspire.Hosting/Aspire.Hosting.Publishing.BeforePublishEvent [ExposeProperties]
 Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfiguration [interface]
 Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfigurationSection [interface, ExposeProperties]
 Microsoft.Extensions.Hosting.Abstractions/Microsoft.Extensions.Hosting.IHostEnvironment [interface, ExposeProperties]
@@ -232,6 +234,10 @@ Aspire.Hosting.Pipelines/PipelineStepFactoryContext.setPipelineContext(context: 
 Aspire.Hosting.Pipelines/PipelineStepFactoryContext.setResource(context: Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepFactoryContext, value: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource) -> Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepFactoryContext
 Aspire.Hosting.Pipelines/PipelineSummary.add(context: Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineSummary, key: string, value: string) -> void
 Aspire.Hosting.Pipelines/requiredBy(context: Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStep, stepName: string) -> void
+Aspire.Hosting.Publishing/AfterPublishEvent.model(context: Aspire.Hosting/Aspire.Hosting.Publishing.AfterPublishEvent) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.DistributedApplicationModel
+Aspire.Hosting.Publishing/AfterPublishEvent.services(context: Aspire.Hosting/Aspire.Hosting.Publishing.AfterPublishEvent) -> System.ComponentModel/System.IServiceProvider
+Aspire.Hosting.Publishing/BeforePublishEvent.model(context: Aspire.Hosting/Aspire.Hosting.Publishing.BeforePublishEvent) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.DistributedApplicationModel
+Aspire.Hosting.Publishing/BeforePublishEvent.services(context: Aspire.Hosting/Aspire.Hosting.Publishing.BeforePublishEvent) -> System.ComponentModel/System.IServiceProvider
 Aspire.Hosting/addConnectionString(name: string, environmentVariableName?: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString
 Aspire.Hosting/addConnectionStringBuilder(name: string, connectionStringBuilder: callback) -> Aspire.Hosting/Aspire.Hosting.ConnectionStringResource
 Aspire.Hosting/addConnectionStringExpression(name: string, connectionStringExpression: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression) -> Aspire.Hosting/Aspire.Hosting.ConnectionStringResource
@@ -350,7 +356,9 @@ Aspire.Hosting/publishResourceUpdate(resource: Aspire.Hosting/Aspire.Hosting.App
 Aspire.Hosting/publishWithContainerFiles(source: Aspire.Hosting/Aspire.Hosting.IResourceWithContainerFiles, destinationPath: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IContainerFilesDestinationResource
 Aspire.Hosting/run(context: Aspire.Hosting/Aspire.Hosting.DistributedApplication, cancellationToken?: cancellationToken) -> void
 Aspire.Hosting/saveStateJson(json: string, cancellationToken?: cancellationToken) -> void
+Aspire.Hosting/subscribeAfterPublish(callback: callback) -> Aspire.Hosting/Aspire.Hosting.Eventing.DistributedApplicationEventSubscription
 Aspire.Hosting/subscribeAfterResourcesCreated(callback: callback) -> Aspire.Hosting/Aspire.Hosting.Eventing.DistributedApplicationEventSubscription
+Aspire.Hosting/subscribeBeforePublish(callback: callback) -> Aspire.Hosting/Aspire.Hosting.Eventing.DistributedApplicationEventSubscription
 Aspire.Hosting/subscribeBeforeStart(callback: callback) -> Aspire.Hosting/Aspire.Hosting.Eventing.DistributedApplicationEventSubscription
 Aspire.Hosting/tryGetResourceState(resourceName: string) -> Aspire.Hosting/Aspire.Hosting.Ats.ResourceEventDto
 Aspire.Hosting/updateTask(statusText: string, cancellationToken?: cancellationToken) -> void
@@ -388,10 +396,6 @@ Aspire.Hosting/withEndpointProxySupport(proxyEnabled: boolean) -> Aspire.Hosting
 Aspire.Hosting/withEntrypoint(entrypoint: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
 Aspire.Hosting/withEnvironment(name: string, value: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression|Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource|Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString|Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExpressionValue) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
 Aspire.Hosting/withEnvironmentCallback(callback: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
-Aspire.Hosting/withEnvironmentConnectionString(envVarName: string, resource: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
-Aspire.Hosting/withEnvironmentEndpoint(name: string, endpointReference: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
-Aspire.Hosting/withEnvironmentExpression(name: string, value: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
-Aspire.Hosting/withEnvironmentParameter(name: string, parameter: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
 Aspire.Hosting/withExecutableCommand(command: string) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource
 Aspire.Hosting/withExplicitStart() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
 Aspire.Hosting/withExternalHttpEndpoints() -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints

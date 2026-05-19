@@ -124,7 +124,7 @@
     <value>Stop any running instance of the AppHost without prompting</value>
   </data>
   <data name="ProjectArgumentDescription" xml:space="preserve">
-    <value>The path to the Aspire AppHost project file</value>
+    <value>The path to the Aspire AppHost project file or a directory to search</value>
   </data>
   <data name="DetachArgumentDescription" xml:space="preserve">
     <value>Run the AppHost in the background and exit after it starts</value>
@@ -182,7 +182,7 @@
     <value>Connecting to AppHost...</value>
   </data>
   <data name="DashboardFailedToStart" xml:space="preserve">
-    <value>Aspire Dashboard failed to start.</value>
+    <value>Aspire Dashboard failed to start or is disabled.</value>
   </data>
   <data name="AppHost" xml:space="preserve">
     <value>AppHost</value>
@@ -231,6 +231,9 @@
   </data>
   <data name="CheckLogsForDetails" xml:space="preserve">
     <value>Check logs for details: {0}</value>
+  </data>
+  <data name="RecentAppHostStartupOutput" xml:space="preserve">
+    <value>Recent AppHost startup output</value>
   </data>
   <data name="ProcessId" xml:space="preserve">
     <value>PID</value>

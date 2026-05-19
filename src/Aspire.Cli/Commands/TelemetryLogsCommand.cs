@@ -6,9 +6,11 @@ using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Aspire.Shared.ConsoleLogs;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Utils;
 using Aspire.Otlp.Serialization;
@@ -23,6 +25,7 @@ namespace Aspire.Cli.Commands;
 internal sealed class TelemetryLogsCommand : BaseCommand
 {
     private readonly IInteractionService _interactionService;
+    private readonly ICliHostEnvironment _hostEnvironment;
     private readonly AppHostConnectionResolver _connectionResolver;
     private readonly ILogger<TelemetryLogsCommand> _logger;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -38,6 +41,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
     private static readonly Option<string?> s_traceIdOption = TelemetryCommandHelpers.CreateTraceIdOption("--trace-id");
     private static readonly Option<string?> s_dashboardUrlOption = TelemetryCommandHelpers.CreateDashboardUrlOption();
     private static readonly Option<string?> s_apiKeyOption = TelemetryCommandHelpers.CreateApiKeyOption();
+    private static readonly Option<string?> s_searchOption = TelemetryCommandHelpers.CreateSearchOption();
     // Logs-specific option
     private static readonly Option<string?> s_severityOption = new("--severity")
     {
@@ -50,7 +54,9 @@ internal sealed class TelemetryLogsCommand : BaseCommand
         IFeatures features,
         ICliUpdateNotifier updateNotifier,
         CliExecutionContext executionContext,
+        IProjectLocator projectLocator,
         AspireCliTelemetry telemetry,
+        ICliHostEnvironment hostEnvironment,
         IHttpClientFactory httpClientFactory,
         ResourceColorMap resourceColorMap,
         TimeProvider timeProvider,
@@ -58,11 +64,12 @@ internal sealed class TelemetryLogsCommand : BaseCommand
         : base("logs", TelemetryCommandStrings.LogsDescription, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _interactionService = interactionService;
+        _hostEnvironment = hostEnvironment;
         _httpClientFactory = httpClientFactory;
         _resourceColorMap = resourceColorMap;
         _timeProvider = timeProvider;
         _logger = logger;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, executionContext, logger);
+        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, projectLocator, executionContext, logger);
 
         Arguments.Add(s_resourceArgument);
         Options.Add(s_appHostOption);
@@ -73,9 +80,10 @@ internal sealed class TelemetryLogsCommand : BaseCommand
         Options.Add(s_dashboardUrlOption);
         Options.Add(s_apiKeyOption);
         Options.Add(s_severityOption);
+        Options.Add(s_searchOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
@@ -88,23 +96,23 @@ internal sealed class TelemetryLogsCommand : BaseCommand
         var severity = parseResult.GetValue(s_severityOption);
         var dashboardUrl = parseResult.GetValue(s_dashboardUrlOption);
         var apiKey = parseResult.GetValue(s_apiKeyOption);
+        var search = parseResult.GetValue(s_searchOption);
 
         // Validate --limit value
         if (limit.HasValue && limit.Value < 1)
         {
-            _interactionService.DisplayError(TelemetryCommandStrings.LimitMustBePositive);
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, TelemetryCommandStrings.LimitMustBePositive);
         }
 
         var dashboardApi = await TelemetryCommandHelpers.GetDashboardApiAsync(
-            _connectionResolver, _interactionService, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: true, cancellationToken);
+            _connectionResolver, _interactionService, _httpClientFactory, _logger, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: true, cancellationToken);
 
         if (!dashboardApi.Success)
         {
-            return dashboardApi.ExitCode;
+            return CommandResult.FromExitCode(dashboardApi.ExitCode);
         }
 
-        return await FetchLogsAsync(dashboardApi.BaseUrl!, dashboardApi.ApiToken!, resourceName, traceId, severity, limit, follow, format, dashboardOnly: dashboardUrl is not null, cancellationToken);
+        return CommandResult.FromExitCode(await FetchLogsAsync(dashboardApi.BaseUrl!, dashboardApi.ApiToken!, resourceName, traceId, severity, limit, follow, format, dashboardOnly: dashboardUrl is not null, dashboardApi.DashboardUrl!, search, cancellationToken));
     }
 
     private async Task<int> FetchLogsAsync(
@@ -117,50 +125,52 @@ internal sealed class TelemetryLogsCommand : BaseCommand
         bool follow,
         OutputFormat format,
         bool dashboardOnly,
+        string dashboardUrl,
+        string? search,
         CancellationToken cancellationToken)
     {
-        using var client = TelemetryCommandHelpers.CreateApiClient(_httpClientFactory, apiToken);
-
-        // Resolve resource name to specific instances (handles replicas)
-        var resources = await TelemetryCommandHelpers.GetAllResourcesAsync(client, baseUrl, cancellationToken).ConfigureAwait(false);
-        var allOtlpResources = TelemetryCommandHelpers.ToOtlpResources(resources);
-
-        // Pre-resolve colors so assignment is deterministic regardless of data order
-        TelemetryCommandHelpers.ResolveResourceColors(_resourceColorMap, allOtlpResources);
-
-        // If a resource was specified but not found, return error
-        if (!TelemetryCommandHelpers.TryResolveResourceNames(resource, resources, out var resolvedResources))
-        {
-            _interactionService.DisplayError($"Resource '{resource}' not found.");
-            return ExitCodeConstants.InvalidCommand;
-        }
-
-        // Build URL with query parameters
-        int? effectiveLimit = (limit.HasValue && !follow) ? limit.Value : null;
-
-        var url = DashboardUrls.TelemetryLogsApiUrl(baseUrl, resolvedResources, traceId: traceId, severity: severity, limit: effectiveLimit, follow: follow ? true : null);
-
         try
         {
+            using var client = TelemetryCommandHelpers.CreateApiClient(_httpClientFactory, apiToken);
+
+            // Resolve resource name to specific instances (handles replicas)
+            var resources = await TelemetryCommandHelpers.GetAllResourcesAsync(client, baseUrl, cancellationToken).ConfigureAwait(false);
+            var allOtlpResources = TelemetryCommandHelpers.ToOtlpResources(resources);
+
+            // Pre-resolve colors so assignment is deterministic regardless of data order
+            TelemetryCommandHelpers.ResolveResourceColors(_resourceColorMap, allOtlpResources);
+
+            // If a resource was specified but not found, return error
+            if (!TelemetryCommandHelpers.TryResolveResourceNames(resource, resources, out var resolvedResources))
+            {
+                _interactionService.DisplayError($"Resource '{resource}' not found.");
+                return CliExitCodes.InvalidCommand;
+            }
+
+            // Build URL with query parameters
+            int? effectiveLimit = (limit.HasValue && !follow) ? limit.Value : null;
+
+            var url = DashboardUrls.TelemetryLogsApiUrl(baseUrl, resolvedResources, traceId: traceId, severity: severity, limit: effectiveLimit, follow: follow ? true : null, search: search);
+
             if (follow)
             {
-                return await StreamLogsAsync(client, url, format, allOtlpResources, cancellationToken);
+                return await StreamLogsAsync(client, url, format, allOtlpResources, dashboardUrl, cancellationToken);
             }
             else
             {
-                return await GetLogsSnapshotAsync(client, url, format, allOtlpResources, cancellationToken);
+                return await GetLogsSnapshotAsync(client, url, format, allOtlpResources, dashboardUrl, cancellationToken);
             }
         }
         catch (HttpRequestException ex)
         {
             _logger.LogError(ex, "Failed to fetch logs from Dashboard API");
-            var errorMessage = await TelemetryCommandHelpers.FormatTelemetryErrorMessageAsync(ex, baseUrl, dashboardOnly, _httpClientFactory, _logger, cancellationToken);
-            _interactionService.DisplayError(errorMessage);
-            return ExitCodeConstants.DashboardFailure;
+            var errorInfo = await TelemetryCommandHelpers.FormatTelemetryErrorAsync(ex, baseUrl, dashboardOnly, _httpClientFactory, _logger, cancellationToken);
+            TelemetryCommandHelpers.DisplayTelemetryError(_interactionService, errorInfo);
+            return CliExitCodes.DashboardFailure;
         }
     }
 
-    private async Task<int> GetLogsSnapshotAsync(HttpClient client, string url, OutputFormat format, IReadOnlyList<IOtlpResource> allResources, CancellationToken cancellationToken)
+    private async Task<int> GetLogsSnapshotAsync(HttpClient client, string url, OutputFormat format, IReadOnlyList<IOtlpResource> allResources, string dashboardUrl, CancellationToken cancellationToken)
     {
         var response = await client.GetAsync(url, cancellationToken);
         TelemetryCommandHelpers.EnsureTelemetryApiResponse(response);
@@ -169,18 +179,20 @@ internal sealed class TelemetryLogsCommand : BaseCommand
 
         if (format == OutputFormat.Json)
         {
-            // Structured output always goes to stdout.
-            _interactionService.DisplayRawText(json, ConsoleOutput.Standard);
+            var apiResponse = JsonSerializer.Deserialize(json, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+            var resourceLogs = apiResponse?.Data?.ResourceLogs;
+            Func<IOtlpResource, string> getResourceName = s => OtlpHelpers.GetResourceName(s, allResources);
+            _interactionService.DisplayRawText(SharedAIHelpers.SerializeLogsToJson(resourceLogs, getResourceName, dashboardUrl), ConsoleOutput.Standard);
         }
         else
         {
             DisplayLogsSnapshot(json, allResources);
         }
 
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
-    private async Task<int> StreamLogsAsync(HttpClient client, string url, OutputFormat format, IReadOnlyList<IOtlpResource> allResources, CancellationToken cancellationToken)
+    private async Task<int> StreamLogsAsync(HttpClient client, string url, OutputFormat format, IReadOnlyList<IOtlpResource> allResources, string dashboardUrl, CancellationToken cancellationToken)
     {
         using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         TelemetryCommandHelpers.EnsureTelemetryApiResponse(response);
@@ -192,8 +204,10 @@ internal sealed class TelemetryLogsCommand : BaseCommand
         {
             if (format == OutputFormat.Json)
             {
-                // Structured output always goes to stdout.
-                _interactionService.DisplayRawText(line, ConsoleOutput.Standard);
+                var request = JsonSerializer.Deserialize(line, OtlpJsonSerializerContext.Default.OtlpExportLogsServiceRequestJson);
+                var resourceLogs = request?.ResourceLogs;
+                Func<IOtlpResource, string> getResourceName = s => OtlpHelpers.GetResourceName(s, allResources);
+                _interactionService.DisplayRawText(SharedAIHelpers.SerializeLogsToJson(resourceLogs, getResourceName, dashboardUrl), ConsoleOutput.Standard);
             }
             else
             {
@@ -201,7 +215,7 @@ internal sealed class TelemetryLogsCommand : BaseCommand
             }
         }
 
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private void DisplayLogsSnapshot(string json, IReadOnlyList<IOtlpResource> allResources)
@@ -249,12 +263,13 @@ internal sealed class TelemetryLogsCommand : BaseCommand
             : "";
         var severity = TelemetryCommandHelpers.GetSeverityText(log.SeverityNumber);
         var body = log.Body?.StringValue ?? "";
+        var displayBody = _hostEnvironment.SupportsAnsi ? body : AnsiParser.StripControlSequences(body);
 
         // Use severity number for color mapping (more reliable than text)
         var severityColor = TelemetryCommandHelpers.GetSeverityColor(log.SeverityNumber);
         var resourceColor = _resourceColorMap.GetColor(resourceName);
 
-        var escapedBody = body.EscapeMarkup();
+        var escapedBody = displayBody.EscapeMarkup();
         _interactionService.DisplayMarkupLine($"[grey]{timestamp}[/] [{severityColor}]{severity,-4}[/] [{resourceColor}]{resourceName.EscapeMarkup()}[/] {escapedBody}");
     }
 }

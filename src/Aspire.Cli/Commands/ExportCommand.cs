@@ -7,6 +7,7 @@ using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
@@ -41,6 +42,11 @@ internal sealed class ExportCommand : BaseCommand
     private static readonly Option<string?> s_dashboardUrlOption = TelemetryCommandHelpers.CreateDashboardUrlOption();
     private static readonly Option<string?> s_apiKeyOption = TelemetryCommandHelpers.CreateApiKeyOption();
 
+    private static readonly Option<bool> s_includeHiddenOption = new("--include-hidden")
+    {
+        Description = ExportCommandStrings.IncludeHiddenOptionDescription
+    };
+
     private static readonly Argument<string?> s_resourceArgument = new("resource")
     {
         Description = ExportCommandStrings.ResourceOptionDescription,
@@ -53,6 +59,7 @@ internal sealed class ExportCommand : BaseCommand
         IFeatures features,
         ICliUpdateNotifier updateNotifier,
         CliExecutionContext executionContext,
+        IProjectLocator projectLocator,
         AspireCliTelemetry telemetry,
         IHttpClientFactory httpClientFactory,
         TimeProvider timeProvider,
@@ -63,16 +70,17 @@ internal sealed class ExportCommand : BaseCommand
         _httpClientFactory = httpClientFactory;
         _timeProvider = timeProvider;
         _logger = logger;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, executionContext, logger);
+        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, projectLocator, executionContext, logger);
 
         Arguments.Add(s_resourceArgument);
         Options.Add(s_appHostOption);
         Options.Add(s_outputOption);
         Options.Add(s_dashboardUrlOption);
         Options.Add(s_apiKeyOption);
+        Options.Add(s_includeHiddenOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
@@ -81,12 +89,12 @@ internal sealed class ExportCommand : BaseCommand
         var outputPath = parseResult.GetValue(s_outputOption);
         var dashboardUrl = parseResult.GetValue(s_dashboardUrlOption);
         var apiKey = parseResult.GetValue(s_apiKeyOption);
+        var includeHidden = parseResult.GetValue(s_includeHiddenOption);
 
         // Validate mutual exclusivity of --apphost and --dashboard-url
         if (passedAppHostProjectFile is not null && dashboardUrl is not null)
         {
-            _interactionService.DisplayError(TelemetryCommandStrings.DashboardUrlAndAppHostExclusive);
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, TelemetryCommandStrings.DashboardUrlAndAppHostExclusive);
         }
 
         // Default file name if not specified
@@ -104,11 +112,11 @@ internal sealed class ExportCommand : BaseCommand
         }
 
         var dashboardApi = await TelemetryCommandHelpers.GetDashboardApiAsync(
-            _connectionResolver, _interactionService, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: false, cancellationToken);
+            _connectionResolver, _interactionService, _httpClientFactory, _logger, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: false, cancellationToken);
 
         if (!dashboardApi.Success)
         {
-            return dashboardApi.ExitCode;
+            return CommandResult.FromExitCode(dashboardApi.ExitCode);
         }
 
         if (dashboardApi.BaseUrl is null)
@@ -118,25 +126,25 @@ internal sealed class ExportCommand : BaseCommand
 
         try
         {
-            return await ExportDataAsync(resourceName, dashboardApi.Connection, dashboardApi.BaseUrl, dashboardApi.ApiToken, outputPath, cancellationToken);
+            return CommandResult.FromExitCode(await ExportDataAsync(resourceName, includeHidden, dashboardApi.Connection, dashboardApi.BaseUrl, dashboardApi.ApiToken, outputPath, cancellationToken));
         }
         catch (HttpRequestException ex) when (dashboardUrl is not null)
         {
             _logger.LogError(ex, "Failed to export telemetry data from dashboard");
-            var errorMessage = await TelemetryCommandHelpers.FormatTelemetryErrorMessageAsync(ex, dashboardApi.BaseUrl!, true, _httpClientFactory, _logger, cancellationToken);
-            _interactionService.DisplayError(errorMessage);
-            return ExitCodeConstants.DashboardFailure;
+            var errorInfo = await TelemetryCommandHelpers.FormatTelemetryErrorAsync(ex, dashboardApi.BaseUrl!, true, _httpClientFactory, _logger, cancellationToken);
+            TelemetryCommandHelpers.DisplayTelemetryError(_interactionService, errorInfo);
+            return CommandResult.Failure(CliExitCodes.DashboardFailure);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to export telemetry data");
-            _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, ExportCommandStrings.FailedToExport, ex.Message));
-            return ExitCodeConstants.DashboardFailure;
+            return CommandResult.Failure(CliExitCodes.DashboardFailure, string.Format(CultureInfo.CurrentCulture, ExportCommandStrings.FailedToExport, ex.Message));
         }
     }
 
     private async Task<int> ExportDataAsync(
         string? resourceName,
+        bool includeHidden,
         IAppHostAuxiliaryBackchannel? connection,
         string? baseUrl,
         string? apiToken,
@@ -147,17 +155,22 @@ internal sealed class ExportCommand : BaseCommand
 
         using var client = isDashboardAvailable ? TelemetryCommandHelpers.CreateApiClient(_httpClientFactory, apiToken!) : null;
 
+        // Always fetch all snapshots so we know which resources are hidden.
+
         // Get telemetry resources and resource snapshots
-        var (telemetryResources, snapshots) = await _interactionService.ShowStatusAsync(ExportCommandStrings.GatheringResources, async () =>
+        var (telemetryResources, allSnapshots) = await _interactionService.ShowStatusAsync(ExportCommandStrings.GatheringResources, async () =>
         {
             var resources = isDashboardAvailable
                 ? await TelemetryCommandHelpers.GetAllResourcesAsync(client!, baseUrl!, cancellationToken).ConfigureAwait(false)
                 : [];
             IReadOnlyList<ResourceSnapshot> snaps = connection is not null
-                ? await connection.GetResourceSnapshotsAsync(cancellationToken).ConfigureAwait(false)
+                ? await connection.GetResourceSnapshotsAsync(includeHidden: true, cancellationToken).ConfigureAwait(false)
                 : [];
             return (resources, snaps);
         });
+
+        // Filter hidden resources, deriving the visible list and the hidden set for log filtering.
+        var (_, snapshots, hiddenResourceNames) = ResourceSnapshotMapper.FilterHiddenResources(allSnapshots, includeHidden, resourceName);
 
         // Validate resource name exists (match by Name or DisplayName since users may pass either)
         if (resourceName is not null && snapshots.Count > 0)
@@ -165,13 +178,13 @@ internal sealed class ExportCommand : BaseCommand
             if (!ResourceSnapshotMapper.WhereMatchesResourceName(snapshots, resourceName).Any())
             {
                 _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, ExportCommandStrings.ResourceNotFound, resourceName));
-                return ExitCodeConstants.InvalidCommand;
+                return CliExitCodes.InvalidCommand;
             }
         }
         else if (resourceName is null && connection is not null && snapshots.Count == 0)
         {
             _interactionService.DisplayMessage(KnownEmojis.Information, ExportCommandStrings.NoResourcesFound);
-            return ExitCodeConstants.Success;
+            return CliExitCodes.Success;
         }
 
         // Resolve which telemetry resources match the filter
@@ -197,7 +210,7 @@ internal sealed class ExportCommand : BaseCommand
         {
             await _interactionService.ShowStatusAsync(ExportCommandStrings.GatheringConsoleLogs, async () =>
             {
-                await AddConsoleLogsAsync(exportArchive, connection, resourceName, snapshots, cancellationToken).ConfigureAwait(false);
+                await AddConsoleLogsAsync(exportArchive, connection, resourceName, snapshots, hiddenResourceNames, cancellationToken).ConfigureAwait(false);
                 return true;
             });
         }
@@ -222,8 +235,8 @@ internal sealed class ExportCommand : BaseCommand
         var fullPath = Path.GetFullPath(outputPath);
         exportArchive.WriteToFile(fullPath);
 
-        _interactionService.DisplayMessage(KnownEmojis.CheckMark, string.Format(CultureInfo.CurrentCulture, ExportCommandStrings.ExportComplete, fullPath));
-        return ExitCodeConstants.Success;
+        _interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, string.Format(CultureInfo.CurrentCulture, ExportCommandStrings.ExportComplete, fullPath));
+        return CliExitCodes.Success;
     }
 
     private static void AddResources(ExportArchive exportArchive, IReadOnlyList<ResourceSnapshot> snapshots, string? resourceName)
@@ -250,12 +263,18 @@ internal sealed class ExportCommand : BaseCommand
         IAppHostAuxiliaryBackchannel connection,
         string? resourceName,
         IReadOnlyList<ResourceSnapshot> snapshots,
+        HashSet<string> hiddenResourceNames,
         CancellationToken cancellationToken)
     {
         var logLinesByResource = new Dictionary<string, List<string>>();
 
         await foreach (var logLine in connection.GetResourceLogsAsync(resourceName, follow: false, cancellationToken).ConfigureAwait(false))
         {
+            // When exporting all resources, skip logs from hidden resources
+            if (resourceName is null && hiddenResourceNames.Contains(logLine.ResourceName))
+            {
+                continue;
+            }
             if (!logLinesByResource.TryGetValue(logLine.ResourceName, out var lines))
             {
                 lines = [];

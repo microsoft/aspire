@@ -42,6 +42,16 @@
         <target state="translated">Les certificats de développeur ne sont peut-être pas entièrement approuvés (le code de sortie d’approbation était : {0}).</target>
         <note />
       </trans-unit>
+      <trans-unit id="CertificatesNotTrustedNonInteractive">
+        <source>Developer certificates are not trusted. Trust them interactively by running 'aspire certs trust'.</source>
+        <target state="new">Developer certificates are not trusted. Trust them interactively by running 'aspire certs trust'.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CertificatesPartiallyTrustedNonInteractive">
+        <source>Developer certificates are only partially trusted. Trust them interactively by running 'aspire certs trust'.</source>
+        <target state="new">Developer certificates are only partially trusted. Trust them interactively by running 'aspire certs trust'.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="CommandNotSupportedWithSingleFileAppHost">
         <source>This command is not yet supported with single file AppHosts.</source>
         <target state="needs-review-translation">Cette commande n’est pas encore prise en charge avec les hôtes d’application à fichier unique.</target>
@@ -67,6 +77,11 @@
         <target state="translated">Impossible d’analyser la version du package Aspire.Hosting.</target>
         <note />
       </trans-unit>
+      <trans-unit id="DotNetSdkUnavailableAppHostDiscoveryWarning">
+        <source>Warning: Required .NET SDK not found; .NET AppHost projects may be missing from results.</source>
+        <target state="new">Warning: Required .NET SDK not found; .NET AppHost projects may be missing from results.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ErrorDeletingConfiguration">
         <source>Error deleting configuration: {0}</source>
         <target state="translated">Erreur lors de la suppression de la configuration : {0}</target>
@@ -86,6 +101,11 @@
         <source>The Aspire extension token must be set if ASPIRE_EXTENSION_ENDPOINT is set. Please ensure that ASPIRE_EXTENSION_TOKEN is set</source>
         <target state="translated">Le jeton d’extension Aspire doit être défini si ASPIRE_EXTENSION_ENDPOINT est défini. Veuillez vérifier que ASPIRE_EXTENSION_TOKEN est défini</target>
         <note>Do not localize ASPIRE_EXTENSION_TOKEN and ASPIRE_EXTENSION_ENDPOINT</note>
+      </trans-unit>
+      <trans-unit id="FailedToParsePackageSearchResults">
+        <source>Failed to parse package search results.</source>
+        <target state="new">Failed to parse package search results.</target>
+        <note />
       </trans-unit>
       <trans-unit id="FailedToParseTemplateVersionFromStdout">
         <source>Failed to parse template version from stdout.</source>
@@ -107,6 +127,16 @@
         <target state="translated">Échec de la recherche des packages. Code de sortie : {0}.</target>
         <note>{0} is a number</note>
       </trans-unit>
+      <trans-unit id="GlobalAppHostPathCannotBeSetWithConfigCommand">
+        <source>The AppHost path cannot be set in global settings. Use 'appHost.path' in a local aspire.config.json file instead.</source>
+        <target state="new">The AppHost path cannot be set in global settings. Use 'appHost.path' in a local aspire.config.json file instead.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="GlobalAppHostPathIgnored">
+        <source>Global settings file '{0}' contains '{1}', which is not supported. AppHost paths must be configured locally.</source>
+        <target state="new">Global settings file '{0}' contains '{1}', which is not supported. AppHost paths must be configured locally.</target>
+        <note>{0} is the global settings file path, {1} is the configured key such as appHost.path or appHostPath.</note>
+      </trans-unit>
       <trans-unit id="InvalidJsonInConfigFile">
         <source>The configuration file '{0}' contains invalid JSON: {1}</source>
         <target state="new">The configuration file '{0}' contains invalid JSON: {1}</target>
@@ -120,6 +150,11 @@
       <trans-unit id="InvalidSocketPath">
         <source>The provided extension socket path needs two valid parts.</source>
         <target state="translated">Le chemin d’accès de socket d’extension fourni nécessite deux parties valides.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LegacyAppHostPathCannotBeSetWithConfigCommand">
+        <source>The legacy AppHost path key 'appHostPath' cannot be set with 'aspire config set'. Use 'appHost.path' in a local aspire.config.json file instead.</source>
+        <target state="new">The legacy AppHost path key 'appHostPath' cannot be set with 'aspire config set'. Use 'appHost.path' in a local aspire.config.json file instead.</target>
         <note />
       </trans-unit>
       <trans-unit id="MinimumSdkVersionNotMet">
@@ -168,9 +203,9 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectFilesCreatedButNodeToolsNotFound">
-        <source>Project files were created, but Aspire could not run 'npm install' automatically because the required Node.js tools were not found on PATH. You may see missing package errors or red squiggles in your IDE until you install Node.js and run 'npm install' in the project directory.</source>
-        <target state="new">Project files were created, but Aspire could not run 'npm install' automatically because the required Node.js tools were not found on PATH. You may see missing package errors or red squiggles in your IDE until you install Node.js and run 'npm install' in the project directory.</target>
-        <note>Do not translate 'npm install', 'Node.js', or 'PATH'.</note>
+        <source>Project files were created, but Aspire could not run '{0}' automatically because the required JavaScript tooling was not found on PATH. You may see missing package errors or red squiggles in your IDE until you install {1} and run '{0}' in the project directory.</source>
+        <target state="new">Project files were created, but Aspire could not run '{0}' automatically because the required JavaScript tooling was not found on PATH. You may see missing package errors or red squiggles in your IDE until you install {1} and run '{0}' in the project directory.</target>
+        <note>{0} is the install command, such as 'npm install', 'bun install', 'yarn install', or 'pnpm install'. {1} is the toolchain display name, such as 'Node.js', 'Bun', 'Yarn', or 'pnpm'. Do not translate 'PATH'.</note>
       </trans-unit>
       <trans-unit id="ProjectIsNotAppHost">
         <source>The project does not contain an Aspire AppHost.</source>

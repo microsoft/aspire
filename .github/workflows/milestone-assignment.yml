@@ -1,0 +1,63 @@
+name: Auto-assign milestone to merged PRs
+
+on:
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  assign-milestone:
+    if: >-
+      github.repository_owner == 'microsoft' &&
+      github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Assign milestone based on target branch
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const branchToMilestone = {
+              'main': '13.4',
+              'release/13.3': '13.3.x',
+            };
+
+            const baseBranch = context.payload.pull_request.base.ref;
+            const expectedTitle = branchToMilestone[baseBranch];
+
+            if (!expectedTitle) {
+              console.log(`No milestone mapping for branch '${baseBranch}', skipping.`);
+              return;
+            }
+
+            // Check if the correct milestone is already assigned
+            const currentMilestone = context.payload.pull_request.milestone;
+            if (currentMilestone && currentMilestone.title === expectedTitle) {
+              console.log(`PR #${context.issue.number} already has milestone '${expectedTitle}'.`);
+              return;
+            }
+
+            // Find the milestone number by title
+            const milestones = await github.paginate(github.rest.issues.listMilestones, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100,
+            });
+
+            const milestone = milestones.find(m => m.title === expectedTitle);
+            if (!milestone) {
+              core.setFailed(`Milestone '${expectedTitle}' not found in the repository.`);
+              return;
+            }
+
+            await github.rest.issues.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              milestone: milestone.number,
+            });
+
+            console.log(`Assigned milestone '${expectedTitle}' to PR #${context.issue.number}.`);

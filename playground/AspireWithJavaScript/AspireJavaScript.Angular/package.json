@@ -42,6 +42,8 @@
     "run-script-os": "^1.1.6"
   },
   "overrides": {
-    "vite": "7.3.2"
+    "vite": "7.3.2",
+    "postcss": "8.5.10",
+    "uuid": "14.0.0"
   }
 }

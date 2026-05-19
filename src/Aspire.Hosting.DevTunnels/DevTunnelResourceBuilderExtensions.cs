@@ -495,24 +495,25 @@ public static partial class DevTunnelsResourceBuilderExtensions
 
                     if (flags.HasFlag(ReferenceEnvironmentInjectionFlags.ServiceDiscovery))
                     {
-                        // Use the endpoint's scheme (not name) in the service discovery key so that
-                        // .NET service discovery can correctly match the scheme segment to the URI scheme.
-                        var scheme = port.TargetEndpoint.Scheme;
-                        if (!schemeIndexTracker.TryGetValue(scheme, out var index))
+                        // Use the endpoint's scheme for "http" and "https" endpoint names to handle
+                        // TLS upgrades correctly. For all other endpoint names, use the endpoint name
+                        // so that .NET service discovery's named endpoint resolution can match them.
+                        var schemeKey = port.TargetEndpoint.IsHttpSchemeNamedEndpoint ? port.TargetEndpoint.Scheme : endpointName;
+                        if (!schemeIndexTracker.TryGetValue(schemeKey, out var index))
                         {
                             index = 0;
                         }
 
                         // Find the next unused index for this scheme in case of collisions with other callbacks.
-                        var key = $"services__{serviceName}__{scheme}__{index}";
+                        var key = $"services__{serviceName}__{schemeKey}__{index}";
                         while (context.EnvironmentVariables.ContainsKey(key))
                         {
                             index++;
-                            key = $"services__{serviceName}__{scheme}__{index}";
+                            key = $"services__{serviceName}__{schemeKey}__{index}";
                         }
 
                         context.EnvironmentVariables[key] = port.TunnelEndpoint;
-                        schemeIndexTracker[scheme] = index + 1;
+                        schemeIndexTracker[schemeKey] = index + 1;
                     }
 
                     if (flags.HasFlag(ReferenceEnvironmentInjectionFlags.Endpoints))

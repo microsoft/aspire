@@ -123,7 +123,7 @@ public sealed class DashboardTelemetrySender : IDashboardTelemetrySender
             }
         }
 
-        _logger.LogInformation("Telemetry is not configured.");
+        _logger.LogDebug("Telemetry is not configured.");
         client = null;
         return false;
     }

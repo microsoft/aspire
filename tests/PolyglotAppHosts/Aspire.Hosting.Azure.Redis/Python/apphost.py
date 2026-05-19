@@ -10,7 +10,7 @@ with create_builder() as builder:
     access_key_cache = builder.add_azure_managed_redis("resource")
     container_cache = builder.add_azure_managed_redis("resource")
     access_key_cache.with_access_key_authentication()
-    access_key_cache.with_access_key_authentication_with_key_vault()
+    access_key_cache.with_access_key_authentication(key_vault)
     container_cache.run_as_container()
     _connection_string = cache.connection_string_expression
     _host_name = cache.host_name

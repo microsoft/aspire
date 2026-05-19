@@ -62,7 +62,7 @@
 
   <ItemGroup>
     <_TestBlameArguments Include="--hangdump" />
-    <_TestBlameArguments Include="--hangdump-type Full" />
+    <_TestBlameArguments Include="--hangdump-type none" />
     <_TestBlameArguments Include="--hangdump-timeout 20m" />
     <_TestBlameArguments Include="--crashdump" />
     <_TestBlameArguments Include="--crashdump-type Full" />

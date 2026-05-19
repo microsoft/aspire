@@ -1,11 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Layout;
+using Aspire.Cli.Resources;
 using Microsoft.Extensions.Logging;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
@@ -42,7 +44,8 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
     {
         var packages = await SearchPackagesInternalAsync(
             workingDirectory,
-            "Aspire.ProjectTemplates",
+            query: "Aspire.ProjectTemplates",
+            exactMatch: false,
             prerelease,
             nugetConfigFile,
             cancellationToken).ConfigureAwait(false);
@@ -58,7 +61,8 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
     {
         var packages = await SearchPackagesInternalAsync(
             workingDirectory,
-            "Aspire.Hosting",
+            query: "Aspire.Hosting",
+            exactMatch: false,
             prerelease,
             nugetConfigFile,
             cancellationToken).ConfigureAwait(false);
@@ -74,7 +78,8 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
     {
         var packages = await SearchPackagesInternalAsync(
             workingDirectory,
-            "Aspire.Cli",
+            query: "Aspire.Cli",
+            exactMatch: false,
             prerelease,
             nugetConfigFile,
             cancellationToken).ConfigureAwait(false);
@@ -93,7 +98,8 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
     {
         var packages = await SearchPackagesInternalAsync(
             workingDirectory,
-            packageId,
+            query: packageId,
+            exactMatch: false,
             prerelease,
             nugetConfigFile,
             cancellationToken).ConfigureAwait(false);
@@ -101,9 +107,30 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
         return FilterPackages(packages, filter);
     }
 
+    public async Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(
+        DirectoryInfo workingDirectory,
+        string exactPackageId,
+        bool prerelease,
+        FileInfo? nugetConfigFile,
+        bool useCache,
+        CancellationToken cancellationToken)
+    {
+        var packages = await SearchPackagesInternalAsync(
+            workingDirectory,
+            query: exactPackageId,
+            exactMatch: true,
+            prerelease,
+            nugetConfigFile,
+            cancellationToken).ConfigureAwait(false);
+
+        bool FilterExactIdMatch(string? id) => string.Equals(id, exactPackageId, StringComparison.Ordinal);
+        return FilterPackages(packages, FilterExactIdMatch);
+    }
+
     private async Task<IEnumerable<NuGetPackage>> SearchPackagesInternalAsync(
         DirectoryInfo workingDirectory,
         string query,
+        bool exactMatch,
         bool prerelease,
         FileInfo? nugetConfigFile,
         CancellationToken cancellationToken)
@@ -175,7 +202,7 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
             _logger.LogError("NuGet search failed with exit code {ExitCode}", exitCode);
             _logger.LogError("NuGet search stderr: {Error}", error);
             _logger.LogError("NuGet search stdout: {Output}", output);
-            throw new NuGetPackageCacheException($"Package search failed: {error}");
+            throw new NuGetPackageCacheException(string.Format(CultureInfo.CurrentCulture, ErrorStrings.FailedToSearchForPackages, exitCode));
         }
 
         _logger.LogDebug("NuGet search returned {Length} bytes", output?.Length ?? 0);
@@ -195,17 +222,35 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
             }
 
             // Convert to NuGetPackage format
-            return result.Packages.Select(p => new NuGetPackage
+            if (!exactMatch)
             {
-                Id = p.Id,
-                Version = p.Version,
-                Source = p.Source ?? string.Empty
-            }).ToList();
+                return result.Packages.Select(p => new NuGetPackage
+                {
+                    Id = p.Id,
+                    Version = p.Version,
+                    Source = p.Source ?? string.Empty
+                }).ToList();
+            }
+            else
+            {
+                var exactMatchResultPackage = result.Packages
+                    .FirstOrDefault(p => p.Id.Equals(query, StringComparison.Ordinal));
+                if (exactMatchResultPackage is null || exactMatchResultPackage.AllVersions is null)
+                {
+                    return [];
+                }
+                return exactMatchResultPackage.AllVersions.Select(packageVersion => new NuGetPackage
+                {
+                    Id = exactMatchResultPackage.Id,
+                    Version = packageVersion,
+                    Source = exactMatchResultPackage.Source ?? string.Empty
+                }).ToList();
+            }
         }
         catch (JsonException ex)
         {
             _logger.LogError(ex, "Failed to parse search results");
-            throw new NuGetPackageCacheException($"Failed to parse search results: {ex.Message}");
+            throw new NuGetPackageCacheException(ErrorStrings.FailedToParsePackageSearchResults);
         }
     }
 

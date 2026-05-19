@@ -6,8 +6,8 @@ const builder = await createBuilder();
 const password = await builder.addParameter("redis-password", { secret: true });
 const cache = await builder.addRedis("cache", { password: password });
 
-// addRedisWithPort — overload with explicit port
-const cache2 = await builder.addRedisWithPort("cache2", { port: 6380 });
+// addRedis — overload with explicit port
+const cache2 = await builder.addRedis("cache2", { port: 6380 });
 
 // withDataVolume + withPersistence — fluent chaining on RedisResource
 await cache.withDataVolume({ name: "redis-data" });
@@ -43,11 +43,11 @@ await cache.withRedisInsight({
 
 // ---- Property access on RedisResource (ExposeProperties = true) ----
 const redis = await cache;
-const _endpoint = await redis.primaryEndpoint.get();
-const _host = await redis.host.get();
-const _port = await redis.port.get();
-const _tlsEnabled: boolean = await redis.tlsEnabled.get();
-const _uri = await redis.uriExpression.get();
-const _cstr = await redis.connectionStringExpression.get();
+const _endpoint = await redis.primaryEndpoint();
+const _host = await redis.host();
+const _port = await redis.port();
+const _tlsEnabled: boolean = await redis.tlsEnabled();
+const _uri = await redis.uriExpression();
+const _cstr = await redis.connectionStringExpression();
 
 await builder.build().run();

@@ -1,4 +1,4 @@
-﻿#   -------------------------------------------------------------
+#   -------------------------------------------------------------
 #   Copyright (c) Microsoft Corporation. All rights reserved.
 #   Licensed under the MIT License. See LICENSE in project root for information.
 #
@@ -19,6 +19,7 @@ import threading
 import time
 import abc
 import datetime
+import types
 import typing
 from functools import cached_property as _cached_property
 from contextlib import AbstractContextManager
@@ -1542,7 +1543,7 @@ class TestConfigDto(typing.TypedDict, total=False):
     Name: str
     Port: int
     Enabled: bool
-    OptionalField: str
+    OptionalField: str | None
 
 class TestDeeplyNestedDto(typing.TypedDict, total=False):
     NestedData: AspireDict[str, AspireList[TestConfigDto]]
@@ -1553,6 +1554,18 @@ class TestNestedDto(typing.TypedDict, total=False):
     Config: TestConfigDto
     Tags: AspireList[str]
     Counts: AspireDict[str, int]
+
+
+# ============================================================================
+# Exported Values
+# ============================================================================
+
+TestConfigs = types.SimpleNamespace()
+TestConfigs.Default = typing.cast(TestConfigDto, { "Name": "default", "Port": 6379, "Enabled": True, "OptionalField": "cache" })
+TestConfigs.Profiles = types.SimpleNamespace()
+TestConfigs.Profiles.Development = typing.cast(TestConfigDto, { "Name": "development", "Port": 5001, "Enabled": False, "OptionalField": None })
+TestConfigs.Secure = typing.cast(TestConfigDto, { "Name": "secure", "Port": 6380, "Enabled": True, "OptionalField": None })
+TestConfigs.UnicodeGreeting = "你好こんにちは"
 
 
 # ============================================================================
@@ -1576,8 +1589,8 @@ class DistributedApplicationBuilder:
 
     def __enter__(self) -> DistributedApplicationBuilder:
         self._handle = self._client.invoke_capability(
-            'Aspire.Hosting/createBuilderWithOptions',
-            {'options': self._options}
+            'Aspire.Hosting/createBuilder',
+            {'argsOrOptions': self._options}
         )
         return self
 
@@ -1642,16 +1655,16 @@ class TestCallbackContext:
         return self._handle
 
     @_uncached_property
-    def name(self) -> str:
+    def name(self) -> str | None:
         """Gets the Name property"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.name',
             {'context': self._handle}
         )
-        return typing.cast(str, result)
+        return typing.cast(str | None, result)
 
     @name.setter
-    def name(self, value: str) -> None:
+    def name(self, value: str | None) -> None:
         """Sets the Name property"""
         self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.setName',
@@ -1751,16 +1764,16 @@ class TestEnvironmentContext:
         )
 
     @_uncached_property
-    def description(self) -> str:
+    def description(self) -> str | None:
         """Gets the Description property"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.description',
             {'context': self._handle}
         )
-        return typing.cast(str, result)
+        return typing.cast(str | None, result)
 
     @description.setter
-    def description(self, value: str) -> None:
+    def description(self, value: str | None) -> None:
         """Sets the Description property"""
         self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.setDescription',
@@ -1781,6 +1794,56 @@ class TestEnvironmentContext:
         """Sets the Priority property"""
         self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.setPriority',
+            {'context': self._handle, 'value': value}
+        )
+
+
+class TestMutableCollectionContext:
+    """Type class for TestMutableCollectionContext."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"TestMutableCollectionContext(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    @_uncached_property
+    def tags(self) -> AspireList[str]:
+        """Gets the Tags property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.tags',
+            {'context': self._handle}
+        )
+        return typing.cast(AspireList[str], result)
+
+    @tags.setter
+    def tags(self, value: AspireList[str]) -> None:
+        """Sets the Tags property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.setTags',
+            {'context': self._handle, 'value': value}
+        )
+
+    @_uncached_property
+    def counts(self) -> AspireDict[str, int]:
+        """Gets the Counts property"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.counts',
+            {'context': self._handle}
+        )
+        return typing.cast(AspireDict[str, int], result)
+
+    @counts.setter
+    def counts(self, value: AspireDict[str, int]) -> None:
+        """Sets the Counts property"""
+        self._client.invoke_capability(
+            'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.setCounts',
             {'context': self._handle, 'value': value}
         )
 
@@ -2775,6 +2838,7 @@ def create_builder(
     *,
     args: typing.Iterable[str] | None = None,
     project_directory: str | None = None,
+    app_host_file_path: str | None = None,
     container_registry_override: str | None = None,
     disable_dashboard: bool | None = None,
     dashboard_application_name: str | None = None,
@@ -2793,6 +2857,8 @@ def create_builder(
             passed to the Aspire command line (arguments specified after '--'). Specifying them here will override that default.
         project_directory (str): The directory containing the AppHost project file. By default, this will  use the ASPIRE_PROJECT_DIRECTORY
             environment variable if set, otherwise it will use the current working directory.
+        app_host_file_path (str): The path to the AppHost source file. By default, this will use the ASPIRE_APPHOST_FILEPATH
+            environment variable if set.
         container_registry_override (str): When containers are used, use this value to override the container registry.
         disable_dashboard (bool): Determines whether the dashboard is disabled.
         dashboard_application_name (str): The application name to display in the dashboard.
@@ -2822,6 +2888,12 @@ def create_builder(
         effective_options['ProjectDirectory'] = project_directory
     elif not effective_options.get('ProjectDirectory'):
         effective_options['ProjectDirectory'] = os.environ.get('ASPIRE_PROJECT_DIRECTORY', os.getcwd())
+    if app_host_file_path is not None:
+        effective_options['AppHostFilePath'] = app_host_file_path
+    elif not effective_options.get('AppHostFilePath'):
+        app_host_file_path = os.environ.get('ASPIRE_APPHOST_FILEPATH')
+        if app_host_file_path:
+            effective_options['AppHostFilePath'] = app_host_file_path
     if container_registry_override is not None:
         effective_options['ContainerRegistryOverride'] = container_registry_override
     if disable_dashboard is not None:
@@ -2844,9 +2916,11 @@ _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.Referen
 _register_handle_wrapper("System.Private.CoreLib/System.Threading.CancellationToken", CancellationToken)
 _register_handle_wrapper("Aspire.Hosting/List<string>", AspireList)
 _register_handle_wrapper("Aspire.Hosting/Dict<string,string>", AspireDict)
+_register_handle_wrapper("Aspire.Hosting/Dict<string,number>", AspireDict)
 _register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCallbackContext", TestCallbackContext)
 _register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCollectionContext", TestCollectionContext)
 _register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext", TestEnvironmentContext)
+_register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext", TestMutableCollectionContext)
 _register_handle_wrapper("Aspire.Hosting.CodeGeneration.Python.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext", TestResourceContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.Resource", _BaseResource)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource", ContainerResource)

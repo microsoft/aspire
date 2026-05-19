@@ -111,9 +111,15 @@ namespace Aspire.Cli.Resources {
             }
         }
 
-        public static string HeaderEndpoints {
+        public static string IncludeHiddenOptionDescription {
             get {
-                return ResourceManager.GetString("HeaderEndpoints", resourceCulture);
+                return ResourceManager.GetString("IncludeHiddenOptionDescription", resourceCulture);
+            }
+        }
+
+        public static string HeaderURLs {
+            get {
+                return ResourceManager.GetString("HeaderURLs", resourceCulture);
             }
         }
     }

@@ -842,6 +842,7 @@ public class ProjectResourceTests
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "build-projectName");
         builder.Services.AddSingleton<IContainerRuntime, FakeContainerRuntime>();
+        builder.Services.AddSingleton<IContainerRuntimeResolver>(sp => (IContainerRuntimeResolver)sp.GetRequiredService<IContainerRuntime>());
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
         // Create a test container resource that implements IResourceWithContainerFiles

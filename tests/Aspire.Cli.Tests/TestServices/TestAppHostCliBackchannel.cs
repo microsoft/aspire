@@ -10,6 +10,7 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
 {
     public TaskCompletionSource? RequestStopAsyncCalled { get; set; }
     public Func<Task>? RequestStopAsyncCallback { get; set; }
+    public TaskCompletionSource? NotifyAppHostReadyAsyncCalled { get; set; }
 
     public TaskCompletionSource? GetDashboardUrlsAsyncCalled { get; set; }
     public Func<CancellationToken, Task<DashboardUrlsState>>? GetDashboardUrlsAsyncCallback { get; set; }
@@ -29,6 +30,9 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
     public TaskCompletionSource? GetCapabilitiesAsyncCalled { get; set; }
     public Func<CancellationToken, Task<string[]>>? GetCapabilitiesAsyncCallback { get; set; }
 
+    public TaskCompletionSource? GetPipelineStepsAsyncCalled { get; set; }
+    public Func<string?, CancellationToken, Task<GetPipelineStepsResponse>>? GetPipelineStepsAsyncCallback { get; set; }
+
     public Task RequestStopAsync(CancellationToken cancellationToken)
     {
         RequestStopAsyncCalled?.SetResult();
@@ -40,6 +44,12 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
         {
             return Task.CompletedTask;
         }
+    }
+
+    public Task NotifyAppHostReadyAsync(CancellationToken cancellationToken)
+    {
+        NotifyAppHostReadyAsyncCalled?.SetResult();
+        return Task.CompletedTask;
     }
 
     public Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken)
@@ -219,7 +229,7 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
         }
         else
         {
-            return ["baseline.v2"];
+            return ["baseline.v2", "pipeline-steps.v1"];
         }
     }
 
@@ -245,9 +255,21 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
         return Task.CompletedTask;
     }
 
-    public async IAsyncEnumerable<CommandOutput> ExecAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+    public async Task<GetPipelineStepsResponse> GetPipelineStepsAsync(string? step, CancellationToken cancellationToken)
     {
-        await Task.Delay(1, cancellationToken).ConfigureAwait(false);
-        yield return new CommandOutput { Text = "test", IsErrorMessage = false, LineNumber = 0 };
+        GetPipelineStepsAsyncCalled?.SetResult();
+        if (GetPipelineStepsAsyncCallback is not null)
+        {
+            return await GetPipelineStepsAsyncCallback(step, cancellationToken).ConfigureAwait(false);
+        }
+
+        return new GetPipelineStepsResponse
+        {
+            Steps = [
+                new PipelineStepInfo { Name = "process-parameters", Description = "Prompts for parameter values" },
+                new PipelineStepInfo { Name = "build-webapi", DependsOn = ["process-parameters"], Tags = ["build-compute"] },
+                new PipelineStepInfo { Name = "deploy-webapi", DependsOn = ["build-webapi"], Tags = ["deploy-compute"] }
+            ]
+        };
     }
 }

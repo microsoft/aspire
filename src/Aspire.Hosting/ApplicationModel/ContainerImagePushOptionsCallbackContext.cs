@@ -14,6 +14,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// to customize how the container image is named and tagged when pushed to a registry.
 /// </remarks>
 [Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
+[AspireExport(ExposeProperties = true)]
 public sealed class ContainerImagePushOptionsCallbackContext
 {
     /// <summary>

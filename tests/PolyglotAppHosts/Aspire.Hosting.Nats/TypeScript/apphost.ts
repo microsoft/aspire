@@ -40,11 +40,11 @@ await consumer.withReference(nats);
 await consumer.withReference(nats4, { connectionName: "messaging4-connection" });
 
 // ---- Property access on NatsServerResource ----
-const _endpoint = await nats.primaryEndpoint.get();
-const _host = await nats.host.get();
-const _port = await nats.port.get();
-const _uri = await nats.uriExpression.get();
-const _userName = await nats.userNameReference.get();
+const _endpoint = await nats.primaryEndpoint();
+const _host = await nats.host();
+const _port = await nats.port();
+const _uri = await nats.uriExpression();
+const _userName = await nats.userNameReference();
 
-const _cstr = await nats.connectionStringExpression.get();
+const _cstr = await nats.connectionStringExpression();
 await builder.build().run();

@@ -241,6 +241,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Aspire deployment target selection, preflight, publish, and deploy workflows.
+        /// </summary>
+        internal static string SkillDescription_AspireDeployment {
+            get {
+                return ResourceManager.GetString("SkillDescription_AspireDeployment", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Browser automation and functional testing.
         /// </summary>
         internal static string SkillDescription_PlaywrightCli {
@@ -255,6 +264,15 @@ namespace Aspire.Cli.Resources {
         internal static string SkillDescription_DotnetInspect {
             get {
                 return ResourceManager.GetString("SkillDescription_DotnetInspect", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to One-time setup: wire up AppHost with discovered projects.
+        /// </summary>
+        internal static string SkillDescription_Aspireify {
+            get {
+                return ResourceManager.GetString("SkillDescription_Aspireify", resourceCulture);
             }
         }
 
@@ -399,6 +417,33 @@ namespace Aspire.Cli.Resources {
         internal static string PlaywrightCliInstaller_InstalledWithMirrorWarnings {
             get {
                 return ResourceManager.GetString("PlaywrightCliInstaller_InstalledWithMirrorWarnings", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Path to the workspace root directory.
+        /// </summary>
+        internal static string InitCommand_WorkspaceRootOptionDescription {
+            get {
+                return ResourceManager.GetString("InitCommand_WorkspaceRootOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Comma-separated list of skill locations to install (e.g. {0}), '{1}', or '{2}'.
+        /// </summary>
+        internal static string InitCommand_SkillLocationsOptionDescription {
+            get {
+                return ResourceManager.GetString("InitCommand_SkillLocationsOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Comma-separated list of skills to install (e.g. {0}), '{1}', or '{2}'.
+        /// </summary>
+        internal static string InitCommand_SkillsOptionDescription {
+            get {
+                return ResourceManager.GetString("InitCommand_SkillsOptionDescription", resourceCulture);
             }
         }
     }

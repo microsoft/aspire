@@ -5,19 +5,22 @@ using System.CommandLine;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
+using Aspire.Shared.Json;
 using Microsoft.Extensions.Logging;
+using Semver;
 using Spectre.Console;
 
 namespace Aspire.Cli.Commands.Sdk;
 
 /// <summary>
-/// Command for dumping ATS capabilities from Aspire integration libraries.
+/// Command for dumping ATS capabilities and exported values from Aspire integration libraries.
 /// Supports multiple output formats for different use cases.
 /// 
 /// Usage:
@@ -65,7 +68,7 @@ internal sealed class SdkDumpCommand : BaseCommand
         Options.Add(s_formatOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var integrationArgs = parseResult.GetValue(s_integrationArgument) ?? [];
         var outputFile = parseResult.GetValue(s_outputOption);
@@ -81,8 +84,7 @@ internal sealed class SdkDumpCommand : BaseCommand
                 var projectFile = new FileInfo(arg);
                 if (!projectFile.Exists)
                 {
-                    InteractionService.DisplayError($"Integration project not found: {projectFile.FullName}");
-                    return ExitCodeConstants.FailedToFindProject;
+                    return CommandResult.Failure(CliExitCodes.FailedToFindProject, $"Integration project not found: {projectFile.FullName}");
                 }
 
                 integrations.Add(IntegrationReference.FromProject(
@@ -97,14 +99,12 @@ internal sealed class SdkDumpCommand : BaseCommand
 
                 if (string.IsNullOrWhiteSpace(packageName) || string.IsNullOrWhiteSpace(packageVersion) || packageName.Contains('@'))
                 {
-                    InteractionService.DisplayError($"Invalid package format '{arg}'. Expected PackageName@Version (e.g. Aspire.Hosting.Redis@9.2.0).");
-                    return ExitCodeConstants.InvalidCommand;
+                    return CommandResult.Failure(CliExitCodes.InvalidCommand, $"Invalid package format '{arg}'. Expected PackageName@Version (e.g. Aspire.Hosting.Redis@9.2.0).");
                 }
 
                 if (!SemVersion.TryParse(packageVersion, SemVersionStyles.Any, out _))
                 {
-                    InteractionService.DisplayError($"Invalid version '{packageVersion}' in '{arg}'. Expected a valid NuGet version (e.g. 9.2.0).");
-                    return ExitCodeConstants.InvalidCommand;
+                    return CommandResult.Failure(CliExitCodes.InvalidCommand, $"Invalid version '{packageVersion}' in '{arg}'. Expected a valid NuGet version (e.g. 9.2.0).");
                 }
 
                 _logger.LogDebug("Parsed package reference {PackageName} version {Version}", packageName, packageVersion);
@@ -112,21 +112,20 @@ internal sealed class SdkDumpCommand : BaseCommand
             }
             else
             {
-                InteractionService.DisplayError($"Invalid integration argument '{arg}'. Expected a .csproj path or PackageName@Version format.");
-                return ExitCodeConstants.InvalidCommand;
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, $"Invalid integration argument '{arg}'. Expected a .csproj path or PackageName@Version format.");
             }
         }
 
         // For file output, skip the interactive spinner
         if (outputFile is not null)
         {
-            return await DumpCapabilitiesAsync(integrations, outputFile, format, cancellationToken);
+            return CommandResult.FromExitCode(await DumpCapabilitiesAsync(integrations, outputFile, format, cancellationToken));
         }
 
-        return await InteractionService.ShowStatusAsync(
+        return CommandResult.FromExitCode(await InteractionService.ShowStatusAsync(
             "Scanning capabilities...",
             async () => await DumpCapabilitiesAsync(integrations, outputFile, format, cancellationToken),
-            emoji: KnownEmojis.MagnifyingGlassTiltedRight);
+            emoji: KnownEmojis.MagnifyingGlassTiltedLeft));
     }
 
     private async Task<int> DumpCapabilitiesAsync(
@@ -160,7 +159,7 @@ internal sealed class SdkDumpCommand : BaseCommand
                         InteractionService.DisplayMessage(KnownEmojis.Wrench, line);
                     }
                 }
-                return ExitCodeConstants.FailedToBuildArtifacts;
+                return CliExitCodes.FailedToBuildArtifacts;
             }
 
             await using var serverSession = AppHostServerSession.Start(
@@ -229,7 +228,7 @@ internal sealed class SdkDumpCommand : BaseCommand
 
             // Return error code if there are errors in diagnostics
             var hasErrors = capabilities.Diagnostics.Exists(d => d.Severity == "Error");
-            return hasErrors ? ExitCodeConstants.InvalidCommand : ExitCodeConstants.Success;
+            return hasErrors ? CliExitCodes.InvalidCommand : CliExitCodes.Success;
         }
         finally
         {
@@ -333,6 +332,26 @@ internal sealed class SdkDumpCommand : BaseCommand
             sb.AppendLine();
         }
 
+        if (capabilities.ExportedValues.Count > 0)
+        {
+            sb.AppendLine("# Exported Values");
+            foreach (var value in capabilities.ExportedValues
+                .OrderBy(value => string.Join(".", value.PathSegments), StringComparer.Ordinal))
+            {
+                var descriptionSuffix = string.IsNullOrEmpty(value.Description)
+                    ? ""
+                    : string.Format(CultureInfo.InvariantCulture, " # {0}", value.Description);
+                sb.AppendLine(string.Format(
+                    CultureInfo.InvariantCulture,
+                    "{0}: {1} = {2}{3}",
+                    string.Join(".", value.PathSegments),
+                    value.Type.TypeId,
+                    value.Value?.ToRelaxedJsonString() ?? "null",
+                    descriptionSuffix));
+            }
+            sb.AppendLine();
+        }
+
         // Capabilities
         sb.AppendLine("# Capabilities");
         foreach (var c in capabilities.Capabilities.OrderBy(c => c.CapabilityId))
@@ -366,6 +385,7 @@ internal sealed class SdkDumpCommand : BaseCommand
         sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   Handle Types:  {0}", capabilities.HandleTypes.Count));
         sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   DTO Types:     {0}", capabilities.DtoTypes.Count));
         sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   Enum Types:    {0}", capabilities.EnumTypes.Count));
+        sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   Exported Values:  {0}", capabilities.ExportedValues.Count));
         sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "   Capabilities:  {0}", capabilities.Capabilities.Count));
         if (errorCount > 0 || warningCount > 0)
         {
@@ -459,6 +479,30 @@ internal sealed class SdkDumpCommand : BaseCommand
             sb.AppendLine();
         }
 
+        if (capabilities.ExportedValues.Count > 0)
+        {
+            sb.AppendLine("Exported Values (copied into guest SDKs)");
+            sb.AppendLine("--------------------------------------------------------------------------------");
+            foreach (var value in capabilities.ExportedValues
+                .OrderBy(value => string.Join(".", value.PathSegments), StringComparer.Ordinal))
+            {
+                sb.AppendLine(string.Format(
+                    CultureInfo.InvariantCulture,
+                    "   {0}: {1}",
+                    string.Join(".", value.PathSegments),
+                    SimplifyTypeName(value.Type.TypeId)));
+                sb.AppendLine(string.Format(
+                    CultureInfo.InvariantCulture,
+                    "      {0}",
+                    value.Value?.ToRelaxedJsonString() ?? "null"));
+                if (!string.IsNullOrEmpty(value.Description))
+                {
+                    sb.AppendLine(string.Format(CultureInfo.InvariantCulture, "      {0}", value.Description));
+                }
+            }
+            sb.AppendLine();
+        }
+
         // Capabilities (grouped by category if available)
         sb.AppendLine("Capabilities");
         sb.AppendLine("--------------------------------------------------------------------------------");
@@ -526,6 +570,7 @@ internal sealed class CapabilitiesInfo
     public List<HandleTypeInfo> HandleTypes { get; set; } = [];
     public List<DtoTypeInfo> DtoTypes { get; set; } = [];
     public List<EnumTypeInfo> EnumTypes { get; set; } = [];
+    public List<ExportedValueInfo> ExportedValues { get; set; } = [];
     public List<DiagnosticInfo> Diagnostics { get; set; } = [];
 }
 
@@ -542,6 +587,7 @@ internal sealed class CapabilityInfo
     public string? OwningTypeName { get; set; }
     public string QualifiedMethodName { get; set; } = "";
     public string? Description { get; set; }
+    public DocumentationInfo? Documentation { get; set; }
     public string CapabilityKind { get; set; } = "";
     public string? TargetTypeId { get; set; }
     public string? TargetParameterName { get; set; }
@@ -562,12 +608,14 @@ internal sealed class ParameterInfo
     public List<CallbackParameterInfo>? CallbackParameters { get; set; }
     public TypeRefInfo? CallbackReturnType { get; set; }
     public string? DefaultValue { get; set; }
+    public DocumentationInfo? Documentation { get; set; }
 }
 
 internal sealed class CallbackParameterInfo
 {
     public string Name { get; set; } = "";
     public TypeRefInfo? Type { get; set; }
+    public DocumentationInfo? Documentation { get; set; }
 }
 
 internal sealed class TypeRefInfo
@@ -588,6 +636,7 @@ internal sealed class HandleTypeInfo
     public bool IsInterface { get; set; }
     public bool ExposeProperties { get; set; }
     public bool ExposeMethods { get; set; }
+    public DocumentationInfo? Documentation { get; set; }
     public List<TypeRefInfo> ImplementedInterfaces { get; set; } = [];
     public List<TypeRefInfo> BaseTypeHierarchy { get; set; } = [];
 }
@@ -597,6 +646,7 @@ internal sealed class DtoTypeInfo
     public string TypeId { get; set; } = "";
     public string Name { get; set; } = "";
     public string? Description { get; set; }
+    public DocumentationInfo? Documentation { get; set; }
     public List<DtoPropertyInfo> Properties { get; set; } = [];
 }
 
@@ -606,6 +656,7 @@ internal sealed class DtoPropertyInfo
     public TypeRefInfo? Type { get; set; }
     public bool IsOptional { get; set; }
     public string? Description { get; set; }
+    public DocumentationInfo? Documentation { get; set; }
 }
 
 internal sealed class EnumTypeInfo
@@ -613,6 +664,37 @@ internal sealed class EnumTypeInfo
     public string TypeId { get; set; } = "";
     public string Name { get; set; } = "";
     public List<string> Values { get; set; } = [];
+    public List<EnumValueInfo> ValueInfos { get; set; } = [];
+    public DocumentationInfo? Documentation { get; set; }
+}
+
+internal sealed class EnumValueInfo
+{
+    public string Name { get; set; } = "";
+    public DocumentationInfo? Documentation { get; set; }
+}
+
+internal sealed class ExportedValueInfo
+{
+    public List<string> PathSegments { get; set; } = [];
+    public TypeRefInfo Type { get; set; } = null!;
+    public JsonNode? Value { get; set; }
+    public string? Description { get; set; }
+    public DocumentationInfo? Documentation { get; set; }
+}
+
+internal sealed class DocumentationInfo
+{
+    public string? Summary { get; set; }
+    public string? Remarks { get; set; }
+    public string? Returns { get; set; }
+    public List<ParameterDocumentationInfo> Parameters { get; set; } = [];
+}
+
+internal sealed class ParameterDocumentationInfo
+{
+    public string Name { get; set; } = "";
+    public string Description { get; set; } = "";
 }
 
 internal sealed class DiagnosticInfo
@@ -637,6 +719,10 @@ internal sealed class DiagnosticInfo
 [JsonSerializable(typeof(DtoTypeInfo))]
 [JsonSerializable(typeof(DtoPropertyInfo))]
 [JsonSerializable(typeof(EnumTypeInfo))]
+[JsonSerializable(typeof(EnumValueInfo))]
+[JsonSerializable(typeof(ExportedValueInfo))]
+[JsonSerializable(typeof(DocumentationInfo))]
+[JsonSerializable(typeof(ParameterDocumentationInfo))]
 [JsonSerializable(typeof(DiagnosticInfo))]
 internal partial class CapabilitiesJsonContext : JsonSerializerContext
 {

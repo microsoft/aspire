@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Deployment.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
@@ -77,11 +78,7 @@ public sealed class AcaDeploymentErrorOutputTests(ITestOutputHelper output)
             await auto.PrepareEnvironmentAsync(workspace, counter);
 
             // Step 2: Set up CLI
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                output.WriteLine("Step 2: Using pre-installed Aspire CLI...");
-                await auto.SourceAspireCliEnvironmentAsync(counter);
-            }
+            await auto.InstallCurrentBuildAspireCliAsync(counter, output);
 
             // Step 3: Create single-file AppHost
             output.WriteLine("Step 3: Creating single-file AppHost...");
@@ -92,13 +89,7 @@ public sealed class AcaDeploymentErrorOutputTests(ITestOutputHelper output)
             await auto.TypeAsync("aspire add Aspire.Hosting.Azure.AppContainers");
             await auto.EnterAsync();
 
-            if (DeploymentE2ETestHelpers.IsRunningInCI)
-            {
-                await auto.WaitUntilTextAsync("(based on NuGet.config)", timeout: TimeSpan.FromSeconds(60));
-                await auto.EnterAsync();
-            }
-
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(180));
+            await auto.WaitForAspireAddCompletionAsync(counter);
 
             // Step 5: Modify apphost.cs to add Azure Container App Environment
             var appHostFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs");
@@ -131,7 +122,7 @@ builder.Build().Run();
             output.WriteLine("Step 7: Starting deployment with invalid location (expecting failure)...");
             await auto.TypeAsync($"aspire deploy --clear-cache 2>&1 | tee {deployOutputFile}");
             await auto.EnterAsync();
-            await auto.WaitUntilTextAsync("PIPELINE FAILED", timeout: TimeSpan.FromMinutes(30));
+            await auto.WaitUntilTextAsync(ConsoleActivityLoggerStrings.PipelineFailed, timeout: TimeSpan.FromMinutes(30));
             await auto.WaitForAnyPromptAsync(counter, TimeSpan.FromMinutes(2));
 
             // Step 8: Exit terminal
@@ -160,7 +151,7 @@ builder.Build().Run();
             Assert.DoesNotContain("Status: 404", deployOutput);
 
             // Verify the pipeline DID fail (sanity check)
-            Assert.Contains("PIPELINE FAILED", deployOutput);
+            Assert.Contains(ConsoleActivityLoggerStrings.PipelineFailed, deployOutput);
 
             var duration = DateTime.UtcNow - startTime;
             output.WriteLine($"✅ Test completed in {duration} - error output is clean");

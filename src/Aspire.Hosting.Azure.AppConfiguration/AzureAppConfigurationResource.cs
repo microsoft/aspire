@@ -79,5 +79,5 @@ public class AzureAppConfigurationResource(string name, Action<AzureResourceInfr
 
     IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["configurationStores"];
 
-    string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() => "privatelink.azconfig.io";
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() => ["privatelink.azconfig.io"];
 }

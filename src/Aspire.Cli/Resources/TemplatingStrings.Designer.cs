@@ -115,15 +115,6 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to React (Vite) &amp; FastAPI starter.
-        /// </summary>
-        public static string AspirePyStarter_Description {
-            get {
-                return ResourceManager.GetString("AspirePyStarter_Description", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Service defaults.
         /// </summary>
         public static string AspireServiceDefaults_Description {
@@ -322,7 +313,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Project creation failed with exit code {0}. See logs at {1}.
+        ///   Looks up a localized string similar to Project creation failed with exit code {0}.
         /// </summary>
         public static string ProjectCreationFailed {
             get {
@@ -376,7 +367,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The template installation failed with exit code {0}. See logs at {1}.
+        ///   Looks up a localized string similar to The template installation failed with exit code {0}.
         /// </summary>
         public static string TemplateInstallationFailed {
             get {

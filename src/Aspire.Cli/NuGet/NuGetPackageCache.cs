@@ -18,6 +18,7 @@ internal interface INuGetPackageCache
     Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken);
     Task<IEnumerable<NuGetPackage>> GetCliPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken);
     Task<IEnumerable<NuGetPackage>> GetPackagesAsync(DirectoryInfo workingDirectory, string packageId, Func<string, bool>? filter, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken);
+    Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(DirectoryInfo workingDirectory, string exactPackageId, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -96,6 +97,7 @@ internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache
             var result = await cliRunner.SearchPackagesAsync(
                 workingDirectory,
                 query,
+                exactMatch: false,
                 prerelease,
                 SearchPageSize,
                 skip,
@@ -166,6 +168,50 @@ internal sealed class NuGetPackageCache(IDotNetCliRunner cliRunner, IMemoryCache
 
             return isHostingOrCommunityToolkitNamespaced && !isExcluded;
         }
+    }
+
+    public async Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(DirectoryInfo workingDirectory, string exactPackageId, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)
+    {
+        using var activity = telemetry.StartDiagnosticActivity();
+
+        var collectedPackages = new List<NuGetPackage>();
+
+        var result = await cliRunner.SearchPackagesAsync(
+                workingDirectory,
+                exactPackageId,
+                exactMatch: true,
+                prerelease,
+                take: 0,
+                skip: 0, // skip and take parameters are ignored when exactMatch is true
+                nugetConfigFile,
+                useCache, // Pass through the useCache parameter
+                new ProcessInvocationOptions { SuppressLogging = true },
+                cancellationToken
+                );
+
+        if (result.ExitCode != 0)
+        {
+            throw new NuGetPackageCacheException(string.Format(CultureInfo.CurrentCulture, ErrorStrings.FailedToSearchForPackages, result.ExitCode));
+        }
+
+        if (result.Packages?.Length > 0)
+        {
+            collectedPackages.AddRange(result.Packages);
+        }
+
+        // If no specific filter is specified we use the fallback filter which is useful in most circumstances
+        // other that aspire update which really needs to see all the packages to work effectively.
+        var effectiveFilter = (NuGetPackage p) =>
+        {
+            // Apply deprecated package filter unless the user wants to show deprecated packages
+            if (!features.IsFeatureEnabled(KnownFeatures.ShowDeprecatedPackages, defaultValue: false))
+            {
+                return !DeprecatedPackages.IsDeprecated(p.Id);
+            }
+            return true;
+        };
+
+        return collectedPackages.Where(effectiveFilter);
     }
 }
 

@@ -32,18 +32,17 @@ internal sealed class SecretPathCommand : BaseCommand
         Options.Add(SecretCommand.s_appHostOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var projectFile = parseResult.GetValue(SecretCommand.s_appHostOption);
 
         var result = await _secretStoreResolver.ResolveAsync(projectFile, autoInit: false, cancellationToken);
         if (result is null)
         {
-            InteractionService.DisplayError(SecretCommandStrings.CouldNotFindAppHost);
-            return ExitCodeConstants.FailedToFindProject;
+            return CommandResult.Failure(CliExitCodes.FailedToFindProject, SecretCommandStrings.CouldNotFindAppHost);
         }
 
         InteractionService.DisplayRawText(result.Store.FilePath, consoleOverride: ConsoleOutput.Standard);
-        return ExitCodeConstants.Success;
+        return CommandResult.Success();
     }
 }

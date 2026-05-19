@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Foundry;
@@ -51,7 +53,7 @@ public static class FoundryExtensions
     /// <param name="modelVersion">The version of the model to deploy.</param>
     /// <param name="format">The format of the model to deploy.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a Microsoft Foundry deployment resource to a Microsoft Foundry resource.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addDeployment dispatcher export.")]
     public static IResourceBuilder<FoundryDeploymentResource> AddDeployment(this IResourceBuilder<FoundryResource> builder, [ResourceName] string name, string modelName, string modelVersion, string format)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -77,6 +79,28 @@ public static class FoundryExtensions
         return deploymentBuilder;
     }
 
+    [AspireExport("addDeployment", Description = "Adds a Microsoft Foundry deployment resource to a Microsoft Foundry resource.")]
+    internal static IResourceBuilder<FoundryDeploymentResource> AddDeploymentForPolyglot(
+        this IResourceBuilder<FoundryResource> builder,
+        [ResourceName] string name,
+        [AspireUnion(typeof(FoundryModel), typeof(string))] object model,
+        string? modelVersion = null,
+        string? format = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(model);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        return model switch
+        {
+            FoundryModel foundryModel when modelVersion is null && format is null => builder.AddDeployment(name, foundryModel),
+            FoundryModel => throw new ArgumentException("Model version and format must be omitted when using a FoundryModel.", nameof(modelVersion)),
+            string modelName when modelVersion is not null && format is not null => builder.AddDeployment(name, modelName, modelVersion, format),
+            string => throw new ArgumentException("Model version and format are required when the model is provided as a string.", nameof(modelVersion)),
+            _ => throw new ArgumentException("Model must be a FoundryModel or a string model name.", nameof(model))
+        };
+    }
+
     /// <summary>
     /// Adds and returns a Microsoft Foundry Deployment resource to the application model using a <see cref="FoundryModel"/>.
     /// </summary>
@@ -95,7 +119,7 @@ public static class FoundryExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport("addDeploymentFromModel", Description = "Adds a Microsoft Foundry deployment resource by using a Microsoft Foundry model descriptor.")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal addDeployment dispatcher export.")]
     public static IResourceBuilder<FoundryDeploymentResource> AddDeployment(this IResourceBuilder<FoundryResource> builder, [ResourceName] string name, FoundryModel model)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -222,7 +246,7 @@ public static class FoundryExtensions
     /// <param name="roles">The Microsoft Foundry roles to be assigned (for example, <see cref="FoundryRole.CognitiveServicesOpenAIUser"/>).</param>
     /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
     /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="FoundryRole"/> value.</exception>
-    [AspireExport("withFoundryRoleAssignments", MethodName = "withRoleAssignments", Description = "Assigns Microsoft Foundry roles to a resource")]
+    [AspireExport("withFoundryRoleAssignments", Description = "Assigns Microsoft Foundry roles to a resource")]
     internal static IResourceBuilder<T> WithRoleAssignments<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<FoundryResource> target,
@@ -408,6 +432,11 @@ public static class FoundryExtensions
 
     private static void ConfigureInfrastructure(AzureResourceInfrastructure infrastructure)
     {
+        var azureResource = (FoundryResource)infrastructure.AspireResource;
+
+        // Check if this Foundry resource has a private endpoint (via annotation)
+        var hasPrivateEndpoint = azureResource.HasAnnotationOfType<PrivateEndpointTargetAnnotation>();
+
         var cogServicesAccount = AzureProvisioningResource.CreateExistingOrNewProvisionableResource(infrastructure,
                 (identifier, name) =>
                 {
@@ -415,27 +444,35 @@ public static class FoundryExtensions
                     resource.Name = name;
                     return resource;
                 },
-                (infrastructure) => new CognitiveServicesAccount(infrastructure.AspireResource.GetBicepIdentifier())
+                (infrastructure) =>
                 {
-                    Kind = "AIServices",
-                    Sku = new CognitiveServicesSku()
+                    // Cognitive Services account names are limited to 64 characters; reserve room for the unique suffix.
+                    var accountNamePrefix = infrastructure.AspireResource.Name[..Math.Min(infrastructure.AspireResource.Name.Length, 50)];
+                    var accountName = ToLower(Interpolate($"{accountNamePrefix}-{GetUniqueString(GetResourceGroup().Id)}"));
+
+                    return new CognitiveServicesAccount(infrastructure.AspireResource.GetBicepIdentifier())
                     {
-                        Name = "S0"
-                    },
-                    Properties = new CognitiveServicesAccountProperties()
-                    {
-                        // Until this bug is fixed, CustomSubDomainName must be set to the
-                        // account's name: https://msdata.visualstudio.com/Vienna/_workitems/edit/4866592
-                        CustomSubDomainName = ToLower(Take(Concat(infrastructure.AspireResource.Name, GetUniqueString(GetResourceGroup().Id)), 24)),
-                        PublicNetworkAccess = ServiceAccountPublicNetworkAccess.Enabled,
-                        DisableLocalAuth = true,
-                        AllowProjectManagement = true
-                    },
-                    Identity = new ManagedServiceIdentity()
-                    {
-                        ManagedServiceIdentityType = ManagedServiceIdentityType.SystemAssigned
-                    },
-                    Tags = { { "aspire-resource-name", infrastructure.AspireResource.Name } }
+                        Name = accountName,
+                        Kind = "AIServices",
+                        Sku = new CognitiveServicesSku()
+                        {
+                            Name = "S0"
+                        },
+                        Properties = new CognitiveServicesAccountProperties()
+                        {
+                            CustomSubDomainName = accountName,
+                            PublicNetworkAccess = hasPrivateEndpoint
+                                ? ServiceAccountPublicNetworkAccess.Disabled
+                                : ServiceAccountPublicNetworkAccess.Enabled,
+                            DisableLocalAuth = true,
+                            AllowProjectManagement = true
+                        },
+                        Identity = new ManagedServiceIdentity()
+                        {
+                            ManagedServiceIdentityType = ManagedServiceIdentityType.SystemAssigned
+                        },
+                        Tags = { { "aspire-resource-name", infrastructure.AspireResource.Name } }
+                    };
                 });
 
         infrastructure.Add(new ProvisioningOutput("aiFoundryApiEndpoint", typeof(string))

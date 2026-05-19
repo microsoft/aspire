@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net;
+using System.Net.Http.Headers;
+using System.Text;
 using Aspire.Hosting.Testing;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
@@ -13,6 +15,87 @@ namespace Aspire.Hosting.Tests;
 [Trait("Partition", "6")]
 public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
 {
+    [Fact]
+    public void HttpCommandResultMode_HasExpectedOrdering()
+    {
+        Assert.Equal(0, (int)HttpCommandResultMode.None);
+        Assert.Equal(1, (int)HttpCommandResultMode.Auto);
+        Assert.Equal(2, (int)HttpCommandResultMode.Json);
+        Assert.Equal(3, (int)HttpCommandResultMode.Text);
+    }
+
+    [Theory]
+    [InlineData(null, false, null)]
+    [InlineData("application/octet-stream", false, null)]
+    [InlineData("application/json", true, CommandResultFormat.Json)]
+    [InlineData("application/problem+json", true, CommandResultFormat.Json)]
+    [InlineData("text/plain", true, CommandResultFormat.Text)]
+    [InlineData("application/xml", true, CommandResultFormat.Text)]
+    [InlineData("application/problem+xml", true, CommandResultFormat.Text)]
+    [InlineData("application/x-www-form-urlencoded", true, CommandResultFormat.Text)]
+    public void TryInferHttpCommandResultFormat_ReturnsExpectedResult(string? mediaType, bool expectedSuccess, CommandResultFormat? expectedFormat)
+    {
+        var contentType = mediaType is null ? null : MediaTypeHeaderValue.Parse(mediaType);
+
+        var success = ResourceBuilderExtensions.TryInferHttpCommandResultFormat(contentType, out var resultFormat);
+
+        Assert.Equal(expectedSuccess, success);
+        Assert.Equal(expectedFormat, success ? resultFormat : null);
+    }
+
+    [Fact]
+    public async Task GetDefaultHttpCommandResultAsync_WithoutOptIn_DoesNotReturnResponseBody()
+    {
+        using var response = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"token":"abc123"}""", Encoding.UTF8, "application/json")
+        };
+
+        var result = await ResourceBuilderExtensions.GetDefaultHttpCommandResultAsync(response, new HttpCommandOptions(), CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.Null(result.Message);
+        Assert.Null(result.Data);
+    }
+
+    [Fact]
+    public async Task GetDefaultHttpCommandResultAsync_WithResultModeJson_ReturnsResponseBody()
+    {
+        using var response = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"token":"abc123"}""", Encoding.UTF8, "application/json")
+        };
+
+        var result = await ResourceBuilderExtensions.GetDefaultHttpCommandResultAsync(response, new HttpCommandOptions
+        {
+            ResultMode = HttpCommandResultMode.Json
+        }, CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.Null(result.Message);
+        Assert.Equal("""{"token":"abc123"}""", result.Data?.Value);
+        Assert.Equal(CommandResultFormat.Json, result.Data?.Format);
+    }
+
+    [Fact]
+    public async Task GetDefaultHttpCommandResultAsync_WithResultModeAuto_ReturnsErrorBodyUsingInferredFormat()
+    {
+        using var response = new HttpResponseMessage(HttpStatusCode.BadRequest)
+        {
+            Content = new StringContent("invalid request", Encoding.UTF8, "text/plain")
+        };
+
+        var result = await ResourceBuilderExtensions.GetDefaultHttpCommandResultAsync(response, new HttpCommandOptions
+        {
+            ResultMode = HttpCommandResultMode.Auto
+        }, CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.Equal("Request failed with status code BadRequest", result.Message);
+        Assert.Equal("invalid request", result.Data?.Value);
+        Assert.Equal(CommandResultFormat.Text, result.Data?.Format);
+    }
+
     [Fact]
     public void WithHttpCommand_AddsHttpClientFactory()
     {
@@ -257,14 +340,23 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
         Assert.True(fakeHandler.Called);
     }
 
-    private sealed class FakeHttpMessageHandler(HttpStatusCode statusCode) : HttpMessageHandler
+    private sealed class FakeHttpMessageHandler(HttpStatusCode statusCode, string? responseBody = null, string? mediaType = null) : HttpMessageHandler
     {
         public bool Called { get; private set; }
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             Called = true;
-            return Task.FromResult(new HttpResponseMessage(statusCode));
+
+            var response = new HttpResponseMessage(statusCode);
+            if (responseBody is not null)
+            {
+                response.Content = mediaType is not null
+                    ? new StringContent(responseBody, Encoding.UTF8, mediaType)
+                    : new StringContent(responseBody);
+            }
+
+            return Task.FromResult(response);
         }
     }
 
@@ -398,6 +490,142 @@ public class WithHttpCommandTests(ITestOutputHelper testOutputHelper)
         Assert.True(callbackCalled);
         Assert.False(result.Success);
         Assert.Equal("A test error message", result.Message);
+    }
+
+    [Fact]
+    public async Task WithHttpCommand_WithoutOptIn_DoesNotReturnJsonResponseBody()
+    {
+        // Arrange
+        using var builder = CreateTestDistributedApplicationBuilder();
+
+        var fakeHandler = new FakeHttpMessageHandler(HttpStatusCode.OK, """{"token":"abc123"}""", "application/json");
+        builder.Services.AddHttpClient("commandclient")
+            .ConfigurePrimaryHttpMessageHandler(() => fakeHandler);
+
+        var service = CreateResourceWithAllocatedEndpoint(builder, "service");
+        service.WithHttpCommand("/token", "Generate Token", commandName: "mycommand", commandOptions: new() { HttpClientName = "commandclient" });
+
+        // Act
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        await MoveResourceToRunningStateAsync(app, service.Resource);
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(service.Resource, "mycommand").DefaultTimeout();
+
+        // Assert
+        Assert.True(result.Success);
+        Assert.Null(result.Data);
+    }
+
+    [Fact]
+    public async Task WithHttpCommand_WithResultModeJson_ReturnsJsonResponseBody()
+    {
+        // Arrange
+        using var builder = CreateTestDistributedApplicationBuilder();
+
+        var fakeHandler = new FakeHttpMessageHandler(HttpStatusCode.OK, """{"token":"abc123"}""", "application/json");
+        builder.Services.AddHttpClient("commandclient")
+            .ConfigurePrimaryHttpMessageHandler(() => fakeHandler);
+
+        var service = CreateResourceWithAllocatedEndpoint(builder, "service");
+        service.WithHttpCommand("/token", "Generate Token", commandName: "mycommand", commandOptions: new() { HttpClientName = "commandclient", ResultMode = HttpCommandResultMode.Json });
+
+        // Act
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        await MoveResourceToRunningStateAsync(app, service.Resource);
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(service.Resource, "mycommand").DefaultTimeout();
+
+        // Assert
+        Assert.True(result.Success);
+        Assert.Equal("""{"token":"abc123"}""", result.Data?.Value);
+        Assert.Equal(CommandResultFormat.Json, result.Data?.Format);
+    }
+
+    [Fact]
+    public async Task WithHttpCommand_WithResultModeText_ReturnsTextResponseBody()
+    {
+        // Arrange
+        using var builder = CreateTestDistributedApplicationBuilder();
+
+        var fakeHandler = new FakeHttpMessageHandler(HttpStatusCode.BadRequest, "invalid request", "text/plain");
+        builder.Services.AddHttpClient("commandclient")
+            .ConfigurePrimaryHttpMessageHandler(() => fakeHandler);
+
+        var service = CreateResourceWithAllocatedEndpoint(builder, "service");
+        service.WithHttpCommand("/text", "Get Text", commandName: "mycommand", commandOptions: new() { HttpClientName = "commandclient", ResultMode = HttpCommandResultMode.Text });
+
+        // Act
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        await MoveResourceToRunningStateAsync(app, service.Resource);
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(service.Resource, "mycommand").DefaultTimeout();
+
+        // Assert
+        Assert.False(result.Success);
+        Assert.Equal("Request failed with status code BadRequest", result.Message);
+        Assert.Equal("invalid request", result.Data?.Value);
+        Assert.Equal(CommandResultFormat.Text, result.Data?.Format);
+    }
+
+    [Fact]
+    public async Task WithHttpCommand_WithResultModeAuto_ReturnsJsonResponseBody()
+    {
+        // Arrange
+        using var builder = CreateTestDistributedApplicationBuilder();
+
+        var fakeHandler = new FakeHttpMessageHandler(HttpStatusCode.OK, """{"token":"abc123"}""", "application/json");
+        builder.Services.AddHttpClient("commandclient")
+            .ConfigurePrimaryHttpMessageHandler(() => fakeHandler);
+
+        var service = CreateResourceWithAllocatedEndpoint(builder, "service");
+        service.WithHttpCommand("/token", "Generate Token", commandName: "mycommand", commandOptions: new() { HttpClientName = "commandclient", ResultMode = HttpCommandResultMode.Auto });
+
+        // Act
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        await MoveResourceToRunningStateAsync(app, service.Resource);
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(service.Resource, "mycommand").DefaultTimeout();
+
+        // Assert
+        Assert.True(result.Success);
+        Assert.Equal("""{"token":"abc123"}""", result.Data?.Value);
+        Assert.Equal(CommandResultFormat.Json, result.Data?.Format);
+    }
+
+    [Fact]
+    public async Task WithHttpCommand_WithResultModeAuto_ReturnsTextResponseBody()
+    {
+        // Arrange
+        using var builder = CreateTestDistributedApplicationBuilder();
+
+        var fakeHandler = new FakeHttpMessageHandler(HttpStatusCode.BadRequest, "invalid request", "text/plain");
+        builder.Services.AddHttpClient("commandclient")
+            .ConfigurePrimaryHttpMessageHandler(() => fakeHandler);
+
+        var service = CreateResourceWithAllocatedEndpoint(builder, "service");
+        service.WithHttpCommand("/text", "Get Text", commandName: "mycommand", commandOptions: new() { HttpClientName = "commandclient", ResultMode = HttpCommandResultMode.Auto });
+
+        // Act
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        await MoveResourceToRunningStateAsync(app, service.Resource);
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(service.Resource, "mycommand").DefaultTimeout();
+
+        // Assert
+        Assert.False(result.Success);
+        Assert.Equal("Request failed with status code BadRequest", result.Message);
+        Assert.Equal("invalid request", result.Data?.Value);
+        Assert.Equal(CommandResultFormat.Text, result.Data?.Format);
     }
 
     [Fact]

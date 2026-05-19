@@ -4,6 +4,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using Aspire.Hosting.Azure.Resources;
 using Aspire.Hosting.Azure.Utils;
@@ -101,6 +102,29 @@ internal sealed class RunModeProvisioningContextProvider(
 
     private async Task RetrieveAzureProvisioningOptions(CancellationToken cancellationToken = default)
     {
+        // Caches for dynamic loading callbacks to avoid redundant Azure API calls.
+        // Keyed by the relevant parameter (tenant ID, subscription ID) so they invalidate when the dependency changes.
+        var subscriptionsCache = new ConcurrentDictionary<string, Task<(List<KeyValuePair<string, string>>? subscriptionOptions, bool fetchSucceeded)>>();
+        var resourceGroupsCache = new ConcurrentDictionary<string, Task<(List<(string Name, string Location)>? resourceGroupOptions, bool fetchSucceeded)>>();
+        var locationsCache = new ConcurrentDictionary<string, Task<(List<KeyValuePair<string, string>> locationOptions, bool fetchSucceeded)>>();
+
+        // Helper to cache only successful results. Failed tasks are evicted so the next callback retries.
+        static async Task<(T options, bool fetchSucceeded)> GetOrAddAsync<T>(
+            ConcurrentDictionary<string, Task<(T options, bool fetchSucceeded)>> cache,
+            string key,
+            Func<string, Task<(T options, bool fetchSucceeded)>> valueFactory)
+        {
+            var cachedTask = cache.GetOrAdd(key, valueFactory);
+            var result = await cachedTask.ConfigureAwait(false);
+
+            if (!result.fetchSucceeded)
+            {
+                cache.TryRemove(new KeyValuePair<string, Task<(T options, bool fetchSucceeded)>>(key, cachedTask));
+            }
+
+            return result;
+        }
+
         while (_options.Location == null || _options.SubscriptionId == null)
         {
             var messageBarResult = await _interactionService.PromptNotificationAsync(
@@ -168,7 +192,7 @@ internal sealed class RunModeProvisioningContextProvider(
                             var tenantId = context.AllInputs[TenantName].Value ?? string.Empty;
 
                             var (subscriptionOptions, fetchSucceeded) =
-                                await TryGetSubscriptionsAsync(tenantId, cancellationToken).ConfigureAwait(false);
+                                await GetOrAddAsync(subscriptionsCache, tenantId, key => TryGetSubscriptionsAsync(key, cancellationToken)).ConfigureAwait(false);
 
                             context.Input.Options = fetchSucceeded
                                 ? subscriptionOptions!
@@ -207,7 +231,7 @@ internal sealed class RunModeProvisioningContextProvider(
                         {
                             var subscriptionId = context.AllInputs[SubscriptionIdName].Value ?? string.Empty;
 
-                            var (resourceGroupOptions, fetchSucceeded) = await TryGetResourceGroupsWithLocationAsync(subscriptionId, cancellationToken).ConfigureAwait(false);
+                            var (resourceGroupOptions, fetchSucceeded) = await GetOrAddAsync(resourceGroupsCache, subscriptionId, key => TryGetResourceGroupsWithLocationAsync(key, cancellationToken)).ConfigureAwait(false);
 
                             if (fetchSucceeded && resourceGroupOptions is not null)
                             {
@@ -246,7 +270,7 @@ internal sealed class RunModeProvisioningContextProvider(
                             var resourceGroupName = context.AllInputs[ResourceGroupName].Value ?? string.Empty;
 
                             // Check if the selected resource group is an existing one
-                            var (resourceGroupOptions, fetchSucceeded) = await TryGetResourceGroupsWithLocationAsync(subscriptionId, cancellationToken).ConfigureAwait(false);
+                            var (resourceGroupOptions, fetchSucceeded) = await GetOrAddAsync(resourceGroupsCache, subscriptionId, key => TryGetResourceGroupsWithLocationAsync(key, cancellationToken)).ConfigureAwait(false);
 
                             if (fetchSucceeded && resourceGroupOptions is not null)
                             {
@@ -262,7 +286,7 @@ internal sealed class RunModeProvisioningContextProvider(
                             }
 
                             // For new resource groups, load all locations
-                            var (locationOptions, _) = await TryGetLocationsAsync(subscriptionId, cancellationToken).ConfigureAwait(false);
+                            var (locationOptions, _) = await GetOrAddAsync(locationsCache, subscriptionId, key => TryGetLocationsAsync(key, cancellationToken)).ConfigureAwait(false);
                             context.Input.Options = locationOptions;
                             context.Input.Disabled = false;
                         },

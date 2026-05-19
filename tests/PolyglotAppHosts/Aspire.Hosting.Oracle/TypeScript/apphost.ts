@@ -52,19 +52,19 @@ const oracle3 = await builder.addOracle("oracledb3")
 await oracle3.addDatabase("chaineddb");
 
 // ---- Property access on OracleDatabaseServerResource ----
-const _endpoint = await oracle.primaryEndpoint.get();
-const _host = await oracle.host.get();
-const _port = await oracle.port.get();
-const _userNameRef = await oracle.userNameReference.get();
-const _uri = await oracle.uriExpression.get();
-const _jdbc = await oracle.jdbcConnectionString.get();
-const _cstr = await oracle.connectionStringExpression.get();
+const _endpoint = await oracle.primaryEndpoint();
+const _host = await oracle.host();
+const _port = await oracle.port();
+const _userNameRef = await oracle.userNameReference();
+const _uri = await oracle.uriExpression();
+const _jdbc = await oracle.jdbcConnectionString();
+const _cstr = await oracle.connectionStringExpression();
 
 // ---- Property access on OracleDatabaseResource ----
-const _dbName: string = await db.databaseName.get();
-const _dbUri = await db.uriExpression.get();
-const _dbJdbc = await db.jdbcConnectionString.get();
-const _dbParent = await db.parent.get();
-const _dbCstr = await db.connectionStringExpression.get();
+const _dbName: string = await db.databaseName();
+const _dbUri = await db.uriExpression();
+const _dbJdbc = await db.jdbcConnectionString();
+const _dbParent = await db.parent();
+const _dbCstr = await db.connectionStringExpression();
 
 await builder.build().run();

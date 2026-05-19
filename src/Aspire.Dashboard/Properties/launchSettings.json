@@ -17,6 +17,19 @@
         "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL": "http://localhost:4318"
       },
       "applicationUrl": "http://localhost:15889"
+    },
+    "http (browser + api)": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:4317",
+        "ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL": "http://localhost:4318",
+        "ASPIRE_DASHBOARD_API_ENABLED": "true",
+        "DASHBOARD__API__PRIMARYAPIKEY": "12345678",
+        "DASHBOARD__API__AUTHMODE": "ApiKey"
+      },
+      "applicationUrl": "http://localhost:15889"
     }
   }
 }

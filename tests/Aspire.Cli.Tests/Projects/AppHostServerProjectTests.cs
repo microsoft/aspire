@@ -6,14 +6,12 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Xml.Linq;
 using Aspire.Cli.Configuration;
-using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Tests.Mcp;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
-using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -33,8 +31,7 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
     {
         appPath ??= _workspace.WorkspaceRoot.FullName;
         var runner = new TestDotNetCliRunner();
-        var packagingService = new MockPackagingService();
-        var configurationService = new TestConfigurationService();
+        var packagingService = MockPackagingServiceFactory.Create();
         var logger = NullLogger<DotNetBasedAppHostServerProject>.Instance;
 
         // Generate socket path same way as factory
@@ -43,7 +40,7 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         // Use workspace root as repo root for testing
         var repoRoot = _workspace.WorkspaceRoot.FullName;
 
-        return new DotNetBasedAppHostServerProject(appPath, socketPath, repoRoot, runner, packagingService, configurationService, logger);
+        return new DotNetBasedAppHostServerProject(appPath, socketPath, repoRoot, runner, packagingService, logger);
     }
 
     [Fact]
@@ -271,20 +268,35 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
             }
             """);
 
-        // Configure global config to return "pr-old" (the WRONG channel)
-        // This simulates a stale global config that hasn't been updated
-        var configurationService = new TestConfigurationService
+        // Create a packaging service that returns explicit channels for both PR hives
+        var prOldHivePath = prOldHive.FullName;
+        var prNewHivePath = prNewHive.FullName;
+        var packagingService = new TestPackagingService
         {
-            OnGetConfiguration = key => key == "channel" ? "pr-old" : null
+            GetChannelsAsyncCallback = _ =>
+            {
+                var nugetCache = new FakeNuGetPackageCache();
+
+                var prOldChannel = PackageChannel.CreateExplicitChannel("pr-old", PackageChannelQuality.Prerelease, new[]
+                {
+                    new PackageMapping("Aspire*", prOldHivePath),
+                    new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
+                }, nugetCache);
+
+                var prNewChannel = PackageChannel.CreateExplicitChannel("pr-new", PackageChannelQuality.Prerelease, new[]
+                {
+                    new PackageMapping("Aspire*", prNewHivePath),
+                    new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
+                }, nugetCache);
+
+                var implicitChannel = PackageChannel.CreateImplicitChannel(nugetCache);
+
+                return Task.FromResult<IEnumerable<PackageChannel>>(new[] { implicitChannel, prOldChannel, prNewChannel });
+            }
         };
 
-        // Create a packaging service that returns explicit channels for both PR hives
-        var packagingService = new MockPackagingServiceWithExplicitChannels(
-            prOldHive.FullName,
-            prNewHive.FullName);
-
         var runner = new TestDotNetCliRunner();
-        
+
         // Use a real logger to capture debug output for diagnostics
         using var loggerFactory = LoggerFactory.Create(builder =>
         {
@@ -295,7 +307,7 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
 
         // Use a workspace-local ProjectModelPath for test isolation
         var projectModelPath = Path.Combine(appPath, ".aspire_server");
-        var project = new DotNetBasedAppHostServerProject(appPath, "test.sock", appPath, runner, packagingService, configurationService, logger, projectModelPath);
+        var project = new DotNetBasedAppHostServerProject(appPath, "test.sock", appPath, runner, packagingService, logger, projectModelPath);
 
         var packages = new List<IntegrationReference>
         {
@@ -339,69 +351,16 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.DoesNotContain(prOldHive.FullName, restoreSources);
     }
 
-    /// <summary>
-    /// Mock packaging service that returns explicit PR channels with specific hive paths.
-    /// Used to test that the correct channel is selected based on project-local settings.
-    /// </summary>
-    private sealed class MockPackagingServiceWithExplicitChannels : IPackagingService
-    {
-        private readonly string _prOldHivePath;
-        private readonly string _prNewHivePath;
-
-        public MockPackagingServiceWithExplicitChannels(string prOldHivePath, string prNewHivePath)
-        {
-            _prOldHivePath = prOldHivePath;
-            _prNewHivePath = prNewHivePath;
-        }
-
-        public Task<IEnumerable<PackageChannel>> GetChannelsAsync(CancellationToken cancellationToken = default)
-        {
-            var nugetCache = new FakeNuGetPackageCache();
-
-            // Create explicit channels for both PR hives
-            var prOldChannel = PackageChannel.CreateExplicitChannel("pr-old", PackageChannelQuality.Prerelease, new[]
-            {
-                new PackageMapping("Aspire*", _prOldHivePath),
-                new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
-            }, nugetCache);
-
-            var prNewChannel = PackageChannel.CreateExplicitChannel("pr-new", PackageChannelQuality.Prerelease, new[]
-            {
-                new PackageMapping("Aspire*", _prNewHivePath),
-                new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
-            }, nugetCache);
-
-            var implicitChannel = PackageChannel.CreateImplicitChannel(nugetCache);
-
-            return Task.FromResult<IEnumerable<PackageChannel>>(new[] { implicitChannel, prOldChannel, prNewChannel });
-        }
-    }
-
-    private sealed class FakeNuGetPackageCache : INuGetPackageCache
-    {
-        public Task<IEnumerable<NuGetPackageCli>> GetTemplatePackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
-            => Task.FromResult<IEnumerable<NuGetPackageCli>>([]);
-
-        public Task<IEnumerable<NuGetPackageCli>> GetIntegrationPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
-            => Task.FromResult<IEnumerable<NuGetPackageCli>>([]);
-
-        public Task<IEnumerable<NuGetPackageCli>> GetCliPackagesAsync(DirectoryInfo workingDirectory, bool prerelease, FileInfo? nugetConfigFile, CancellationToken cancellationToken)
-            => Task.FromResult<IEnumerable<NuGetPackageCli>>([]);
-
-        public Task<IEnumerable<NuGetPackageCli>> GetPackagesAsync(DirectoryInfo workingDirectory, string packageId, Func<string, bool>? filter, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)
-            => Task.FromResult<IEnumerable<NuGetPackageCli>>([]);
-    }
-
     private static void DumpDirectoryTree(string path, ITestOutputHelper output, string indent = "")
     {
         var dirInfo = new DirectoryInfo(path);
         output.WriteLine($"{indent}{dirInfo.Name}/");
-        
+
         foreach (var file in dirInfo.GetFiles())
         {
             output.WriteLine($"{indent}  {file.Name}");
         }
-        
+
         foreach (var dir in dirInfo.GetDirectories())
         {
             DumpDirectoryTree(dir.FullName, output, indent + "  ");

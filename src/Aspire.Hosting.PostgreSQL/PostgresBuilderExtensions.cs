@@ -372,7 +372,7 @@ public static class PostgresBuilderExtensions
 
         containerName ??= $"{builder.Resource.Name}-mcp";
 
-        if (builder.ApplicationBuilder.Resources.OfType<PostgresMcpContainerResource>().FirstOrDefault(r => string.Equals(r.Name, containerName, StringComparisons.ResourceName)) is { } existing)
+        if (builder.ApplicationBuilder.Resources.TryGetByName(containerName, out var existingResource) && existingResource is PostgresMcpContainerResource existing)
         {
             var existingBuilder = builder.ApplicationBuilder.CreateResourceBuilder(existing);
             configureContainer?.Invoke(existingBuilder);

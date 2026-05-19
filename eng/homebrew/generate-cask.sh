@@ -16,7 +16,7 @@ Optional:
   --artifact-version VER    Version segment used in the ci.dot.net artifact path (defaults to --version)
   --output PATH             Output file path (default: ./aspire.rb)
   --archive-root PATH       Root directory containing locally built CLI archives to hash
-  --validate-urls           Verify all tarball URLs are accessible before downloading
+  --skip-url-validation     Skip URL validation and downloading; use placeholder SHA256 hashes
   --help                    Show this help message
 EOF
   exit 1
@@ -26,17 +26,17 @@ VERSION=""
 ARTIFACT_VERSION=""
 OUTPUT=""
 ARCHIVE_ROOT=""
-VALIDATE_URLS=false
+SKIP_URL_VALIDATION=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --version)        VERSION="$2";  shift 2 ;;
-    --artifact-version) ARTIFACT_VERSION="$2"; shift 2 ;;
-    --output)         OUTPUT="$2";   shift 2 ;;
-    --archive-root)   ARCHIVE_ROOT="$2"; shift 2 ;;
-    --validate-urls)  VALIDATE_URLS=true; shift ;;
-    --help)           usage ;;
-    *)                echo "Unknown option: $1"; usage ;;
+    --version)              VERSION="$2";  shift 2 ;;
+    --artifact-version)     ARTIFACT_VERSION="$2"; shift 2 ;;
+    --output)               OUTPUT="$2";   shift 2 ;;
+    --archive-root)         ARCHIVE_ROOT="$2"; shift 2 ;;
+    --skip-url-validation)  SKIP_URL_VALIDATION=true; shift ;;
+    --help)                 usage ;;
+    *)                      echo "Unknown option: $1"; usage ;;
   esac
 done
 
@@ -134,8 +134,21 @@ if [[ -n "$ARCHIVE_ROOT" && ! -d "$ARCHIVE_ROOT" ]]; then
   exit 1
 fi
 
-# Validate URLs are accessible before downloading (fast-fail)
-if [[ "$VALIDATE_URLS" == true ]]; then
+if [[ -n "$ARCHIVE_ROOT" ]]; then
+  echo "Computing SHA256 hashes from local archives in $ARCHIVE_ROOT..."
+  OSX_ARM64_ARCHIVE="$(find_local_archive "aspire-cli-osx-arm64-$VERSION.tar.gz")"
+  OSX_X64_ARCHIVE="$(find_local_archive "aspire-cli-osx-x64-$VERSION.tar.gz")"
+
+  SHA256_OSX_ARM64="$(compute_sha256_from_file "$OSX_ARM64_ARCHIVE" "macOS ARM64 tarball")"
+  SHA256_OSX_X64="$(compute_sha256_from_file "$OSX_X64_ARCHIVE" "macOS x64 tarball")"
+elif [[ "$SKIP_URL_VALIDATION" == true ]]; then
+  echo "SkipUrlValidation specified — using placeholder SHA256 hashes (tarball URLs will not be validated or downloaded)"
+  SHA256_OSX_ARM64="$(printf '0%.0s' {1..64})"
+  SHA256_OSX_X64="$(printf '0%.0s' {1..64})"
+  echo "  osx-arm64: URL=$OSX_ARM64_URL, SHA256=$SHA256_OSX_ARM64 (placeholder)"
+  echo "  osx-x64: URL=$OSX_X64_URL, SHA256=$SHA256_OSX_X64 (placeholder)"
+else
+  # Validate URLs are accessible before downloading (fast-fail)
   echo "Validating tarball URLs..."
   failed=false
   for url in "$OSX_ARM64_URL" "$OSX_X64_URL"; do
@@ -153,15 +166,7 @@ if [[ "$VALIDATE_URLS" == true ]]; then
     exit 1
   fi
   echo ""
-fi
 
-if [[ -n "$ARCHIVE_ROOT" ]]; then
-  OSX_ARM64_ARCHIVE="$(find_local_archive "aspire-cli-osx-arm64-$VERSION.tar.gz")"
-  OSX_X64_ARCHIVE="$(find_local_archive "aspire-cli-osx-x64-$VERSION.tar.gz")"
-
-  SHA256_OSX_ARM64="$(compute_sha256_from_file "$OSX_ARM64_ARCHIVE" "macOS ARM64 tarball")"
-  SHA256_OSX_X64="$(compute_sha256_from_file "$OSX_X64_ARCHIVE" "macOS x64 tarball")"
-else
   SHA256_OSX_ARM64="$(compute_sha256 "$OSX_ARM64_URL" "macOS ARM64 tarball")"
   SHA256_OSX_X64="$(compute_sha256 "$OSX_X64_URL" "macOS x64 tarball")"
 fi

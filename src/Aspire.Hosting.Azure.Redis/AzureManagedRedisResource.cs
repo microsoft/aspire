@@ -253,5 +253,5 @@ public class AzureManagedRedisResource(string name, Action<AzureResourceInfrastr
 
     IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["redisEnterprise"];
 
-    string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() => "privatelink.redis.azure.net";
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() => ["privatelink.redis.azure.net"];
 }

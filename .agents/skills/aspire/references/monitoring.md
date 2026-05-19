@@ -24,11 +24,14 @@ Keep these points in mind:
 Use these commands when the task is to diagnose behavior in the live app before making code changes.
 
 ```bash
-aspire otel logs [resource]
-aspire otel traces [resource]
-aspire otel spans [resource]
-aspire otel logs --trace-id <id>
+aspire otel logs [resource] --format Json
+aspire otel traces [resource] --format Json
+aspire otel spans [resource] --format Json
+aspire otel logs --trace-id <id> --format Json
+aspire otel logs [resource] --search "connection timeout"
+aspire otel spans [resource] --search "/api/products"
 aspire logs [resource]
+aspire logs [resource] --search "error"
 ```
 
 Keep these points in mind:
@@ -36,6 +39,10 @@ Keep these points in mind:
 - Prefer structured telemetry before raw console logs when possible.
 - Use `aspire logs` as a secondary console-output view after checking structured telemetry.
 - Use the trace-filtered log command when you already have a trace id and want the related log slice.
+- Use `--search` to filter results by a case-insensitive text match across all fields (messages, attribute keys/values, trace/span IDs, resource names, severity, scope names). This is the fastest way to narrow output when you know what you're looking for.
+- Prefer `--format Json` when another tool or script needs to consume the result, such as a Playwright handoff or endpoint extraction.
+- `[resource]` is optional. Include it to filter results to a single resource; omit it to see all resources.
+- `--search` can be combined with other options like `--format Json`, `--trace-id`, `--limit`, and resource filtering.
 
 ## Scenario: I Need A Sharable Diagnostics Bundle
 
@@ -45,6 +52,43 @@ Use this command when you need a portable handoff artifact for deeper analysis o
 aspire export [resource]
 ```
 
-Keep this point in mind:
+Keep these points in mind:
 
 - Use `aspire export` when you need a sharable bundle of telemetry and resource state.
+- `[resource]` is optional. Include it to filter the export to a single resource; omit it to export all resources.
+- The output is a zip archive (default name `aspire-export-<timestamp>.zip`) containing up to four directories:
+  - `resources/` — one JSON file per resource with resource details (name, type, state, endpoints, environment variables, etc.).
+  - `consolelogs/` — one plain-text file per resource with raw console output lines.
+  - `structuredlogs/` — one JSON file per resource with structured log entries in OTLP format.
+  - `traces/` — one JSON file per resource with distributed traces and spans in OTLP format.
+- When extracting the export for analysis, look at `resources/` first for an overview, then drill into `consolelogs/`, `structuredlogs/` and `traces/` for detailed diagnostics.
+
+## Dashboard Links
+
+Commands like `aspire describe`, `aspire otel logs`, `aspire otel traces`, and `aspire otel spans` may include dashboard URLs in their JSON output. Only use URLs that are explicitly returned by these commands — do not construct dashboard URLs yourself.
+
+When a dashboard link is returned alongside a resource or telemetry entry, make the resource name, trace ID, or span ID a clickable markdown link using the returned URL.
+
+## Displaying Resources
+
+When showing resource state to the user, display the state text with a circle emoji prefix:
+
+- 🟢 Running, healthy
+- 🟡 Starting, waiting
+- 🔴 Failed, error, unhealthy
+- ⚪ Stopped, exited
+
+Link resource names to their dashboard page when the dashboard URL is known.
+
+## Displaying Telemetry
+
+When showing structured logs, prefix each entry with an emoji matching the log level:
+
+- 🔴 Error / Critical
+- 🟡 Warning
+- 🔵 Information
+- ⚪ Debug / Trace
+
+Link resource names to their dashboard resource page. When trace IDs are present, display the first 7 characters and link that value to the full trace detail page.
+
+When showing traces or spans, use 🟢 for success/unset status and 🔴 for error status. Display only the first 7 characters of trace and span IDs, and link those values to their dashboard detail pages.

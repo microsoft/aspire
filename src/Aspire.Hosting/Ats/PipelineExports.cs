@@ -14,6 +14,45 @@ namespace Aspire.Hosting.Ats;
 internal static class PipelineExports
 {
     /// <summary>
+    /// Adds an application-level pipeline step in a TypeScript-friendly shape.
+    /// </summary>
+    /// <param name="pipeline">The distributed application pipeline.</param>
+    /// <param name="stepName">The unique name of the pipeline step.</param>
+    /// <param name="callback">The callback to execute when the step runs.</param>
+    /// <param name="dependsOn">Optional step names that this step depends on.</param>
+    /// <param name="requiredBy">Optional step names that require this step.</param>
+    [AspireExport(Description = "Adds a pipeline step to the application")]
+    public static void AddStep(
+        this global::Aspire.Hosting.Pipelines.IDistributedApplicationPipeline pipeline,
+        string stepName,
+        Func<PipelineStepContext, Task> callback,
+        string[]? dependsOn = null,
+        string[]? requiredBy = null)
+    {
+        ArgumentNullException.ThrowIfNull(pipeline);
+        ArgumentException.ThrowIfNullOrEmpty(stepName);
+        ArgumentNullException.ThrowIfNull(callback);
+
+        pipeline.AddStep(stepName, callback, dependsOn, requiredBy);
+    }
+
+    /// <summary>
+    /// Registers a pipeline configuration callback in a TypeScript-friendly shape.
+    /// </summary>
+    /// <param name="pipeline">The distributed application pipeline.</param>
+    /// <param name="callback">The callback to execute during pipeline configuration.</param>
+    [AspireExport(Description = "Configures the application pipeline via a callback")]
+    public static void Configure(
+        this global::Aspire.Hosting.Pipelines.IDistributedApplicationPipeline pipeline,
+        Func<PipelineConfigurationContext, Task> callback)
+    {
+        ArgumentNullException.ThrowIfNull(pipeline);
+        ArgumentNullException.ThrowIfNull(callback);
+
+        pipeline.AddPipelineConfiguration(callback);
+    }
+
+    /// <summary>
     /// Adds a key-value pair to the pipeline summary with a Markdown-formatted value.
     /// </summary>
     /// <param name="summary">The pipeline summary handle.</param>

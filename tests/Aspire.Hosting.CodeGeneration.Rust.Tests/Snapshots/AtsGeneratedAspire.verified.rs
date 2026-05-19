@@ -138,6 +138,35 @@ impl TestDeeplyNestedDto {
 }
 
 // ============================================================================
+// Exported Values
+// ============================================================================
+
+pub mod test_configs {
+    use super::*;
+
+    pub fn default() -> TestConfigDto {
+        serde_json::from_value::<TestConfigDto>(serde_json::json!({"Name":"default","Port":6379,"Enabled":true,"OptionalField":"cache"}))
+            .expect("generated exported value should deserialize")
+    }
+    pub mod profiles {
+        use super::*;
+
+        pub fn development() -> TestConfigDto {
+            serde_json::from_value::<TestConfigDto>(serde_json::json!({"Name":"development","Port":5001,"Enabled":false,"OptionalField":null}))
+                .expect("generated exported value should deserialize")
+        }
+    }
+    pub fn secure() -> TestConfigDto {
+        serde_json::from_value::<TestConfigDto>(serde_json::json!({"Name":"secure","Port":6380,"Enabled":true,"OptionalField":null}))
+            .expect("generated exported value should deserialize")
+    }
+    pub fn unicode_greeting() -> String {
+        serde_json::from_value::<String>(serde_json::json!("你好こんにちは"))
+            .expect("generated exported value should deserialize")
+    }
+}
+
+// ============================================================================
 // Handle Wrappers
 // ============================================================================
 
@@ -802,6 +831,62 @@ impl TestEnvironmentContext {
         let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.setPriority", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(TestEnvironmentContext::new(handle, self.client.clone()))
+    }
+}
+
+/// Wrapper for Aspire.Hosting.CodeGeneration.Rust.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestMutableCollectionContext
+pub struct TestMutableCollectionContext {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for TestMutableCollectionContext {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl TestMutableCollectionContext {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Gets the Tags property
+    pub fn tags(&self) -> AspireList<String> {
+        AspireList::with_getter(self.handle.clone(), self.client.clone(), "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.tags")
+    }
+
+    /// Sets the Tags property
+    pub fn set_tags(&self, value: AspireList<String>) -> Result<TestMutableCollectionContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("value".to_string(), value.handle().to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.setTags", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(TestMutableCollectionContext::new(handle, self.client.clone()))
+    }
+
+    /// Gets the Counts property
+    pub fn counts(&self) -> AspireDict<String, f64> {
+        AspireDict::with_getter(self.handle.clone(), self.client.clone(), "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.counts")
+    }
+
+    /// Sets the Counts property
+    pub fn set_counts(&self, value: AspireDict<String, f64>) -> Result<TestMutableCollectionContext, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        args.insert("value".to_string(), value.handle().to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestMutableCollectionContext.setCounts", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(TestMutableCollectionContext::new(handle, self.client.clone()))
     }
 }
 
@@ -1663,13 +1748,22 @@ pub fn create_builder(options: Option<CreateBuilderOptions>) -> Result<IDistribu
         resolved_options.insert("Args".to_string(), serde_json::to_value(args).unwrap_or(Value::Null));
     }
     if !resolved_options.contains_key("ProjectDirectory") {
-        if let Ok(pwd) = std::env::current_dir() {
+        if let Some(project_directory) = std::env::var("ASPIRE_PROJECT_DIRECTORY").ok().filter(|s| !s.is_empty()) {
+            resolved_options.insert("ProjectDirectory".to_string(), Value::String(project_directory));
+        } else if let Ok(pwd) = std::env::current_dir() {
             resolved_options.insert("ProjectDirectory".to_string(), Value::String(pwd.to_string_lossy().to_string()));
         }
     }
+    if !resolved_options.contains_key("AppHostFilePath") {
+        if let Ok(app_host_file_path) = std::env::var("ASPIRE_APPHOST_FILEPATH") {
+            if !app_host_file_path.is_empty() {
+                resolved_options.insert("AppHostFilePath".to_string(), Value::String(app_host_file_path));
+            }
+        }
+    }
     let mut args: HashMap<String, Value> = HashMap::new();
-    args.insert("options".to_string(), serde_json::to_value(resolved_options).unwrap_or(Value::Null));
-    let result = client.invoke_capability("Aspire.Hosting/createBuilderWithOptions", args)?;
+    args.insert("argsOrOptions".to_string(), serde_json::to_value(resolved_options).unwrap_or(Value::Null));
+    let result = client.invoke_capability("Aspire.Hosting/createBuilder", args)?;
     let handle: Handle = serde_json::from_value(result)?;
     Ok(IDistributedApplicationBuilder::new(handle, client))
 }

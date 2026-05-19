@@ -149,5 +149,5 @@ public class AzureKeyVaultResource(string name, Action<AzureResourceInfrastructu
 
     IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["vault"];
 
-    string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() => "privatelink.vaultcore.azure.net";
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() => ["privatelink.vaultcore.azure.net"];
 }
