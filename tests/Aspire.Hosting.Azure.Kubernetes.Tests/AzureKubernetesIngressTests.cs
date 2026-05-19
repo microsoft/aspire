@@ -21,7 +21,8 @@ public class AzureKubernetesIngressTests
             .WithIngressClass("nginx");
 
         var api = builder.AddContainer("myapi", "nginx")
-            .WithHttpEndpoint(targetPort: 8080);
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
 
         ingress.WithRoute("/", api.GetEndpoint("http"));
 
@@ -58,5 +59,119 @@ public class AzureKubernetesIngressTests
 
         Assert.IsType<KubernetesGatewayResource>(gateway.Resource);
         Assert.IsType<KubernetesEnvironmentResource>(gateway.Resource.Parent);
+    }
+
+    [Fact]
+    public async Task WithLoadBalancer_OnGateway_AnnotatesAndDefaultsClass()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
+        var albSubnet = vnet.AddSubnet("alb", "10.0.4.0/24");
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var lb = aks.AddLoadBalancer("lb1", albSubnet);
+
+        var gateway = aks.AddGateway("public").WithLoadBalancer(lb);
+
+        Assert.NotNull(gateway.Resource.GatewayClassName);
+        var resolvedClass = await gateway.Resource.GatewayClassName!.GetValueAsync(default);
+        Assert.Equal("azure-alb-external", resolvedClass);
+
+        Assert.True(gateway.Resource.GatewayAnnotations.TryGetValue("alb.networking.azure.io/alb-name", out var albNameRef));
+        Assert.Equal("alb-lb1", await albNameRef!.GetValueAsync(default));
+
+        Assert.True(gateway.Resource.GatewayAnnotations.TryGetValue("alb.networking.azure.io/alb-namespace", out var albNsRef));
+        Assert.Equal("default", await albNsRef!.GetValueAsync(default));
+    }
+
+    [Fact]
+    public async Task WithLoadBalancer_OnIngress_AnnotatesAndDefaultsClass()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
+        var albSubnet = vnet.AddSubnet("alb", "10.0.4.0/24");
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var lb = aks.AddLoadBalancer("lb1", albSubnet);
+
+        var ingress = aks.AddIngress("public").WithLoadBalancer(lb);
+
+        Assert.NotNull(ingress.Resource.IngressClassName);
+        var resolvedClass = await ingress.Resource.IngressClassName!.GetValueAsync(default);
+        Assert.Equal("azure-alb-external", resolvedClass);
+
+        Assert.True(ingress.Resource.IngressAnnotations.TryGetValue("alb.networking.azure.io/alb-name", out var albNameRef));
+        Assert.Equal("alb-lb1", await albNameRef!.GetValueAsync(default));
+
+        Assert.True(ingress.Resource.IngressAnnotations.TryGetValue("alb.networking.azure.io/alb-namespace", out var albNsRef));
+        Assert.Equal("default", await albNsRef!.GetValueAsync(default));
+    }
+
+    [Fact]
+    public async Task WithLoadBalancer_RespectsExplicitGatewayClass()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
+        var albSubnet = vnet.AddSubnet("alb", "10.0.4.0/24");
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var lb = aks.AddLoadBalancer("lb1", albSubnet);
+
+        // Explicit class set BEFORE WithLoadBalancer is preserved; AGC annotations
+        // are still applied so AGC can still discover the LB.
+        var gateway = aks.AddGateway("public")
+            .WithGatewayClass("custom-class")
+            .WithLoadBalancer(lb);
+
+        Assert.NotNull(gateway.Resource.GatewayClassName);
+        var resolvedClass = await gateway.Resource.GatewayClassName!.GetValueAsync(default);
+        Assert.Equal("custom-class", resolvedClass);
+
+        Assert.True(gateway.Resource.GatewayAnnotations.ContainsKey("alb.networking.azure.io/alb-name"));
+        Assert.True(gateway.Resource.GatewayAnnotations.ContainsKey("alb.networking.azure.io/alb-namespace"));
+    }
+
+    [Fact]
+    public void AksAddIngress_WithRoute_NonExternalEndpoint_ThrowsOnPublish()
+    {
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var ingress = aks.AddIngress("public").WithIngressClass("nginx");
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        ingress.WithRoute("/", api.GetEndpoint("http"));
+
+        var app = builder.Build();
+        var aggregate = Assert.Throws<AggregateException>(app.Run);
+        var ex = aggregate.Flatten().InnerExceptions.OfType<InvalidOperationException>().First(e => e.Message.Contains("WithExternalHttpEndpoints"));
+
+        Assert.Contains("myapi", ex.Message);
+        Assert.Contains("WithExternalHttpEndpoints", ex.Message);
+    }
+
+    [Fact]
+    public void AksAddGateway_WithRoute_NonExternalEndpoint_ThrowsOnPublish()
+    {
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var gateway = aks.AddGateway("public").WithGatewayClass("nginx");
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        gateway.WithRoute("/", api.GetEndpoint("http"));
+
+        var app = builder.Build();
+        var aggregate = Assert.Throws<AggregateException>(app.Run);
+        var ex = aggregate.Flatten().InnerExceptions.OfType<InvalidOperationException>().First(e => e.Message.Contains("WithExternalHttpEndpoints"));
+
+        Assert.Contains("myapi", ex.Message);
+        Assert.Contains("WithExternalHttpEndpoints", ex.Message);
     }
 }

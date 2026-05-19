@@ -27,7 +27,7 @@ internal sealed class CertificatesTrustCommand : BaseCommand
 
     protected override bool UpdateNotificationsEnabled => false;
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         InteractionService.DisplayMessage(KnownEmojis.Information, CertificatesCommandStrings.TrustProgress);
 
@@ -36,17 +36,15 @@ internal sealed class CertificatesTrustCommand : BaseCommand
         if (result.Success)
         {
             InteractionService.DisplaySuccess(CertificatesCommandStrings.TrustSuccess);
-            return ExitCodeConstants.Success;
+            return CommandResult.Success();
         }
 
         if (result.WasCancelled)
         {
-            return ExitCodeConstants.FailedToTrustCertificates;
+            return CommandResult.Failure(CliExitCodes.FailedToTrustCertificates);
         }
 
         var details = string.Format(CultureInfo.CurrentCulture, CertificatesCommandStrings.TrustFailureDetailsFormat, result.ResultCode);
-        InteractionService.DisplayError(details);
-        InteractionService.DisplayError(CertificatesCommandStrings.TrustFailure);
-        return ExitCodeConstants.FailedToTrustCertificates;
+        return CommandResult.Failure(CliExitCodes.FailedToTrustCertificates, $"{CertificatesCommandStrings.TrustFailure} {details}");
     }
 }

@@ -22,6 +22,11 @@
         <target state="needs-review-translation">以 JSON 格式输出日志(NDJSON)。</target>
         <note />
       </trans-unit>
+      <trans-unit id="NoLogsFound">
+        <source>No logs found.</source>
+        <target state="new">No logs found.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NoResourcesFound">
         <source>No resources found.</source>
         <target state="translated">未找到资源。</target>
@@ -40,6 +45,11 @@
       <trans-unit id="ResourceRequiredWithoutFollow">
         <source>A resource name is required when not using --follow. Use --follow to stream logs from all resources.</source>
         <target state="translated">不使用 --follow 时必须指定资源名称。使用 --follow 流式传输所有资源的日志。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SearchOptionDescription">
+        <source>Full-text search to filter log content</source>
+        <target state="new">Full-text search to filter log content</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">

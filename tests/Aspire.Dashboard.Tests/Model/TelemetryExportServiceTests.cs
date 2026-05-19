@@ -4,6 +4,7 @@
 using System.Globalization;
 using System.IO.Compression;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Serialization;
 using Aspire.Dashboard.Otlp.Model;
@@ -13,6 +14,7 @@ using Aspire.Otlp.Serialization;
 using Aspire.Dashboard.Tests.TelemetryRepositoryTests;
 using Aspire.Tests.Shared.DashboardModel;
 using Google.Protobuf.Collections;
+using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.InternalTesting;
 using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Trace.V1;
@@ -1184,6 +1186,15 @@ public sealed class TelemetryExportServiceTests
             state: KnownResourceState.Running,
             urls: [new UrlViewModel("http", new Uri("http://localhost:5000"), isInternal: false, isInactive: false, UrlDisplayPropertiesViewModel.Empty)],
             environment: [new EnvironmentVariableViewModel("MY_VAR", "my-value", fromSpec: true)],
+            properties: new Dictionary<string, ResourcePropertyViewModel>
+            {
+                [KnownProperties.Resource.WaitingFor] = new(
+                    KnownProperties.Resource.WaitingFor,
+                    Value.ForList(Value.ForString("dependency-resource")),
+                    isValueSensitive: false,
+                    knownProperty: null,
+                    priority: 0)
+            },
             relationships: [new RelationshipViewModel("dependency", "Reference")]);
 
         var allResources = new[] { resource, dependencyResource };
@@ -1198,6 +1209,12 @@ public sealed class TelemetryExportServiceTests
         Assert.Equal("Test Resource", deserialized.DisplayName);
         Assert.Equal("Container", deserialized.ResourceType);
         Assert.Equal("Running", deserialized.State);
+        Assert.NotNull(deserialized.WaitingFor);
+        Assert.Equal(["dependency"], deserialized.WaitingFor);
+        Assert.NotNull(deserialized.Properties);
+        var waitingForProperty = Assert.IsType<JsonArray>(deserialized.Properties[KnownProperties.Resource.WaitingFor]);
+        var waitingForPropertyValue = Assert.Single(waitingForProperty);
+        Assert.Equal("dependency-resource", waitingForPropertyValue?.GetValue<string>());
 
         Assert.NotNull(deserialized.Urls);
         Assert.Single(deserialized.Urls);

@@ -45,6 +45,9 @@ internal sealed class ProcessExecution : IProcessExecution
     public int ExitCode => _process.ExitCode;
 
     /// <inheritdoc />
+    public int ProcessId => _process.Id;
+
+    /// <inheritdoc />
     public bool Start()
     {
         var started = _process.Start();

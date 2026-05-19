@@ -34,6 +34,11 @@ public static class DockerComposeEnvironmentExtensions
                 name: DockerComposePipelineStepMarker.StepName,
                 action: ctx =>
                 {
+                    if (!ctx.ExecutionContext.IsPublishMode)
+                    {
+                        return Task.CompletedTask;
+                    }
+
                     if (!ctx.Model.Resources.OfType<DockerComposeEnvironmentResource>().Any())
                     {
                         foreach (var r in ctx.Model.GetComputeResources())

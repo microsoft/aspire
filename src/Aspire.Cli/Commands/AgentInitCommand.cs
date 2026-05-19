@@ -91,7 +91,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
     /// Public entry point for executing the init command.
     /// This allows McpInitCommand to delegate to this implementation.
     /// </summary>
-    internal Task<int> ExecuteCommandAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    internal Task<CommandResult> ExecuteCommandAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         return ExecuteAsync(parseResult, cancellationToken);
     }
@@ -107,10 +107,13 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         PromptBinding<bool> agentInitBinding,
         CancellationToken cancellationToken)
     {
-        if (previousResultExitCode != ExitCodeConstants.Success)
+        if (previousResultExitCode != CliExitCodes.Success)
         {
             return new(previousResultExitCode, [], []);
         }
+
+        // Add a separating line between prompt and previous work in aspire new and aspire init.
+        interactionService.DisplayEmptyLine();
 
         var runAgentInit = await interactionService.PromptConfirmAsync(
             SharedCommandStrings.PromptRunAgentInit,
@@ -122,14 +125,14 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             return await ExecuteAgentInitAsync(workspaceRoot, parseResult: null, cancellationToken);
         }
 
-        return new(ExitCodeConstants.Success, [], []);
+        return new(CliExitCodes.Success, [], []);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var workspaceRoot = await PromptForWorkspaceRootAsync(parseResult, cancellationToken);
         var result = await ExecuteAgentInitAsync(workspaceRoot, parseResult, cancellationToken);
-        return result.ExitCode;
+        return CommandResult.FromExitCode(result.ExitCode);
     }
 
     private async Task<DirectoryInfo> PromptForWorkspaceRootAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -172,7 +175,8 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
 
         var applicators = await _interactionService.ShowStatusAsync(
             McpCommandStrings.InitCommand_DetectingAgentEnvironments,
-            async () => await _agentEnvironmentDetector.DetectAsync(context, cancellationToken));
+            async () => await _agentEnvironmentDetector.DetectAsync(context, cancellationToken),
+            emoji: KnownEmojis.Robot);
 
         // Detect the AppHost language to determine which skills to offer.
         // When no language is detected (e.g., standalone `aspire agent init`), language-restricted skills are excluded.
@@ -213,6 +217,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             preSelected: SkillLocation.All.Where(l => l.IsDefault),
             optional: true,
             binding: skillLocationsBinding,
+            echoSelected: false,
             cancellationToken: cancellationToken);
 
         // --- Phase 2: Skill and MCP server selection (only if locations were selected) ---
@@ -263,6 +268,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
                 preSelected: preSelectedItems,
                 optional: true,
                 binding: skillsBinding,
+                echoSelected: false,
                 cancellationToken: cancellationToken);
 
             selectedSkills = selectedItems.OfType<SkillDefinition>().ToList();
@@ -369,7 +375,6 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         if (hasErrors)
         {
             _interactionService.DisplayMessage(KnownEmojis.Warning, AgentCommandStrings.ConfigurationCompletedWithErrors);
-            _interactionService.DisplayMessage(KnownEmojis.PageFacingUp, string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, ExecutionContext.LogFilePath));
         }
         else
         {
@@ -377,7 +382,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         }
 
         return new(
-            hasErrors ? ExitCodeConstants.InvalidCommand : ExitCodeConstants.Success,
+            hasErrors ? CliExitCodes.InvalidCommand : CliExitCodes.Success,
             selectedLocations,
             selectedSkills);
     }
@@ -432,7 +437,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
                 .Replace(Path.DirectorySeparatorChar, '/')
                 .Replace(Path.AltDirectorySeparatorChar, '/');
             var displayPath = isUserLevel ? $"~/{displayRelativeSkillPath}" : displayRelativeSkillPath;
-            _interactionService.DisplayMessage(KnownEmojis.CheckMarkButton,
+            _interactionService.DisplayMessage(KnownEmojis.Robot,
                 string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_InstalledSkill, skill.Name, displayPath));
             return true;
         }

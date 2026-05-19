@@ -1,11 +1,16 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only
+
 using System.Reflection;
+using Aspire.Hosting.Azure;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.RemoteHost;
 using Aspire.TypeSystem;
 using Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes;
+using Azure.Provisioning.AppContainers;
+using Azure.Provisioning.AppService;
 
 namespace Aspire.Hosting.CodeGeneration.TypeScript.Tests;
 
@@ -20,17 +25,40 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
-    public async Task EmbeddedResource_PackageJson_MatchesSnapshot()
+    public void EmbeddedResource_PackageJson_IsAvailableWithExpectedStructure()
     {
-        var assembly = typeof(AtsTypeScriptCodeGenerator).Assembly;
-        var resourceName = "Aspire.Hosting.CodeGeneration.TypeScript.Resources.package.json";
+        // The package.json under Resources/ is the single source of truth for
+        // the SDK manifest emitted alongside generated TypeScript. Verify the
+        // embedded resource loads and has the structural fields downstream
+        // consumers rely on — without copying its bytes into a snapshot file
+        // that would drift from the resource on every edit.
+        var content = EmbeddedResources.Read("package.json");
 
-        using var stream = assembly.GetManifestResourceStream(resourceName)!;
-        using var reader = new StreamReader(stream);
-        var content = await reader.ReadToEndAsync();
+        Assert.NotEmpty(content);
 
-        await Verify(content, extension: "json")
-            .UseFileName("package");
+        var packageJson = System.Text.Json.Nodes.JsonNode.Parse(content)!.AsObject();
+        Assert.Equal("aspire-host", packageJson["name"]?.GetValue<string>());
+        Assert.Equal("module", packageJson["type"]?.GetValue<string>());
+        Assert.NotNull(packageJson["dependencies"]?["vscode-jsonrpc"]);
+    }
+
+    [Fact]
+    public void GenerateDistributedApplication_EmitsBaseAndTransportResourcesVerbatim()
+    {
+        var atsContext = CreateContextFromTestAssembly();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+
+        Assert.Contains("base.ts", files.Keys);
+        Assert.Contains("transport.ts", files.Keys);
+
+        // base.ts and transport.ts are emitted as embedded-resource pass-throughs,
+        // so asserting equality against the embedded resource (the single source
+        // of truth) keeps the test signal — "the generator emits the resource
+        // verbatim" — without maintaining duplicate *.verified.ts snapshots that
+        // would have to be regenerated on every change to the source resource.
+        Assert.Equal(EmbeddedResources.Read("base.ts"), files["base.ts"]);
+        Assert.Equal(EmbeddedResources.Read("transport.ts"), files["transport.ts"]);
     }
 
     [Fact]
@@ -44,17 +72,13 @@ public class AtsTypeScriptCodeGeneratorTests
 
         // Assert
         Assert.Contains("aspire.ts", files.Keys);
-        Assert.Contains("transport.ts", files.Keys);
-        Assert.Contains("base.ts", files.Keys);
 
+        // aspire.ts is real generated code (composed from scanned types), so a
+        // Verify snapshot is the right tool here. base.ts and transport.ts are
+        // resource pass-throughs and are covered by
+        // GenerateDistributedApplication_EmitsBaseAndTransportResourcesVerbatim.
         await Verify(files["aspire.ts"], extension: "ts")
             .UseFileName("AtsGeneratedAspire");
-
-        await Verify(files["base.ts"], extension: "ts")
-            .UseFileName("base");
-
-        await Verify(files["transport.ts"], extension: "ts")
-            .UseFileName("transport");
     }
 
     [Fact]
@@ -87,6 +111,8 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Contains("condition: extractHandleForExpr(state.condition),", files["base.ts"]);
         Assert.Contains("('$handle' in json || '$expr' in json)", files["base.ts"]);
         Assert.Contains("registerCancellation(state.client, cancellationToken)", files["base.ts"]);
+        Assert.Contains("arguments(): Promise<InteractionInputCollection>", files["aspire.ts"]);
+        Assert.DoesNotContain("setArguments", files["aspire.ts"]);
     }
 
     [Fact]
@@ -132,6 +158,115 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Equal("Aspire.Hosting/Aspire.Hosting.IDistributedApplicationBuilder", addTestRedis.TargetTypeId);
         Assert.Contains(addTestRedis.Parameters, p => p.Name == "name" && p.Type?.TypeId == "string");
         Assert.Contains(addTestRedis.Parameters, p => p.Name == "port" && p.IsOptional);
+    }
+
+    [Fact]
+    public void Scanner_WithTestTypes_CapturesXmlDocumentation()
+    {
+        var context = CreateContextFromTestAssembly();
+
+        var addTestRedis = context.Capabilities.First(c => c.CapabilityId == "Aspire.Hosting.CodeGeneration.TypeScript.Tests/addTestRedis");
+        Assert.Equal("Adds a test Redis resource", addTestRedis.Description);
+        Assert.Equal("Adds a test Redis resource from ATS documentation.", addTestRedis.Documentation?.Summary);
+        Assert.Null(addTestRedis.Documentation?.Remarks);
+        Assert.Equal("The ATS test Redis resource builder.", addTestRedis.Documentation?.Returns);
+
+        var nameParameter = addTestRedis.Parameters.First(p => p.Name == "name");
+        Assert.Equal("The ATS resource name.", nameParameter.Documentation?.Summary);
+
+        var portParameter = addTestRedis.Parameters.First(p => p.Name == "port");
+        Assert.Null(portParameter.Documentation);
+
+        var testConfig = context.DtoTypes.First(dto => dto.Name == nameof(TestConfigDto));
+        Assert.Equal("Test DTO to verify [AspireDto] generates TypeScript interfaces.", testConfig.Documentation?.Summary);
+        Assert.Equal("The name of the test config.", testConfig.Properties.First(p => p.Name == nameof(TestConfigDto.Name)).Documentation?.Summary);
+
+        var testStatus = context.EnumTypes.First(e => e.Name == nameof(TestResourceStatus));
+        Assert.Equal("Test enum for type generation verification.", testStatus.Documentation?.Summary);
+        Assert.Equal("The resource is pending.", testStatus.ValueInfos.First(v => v.Name == nameof(TestResourceStatus.Pending)).Documentation?.Summary);
+
+        var defaultConfig = context.ExportedValues.First(value => string.Join(".", value.PathSegments) == "TestConfigs.Default");
+        Assert.Equal("The default test configuration.", defaultConfig.Documentation?.Summary);
+    }
+
+    [Fact]
+    public void GenerateDistributedApplication_WithTestTypes_EmitsXmlDocumentationAsJSDoc()
+    {
+        var context = CreateContextFromTestAssembly();
+
+        var files = _generator.GenerateDistributedApplication(context);
+        var aspireTs = files["aspire.ts"];
+
+        Assert.Contains("Adds a test Redis resource from ATS documentation.", aspireTs);
+        Assert.Contains("@param name The ATS resource name.", aspireTs);
+        Assert.Contains("@param options Additional options.", aspireTs);
+        Assert.Contains("@returns The ATS test Redis resource builder.", aspireTs);
+        Assert.DoesNotContain("The optional Redis port.", aspireTs);
+        Assert.DoesNotContain("Uses XML documentation instead of the attribute description when both are present.", aspireTs);
+        Assert.Contains("/** The name of the test config. */", aspireTs);
+        Assert.Contains("/** The default test configuration. */", aspireTs);
+        Assert.Contains("/** The resource is pending. */", aspireTs);
+    }
+
+    [Fact]
+    public void GenerateDistributedApplication_WithSuppressedSummary_DoesNotUseDescriptionFallback()
+    {
+        var context = CreateContextFromTestAssembly();
+        var capability = CreateDistributedApplicationBuilderCapability(
+            context,
+            methodName: "withSuppressedSummary",
+            description: "Description fallback should not be emitted.",
+            documentation: new AtsDocumentationInfo());
+        context = WithAdditionalCapabilities(context, capability);
+
+        var files = _generator.GenerateDistributedApplication(context);
+        var aspireTs = files["aspire.ts"];
+
+        Assert.Contains("withSuppressedSummary()", aspireTs);
+        Assert.DoesNotContain("Description fallback should not be emitted.", aspireTs);
+    }
+
+    [Fact]
+    public void GenerateDistributedApplication_WithVoidReturn_DoesNotEmitReturnsDocumentation()
+    {
+        var context = CreateContextFromTestAssembly();
+        var capability = CreateDistributedApplicationBuilderCapability(
+            context,
+            methodName: "withVoidReturnDocumentation",
+            description: null,
+            documentation: new AtsDocumentationInfo
+            {
+                Summary = "Runs a void capability.",
+                Returns = "Void return documentation should not be emitted."
+            });
+        context = WithAdditionalCapabilities(context, capability);
+
+        var files = _generator.GenerateDistributedApplication(context);
+        var aspireTs = files["aspire.ts"];
+
+        Assert.Contains("Runs a void capability.", aspireTs);
+        Assert.DoesNotContain("Void return documentation should not be emitted.", aspireTs);
+    }
+
+    [Fact]
+    public void GenerateDistributedApplication_WithAtsReference_RendersJsDocLink()
+    {
+        var context = CreateContextFromTestAssembly();
+        var capability = CreateDistributedApplicationBuilderCapability(
+            context,
+            methodName: "withAtsReference",
+            description: null,
+            documentation: new AtsDocumentationInfo
+            {
+                Summary = "Configures {@ats-ref type:TestRedisResource} from ATS documentation."
+            });
+        context = WithAdditionalCapabilities(context, capability);
+
+        var files = _generator.GenerateDistributedApplication(context);
+        var aspireTs = files["aspire.ts"];
+
+        Assert.Contains("Configures {@link TestRedisResource} from ATS documentation.", aspireTs);
+        Assert.DoesNotContain("{@ats-ref", aspireTs);
     }
 
     [Fact]
@@ -397,16 +532,17 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
-    public void Scanner_HostingAssembly_WithBrowserLogsCapability()
+    public void Scanner_BrowsersAssembly_WithBrowserLogsCapability()
     {
-        var capabilities = ScanCapabilitiesFromHostingAssembly();
+        var capabilities = ScanCapabilitiesFromBrowsersAssembly();
 
-        var withBrowserLogs = capabilities.FirstOrDefault(c => c.CapabilityId == "Aspire.Hosting/withBrowserLogs");
+        var withBrowserLogs = capabilities.FirstOrDefault(c => c.CapabilityId == "Aspire.Hosting.Browsers/withBrowserLogs");
         Assert.NotNull(withBrowserLogs);
         Assert.Equal("withBrowserLogs", withBrowserLogs.MethodName);
         Assert.Equal("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints", withBrowserLogs.TargetTypeId);
         Assert.Contains(withBrowserLogs.Parameters, p => p.Name == "browser" && p.Type?.TypeId == "string" && p.IsOptional);
         Assert.Contains(withBrowserLogs.Parameters, p => p.Name == "profile" && p.Type?.TypeId == "string" && p.IsOptional);
+        Assert.Contains(withBrowserLogs.Parameters, p => p.Name == "userDataMode" && p.IsOptional);
         Assert.True(withBrowserLogs.ReturnsBuilder);
     }
 
@@ -880,18 +1016,6 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
-    public void TwoPassScanning_GeneratesDeprecatedJSDocForObsoleteExports()
-    {
-        var atsContext = CreateContextFromBothAssemblies();
-
-        var files = _generator.GenerateDistributedApplication(atsContext);
-        var aspireTs = files["aspire.ts"];
-
-        Assert.Contains("@deprecated ATS compatibility shim. Use withEnvironment instead.", aspireTs);
-        Assert.Contains("withEnvironmentExpression(name: string, value: ReferenceExpression)", aspireTs);
-    }
-
-    [Fact]
     public void TwoPassScanning_DeduplicatesExpandedUnionTypes()
     {
         var atsContext = CreateContextFromBothAssemblies();
@@ -905,6 +1029,24 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Contains(lines, line => line.StartsWith("withEnvironment(name: string, value: string | ReferenceExpression | EndpointReference | ", StringComparison.Ordinal));
         Assert.Contains("ResourceWithConnectionString", aspireTs);
         Assert.DoesNotContain("value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression", aspireTs);
+    }
+
+    [Fact]
+    public void Scanner_AzureProvisioningCallbacks_ExposeTypedCustomizationProperties()
+    {
+        var capabilities = ScanCapabilitiesFromAzureAssemblies();
+
+        var publishAsWebsite = Assert.Single(capabilities, c => c.CapabilityId == "Aspire.Hosting.Azure.AppService/publishAsAzureAppServiceWebsite");
+        AssertCallbackParameterTypes(publishAsWebsite, "configure", typeof(AzureResourceInfrastructure), typeof(WebSite));
+        AssertCallbackParameterTypes(publishAsWebsite, "configureSlot", typeof(AzureResourceInfrastructure), typeof(WebSiteSlot));
+
+        var publishAsContainerAppJob = Assert.Single(capabilities, c => c.CapabilityId == "Aspire.Hosting.Azure.AppContainers/publishAsAzureContainerAppJob");
+        AssertCallbackParameterTypes(publishAsContainerAppJob, "configure", typeof(AzureResourceInfrastructure), typeof(ContainerAppJob));
+
+        AssertTargetedMethod(capabilities, "Aspire.Hosting.Azure.AppService/configureWebSiteSiteConfig", "configureSiteConfig", typeof(WebSite), GetRequiredType("Aspire.Hosting.Azure.AzureAppServiceSiteConfig, Aspire.Hosting.Azure.AppService"));
+        AssertTargetedMethod(capabilities, "Aspire.Hosting.Azure.AppService/configureWebSiteSlotSiteConfig", "configureSlotSiteConfig", typeof(WebSiteSlot), GetRequiredType("Aspire.Hosting.Azure.AzureAppServiceSiteConfig, Aspire.Hosting.Azure.AppService"));
+
+        AssertTargetedMethod(capabilities, "Aspire.Hosting.Azure.AppContainers/configureContainerAppScale", "configureScale", typeof(ContainerApp), GetRequiredType("Aspire.Hosting.Azure.AzureContainerAppScaleConfig, Aspire.Hosting.Azure.AppContainers"));
     }
 
     private static List<AtsCapabilityInfo> ScanCapabilitiesFromTestAssembly()
@@ -925,6 +1067,47 @@ public class AtsTypeScriptCodeGeneratorTests
         return result.ToAtsContext();
     }
 
+    private static AtsContext WithAdditionalCapabilities(AtsContext context, params AtsCapabilityInfo[] capabilities)
+    {
+        return new AtsContext
+        {
+            Capabilities = [.. context.Capabilities, .. capabilities],
+            HandleTypes = context.HandleTypes,
+            DtoTypes = context.DtoTypes,
+            EnumTypes = context.EnumTypes,
+            ExportedValues = context.ExportedValues,
+            Diagnostics = context.Diagnostics
+        };
+    }
+
+    private static AtsCapabilityInfo CreateDistributedApplicationBuilderCapability(
+        AtsContext context,
+        string methodName,
+        string? description,
+        AtsDocumentationInfo documentation)
+    {
+        var addTestRedis = context.Capabilities.First(c => c.CapabilityId == "Aspire.Hosting.CodeGeneration.TypeScript.Tests/addTestRedis");
+
+        return new AtsCapabilityInfo
+        {
+            CapabilityId = $"Aspire.Hosting.CodeGeneration.TypeScript.Tests/{methodName}",
+            MethodName = methodName,
+            Description = description,
+            Documentation = documentation,
+            Parameters = [],
+            ReturnType = new AtsTypeRef
+            {
+                TypeId = AtsConstants.Void,
+                Category = AtsTypeCategory.Primitive
+            },
+            TargetTypeId = addTestRedis.TargetTypeId,
+            TargetType = addTestRedis.TargetType,
+            TargetParameterName = addTestRedis.TargetParameterName,
+            ExpandedTargetTypes = addTestRedis.ExpandedTargetTypes,
+            CapabilityKind = AtsCapabilityKind.Method
+        };
+    }
+
     private static Assembly LoadTestAssembly()
     {
         // Get the test assembly at runtime
@@ -935,6 +1118,13 @@ public class AtsTypeScriptCodeGeneratorTests
     {
         var hostingAssembly = typeof(DistributedApplication).Assembly;
         var result = AtsCapabilityScanner.ScanAssembly(hostingAssembly);
+        return result.Capabilities;
+    }
+
+    private static List<AtsCapabilityInfo> ScanCapabilitiesFromBrowsersAssembly()
+    {
+        var browsersAssembly = typeof(global::Aspire.Hosting.BrowserLogsBuilderExtensions).Assembly;
+        var result = AtsCapabilityScanner.ScanAssembly(browsersAssembly);
         return result.Capabilities;
     }
 
@@ -961,6 +1151,59 @@ public class AtsTypeScriptCodeGeneratorTests
         // Use ScanAssemblies for proper cross-assembly expansion and enum collection
         var result = AtsCapabilityScanner.ScanAssemblies([hostingAssembly, testAssembly]);
         return result.ToAtsContext();
+    }
+
+    private static List<AtsCapabilityInfo> ScanCapabilitiesFromAzureAssemblies()
+    {
+        var result = AtsCapabilityScanner.ScanAssemblies(LoadAzureAssemblies());
+        return result.Capabilities;
+    }
+
+    private static Assembly[] LoadAzureAssemblies()
+    {
+        return
+        [
+            typeof(DistributedApplication).Assembly,
+            typeof(AzureResourceInfrastructure).Assembly,
+            typeof(global::Aspire.Hosting.AzureContainerAppProjectExtensions).Assembly,
+            typeof(global::Aspire.Hosting.AzureAppServiceComputeResourceExtensions).Assembly
+        ];
+    }
+
+    private static void AssertCallbackParameterTypes(AtsCapabilityInfo capability, string parameterName, params Type[] expectedTypes)
+    {
+        var parameter = Assert.Single(capability.Parameters, p => p.Name == parameterName);
+
+        Assert.True(parameter.IsCallback);
+        Assert.NotNull(parameter.CallbackParameters);
+        Assert.Equal(expectedTypes.Select(GetAtsTypeId), parameter.CallbackParameters.Select(p => p.Type?.TypeId));
+    }
+
+    private static void AssertTargetedMethod(IReadOnlyList<AtsCapabilityInfo> capabilities, string capabilityId, string methodName, Type targetType, Type parameterType)
+    {
+        var capability = Assert.Single(capabilities, c => c.CapabilityId == capabilityId);
+        var parameter = Assert.Single(capability.Parameters);
+
+        Assert.Equal(methodName, capability.MethodName);
+        Assert.Equal(GetAtsTypeId(targetType), capability.TargetTypeId);
+        Assert.Equal(GetAtsTypeId(parameterType), parameter.Type?.TypeId);
+    }
+
+    private static Type GetRequiredType(string assemblyQualifiedTypeName)
+    {
+        return Type.GetType(assemblyQualifiedTypeName, throwOnError: true)!;
+    }
+
+    private static string GetAtsTypeId(Type type)
+    {
+        return type switch
+        {
+            _ when type == typeof(string) => "string",
+            _ when type == typeof(bool) => "boolean",
+            _ when type == typeof(byte) || type == typeof(short) || type == typeof(int) || type == typeof(long) ||
+                type == typeof(float) || type == typeof(double) || type == typeof(decimal) => "number",
+            _ => $"{type.Assembly.GetName().Name}/{type.FullName}"
+        };
     }
 
     private static (Assembly testAssembly, Assembly hostingAssembly) LoadBothAssemblies()
@@ -1038,6 +1281,10 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Contains("getDistributedApplicationModel", aspireTs);
         Assert.Contains("subscribeBeforeStart", aspireTs);
         Assert.Contains("subscribeAfterResourcesCreated", aspireTs);
+        Assert.Contains("subscribeBeforePublish", aspireTs);
+        Assert.Contains("subscribeAfterPublish", aspireTs);
+        Assert.Contains("onBeforePublish", aspireTs);
+        Assert.Contains("onAfterPublish", aspireTs);
         Assert.Contains("onBeforeResourceStarted", aspireTs);
         Assert.Contains("onResourceStopped", aspireTs);
         Assert.Contains("onConnectionStringAvailable", aspireTs);

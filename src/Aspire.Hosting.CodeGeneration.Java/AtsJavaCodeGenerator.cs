@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Reflection;
 using System.Text;
 using System.Text.Json.Nodes;
+using Aspire.Shared.Json;
 using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.Java;
@@ -527,7 +528,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
 
             var dtoName = _dtoNames[dto.TypeId];
             WriteLine($"/** {dto.Name} DTO. */");
-            WriteLine($"class {dtoName} {{");
+            WriteLine($"class {dtoName} implements JsonSerializable {{");
             
             // Fields
             foreach (var property in dto.Properties)
@@ -1839,8 +1840,14 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         WriteLine("            // Note: Java doesn't have easy access to command line args from here");
         WriteLine("            resolvedOptions.put(\"Args\", new String[0]);");
         WriteLine("        }");
+        // ASPIRE_PROJECT_DIRECTORY is set by the CLI so the host reports the correct project
+        // directory (not the JVM's user.dir) when matching --apphost <directory> requests.
         WriteLine("        if (resolvedOptions.get(\"ProjectDirectory\") == null) {");
-        WriteLine("            resolvedOptions.put(\"ProjectDirectory\", System.getProperty(\"user.dir\"));");
+        WriteLine("            String projectDirectory = System.getenv(\"ASPIRE_PROJECT_DIRECTORY\");");
+        WriteLine("            if (projectDirectory == null || projectDirectory.isEmpty()) {");
+        WriteLine("                projectDirectory = System.getProperty(\"user.dir\");");
+        WriteLine("            }");
+        WriteLine("            resolvedOptions.put(\"ProjectDirectory\", projectDirectory);");
         WriteLine("        }");
         WriteLine("        if (resolvedOptions.get(\"AppHostFilePath\") == null) {");
         WriteLine("            String appHostFilePath = System.getenv(\"ASPIRE_APPHOST_FILEPATH\");");

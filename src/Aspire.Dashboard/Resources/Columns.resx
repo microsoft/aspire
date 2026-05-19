@@ -118,11 +118,15 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="StateColumnResourceExitedUnexpectedly" xml:space="preserve">
-    <value>{0} exited unexpectedly with exit code {1}</value>
+    <value>{0} exited unexpectedly with exit code {1}.</value>
     <comment>{0} is a resource type, {1} is a number</comment>
   </data>
   <data name="StateColumnResourceExited" xml:space="preserve">
-    <value>{0} is no longer running</value>
+    <value>{0} is no longer running.</value>
+    <comment>{0} is a resource type</comment>
+  </data>
+  <data name="StateColumnResourceFailedToStart" xml:space="preserve">
+    <value>{0} failed to start.</value>
     <comment>{0} is a resource type</comment>
   </data>
   <data name="SourceColumnDisplayCopyCommandToClipboard" xml:space="preserve">
@@ -151,13 +155,17 @@
   </data>
   <data name="StateColumnResourceContainerRuntimeUnhealthy" xml:space="preserve">
     <value>Container runtime was found but appears to be unhealthy. Ensure that it is running.
-For more information, see https://aka.ms/aspire/container-runtime-unhealthy</value>
+For more information, see https://aka.ms/aspire/container-runtime-unhealthy.</value>
     <comment>Contains a new line</comment>
   </data>
   <data name="StateColumnResourceNotStarted" xml:space="preserve">
-    <value>Resource has not started because it's configured to not automatically start.</value>
+    <value>Resource is not configured to start automatically.</value>
   </data>
   <data name="StateColumnResourceWaiting" xml:space="preserve">
-    <value>Resource is waiting for other resources to be in a running and healthy state.</value>
+    <value>Resource is waiting for dependencies.</value>
+  </data>
+  <data name="StateColumnResourceWaitingFor" xml:space="preserve">
+    <value>Waiting for dependencies: {0}.</value>
+    <comment>{0} is a comma-separated list of dependency resource names.</comment>
   </data>
 </root>

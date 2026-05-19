@@ -19,12 +19,19 @@ internal static partial class DocsSourceConfiguration
     public const string LlmsTxtUrlConfigPath = "docs:llmsTxtUrl";
 
     /// <summary>
-    /// Default URL for the abridged Aspire llms.txt documentation source.
+    /// Default URL for the Aspire llms.txt documentation source.
     /// </summary>
-    public const string DefaultLlmsTxtUrl = "https://aspire.dev/llms-small.txt";
+    /// <remarks>
+    /// Uses <c>llms-full.txt</c> rather than <c>llms-small.txt</c> because the
+    /// abridged source collapses whitespace inside fenced code blocks, which
+    /// renders code samples as flowed paragraphs in <c>aspire docs get</c>.
+    /// The full source is only marginally larger and is ETag-cached, so the
+    /// extra bytes are paid once per source change.
+    /// </remarks>
+    public const string DefaultLlmsTxtUrl = "https://aspire.dev/llms-full.txt";
 
     /// <summary>
-    /// Gets the URL used to fetch the abridged Aspire llms.txt documentation source.
+    /// Gets the URL used to fetch the Aspire llms.txt documentation source.
     /// </summary>
     /// <param name="configuration">The configuration to read from.</param>
     /// <returns>The resolved documentation source URL.</returns>

@@ -32,7 +32,6 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         appPath ??= _workspace.WorkspaceRoot.FullName;
         var runner = new TestDotNetCliRunner();
         var packagingService = MockPackagingServiceFactory.Create();
-        var configurationService = new TestConfigurationService();
         var logger = NullLogger<DotNetBasedAppHostServerProject>.Instance;
 
         // Generate socket path same way as factory
@@ -41,7 +40,7 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         // Use workspace root as repo root for testing
         var repoRoot = _workspace.WorkspaceRoot.FullName;
 
-        return new DotNetBasedAppHostServerProject(appPath, socketPath, repoRoot, runner, packagingService, configurationService, logger);
+        return new DotNetBasedAppHostServerProject(appPath, socketPath, repoRoot, runner, packagingService, logger);
     }
 
     [Fact]
@@ -269,13 +268,6 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
             }
             """);
 
-        // Configure global config to return "pr-old" (the WRONG channel)
-        // This simulates a stale global config that hasn't been updated
-        var configurationService = new TestConfigurationService
-        {
-            OnGetConfiguration = key => key == "channel" ? "pr-old" : null
-        };
-
         // Create a packaging service that returns explicit channels for both PR hives
         var prOldHivePath = prOldHive.FullName;
         var prNewHivePath = prNewHive.FullName;
@@ -304,7 +296,7 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         };
 
         var runner = new TestDotNetCliRunner();
-        
+
         // Use a real logger to capture debug output for diagnostics
         using var loggerFactory = LoggerFactory.Create(builder =>
         {
@@ -315,7 +307,7 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
 
         // Use a workspace-local ProjectModelPath for test isolation
         var projectModelPath = Path.Combine(appPath, ".aspire_server");
-        var project = new DotNetBasedAppHostServerProject(appPath, "test.sock", appPath, runner, packagingService, configurationService, logger, projectModelPath);
+        var project = new DotNetBasedAppHostServerProject(appPath, "test.sock", appPath, runner, packagingService, logger, projectModelPath);
 
         var packages = new List<IntegrationReference>
         {
@@ -363,12 +355,12 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
     {
         var dirInfo = new DirectoryInfo(path);
         output.WriteLine($"{indent}{dirInfo.Name}/");
-        
+
         foreach (var file in dirInfo.GetFiles())
         {
             output.WriteLine($"{indent}  {file.Name}");
         }
-        
+
         foreach (var dir in dirInfo.GetDirectories())
         {
             DumpDirectoryTree(dir.FullName, output, indent + "  ");

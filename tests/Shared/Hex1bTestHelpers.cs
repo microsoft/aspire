@@ -52,7 +52,7 @@ internal enum AspireTemplate
 
     /// <summary>
     /// Empty (TypeScript AppHost).
-    /// Prompts: template, project name, output path, URLs. No language, Redis, or test project prompt.
+    /// Prompts: template, language, project name, output path, URLs. No Redis or test project prompt.
     /// </summary>
     TypeScriptEmptyAppHost,
 
@@ -63,8 +63,8 @@ internal enum AspireTemplate
     EmptyAppHost,
 
     /// <summary>
-    /// Empty (Java AppHost) — visible only when experimental Java support is enabled.
-    /// Prompts: template, project name, output path, URLs. No Redis or test project prompt.
+    /// Empty (Java AppHost) — visible only in the language picker when experimental Java support is enabled.
+    /// Prompts: template, language, project name, output path, URLs. No Redis or test project prompt.
     /// </summary>
     JavaEmptyAppHost,
 }
@@ -456,18 +456,18 @@ internal static class Hex1bTestHelpers
                 break;
 
             case AspireTemplate.TypeScriptEmptyAppHost:
-                var typeScriptEmptyAppHostSelected = new CellPatternSearcher()
-                    .Find("> Empty (TypeScript AppHost)");
-                builder.Type("Empty (TypeScript")
-                    .WaitUntil(s => typeScriptEmptyAppHostSelected.Search(s).Count > 0, TimeSpan.FromSeconds(5))
+                builder.Type("Empty AppHost")
+                    .Enter()
+                    .WaitUntil(s => waitingForAppHostLanguagePrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
+                    .Type("TypeScript")
                     .Enter();
                 break;
 
             case AspireTemplate.JavaEmptyAppHost:
-                var javaEmptyAppHostSelected = new CellPatternSearcher()
-                    .Find("> Empty (Java AppHost)");
-                builder.Type("Empty (Java AppHost)")
-                    .WaitUntil(s => javaEmptyAppHostSelected.Search(s).Count > 0, TimeSpan.FromSeconds(5))
+                builder.Type("Empty AppHost")
+                    .Enter()
+                    .WaitUntil(s => waitingForAppHostLanguagePrompt.Search(s).Count > 0, TimeSpan.FromSeconds(10))
+                    .Type("Java")
                     .Enter();
                 break;
         }

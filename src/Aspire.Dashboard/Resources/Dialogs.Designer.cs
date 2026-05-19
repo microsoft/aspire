@@ -628,7 +628,7 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Go to Microsoft Learn documentation.
+        ///   Looks up a localized string similar to Go to aspire.dev documentation.
         /// </summary>
         public static string HelpDialogGetHelpLinkText {
             get {
@@ -1191,6 +1191,33 @@ namespace Aspire.Dashboard.Resources {
         public static string NotificationEntryDismiss {
             get {
                 return ResourceManager.GetString("NotificationEntryDismiss", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to AI Agents.
+        /// </summary>
+        public static string AIAgentsDialogTitle {
+            get {
+                return ResourceManager.GetString("AIAgentsDialogTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Build, debug, and profile apps using AI agents and Aspire....
+        /// </summary>
+        public static string AIAgentsDialogStandaloneDescription {
+            get {
+                return ResourceManager.GetString("AIAgentsDialogStandaloneDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Build, debug, and profile apps using AI agents and Aspire....
+        /// </summary>
+        public static string AIAgentsDialogAppHostDescription {
+            get {
+                return ResourceManager.GetString("AIAgentsDialogAppHostDescription", resourceCulture);
             }
         }
     }

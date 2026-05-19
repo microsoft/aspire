@@ -4,6 +4,7 @@
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Kubernetes.Resources;
 using Aspire.Hosting.Utils;
+using YamlDotNet.RepresentationModel;
 using YamlDotNet.Serialization;
 
 namespace Aspire.Hosting.Kubernetes.Tests;
@@ -176,13 +177,79 @@ public class KubernetesPublisherTests()
     }
 
     [Fact]
+    public async Task PublishAsync_CustomManifestResource()
+    {
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        builder.AddContainer("myapp", "mcr.microsoft.com/dotnet/aspnet:8.0")
+            .PublishAsKubernetesService(serviceResource =>
+            {
+                serviceResource.AddManifest("keda.sh/v1alpha1", "ScaledObject", "myapp-scaler", manifest =>
+                {
+                    manifest.WithNamespace("autoscaling")
+                        .WithLabel("example.com/custom", "true")
+                        .WithAnnotation("example.com/source", "polyglot")
+                        .WithField("spec.scaleTargetRef.kind", "Deployment")
+                        .WithField("spec.scaleTargetRef.name", "myapp")
+                        .WithField("spec.minReplicaCount", 1)
+                        .WithField("spec.maxReplicaCount", (double)3)
+                        .WithField("data.enabled", true);
+                });
+            });
+
+        var app = builder.Build();
+
+        app.Run();
+
+        var manifestPath = Path.Combine(tempDir.Path, "templates/myapp/scaler.yaml");
+        Assert.True(File.Exists(manifestPath), $"Manifest should exist at {manifestPath}");
+
+        var content = await File.ReadAllTextAsync(manifestPath);
+
+        Assert.Contains("apiVersion: keda.sh/v1alpha1", content);
+        Assert.Contains("kind: ScaledObject", content);
+        Assert.Contains("myapp-scaler", content);
+        Assert.Contains("namespace: \"autoscaling\"", content);
+        Assert.Contains("example.com/custom: \"true\"", content);
+        Assert.Contains("app.kubernetes.io/name:", content);
+        Assert.Contains("example.com/source: \"polyglot\"", content);
+        Assert.Contains("scaleTargetRef:", content);
+        Assert.Contains("kind: \"Deployment\"", content);
+        Assert.Contains("name: \"myapp\"", content);
+        Assert.Contains("minReplicaCount: 1", content);
+
+        var yaml = new YamlStream();
+        yaml.Load(new StringReader(content));
+        var root = Assert.IsType<YamlMappingNode>(yaml.Documents[0].RootNode);
+        var spec = Assert.IsType<YamlMappingNode>(root.Children.Single(static entry => entry.Key is YamlScalarNode { Value: "spec" }).Value);
+        var maxReplicaCount = Assert.IsType<YamlScalarNode>(spec.Children.Single(static entry => entry.Key is YamlScalarNode { Value: "maxReplicaCount" }).Value);
+        Assert.Equal("3", maxReplicaCount.Value);
+        Assert.DoesNotContain("maxReplicaCount: 3.0", content);
+        Assert.Contains("enabled: true", content);
+    }
+
+    [Fact]
+    public void KubernetesManifestResourceWithFieldThrowsWhenIntermediatePathIsScalar()
+    {
+        var manifest = new KubernetesManifestResource("example.com/v1", "Example", "example");
+        manifest.WithField("spec", "scalar");
+
+        var exception = Assert.Throws<ArgumentException>(() => manifest.WithField("spec.replicas", 3));
+
+        Assert.Contains("Cannot set nested manifest field 'spec.replicas' because 'spec' already has a scalar value.", exception.Message);
+    }
+
+    [Fact]
     public async Task PublishAsync_HandlesSpecialResourceName()
     {
         using var tempDir = new TestTempDirectory();
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
 
         builder.AddKubernetesEnvironment("env")
-                   .WithProperties(k => k.HelmChartName = "my-chart");
+                   .WithHelm(helm => helm.WithChartName("my-chart"));
 
         var param0 = builder.AddParameter("param0");
         var param1 = builder.AddParameter("param1", secret: true);
@@ -612,6 +679,60 @@ public class KubernetesPublisherTests()
             "values.yaml",
             "templates/env-dashboard/deployment.yaml",
             "templates/env-dashboard/service.yaml",
+            "templates/myapp/deployment.yaml",
+            "templates/myapp/config.yaml",
+        };
+
+        SettingsTask settingsTask = default!;
+
+        foreach (var expectedFile in expectedFiles)
+        {
+            var filePath = Path.Combine(tempDir.Path, expectedFile);
+            var fileExtension = Path.GetExtension(filePath)[1..];
+
+            if (settingsTask is null)
+            {
+                settingsTask = Verify(File.ReadAllText(filePath), fileExtension);
+            }
+            else
+            {
+                settingsTask = settingsTask.AppendContentAsFile(File.ReadAllText(filePath), fileExtension);
+            }
+        }
+
+        await settingsTask;
+    }
+
+    [Fact]
+    public async Task PublishAsync_HandlesScalarEnvironmentVariableTypes()
+    {
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        builder.AddKubernetesEnvironment("env");
+
+        var api = builder.AddContainer("myapp", "mcr.microsoft.com/dotnet/aspnet:8.0")
+            .WithEnvironment(context =>
+            {
+                context.EnvironmentVariables["BOOL_TRUE"] = true;
+                context.EnvironmentVariables["BOOL_FALSE"] = false;
+                context.EnvironmentVariables["INT_VALUE"] = 42;
+                context.EnvironmentVariables["DOUBLE_VALUE"] = 3.14;
+                context.EnvironmentVariables["DATETIMEOFFSET_VALUE"] = new DateTimeOffset(2024, 1, 2, 3, 4, 5, TimeSpan.Zero);
+                context.EnvironmentVariables["TIMESPAN_VALUE"] = TimeSpan.FromMinutes(90);
+                context.EnvironmentVariables["URI_VALUE"] = new Uri("https://example.com/path");
+                int? nullableIntWithValue = 7;
+                context.EnvironmentVariables["NULLABLE_INT_WITH_VALUE"] = nullableIntWithValue!;
+            })
+            .WithEnvironment("STRING_VALUE", "hello");
+
+        var app = builder.Build();
+        app.Run();
+
+        var expectedFiles = new[]
+        {
+            "Chart.yaml",
+            "values.yaml",
             "templates/myapp/deployment.yaml",
             "templates/myapp/config.yaml",
         };

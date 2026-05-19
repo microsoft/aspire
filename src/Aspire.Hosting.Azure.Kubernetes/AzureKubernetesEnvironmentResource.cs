@@ -5,11 +5,10 @@
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREAZURE001
 
-using Aspire.Hosting.Azure.Kubernetes;
 using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Pipelines;
 
-namespace Aspire.Hosting.Azure;
+namespace Aspire.Hosting.Azure.Kubernetes;
 
 /// <summary>
 /// Represents an Azure Kubernetes Service (AKS) environment resource that provisions
@@ -113,11 +112,6 @@ public partial class AzureKubernetesEnvironmentResource :
     internal string? KubernetesVersion { get; set; }
 
     /// <summary>
-    /// Gets or sets the SKU tier for the AKS cluster.
-    /// </summary>
-    internal AksSkuTier SkuTier { get; set; } = AksSkuTier.Free;
-
-    /// <summary>
     /// Gets or sets whether OIDC issuer is enabled on the cluster.
     /// </summary>
     internal bool OidcIssuerEnabled { get; set; } = true;
@@ -170,4 +164,37 @@ public partial class AzureKubernetesEnvironmentResource :
     /// Gets or sets the default container registry auto-created for this AKS environment.
     /// </summary>
     internal AzureContainerRegistryResource? DefaultContainerRegistry { get; set; }
+
+    /// <summary>
+    /// Gets the load balancer resources registered against this AKS environment via
+    /// <see cref="AzureKubernetesEnvironmentExtensions.AddLoadBalancer"/>. Used by
+    /// the Bicep emission to synthesize per-LB role assignments granting the
+    /// AKS-auto-created AGC controller identity permission to join each LB subnet.
+    /// </summary>
+    internal List<AzureKubernetesLoadBalancerResource> LoadBalancers { get; } = [];
+
+    /// <summary>
+    /// Gets or sets whether the AKS managed Gateway API installation is enabled on the
+    /// cluster. Toggled internally by <see cref="AzureKubernetesEnvironmentExtensions.AddLoadBalancer"/>;
+    /// not exposed as a public extension because it's only useful in combination with the
+    /// AGC ALB controller add-on (<see cref="ApplicationLoadBalancerEnabled"/>) today.
+    /// </summary>
+    internal bool GatewayApiEnabled { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether the Azure Application Gateway for Containers (AGC) ALB
+    /// controller add-on is enabled on the cluster. Toggled internally by
+    /// <see cref="AzureKubernetesEnvironmentExtensions.AddLoadBalancer"/>.
+    /// </summary>
+    internal bool ApplicationLoadBalancerEnabled { get; set; }
+
+    /// <summary>
+    /// Whether the cluster needs to be emitted using a preview Bicep API version because
+    /// it depends on <c>ingressProfile.gatewayAPI</c> or <c>ingressProfile.applicationLoadBalancer</c>,
+    /// neither of which is in any stable AKS API version yet (latest stable
+    /// <c>2026-01-01</c> doesn't have them; <c>gatewayAPI</c> first appears in
+    /// <c>2025-08-02-preview</c>, <c>applicationLoadBalancer</c> in
+    /// <c>2025-09-02-preview</c>).
+    /// </summary>
+    internal bool RequiresPreviewIngressApi => GatewayApiEnabled || ApplicationLoadBalancerEnabled;
 }

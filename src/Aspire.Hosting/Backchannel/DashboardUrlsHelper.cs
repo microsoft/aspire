@@ -4,6 +4,7 @@
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Devcontainers.Codespaces;
+using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -43,76 +44,115 @@ internal static class DashboardUrlsHelper
             return DashboardConnectionInfo.Unhealthy;
         }
 
+        var profilingTelemetry = serviceProvider.GetRequiredService<ProfilingTelemetry>();
+        using var activity = profilingTelemetry.StartDashboardGetConnectionInfo();
         var resourceNotificationService = serviceProvider.GetRequiredService<ResourceNotificationService>();
 
         // Wait for the dashboard to be healthy
+        using (var waitActivity = profilingTelemetry.StartDashboardWaitHealthy())
+        {
+            try
+            {
+                await resourceNotificationService.WaitForResourceHealthyAsync(
+                    KnownResourceNames.AspireDashboard,
+                    WaitBehavior.StopOnResourceUnavailable,
+                    cancellationToken).ConfigureAwait(false);
+                waitActivity.SetDashboardHealthy(true);
+                waitActivity.AddDashboardWaitHealthyCompleted();
+            }
+            catch (DistributedApplicationException ex)
+            {
+                waitActivity.SetDashboardHealthy(false);
+                waitActivity.AddDashboardWaitHealthyFailed();
+                waitActivity.SetError(ex);
+                activity.SetDashboardHealthy(false);
+                logger.LogWarning(ex, "An error occurred while waiting for the Aspire Dashboard to become healthy.");
+                return DashboardConnectionInfo.Unhealthy;
+            }
+        }
+
         try
         {
-            await resourceNotificationService.WaitForResourceHealthyAsync(
-                KnownResourceNames.AspireDashboard,
-                WaitBehavior.StopOnResourceUnavailable,
-                cancellationToken).ConfigureAwait(false);
-        }
-        catch (DistributedApplicationException ex)
-        {
-            logger.LogWarning(ex, "An error occurred while waiting for the Aspire Dashboard to become healthy.");
-            return DashboardConnectionInfo.Unhealthy;
-        }
-
-        var dashboardOptions = serviceProvider.GetService<IOptions<DashboardOptions>>()?.Value;
-        if (dashboardOptions is null)
-        {
-            logger.LogWarning("Dashboard options not found.");
-            return DashboardConnectionInfo.Unhealthy;
-        }
-
-        string? apiBaseUrl = null;
-
-        // API endpoint (https or http) - used for Dashboard UI and Telemetry API
-        var httpsEndpoint = dashboardResource.GetEndpoint("https");
-        var httpEndpoint = dashboardResource.GetEndpoint("http");
-        var apiEndpoint = httpsEndpoint.Exists ? httpsEndpoint : httpEndpoint;
-        if (apiEndpoint.Exists)
-        {
-            apiBaseUrl = await EndpointHostHelpers.GetUrlWithTargetHostAsync(apiEndpoint, cancellationToken).ConfigureAwait(false);
-        }
-
-        // Fall back to configured URL if we couldn't get it from the resource
-        if (string.IsNullOrEmpty(apiBaseUrl))
-        {
-            if (StringUtils.TryGetUriFromDelimitedString(dashboardOptions.DashboardUrl, ";", out var dashboardUri))
+            var dashboardOptions = serviceProvider.GetService<IOptions<DashboardOptions>>()?.Value;
+            if (dashboardOptions is null)
             {
-                apiBaseUrl = dashboardUri.GetLeftPart(UriPartial.Authority);
+                activity.SetDashboardHealthy(false);
+                activity.SetDashboardUrlSource(ProfilingTelemetry.Values.DashboardUrlSourceNone);
+                logger.LogWarning("Dashboard options not found.");
+                return DashboardConnectionInfo.Unhealthy;
             }
-        }
 
-        // Build dashboard URLs. When browser token auth is enabled, include the login token.
-        // When anonymous access is enabled, return the base URL directly.
-        var codespacesUrlRewriter = serviceProvider.GetService<CodespacesUrlRewriter>();
-        string? baseUrlWithLoginToken = null;
-        string? codespacesUrlWithLoginToken = null;
+            string? apiBaseUrl = null;
+            var apiBaseUrlSource = ProfilingTelemetry.Values.DashboardUrlSourceNone;
 
-        if (!string.IsNullOrEmpty(apiBaseUrl))
-        {
-            baseUrlWithLoginToken = !string.IsNullOrEmpty(dashboardOptions.DashboardToken)
-                ? $"{apiBaseUrl.TrimEnd('/')}/login?t={dashboardOptions.DashboardToken}"
-                : apiBaseUrl;
-
-            var rewrittenUrl = codespacesUrlRewriter?.RewriteUrl(baseUrlWithLoginToken);
-            if (rewrittenUrl != baseUrlWithLoginToken)
+            using (var resolveActivity = profilingTelemetry.StartDashboardResolveUrls())
             {
-                codespacesUrlWithLoginToken = rewrittenUrl;
-            }
-        }
+                if (dashboardResource is not null)
+                {
+                    // API endpoint (https or http) - used for Dashboard UI and Telemetry API
+                    var httpsEndpoint = dashboardResource.GetEndpoint("https");
+                    var httpEndpoint = dashboardResource.GetEndpoint("http");
+                    var apiEndpoint = httpsEndpoint.Exists ? httpsEndpoint : httpEndpoint;
+                    if (apiEndpoint.Exists)
+                    {
+                        apiBaseUrl = await EndpointHostHelpers.GetUrlWithTargetHostAsync(apiEndpoint, cancellationToken).ConfigureAwait(false);
+                        if (!string.IsNullOrEmpty(apiBaseUrl))
+                        {
+                            apiBaseUrlSource = ProfilingTelemetry.Values.DashboardUrlSourceResource;
+                        }
+                    }
+                }
 
-        return new DashboardConnectionInfo
+                // Fall back to configured URL if we couldn't get it from the resource
+                if (string.IsNullOrEmpty(apiBaseUrl))
+                {
+                    if (StringUtils.TryGetUriFromDelimitedString(dashboardOptions.DashboardUrl, ";", out var dashboardUri))
+                    {
+                        apiBaseUrl = dashboardUri.GetLeftPart(UriPartial.Authority);
+                        apiBaseUrlSource = ProfilingTelemetry.Values.DashboardUrlSourceConfiguration;
+                    }
+                }
+
+                resolveActivity.SetDashboardUrlSource(apiBaseUrlSource);
+                resolveActivity.SetDashboardHasApiBaseUrl(!string.IsNullOrEmpty(apiBaseUrl));
+            }
+
+            // Build dashboard URLs. When browser token auth is enabled, include the login token.
+            // When anonymous access is enabled, return the base URL directly.
+            var codespacesUrlRewriter = serviceProvider.GetService<CodespacesUrlRewriter>();
+            string? baseUrlWithLoginToken = null;
+            string? codespacesUrlWithLoginToken = null;
+
+            if (!string.IsNullOrEmpty(apiBaseUrl))
+            {
+                baseUrlWithLoginToken = !string.IsNullOrEmpty(dashboardOptions.DashboardToken)
+                    ? $"{apiBaseUrl.TrimEnd('/')}/login?t={dashboardOptions.DashboardToken}"
+                    : apiBaseUrl;
+
+                var rewrittenUrl = codespacesUrlRewriter?.RewriteUrl(baseUrlWithLoginToken);
+                if (rewrittenUrl != baseUrlWithLoginToken)
+                {
+                    codespacesUrlWithLoginToken = rewrittenUrl;
+                }
+            }
+
+            activity.SetDashboardHealthy(true);
+            activity.SetDashboardUrlSource(apiBaseUrlSource);
+
+            return new DashboardConnectionInfo
+            {
+                IsHealthy = true,
+                ApiBaseUrl = apiBaseUrl,
+                ApiToken = dashboardOptions.ApiKey,
+                BaseUrlWithLoginToken = baseUrlWithLoginToken,
+                CodespacesUrlWithLoginToken = codespacesUrlWithLoginToken
+            };
+        }
+        catch (Exception ex)
         {
-            IsHealthy = true,
-            ApiBaseUrl = apiBaseUrl,
-            ApiToken = dashboardOptions.ApiKey,
-            BaseUrlWithLoginToken = baseUrlWithLoginToken,
-            CodespacesUrlWithLoginToken = codespacesUrlWithLoginToken
-        };
+            activity.SetError(ex);
+            throw;
+        }
     }
 
     /// <summary>

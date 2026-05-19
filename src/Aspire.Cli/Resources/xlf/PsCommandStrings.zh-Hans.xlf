@@ -7,6 +7,11 @@
         <target state="needs-review-translation">列出正在运行的 Aspire AppHost。</target>
         <note />
       </trans-unit>
+      <trans-unit id="HeaderCliLog">
+        <source>Logs</source>
+        <target state="new">Logs</target>
+        <note />
+      </trans-unit>
       <trans-unit id="HeaderCliPid">
         <source>CLI PID</source>
         <target state="translated">CLI PID</target>
@@ -25,6 +30,11 @@
       <trans-unit id="HeaderPid">
         <source>PID</source>
         <target state="translated">PID</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="HeaderSdk">
+        <source>SDK</source>
+        <target state="new">SDK</target>
         <note />
       </trans-unit>
       <trans-unit id="JsonOptionDescription">

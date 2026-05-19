@@ -11,6 +11,7 @@ namespace Aspire.Hosting.Backchannel;
 
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Protocol;
@@ -20,7 +21,7 @@ using ModelContextProtocol.Protocol;
 //
 // 1. All methods take a single request object (nullable where sensible)
 // 2. All methods return a response object (or IAsyncEnumerable<T> for streaming)
-// 3. Request/response types are sealed classes with { get; init; } properties
+// 3. Request types derive from BackchannelRequest; request/response types are sealed classes with { get; init; } properties
 // 4. Required properties use 'required' keyword
 // 5. Optional properties are nullable (T?) - can be added without breaking
 // 6. Empty request classes are allowed (for future expansion)
@@ -43,6 +44,21 @@ internal static class AuxiliaryBackchannelCapabilities
     /// Version 2 capabilities (13.2+): Request objects, new methods.
     /// </summary>
     public const string V2 = "aux.v2";
+
+    /// <summary>
+    /// Version 3 capabilities: Batched console log streaming and AppHost startup readiness wait.
+    /// </summary>
+    public const string V3 = "aux.v3";
+}
+
+/// <summary>
+/// Constants for resource command visibility values in the auxiliary backchannel contract.
+/// </summary>
+internal static class KnownCommandVisibility
+{
+    public const string UI = "UI";
+    public const string Api = "Api";
+    public const string Default = $"{UI}, {Api}";
 }
 
 #endregion
@@ -50,9 +66,57 @@ internal static class AuxiliaryBackchannelCapabilities
 #region V2 Request/Response Types
 
 /// <summary>
+/// Trace context metadata propagated over the auxiliary backchannel.
+/// </summary>
+internal sealed class BackchannelTraceContext
+{
+    /// <summary>
+    /// Gets the W3C traceparent value associated with the caller span.
+    /// </summary>
+    public string? TraceParent { get; init; }
+
+    /// <summary>
+    /// Gets the W3C tracestate value associated with the caller span.
+    /// </summary>
+    public string? TraceState { get; init; }
+
+    /// <summary>
+    /// Gets the baggage values associated with the trace.
+    /// </summary>
+    public Dictionary<string, string> Baggage { get; init; } = [];
+}
+
+/// <summary>
+/// Base class for auxiliary backchannel request-object RPC parameters.
+/// </summary>
+internal abstract class BackchannelRequest
+{
+    /// <summary>
+    /// Gets trace context metadata propagated by the CLI.
+    /// </summary>
+    public BackchannelTraceContext? TraceContext { get; init; }
+
+    /// <summary>
+    /// Creates a copy of this request with the specified trace context.
+    /// </summary>
+    /// <remarks>
+    /// StreamJsonRpc carries W3C traceparent/tracestate on the JSON-RPC request envelope.
+    /// See https://microsoft.github.io/vs-streamjsonrpc/docs/resiliency.html#activity-tracing.
+    /// The request object only carries extra trace metadata such as baggage values. Each
+    /// request type owns its copy logic so this stays AOT- and trimming-friendly instead of
+    /// relying on reflection to clone arbitrary records/classes.
+    /// </remarks>
+    public abstract BackchannelRequest WithTraceContext(BackchannelTraceContext traceContext);
+}
+
+/// <summary>
 /// Request for getting auxiliary backchannel capabilities.
 /// </summary>
-internal sealed class GetCapabilitiesRequest { }
+internal sealed class GetCapabilitiesRequest : BackchannelRequest
+{
+    /// <inheritdoc />
+    public override GetCapabilitiesRequest WithTraceContext(BackchannelTraceContext traceContext) => new() { TraceContext = traceContext };
+}
 
 /// <summary>
 /// Response containing auxiliary backchannel capabilities.
@@ -68,7 +132,11 @@ internal sealed class GetCapabilitiesResponse
 /// <summary>
 /// Request for getting AppHost information.
 /// </summary>
-internal sealed class GetAppHostInfoRequest { }
+internal sealed class GetAppHostInfoRequest : BackchannelRequest
+{
+    /// <inheritdoc />
+    public override GetAppHostInfoRequest WithTraceContext(BackchannelTraceContext traceContext) => new() { TraceContext = traceContext };
+}
 
 /// <summary>
 /// Response containing AppHost information.
@@ -99,12 +167,21 @@ internal sealed class GetAppHostInfoResponse
     /// Gets when the AppHost process started.
     /// </summary>
     public DateTimeOffset? StartedAt { get; init; }
+
+    /// <summary>
+    /// Gets the log file path of the CLI process that launched the AppHost, if applicable.
+    /// </summary>
+    public string? CliLogFilePath { get; init; }
 }
 
 /// <summary>
 /// Request for getting Dashboard information.
 /// </summary>
-internal sealed class GetDashboardInfoRequest { }
+internal sealed class GetDashboardInfoRequest : BackchannelRequest
+{
+    /// <inheritdoc />
+    public override GetDashboardInfoRequest WithTraceContext(BackchannelTraceContext traceContext) => new() { TraceContext = traceContext };
+}
 
 /// <summary>
 /// Response containing Dashboard information.
@@ -134,14 +211,41 @@ internal sealed class GetDashboardInfoResponse
 }
 
 /// <summary>
+/// Request for waiting until the AppHost reaches its startup readiness point.
+/// </summary>
+internal sealed class WaitForAppHostReadyRequest : BackchannelRequest
+{
+    /// <inheritdoc />
+    public override WaitForAppHostReadyRequest WithTraceContext(BackchannelTraceContext traceContext) => new() { TraceContext = traceContext };
+}
+
+/// <summary>
+/// Response returned once the AppHost reaches its startup readiness point.
+/// </summary>
+internal sealed class WaitForAppHostReadyResponse
+{
+    /// <summary>
+    /// Gets whether the AppHost has reached its startup readiness point.
+    /// </summary>
+    public bool IsReady { get; init; }
+}
+
+/// <summary>
 /// Request for getting resource snapshots.
 /// </summary>
-internal sealed class GetResourcesRequest
+internal sealed class GetResourcesRequest : BackchannelRequest
 {
     /// <summary>
     /// Gets an optional filter pattern for resource names.
     /// </summary>
     public string? Filter { get; init; }
+
+    /// <inheritdoc />
+    public override GetResourcesRequest WithTraceContext(BackchannelTraceContext traceContext) => new()
+    {
+        TraceContext = traceContext,
+        Filter = Filter
+    };
 }
 
 /// <summary>
@@ -158,34 +262,67 @@ internal sealed class GetResourcesResponse
 /// <summary>
 /// Request for watching resource changes.
 /// </summary>
-internal sealed class WatchResourcesRequest
+internal sealed class WatchResourcesRequest : BackchannelRequest
 {
     /// <summary>
     /// Gets an optional filter pattern for resource names.
     /// </summary>
     public string? Filter { get; init; }
+
+    /// <inheritdoc />
+    public override WatchResourcesRequest WithTraceContext(BackchannelTraceContext traceContext) => new()
+    {
+        TraceContext = traceContext,
+        Filter = Filter
+    };
 }
 
 /// <summary>
 /// Request for getting console logs.
 /// </summary>
-internal sealed class GetConsoleLogsRequest
+internal sealed class GetConsoleLogsRequest : BackchannelRequest
 {
     /// <summary>
     /// Gets the resource name to get logs for.
     /// </summary>
-    public required string ResourceName { get; init; }
+    public string? ResourceName { get; init; }
 
     /// <summary>
     /// Gets whether to follow (stream) new log entries.
     /// </summary>
     public bool Follow { get; init; }
+
+    /// <summary>
+    /// Gets an optional search string to match against log content or resource name.
+    /// </summary>
+    public string? Search { get; init; }
+
+    /// <summary>
+    /// Gets the maximum number of matching snapshot log entries to return.
+    /// </summary>
+    public int? Tail { get; init; }
+
+    /// <summary>
+    /// Gets whether hidden resources should be included when no resource name is specified.
+    /// </summary>
+    public bool IncludeHidden { get; init; }
+
+    /// <inheritdoc />
+    public override GetConsoleLogsRequest WithTraceContext(BackchannelTraceContext traceContext) => new()
+    {
+        TraceContext = traceContext,
+        ResourceName = ResourceName,
+        Follow = Follow,
+        Search = Search,
+        Tail = Tail,
+        IncludeHidden = IncludeHidden
+    };
 }
 
 /// <summary>
 /// Request for calling an MCP tool on a resource.
 /// </summary>
-internal sealed class CallMcpToolRequest
+internal sealed class CallMcpToolRequest : BackchannelRequest
 {
     /// <summary>
     /// Gets the resource name.
@@ -201,6 +338,15 @@ internal sealed class CallMcpToolRequest
     /// Gets the tool arguments.
     /// </summary>
     public JsonElement? Arguments { get; init; }
+
+    /// <inheritdoc />
+    public override CallMcpToolRequest WithTraceContext(BackchannelTraceContext traceContext) => new()
+    {
+        TraceContext = traceContext,
+        ResourceName = ResourceName,
+        ToolName = ToolName,
+        Arguments = Arguments
+    };
 }
 
 /// <summary>
@@ -238,12 +384,19 @@ internal sealed class McpToolContentItem
 /// <summary>
 /// Request for stopping the AppHost.
 /// </summary>
-internal sealed class StopAppHostRequest
+internal sealed class StopAppHostRequest : BackchannelRequest
 {
     /// <summary>
     /// Gets the exit code to use when stopping.
     /// </summary>
     public int? ExitCode { get; init; }
+
+    /// <inheritdoc />
+    public override StopAppHostRequest WithTraceContext(BackchannelTraceContext traceContext) => new()
+    {
+        TraceContext = traceContext,
+        ExitCode = ExitCode
+    };
 }
 
 /// <summary>
@@ -254,7 +407,7 @@ internal sealed class StopAppHostResponse { }
 /// <summary>
 /// Request for executing a resource command.
 /// </summary>
-internal sealed class ExecuteResourceCommandRequest
+internal sealed class ExecuteResourceCommandRequest : BackchannelRequest
 {
     /// <summary>
     /// Gets the resource name (or resource ID for replicas).
@@ -265,6 +418,55 @@ internal sealed class ExecuteResourceCommandRequest
     /// Gets the command name (e.g., "start", "stop", "restart").
     /// </summary>
     public required string CommandName { get; init; }
+
+    /// <summary>
+    /// Gets optional invocation arguments to pass to the resource command.
+    /// Arrays are matched to declared command arguments by order. Objects are matched by argument name.
+    /// </summary>
+    public JsonNode? Arguments { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the request should validate arguments without executing the command.
+    /// </summary>
+    public bool ValidateOnly { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether command execution should fail instead of prompting for missing input.
+    /// </summary>
+    public bool NonInteractive { get; init; } = true;
+
+    /// <inheritdoc />
+    public override ExecuteResourceCommandRequest WithTraceContext(BackchannelTraceContext traceContext) => new()
+    {
+        TraceContext = traceContext,
+        ResourceName = ResourceName,
+        CommandName = CommandName,
+        Arguments = Arguments,
+        ValidateOnly = ValidateOnly,
+        NonInteractive = NonInteractive
+    };
+}
+
+/// <summary>
+/// Options for executing a resource command through the auxiliary backchannel.
+/// </summary>
+internal sealed class ExecuteResourceCommandOptions
+{
+    /// <summary>
+    /// Gets optional invocation arguments to pass to the resource command.
+    /// Arrays are matched to declared command arguments by order. Objects are matched by argument name.
+    /// </summary>
+    public JsonNode? Arguments { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the request should validate arguments without executing the command.
+    /// </summary>
+    public bool ValidateOnly { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether command execution should fail instead of prompting for missing input.
+    /// </summary>
+    public bool NonInteractive { get; init; } = true;
 }
 
 /// <summary>
@@ -297,6 +499,27 @@ internal sealed class ExecuteResourceCommandResponse
     /// Gets the value produced by the command.
     /// </summary>
     public ExecuteResourceCommandResult? Value { get; init; }
+
+    /// <summary>
+    /// Gets validation errors for submitted command arguments.
+    /// </summary>
+    public ResourceCommandArgumentValidationError[] ValidationErrors { get; init; } = [];
+}
+
+/// <summary>
+/// Represents a validation error for a submitted resource command argument.
+/// </summary>
+internal sealed class ResourceCommandArgumentValidationError
+{
+    /// <summary>
+    /// Gets the argument name.
+    /// </summary>
+    public required string ArgumentName { get; init; }
+
+    /// <summary>
+    /// Gets the validation error message.
+    /// </summary>
+    public required string ErrorMessage { get; init; }
 }
 
 /// <summary>
@@ -352,7 +575,7 @@ internal enum CommandResultFormat
 /// <summary>
 /// Request to wait for a resource to reach a target status.
 /// </summary>
-internal sealed class WaitForResourceRequest
+internal sealed class WaitForResourceRequest : BackchannelRequest
 {
     /// <summary>
     /// Gets the name of the resource to wait for.
@@ -368,6 +591,15 @@ internal sealed class WaitForResourceRequest
     /// Gets the timeout in seconds.
     /// </summary>
     public int TimeoutSeconds { get; init; } = 120;
+
+    /// <inheritdoc />
+    public override WaitForResourceRequest WithTraceContext(BackchannelTraceContext traceContext) => new()
+    {
+        TraceContext = traceContext,
+        ResourceName = ResourceName,
+        Status = Status,
+        TimeoutSeconds = TimeoutSeconds
+    };
 }
 
 /// <summary>
@@ -668,20 +900,6 @@ internal class BackchannelLogEntry
     public required string CategoryName { get; set; }
 }
 
-internal class CommandOutput
-{
-    public required string Text { get; init; }
-    public bool IsErrorMessage { get; init; }
-    public int? LineNumber { get; init; }
-    /// <summary>
-    /// Additional info about type of the message.
-    /// Should be used for controlling the display style.
-    /// </summary>
-    public string? Type { get; init; }
-
-    public int? ExitCode { get; init; }
-}
-
 internal class PublishingPromptInputAnswer
 {
     public string? Name { get; set; }
@@ -722,13 +940,20 @@ internal sealed class PipelineStepInfo
 /// <summary>
 /// Request for getting pipeline step metadata.
 /// </summary>
-internal sealed class GetPipelineStepsRequest
+internal sealed class GetPipelineStepsRequest : BackchannelRequest
 {
     /// <summary>
     /// Gets or sets the target step name to filter to (including transitive dependencies).
     /// When null, all steps are returned.
     /// </summary>
     public string? Step { get; init; }
+
+    /// <inheritdoc />
+    public override GetPipelineStepsRequest WithTraceContext(BackchannelTraceContext traceContext) => new()
+    {
+        TraceContext = traceContext,
+        Step = Step
+    };
 }
 
 /// <summary>
@@ -797,6 +1022,11 @@ internal sealed class ResourceSnapshot
     public string? State { get; init; }
 
     /// <summary>
+    /// Gets the names of resources this resource is waiting for.
+    /// </summary>
+    public string[]? WaitingFor { get; init; }
+
+    /// <summary>
     /// Gets the state style hint (e.g., "success", "error", "warning").
     /// </summary>
     public string? StateStyle { get; init; }
@@ -855,7 +1085,7 @@ internal sealed class ResourceSnapshot
     /// Gets additional properties as key-value pairs.
     /// This allows for extensibility without changing the schema.
     /// </summary>
-    public Dictionary<string, string?> Properties { get; init; } = [];
+    public Dictionary<string, JsonNode?> Properties { get; init; } = [];
 
     /// <summary>
     /// Gets a value indicating whether this resource is hidden.
@@ -895,9 +1125,85 @@ internal sealed class ResourceSnapshotCommand
     public string? Description { get; init; }
 
     /// <summary>
+    /// Gets the ordered inputs that describe the invocation arguments accepted by the command.
+    /// </summary>
+    public ResourceSnapshotCommandArgument[] ArgumentInputs { get; init; } = [];
+
+    /// <summary>
+    /// Gets where the command is visible to users and clients.
+    /// </summary>
+    public string Visibility { get; init; } = KnownCommandVisibility.Default;
+
+    /// <summary>
     /// Gets the state of the command (e.g., "Enabled", "Disabled", "Hidden").
     /// </summary>
     public required string State { get; init; }
+}
+
+/// <summary>
+/// Represents an invocation argument accepted by a resource command.
+/// </summary>
+internal sealed class ResourceSnapshotCommandArgument
+{
+    /// <summary>
+    /// Gets the argument name.
+    /// </summary>
+    public required string Name { get; init; }
+
+    /// <summary>
+    /// Gets the display label.
+    /// </summary>
+    public string? Label { get; init; }
+
+    /// <summary>
+    /// Gets the argument description.
+    /// </summary>
+    public string? Description { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the description should be rendered as Markdown.
+    /// </summary>
+    public bool EnableDescriptionMarkdown { get; init; }
+
+    /// <summary>
+    /// Gets the input type.
+    /// </summary>
+    public required string InputType { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the argument is required.
+    /// </summary>
+    public bool Required { get; init; }
+
+    /// <summary>
+    /// Gets the placeholder text.
+    /// </summary>
+    public string? Placeholder { get; init; }
+
+    /// <summary>
+    /// Gets the default or submitted value.
+    /// </summary>
+    public string? Value { get; init; }
+
+    /// <summary>
+    /// Gets choice options keyed by submitted value.
+    /// </summary>
+    public Dictionary<string, string?>? Options { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether custom choices are allowed.
+    /// </summary>
+    public bool AllowCustomChoice { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the argument input is disabled.
+    /// </summary>
+    public bool Disabled { get; init; }
+
+    /// <summary>
+    /// Gets the maximum length for text inputs.
+    /// </summary>
+    public int? MaxLength { get; init; }
 }
 
 /// <summary>
@@ -1085,6 +1391,12 @@ internal sealed class AppHostInformation
     /// This value is only set when the AppHost is launched via the Aspire CLI.
     /// </summary>
     public DateTimeOffset? CliStartedAt { get; init; }
+
+    /// <summary>
+    /// Gets or sets the log file path of the CLI process that launched the AppHost.
+    /// This value is only set when the AppHost is launched via the Aspire CLI.
+    /// </summary>
+    public string? CliLogFilePath { get; init; }
 }
 
 /// <summary>
@@ -1111,4 +1423,15 @@ internal sealed class ResourceLogLine
     /// Gets whether this log line is from stderr (error output).
     /// </summary>
     public bool IsError { get; init; }
+}
+
+/// <summary>
+/// Represents a batch of resource console log lines.
+/// </summary>
+internal sealed class ResourceLogBatch
+{
+    /// <summary>
+    /// Gets the log lines in this batch.
+    /// </summary>
+    public required ResourceLogLine[] Lines { get; init; }
 }

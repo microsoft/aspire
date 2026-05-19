@@ -32,8 +32,11 @@ import { installCliStableCommand, installCliDailyCommand, verifyCliInstalledComm
 import { AspireMcpServerDefinitionProvider } from './mcp/AspireMcpServerDefinitionProvider';
 import { AspireCodeLensProvider } from './editor/AspireCodeLensProvider';
 import { AspireGutterDecorationProvider } from './editor/AspireGutterDecorationProvider';
+import { AppHostFilePresenceWatcher } from './editor/AppHostFilePresenceWatcher';
 import { getSupportedLanguageIds } from './editor/parsers/AppHostResourceParser';
 import { readGitCommitSha } from './utils/versionInfo';
+import { collectResourceCommandArguments, hasSecretResourceCommandArguments } from './views/ResourceCommandArguments';
+import { ResourceCommandJson } from './views/AppHostDataRepository';
 
 let aspireExtensionContext = new AspireExtensionContext();
 
@@ -82,7 +85,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
   // Aspire panel - running app hosts tree view
   const dataRepository = new AppHostDataRepository(terminalProvider);
-  const appHostTreeProvider = new AspireAppHostTreeProvider(dataRepository, terminalProvider);
+  const appHostTreeProvider = new AspireAppHostTreeProvider(dataRepository, terminalProvider, context.globalState);
   const appHostTreeView = vscode.window.createTreeView('aspire-vscode.runningAppHosts', {
     treeDataProvider: appHostTreeProvider,
     showCollapseAll: true,
@@ -94,6 +97,11 @@ export async function activate(context: vscode.ExtensionContext) {
   appHostTreeView.onDidChangeVisibility(e => {
     dataRepository.setPanelVisible(e.visible);
   });
+
+  // Also drive data sources based on whether an AppHost file is currently visible in any editor.
+  // This makes resource code-lens decorations on a fresh AppHost file work without first opening the panel.
+  const appHostFilePresenceWatcher = new AppHostFilePresenceWatcher(dataRepository);
+  context.subscriptions.push(appHostFilePresenceWatcher);
 
   const refreshRunningAppHostsRegistration = vscode.commands.registerCommand('aspire-vscode.refreshRunningAppHosts', () => dataRepository.refresh());
   const switchToGlobalViewRegistration = vscode.commands.registerCommand('aspire-vscode.switchToGlobalView', () => dataRepository.setViewMode('global'));
@@ -124,16 +132,21 @@ export async function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(appHostTreeView, refreshRunningAppHostsRegistration, switchToGlobalViewRegistration, switchToWorkspaceViewRegistration, openDashboardRegistration, openAppHostSourceRegistration, stopAppHostRegistration, stopResourceRegistration, startResourceRegistration, restartResourceRegistration, viewResourceLogsRegistration, executeResourceCommandRegistration, copyEndpointUrlRegistration, openInExternalBrowserRegistration, openInIntegratedBrowserRegistration, copyResourceNameRegistration, copyPidRegistration, copyAppHostPathRegistration, expandAllRegistration, { dispose: () => { appHostTreeProvider.dispose(); dataRepository.dispose(); } });
 
   // CodeLens provider — shows Debug on pipeline steps, resource state on resources
-  const codeLensProvider = new AspireCodeLensProvider(appHostTreeProvider);
+  const codeLensProvider = new AspireCodeLensProvider(appHostTreeProvider, dataRepository);
   const languageFilters = getSupportedLanguageIds().map(lang => ({ language: lang, scheme: 'file' }));
   const codeLensRegistration = vscode.languages.registerCodeLensProvider(languageFilters, codeLensProvider);
   const codeLensDebugPipelineStepRegistration = vscode.commands.registerCommand('aspire-vscode.codeLensDebugPipelineStep', (stepName: string) => editorCommandProvider.tryExecuteDoAppHost(false, stepName));
-  const codeLensResourceActionRegistration = vscode.commands.registerCommand('aspire-vscode.codeLensResourceAction', (resourceName: string, action: string, appHostPath: string) => {
-    let command = `resource "${resourceName}" ${action}`;
+  const codeLensResourceActionRegistration = vscode.commands.registerCommand('aspire-vscode.codeLensResourceAction', async (resourceName: string, action: string, appHostPath: string, resourceCommand?: ResourceCommandJson) => {
+    const additionalArgs = await collectResourceCommandArguments(action, resourceCommand, { secretWarningState: context.globalState });
+    if (additionalArgs === undefined) {
+      return;
+    }
+
+    let command = `resource "${resourceName}" "${action}"`;
     if (appHostPath) {
       command += ` --apphost "${appHostPath}"`;
     }
-    terminalProvider.sendAspireCommandToAspireTerminal(command);
+    terminalProvider.sendAspireCommandToAspireTerminal(command, true, additionalArgs, { redactAdditionalArgs: hasSecretResourceCommandArguments(resourceCommand) });
   });
   const codeLensViewLogsRegistration = vscode.commands.registerCommand('aspire-vscode.codeLensViewLogs', (resourceName: string, appHostPath: string) => {
     let command = `logs "${resourceName}"`;
@@ -149,7 +162,19 @@ export async function activate(context: vscode.ExtensionContext) {
       appHostTreeView.reveal(element, { select: true, focus: true });
     }
   });
-  context.subscriptions.push(codeLensRegistration, codeLensDebugPipelineStepRegistration, codeLensResourceActionRegistration, codeLensViewLogsRegistration, codeLensRevealResourceRegistration, codeLensProvider);
+  const codeLensOpenDashboardRegistration = vscode.commands.registerCommand('aspire-vscode.codeLensOpenDashboard', (appHostPath?: string) => {
+    const element = appHostPath ? appHostTreeProvider.findAppHostElement(appHostPath) : undefined;
+    return appHostTreeProvider.openDashboard(element);
+  });
+  const codeLensViewAppHostLogsRegistration = vscode.commands.registerCommand('aspire-vscode.codeLensViewAppHostLogs', (appHostPath?: string) => {
+    const additionalArgs: string[] = [];
+    if (appHostPath) {
+      additionalArgs.push('--apphost', appHostPath);
+    }
+    additionalArgs.push('--follow');
+    terminalProvider.sendAspireCommandToAspireTerminal('logs', true, additionalArgs);
+  });
+  context.subscriptions.push(codeLensRegistration, codeLensDebugPipelineStepRegistration, codeLensResourceActionRegistration, codeLensViewLogsRegistration, codeLensRevealResourceRegistration, codeLensOpenDashboardRegistration, codeLensViewAppHostLogsRegistration, codeLensProvider);
 
   // Gutter decorations — colored dots next to resources showing runtime state
   const gutterDecorationProvider = new AspireGutterDecorationProvider(appHostTreeProvider);

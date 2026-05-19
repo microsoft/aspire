@@ -31,7 +31,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Theory]
@@ -49,7 +49,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
     }
 
     [Fact]
@@ -75,7 +75,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         // With ANSI disabled, output is plain text: "timestamp severity resourceName body"
         var logLines = outputWriter.Logs.Where(l => l.Contains("redis") || l.Contains("apiservice")).ToList();
@@ -110,7 +110,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         // Replicas get shortened GUID appended: apiservice-11111111 and apiservice-aaaaaaaa
         var logLines = outputWriter.Logs.Where(l => l.Contains("apiservice")).ToList();
@@ -140,7 +140,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var logLine = Assert.Single(outputWriter.Logs, l => l.Contains("apiservice", StringComparison.Ordinal));
         Assert.Equal($"{FormatHelpers.FormatConsoleTime(TimeProvider.System, s_testTime)} INFO apiservice Request received", logLine);
@@ -220,7 +220,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         var logLines = outputWriter.Logs.Where(l => l.Contains("redis")).ToList();
         Assert.Single(logLines);
         Assert.Contains("Ready to accept connections", logLines[0]);
@@ -272,7 +272,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal("my-secret-key", capturedApiKey);
     }
 
@@ -294,7 +294,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
         Assert.Equal(TelemetryCommandStrings.DashboardUrlAndAppHostExclusive, errorMessage);
     }
@@ -317,7 +317,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
         var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
         Assert.Equal(string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardUrlInvalid, "not-a-url"), errorMessage);
     }
@@ -355,7 +355,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.DashboardFailure, exitCode);
+        Assert.Equal(CliExitCodes.DashboardFailure, exitCode);
         var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
         Assert.Equal(TelemetryCommandStrings.DashboardAuthFailed, errorMessage);
     }
@@ -398,7 +398,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.DashboardFailure, exitCode);
+        Assert.Equal(CliExitCodes.DashboardFailure, exitCode);
         var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
         Assert.Equal(string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardApiNotEnabled, "http://localhost:18888"), errorMessage);
     }
@@ -437,7 +437,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.DashboardFailure, exitCode);
+        Assert.Equal(CliExitCodes.DashboardFailure, exitCode);
         var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
         Assert.Equal(string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardConnectionFailed, "http://localhost:18888"), errorMessage);
     }
@@ -467,7 +467,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.DashboardFailure, exitCode);
+        Assert.Equal(CliExitCodes.DashboardFailure, exitCode);
         var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
         Assert.Equal(string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardConnectionFailed, "http://localhost:18888"), errorMessage);
     }
@@ -507,7 +507,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.DashboardFailure, exitCode);
+        Assert.Equal(CliExitCodes.DashboardFailure, exitCode);
         var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
         Assert.Equal(string.Format(CultureInfo.CurrentCulture, TelemetryCommandStrings.DashboardApiNotEnabled, "http://localhost:18888"), errorMessage);
     }
@@ -563,7 +563,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
         // Verify the request went to the base URL (without /login path)
         Assert.NotNull(capturedBaseUrl);
         Assert.DoesNotContain("/login", capturedBaseUrl);
@@ -645,7 +645,7 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.Success, exitCode);
+        Assert.Equal(CliExitCodes.Success, exitCode);
 
         var jsonLine = outputWriter.Logs.Single(l => l.TrimStart().StartsWith('['));
         var formattedJson = TelemetryTestHelper.FormatJson(jsonLine);
@@ -666,5 +666,53 @@ public class TelemetryLogsCommandTests(ITestOutputHelper outputHelper)
             """;
 
         Assert.Equal(expected, formattedJson, ignoreLineEndingDifferences: true);
+    }
+
+    [Fact]
+    public async Task TelemetryLogsCommand_WithSearchOption_PassesSearchToUrl()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputWriter = new TestOutputTextWriter(outputHelper);
+        string? capturedUrl = null;
+
+        var handler = new MockHttpMessageHandler(request =>
+        {
+            var url = request.RequestUri!.ToString();
+            if (url.Contains("/api/telemetry/resources"))
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("[]", System.Text.Encoding.UTF8, "application/json")
+                };
+            }
+            if (url.Contains("/api/telemetry/logs"))
+            {
+                capturedUrl = url;
+                var json = BuildLogsJson(("redis", null, 9, "Information", "Connection timeout", s_testTime));
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json")
+                };
+            }
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        });
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = outputWriter;
+            options.DisableAnsi = true;
+        });
+        services.AddSingleton(handler);
+        services.Replace(ServiceDescriptor.Singleton<IHttpClientFactory>(new MockHttpClientFactory(handler)));
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("otel logs --dashboard-url http://localhost:18888 --search timeout");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(capturedUrl);
+        Assert.Contains("search=timeout", capturedUrl);
     }
 }

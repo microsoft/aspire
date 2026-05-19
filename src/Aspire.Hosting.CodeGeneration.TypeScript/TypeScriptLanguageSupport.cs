@@ -29,27 +29,21 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
     private const string AppHostFileName = "apphost.ts";
     private const string PackageJsonFileName = "package.json";
     private const string AppHostTsConfigFileName = "tsconfig.apphost.json";
+    private const string EslintConfigFileName = "eslint.config.mjs";
 
     /// <summary>
-    /// The default content for tsconfig.apphost.json, shared between scaffolding and migration.
+    /// Cached content of <c>tsconfig.apphost.json</c>, sourced from the embedded resource
+    /// of the same name so the scaffold and the lint regression tests share a single
+    /// source of truth.
     /// </summary>
-    private const string AppHostTsConfigContent = """
-        {
-          "compilerOptions": {
-            "target": "ES2022",
-            "module": "NodeNext",
-            "moduleResolution": "NodeNext",
-            "esModuleInterop": true,
-            "forceConsistentCasingInFileNames": true,
-            "strict": true,
-            "skipLibCheck": true,
-            "outDir": "./dist/apphost",
-            "rootDir": "."
-          },
-          "include": ["apphost.ts", ".modules/**/*.ts"],
-          "exclude": ["node_modules"]
-        }
-        """;
+    private static readonly string s_appHostTsConfigContent = EmbeddedResources.Read(AppHostTsConfigFileName);
+
+    /// <summary>
+    /// Cached content of <c>eslint.config.mjs</c>, sourced from the embedded resource of
+    /// the same name. The scaffolded file enables <c>@typescript-eslint/no-floating-promises</c>
+    /// against <c>apphost.ts</c> so unawaited AppHost promises surface as lint errors.
+    /// </summary>
+    private static readonly string s_eslintConfigContent = EmbeddedResources.Read(EslintConfigFileName);
 
     private static readonly JsonSerializerOptions s_jsonSerializerOptions = new()
     {
@@ -91,28 +85,10 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
         files[PackageJsonFileName] = CreatePackageJson(request);
 
         // Create eslint.config.mjs for catching unawaited promises in apphost.ts
-        files["eslint.config.mjs"] = """
-            // @ts-check
-
-            import { defineConfig } from 'eslint/config';
-            import tseslint from 'typescript-eslint';
-
-            export default defineConfig({
-              files: ['apphost.ts'],
-              extends: [tseslint.configs.base],
-              languageOptions: {
-                parserOptions: {
-                  projectService: true,
-                },
-              },
-              rules: {
-                '@typescript-eslint/no-floating-promises': ['error', { checkThenables: true }],
-              },
-            });
-            """;
+        files[EslintConfigFileName] = s_eslintConfigContent;
 
         // Create an apphost-specific tsconfig so existing brownfield TypeScript settings are preserved.
-        files[AppHostTsConfigFileName] = AppHostTsConfigContent;
+        files[AppHostTsConfigFileName] = s_appHostTsConfigContent;
 
         // Create apphost.run.json with random ports
         // Use PortSeed if provided (for testing), otherwise use random
@@ -120,19 +96,16 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
             ? new Random(request.PortSeed.Value)
             : Random.Shared;
 
-        var httpsPort = random.Next(10000, 65000);
-        var httpPort = random.Next(10000, 65000);
-        var otlpPort = random.Next(10000, 65000);
-        var resourceServicePort = random.Next(10000, 65000);
+        var ports = AppHostProfilePortGenerator.Generate(random);
 
         files["apphost.run.json"] = $$"""
             {
               "profiles": {
                 "https": {
-                  "applicationUrl": "https://localhost:{{httpsPort}};http://localhost:{{httpPort}}",
+                  "applicationUrl": "https://localhost:{{ports.DashboardHttpsPort}};http://localhost:{{ports.DashboardHttpPort}}",
                   "environmentVariables": {
-                    "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:{{otlpPort}}",
-                    "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:{{resourceServicePort}}"
+                    "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "https://localhost:{{ports.OtlpHttpsPort}}",
+                    "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "https://localhost:{{ports.ResourceServiceHttpsPort}}"
                   }
                 }
               }
@@ -151,7 +124,8 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
         var packageJson = new JsonObject();
         var packageJsonPath = Path.Combine(request.TargetPath, PackageJsonFileName);
 
-        if (!File.Exists(packageJsonPath))
+        var isGreenfield = !File.Exists(packageJsonPath);
+        if (isGreenfield)
         {
             // Greenfield: include root metadata so the scaffold output is a complete package.json.
             var packageName = request.ProjectName?.ToLowerInvariant() ?? "aspire-apphost";
@@ -173,6 +147,16 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
         scripts["aspire:start"] = "aspire run";
         scripts["aspire:build"] = $"tsc -p {AppHostTsConfigFileName}";
         scripts["aspire:dev"] = $"tsc --watch -p {AppHostTsConfigFileName}";
+
+        if (isGreenfield)
+        {
+            scripts["lint"] = "npm run aspire:lint";
+            scripts["predev"] = "npm run aspire:lint";
+            scripts["dev"] = "npm run aspire:start";
+            scripts["prebuild"] = "npm run aspire:lint";
+            scripts["build"] = "npm run aspire:build";
+            scripts["watch"] = "npm run aspire:dev";
+        }
 
         EnsureDependency(packageJson, "dependencies", "vscode-jsonrpc", "^8.2.0");
         EnsureDependency(packageJson, "devDependencies", "@types/node", "^22.0.0");
@@ -257,6 +241,14 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
                 Command = "npm",
                 Args = ["install"]
             },
+            PreExecute =
+            [
+                new CommandSpec
+                {
+                    Command = "npx",
+                    Args = ["--no-install", "tsc", "--noEmit", "-p", AppHostTsConfigFileName]
+                }
+            ],
             Execute = new CommandSpec
             {
                 Command = "npx",
@@ -273,12 +265,12 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
                     "--ext", "ts",
                     "--ignore", "node_modules/",
                     "--ignore", ".modules/",
-                    "--exec", $"npx --no-install tsx --tsconfig {AppHostTsConfigFileName} {{appHostFile}}"
+                    "--exec", $"npx --no-install tsc --noEmit -p {AppHostTsConfigFileName} && npx --no-install tsx --tsconfig {AppHostTsConfigFileName} \"{{appHostFile}}\""
                 ]
             },
             MigrationFiles = new Dictionary<string, string>
             {
-                [AppHostTsConfigFileName] = AppHostTsConfigContent
+                [AppHostTsConfigFileName] = s_appHostTsConfigContent
             }
         };
     }

@@ -37,6 +37,20 @@
         "The aspire docs search or get command was called for custom resource commands.",
         "The agent chains a call to the target resource in apphost.cs with `WithCommand`, providing the necessary configuration for the command."
       ]
+    },
+    {
+      "id": 4,
+      "prompt": "My Aspire AppHost is already running and I changed code in the api resource. Should I restart the whole AppHost, or can you use hot reload/watch somehow?",
+      "expected_output": "The agent should keep the AppHost running for a resource-specific code change, avoid an unnecessary AppHost restart, and choose a resource-specific workflow such as runtime hot reload/watch/HMR or `aspire resource api rebuild`/stop/start when available.",
+      "files": [
+        "evals/files/csharp-apphost-command"
+      ],
+      "expectations": [
+        "The agent should not rerun `aspire start` unless it identifies an AppHost model or AppHost code change.",
+        "The agent should use the command shape `aspire resource <resource-name> <command>` with examples such as `aspire resource api rebuild`, `aspire resource api stop`, or `aspire resource api start` as alternatives rather than a single sequence.",
+        "The agent should mention `features.defaultWatchEnabled` only as Aspire default watch behavior, not as a replacement for resource-specific runtime hot reload/watch/HMR or IDE-managed hot reload.",
+        "For frontend resources, the agent should recognize that frameworks such as Vite, Next.js, and similar client-side JavaScript stacks may have HMR enabled by default and should not force a restart when that dev-server workflow is already handling the change."
+      ]
     }
   ]
 }

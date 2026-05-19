@@ -11,7 +11,9 @@ namespace Aspire.Acquisition.Tests.Scripts;
 /// </summary>
 public static class FakeArchiveHelper
 {
-    public static async Task<FakeArchive> CreateFakeArchiveAsync(string outputDir, string platform = "linux-x64")
+    public static async Task<FakeArchive> CreateFakeArchiveAsync(
+        string outputDir,
+        string platform = "linux-x64")
     {
         Directory.CreateDirectory(outputDir);
 
@@ -75,9 +77,26 @@ public static class FakeArchiveHelper
 
     private static async Task CreateTarGzAsync(string contentDir, string archivePath)
     {
+        // Use TarWriter manually with AttributesToSkip = 0 instead of
+        // TarFile.CreateFromDirectoryAsync, because the convenience API uses
+        // default EnumerationOptions which skip files .NET considers hidden.
+        // On Unix that includes dotfiles, so any dotfile entry under contentDir
+        // would silently drop out of the archive.
         await using var fileStream = File.Create(archivePath);
         await using var gzipStream = new System.IO.Compression.GZipStream(fileStream, System.IO.Compression.CompressionLevel.Fastest);
-        await System.Formats.Tar.TarFile.CreateFromDirectoryAsync(contentDir, gzipStream, includeBaseDirectory: false);
+        await using var tarWriter = new System.Formats.Tar.TarWriter(gzipStream, System.Formats.Tar.TarEntryFormat.Pax, leaveOpen: true);
+
+        var options = new EnumerationOptions
+        {
+            AttributesToSkip = 0,
+            RecurseSubdirectories = true,
+        };
+
+        foreach (var fullPath in Directory.EnumerateFiles(contentDir, "*", options))
+        {
+            var relativePath = Path.GetRelativePath(contentDir, fullPath).Replace(Path.DirectorySeparatorChar, '/');
+            await tarWriter.WriteEntryAsync(fullPath, entryName: relativePath);
+        }
     }
 
     private static async Task<string> ComputeSha512Async(string filePath)

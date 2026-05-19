@@ -154,4 +154,19 @@
   <data name="NonInteractiveTemplateRequired" xml:space="preserve">
     <value>A template must be specified when running in non-interactive mode. Use 'aspire new &lt;template&gt;'.</value>
   </data>
+  <data name="OutputDirectoryNotEmptyNonInteractive" xml:space="preserve">
+    <value>The output directory '{0}' already exists and is not empty. Specify --output with a different location.</value>
+  </data>
+  <data name="OutputDirectoryNotEmptyInteractive" xml:space="preserve">
+    <value>The output directory '{0}' already exists and is not empty. Specify a different location.</value>
+  </data>
+  <data name="OutputPathContainsInvalidCharacters" xml:space="preserve">
+    <value>The output path '{0}' contains invalid characters.</value>
+  </data>
+  <data name="NoPackageChannelsAvailable" xml:space="preserve">
+    <value>No package channels are available.</value>
+  </data>
+  <data name="NoChannelFoundMatching" xml:space="preserve">
+    <value>No channel found matching '{0}'. Valid options are: {1}.</value>
+  </data>
 </root>

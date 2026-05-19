@@ -430,9 +430,9 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task GetCapabilitiesAsyncReturnsV1AndV2()
+    public async Task GetCapabilitiesAsyncReturnsCurrentCapabilities()
     {
-        // This test verifies that GetCapabilitiesAsync returns both v1 and v2 capabilities
+        // This test verifies that GetCapabilitiesAsync returns the current capabilities.
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(outputHelper);
 
         using var app = builder.Build();
@@ -458,11 +458,12 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
             new object?[] { null }
         ).DefaultTimeout();
 
-        // Verify capabilities include both v1 and v2
+        // Verify the current capability set.
         Assert.NotNull(response);
         Assert.NotNull(response.Capabilities);
         Assert.Contains(AuxiliaryBackchannelCapabilities.V1, response.Capabilities);
         Assert.Contains(AuxiliaryBackchannelCapabilities.V2, response.Capabilities);
+        Assert.Contains(AuxiliaryBackchannelCapabilities.V3, response.Capabilities);
 
         await app.StopAsync().DefaultTimeout();
     }

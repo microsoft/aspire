@@ -56,7 +56,7 @@ internal sealed class ApiGetCommand : BaseCommand
 
     protected override bool UpdateNotificationsEnabled => false;
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
@@ -69,18 +69,17 @@ internal sealed class ApiGetCommand : BaseCommand
 
         if (item is null)
         {
-            InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, ApiCommandStrings.ApiNotFound, id));
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, string.Format(CultureInfo.CurrentCulture, ApiCommandStrings.ApiNotFound, id));
         }
 
         if (format is OutputFormat.Json)
         {
             var json = JsonSerializer.Serialize(item, JsonSourceGenerationContext.RelaxedEscaping.ApiContent);
             InteractionService.DisplayRawText(json, ConsoleOutput.Standard);
-            return ExitCodeConstants.Success;
+            return CommandResult.Success();
         }
 
         InteractionService.DisplayMarkdown(item.Content);
-        return ExitCodeConstants.Success;
+        return CommandResult.Success();
     }
 }

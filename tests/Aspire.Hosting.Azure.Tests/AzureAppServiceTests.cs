@@ -411,6 +411,26 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task ValidateAzureAppService_DoesNotThrowInRunMode()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/16940.
+        // In run mode, AddAzureAppServiceEnvironment does not add the env resource to the model.
+        // If a compute resource still ends up with an AzureAppServiceWebsiteCustomizationAnnotation
+        // (e.g. via WithAnnotation), the validation step should not throw at 'aspire run' time —
+        // PublishAs* customizations are only meaningful at publish/deploy time.
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        builder.AddAzureAppServiceEnvironment("env");
+
+        builder.AddContainer("api", "myimage")
+            .WithAnnotation(new AzureAppServiceWebsiteCustomizationAnnotation((_, _) => { }));
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+    }
+
+    [Fact]
     [ActiveIssue("https://github.com/microsoft/aspire/issues/11818", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public async Task MultipleAzureAppServiceEnvironmentsSupported()
     {
@@ -802,6 +822,34 @@ public class AzureAppServiceTests(ITestOutputHelper testOutputHelper)
         var output = Assert.IsType<BicepOutputReference>(provider);
         Assert.Equal(env.Resource, output.Resource);
         Assert.Equal("webSiteSuffix", output.Name);
+    }
+
+    [Theory]
+    [InlineData(EndpointProperty.Url, "https://project1-website123.azurewebsites.net")]
+    [InlineData(EndpointProperty.Host, "project1-website123.azurewebsites.net")]
+    [InlineData(EndpointProperty.IPV4Host, "project1-website123.azurewebsites.net")]
+    [InlineData(EndpointProperty.Port, "443")]
+    [InlineData(EndpointProperty.TargetPort, "5000")]
+    [InlineData(EndpointProperty.Scheme, "https")]
+    [InlineData(EndpointProperty.HostAndPort, "project1-website123.azurewebsites.net")]
+    [InlineData(EndpointProperty.TlsEnabled, "True")]
+    public async Task GetEndpointPropertyExpression_ReturnsAppServiceEndpointPropertyExpression(EndpointProperty property, string expected)
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var env = builder.AddAzureAppServiceEnvironment("env");
+        env.Resource.Outputs["webSiteSuffix"] = "website123";
+        env.Resource.ProvisioningTaskCompletionSource?.TrySetResult();
+
+        var project = builder
+            .AddProject<Project>("project1", launchProfileName: null)
+            .WithEndpoint(port: 8080, targetPort: 5000, scheme: "http", name: "http", isExternal: true);
+
+#pragma warning disable ASPIRECOMPUTE002
+        var expression = env.Resource.GetEndpointPropertyExpression(project.GetEndpoint("http").Property(property));
+#pragma warning restore ASPIRECOMPUTE002
+
+        Assert.Equal(expected, await expression.GetValueAsync(default));
     }
 
     [Fact]

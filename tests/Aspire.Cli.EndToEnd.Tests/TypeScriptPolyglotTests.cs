@@ -33,6 +33,11 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         var workspace = TemporaryWorkspace.Create(output);
         var localChannel = CliE2ETestHelpers.PrepareLocalChannel(repoRoot, strategy,
             ["Aspire.Hosting.CodeGeneration.TypeScript.", "Aspire.Hosting.JavaScript."]);
+
+        // LocalHive strategy only: PrepareLocalChannel returned a real channel,
+        // so pass --channel local explicitly to aspire init. Other strategies
+        // (script-installed CLI, pre-existing CLI) return null and rely on the
+        // CLI's baked channel + ambient NuGet feeds.
         var channelArgument = localChannel is not null ? " --channel local" : string.Empty;
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, variant: CliE2ETestHelpers.DockerfileVariant.Polyglot, mountDockerSocket: true, workspace: workspace);
@@ -55,6 +60,11 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         await auto.DeclineAgentInitPromptAsync(counter);
 
         TypeScriptAppHostToolchainTestHelpers.SetPackageManager(workspace.WorkspaceRoot.FullName, toolchain, cleanInstallState: true);
+
+        // LocalHive strategy only: PrepareLocalChannel returned a real channel,
+        // so write the per-project aspire.config.json to point at the in-repo
+        // nupkg hive. Other strategies (script-installed CLI, pre-existing CLI)
+        // return null and rely on the CLI's baked channel + ambient NuGet feeds.
         if (localChannel is not null)
         {
             CliE2ETestHelpers.WriteLocalChannelSettings(workspace.WorkspaceRoot.FullName, localChannel.SdkVersion);
@@ -130,6 +140,11 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         var workspace = TemporaryWorkspace.Create(output);
         var localChannel = CliE2ETestHelpers.PrepareLocalChannel(repoRoot, strategy,
             ["Aspire.Hosting.CodeGeneration.TypeScript.", "Aspire.Hosting.JavaScript."]);
+
+        // LocalHive strategy only: PrepareLocalChannel returned a real channel,
+        // so pass --channel local explicitly to aspire init. Other strategies
+        // (script-installed CLI, pre-existing CLI) return null and rely on the
+        // CLI's baked channel + ambient NuGet feeds.
         var channelArgument = localChannel is not null ? " --channel local" : string.Empty;
 
         using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(repoRoot, strategy, output, variant: CliE2ETestHelpers.DockerfileVariant.DotNet, mountDockerSocket: true, workspace: workspace);
@@ -167,6 +182,10 @@ public sealed class TypeScriptPolyglotTests(ITestOutputHelper output)
         originalPreviewScript = scripts["preview"]?.GetValue<string>();
         originalTsConfig = File.ReadAllText(Path.Combine(projectRoot, "tsconfig.json"));
 
+        // LocalHive strategy only: PrepareLocalChannel returned a real channel,
+        // so write the per-project aspire.config.json to point at the in-repo
+        // nupkg hive. Other strategies (script-installed CLI, pre-existing CLI)
+        // return null and rely on the CLI's baked channel + ambient NuGet feeds.
         if (localChannel is not null)
         {
             CliE2ETestHelpers.WriteLocalChannelSettings(projectRoot, localChannel.SdkVersion);

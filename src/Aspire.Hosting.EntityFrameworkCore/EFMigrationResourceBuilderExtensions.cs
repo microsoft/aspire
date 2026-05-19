@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREPIPELINES001 // PipelineStepAnnotation is experimental; used to wire migration-bundle pipeline steps.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.EntityFrameworkCore;
 using Aspire.Hosting.Pipelines;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -225,7 +226,7 @@ public static class EFMigrationResourceBuilderExtensions
     /// remains the original project.
     /// </para>
     /// </remarks>
-    [AspireExport("withMigrationsProjectFromPath", MethodName = "withMigrationsProject", Description = "Configures a separate project containing the migrations using a path")]
+    [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withMigrationsProject dispatcher export.")]
     public static IResourceBuilder<EFMigrationResource> WithMigrationsProject(this IResourceBuilder<EFMigrationResource> builder, string projectPath)
     {
         ArgumentException.ThrowIfNullOrEmpty(projectPath);
@@ -254,12 +255,31 @@ public static class EFMigrationResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport]
+    [AspireExportIgnore(Reason = "Uses IProjectMetadata generic constraint which is a .NET-specific type. Polyglot app hosts use the internal withMigrationsProject dispatcher export.")]
     public static IResourceBuilder<EFMigrationResource> WithMigrationsProject<TProject>(this IResourceBuilder<EFMigrationResource> builder)
         where TProject : IProjectMetadata, new()
     {
         builder.Resource.MigrationsProjectPath = new TProject().ProjectPath;
         return builder;
+    }
+
+    /// <summary>
+    /// Configures a separate project containing migrations for polyglot app hosts.
+    /// </summary>
+    [AspireExport("withMigrationsProject", Description = "Configures a separate project containing the migrations")]
+    internal static IResourceBuilder<EFMigrationResource> WithMigrationsProjectForPolyglot(
+        this IResourceBuilder<EFMigrationResource> builder,
+        [AspireUnion(typeof(string), typeof(IResourceBuilder<ProjectResource>))] object? migrationsProject = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return migrationsProject switch
+        {
+            null => builder,
+            string projectPath => builder.WithMigrationsProject(projectPath),
+            IResourceBuilder<ProjectResource> projectBuilder => builder.WithMigrationsProject(projectBuilder.Resource.GetProjectMetadata().ProjectPath),
+            _ => throw new ArgumentException("Migrations project must be omitted, a project path string, or a project resource builder.", nameof(migrationsProject))
+        };
     }
 
     // Base image repositories used when publishing the migration bundle as a container. The

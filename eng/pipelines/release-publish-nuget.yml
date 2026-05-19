@@ -5,6 +5,11 @@
 # 2. Publishes packages to NuGet.org
 # 3. Promotes the build to the Aspire GA channel via darc
 # 4. Submits WinGet manifests and Homebrew cask PRs
+# 5. Dispatches the release-github-tasks GitHub Actions workflow as the
+#    aspire-repo-bot GitHub App (tag, GitHub Release, merge-back PR,
+#    baseline PR) and waits for it to complete
+# 6. Uploads aspire-cli-* archives from the source build's BlobArtifacts
+#    onto the GitHub Release as the aspire-repo-bot
 #
 # For full documentation, see: docs/release-process.md
 
@@ -12,36 +17,76 @@ trigger: none  # Manual trigger only
 pr: none       # Not triggered by PRs
 
 parameters:
-  - name: GaChannelName
-    displayName: 'GA Channel Name'
+  # ===== COMMON PARAMETERS =====
+  # The two most common knobs for a release run. Most other parameters below
+  # are flagged [Advanced] and should be left at their defaults unless you
+  # are deliberately re-running after a partial failure.
+
+  - name: ReleaseVersion
+    displayName: 'Release Version (leave as "auto" to derive from source build tag, or set explicitly e.g. 13.3.4)'
     type: string
-    default: 'Aspire 9.x GA'
+    default: 'auto'
+
+  - name: IsPrerelease
+    displayName: 'Is this a preview / prerelease?'
+    type: boolean
+    default: false
 
   - name: DryRun
     displayName: 'Dry Run (skip actual publish - for testing)'
     type: boolean
     default: false
 
-  # Idempotency flags for re-running after partial failures
+  - name: GaChannelName
+    displayName: '[Advanced] GA Channel Name (darc promotion target; do NOT change even for Aspire 10.x+ — the channel is named "Aspire 9.x GA" historically)'
+    type: string
+    default: 'Aspire 9.x GA'
+
+  # ===== ADVANCED PARAMETERS =====
+  # Below this point: leave defaults unless you know exactly what you are
+  # changing. The Skip* booleans are for re-running after a partial failure;
+  # GitHubTasksWorkflowRef is for testing pipeline changes on a topic branch.
+
   - name: SkipNuGetPublish
-    displayName: 'Skip NuGet Publishing (set true if already completed)'
+    displayName: '[Advanced] Skip NuGet Publishing (re-run after success)'
     type: boolean
     default: false
 
   - name: SkipChannelPromotion
-    displayName: 'Skip Channel Promotion (set true if already completed)'
+    displayName: '[Advanced] Skip Channel Promotion (re-run after success)'
     type: boolean
     default: false
 
   - name: SkipWinGetPublish
-    displayName: 'Skip WinGet Publishing (set true if already completed)'
+    displayName: '[Advanced] Skip WinGet Publishing (re-run after success)'
+    type: boolean
+    default: true
+
+  - name: SkipHomebrewPublish
+    displayName: '[Advanced] Skip Homebrew Publishing (re-run after success)'
+    type: boolean
+    default: true
+
+  - name: SkipGitHubTasks
+    displayName: '[Advanced] Skip GitHub Tasks dispatch (re-run after success)'
     type: boolean
     default: false
 
-  - name: SkipHomebrewPublish
-    displayName: 'Skip Homebrew Publishing (set true if already completed)'
+  - name: SkipReleaseAssets
+    displayName: '[Advanced] Skip CLI asset upload to GitHub Release (re-run after success)'
     type: boolean
     default: false
+
+  # Ref used when invoking `workflow_dispatch` against release-github-tasks.yml.
+  # GitHub loads the workflow file *from this ref*, so it controls which version
+  # of the workflow runs. The branch/commit being released is passed separately
+  # via the `release_branch` and `commit_sha` workflow inputs, so this ref only
+  # affects the workflow source — not what gets tagged or released. Defaults to
+  # 'main' so workflow fixes don't require backporting to every release branch.
+  - name: GitHubTasksWorkflowRef
+    displayName: '[Advanced] Ref to dispatch release-github-tasks.yml from (workflow source only)'
+    type: string
+    default: 'main'
 
 variables:
   - template: /eng/pipelines/common-variables.yml@self
@@ -105,14 +150,16 @@ extends:
                   displayName: 'Publish PackageArtifacts with SBOM'
                   targetPath: '$(Pipeline.Workspace)/packages/PackageArtifacts'
                   artifactName: 'PackageArtifacts'
-                - output: pipelineArtifact
-                  displayName: 'Publish WinGet Manifests'
-                  targetPath: '$(Pipeline.Workspace)/installers/winget-manifests-stable'
-                  artifactName: 'winget-manifests-stable'
-                - output: pipelineArtifact
-                  displayName: 'Publish Homebrew Cask'
-                  targetPath: '$(Pipeline.Workspace)/installers/homebrew-cask-stable'
-                  artifactName: 'homebrew-cask-stable'
+                - ${{ if eq(parameters.SkipWinGetPublish, false) }}:
+                  - output: pipelineArtifact
+                    displayName: 'Publish WinGet Manifests'
+                    targetPath: '$(Pipeline.Workspace)/installers/winget-manifests-stable'
+                    artifactName: 'winget-manifests-stable'
+                - ${{ if eq(parameters.SkipHomebrewPublish, false) }}:
+                  - output: pipelineArtifact
+                    displayName: 'Publish Homebrew Cask'
+                    targetPath: '$(Pipeline.Workspace)/installers/homebrew-cask-stable'
+                    artifactName: 'homebrew-cask-stable'
             steps:
               - checkout: none
 
@@ -125,6 +172,99 @@ extends:
                   Write-Host "==============================="
                 displayName: 'Log Stage Info'
 
+              # Auto-derive ReleaseVersion from the source build's `release-version - *`
+              # tag (set by eng/pipelines/azure-pipelines.yml after the version is
+              # computed from the Aspire.Hosting.AppHost nupkg). This means operators
+              # don't have to retype the version when queuing a release — the tag
+              # is also visible in the AzDO source-build picker so it can be verified
+              # at queue time.
+              #
+              # Override semantics: if the operator passes a non-empty
+              # parameters.ReleaseVersion, we honor it but log a loud warning when
+              # it disagrees with the build tag. The override is the documented
+              # escape hatch for re-shipping under a corrected tag.
+              #
+              # Failure semantics: hard-fail when no override is supplied AND the
+              # source build has no `release-version - *` tag (e.g., a pre-tagging
+              # build was selected). The fix is either to backport the tag-add
+              # change to the relevant release branch and re-run the source build,
+              # or pass an explicit -ReleaseVersion override.
+              - powershell: |
+                  $buildId = "$(resources.pipeline.aspire-build.runID)"
+                  $org     = "$(System.CollectionUri)"
+                  $project = "internal"
+                  $override = "${{ parameters.ReleaseVersion }}"
+
+                  # Sentinel: AzDO's UI rejects empty-string param values even
+                  # when default is '', so we use the literal 'auto' as a
+                  # stand-in for "derive from source build tag". Match
+                  # case-insensitively with whitespace trimming so operators
+                  # who paste " Auto " still hit the sentinel branch.
+                  if ($override.Trim() -match '^(?i)auto$') {
+                    $override = ''
+                  }
+
+                  $uri = "${org}${project}/_apis/build/builds/${buildId}/tags?api-version=7.0"
+                  Write-Host "Fetching tags for source build $buildId from $uri"
+
+                  try {
+                    $response = Invoke-RestMethod -Uri $uri -Headers @{
+                      Authorization = "Bearer $(System.AccessToken)"
+                    } -Method Get
+                  } catch {
+                    Write-Error "Failed to fetch tags from source build $buildId : $_"
+                    exit 1
+                  }
+
+                  Write-Host "Build tags: $($response.value -join ', ')"
+
+                  # Tags look like 'release-version - 13.3.3'. Filter and parse.
+                  # The ' - ' separator (rather than ':') matches the 'BAR ID - <id>'
+                  # tag style and avoids AzDO's 1ES PT request validator rejecting ':'
+                  # in tag names (it becomes part of the addbuildtag REST URL path).
+                  # NB: variable named $tagMatches (not $matches) to avoid shadowing
+                  # PowerShell's automatic $Matches hashtable.
+                  $tagMatches = @($response.value | Where-Object { $_ -match '^release-version - (.+)$' })
+
+                  $derived = $null
+                  if ($tagMatches.Count -eq 0) {
+                    if ([string]::IsNullOrWhiteSpace($override)) {
+                      $msg = "Source build $buildId has no 'release-version - *' tag and no -ReleaseVersion was supplied. " +
+                             "Either re-queue with an explicit -ReleaseVersion <X.Y.Z> override, or run a newer source " +
+                             "build that includes the tag-emitting step from eng/pipelines/azure-pipelines.yml."
+                      Write-Error $msg
+                      exit 1
+                    }
+                    Write-Host "##vso[task.logissue type=warning]No 'release-version - *' tag on source build $buildId; using operator-supplied -ReleaseVersion '$override'."
+                  } elseif ($tagMatches.Count -gt 1) {
+                    Write-Error "Source build $buildId has multiple 'release-version - *' tags ($($tagMatches -join ', ')). Refusing to guess; pass -ReleaseVersion explicitly."
+                    exit 1
+                  } else {
+                    $derived = ($tagMatches[0] -replace '^release-version - ', '').Trim()
+                    if ($derived -notmatch '^\d+\.\d+\.\d+(-[A-Za-z0-9.-]+)?$') {
+                      Write-Error "Derived release version '$derived' does not look like valid semver (X.Y.Z[-suffix])."
+                      exit 1
+                    }
+                    Write-Host "Derived release version from tag: $derived"
+                  }
+
+                  # Resolve the effective value: operator override wins, derived is fallback.
+                  if (-not [string]::IsNullOrWhiteSpace($override)) {
+                    if ($derived -and $override -ne $derived) {
+                      Write-Host "##vso[task.logissue type=warning]Operator-supplied -ReleaseVersion '$override' does NOT match source-build tag 'release-version - $derived'. Proceeding with operator override."
+                    }
+                    $effective = $override.Trim()
+                  } else {
+                    $effective = $derived
+                  }
+
+                  Write-Host "✓ ReleaseVersionEffective: $effective"
+                  Write-Host "##vso[task.setvariable variable=releaseVersionEffective;isOutput=true]$effective"
+                name: deriveReleaseVersion
+                displayName: 'Derive ReleaseVersion from source build tag'
+                env:
+                  SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+
               # Download artifacts from the source build pipeline
               - ${{ if not(and(eq(parameters.SkipNuGetPublish, true), eq(parameters.SkipChannelPromotion, true))) }}:
                 - download: aspire-build
@@ -132,13 +272,15 @@ extends:
                   artifact: PackageArtifacts
                   patterns: '**/*.nupkg'
 
-              - download: aspire-build
-                displayName: 'Download WinGet Manifests from Source Build'
-                artifact: winget-manifests-stable
+              - ${{ if eq(parameters.SkipWinGetPublish, false) }}:
+                - download: aspire-build
+                  displayName: 'Download WinGet Manifests from Source Build'
+                  artifact: winget-manifests-stable
 
-              - download: aspire-build
-                displayName: 'Download Homebrew Cask from Source Build'
-                artifact: homebrew-cask-stable
+              - ${{ if eq(parameters.SkipHomebrewPublish, false) }}:
+                - download: aspire-build
+                  displayName: 'Download Homebrew Cask from Source Build'
+                  artifact: homebrew-cask-stable
 
               # Move artifacts to expected location for output
               - ${{ if not(and(eq(parameters.SkipNuGetPublish, true), eq(parameters.SkipChannelPromotion, true))) }}:
@@ -175,7 +317,10 @@ extends:
                     Write-Host "Installer-only run detected; created empty PackageArtifacts placeholder."
                   displayName: 'Prepare Empty PackageArtifacts Placeholder'
 
-              # Copy installer artifacts to expected locations for output
+              # Copy installer artifacts to expected locations for output.
+              # Entries whose source directory doesn't exist are silently skipped, which
+              # handles re-runs where SkipWinGetPublish/SkipHomebrewPublish caused the
+              # corresponding download step to be omitted.
               - powershell: |
                   $artifacts = @(
                     @{ Name = 'winget-manifests-stable'; Source = '$(Pipeline.Workspace)/aspire-build/winget-manifests-stable'; Target = '$(Pipeline.Workspace)/installers/winget-manifests-stable' },
@@ -183,6 +328,11 @@ extends:
                   )
 
                   foreach ($artifact in $artifacts) {
+                    if (!(Test-Path $artifact.Source)) {
+                      Write-Host "Skipping $($artifact.Name): source path '$($artifact.Source)' not present (download was skipped)."
+                      continue
+                    }
+
                     Write-Host "Copying $($artifact.Name) from $($artifact.Source) to $($artifact.Target)"
 
                     if (!(Test-Path $artifact.Target)) {
@@ -319,29 +469,40 @@ extends:
                   displayName: 'List Packages'
 
                 # ===== VERIFY SIGNATURES =====
-                - powershell: |
+                # Verify packages in parallel via ForEach-Object -Parallel.
+                # Sequential verification was the single biggest time sink in
+                # this stage (~1.5s per package * ~80 packages). Throttle to
+                # 8 to avoid saturating the runner's CPU / network for the
+                # cert-revocation checks `dotnet nuget verify` performs. The
+                # runner ships PowerShell 7+, so -Parallel is available.
+                - pwsh: |
                     $packagesPath = "$(Pipeline.Workspace)/packages/PackageArtifacts"
-                    Write-Host "=== Verifying Package Signatures ==="
+                    Write-Host "=== Verifying Package Signatures (parallel) ==="
 
                     $packages = Get-ChildItem -Path $packagesPath -Filter "*.nupkg" -Recurse
-                    $failedVerification = @()
+                    Write-Host "Found $($packages.Count) packages to verify"
 
-                    foreach ($package in $packages) {
-                      Write-Host "Verifying: $($package.Name)"
+                    # ConcurrentBag is thread-safe; we collect failed package
+                    # names across runspaces without locking.
+                    $failedVerification = [System.Collections.Concurrent.ConcurrentBag[string]]::new()
 
-                      # Use $ErrorActionPreference to prevent PowerShell from treating stderr as terminating error
-                      $originalErrorActionPreference = $ErrorActionPreference
+                    $packages | ForEach-Object -ThrottleLimit 8 -Parallel {
+                      $package = $_
+                      $bag = $using:failedVerification
+
+                      # Prevent PowerShell from treating stderr writes from
+                      # the verify command as terminating errors inside the
+                      # parallel runspace.
                       $ErrorActionPreference = 'Continue'
                       $result = dotnet nuget verify $package.FullName 2>&1
                       $verifyExitCode = $LASTEXITCODE
-                      $ErrorActionPreference = $originalErrorActionPreference
 
                       if ($verifyExitCode -ne 0) {
-                        Write-Host "  ❌ Signature verification FAILED"
+                        Write-Host "  ❌ $($package.Name): signature verification FAILED"
                         Write-Host $result
-                        $failedVerification += $package.Name
+                        $bag.Add($package.Name)
                       } else {
-                        Write-Host "  ✓ Signature valid"
+                        Write-Host "  ✓ $($package.Name)"
                       }
                     }
 
@@ -495,6 +656,22 @@ extends:
                   }
                   Write-Host "║ WinGet:         (runs in parallel after this job)"
                   Write-Host "║ Homebrew:       (runs in parallel after this job)"
+                  Write-Host "║ GitHub Tasks:   ${{ parameters.SkipGitHubTasks }}" -NoNewline
+                  if ("${{ parameters.SkipGitHubTasks }}" -eq "true") {
+                    Write-Host " (SKIPPED)"
+                  } elseif ("${{ parameters.DryRun }}" -eq "true") {
+                    Write-Host " (dispatched after Release stage; dry_run=true forwarded)"
+                  } else {
+                    Write-Host " (dispatched after Release stage)"
+                  }
+                  Write-Host "║ Release Assets: ${{ parameters.SkipReleaseAssets }}" -NoNewline
+                  if ("${{ parameters.SkipReleaseAssets }}" -eq "true") {
+                    Write-Host " (SKIPPED)"
+                  } elseif ("${{ parameters.DryRun }}" -eq "true") {
+                    Write-Host " (verify only; no upload in dry-run)"
+                  } else {
+                    Write-Host " (uploaded after GitHub Tasks job)"
+                  }
                   Write-Host "╚═══════════════════════════════════════════════════════════════╝"
                   Write-Host ""
                 displayName: 'Print Summary'
@@ -554,3 +731,210 @@ extends:
                 parameters:
                   caskArtifactPath: $(Pipeline.Workspace)/homebrew/homebrew-cask-stable
                   dryRun: ${{ parameters.DryRun }}
+
+      # ===== STAGE 3: GITHUB TASKS =====
+      # Two responsibilities, both running as the aspire-repo-bot GitHub App:
+      #
+      #   1. DispatchGitHubTasksJob — dispatches the release-github-tasks
+      #      GitHub Actions workflow (tag, GitHub Release, merge-back PR,
+      #      baseline PR) and polls the run to completion. Fails the pipeline
+      #      if the workflow doesn't succeed.
+      #
+      #   2. PublishReleaseAssetsJob — downloads aspire-cli-* archives from
+      #      the signed source build's BlobArtifacts, verifies their SHA512s,
+      #      and uploads them as assets on the GitHub release that the
+      #      dispatch job just created.
+      #
+      # Each job has its own skip flag (SkipGitHubTasks / SkipReleaseAssets)
+      # so partial-failure re-runs can recover either piece independently:
+      #
+      #   | SkipGitHubTasks | SkipReleaseAssets | Behavior                        |
+      #   |-----------------|-------------------|---------------------------------|
+      #   | false           | false             | Full path (default release)     |
+      #   | true            | false             | Skip dispatch, upload assets    |
+      #   | true            | true              | Skip the whole stage            |
+      #   | false           | true              | Dispatch only, no asset upload  |
+      #
+      # DryRun behavior: this stage still runs when DryRun=true. DryRun is
+      # propagated to the GH workflow as dry_run=true (keeps it from
+      # creating tags/releases/PRs) and to the asset script (downloads and
+      # verifies SHA512s but skips the gh release upload). This lets a
+      # release manager validate the full AzDO → GitHub path end-to-end
+      # without performing a real release.
+      - stage: GitHubTasks
+        displayName: 'Dispatch GitHub Release Tasks'
+        # PrepareArtifacts is listed explicitly (in addition to Release) so the
+        # jobs in this stage can resolve
+        # stageDependencies.PrepareArtifacts.PrepareJob.outputs['deriveReleaseVersion.releaseVersionEffective'].
+        # AzDO only exposes stageDependencies for stages named directly in dependsOn —
+        # the relationship is NOT transitive through Release. Without this, the
+        # ReleaseVersionEffective variable silently evaluates to empty and the GitHub
+        # workflow dispatch fails with HTTP 422 "Required input 'release_version' not provided".
+        dependsOn:
+          - Release
+          - PrepareArtifacts
+        condition: |
+          and(
+            in(dependencies.Release.result, 'Succeeded', 'SucceededWithIssues'),
+            or(
+              eq('${{ parameters.SkipGitHubTasks }}', 'false'),
+              eq('${{ parameters.SkipReleaseAssets }}', 'false')
+            )
+          )
+        jobs:
+          - job: DispatchGitHubTasksJob
+            displayName: 'Dispatch and Wait for release-github-tasks workflow'
+            condition: eq('${{ parameters.SkipGitHubTasks }}', 'false')
+            timeoutInMinutes: 90
+            pool:
+              name: NetCore1ESPool-Internal
+              image: windows.vs2026preview.scout.amd64
+              os: windows
+            variables:
+              # Pulled from the deriveReleaseVersion step in PrepareJob (PrepareArtifacts stage).
+              ReleaseVersionEffective: $[ stageDependencies.PrepareArtifacts.PrepareJob.outputs['deriveReleaseVersion.releaseVersionEffective'] ]
+            steps:
+              - checkout: self
+                displayName: 'Checkout repo (for dispatch script)'
+                fetchDepth: 1
+
+              - powershell: |
+                  # Derive the GitHub workflow inputs from the source build resource.
+                  # sourceBranch is in refs/heads/<name> form; strip the prefix.
+                  $sourceBranch = "$(resources.pipeline.aspire-build.sourceBranch)"
+                  $releaseBranch = $sourceBranch -replace '^refs/heads/', ''
+                  $commitSha = "$(resources.pipeline.aspire-build.sourceCommit)"
+
+                  Write-Host "Source branch: $sourceBranch -> release_branch: $releaseBranch"
+                  Write-Host "Source commit: $commitSha"
+
+                  if ([string]::IsNullOrWhiteSpace($commitSha) -or $commitSha.Length -ne 40) {
+                    Write-Error "Expected a 40-char commit SHA from the source build, got '$commitSha'"
+                    exit 1
+                  }
+
+                  Write-Host "##vso[task.setvariable variable=ReleaseBranchDerived]$releaseBranch"
+                  Write-Host "##vso[task.setvariable variable=CommitShaDerived]$commitSha"
+                displayName: 'Derive workflow inputs from source build'
+
+              # pwsh (not powershell): Get-AspireBotInstallationToken.ps1 uses
+              # RSA.ImportFromPem, which is only available in .NET Core 3.0+ / .NET 5+.
+              # The legacy `powershell:` shorthand runs Windows PowerShell 5.1 on
+              # .NET Framework, which doesn't have that API and would fail at runtime.
+              - pwsh: |
+                  $inputs = @{
+                    release_version     = "$(ReleaseVersionEffective)"
+                    commit_sha          = "$(CommitShaDerived)"
+                    release_branch      = "$(ReleaseBranchDerived)"
+                    is_prerelease       = ([System.Convert]::ToBoolean("${{ parameters.IsPrerelease }}")).ToString().ToLowerInvariant()
+                    dry_run             = ([System.Convert]::ToBoolean("${{ parameters.DryRun }}")).ToString().ToLowerInvariant()
+                    # The AzDO pipeline owns idempotency for the *AzDO* side via its
+                    # own Skip* parameters. The GH workflow skip_* flags stay at
+                    # their defaults (false). If a GH-side step needs to be
+                    # skipped, the release manager can run the workflow manually
+                    # after setting SkipGitHubTasks=true on the AzDO re-run.
+                    skip_tagging        = "false"
+                    skip_github_release = "false"
+                    skip_merge_pr       = "false"
+                    skip_baseline_pr    = "false"
+                  }
+
+                  & "$(Build.SourcesDirectory)/eng/pipelines/scripts/dispatch-release-github-tasks.ps1" `
+                    -AppId         "$env:ASPIRE_BOT_APP_ID" `
+                    -PrivateKeyPem "$env:ASPIRE_BOT_PRIVATE_KEY" `
+                    -Owner         'microsoft' `
+                    -Repo          'aspire' `
+                    -WorkflowFile  'release-github-tasks.yml' `
+                    -Ref           '${{ parameters.GitHubTasksWorkflowRef }}' `
+                    -Inputs        $inputs
+                displayName: 'Dispatch release-github-tasks and wait'
+                env:
+                  # Secrets must be mapped explicitly into env so PowerShell can
+                  # read them; AzDO doesn't expose secret variables to scripts
+                  # by default.
+                  ASPIRE_BOT_APP_ID: $(aspire-bot-app-id)
+                  ASPIRE_BOT_PRIVATE_KEY: $(aspire-bot-private-key)
+
+              - powershell: |
+                  Write-Host ""
+                  Write-Host "Dispatched run: $env:DISPATCHED_RUN_URL"
+                displayName: 'Print dispatched run URL'
+                condition: always()
+                env:
+                  DISPATCHED_RUN_URL: $(DispatchedRunUrl)
+
+          # Upload aspire-cli-* archives from the signed source build's
+          # BlobArtifacts onto the GitHub release. Depends on the dispatch
+          # job so the release exists before we try to attach assets to it.
+          # When SkipGitHubTasks=true (re-run after the GH workflow already
+          # ran), we still want to try the upload — dependsOn declares only
+          # ordering, and the conditions above let this job run on its own
+          # when its sibling is skipped.
+          - job: PublishReleaseAssetsJob
+            displayName: 'Upload CLI Assets to GitHub Release'
+            dependsOn: DispatchGitHubTasksJob
+            condition: |
+              and(
+                eq('${{ parameters.SkipReleaseAssets }}', 'false'),
+                in(dependencies.DispatchGitHubTasksJob.result, 'Succeeded', 'SucceededWithIssues', 'Skipped')
+              )
+            timeoutInMinutes: 30
+            pool:
+              name: NetCore1ESPool-Internal
+              image: windows.vs2026preview.scout.amd64
+              os: windows
+            variables:
+              # Pulled from the deriveReleaseVersion step in PrepareJob (PrepareArtifacts stage).
+              # Mapped here independently of DispatchGitHubTasksJob so this job still gets the
+              # value when SkipGitHubTasks=true causes its sibling to be skipped.
+              ReleaseVersionEffective: $[ stageDependencies.PrepareArtifacts.PrepareJob.outputs['deriveReleaseVersion.releaseVersionEffective'] ]
+            steps:
+              - checkout: self
+                displayName: 'Checkout repo (for upload script)'
+                fetchDepth: 1
+
+              # Download aspire-cli-* archives from the source build. Matches
+              # the existing PackageArtifacts/winget/homebrew download pattern.
+              - download: aspire-build
+                displayName: 'Download aspire-cli-* from Source Build'
+                artifact: BlobArtifacts
+                # The download task enumerates artifact items with the artifact
+                # name as a path prefix (e.g. 'BlobArtifacts/aspire-cli-...'), so
+                # a bare 'aspire-cli-*' minimatch glob excludes every file and
+                # the target directory never gets created. Use '**/aspire-cli-*'
+                # to match files under the artifact root.
+                patterns: '**/aspire-cli-*'
+
+              # pwsh (not powershell): publish-release-cli-assets.ps1 calls
+              # Get-AspireBotInstallationToken.ps1, which uses RSA.ImportFromPem
+              # — only available in .NET Core 3.0+ / .NET 5+, not in the .NET
+              # Framework runtime backing the legacy `powershell:` shorthand.
+              - pwsh: |
+                  $dryRun = [System.Convert]::ToBoolean("${{ parameters.DryRun }}")
+                  $tag    = "v$(ReleaseVersionEffective)"
+
+                  $assetsDir = Join-Path "$(Pipeline.Workspace)" 'aspire-build/BlobArtifacts'
+                  Write-Host "Assets dir: $assetsDir"
+
+                  # Use hashtable splatting (not array splatting) because the PEM
+                  # private key value starts with `-----BEGIN PRIVATE KEY-----`.
+                  # With `@arr` splat, PowerShell's parameter binder sees the value
+                  # for -PrivateKeyPem also starting with `-` and tries to interpret
+                  # it as another switch, failing with "A positional parameter cannot
+                  # be found that accepts argument '-PrivateKeyPem'." Hashtable splat
+                  # explicitly binds each value to its named parameter and bypasses
+                  # the "looks like a switch" heuristic. See dispatch step above for
+                  # the equivalent inline backtick form (also safe).
+                  $scriptArgs = @{
+                    AssetsDir     = $assetsDir
+                    Tag           = $tag
+                    AppId         = $env:ASPIRE_BOT_APP_ID
+                    PrivateKeyPem = $env:ASPIRE_BOT_PRIVATE_KEY
+                  }
+                  if ($dryRun) { $scriptArgs.DryRun = $true }
+
+                  & "$(Build.SourcesDirectory)/eng/pipelines/scripts/publish-release-cli-assets.ps1" @scriptArgs
+                displayName: 'Verify SHA512s and upload to GitHub Release'
+                env:
+                  ASPIRE_BOT_APP_ID: $(aspire-bot-app-id)
+                  ASPIRE_BOT_PRIVATE_KEY: $(aspire-bot-private-key)

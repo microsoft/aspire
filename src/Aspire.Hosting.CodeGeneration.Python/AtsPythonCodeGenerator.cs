@@ -4,7 +4,9 @@
 using System.Globalization;
 using System.Reflection;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
+using Aspire.Shared.Json;
 using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.Python;
@@ -207,7 +209,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
             return wrapperClassName;
         }
 
-        return typeRef.Category switch
+        var mappedType = typeRef.Category switch
         {
             AtsTypeCategory.Primitive => MapPrimitiveType(typeRef.TypeId),
             AtsTypeCategory.Enum => MapEnumType(typeRef.TypeId),
@@ -223,6 +225,19 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
             AtsTypeCategory.Unknown => "typing.Any",  // Unknown types use 'Any' since they're not in the ATS universe
             _ => "typing.Any"  // Fallback for any unhandled categories
         };
+        return ApplyNullableType(typeRef, mappedType);
+    }
+
+    private static string ApplyNullableType(AtsTypeRef typeRef, string mappedType)
+    {
+        if (typeRef.IsNullable != true || typeRef.Category is not (AtsTypeCategory.Primitive or AtsTypeCategory.Enum))
+        {
+            return mappedType;
+        }
+
+        return typeRef.TypeId is AtsConstants.Void or AtsConstants.Any or AtsConstants.CancellationToken
+            ? mappedType
+            : $"{mappedType} | None";
     }
 
     /// <summary>
@@ -345,6 +360,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
                         IsCallback = p.IsCallback,
                         CallbackParameters = p.CallbackParameters,
                         CallbackReturnType = p.CallbackReturnType,
+                        Documentation = p.Documentation,
                         DefaultValue = p.DefaultValue
                     });
                 }
@@ -367,6 +383,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
                 MethodName = shortest.MethodName,
                 OwningTypeName = shortest.OwningTypeName,
                 Description = shortest.Description ?? items.FirstOrDefault(c => c.Description is not null)?.Description,
+                Documentation = shortest.Documentation ?? items.FirstOrDefault(c => c.Documentation is not null)?.Documentation,
                 Parameters = mergedParams,
                 ReturnType = shortest.ReturnType,
                 TargetTypeId = shortest.TargetTypeId,
@@ -933,23 +950,7 @@ internal sealed class AtsPythonCodeGenerator : ICodeGenerator
             return name;
         }
 
-        var result = new System.Text.StringBuilder();
-        result.Append(char.ToLowerInvariant(name[0]));
-
-        for (int i = 1; i < name.Length; i++)
-        {
-            var c = name[i];
-            if (char.IsUpper(c))
-            {
-                result.Append('_');
-                result.Append(char.ToLowerInvariant(c));
-            }
-            else
-            {
-                result.Append(c);
-            }
-        }
-        var resultStr = result.ToString();
+        var resultStr = JsonNamingPolicy.SnakeCaseLower.ConvertName(name);
         resultStr = resultStr.Replace("environment", "env");
         resultStr = resultStr.Replace("configuration", "config");
         resultStr = resultStr.Replace("application", "app");

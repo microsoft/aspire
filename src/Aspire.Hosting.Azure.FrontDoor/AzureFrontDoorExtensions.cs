@@ -20,13 +20,6 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class AzureFrontDoorExtensions
 {
-    // Azure resource name length limits (from Azure portal).
-    private const int ProfileNameMaxLength = 90;
-    private const int EndpointNameMaxLength = 46;
-    private const int OriginGroupNameMaxLength = 90;
-    private const int OriginNameMaxLength = 90;
-    private const int RouteNameMaxLength = 90;
-
     /// <summary>
     /// Adds an Azure Front Door resource to the application model.
     /// </summary>
@@ -76,7 +69,6 @@ public static class AzureFrontDoorExtensions
             var profile = new CdnProfile(infrastructure.AspireResource.GetBicepIdentifier())
             {
                 SkuName = CdnSkuName.StandardAzureFrontDoor,
-                Name = BicepFunction.Take(BicepFunction.Interpolate($"{infrastructure.AspireResource.Name}-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"), ProfileNameMaxLength),
                 Location = new AzureLocation("Global"),
                 Tags = { { "aspire-resource-name", infrastructure.AspireResource.Name } }
             };
@@ -89,7 +81,6 @@ public static class AzureFrontDoorExtensions
             {
                 var originResource = originAnnotation.Resource;
                 var originBicepId = Infrastructure.NormalizeBicepIdentifier(originResource.Name);
-                var originName = originResource.Name.ToLowerInvariant();
 
                 var endpointReference = GetOriginEndpoint(originResource);
 
@@ -105,7 +96,6 @@ public static class AzureFrontDoorExtensions
                 var endpoint = new FrontDoorEndpoint($"{originBicepId}Endpoint")
                 {
                     Parent = profile,
-                    Name = BicepFunction.Take(BicepFunction.Interpolate($"{originName}-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"), EndpointNameMaxLength),
                     Location = new AzureLocation("Global")
                 };
                 infrastructure.Add(endpoint);
@@ -114,7 +104,6 @@ public static class AzureFrontDoorExtensions
                 var originGroup = new FrontDoorOriginGroup($"{originBicepId}OriginGroup")
                 {
                     Parent = profile,
-                    Name = BicepFunction.Take(BicepFunction.Interpolate($"{originName}-og-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"), OriginGroupNameMaxLength),
                     HealthProbeSettings = new HealthProbeSettings
                     {
                         ProbeProtocol = probeProtocol,
@@ -133,7 +122,6 @@ public static class AzureFrontDoorExtensions
                 var origin = new FrontDoorOrigin($"{originBicepId}Origin")
                 {
                     Parent = originGroup,
-                    Name = BicepFunction.Take(BicepFunction.Interpolate($"{originName}-origin-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"), OriginNameMaxLength),
                     HostName = hostParam,
                     OriginHostHeader = hostParam
                 };
@@ -143,7 +131,6 @@ public static class AzureFrontDoorExtensions
                 var route = new FrontDoorRoute($"{originBicepId}Route")
                 {
                     Parent = endpoint,
-                    Name = BicepFunction.Take(BicepFunction.Interpolate($"{originName}-route-{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"), RouteNameMaxLength),
                     OriginGroupId = originGroup.Id,
                     PatternsToMatch = ["/*"],
                     ForwardingProtocol = ForwardingProtocol.HttpsOnly,

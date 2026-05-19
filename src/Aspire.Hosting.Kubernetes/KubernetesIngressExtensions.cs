@@ -2,8 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Kubernetes;
 
-namespace Aspire.Hosting.Kubernetes;
+namespace Aspire.Hosting;
 
 /// <summary>
 /// Provides extension methods for configuring Kubernetes Ingress resources in the Aspire application model.
@@ -234,8 +235,7 @@ public static class KubernetesIngressExtensions
         ArgumentException.ThrowIfNullOrEmpty(secretName);
 
         builder.Resource.TlsConfigs.Add(new IngressTlsConfig(
-            SecretName: ReferenceExpression.Create($"{secretName}"),
-            Hosts: [.. builder.Resource.Hostnames]));
+            SecretName: ReferenceExpression.Create($"{secretName}")));
 
         return builder;
     }
@@ -255,8 +255,7 @@ public static class KubernetesIngressExtensions
         ArgumentNullException.ThrowIfNull(secretName);
 
         builder.Resource.TlsConfigs.Add(new IngressTlsConfig(
-            SecretName: ReferenceExpression.Create($"{secretName.Resource}"),
-            Hosts: [.. builder.Resource.Hostnames]));
+            SecretName: ReferenceExpression.Create($"{secretName.Resource}")));
 
         return builder;
     }
@@ -275,8 +274,7 @@ public static class KubernetesIngressExtensions
         var secretName = $"{builder.Resource.Name}-tls";
 
         builder.Resource.TlsConfigs.Add(new IngressTlsConfig(
-            SecretName: ReferenceExpression.Create($"{secretName}"),
-            Hosts: [.. builder.Resource.Hostnames]));
+            SecretName: ReferenceExpression.Create($"{secretName}")));
 
         return builder;
     }

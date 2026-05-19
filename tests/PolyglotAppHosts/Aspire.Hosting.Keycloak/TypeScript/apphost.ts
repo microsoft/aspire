@@ -26,6 +26,7 @@ const keycloak2 = await builder.addKeycloak("keycloak2")
     .withOtlpExporter({ protocol: OtlpProtocol.HttpProtobuf });
 
 await builder.addContainer("consumer", "nginx")
+    .withOtlpExporter({ protocol: OtlpProtocol.HttpJson })
     .withReference(keycloak)
     .withReference(keycloak2);
 

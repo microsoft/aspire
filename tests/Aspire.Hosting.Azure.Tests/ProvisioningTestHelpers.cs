@@ -17,6 +17,8 @@ using Aspire.Hosting.Publishing;
 using Azure;
 using Azure.Core;
 using Azure.ResourceManager;
+using Azure.ResourceManager.Authorization;
+using Azure.ResourceManager.Authorization.Models;
 using Azure.ResourceManager.Resources;
 using Azure.ResourceManager.Resources.Models;
 using Azure.Security.KeyVault.Secrets;
@@ -182,6 +184,7 @@ internal sealed class TestArmClient : IArmClient
     private readonly Dictionary<string, object>? _deploymentOutputs;
     private readonly Func<string, Dictionary<string, object>>? _deploymentOutputsProvider;
     private readonly TestResourceGroupResource? _resourceGroup;
+    public TestRoleAssignmentCollection RoleAssignments { get; } = new();
 
     public TestArmClient(Dictionary<string, object> deploymentOutputs, TestResourceGroupResource? resourceGroup = null)
     {
@@ -263,6 +266,11 @@ internal sealed class TestArmClient : IArmClient
             ("rg-aspire-dev", "westus2")
         };
         return Task.FromResult<IEnumerable<(string, string)>>(resourceGroups);
+    }
+
+    public IRoleAssignmentCollection GetRoleAssignments(ResourceIdentifier scope)
+    {
+        return RoleAssignments;
     }
 }
 
@@ -423,6 +431,33 @@ internal sealed class TestResourceGroupResource : IResourceGroupResource
         WasGetResourcesCalled = true;
         await Task.CompletedTask;
         yield break;
+    }
+}
+
+/// <summary>
+/// Test implementation of <see cref="IRoleAssignmentCollection"/>.
+/// </summary>
+internal sealed class TestRoleAssignmentCollection : IRoleAssignmentCollection
+{
+    public bool WasCreateOrUpdateCalled { get; private set; }
+    public WaitUntil? WaitUntil { get; private set; }
+    public string? RoleAssignmentName { get; private set; }
+    public RoleAssignmentCreateOrUpdateContent? Content { get; private set; }
+    public CancellationToken CancellationToken { get; private set; }
+
+    public Task<ArmOperation<RoleAssignmentResource>> CreateOrUpdateAsync(
+        WaitUntil waitUntil,
+        string roleAssignmentName,
+        RoleAssignmentCreateOrUpdateContent content,
+        CancellationToken cancellationToken = default)
+    {
+        WasCreateOrUpdateCalled = true;
+        WaitUntil = waitUntil;
+        RoleAssignmentName = roleAssignmentName;
+        Content = content;
+        CancellationToken = cancellationToken;
+
+        return Task.FromResult<ArmOperation<RoleAssignmentResource>>(new TestArmOperation<RoleAssignmentResource>(default!));
     }
 }
 

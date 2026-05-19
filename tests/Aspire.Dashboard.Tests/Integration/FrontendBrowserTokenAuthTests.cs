@@ -171,7 +171,7 @@ public class FrontendBrowserTokenAuthTests
         Assert.Collection(l,
             w =>
             {
-                Assert.Equal("Aspire version: {Version}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
+                Assert.Equal("Aspire dashboard version: {Version}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
             },
             w =>
             {
@@ -206,9 +206,10 @@ public class FrontendBrowserTokenAuthTests
             },
             w =>
             {
-                Assert.Equal("Login to the dashboard at {DashboardLoginUrl}", LogTestHelpers.GetValue(w, "{OriginalFormat}"));
+                Assert.StartsWith("Aspire Dashboard", (string)LogTestHelpers.GetValue(w, "{OriginalFormat}")!);
 
-                var uri = new Uri((string)LogTestHelpers.GetValue(w, "DashboardLoginUrl")!, UriKind.Absolute);
+                var loginUrl = (string)LogTestHelpers.GetValue(w, "LoginUrl")!;
+                var uri = new Uri(loginUrl, UriKind.Absolute);
                 var queryString = HttpUtility.ParseQueryString(uri.Query);
                 Assert.NotNull(queryString["t"]);
             });
@@ -235,10 +236,11 @@ public class FrontendBrowserTokenAuthTests
         // Assert
         var l = testSink.Writes.Where(w => w.LoggerName == typeof(DashboardWebApplication).FullName).ToList();
 
-        // Testing via the log template is kind of hacky. If this becomes a problem then consider adding proper log definitions and match via ID.
-        var loginLinkLog = l.Single(w => "Login to the dashboard at {DashboardLoginUrl}" == (string?)LogTestHelpers.GetValue(w, "{OriginalFormat}"));
+        // The login URL is now part of the summary log message.
+        var summaryLog = l.Single(w => ((string?)LogTestHelpers.GetValue(w, "{OriginalFormat}"))?.StartsWith("Aspire Dashboard") == true);
 
-        var uri = new Uri((string)LogTestHelpers.GetValue(loginLinkLog, "DashboardLoginUrl")!, UriKind.Absolute);
+        var loginUrl = (string)LogTestHelpers.GetValue(summaryLog, "LoginUrl")!;
+        var uri = new Uri(loginUrl, UriKind.Absolute);
         var queryString = HttpUtility.ParseQueryString(uri.Query);
         Assert.NotNull(queryString["t"]);
 
@@ -262,7 +264,9 @@ public class FrontendBrowserTokenAuthTests
         // Assert
         var l = testSink.Writes.Where(w => w.LoggerName == typeof(DashboardWebApplication).FullName).ToList();
 
-        // Testing via the log template is kind of hacky. If this becomes a problem then consider adding proper log definitions and match via ID.
-        Assert.Single(l, w => (string?)LogTestHelpers.GetValue(w, "{OriginalFormat}") == "Login to the dashboard at {DashboardLoginUrl} . The URL may need changes depending on how network access to the container is configured.");
+        // The container message is now part of the summary log message.
+        var summaryLog = l.Single(w => ((string?)LogTestHelpers.GetValue(w, "{OriginalFormat}"))?.StartsWith("Aspire Dashboard") == true);
+        var containerMessage = "URLs may need changes depending on how network access to the container is configured.";
+        Assert.Contains(containerMessage, summaryLog.Message);
     }
 }

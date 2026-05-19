@@ -15,7 +15,8 @@ builder.AddPythonModule("fastapi-app", "../module_only", "uvicorn")
 builder.AddPythonExecutable("fastapi-uvicorn-app", "../module_only", "uvicorn")
     .WithDebugging()
     .WithArgs("api:app", "--reload", "--host=0.0.0.0", "--port=8001")
-    .WithHttpEndpoint(targetPort: 8001);
+    .WithHttpEndpoint(targetPort: 8001)
+    .WithUv();
 
 // Flask app using Flask module directly
 builder.AddPythonModule("flask-app", "../flask_app", "flask")

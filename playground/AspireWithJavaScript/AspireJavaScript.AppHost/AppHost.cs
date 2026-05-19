@@ -1,5 +1,3 @@
-#pragma warning disable ASPIREEXTENSION001 // Type is for evaluation purposes only
-
 var builder = DistributedApplication.CreateBuilder(args);
 
 var weatherApi = builder.AddProject<Projects.AspireJavaScript_MinimalApi>("weatherapi")
@@ -32,22 +30,20 @@ builder.AddJavaScriptApp("vue", "../AspireJavaScript.Vue")
     .WithExternalHttpEndpoints()
     .PublishAsDockerFile();
 
-#pragma warning disable ASPIREEXTENSION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 var reactvite = builder.AddViteApp("reactvite", "../AspireJavaScript.Vite")
     .WithReference(weatherApi)
     .WithEnvironment("BROWSER", "none")
     .WithExternalHttpEndpoints();
-#pragma warning restore ASPIREEXTENSION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 // Demonstrate the new publish methods:
 
 // PublishAsStaticWebsite: deploys the Vite app as a static site served by YARP.
 // With apiPath/apiTarget, YARP reverse-proxies /api/* to the weather API via service discovery — no CORS needed.
-#pragma warning disable ASPIREEXTENSION001
+#pragma warning disable ASPIREJAVASCRIPT001
 builder.AddViteApp("vite-static", "../AspireJavaScript.Vite")
     .WithExternalHttpEndpoints()
     .PublishAsStaticWebsite("/api", weatherApi);
-#pragma warning restore ASPIREEXTENSION001
+#pragma warning restore ASPIREJAVASCRIPT001
 
 // PublishAsNodeServer: for frameworks that produce a self-contained Node.js server artifact.
 // Example: SvelteKit with adapter-node builds to build/index.js, Nuxt/TanStack build to .output/server/index.mjs

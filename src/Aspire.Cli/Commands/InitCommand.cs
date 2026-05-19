@@ -9,12 +9,18 @@ using Aspire.Cli.Agents;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.NuGet;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Telemetry;
+using Aspire.Cli.Templating;
 using Aspire.Cli.Utils;
+using Aspire.Hosting;
+using Aspire.Shared;
 
 namespace Aspire.Cli.Commands;
 
@@ -36,6 +42,7 @@ internal sealed class InitCommand : BaseCommand
     private readonly ICertificateService _certificateService;
     private readonly IScaffoldingService _scaffoldingService;
     private readonly ILanguageDiscovery _languageDiscovery;
+    private readonly TemplateNuGetConfigService _templateNuGetConfigService;
 
     private static readonly Option<string?> s_sourceOption = new("--source", "-s")
     {
@@ -66,7 +73,8 @@ internal sealed class InitCommand : BaseCommand
         IDotNetCliRunner runner,
         ICertificateService certificateService,
         IScaffoldingService scaffoldingService,
-        ILanguageDiscovery languageDiscovery)
+        ILanguageDiscovery languageDiscovery,
+        TemplateNuGetConfigService templateNuGetConfigService)
         : base("init", InitCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _executionContext = executionContext;
@@ -77,6 +85,7 @@ internal sealed class InitCommand : BaseCommand
         _certificateService = certificateService;
         _scaffoldingService = scaffoldingService;
         _languageDiscovery = languageDiscovery;
+        _templateNuGetConfigService = templateNuGetConfigService;
 
         _channelOption = new Option<string?>("--channel")
         {
@@ -96,7 +105,7 @@ internal sealed class InitCommand : BaseCommand
         Options.Add(NewCommand.s_suppressAgentInitOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(this.Name);
 
@@ -122,10 +131,9 @@ internal sealed class InitCommand : BaseCommand
             ? await DropCSharpSkeletonAsync(workingDirectory, solutionFile, cancellationToken)
             : await DropPolyglotSkeletonAsync(selectedProject.LanguageId, workingDirectory, cancellationToken);
 
-        if (dropResult != ExitCodeConstants.Success)
+        if (dropResult != CliExitCodes.Success)
         {
-            InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.ProjectCouldNotBeCreated, ExecutionContext.LogFilePath));
-            return dropResult;
+            return CommandResult.Failure(dropResult, InteractionServiceStrings.ProjectCouldNotBeCreated);
         }
 
         // Persist the prompted language selection now that the skeleton drop succeeded.
@@ -154,10 +162,10 @@ internal sealed class InitCommand : BaseCommand
         // This prompt lets users choose which skills to install — including aspireify.
         var workspaceRoot = solutionFile?.Directory ?? workingDirectory;
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, NewCommand.s_suppressAgentInitOption, defaultValue: true);
-        var agentInitResult = await _agentInitCommand.PromptAndChainAsync(InteractionService, ExitCodeConstants.Success, workspaceRoot, agentInitBinding, cancellationToken);
+        var agentInitResult = await _agentInitCommand.PromptAndChainAsync(InteractionService, CliExitCodes.Success, workspaceRoot, agentInitBinding, cancellationToken);
 
         // Step 5: Print follow-up commands only when the user selected the one-time init skill.
-        if (agentInitResult.ExitCode == ExitCodeConstants.Success &&
+        if (agentInitResult.ExitCode == CliExitCodes.Success &&
             agentInitResult.SelectedSkills.Contains(SkillDefinition.Aspireify))
         {
             var commands = GetAspireifyCommands(agentInitResult.SelectedLocations);
@@ -167,8 +175,8 @@ internal sealed class InitCommand : BaseCommand
                 InteractionService.DisplayMessage(
                     KnownEmojis.Dizzy,
                     commands.Count == 1
-                        ? "Aspire AppHost created! To complete setup, run:"
-                        : "Aspire AppHost created! To complete setup, run one of:");
+                        ? InitCommandStrings.AppHostCreatedRunOne
+                        : InitCommandStrings.AppHostCreatedRunOneOf);
                 InteractionService.DisplayEmptyLine();
 
                 foreach (var command in commands)
@@ -178,7 +186,7 @@ internal sealed class InitCommand : BaseCommand
             }
         }
 
-        return agentInitResult.ExitCode;
+        return CommandResult.FromExitCode(agentInitResult.ExitCode);
     }
 
     private void DisplayDeprecatedOptionWarnings(ParseResult parseResult)
@@ -194,7 +202,7 @@ internal sealed class InitCommand : BaseCommand
         {
             InteractionService.DisplayMessage(
                 KnownEmojis.Warning,
-                $"`aspire init {optionName}` is deprecated and no longer affects generated AppHosts. It is accepted for compatibility and will be removed in a future version.");
+                string.Format(CultureInfo.CurrentCulture, InitCommandStrings.DeprecatedOptionWarning, optionName));
         }
     }
 
@@ -225,15 +233,34 @@ internal sealed class InitCommand : BaseCommand
         return await DropCSharpSingleFileSkeletonAsync(workingDirectory, cancellationToken);
     }
 
-    private Task<int> DropCSharpSingleFileSkeletonAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
+    private async Task<int> DropCSharpSingleFileSkeletonAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
-        _ = cancellationToken;
+        // Ensure the workspace has a NuGet.config that exposes the running CLI binary's
+        // identity-channel package sources (CliExecutionContext.IdentityChannel — stable,
+        // staging, daily, pr-<N>, or local). Run this BEFORE the apphost.cs-already-exists
+        // early return so re-running `aspire init` against a workspace produced by a
+        // previous broken CLI (which left apphost.cs without a workspace NuGet.config)
+        // recovers cleanly. The config is also required so MSBuild can resolve
+        // `#:sdk Aspire.AppHost.Sdk@<version>` from the SDK directive — both for
+        // `aspire add` (`dotnet package add --file apphost.cs`) and for
+        // `dotnet run --file apphost.cs`. Without it, any non-stable channel (PR/run
+        // hives, locally-built `local-*`/`dev-*` hives, the staging channel, etc.) is
+        // invisible and SDK resolution fails. `NuGetConfigMerger` underneath creates a
+        // new file or merges missing sources into an existing one.
+        var createdNuGetConfig = await _templateNuGetConfigService.CreateOrUpdateNuGetConfigWithoutPromptAsync(
+            channelName: _executionContext.IdentityChannel,
+            outputPath: workingDirectory.FullName,
+            cancellationToken).ConfigureAwait(false);
+        if (createdNuGetConfig)
+        {
+            InteractionService.DisplayMessage(KnownEmojis.Package, TemplatingStrings.NuGetConfigCreatedOrUpdatedConfirmationMessage);
+        }
 
         var appHostPath = Path.Combine(workingDirectory.FullName, "apphost.cs");
         if (File.Exists(appHostPath))
         {
-            InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, "apphost.cs already exists — skipping.");
-            return Task.FromResult(ExitCodeConstants.Success);
+            InteractionService.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.FileAlreadyExistsSkipping, "apphost.cs"));
+            return CliExitCodes.Success;
         }
 
         // Drop bare single-file apphost. Pin the SDK version so later operations
@@ -250,12 +277,32 @@ internal sealed class InitCommand : BaseCommand
             builder.Build().Run();
             """;
         File.WriteAllText(appHostPath, appHostContent);
-        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, "Created apphost.cs");
+        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.CreatedFile, "apphost.cs"));
 
-        // Drop aspire.config.json
-        var configResult = DropAspireConfig(workingDirectory, "apphost.cs", language: null);
+        // Generate one set of ports so aspire.config.json (used by `aspire run`) and
+        // apphost.run.json (used by `dotnet run apphost.cs`) agree on the dashboard /
+        // OTLP / resource service endpoints.
+        var ports = AppHostProfilePortGenerator.Generate(Random.Shared);
 
-        return Task.FromResult(configResult);
+        // Drop aspire.config.json. The returned ports are whatever ended up effective
+        // in aspire.config.json — newly generated, or pre-existing if the file already
+        // had a `profiles` section. Use the SAME ports for apphost.run.json so the two
+        // files always agree on dashboard / OTLP / resource service endpoints.
+        var (configResult, effectivePorts) = DropAspireConfig(workingDirectory, "apphost.cs", language: null, ports);
+        if (configResult != CliExitCodes.Success)
+        {
+            return configResult;
+        }
+
+        // Drop apphost.run.json so `dotnet run apphost.cs` picks up the dashboard /
+        // OTLP / resource service env vars from the file-based launch profile. Without
+        // this file the AppHost crashes at startup because DashboardOptions validation
+        // requires ASPNETCORE_URLS and ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL to be set
+        // (these env vars are otherwise injected by the Aspire CLI when running via
+        // `aspire run`, but `dotnet run apphost.cs` does not go through that path).
+        DropAppHostRunJson(workingDirectory, effectivePorts);
+
+        return CliExitCodes.Success;
     }
 
     private async Task<int> DropCSharpProjectSkeletonAsync(FileInfo solutionFile, CancellationToken cancellationToken)
@@ -265,37 +312,114 @@ internal sealed class InitCommand : BaseCommand
         var appHostDirName = $"{solutionName}.AppHost";
         var appHostDirPath = Path.Combine(solutionDir.FullName, appHostDirName);
 
+        // Drop the solution-directory NuGet.config BEFORE the AppHost-dir-already-exists
+        // early return so re-running `aspire init` against a workspace produced by a
+        // previous broken CLI (which left a `<sln>.AppHost/` without a workspace
+        // NuGet.config) recovers cleanly. Writing here is also required BEFORE
+        // `_runner.NewProjectAsync` so the aspire-apphost template's built-in `restore`
+        // post-action (template.json post-action id "restore", conditioned on
+        // !skipRestore which defaults to false) can resolve the
+        // `Aspire.AppHost.Sdk/<version>` reference from the channel-matched hive. The
+        // post-action currently runs with continueOnError=true so a missing nuget.config
+        // wouldn't fail init, but its restore would still emit confusing errors and waste
+        // work — and a future template change that drops continueOnError would break init
+        // outright.
+        //
+        // Source: CliExecutionContext.IdentityChannel (stable / staging / daily / pr-<N> /
+        // local). NuGetConfigMerger underneath creates a new file or merges missing
+        // sources into an existing one, so adding hives later is handled the same way as
+        // for templates. Mirrors what DropCSharpSingleFileSkeletonAsync already does for
+        // the apphost.cs path on every channel.
+        var createdNuGetConfig = await _templateNuGetConfigService.CreateOrUpdateNuGetConfigWithoutPromptAsync(
+            channelName: _executionContext.IdentityChannel,
+            outputPath: solutionDir.FullName,
+            cancellationToken).ConfigureAwait(false);
+        if (createdNuGetConfig)
+        {
+            InteractionService.DisplayMessage(KnownEmojis.Package, TemplatingStrings.NuGetConfigCreatedOrUpdatedConfirmationMessage);
+        }
+
         if (Directory.Exists(appHostDirPath))
         {
-            InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"{appHostDirName}/ already exists — skipping.");
-            return ExitCodeConstants.Success;
+            InteractionService.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.FileAlreadyExistsSkipping, $"{appHostDirName}/"));
+            return CliExitCodes.Success;
+        }
+
+        // Resolve the channel-aware template package version + feed mapping. The running
+        // CLI binary's identity channel (CliExecutionContext.IdentityChannel — stable, staging,
+        // daily, pr-<N>, or local) drives the selection so a developer scaffolding with a
+        // pr-<N> CLI gets a project wired to the matching pr-<N> hive. PR hives are
+        // intentionally excluded — init should produce the same template on every machine
+        // for a given CLI build.
+        TemplatePackageSelection selection;
+        try
+        {
+            var query = new TemplatePackageQuery(
+                RequestedChannel: _executionContext.IdentityChannel,
+                VersionOverride: null,
+                SourceOverride: null,
+                IncludePrHives: false);
+
+            selection = await _templateNuGetConfigService.ResolveTemplatePackageAsync(query, cancellationToken);
+        }
+        catch (ChannelNotFoundException) when
+            (string.Equals(_executionContext.IdentityChannel, PackageChannelNames.Local, StringComparison.OrdinalIgnoreCase))
+        {
+            // Locally-built CLI (identity=local) on a machine where ~/.aspire/hives/local
+            // isn't installed. The PackagingService produces no "local" channel in that
+            // case, but init's contract is that identity-as-request is implicit — so fall
+            // back to the implicit channel (ambient NuGet) instead of failing. This branch
+            // lives here, NOT in the resolver, so that an explicit `aspire new --channel local`
+            // without the hive correctly errors instead of silently switching feeds.
+            var fallbackQuery = new TemplatePackageQuery(
+                RequestedChannel: null,
+                VersionOverride: null,
+                SourceOverride: null,
+                IncludePrHives: false);
+
+            selection = await _templateNuGetConfigService.ResolveTemplatePackageAsync(fallbackQuery, cancellationToken);
+        }
+        catch (ChannelNotFoundException ex)
+        {
+            InteractionService.DisplayError(ex.Message);
+            return CliExitCodes.FailedToInstallTemplates;
+        }
+        catch (EmptyChoicesException ex)
+        {
+            InteractionService.DisplayError(ex.Message);
+            return CliExitCodes.FailedToInstallTemplates;
+        }
+        catch (NuGetPackageCacheException ex)
+        {
+            // Surface NuGet feed search failures (offline, inaccessible feed, etc.) with a friendly error
+            // instead of letting them bubble up to the top-level "unexpected error" handler. The pre-extraction
+            // init code went straight to `dotnet new install` and never invoked a NuGet search, so this catch
+            // restores parity with the prior init failure mode for these scenarios.
+            InteractionService.DisplayError(ex.Message);
+            return CliExitCodes.FailedToInstallTemplates;
         }
 
         // The aspire-apphost template ships in the Aspire.ProjectTemplates package.
         // `dotnet new` does not install templates implicitly, so on a fresh machine
         // (or after a CLI update) the template will be missing. Install first.
-        var aspireVersion = VersionHelper.GetDefaultTemplateVersion();
-        var installResult = await InteractionService.ShowStatusAsync(
-            "Installing Aspire project templates...",
-            () => _runner.InstallTemplateAsync(
-                packageName: "Aspire.ProjectTemplates",
-                version: aspireVersion,
-                nugetConfigFile: null,
-                nugetSource: null,
-                force: true,
-                options: new ProcessInvocationOptions(),
-                cancellationToken: cancellationToken));
+        var installOutcome = await _templateNuGetConfigService.InstallTemplatePackageAsync(
+            selection,
+            _runner,
+            InitCommandStrings.InstallingAspireProjectTemplates,
+            statusEmoji: null,
+            cancellationToken);
 
-        if (installResult.ExitCode != 0)
+        if (installOutcome.ExitCode != 0)
         {
-            InteractionService.DisplayError($"Failed to install Aspire.ProjectTemplates (exit code {installResult.ExitCode}).");
-            return ExitCodeConstants.FailedToInstallTemplates;
+            InteractionService.DisplayLines(installOutcome.OutputLines);
+            InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, TemplatingStrings.TemplateInstallationFailed, installOutcome.ExitCode));
+            return CliExitCodes.FailedToInstallTemplates;
         }
 
         // Use the aspire-apphost template to generate a correct AppHost project
         // with proper launchSettings.json, .csproj, and Program.cs.
         var result = await InteractionService.ShowStatusAsync(
-            "Creating AppHost from template...",
+            InitCommandStrings.CreatingAppHostFromTemplate,
             async () =>
             {
                 return await _runner.NewProjectAsync(
@@ -309,13 +433,13 @@ internal sealed class InitCommand : BaseCommand
 
         if (result != 0)
         {
-            InteractionService.DisplayError($"Failed to create AppHost from template (exit code {result}).");
-            return ExitCodeConstants.FailedToCreateNewProject;
+            InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InitCommandStrings.FailedToCreateAppHostFromTemplate, result));
+            return CliExitCodes.FailedToCreateNewProject;
         }
 
-        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"Created {appHostDirName}/");
+        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.CreatedFile, $"{appHostDirName}/"));
 
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private async Task<int> DropPolyglotSkeletonAsync(string languageId, DirectoryInfo workingDirectory, CancellationToken cancellationToken)
@@ -329,22 +453,22 @@ internal sealed class InitCommand : BaseCommand
         var appHostPath = Path.Combine(workingDirectory.FullName, appHostFileName);
         if (File.Exists(appHostPath))
         {
-            InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"{appHostFileName} already exists — skipping.");
-            return ExitCodeConstants.Success;
+            InteractionService.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.FileAlreadyExistsSkipping, appHostFileName));
+            return CliExitCodes.Success;
         }
 
         var context = new ScaffoldContext(language, workingDirectory, workingDirectory.Name);
         var scaffolded = await _scaffoldingService.ScaffoldAsync(context, cancellationToken);
         if (!scaffolded)
         {
-            return ExitCodeConstants.FailedToCreateNewProject;
+            return CliExitCodes.FailedToCreateNewProject;
         }
 
-        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"Created {appHostFileName}");
-        return ExitCodeConstants.Success;
+        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.CreatedFile, appHostFileName));
+        return CliExitCodes.Success;
     }
 
-    private int DropAspireConfig(DirectoryInfo directory, string appHostPath, string? language)
+    private (int ExitCode, AppHostProfilePorts EffectivePorts) DropAspireConfig(DirectoryInfo directory, string appHostPath, string? language, AppHostProfilePorts? ports = null)
     {
         var configPath = Path.Combine(directory.FullName, AspireConfigFile.FileName);
 
@@ -366,9 +490,9 @@ internal sealed class InitCommand : BaseCommand
                 }
                 catch (JsonException ex)
                 {
-                    InteractionService.DisplayError($"Failed to parse existing {AspireConfigFile.FileName} at '{configPath}': {ex.Message}");
-                    InteractionService.DisplayMessage(KnownEmojis.Warning, $"Fix or remove {AspireConfigFile.FileName} and re-run `aspire init`.");
-                    return ExitCodeConstants.FailedToCreateNewProject;
+                    InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, InitCommandStrings.FailedToParseExistingConfig, AspireConfigFile.FileName, configPath, ex.Message));
+                    InteractionService.DisplayMessage(KnownEmojis.Warning, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.FixOrRemoveConfigAndRerun, AspireConfigFile.FileName));
+                    return (CliExitCodes.FailedToCreateNewProject, default);
                 }
             }
         }
@@ -393,48 +517,193 @@ internal sealed class InitCommand : BaseCommand
             appHost["language"] = language;
         }
 
-        // Write default profiles with random ports for dashboard/OTLP/resource service.
-        // Matches the profile structure used by `aspire new` templates (see Templates/*/aspire.config.json).
-        // Normally scaffolding + codegen creates these, but our thin init skips scaffolding.
-        if (settings["profiles"] is null)
+        // Resolve the effective ports. Three cases:
+        //   1. profiles is null → write fresh profiles, return those ports
+        //   2. profiles exists and parses cleanly → adopt those ports, return them (so
+        //      apphost.run.json stays in sync with what `aspire run` will use)
+        //   3. profiles exists but doesn't match the expected 6-port shape (user-customized
+        //      or older format) → PRESERVE the existing profiles untouched and just generate
+        //      fresh ports for apphost.run.json. This is strictly safer than overwriting,
+        //      even if the two files end up disagreeing on dashboard ports — the user has
+        //      already opted into a custom config and we shouldn't trash their data.
+        AppHostProfilePorts effectivePorts;
+        var existingProfilesObject = settings["profiles"] as JsonObject;
+        if (existingProfilesObject is not null && TryReadAppHostProfilePorts(existingProfilesObject, out var readPorts))
         {
-            // Port ranges match CliTemplateFactory.GenerateRandomPorts()
-            var httpPort = Random.Shared.Next(15000, 15300);
-            var httpsPort = Random.Shared.Next(17000, 17300);
-            var otlpHttpPort = Random.Shared.Next(19000, 19300);
-            var otlpHttpsPort = Random.Shared.Next(21000, 21300);
-            var resourceHttpPort = Random.Shared.Next(20000, 20300);
-            var resourceHttpsPort = Random.Shared.Next(22000, 22300);
+            effectivePorts = readPorts;
+        }
+        else if (existingProfilesObject is not null)
+        {
+            // Existing profiles can't be parsed into our expected shape — leave them alone
+            // and just generate fresh ports for apphost.run.json. We deliberately don't
+            // overwrite the user's customizations, even though it means the two files may
+            // bind to different dashboard URLs in this edge case.
+            effectivePorts = ports ?? AppHostProfilePortGenerator.Generate(Random.Shared);
+        }
+        else
+        {
+            // Matches the profile structure used by `aspire new` templates (see Templates/*/aspire.config.json).
+            // Normally scaffolding + codegen creates these, but our thin init skips scaffolding.
+            effectivePorts = ports ?? AppHostProfilePortGenerator.Generate(Random.Shared);
 
+            // Two profiles (https + http) so `aspire run` can pick either based on user choice.
+            // Each carries the dashboard URL (applicationUrl) plus the OTLP and resource-service
+            // endpoint env vars consumed by DashboardOptionsValidator at AppHost startup.
             settings["profiles"] = new JsonObject
             {
                 ["https"] = new JsonObject
                 {
-                    ["applicationUrl"] = $"https://localhost:{httpsPort};http://localhost:{httpPort}",
+                    ["applicationUrl"] = $"https://localhost:{effectivePorts.DashboardHttpsPort};http://localhost:{effectivePorts.DashboardHttpPort}",
                     ["environmentVariables"] = new JsonObject
                     {
-                        ["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = $"https://localhost:{otlpHttpsPort}",
-                        ["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = $"https://localhost:{resourceHttpsPort}"
+                        [KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = $"https://localhost:{effectivePorts.OtlpHttpsPort}",
+                        [KnownConfigNames.ResourceServiceEndpointUrl] = $"https://localhost:{effectivePorts.ResourceServiceHttpsPort}"
                     }
                 },
                 ["http"] = new JsonObject
                 {
-                    ["applicationUrl"] = $"http://localhost:{httpPort}",
+                    ["applicationUrl"] = $"http://localhost:{effectivePorts.DashboardHttpPort}",
                     ["environmentVariables"] = new JsonObject
                     {
-                        ["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = $"http://localhost:{otlpHttpPort}",
-                        ["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = $"http://localhost:{resourceHttpPort}",
-                        ["ASPIRE_ALLOW_UNSECURED_TRANSPORT"] = "true"
+                        [KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = $"http://localhost:{effectivePorts.OtlpHttpPort}",
+                        [KnownConfigNames.ResourceServiceEndpointUrl] = $"http://localhost:{effectivePorts.ResourceServiceHttpPort}",
+                        [KnownConfigNames.AllowUnsecuredTransport] = "true"
                     }
                 }
             };
         }
 
-        var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
-        File.WriteAllText(configPath, settings.ToJsonString(jsonOptions));
+        File.WriteAllText(configPath, JsonSerializer.Serialize(settings, JsonSourceGenerationContext.RelaxedEscaping.JsonObject));
 
-        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, $"Created {AspireConfigFile.FileName}");
-        return ExitCodeConstants.Success;
+        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.CreatedFile, AspireConfigFile.FileName));
+        return (CliExitCodes.Success, effectivePorts);
+    }
+
+    // Best-effort extraction of the dashboard / OTLP / resource service ports from an
+    // existing `profiles` section. Returns true only if every expected port can be parsed
+    // from the https + http profiles, otherwise the caller falls back to fresh ports.
+    private static bool TryReadAppHostProfilePorts(JsonObject profiles, out AppHostProfilePorts ports)
+    {
+        ports = default;
+
+        if (profiles["https"] is not JsonObject https || profiles["http"] is not JsonObject http)
+        {
+            return false;
+        }
+
+        var httpsEnv = https["environmentVariables"] as JsonObject;
+        var httpEnv = http["environmentVariables"] as JsonObject;
+        if (httpsEnv is null || httpEnv is null)
+        {
+            return false;
+        }
+
+        if (!TryParseHostPort(https["applicationUrl"]?.GetValue<string>(), "https", out var dashboardHttps)
+            || !TryParseHostPort(http["applicationUrl"]?.GetValue<string>(), "http", out var dashboardHttp)
+            || !TryParseHostPort(httpsEnv[KnownConfigNames.DashboardOtlpGrpcEndpointUrl]?.GetValue<string>(), "https", out var otlpHttps)
+            || !TryParseHostPort(httpEnv[KnownConfigNames.DashboardOtlpGrpcEndpointUrl]?.GetValue<string>(), "http", out var otlpHttp)
+            || !TryParseHostPort(httpsEnv[KnownConfigNames.ResourceServiceEndpointUrl]?.GetValue<string>(), "https", out var resourceServiceHttps)
+            || !TryParseHostPort(httpEnv[KnownConfigNames.ResourceServiceEndpointUrl]?.GetValue<string>(), "http", out var resourceServiceHttp))
+        {
+            return false;
+        }
+
+        ports = new AppHostProfilePorts(
+            DashboardHttpsPort: dashboardHttps,
+            DashboardHttpPort: dashboardHttp,
+            OtlpHttpsPort: otlpHttps,
+            OtlpHttpPort: otlpHttp,
+            ResourceServiceHttpsPort: resourceServiceHttps,
+            ResourceServiceHttpPort: resourceServiceHttp);
+        return true;
+    }
+
+    // Parses the first `<scheme>://host:<port>` segment from a (possibly semicolon-
+    // separated) URL list. Returns false if no segment with the requested scheme is found
+    // or the port can't be parsed.
+    private static bool TryParseHostPort(string? value, string scheme, out int port)
+    {
+        port = 0;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        foreach (var raw in value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (!Uri.TryCreate(raw, UriKind.Absolute, out var uri))
+            {
+                continue;
+            }
+
+            if (string.Equals(uri.Scheme, scheme, StringComparison.OrdinalIgnoreCase) && uri.Port > 0)
+            {
+                port = uri.Port;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // Writes apphost.run.json next to the single-file AppHost so that
+    // `dotnet run apphost.cs` (.NET file-based runner) picks up the dashboard / OTLP /
+    // resource service launch profile env vars. Mirrors the structure shipped by the
+    // aspire-apphost-singlefile MSBuild template. Skips if the file already exists.
+    private void DropAppHostRunJson(DirectoryInfo directory, AppHostProfilePorts ports)
+    {
+        const string fileName = "apphost.run.json";
+        var path = Path.Combine(directory.FullName, fileName);
+        if (File.Exists(path))
+        {
+            return;
+        }
+
+        // Shape mirrors a Properties/launchSettings.json (the schema the .NET file-based
+        // runner inherits for `[file].run.json`): a `profiles` map with `commandName: Project`
+        // entries. The https / http pair gives `dotnet run apphost.cs` a working dashboard
+        // URL plus the OTLP and resource-service endpoint env vars that DashboardOptionsValidator
+        // requires — without these the AppHost crashes at startup (see #15986).
+        var settings = new JsonObject
+        {
+            ["$schema"] = "https://json.schemastore.org/launchsettings.json",
+            ["profiles"] = new JsonObject
+            {
+                ["https"] = new JsonObject
+                {
+                    ["commandName"] = "Project",
+                    ["dotnetRunMessages"] = true,
+                    ["launchBrowser"] = true,
+                    ["applicationUrl"] = $"https://localhost:{ports.DashboardHttpsPort};http://localhost:{ports.DashboardHttpPort}",
+                    ["environmentVariables"] = new JsonObject
+                    {
+                        ["ASPNETCORE_ENVIRONMENT"] = "Development",
+                        ["DOTNET_ENVIRONMENT"] = "Development",
+                        [KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = $"https://localhost:{ports.OtlpHttpsPort}",
+                        [KnownConfigNames.ResourceServiceEndpointUrl] = $"https://localhost:{ports.ResourceServiceHttpsPort}"
+                    }
+                },
+                ["http"] = new JsonObject
+                {
+                    ["commandName"] = "Project",
+                    ["dotnetRunMessages"] = true,
+                    ["launchBrowser"] = true,
+                    ["applicationUrl"] = $"http://localhost:{ports.DashboardHttpPort}",
+                    ["environmentVariables"] = new JsonObject
+                    {
+                        ["ASPNETCORE_ENVIRONMENT"] = "Development",
+                        ["DOTNET_ENVIRONMENT"] = "Development",
+                        [KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = $"http://localhost:{ports.OtlpHttpPort}",
+                        [KnownConfigNames.ResourceServiceEndpointUrl] = $"http://localhost:{ports.ResourceServiceHttpPort}",
+                        [KnownConfigNames.AllowUnsecuredTransport] = "true"
+                    }
+                }
+            }
+        };
+
+        File.WriteAllText(path, JsonSerializer.Serialize(settings, JsonSourceGenerationContext.RelaxedEscaping.JsonObject));
+
+        InteractionService.DisplayMessage(KnownEmojis.CheckMarkButton, string.Format(CultureInfo.CurrentCulture, InitCommandStrings.CreatedFile, fileName));
     }
 
 }

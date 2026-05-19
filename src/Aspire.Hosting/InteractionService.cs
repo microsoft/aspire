@@ -17,6 +17,11 @@ internal class InteractionService : IInteractionService
 {
     internal const string DiagnosticId = "ASPIREINTERACTION001";
 
+    // Tracks whether the current async flow is executing in a non-interactive context,
+    // such as a resource command triggered by the CLI with NonInteractive=true.
+    // When set, IsAvailable returns false so command callbacks know not to prompt the user.
+    private static readonly AsyncLocal<bool> s_nonInteractiveScope = new();
+
     private Action<Interaction>? OnInteractionUpdated { get; set; }
     private readonly object _onInteractionUpdatedLock = new();
     private readonly InteractionCollection _interactionCollection = new();
@@ -37,6 +42,11 @@ internal class InteractionService : IInteractionService
     {
         get
         {
+            if (s_nonInteractiveScope.Value)
+            {
+                return false;
+            }
+
             if (_distributedApplicationOptions.DisableDashboard)
             {
                 return false;
@@ -52,6 +62,28 @@ internal class InteractionService : IInteractionService
             }
 
             return true;
+        }
+    }
+
+    /// <summary>
+    /// Creates a scope in which <see cref="IsAvailable"/> returns <c>false</c>.
+    /// The previous value is restored when the returned <see cref="IDisposable"/> is disposed.
+    /// </summary>
+    internal static NonInteractiveScope StartNonInteractiveScope() => new();
+
+    internal sealed class NonInteractiveScope : IDisposable
+    {
+        private readonly bool _previousValue;
+
+        public NonInteractiveScope()
+        {
+            _previousValue = s_nonInteractiveScope.Value;
+            s_nonInteractiveScope.Value = true;
+        }
+
+        public void Dispose()
+        {
+            s_nonInteractiveScope.Value = _previousValue;
         }
     }
 
@@ -490,7 +522,7 @@ internal class InteractionService : IInteractionService
     {
         if (!IsAvailable)
         {
-            throw new InvalidOperationException($"InteractionService is not available because the dashboard is not enabled. Use the {nameof(IsAvailable)} property to determine whether the service is available.");
+            throw new InvalidOperationException($"{nameof(InteractionService)} is not available because the dashboard is not enabled or because this command is running in non-interactive CLI mode.");
         }
     }
 }

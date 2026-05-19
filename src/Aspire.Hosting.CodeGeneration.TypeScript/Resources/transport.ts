@@ -685,6 +685,10 @@ async function marshalTransportValue(
     path: string = 'args',
     ancestors: Set<object> = new Set<object>()
 ): Promise<unknown> {
+    if (typeof value === 'function') {
+        return registerCallback(value as (...args: any[]) => unknown);
+    }
+
     if (value === null || value === undefined || typeof value !== 'object') {
         return value;
     }

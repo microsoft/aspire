@@ -7,12 +7,15 @@ import {
     CertificateTrustScope,
     EndpointProperty,
     IconVariant,
+    OtlpProtocol,
     ProbeType,
     refExpr,
 } from './.modules/aspire.js';
 import type { DockerfileBuilderCallbackContext } from './.modules/aspire.js';
+import { fileURLToPath } from 'node:url';
 
 const builder = await createBuilder();
+const processCommandStdinScriptPath = fileURLToPath(new URL("./process-command-scripts/stdin.js", import.meta.url));
 
 // ===================================================================
 // Factory methods on builder
@@ -20,6 +23,7 @@ const builder = await createBuilder();
 
 // addContainer (pre-existing)
 const container = await builder.addContainer("mycontainer", "nginx");
+await container.withOtlpExporter({ protocol: OtlpProtocol.HttpJson });
 const taggedContainer = await builder.addContainer("mytaggedcontainer", {
     image: "nginx",
     tag: "stable-alpine",
@@ -274,7 +278,7 @@ await container.withRemoteImageTag("latest");
 
 // withImagePushOptions
 await container.withImagePushOptions(async (context) => {
-    const options = await context.options.get();
+    const options = await context.options();
     await options.remoteImageName.set("myregistry.azurecr.io/myapp");
     await options.remoteImageTag.set("latest");
 });
@@ -315,7 +319,7 @@ await tool.publishAsDockerFile(async (_container) => {
 // ===================================================================
 
 await container.withPipelineStepFactory("custom-build-step", async (stepContext) => {
-    const pipelineContext = await stepContext.pipelineContext.get();
+    const pipelineContext = await stepContext.pipelineContext();
     const pipelineModel = await pipelineContext.model();
     const _pipelineResources = await pipelineModel.getResources();
     const _pipelineContainer = await pipelineModel.findResourceByName("mycontainer");
@@ -336,7 +340,7 @@ await container.withPipelineStepFactory("custom-build-step", async (stepContext)
     await stepLogger.logInformation("Pipeline step context logger");
     const stepSummary = await stepContext.summary();
     await stepSummary.add("PipelineStepContext", "Validated");
-    const reportingStep = await stepContext.reportingStep.get();
+    const reportingStep = await stepContext.reportingStep();
     await reportingStep.logStep("information", "Reporting step log");
     await reportingStep.logStepMarkdown("information", "**Reporting step markdown log**");
     const reportingTask = await reportingStep.createTask("Task created");
@@ -372,7 +376,7 @@ await container.withPipelineConfiguration(async (configContext) => {
     const taggedSteps = await configPipeline.stepsByTag(WellKnownPipelineTags.BuildCompute);
 
     const _stepName: string = await allSteps[0].name();
-    const _description: string = await allSteps[0].description();
+    const _description: string | null = await allSteps[0].description();
 
     await allSteps[0].addTag("validated");
     await allSteps[0].dependsOn("restore");
@@ -417,6 +421,20 @@ await builder.addEventingSubscriber(async (registrationContext) => {
         const subscriberServices = await beforeStartEvent.services();
         const aspireStore = await subscriberServices.getAspireStore();
         const _contentBackedFilename = await aspireStore.getFileNameWithContent("validation-apphost.ts", "apphost.ts");
+    });
+
+    await registrationContext.onBeforePublish(async (beforePublishEvent) => {
+        const beforePublishServices = await beforePublishEvent.services();
+        const beforePublishModel = await beforePublishEvent.model();
+        const _beforePublishEventing = await beforePublishServices.getEventing();
+        const _beforePublishResources = await beforePublishModel.getResources();
+    });
+
+    await registrationContext.onAfterPublish(async (afterPublishEvent) => {
+        const afterPublishServices = await afterPublishEvent.services();
+        const afterPublishModel = await afterPublishEvent.model();
+        const _afterPublishEventing = await afterPublishServices.getEventing();
+        const _afterPublishResources = await afterPublishModel.getResources();
     });
 
     await registrationContext.onAfterResourcesCreated(async (afterResourcesCreatedEvent) => {
@@ -508,9 +526,31 @@ const afterResourcesCreatedSubscription = await builder.subscribeAfterResourcesC
     await afterResourcesCreatedLogger.logInformation("AfterResourcesCreated");
 });
 
+const beforePublishSubscription = await builder.subscribeBeforePublish(async (beforePublishEvent) => {
+    const beforePublishServices = await beforePublishEvent.services();
+    const beforePublishModel = await beforePublishEvent.model();
+    const _beforePublishResources = await beforePublishModel.getResources();
+    const _beforePublishContainer = await beforePublishModel.findResourceByName("mycontainer");
+    const beforePublishLoggerFactory = await beforePublishServices.getLoggerFactory();
+    const beforePublishLogger = await beforePublishLoggerFactory.createLogger("ValidationAppHost.BeforePublish");
+    await beforePublishLogger.logInformation("BeforePublish");
+});
+
+const afterPublishSubscription = await builder.subscribeAfterPublish(async (afterPublishEvent) => {
+    const afterPublishServices = await afterPublishEvent.services();
+    const afterPublishModel = await afterPublishEvent.model();
+    const _afterPublishResources = await afterPublishModel.getResources();
+    const _afterPublishContainer = await afterPublishModel.findResourceByName("mycontainer");
+    const afterPublishLoggerFactory = await afterPublishServices.getLoggerFactory();
+    const afterPublishLogger = await afterPublishLoggerFactory.createLogger("ValidationAppHost.AfterPublish");
+    await afterPublishLogger.logInformation("AfterPublish");
+});
+
 const builderEventing = await builder.eventing();
 await builderEventing.unsubscribe(beforeStartSubscription);
 await builderEventing.unsubscribe(afterResourcesCreatedSubscription);
+await builderEventing.unsubscribe(beforePublishSubscription);
+await builderEventing.unsubscribe(afterPublishSubscription);
 
 await container.onBeforeResourceStarted(async (beforeResourceStartedEvent) => {
     const _resource = await beforeResourceStartedEvent.resource();
@@ -635,6 +675,28 @@ await container.withHealthCheck("http");
 // withCommand
 await container.withCommand("restart", "Restart", async (_ctx) => {
     return { success: true };
+});
+
+// withProcessCommand
+await container.withProcessCommand("dotnet-version", "Show .NET version", {
+    executablePath: "dotnet",
+    arguments: ["--version"],
+    commandOptions: {
+        description: "Runs dotnet --version from a TypeScript AppHost.",
+        iconName: "WindowConsole",
+    },
+    maxOutputLineCount: 10,
+    displayImmediately: false,
+});
+await container.withProcessCommand("node-stdin", "Node stdin", {
+    executablePath: "node",
+    arguments: [processCommandStdinScriptPath],
+    standardInputContent: "hello-from-typescript",
+    commandOptions: {
+        description: "Runs node and writes command input to stdin.",
+        iconName: "WindowConsole",
+    },
+    maxOutputLineCount: 10,
 });
 
 // withHttpCommand

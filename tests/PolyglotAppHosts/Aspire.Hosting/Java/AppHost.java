@@ -3,6 +3,7 @@ import aspire.*;
 void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         var container = builder.addContainer("mycontainer", "nginx");
+        container.withOtlpExporter(OtlpProtocol.HTTP_JSON);
         var dockerContainer = builder.addDockerfile("dockerapp", "./app");
         var configureDockerfileBuilder = (AspireAction1<DockerfileBuilderCallbackContext>) (dockerfileContext) -> {
             var _dockerfileResource = dockerfileContext.resource();
@@ -56,7 +57,7 @@ void main() throws Exception {
         container.withReference(endpoint);
         container.withReference("https://example.com/", new WithReferenceOptions().name("external-uri"));
         var vnet = builder.addAzureVirtualNetwork("vnet", "10.0.0.0/16");
-        var subnet = vnet.addSubnet("web", "10.0.1.0/24");
+        var subnet = vnet.addSubnet("web", "10.0.1.0/24", null);
         subnet.allowInbound(new AllowInboundOptions().port("443").from(AzureServiceTags.AzureLoadBalancer));
         subnet.denyInbound(new DenyInboundOptions().from(AzureServiceTags.Internet));
         var aks = builder.addAzureKubernetesEnvironment("aks");
@@ -128,6 +129,18 @@ void main() throws Exception {
                 var aspireStore = subscriberServices.getAspireStore();
                 var _contentBackedFilename = aspireStore.getFileNameWithContent("validation-apphost.java", "AppHost.java");
             });
+            registrationContext.onBeforePublish((beforePublishEvent) -> {
+                var beforePublishServices = beforePublishEvent.services();
+                var beforePublishModel = beforePublishEvent.model();
+                var _beforePublishEventing = beforePublishServices.getEventing();
+                var _beforePublishResources = beforePublishModel.getResources();
+            });
+            registrationContext.onAfterPublish((afterPublishEvent) -> {
+                var afterPublishServices = afterPublishEvent.services();
+                var afterPublishModel = afterPublishEvent.model();
+                var _afterPublishEventing = afterPublishServices.getEventing();
+                var _afterPublishResources = afterPublishModel.getResources();
+            });
             registrationContext.onAfterResourcesCreated((afterResourcesCreatedEvent) -> {
                 var afterResourcesCreatedServices = afterResourcesCreatedEvent.services();
                 var afterResourcesCreatedModel = afterResourcesCreatedEvent.model();
@@ -163,9 +176,13 @@ void main() throws Exception {
         var _httpsCertificateData = executionConfiguration.getHttpsCertificateData();
         var beforeStartSubscription = builder.subscribeBeforeStart((beforeStartEvent) -> { var beforeStartServices = beforeStartEvent.services(); var beforeStartModel = beforeStartEvent.model(); var _beforeStartResources = beforeStartModel.getResources(); var _beforeStartContainer = beforeStartModel.findResourceByName("mycontainer"); var _beforeStartEventing = beforeStartServices.getEventing(); var beforeStartLoggerFactory = beforeStartServices.getLoggerFactory(); var beforeStartLogger = beforeStartLoggerFactory.createLogger("ValidationAppHost.BeforeStart"); beforeStartLogger.logInformation("BeforeStart information"); beforeStartLogger.logWarning("BeforeStart warning"); beforeStartLogger.logError("BeforeStart error"); beforeStartLogger.logDebug("BeforeStart debug"); beforeStartLogger.log("critical", "BeforeStart critical"); var beforeStartResourceLoggerService = beforeStartServices.getResourceLoggerService(); beforeStartResourceLoggerService.completeLog(container); beforeStartResourceLoggerService.completeLogByName("mycontainer"); var beforeStartNotificationService = beforeStartServices.getResourceNotificationService(); beforeStartNotificationService.waitForResourceState("mycontainer", "Running"); var _matchedResourceState = beforeStartNotificationService.waitForResourceStates("mycontainer", new String[] { "Running", "FailedToStart" }); var _healthyResourceEvent = beforeStartNotificationService.waitForResourceHealthy("mycontainer"); beforeStartNotificationService.waitForDependencies(container); var _currentResourceState = beforeStartNotificationService.tryGetResourceState("mycontainer"); beforeStartNotificationService.publishResourceUpdate(container, new PublishResourceUpdateOptions().state("Validated").stateStyle("info")); var userSecretsManager = beforeStartServices.getUserSecretsManager(); var _userSecretsAvailable = userSecretsManager.isAvailable(); var _userSecretsFilePath = userSecretsManager.filePath(); var _secretSet = userSecretsManager.trySetSecret("Validation:Key", "value"); userSecretsManager.getOrSetSecret(container, "Validation:GeneratedKey", "generated-value"); var _generatedSecretValue = builderConfiguration.getConfigValue("Validation:GeneratedKey"); userSecretsManager.saveStateJson("{\"Validation\":\"Value\"}"); var _modelFromServices = beforeStartServices.getDistributedApplicationModel(); });
         var afterResourcesCreatedSubscription = builder.subscribeAfterResourcesCreated((afterResourcesCreatedEvent) -> { var afterResourcesCreatedServices = afterResourcesCreatedEvent.services(); var afterResourcesCreatedModel = afterResourcesCreatedEvent.model(); var _afterResources = afterResourcesCreatedModel.getResources(); var _afterResourcesContainer = afterResourcesCreatedModel.findResourceByName("mycontainer"); var afterResourcesCreatedLoggerFactory = afterResourcesCreatedServices.getLoggerFactory(); var afterResourcesCreatedLogger = afterResourcesCreatedLoggerFactory.createLogger("ValidationAppHost.AfterResourcesCreated"); afterResourcesCreatedLogger.logInformation("AfterResourcesCreated"); });
+        var beforePublishSubscription = builder.subscribeBeforePublish((beforePublishEvent) -> { var beforePublishServices = beforePublishEvent.services(); var beforePublishModel = beforePublishEvent.model(); var _beforePublishResources = beforePublishModel.getResources(); var _beforePublishContainer = beforePublishModel.findResourceByName("mycontainer"); var beforePublishLoggerFactory = beforePublishServices.getLoggerFactory(); var beforePublishLogger = beforePublishLoggerFactory.createLogger("ValidationAppHost.BeforePublish"); beforePublishLogger.logInformation("BeforePublish"); });
+        var afterPublishSubscription = builder.subscribeAfterPublish((afterPublishEvent) -> { var afterPublishServices = afterPublishEvent.services(); var afterPublishModel = afterPublishEvent.model(); var _afterPublishResources = afterPublishModel.getResources(); var _afterPublishContainer = afterPublishModel.findResourceByName("mycontainer"); var afterPublishLoggerFactory = afterPublishServices.getLoggerFactory(); var afterPublishLogger = afterPublishLoggerFactory.createLogger("ValidationAppHost.AfterPublish"); afterPublishLogger.logInformation("AfterPublish"); });
         var builderEventing = builder.eventing();
         builderEventing.unsubscribe(beforeStartSubscription);
         builderEventing.unsubscribe(afterResourcesCreatedSubscription);
+        builderEventing.unsubscribe(beforePublishSubscription);
+        builderEventing.unsubscribe(afterPublishSubscription);
         container.onBeforeResourceStarted((beforeResourceStartedEvent) -> { var _resource = beforeResourceStartedEvent.resource(); var services = beforeResourceStartedEvent.services(); var loggerFactory = services.getLoggerFactory(); var logger = loggerFactory.createLogger("ValidationAppHost.BeforeResourceStarted"); logger.logInformation("BeforeResourceStarted"); });
         container.onResourceStopped((resourceStoppedEvent) -> { var _resource = resourceStoppedEvent.resource(); var services = resourceStoppedEvent.services(); var loggerFactory = services.getLoggerFactory(); var logger = loggerFactory.createLogger("ValidationAppHost.ResourceStopped"); logger.logWarning("ResourceStopped"); });
         cache.onConnectionStringAvailable((connectionStringAvailableEvent) -> { var _resource = connectionStringAvailableEvent.resource(); var services = connectionStringAvailableEvent.services(); var notifications = services.getResourceNotificationService(); var _connectionState = notifications.tryGetResourceState("cache"); });
