@@ -21,7 +21,7 @@ internal static class GatewayConfigurationBuilder
         List<GatewayAppRegistration> apps,
         EndpointReference gatewayEndpoint,
         EndpointReference? httpGatewayEndpoint = null,
-        string? httpOtlpEndpointUrl = null)
+        object? httpOtlpEndpoint = null)
     {
         var addedClusters = new HashSet<string>();
         var httpClientEndpoint = httpGatewayEndpoint ?? (gatewayEndpoint.IsHttp ? gatewayEndpoint : null);
@@ -56,7 +56,7 @@ internal static class GatewayConfigurationBuilder
 
         if (apps.Any(app => app.ProxyTelemetry))
         {
-            EmitOtlpCluster(env, httpOtlpEndpointUrl);
+            EmitOtlpCluster(env, httpOtlpEndpoint);
         }
     }
 
@@ -71,7 +71,7 @@ internal static class GatewayConfigurationBuilder
         string resourceName,
         IReadOnlyList<HostedClientService> services,
         bool proxyTelemetry,
-        string? httpOtlpEndpointUrl,
+        object? httpOtlpEndpoint,
         string otlpPrefix = DefaultOtlpPrefix)
     {
         var httpClientEndpoint = httpHostEndpoint ?? (hostEndpoint.IsHttp ? hostEndpoint : null);
@@ -93,7 +93,7 @@ internal static class GatewayConfigurationBuilder
 
         if (proxyTelemetry)
         {
-            EmitOtlpCluster(env, httpOtlpEndpointUrl);
+            EmitOtlpCluster(env, httpOtlpEndpoint);
         }
     }
 
@@ -160,14 +160,15 @@ internal static class GatewayConfigurationBuilder
     /// <summary>
     /// Emits the shared OTLP dashboard YARP cluster.
     /// Uses the HTTP OTLP endpoint (for HTTP/protobuf from WASM clients) when available.
+    /// Accepts either a string URL or an EndpointReference (which resolves at runtime).
     /// Does NOT fall back to OTEL_EXPORTER_OTLP_ENDPOINT because that is typically the
     /// gRPC endpoint which cannot be used from browser-based clients.
     /// </summary>
-    private static void EmitOtlpCluster(IDictionary<string, object> env, string? httpOtlpEndpointUrl = null)
+    private static void EmitOtlpCluster(IDictionary<string, object> env, object? httpOtlpEndpoint = null)
     {
-        if (httpOtlpEndpointUrl is not null)
+        if (httpOtlpEndpoint is not null)
         {
-            env["ReverseProxy__Clusters__cluster-otlp-dashboard__Destinations__d1__Address"] = httpOtlpEndpointUrl;
+            env["ReverseProxy__Clusters__cluster-otlp-dashboard__Destinations__d1__Address"] = httpOtlpEndpoint;
         }
     }
 
