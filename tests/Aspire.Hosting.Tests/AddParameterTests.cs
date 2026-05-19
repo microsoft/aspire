@@ -658,7 +658,7 @@ public class AddParameterTests
     }
 
     [Fact]
-    public void ParameterWithPolyglotCustomInput_IgnoresEmptyOptionalStrings()
+    public void ParameterWithPolyglotCustomInput_IgnoresEmptyOptionalValues()
     {
         var appBuilder = DistributedApplication.CreateBuilder();
 
@@ -670,7 +670,8 @@ public class AddParameterTests
             [nameof(InteractionInput.Label)] = "",
             [nameof(InteractionInput.Description)] = "",
             [nameof(InteractionInput.Placeholder)] = "",
-            [nameof(InteractionInput.Value)] = ""
+            [nameof(InteractionInput.Value)] = "",
+            [nameof(InteractionInput.Options)] = new Dictionary<string, string>()
         });
 
         var input = parameter.Resource.CreateInput();
@@ -679,6 +680,7 @@ public class AddParameterTests
         Assert.True(input.EnableDescriptionMarkdown);
         Assert.Equal(string.Format(InteractionStrings.ParametersInputsParameterPlaceholder, "worker-count"), input.Placeholder);
         Assert.Null(input.Value);
+        Assert.Null(input.Options);
     }
 #pragma warning restore ASPIREINTERACTION001
 

@@ -265,7 +265,7 @@ public static class ParameterResourceBuilderExtensions
             Label = GetOptionalString(options.Label) ?? parameter.Name,
             Description = GetOptionalString(options.Description) ?? parameter.Description,
             EnableDescriptionMarkdown = options.EnableDescriptionMarkdown ?? parameter.EnableDescriptionMarkdown,
-            Options = options.Options?.Select(static option => KeyValuePair.Create(option.Key, option.Value)).ToArray(),
+            Options = options.Options is { Count: > 0 } optionValues ? optionValues.Select(static option => KeyValuePair.Create(option.Key, option.Value)).ToArray() : null,
             Value = GetOptionalString(options.Value),
             Placeholder = GetOptionalString(options.Placeholder) ?? string.Format(CultureInfo.CurrentCulture, InteractionStrings.ParametersInputsParameterPlaceholder, parameter.Name),
             AllowCustomChoice = options.AllowCustomChoice ?? false,
