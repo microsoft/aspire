@@ -466,6 +466,178 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         Assert.Null(result);
     }
 
+    [Fact]
+    public async Task TryCreateTemporaryNuGetConfig_WithPackageSourceOverride_MapsAspireToOverrideAndAddsNuGetOrgFallback()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string packageSourceOverride = "/tmp/aspire-packages";
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([])
+        };
+        var server = CreateServerWithPackagingService(workspace, packagingService);
+
+        using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(
+            server,
+            requestedChannel: null,
+            packageSourceOverride: packageSourceOverride);
+
+        Assert.NotNull(result);
+        var doc = XDocument.Load(result.ConfigFile.FullName);
+        Assert.Equal(["Aspire*"], GetPackagePatternsForSource(doc, packageSourceOverride));
+        Assert.Equal([PackageMapping.AllPackages], GetPackagePatternsForSource(doc, NuGetOrgSource));
+    }
+
+    [Fact]
+    public async Task TryCreateTemporaryNuGetConfig_WithPackageSourceOverrideWithoutRequestedChannel_DoesNotMergeExplicitChannelAspireMappings()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string packageSourceOverride = "/tmp/aspire-packages";
+        const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
+        var explicitChannel = PackageChannel.CreateExplicitChannel(
+            name: "daily",
+            quality: PackageChannelQuality.Both,
+            mappings:
+            [
+                new PackageMapping("Aspire*", channelSource),
+                new PackageMapping(PackageMapping.AllPackages, NuGetOrgSource)
+            ],
+            nuGetPackageCache: new FakeNuGetPackageCache());
+        var server = CreateServerWithChannel(workspace, explicitChannel, CreateContextWithIdentityChannel("pr-12345"));
+
+        using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(
+            server,
+            requestedChannel: null,
+            packageSourceOverride: packageSourceOverride);
+
+        Assert.NotNull(result);
+        var doc = XDocument.Load(result.ConfigFile.FullName);
+        Assert.Equal(["Aspire*"], GetPackagePatternsForSource(doc, packageSourceOverride));
+        Assert.Empty(GetPackagePatternsForSource(doc, channelSource));
+        Assert.Equal([PackageMapping.AllPackages], GetPackagePatternsForSource(doc, NuGetOrgSource));
+    }
+
+    [Fact]
+    public async Task TryCreateTemporaryNuGetConfig_WithPackageSourceOverride_PreservesRequestedChannelMappingsAndGlobalPackagesFolder()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string packageSourceOverride = "/tmp/aspire-packages";
+        const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
+        var stagingChannel = PackageChannel.CreateExplicitChannel(
+            name: "staging",
+            quality: PackageChannelQuality.Both,
+            mappings: [new PackageMapping("CommunityToolkit*", channelSource)],
+            nuGetPackageCache: new FakeNuGetPackageCache(),
+            configureGlobalPackagesFolder: true);
+        var server = CreateServerWithChannel(workspace, stagingChannel, CreateContextWithIdentityChannel("pr-12345"));
+
+        using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(
+            server,
+            requestedChannel: "staging",
+            packageSourceOverride: packageSourceOverride);
+
+        Assert.NotNull(result);
+        var doc = XDocument.Load(result.ConfigFile.FullName);
+        Assert.Equal(["Aspire*"], GetPackagePatternsForSource(doc, packageSourceOverride));
+        Assert.Equal(["CommunityToolkit*"], GetPackagePatternsForSource(doc, channelSource));
+        Assert.Equal([PackageMapping.AllPackages], GetPackagePatternsForSource(doc, NuGetOrgSource));
+        Assert.NotNull(doc.Descendants("config")
+            .SelectMany(c => c.Elements("add"))
+            .FirstOrDefault(a => string.Equals(a.Attribute("key")?.Value, "globalPackagesFolder", StringComparison.OrdinalIgnoreCase)));
+    }
+
+    [Fact]
+    public async Task TryCreateTemporaryNuGetConfig_WithPackageSourceOverride_DropsRequestedChannelAspireMappings()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string packageSourceOverride = "/tmp/aspire-packages";
+        const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
+        var stagingChannel = PackageChannel.CreateExplicitChannel(
+            name: "staging",
+            quality: PackageChannelQuality.Both,
+            mappings: [new PackageMapping("Aspire*", channelSource), new PackageMapping(PackageMapping.AllPackages, NuGetOrgSource)],
+            nuGetPackageCache: new FakeNuGetPackageCache());
+        var server = CreateServerWithChannel(workspace, stagingChannel, CreateContextWithIdentityChannel("pr-12345"));
+
+        using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(
+            server,
+            requestedChannel: "staging",
+            packageSourceOverride: packageSourceOverride);
+
+        Assert.NotNull(result);
+        var doc = XDocument.Load(result.ConfigFile.FullName);
+        Assert.Equal(["Aspire*"], GetPackagePatternsForSource(doc, packageSourceOverride));
+        Assert.Empty(GetPackagePatternsForSource(doc, channelSource));
+        Assert.Equal([PackageMapping.AllPackages], GetPackagePatternsForSource(doc, NuGetOrgSource));
+    }
+
+    [Fact]
+    public async Task TryCreateTemporaryNuGetConfig_WithPackageSourceOverride_PassesRequestedChannelToPackagingService()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string packageSourceOverride = "/tmp/aspire-packages";
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([])
+        };
+        var server = CreateServerWithPackagingService(workspace, packagingService);
+
+        using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(
+            server,
+            requestedChannel: PackageChannelNames.Staging,
+            packageSourceOverride: packageSourceOverride);
+
+        Assert.NotNull(result);
+        Assert.Equal(PackageChannelNames.Staging, packagingService.LastRequestedChannelName);
+    }
+
+    [Fact]
+    public async Task TryCreateTemporaryNuGetConfig_WithPackageSourceOverride_UsesChannelAllPackagesMappingAsFallback()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string packageSourceOverride = "/tmp/aspire-packages";
+        const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
+        var stagingChannel = PackageChannel.CreateExplicitChannel(
+            name: "staging",
+            quality: PackageChannelQuality.Both,
+            mappings: [new PackageMapping(PackageMapping.AllPackages, channelSource)],
+            nuGetPackageCache: new FakeNuGetPackageCache());
+        var server = CreateServerWithChannel(workspace, stagingChannel, CreateContextWithIdentityChannel("pr-12345"));
+
+        using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(
+            server,
+            requestedChannel: "staging",
+            packageSourceOverride: packageSourceOverride);
+
+        Assert.NotNull(result);
+        var doc = XDocument.Load(result.ConfigFile.FullName);
+        Assert.Equal(["Aspire*"], GetPackagePatternsForSource(doc, packageSourceOverride));
+        Assert.Equal([PackageMapping.AllPackages], GetPackagePatternsForSource(doc, channelSource));
+        Assert.Empty(GetPackagePatternsForSource(doc, NuGetOrgSource));
+    }
+
+    [Fact]
+    public async Task TryCreateTemporaryNuGetConfig_WithPackageSourceOverride_WhenChannelLookupFails_StillCreatesOverrideConfigWithFallback()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string packageSourceOverride = "/tmp/aspire-packages";
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => throw new InvalidOperationException("Channel lookup failed.")
+        };
+        var server = CreateServerWithPackagingService(workspace, packagingService);
+
+        using var result = await InvokeTryCreateTemporaryNuGetConfigAsync(
+            server,
+            requestedChannel: "staging",
+            packageSourceOverride: packageSourceOverride);
+
+        Assert.NotNull(result);
+        var doc = XDocument.Load(result.ConfigFile.FullName);
+        Assert.Equal(["Aspire*"], GetPackagePatternsForSource(doc, packageSourceOverride));
+        Assert.Equal([PackageMapping.AllPackages], GetPackagePatternsForSource(doc, NuGetOrgSource));
+    }
+
     private static CliExecutionContext CreateContextWithIdentityChannel(string identityChannel) =>
         new(new DirectoryInfo(Path.GetTempPath()),
             new DirectoryInfo(Path.Combine(Path.GetTempPath(), "hives")),
@@ -501,6 +673,15 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
         };
 
+        return CreateServerWithPackagingService(workspace, packagingService, executionContext);
+    }
+
+    private static PrebuiltAppHostServer CreateServerWithPackagingService(
+        TemporaryWorkspace workspace,
+        IPackagingService packagingService,
+        CliExecutionContext? executionContext = null)
+    {
+        executionContext ??= TestExecutionContextFactory.CreateTestContext();
         var nugetService = new BundleNuGetService(
             new NullLayoutDiscovery(),
             new LayoutProcessRunner(new TestProcessExecutionFactory()),
@@ -521,14 +702,16 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     private static async Task<TemporaryNuGetConfig?> InvokeTryCreateTemporaryNuGetConfigAsync(
-        PrebuiltAppHostServer server, string requestedChannel)
+        PrebuiltAppHostServer server,
+        string? requestedChannel,
+        string? packageSourceOverride = null)
     {
         var method = typeof(PrebuiltAppHostServer).GetMethod(
             "TryCreateTemporaryNuGetConfigAsync",
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
         Assert.NotNull(method);
 
-        var task = (Task<TemporaryNuGetConfig?>)method.Invoke(server, [requestedChannel, null, CancellationToken.None])!;
+        var task = (Task<TemporaryNuGetConfig?>)method.Invoke(server, [requestedChannel, packageSourceOverride, CancellationToken.None])!;
         return await task;
     }
 
@@ -667,6 +850,44 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Assert.Contains("Aspire.Hosting.CodeGeneration.TypeScript,[13.4.0-pr.17141.gf142085f]", restoreArgs!);
             Assert.Contains("CommunityToolkit.Aspire.Hosting.Redis,1.0.0", restoreArgs!);
             Assert.Contains("--nuget-config", restoreArgs!);
+        }
+        finally
+        {
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task PrepareAsync_WithPackageSourceOverride_AddsNuGetOrgFallbackSource()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string packageSourceOverride = "/tmp/aspire-pr-hive/packages";
+        List<string>? restoreArgs = null;
+
+        var (server, executionFactory) = CreatePackageReferenceServer(workspace);
+        executionFactory.AssertionCallback = (args, _, _, _) =>
+        {
+            if (args is ["nuget", "restore", ..])
+            {
+                restoreArgs = [.. args];
+            }
+        };
+
+        var workingDirectory = GetWorkingDirectory(server);
+
+        try
+        {
+            var result = await server.PrepareAsync(
+                "13.4.0-pr.17141.gf142085f",
+                [
+                    IntegrationReference.FromPackage("Aspire.Hosting.CodeGeneration.TypeScript", "13.4.0-pr.17141.gf142085f"),
+                    IntegrationReference.FromPackage("CommunityToolkit.Aspire.Hosting.Redis", "1.0.0")
+                ],
+                packageSourceOverride: packageSourceOverride);
+
+            Assert.True(result.Success);
+            Assert.NotNull(restoreArgs);
+            Assert.Equal([packageSourceOverride, NuGetOrgSource], GetSourceArguments(restoreArgs!));
         }
         finally
         {
@@ -1477,6 +1698,15 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         }
 
         return [.. sources];
+    }
+
+    private static string[] GetPackagePatternsForSource(XDocument doc, string source)
+    {
+        return [.. doc.Descendants("packageSource")
+            .Where(e => string.Equals(e.Attribute("key")?.Value, source, StringComparison.OrdinalIgnoreCase))
+            .Elements("package")
+            .Select(e => e.Attribute("pattern")?.Value)
+            .OfType<string>()];
     }
 
     private static void DeleteWorkingDirectory(string workingDirectory)

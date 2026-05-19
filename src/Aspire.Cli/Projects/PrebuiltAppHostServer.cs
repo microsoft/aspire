@@ -26,8 +26,8 @@ namespace Aspire.Cli.Projects;
 /// </summary>
 internal sealed class PrebuiltAppHostServer : IAppHostServerProject
 {
-    // An explicit PR/local source only contains Aspire packages. Keep NuGet.org available
-    // for non-Aspire packages and transitive dependencies that are outside the Aspire* mapping.
+    // An explicit source is preferred for Aspire packages. Keep NuGet.org available for
+    // non-Aspire packages and transitive dependencies that are outside the Aspire* mapping.
     private const string NuGetOrgSource = "https://api.nuget.org/v3/index.json";
 
     internal const string ClosureMetadataFileName = "closure-metadata.txt";
@@ -392,6 +392,9 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
 
         if (!string.IsNullOrWhiteSpace(restoreConfigFile))
         {
+            // RestoreAdditionalProjectSources can add feeds, but it cannot carry package source
+            // mappings. Use the temp NuGet.config so Aspire* packages stay pinned to the
+            // explicit source while non-Aspire dependencies can use fallback sources.
             propertyGroup.Add(new XElement("RestoreConfigFile", restoreConfigFile));
         }
         // Add channel sources without replacing the user's nuget.config.
@@ -498,7 +501,16 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
 
         try
         {
-            foreach (var channel in await GetExplicitRestoreChannelsAsync(requestedChannel, cancellationToken))
+            // When --source is set without a specific channel, do NOT fold in every explicit
+            // channel's sources: each built-in channel contributes its own Aspire* feed, and
+            // letting all of them through would give NuGet multiple co-eligible sources for
+            // Aspire packages and silently defeat the override. The temp NuGet.config below
+            // emits PSM that constrains Aspire packages to the override; this list only needs
+            // the override (plus a NuGet.org fallback) for non-Aspire transitives.
+            var channels = !string.IsNullOrWhiteSpace(packageSourceOverride) && string.IsNullOrEmpty(requestedChannel)
+                ? []
+                : await GetExplicitRestoreChannelsAsync(requestedChannel, cancellationToken);
+            foreach (var channel in channels)
             {
                 if (channel.Mappings is null)
                 {
@@ -521,6 +533,9 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
 
         if (!string.IsNullOrWhiteSpace(packageSourceOverride) && sources.Count == 1)
         {
+            // Keep NuGet.org available for unrelated packages and transitives; the temp
+            // NuGet.config maps Aspire* exclusively to the explicit source so Aspire packages
+            // cannot float to NuGet.org or any other co-eligible feed.
             sources.Add(NuGetOrgSource);
         }
 
@@ -531,6 +546,9 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
     {
         if (!string.IsNullOrWhiteSpace(packageSourceOverride))
         {
+            // Treat an explicit --source value as the preferred source for Aspire packages.
+            // Build a temporary NuGet.config that routes Aspire* there, optionally preserves
+            // non-Aspire channel mappings, and leaves a fallback source for non-Aspire deps.
             var mappings = new List<PackageMapping>
             {
                 new("Aspire*", packageSourceOverride)
@@ -539,15 +557,32 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
 
             try
             {
-                foreach (var restoreChannel in await GetExplicitRestoreChannelsAsync(requestedChannel, cancellationToken))
+                // Only fold in mappings from an explicitly-requested, matched channel. Falling
+                // back to "all explicit channels" here would pull in every built-in channel's
+                // Aspire* mapping pointing at its own feed; NuGet would treat all of them as
+                // co-eligible sources for Aspire packages and silently defeat the override.
+                if (!string.IsNullOrEmpty(requestedChannel))
                 {
-                    if (restoreChannel.Mappings is null)
+                    var packageChannels = await _packagingService.GetChannelsAsync(cancellationToken, requestedChannel);
+                    var matchedChannel = packageChannels.FirstOrDefault(c =>
+                        string.Equals(c.Name, requestedChannel, StringComparison.OrdinalIgnoreCase));
+                    if (matchedChannel?.Mappings is not null)
                     {
-                        continue;
-                    }
+                        foreach (var mapping in matchedChannel.Mappings)
+                        {
+                            // Drop any Aspire-prefixed mapping — the --source override owns
+                            // Aspire restoration exclusively. Non-Aspire patterns (e.g.
+                            // CommunityToolkit*, catch-all *) are preserved.
+                            if (mapping.PackageFilter.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase))
+                            {
+                                continue;
+                            }
 
-                    mappings.AddRange(restoreChannel.Mappings);
-                    configureGlobalPackagesFolder |= restoreChannel.ConfigureGlobalPackagesFolder;
+                            mappings.Add(mapping);
+                        }
+
+                        configureGlobalPackagesFolder |= matchedChannel.ConfigureGlobalPackagesFolder;
+                    }
                 }
             }
             catch (Exception ex)
@@ -606,7 +641,10 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         if (!string.IsNullOrEmpty(requestedChannel))
         {
             var matchingChannel = channels.FirstOrDefault(c => string.Equals(c.Name, requestedChannel, StringComparison.OrdinalIgnoreCase));
-            return matchingChannel is not null ? [matchingChannel] : channels.Where(c => c.Type == PackageChannelType.Explicit).ToArray();
+            if (matchingChannel is not null)
+            {
+                return [matchingChannel];
+            }
         }
 
         return channels.Where(c => c.Type == PackageChannelType.Explicit).ToArray();
@@ -614,17 +652,13 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
 
     private static string GetRestoreVersion(string packageName, string version, bool useExactPackageVersions)
     {
-        if (!ShouldUseExactPackageVersion(packageName, useExactPackageVersions) || version.Length == 0 || version[0] is '[' or '(')
+        var shouldUseExactAspirePackageVersion = useExactPackageVersions && packageName.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase);
+        if (!shouldUseExactAspirePackageVersion || version.Length == 0 || version[0] is '[' or '(')
         {
             return version;
         }
 
         return $"[{version}]";
-    }
-
-    private static bool ShouldUseExactPackageVersion(string packageName, bool useExactPackageVersions)
-    {
-        return useExactPackageVersions && packageName.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <inheritdoc />
