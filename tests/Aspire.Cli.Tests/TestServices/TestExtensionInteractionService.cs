@@ -81,7 +81,7 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
         DisplayErrorCallback?.Invoke(errorMessage);
     }
 
-    public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false)
+    public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false, ConsoleOutput? consoleOverride = null)
     {
     }
 
@@ -118,7 +118,7 @@ internal sealed class TestExtensionInteractionService(IServiceProvider servicePr
     {
     }
 
-    public void DisplayCancellationMessage()
+    public void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null)
     {
     }
 

@@ -74,7 +74,8 @@ internal abstract class BaseCommand : Command
 
             if (result.ShouldDisplayCancellationMessage)
             {
-                interactionService.DisplayCancellationMessage();
+                interactionService.DisplayCancellationMessage(
+                    result.ExitCode != CliExitCodes.Success ? ConsoleOutput.Error : null);
             }
 
             // Display the CLI log file path on non-zero exit codes so the user knows
@@ -85,7 +86,8 @@ internal abstract class BaseCommand : Command
                 interactionService.DisplayMessage(
                     KnownEmojis.PageFacingUp,
                     string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, MarkupHelpers.SafeFileLink(interactionService, executionContext.LogFilePath)),
-                    allowMarkup: true);
+                    allowMarkup: true,
+                    consoleOverride: ConsoleOutput.Error);
 
                 // If we connected to a running app host, also display the log file path of
                 // the CLI process that launched it so users can diagnose issues in both processes.
@@ -94,7 +96,8 @@ internal abstract class BaseCommand : Command
                     interactionService.DisplayMessage(
                         KnownEmojis.MagnifyingGlassTiltedLeft,
                         string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeAppHostLogsAt, MarkupHelpers.SafeFileLink(interactionService, executionContext.AppHostCliLogFilePath)),
-                        allowMarkup: true);
+                        allowMarkup: true,
+                        consoleOverride: ConsoleOutput.Error);
                 }
             }
 

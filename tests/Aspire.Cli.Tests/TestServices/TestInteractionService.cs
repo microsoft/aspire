@@ -199,7 +199,7 @@ internal sealed class TestInteractionService : IInteractionService
         }
     }
 
-    public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false)
+    public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false, ConsoleOutput? consoleOverride = null)
     {
         lock (_displayLock)
         {
@@ -223,7 +223,7 @@ internal sealed class TestInteractionService : IInteractionService
         }
     }
 
-    public void DisplayCancellationMessage()
+    public void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null)
     {
         DisplayCancellationMessageCount++;
     }
