@@ -261,23 +261,6 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
         return AppHostProfilePortGenerator.Generate(Random.Shared);
     }
 
-    // The --source override is consumed only during the initial scaffold restore inside
-    // PrebuiltAppHostServer / the guest AppHost build path; nothing in the scaffolded project
-    // records the source, so a later `aspire restore` / `aspire add` will use the channel
-    // feeds resolved from aspire.config.json. Surface that so users supplying
-    // `--source <pr-hive>/packages` aren't surprised when subsequent commands fail to find
-    // the same packages. Persisting the feed is tracked as a follow-up.
-    private void DisplaySourceOverrideNotPersistedWarningIfNeeded(string? source)
-    {
-        if (!string.IsNullOrWhiteSpace(source))
-        {
-            _interactionService.DisplayMessage(
-                KnownEmojis.Warning,
-                TemplatingStrings.SourceOverrideNotPersistedWarning,
-                allowMarkup: true);
-        }
-    }
-
     private static void AddOptionIfMissing(System.CommandLine.Command command, System.CommandLine.Option option)
     {
         if (!command.Options.Contains(option))

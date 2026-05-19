@@ -1,0 +1,39 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+namespace Aspire.Cli.Packaging;
+
+internal static class PackageSourceOverrideMappings
+{
+    internal const string NuGetOrgSource = "https://api.nuget.org/v3/index.json";
+
+    public static PackageMapping[] Create(string packageSourceOverride, PackageChannel? requestedChannel)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(packageSourceOverride);
+
+        var mappings = new List<PackageMapping>
+        {
+            new("Aspire*", packageSourceOverride)
+        };
+
+        if (requestedChannel?.Mappings is not null)
+        {
+            foreach (var mapping in requestedChannel.Mappings)
+            {
+                if (mapping.PackageFilter.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                mappings.Add(mapping);
+            }
+        }
+
+        if (!mappings.Any(static mapping => mapping.PackageFilter == PackageMapping.AllPackages))
+        {
+            mappings.Add(new PackageMapping(PackageMapping.AllPackages, NuGetOrgSource));
+        }
+
+        return [.. mappings.DistinctBy(static mapping => $"{mapping.PackageFilter}\0{mapping.Source}")];
+    }
+}

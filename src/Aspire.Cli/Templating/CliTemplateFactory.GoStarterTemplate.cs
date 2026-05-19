@@ -87,8 +87,7 @@ internal sealed partial class CliTemplateFactory
                         _interactionService.DisplayError("Automatic 'aspire restore' failed for the new Go starter project. Run 'aspire restore' in the project directory for more details.");
                         return new TemplateResult((int)CliExitCodes.FailedToBuildArtifacts, outputPath);
                     }
-
-                    DisplaySourceOverrideNotPersistedWarningIfNeeded(inputs.Source);
+                    await _templateNuGetConfigService.CreateOrUpdateNuGetConfigForSourceOverrideAsync(inputs.Source, inputs.Channel, outputPath, cancellationToken);
 
                     return new TemplateResult((int)CliExitCodes.Success, outputPath);
                 }), emoji: KnownEmojis.Rocket);

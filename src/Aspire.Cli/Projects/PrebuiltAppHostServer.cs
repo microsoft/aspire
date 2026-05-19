@@ -26,10 +26,6 @@ namespace Aspire.Cli.Projects;
 /// </summary>
 internal sealed class PrebuiltAppHostServer : IAppHostServerProject
 {
-    // An explicit source is preferred for Aspire packages. Keep NuGet.org available for
-    // non-Aspire packages and transitive dependencies that are outside the Aspire* mapping.
-    private const string NuGetOrgSource = "https://api.nuget.org/v3/index.json";
-
     internal const string ClosureMetadataFileName = "closure-metadata.txt";
     internal const string ClosureSourcesFileName = "closure-sources.txt";
     internal const string ClosureTargetsFileName = "closure-targets.txt";
@@ -636,9 +632,9 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             // --source argument list must agree so non-Aspire transitives have the same
             // catch-all source in both views.
             if (hasOverride && !matchedChannelHasAllPackagesMapping &&
-                !sources.Contains(NuGetOrgSource, StringComparer.OrdinalIgnoreCase))
+                !sources.Contains(PackageSourceOverrideMappings.NuGetOrgSource, StringComparer.OrdinalIgnoreCase))
             {
-                sources.Add(NuGetOrgSource);
+                sources.Add(PackageSourceOverrideMappings.NuGetOrgSource);
             }
         }
         catch (Exception ex)
@@ -661,10 +657,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             // Treat an explicit --source value as the preferred source for Aspire packages.
             // Build a temporary NuGet.config that routes Aspire* there, optionally preserves
             // non-Aspire channel mappings, and leaves a fallback source for non-Aspire deps.
-            var mappings = new List<PackageMapping>
-            {
-                new("Aspire*", packageSourceOverride)
-            };
+            PackageChannel? matchedChannel = null;
             var configureGlobalPackagesFolder = false;
 
             try
@@ -676,23 +669,10 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
                 if (!string.IsNullOrEmpty(requestedChannel))
                 {
                     var packageChannels = await _packagingService.GetChannelsAsync(cancellationToken, requestedChannel);
-                    var matchedChannel = packageChannels.FirstOrDefault(c =>
+                    matchedChannel = packageChannels.FirstOrDefault(c =>
                         string.Equals(c.Name, requestedChannel, StringComparisons.ChannelName));
-                    if (matchedChannel?.Mappings is not null)
+                    if (matchedChannel is not null)
                     {
-                        foreach (var mapping in matchedChannel.Mappings)
-                        {
-                            // Drop any Aspire-prefixed mapping — the --source override owns
-                            // Aspire restoration exclusively. Non-Aspire patterns (e.g.
-                            // CommunityToolkit*, catch-all *) are preserved.
-                            if (mapping.PackageFilter.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase))
-                            {
-                                continue;
-                            }
-
-                            mappings.Add(mapping);
-                        }
-
                         configureGlobalPackagesFolder |= matchedChannel.ConfigureGlobalPackagesFolder;
                     }
                 }
@@ -702,13 +682,8 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
                 _logger.LogWarning(ex, "Failed to get package channels while creating source override NuGet.config");
             }
 
-            if (!mappings.Any(static mapping => mapping.PackageFilter == PackageMapping.AllPackages))
-            {
-                mappings.Add(new PackageMapping(PackageMapping.AllPackages, NuGetOrgSource));
-            }
-
             return await TemporaryNuGetConfig.CreateAsync(
-                [.. mappings.DistinctBy(static mapping => $"{mapping.PackageFilter}\0{mapping.Source}")],
+                PackageSourceOverrideMappings.Create(packageSourceOverride, matchedChannel),
                 configureGlobalPackagesFolder);
         }
 

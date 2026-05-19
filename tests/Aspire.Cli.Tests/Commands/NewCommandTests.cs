@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Xml.Linq;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Commands;
@@ -710,6 +711,36 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         return runner;
     }
 
+    private static void AssertSourceOverrideNuGetConfig(string outputPath, string sourceOverride)
+    {
+        var doc = XDocument.Load(Path.Combine(outputPath, "nuget.config"));
+        var packageSources = doc.Root!.Element("packageSources")!;
+
+        Assert.Contains(packageSources.Elements("clear"), _ => true);
+        Assert.Contains(packageSources.Elements("add"), e => (string?)e.Attribute("value") == sourceOverride);
+        Assert.Contains(packageSources.Elements("add"), e => (string?)e.Attribute("value") == PackageSourceOverrideMappings.NuGetOrgSource);
+        Assert.Equal(["Aspire*"], GetPackagePatternsForSource(doc, sourceOverride));
+        Assert.Equal([PackageMapping.AllPackages], GetPackagePatternsForSource(doc, PackageSourceOverrideMappings.NuGetOrgSource));
+    }
+
+    private static string[] GetPackagePatternsForSource(XDocument doc, string source)
+    {
+        var packageSourceMapping = doc.Root!.Element("packageSourceMapping");
+        if (packageSourceMapping is null)
+        {
+            return [];
+        }
+
+        return packageSourceMapping
+            .Elements("packageSource")
+            .Where(e => string.Equals((string?)e.Attribute("key"), source, StringComparison.OrdinalIgnoreCase))
+            .Elements("package")
+            .Select(e => (string?)e.Attribute("pattern"))
+            .Where(pattern => pattern is not null)
+            .Select(pattern => pattern!)
+            .ToArray();
+    }
+
     private sealed class ThrowingCertificateService : ICertificateService
     {
         public Task<EnsureCertificatesTrustedResult> EnsureCertificatesTrustedAsync(CancellationToken cancellationToken)
@@ -1157,7 +1188,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [InlineData("python", "experimentalPolyglot:python", "apphost.py")]
     [InlineData("go", "experimentalPolyglot:go", "apphost.go")]
     [InlineData("rust", "experimentalPolyglot:rust", "apphost.rs")]
-    public async Task NewCommandWithEmptyTemplateAndSourceOverrideWarnsThatOverrideIsNotPersisted(string language, string? featureFlag, string scaffoldFileName)
+    public async Task NewCommandWithEmptyTemplateAndSourceOverridePersistsSourceForLaterRestore(string language, string? featureFlag, string scaffoldFileName)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         const string sourceOverride = "/tmp/aspire-pr-hive/packages";
@@ -1195,11 +1226,29 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(sourceOverride, capturedPackageSourceOverride);
+        AssertSourceOverrideNuGetConfig(Path.Combine(workspace.WorkspaceRoot.FullName, "output"), sourceOverride);
         Assert.NotNull(interactionService);
-        Assert.Contains(
+        Assert.DoesNotContain(
             interactionService!.DisplayedMessages,
-            entry => entry.Emoji.Name == KnownEmojis.Warning.Name
-                && entry.Message == TemplatingStrings.SourceOverrideNotPersistedWarning);
+            entry => entry.Message == TemplatingStrings.SourceOverrideNotPersistedWarning);
+    }
+
+    [Fact]
+    public async Task NewCommandWithCSharpEmptyTemplateAndSourceOverridePersistsSourceForLaterRestore()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string sourceOverride = "/tmp/aspire-pr-hive/packages";
+
+        var services = CreateServiceCollection(workspace);
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse($"new aspire-empty --name TestApp --output ./output --language csharp --localhost-tld false --suppress-agent-init --source {sourceOverride}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        AssertSourceOverrideNuGetConfig(Path.Combine(workspace.WorkspaceRoot.FullName, "output"), sourceOverride);
     }
 
     [Fact]
@@ -1792,7 +1841,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task NewCommandWithTypeScriptStarterAndSourceOverrideWarnsAndPlumbsOverride()
+    public async Task NewCommandWithTypeScriptStarterAndSourceOverridePersistsSourceAndPlumbsOverride()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         const string sourceOverride = "/tmp/aspire-pr-hive/packages";
@@ -1844,11 +1893,44 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Equal(sourceOverride, projectFactory.Project.LastPackageSourceOverride);
+        AssertSourceOverrideNuGetConfig(Path.Combine(workspace.WorkspaceRoot.FullName, "output"), sourceOverride);
         Assert.NotNull(interactionService);
-        Assert.Contains(
+        Assert.DoesNotContain(
             interactionService!.DisplayedMessages,
-            entry => entry.Emoji.Name == KnownEmojis.Warning.Name
-                && entry.Message == TemplatingStrings.SourceOverrideNotPersistedWarning);
+            entry => entry.Message == TemplatingStrings.SourceOverrideNotPersistedWarning);
+    }
+
+    [Fact]
+    public async Task NewCommandWithDotNetTemplateAndSourceOverridePersistsSourceForLaterRestore()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string sourceOverride = "/tmp/aspire-pr-hive/packages";
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = CreateTestRunnerWithStandardPackages();
+                runner.InstallTemplateAsyncCallback = (packageName, version, nugetConfigFile, nugetSource, force, invocationOptions, cancellationToken) =>
+                {
+                    return (0, version);
+                };
+                runner.NewProjectAsyncCallback = (templateName, projectName, outputPath, invocationOptions, cancellationToken) =>
+                {
+                    return 0;
+                };
+                return runner;
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"new aspire-starter --name TestApp --output ./output --source {sourceOverride} --use-redis-cache --test-framework None");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        AssertSourceOverrideNuGetConfig(Path.Combine(workspace.WorkspaceRoot.FullName, "output"), sourceOverride);
     }
 
     [Fact]
