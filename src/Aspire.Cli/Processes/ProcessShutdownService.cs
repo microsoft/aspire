@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Bundles;
 using Aspire.Cli.Layout;
 using Aspire.Shared;
 using Microsoft.Extensions.Logging;
@@ -14,6 +15,7 @@ namespace Aspire.Cli.Processes;
 /// </summary>
 internal sealed class ProcessShutdownService(
     ILayoutDiscovery layoutDiscovery,
+    IBundleService bundleService,
     LayoutProcessRunner layoutProcessRunner,
     CliExecutionContext executionContext,
     ILogger<ProcessShutdownService> logger,
@@ -156,7 +158,9 @@ internal sealed class ProcessShutdownService(
             return true;
         }
 
-        var dcpDirectory = layoutDiscovery.GetComponentPath(LayoutComponent.Dcp, executionContext.WorkingDirectory.FullName);
+        using var layoutLease = await bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "dcp-stop-process-tree", cancellationToken).ConfigureAwait(false);
+        var dcpDirectory = layoutLease?.Layout.GetDcpPath() ??
+            layoutDiscovery.GetComponentPath(LayoutComponent.Dcp, executionContext.WorkingDirectory.FullName);
         if (dcpDirectory is null)
         {
             logger.LogWarning("Could not find DCP in the Aspire layout.");

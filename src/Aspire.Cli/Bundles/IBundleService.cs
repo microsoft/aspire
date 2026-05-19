@@ -42,6 +42,8 @@ internal interface IBundleService
 
     /// <summary>
     /// Ensures the bundle is extracted and returns a version-rooted layout with a lease that prevents cleanup.
+    /// Extraction, active-version resolution, and lease acquisition happen under the same bundle lock
+    /// so cleanup cannot delete the selected version before the lease protects it.
     /// Callers that start bundle-owned processes should use this method and keep the returned lease alive
     /// until the child process has exited or acquired its own lease.
     /// </summary>

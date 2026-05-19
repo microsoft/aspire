@@ -645,6 +645,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             var fileLoggerProvider = new FileLoggerProvider(executionContext.LogFilePath, new TestStartupErrorWriter());
             var processShutdownService = new ProcessShutdownService(
                 new FixedLayoutDiscovery(),
+                new NullBundleService(),
                 new LayoutProcessRunner(new TestProcessExecutionFactory()),
                 executionContext,
                 NullLogger<ProcessShutdownService>.Instance,

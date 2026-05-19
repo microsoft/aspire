@@ -70,36 +70,9 @@ internal sealed class BundleService(
     /// <inheritdoc/>
     public async Task EnsureExtractedAsync(CancellationToken cancellationToken = default)
     {
-        if (!IsBundle)
-        {
-            logger.LogDebug("No embedded bundle payload, skipping extraction.");
-            return;
-        }
-
-        var processPath = ProcessPathOverride ?? Environment.ProcessPath;
-        if (string.IsNullOrEmpty(processPath))
-        {
-            logger.LogDebug("ProcessPath is null or empty, skipping bundle extraction.");
-            return;
-        }
-
-        // The winget portable installer has no post-install hook, so the CLI
-        // self-stamps the install-route sidecar on first run. No-op on
-        // non-Windows and once the sidecar already exists.
-        if (wingetFirstRunProbe is not null && OperatingSystem.IsWindows())
-        {
-            var realBinaryPath = ResolveSymlinks(processPath, logger);
-            var binaryDir = Path.GetDirectoryName(realBinaryPath);
-            if (!string.IsNullOrEmpty(binaryDir))
-            {
-                wingetFirstRunProbe.Run(binaryDir);
-            }
-        }
-
-        var extractDir = GetDefaultExtractDir(processPath);
+        var extractDir = GetBundleExtractDirForCurrentProcess();
         if (string.IsNullOrEmpty(extractDir))
         {
-            logger.LogDebug("Could not determine extraction directory from {ProcessPath}, skipping.", processPath);
             return;
         }
 
@@ -123,11 +96,8 @@ internal sealed class BundleService(
     /// <inheritdoc/>
     public async Task<BundleLayoutLease?> EnsureExtractedAndAcquireLayoutAsync(string holderKind, string? commandName = null, CancellationToken cancellationToken = default)
     {
-        await EnsureExtractedAsync(cancellationToken).ConfigureAwait(false);
-
-        var processPath = ProcessPathOverride ?? Environment.ProcessPath;
-        var extractDir = string.IsNullOrEmpty(processPath) ? null : GetDefaultExtractDir(processPath);
-        if (!IsBundle || string.IsNullOrEmpty(extractDir))
+        var extractDir = GetBundleExtractDirForCurrentProcess();
+        if (string.IsNullOrEmpty(extractDir))
         {
             var fallbackLayout = layoutDiscovery.DiscoverLayout();
             return fallbackLayout is null
@@ -137,6 +107,16 @@ internal sealed class BundleService(
 
         var lockPath = Path.Combine(extractDir, ".aspire-bundle-lock");
         using var fileLock = await FileLock.AcquireAsync(lockPath, cancellationToken).ConfigureAwait(false);
+
+        // Extraction cleanup and lease acquisition must share the same critical section;
+        // otherwise a concurrent upgrade can delete the just-resolved active version
+        // before this process protects it with a lease.
+        var result = await ExtractAsyncCore(extractDir, force: false, cancellationToken).ConfigureAwait(false);
+        if (result is BundleExtractResult.ExtractionFailed)
+        {
+            throw new InvalidOperationException(
+                "Bundle extraction failed. Run 'aspire setup --force' to retry, or reinstall the Aspire CLI.");
+        }
 
         var activeVersion = ResolveActiveVersionDirectory(extractDir);
         if (activeVersion is null)
@@ -177,6 +157,11 @@ internal sealed class BundleService(
         using var fileLock = await FileLock.AcquireAsync(lockPath, cancellationToken).ConfigureAwait(false);
         logger.LogDebug("Bundle extraction lock acquired.");
 
+        return await ExtractAsyncCore(destinationPath, force, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<BundleExtractResult> ExtractAsyncCore(string destinationPath, bool force, CancellationToken cancellationToken)
+    {
         try
         {
             // Re-check after acquiring lock — another process may have already extracted
@@ -200,6 +185,44 @@ internal sealed class BundleService(
             logger.LogError(ex, "Failed to extract bundle to {Path}", destinationPath);
             return BundleExtractResult.ExtractionFailed;
         }
+    }
+
+    private string? GetBundleExtractDirForCurrentProcess()
+    {
+        if (!IsBundle)
+        {
+            logger.LogDebug("No embedded bundle payload, skipping extraction.");
+            return null;
+        }
+
+        var processPath = ProcessPathOverride ?? Environment.ProcessPath;
+        if (string.IsNullOrEmpty(processPath))
+        {
+            logger.LogDebug("ProcessPath is null or empty, skipping bundle extraction.");
+            return null;
+        }
+
+        // The winget portable installer has no post-install hook, so the CLI
+        // self-stamps the install-route sidecar on first run. No-op on
+        // non-Windows and once the sidecar already exists.
+        if (wingetFirstRunProbe is not null && OperatingSystem.IsWindows())
+        {
+            var realBinaryPath = ResolveSymlinks(processPath, logger);
+            var binaryDir = Path.GetDirectoryName(realBinaryPath);
+            if (!string.IsNullOrEmpty(binaryDir))
+            {
+                wingetFirstRunProbe.Run(binaryDir);
+            }
+        }
+
+        var extractDir = GetDefaultExtractDir(processPath);
+        if (string.IsNullOrEmpty(extractDir))
+        {
+            logger.LogDebug("Could not determine extraction directory from {ProcessPath}, skipping.", processPath);
+            return null;
+        }
+
+        return extractDir;
     }
 
     private async Task<BundleExtractResult> ExtractCoreAsync(string destinationPath, CancellationToken cancellationToken)
