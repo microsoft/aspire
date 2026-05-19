@@ -127,9 +127,9 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
     public async Task<AppHostServerPrepareResult> PrepareAsync(
         string sdkVersion,
         IEnumerable<IntegrationReference> integrations,
-        CancellationToken cancellationToken = default,
         string? requestedChannel = null,
-        string? packageSourceOverride = null)
+        string? packageSourceOverride = null,
+        CancellationToken cancellationToken = default)
     {
         var integrationList = integrations.ToList();
         var packageRefs = integrationList.Where(r => r.IsPackageReference).ToList();
@@ -319,11 +319,11 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         Directory.CreateDirectory(restoreDir);
 
         // Only synthesize a temp NuGet.config (replacing nuget.config discovery via
-        // RestoreConfigFile) when the user explicitly opted into a single source via --source.
-        // The explicit-channel-no-override path keeps the user's ambient nuget.config in place
-        // and contributes channel mappings additively via RestoreAdditionalProjectSources so
-        // private/internal feeds the user has configured remain reachable for non-Aspire
-        // transitives during project-ref restore.
+        // RestoreConfigFile) when an explicit --source or auto-discovered local channel source
+        // is in play. The explicit-channel-no-override path keeps the user's ambient
+        // nuget.config in place and contributes channel mappings additively via
+        // RestoreAdditionalProjectSources so private/internal feeds the user has configured
+        // remain reachable for non-Aspire transitives during project-ref restore.
         using var temporaryNuGetConfig = !string.IsNullOrWhiteSpace(packageSourceOverride)
             ? await TryCreateTemporaryNuGetConfigAsync(requestedChannel, packageSourceOverride, cancellationToken)
             : null;
@@ -651,6 +651,11 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
 
     internal async Task<TemporaryNuGetConfig?> TryCreateTemporaryNuGetConfigAsync(string? requestedChannel, string? packageSourceOverride, CancellationToken cancellationToken)
     {
+        // Keep staging refusal consistent across both temp-config branches. The project-reference
+        // restore path skips GetNuGetSourcesAsync when a temp config exists, so this method must
+        // surface the actionable staging-unavailable reason before building any override config.
+        ThrowIfStagingUnavailable(requestedChannel);
+
         if (!string.IsNullOrWhiteSpace(packageSourceOverride))
         {
             // Treat an explicit --source value as the preferred source for Aspire packages.
@@ -711,11 +716,6 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         {
             return null;
         }
-
-        // Same staging refusal as GetNuGetSourcesAsync: if the CLI cannot synthesize staging,
-        // surface the actionable reason instead of returning null and letting restore proceed
-        // against whichever sources the caller resolved separately.
-        ThrowIfStagingUnavailable(requestedChannel);
 
         PackageChannel? channel;
         try

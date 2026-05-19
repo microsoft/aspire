@@ -745,6 +745,21 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task TryCreateTemporaryNuGetConfig_StagingRequestedWithSourceOverride_RefusesWhenPackagingServiceReportsUnavailable()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var executionContext = CreateContextWithIdentityChannel("daily");
+        const string unavailableReason =
+            "Staging unavailable on this daily CLI build. Set overrideStagingFeed or enable the StagingChannelEnabled feature flag to use it.";
+        var server = CreateServerWithUnavailableStagingChannel(workspace, executionContext, unavailableReason);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => InvokeTryCreateTemporaryNuGetConfigAsync(server, "staging", "/tmp/aspire-pr-hive/packages"));
+        Assert.Equal(unavailableReason, ex.Message);
+    }
+
+    [Fact]
     public async Task GetNuGetSources_StagingRequested_RefusesWhenPackagingServiceReportsUnavailable()
     {
         // Companion of the TryCreateTemporaryNuGetConfig test above. Without this guard,

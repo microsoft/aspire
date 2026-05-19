@@ -107,7 +107,7 @@ internal sealed class TestTypeScriptStarterProject(Func<DirectoryInfo, Cancellat
         throw new NotImplementedException();
     }
 
-    public Task<bool> BuildAndGenerateSdkAsync(DirectoryInfo directory, CancellationToken cancellationToken, string? packageSourceOverride = null)
+    public Task<bool> BuildAndGenerateSdkAsync(DirectoryInfo directory, string? packageSourceOverride = null, CancellationToken cancellationToken = default)
     {
         LastPackageSourceOverride = packageSourceOverride;
         return buildAndGenerateSdkAsync(directory, cancellationToken, packageSourceOverride);

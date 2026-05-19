@@ -259,9 +259,9 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     /// </summary>
     public async Task<(string ProjectPath, string? ChannelName)> CreateProjectFilesAsync(
         IEnumerable<IntegrationReference> integrations,
-        CancellationToken cancellationToken = default,
         string? requestedChannel = null,
-        string? packageSourceOverride = null)
+        string? packageSourceOverride = null,
+        CancellationToken cancellationToken = default)
     {
         // Clean obj folder to ensure fresh NuGet restore
         var objPath = Path.Combine(_projectModelPath, "obj");
@@ -439,11 +439,11 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     public async Task<AppHostServerPrepareResult> PrepareAsync(
         string sdkVersion,
         IEnumerable<IntegrationReference> integrations,
-        CancellationToken cancellationToken = default,
         string? requestedChannel = null,
-        string? packageSourceOverride = null)
+        string? packageSourceOverride = null,
+        CancellationToken cancellationToken = default)
     {
-        var (_, channelName) = await CreateProjectFilesAsync(integrations, cancellationToken, requestedChannel, packageSourceOverride);
+        var (_, channelName) = await CreateProjectFilesAsync(integrations, requestedChannel, packageSourceOverride, cancellationToken);
         var (buildSuccess, buildOutput) = await BuildAsync(cancellationToken);
 
         if (!buildSuccess)

@@ -20,8 +20,10 @@ internal static class PackageSourceRedactor
     /// <remarks>
     /// Fails closed for HTTP-shaped inputs that <see cref="Uri.TryCreate(string, UriKind, out Uri)"/>
     /// cannot parse (for example <c>https://user:p@ss@host/path</c> or
-    /// <c>https://user:p#word@host/</c>): returns a sentinel rather than the raw input. Plain
-    /// non-HTTP-looking inputs (local paths, file://, etc.) still pass through unchanged.
+    /// <c>https://user:p#word@host/</c>): returns a sentinel rather than the raw input. Leading
+    /// and trailing whitespace is ignored for HTTP detection so indented feed URLs are still
+    /// protected. Plain non-HTTP-looking inputs (local paths, file://, etc.) still pass through
+    /// unchanged.
     /// </remarks>
     public static string RedactForDisplay(string source)
     {
@@ -30,14 +32,20 @@ internal static class PackageSourceRedactor
             return source;
         }
 
+        var sourceToParse = source.Trim();
+        if (sourceToParse.Length == 0)
+        {
+            return source;
+        }
+
         // Detect HTTP-shaped inputs before attempting to parse so malformed URLs that look like
         // an HTTP feed fail closed instead of leaking credentials through the parse-failure
-        // branch below.
+        // branch below. Trim first because NuGet sources in config/output can be indented.
         var looksHttp =
-            source.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
-            source.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+            sourceToParse.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            sourceToParse.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
 
-        if (!Uri.TryCreate(source, UriKind.Absolute, out var uri) ||
+        if (!Uri.TryCreate(sourceToParse, UriKind.Absolute, out var uri) ||
             (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
         {
             return looksHttp ? UnparseableHttpSentinel : source;
@@ -48,7 +56,7 @@ internal static class PackageSourceRedactor
         var hasFragment = !string.IsNullOrEmpty(uri.Fragment);
         if (!hasUserInfo && !hasQuery && !hasFragment)
         {
-            return source;
+            return sourceToParse;
         }
 
         var builder = new UriBuilder(uri)

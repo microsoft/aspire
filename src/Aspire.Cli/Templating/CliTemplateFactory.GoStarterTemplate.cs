@@ -81,7 +81,7 @@ internal sealed partial class CliTemplateFactory
                     }
 
                     _logger.LogDebug("Generating SDK code for Go starter in '{OutputPath}'.", outputPath);
-                    var restoreSucceeded = await guestProject.BuildAndGenerateSdkAsync(new DirectoryInfo(outputPath), cancellationToken, packageSourceOverride: inputs.Source);
+                    var restoreSucceeded = await guestProject.BuildAndGenerateSdkAsync(new DirectoryInfo(outputPath), packageSourceOverride: inputs.Source, cancellationToken: cancellationToken);
                     if (!restoreSucceeded)
                     {
                         _interactionService.DisplayError("Automatic 'aspire restore' failed for the new Go starter project. Run 'aspire restore' in the project directory for more details.");

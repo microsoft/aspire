@@ -130,9 +130,9 @@ public class ChannelReseedTests(ITestOutputHelper outputHelper)
         public Task<AppHostServerPrepareResult> PrepareAsync(
             string sdkVersion,
             IEnumerable<IntegrationReference> integrations,
-            CancellationToken cancellationToken = default,
             string? requestedChannel = null,
-            string? packageSourceOverride = null)
+            string? packageSourceOverride = null,
+            CancellationToken cancellationToken = default)
         {
             PackageSourceOverride = packageSourceOverride;
             return Task.FromResult(new AppHostServerPrepareResult(Success: false, Output: null));

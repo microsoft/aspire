@@ -147,7 +147,7 @@ internal sealed class SdkDumpCommand : BaseCommand
             var prepareResult = await appHostServerProject.PrepareAsync(
                 VersionHelper.GetDefaultTemplateVersion(),
                 integrations,
-                cancellationToken);
+                cancellationToken: cancellationToken);
 
             if (!prepareResult.Success)
             {

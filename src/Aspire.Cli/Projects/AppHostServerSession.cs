@@ -203,7 +203,7 @@ internal sealed class AppHostServerSessionFactory : IAppHostServerSessionFactory
         var appHostServerProject = await _projectFactory.CreateAsync(appHostPath, cancellationToken);
 
         // Prepare the server (create files + build for dev mode, restore packages for prebuilt mode)
-        var prepareResult = await appHostServerProject.PrepareAsync(sdkVersion, integrations, cancellationToken);
+        var prepareResult = await appHostServerProject.PrepareAsync(sdkVersion, integrations, cancellationToken: cancellationToken);
         if (!prepareResult.Success)
         {
             return new AppHostServerSessionResult(

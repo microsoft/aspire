@@ -395,7 +395,7 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
             IntegrationReference.FromPackage("Aspire.Hosting", "13.1.0")
         };
 
-        var (projectFilePath, _) = await project.CreateProjectFilesAsync(packages, CancellationToken.None, packageSourceOverride: overrideSource).DefaultTimeout();
+        var (projectFilePath, _) = await project.CreateProjectFilesAsync(packages, packageSourceOverride: overrideSource, cancellationToken: CancellationToken.None).DefaultTimeout();
 
         var projectDoc = XDocument.Load(projectFilePath);
         var restoreSources = projectDoc.Descendants("RestoreAdditionalProjectSources").FirstOrDefault()?.Value;
