@@ -77,11 +77,6 @@
         <target state="translated">Creando un nuevo proyecto de Aspire...</target>
         <note />
       </trans-unit>
-      <trans-unit id="EmptySourceOverrideNotPersistedWarning">
-        <source>[yellow]--source was used for the initial scaffold restore only and is not persisted. Later 'aspire restore' / 'aspire add' will use the channel feeds configured for this project.[/]</source>
-        <target state="new">[yellow]--source was used for the initial scaffold restore only and is not persisted. Later 'aspire restore' / 'aspire add' will use the channel feeds configured for this project.[/]</target>
-        <note>Do not translate [yellow] or [/]. Displayed after 'aspire new' (aspire-empty or aspire-starter) when --source was supplied for a non-C# language.</note>
-      </trans-unit>
       <trans-unit id="EnterXUnitVersion_Description">
         <source>The version of xUnit.net to use for the test project.</source>
         <target state="translated">La versión de xUnit.net que se utilizará para el proyecto de prueba.</target>
@@ -171,6 +166,11 @@
         <source>Searching for available project template versions...</source>
         <target state="translated">Buscando versiones de plantillas de proyecto disponibles...</target>
         <note />
+      </trans-unit>
+      <trans-unit id="SourceOverrideNotPersistedWarning">
+        <source>[yellow]--source was used for the initial scaffold restore only and is not persisted. Later 'aspire restore' / 'aspire add' will use the channel feeds configured for this project.[/]</source>
+        <target state="new">[yellow]--source was used for the initial scaffold restore only and is not persisted. Later 'aspire restore' / 'aspire add' will use the channel feeds configured for this project.[/]</target>
+        <note>Do not translate [yellow] or [/]. Displayed after 'aspire new' (aspire-empty or aspire-starter) when --source was supplied for a non-C# language.</note>
       </trans-unit>
       <trans-unit id="TemplateInstallationFailed">
         <source>The template installation failed with exit code {0}.</source>

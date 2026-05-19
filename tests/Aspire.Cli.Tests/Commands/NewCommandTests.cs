@@ -1196,7 +1196,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains(
             interactionService!.DisplayedMessages,
             entry => entry.Emoji.Name == KnownEmojis.Warning.Name
-                && entry.Message == TemplatingStrings.EmptySourceOverrideNotPersistedWarning);
+                && entry.Message == TemplatingStrings.SourceOverrideNotPersistedWarning);
     }
 
     [Fact]
@@ -1228,7 +1228,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.NotNull(interactionService);
         Assert.DoesNotContain(
             interactionService!.DisplayedMessages,
-            entry => entry.Message == TemplatingStrings.EmptySourceOverrideNotPersistedWarning);
+            entry => entry.Message == TemplatingStrings.SourceOverrideNotPersistedWarning);
     }
 
     [Fact]
@@ -1845,7 +1845,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains(
             interactionService!.DisplayedMessages,
             entry => entry.Emoji.Name == KnownEmojis.Warning.Name
-                && entry.Message == TemplatingStrings.EmptySourceOverrideNotPersistedWarning);
+                && entry.Message == TemplatingStrings.SourceOverrideNotPersistedWarning);
     }
 
     [Fact]
@@ -1900,7 +1900,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.NotNull(interactionService);
         Assert.DoesNotContain(
             interactionService!.DisplayedMessages,
-            entry => entry.Message == TemplatingStrings.EmptySourceOverrideNotPersistedWarning);
+            entry => entry.Message == TemplatingStrings.SourceOverrideNotPersistedWarning);
     }
 
     [Fact]

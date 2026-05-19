@@ -273,7 +273,7 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
         {
             _interactionService.DisplayMessage(
                 KnownEmojis.Warning,
-                TemplatingStrings.EmptySourceOverrideNotPersistedWarning,
+                TemplatingStrings.SourceOverrideNotPersistedWarning,
                 allowMarkup: true);
         }
     }
