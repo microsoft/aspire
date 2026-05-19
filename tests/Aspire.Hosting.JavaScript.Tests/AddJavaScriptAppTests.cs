@@ -243,6 +243,42 @@ public class AddJavaScriptAppTests
     }
 
     [Fact]
+    public async Task PublishWithExistingDockerfileAllowsWithRunScriptMatchingDefault()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var appDir = CreateJavaScriptAppWithDockerfile(tempDir.Path);
+        var app = builder.AddJavaScriptApp("js", appDir)
+            .WithBun()
+            // Re-stating the default script name explicitly should not be treated as a conflict
+            // with the existing Dockerfile, because the effective run script still matches the default.
+            .WithRunScript("dev");
+
+        var manifest = await ManifestUtils.GetManifest(app.Resource, tempDir.Path);
+
+        Assert.Equal("container.v1", manifest["type"]?.ToString());
+    }
+
+    [Fact]
+    public async Task PublishWithExistingDockerfileThrowsAndIncludesArgsWhenDefaultScriptHasArgs()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var appDir = CreateJavaScriptAppWithDockerfile(tempDir.Path);
+        var app = builder.AddJavaScriptApp("js", appDir)
+            .WithBun()
+            .WithRunScript("dev", ["--port", "8080"]);
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => ManifestUtils.GetManifest(app.Resource, tempDir.Path));
+
+        Assert.Contains("run script 'dev'", exception.Message);
+        Assert.Contains("with args [--port, 8080]", exception.Message);
+        Assert.Contains("Dockerfile", exception.Message);
+    }
+
+    [Fact]
     [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
     [OuterloopTest("Builds a Docker image to verify the generated pnpm Dockerfile works")]
     public async Task VerifyPnpmDockerfileBuildSucceeds()

@@ -882,7 +882,7 @@ public static class JavaScriptHostingExtensions
 
             Task WriteValidatedContainerAsync(ManifestPublishingContext context)
             {
-                ValidateExistingDockerfileRunScript(resource, containerBuilder.Resource, runScriptName);
+                ValidateExistingDockerfileRunScript(resource, containerBuilder.Resource);
                 return context.WriteContainerAsync(containerBuilder.Resource);
             }
 
@@ -896,7 +896,7 @@ public static class JavaScriptHostingExtensions
                 Resource = containerBuilder.Resource,
                 Action = _ =>
                 {
-                    ValidateExistingDockerfileRunScript(resource, containerBuilder.Resource, runScriptName);
+                    ValidateExistingDockerfileRunScript(resource, containerBuilder.Resource);
                     return Task.CompletedTask;
                 }
             }));
@@ -921,7 +921,7 @@ public static class JavaScriptHostingExtensions
         return resourceBuilder;
     }
 
-    private static void ValidateExistingDockerfileRunScript(JavaScriptAppResource resource, ContainerResource containerResource, string initialRunScriptName)
+    private static void ValidateExistingDockerfileRunScript(JavaScriptAppResource resource, ContainerResource containerResource)
     {
         if (containerResource.Entrypoint is not null ||
             !containerResource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation) ||
@@ -931,26 +931,31 @@ public static class JavaScriptHostingExtensions
             return;
         }
 
-        var hasMultipleRunScriptAnnotations =
-            containerResource.TryGetAnnotationsOfType<JavaScriptRunScriptAnnotation>(out var runScriptAnnotations) &&
-            runScriptAnnotations.Skip(1).Any();
-
+        // The user's effective run-script intent is captured by the last annotation: AddJavaScriptApp
+        // always adds one with the supplied runScriptName, and any subsequent WithRunScript call
+        // appends another. Comparing the last annotation against the default avoids false positives
+        // when the user re-states the default explicitly (e.g. .WithRunScript("dev")).
         var hasExplicitRunScript =
-            !string.Equals(initialRunScriptName, DefaultJavaScriptRunScriptName, StringComparison.Ordinal) ||
-            hasMultipleRunScriptAnnotations ||
-            runScript.Args.Length > 0;
+            !string.Equals(runScript.ScriptName, DefaultJavaScriptRunScriptName, StringComparison.Ordinal) ||
+            runScript.Args is { Length: > 0 };
 
         if (!hasExplicitRunScript)
         {
             return;
         }
 
+        // Include the args in the message when they are the trigger, so the user can see why
+        // a default-named script (e.g. "dev") still produced a conflict.
+        var argsClause = runScript.Args is { Length: > 0 }
+            ? $" with args [{string.Join(", ", runScript.Args)}]"
+            : string.Empty;
+
         // Existing Dockerfiles are user-authored, so Aspire cannot safely assume that replacing
         // their entrypoint with a package-manager script will work for the image shape.
         // If the user provides an explicit container entrypoint above, honor it; otherwise fail
         // instead of silently publishing an image that ignores the requested run script.
         throw new DistributedApplicationException(
-            $"JavaScript app resource '{resource.Name}' is configured to run script '{runScript.ScriptName}', but publish is using the existing Dockerfile '{dockerfileBuildAnnotation.DockerfilePath}'. " +
+            $"JavaScript app resource '{resource.Name}' is configured to run script '{runScript.ScriptName}'{argsClause}, but publish is using the existing Dockerfile '{dockerfileBuildAnnotation.DockerfilePath}'. " +
             "An existing Dockerfile entrypoint cannot be changed automatically from runScriptName or WithRunScript. " +
             "Remove or rename the Dockerfile so Aspire can generate one, or call PublishAsDockerFile(...) and set the container entrypoint explicitly.");
     }
