@@ -1,0 +1,64 @@
+# Aspire.Hosting.Integration.Analyzers package
+
+Provides experimental Roslyn analyzers for Aspire hosting integration authors building ATS and polyglot-friendly extensions outside the Aspire repo.
+
+## Getting started
+
+### Install the package
+
+In your integration project, install the experimental analyzer package with [NuGet](https://www.nuget.org):
+
+```dotnetcli
+dotnet add package Aspire.Hosting.Integration.Analyzers --prerelease
+```
+
+If you keep your package references in the project file, prefer a private development-only reference:
+
+```xml
+<ItemGroup>
+  <PackageReference Include="Aspire.Hosting" Version="13.4.0-*" />
+  <PackageReference Include="Aspire.Hosting.Integration.Analyzers" Version="13.4.0-*" PrivateAssets="all" />
+</ItemGroup>
+```
+
+## Usage
+
+The package is applied automatically when it is referenced. No additional MSBuild property is required.
+
+The analyzers validate common ATS export patterns used by polyglot integrations, such as:
+
+- exported builder methods that directly invoke synchronous callbacks
+- unsupported signatures or exported shapes for ATS/code-generated hosting surfaces
+- other authoring patterns that can break polyglot consumers
+
+For example, this pattern produces analyzer feedback because the exported API executes a synchronous callback directly:
+
+```csharp
+using Aspire.Hosting;
+using Aspire.Hosting.ApplicationModel;
+
+namespace MyIntegration;
+
+public static class MyIntegrationExtensions
+{
+    [AspireExport("addMyContainer")]
+    public static IResourceBuilder<ContainerResource> AddMyContainer(
+        this IDistributedApplicationBuilder builder,
+        string name,
+        Action<IResourceBuilder<ContainerResource>> configure)
+    {
+        var resource = builder.AddContainer(name, "my-image");
+        configure(resource);
+        return resource;
+    }
+}
+```
+
+## Additional documentation
+
+- https://github.com/microsoft/aspire/blob/main/src/Aspire.Hosting/Ats/ThirdPartyAtsAttributes.md
+- https://github.com/microsoft/aspire/blob/main/docs/specs/polyglot-apphost.md
+
+## Feedback & contributing
+
+https://github.com/microsoft/aspire
