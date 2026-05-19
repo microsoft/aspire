@@ -898,7 +898,12 @@ extends:
               - download: aspire-build
                 displayName: 'Download aspire-cli-* from Source Build'
                 artifact: BlobArtifacts
-                patterns: 'aspire-cli-*'
+                # The download task enumerates artifact items with the artifact
+                # name as a path prefix (e.g. 'BlobArtifacts/aspire-cli-...'), so
+                # a bare 'aspire-cli-*' minimatch glob excludes every file and
+                # the target directory never gets created. Use '**/aspire-cli-*'
+                # to match files under the artifact root.
+                patterns: '**/aspire-cli-*'
 
               # pwsh (not powershell): publish-release-cli-assets.ps1 calls
               # Get-AspireBotInstallationToken.ps1, which uses RSA.ImportFromPem
