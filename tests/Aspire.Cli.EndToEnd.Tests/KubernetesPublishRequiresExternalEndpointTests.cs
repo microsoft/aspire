@@ -87,9 +87,10 @@ public sealed class KubernetesPublishRequiresExternalEndpointTests(ITestOutputHe
             await auto.EnterAsync();
             await auto.WaitForAspireAddCompletionAsync(counter, TimeSpan.FromSeconds(180));
 
-            // Patch AppHost.cs in-place. The EmptyAppHost template emits a single
-            // `builder.Build().Run();` line we replace; failing to find it should
-            // surface as a clear test failure rather than a silently no-op publish.
+            // Patch AppHost.cs in-place. The Starter template's AppHost.cs ends
+            // with `builder.Build().Run();`; we insert the K8s wiring immediately
+            // before it. Failing to find the marker should surface as a clear
+            // test failure rather than a silently no-op publish.
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, ProjectName);
             var appHostDir = Path.Combine(projectDir, $"{ProjectName}.AppHost");
             var appHostFilePath = Path.Combine(appHostDir, "AppHost.cs");
