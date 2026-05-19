@@ -3,10 +3,11 @@
 
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
+using System.Globalization;
 using Aspire.Dashboard.Components.Controls;
-using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
@@ -374,24 +375,79 @@ public class ResourceDetailsTests : DashboardTestContext
     [Fact]
     public void Render_StateDescription_ShowsAsResourceDetailEntry()
     {
-        // Arrange
         ResourceSetupHelpers.SetupResourceDetails(this);
 
         var resource = ModelTestHelpers.CreateResource(
             resourceName: "app1",
             state: KnownResourceState.Waiting);
 
-        // Act
         var cut = RenderComponent<ResourceDetails>(builder =>
         {
             builder.Add(p => p.Resource, resource);
             builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
         });
 
-        // Assert
         var resourcePropertyGrid = cut.FindAll(".property-grid")[0];
         Assert.Contains(ControlsStrings.ResourceDetailsStateDescriptionHeader, resourcePropertyGrid.TextContent);
         Assert.Contains(Columns.StateColumnResourceWaiting, resourcePropertyGrid.TextContent);
+    }
+
+    [Fact]
+    public void Render_NotStartedStateDescription_ShowsDescription()
+    {
+        ResourceSetupHelpers.SetupResourceDetails(this);
+
+        var resource = ModelTestHelpers.CreateResource(
+            resourceName: "app1",
+            state: KnownResourceState.NotStarted);
+
+        var cut = RenderComponent<ResourceDetails>(builder =>
+        {
+            builder.Add(p => p.Resource, resource);
+            builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
+        });
+
+        var resourcePropertyGrid = cut.FindAll(".property-grid")[0];
+        Assert.Contains(ControlsStrings.ResourceDetailsStateDescriptionHeader, resourcePropertyGrid.TextContent);
+        Assert.Contains(Columns.StateColumnResourceNotStarted, resourcePropertyGrid.TextContent);
+    }
+
+    [Fact]
+    public void Render_StateDescription_ShowsWaitingForDependenciesAsResourceDetailEntry()
+    {
+        ResourceSetupHelpers.SetupResourceDetails(this);
+
+        var nginx = ModelTestHelpers.CreateResource(resourceName: "nginx-abcxyz", displayName: "nginx");
+        var redis = ModelTestHelpers.CreateResource(resourceName: "redis");
+
+        var resource = ModelTestHelpers.CreateResource(
+            resourceName: "app1",
+            state: KnownResourceState.Waiting,
+            properties: new Dictionary<string, ResourcePropertyViewModel>
+            {
+                [KnownProperties.Resource.WaitingFor] = new(
+                    KnownProperties.Resource.WaitingFor,
+                    Value.ForList(Value.ForString("nginx-abcxyz"), Value.ForString("redis")),
+                    isValueSensitive: false,
+                    knownProperty: null,
+                    priority: 0)
+            });
+
+        var cut = RenderComponent<ResourceDetails>(builder =>
+        {
+            builder.Add(p => p.Resource, resource);
+            builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([
+                new KeyValuePair<string, ResourceViewModel>(resource.Name, resource),
+                new KeyValuePair<string, ResourceViewModel>(nginx.Name, nginx),
+                new KeyValuePair<string, ResourceViewModel>(redis.Name, redis)
+            ]));
+        });
+
+        var resourcePropertyGrid = cut.FindAll(".property-grid")[0];
+        Assert.Contains(ControlsStrings.ResourceDetailsStateDescriptionHeader, resourcePropertyGrid.TextContent);
+        Assert.Contains(string.Format(CultureInfo.InvariantCulture, Columns.StateColumnResourceWaitingFor, "nginx, redis"), resourcePropertyGrid.TextContent);
+
+        Assert.Empty(resourcePropertyGrid.QuerySelectorAll("fluent-anchor"));
     }
 
     [Fact]

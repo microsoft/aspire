@@ -1022,6 +1022,11 @@ internal sealed class ResourceSnapshot
     public string? State { get; init; }
 
     /// <summary>
+    /// Gets the names of resources this resource is waiting for.
+    /// </summary>
+    public string[]? WaitingFor { get; init; }
+
+    /// <summary>
     /// Gets the state style hint (e.g., "success", "error", "warning").
     /// </summary>
     public string? StateStyle { get; init; }
@@ -1080,7 +1085,7 @@ internal sealed class ResourceSnapshot
     /// Gets additional properties as key-value pairs.
     /// This allows for extensibility without changing the schema.
     /// </summary>
-    public Dictionary<string, string?> Properties { get; init; } = [];
+    public Dictionary<string, JsonNode?> Properties { get; init; } = [];
 
     /// <summary>
     /// Gets a value indicating whether this resource is hidden.

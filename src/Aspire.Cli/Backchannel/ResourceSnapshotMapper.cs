@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json.Nodes;
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
 using Aspire.Shared;
 using Aspire.Shared.Model;
@@ -82,7 +84,9 @@ internal static class ResourceSnapshotMapper
 
         var properties = snapshot.Properties.OrderBy(p => p.Key).ToDistinctDictionary(
             p => p.Key,
-            p => p.Value);
+            p => p.Value?.DeepClone());
+
+        var waitingFor = GetResolvedWaitingForDependencies(snapshot, allSnapshots);
 
         // Build relationships by matching DisplayName
         var relationships = new List<ResourceRelationshipJson>();
@@ -119,7 +123,10 @@ internal static class ResourceSnapshotMapper
                 });
 
         // Get source information using the shared ResourceSourceViewModel
-        var sourceViewModel = ResourceSource.GetSourceModel(snapshot.ResourceType, snapshot.Properties);
+        var stringProperties = snapshot.Properties.OrderBy(p => p.Key).ToDistinctDictionary(
+            p => p.Key,
+            p => ConvertJsonNodeToString(p.Value));
+        var sourceViewModel = ResourceSource.GetSourceModel(snapshot.ResourceType, stringProperties);
 
         // Generate dashboard URL for this resource if a base URL is provided
         string? dashboardUrl = null;
@@ -135,6 +142,7 @@ internal static class ResourceSnapshotMapper
             DisplayName = snapshot.DisplayName,
             ResourceType = snapshot.ResourceType,
             State = snapshot.State,
+            WaitingFor = waitingFor,
             StateStyle = snapshot.StateStyle,
             HealthStatus = snapshot.HealthStatus,
             Source = sourceViewModel?.Value,
@@ -151,6 +159,60 @@ internal static class ResourceSnapshotMapper
             Relationships = relationships.ToArray(),
             Commands = commands
         };
+    }
+
+    private static string[]? GetResolvedWaitingForDependencies(ResourceSnapshot snapshot, IReadOnlyList<ResourceSnapshot> allSnapshots)
+    {
+        var waitingFor = snapshot.WaitingFor;
+        if (waitingFor is not { Length: > 0 } &&
+            snapshot.Properties.TryGetValue(KnownProperties.Resource.WaitingFor, out var waitingForProperty) &&
+            TryConvertJsonNodeToString(waitingForProperty, out var waitingForPropertyString) &&
+            !string.IsNullOrWhiteSpace(waitingForPropertyString))
+        {
+            waitingFor = waitingForPropertyString.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        }
+
+        if (waitingFor is not { Length: > 0 })
+        {
+            return null;
+        }
+
+        var dependencies = new List<string>();
+        var seenDependencies = new HashSet<string>(StringComparers.ResourceName);
+
+        foreach (var dependency in waitingFor)
+        {
+            var dependencyName = dependency;
+            var matches = ResolveResources(dependency, allSnapshots);
+            if (matches.Count == 1)
+            {
+                dependencyName = GetResourceName(matches[0], allSnapshots);
+            }
+
+            if (seenDependencies.Add(dependencyName))
+            {
+                dependencies.Add(dependencyName);
+            }
+        }
+
+        return dependencies.Count > 0 ? [.. dependencies] : null;
+    }
+
+    private static string? ConvertJsonNodeToString(JsonNode? node)
+    {
+        return TryConvertJsonNodeToString(node, out var value) ? value : null;
+    }
+
+    private static bool TryConvertJsonNodeToString(JsonNode? node, [System.Diagnostics.CodeAnalysis.NotNullWhen(returnValue: true)] out string? value)
+    {
+        if (node is JsonValue jsonValue && jsonValue.TryGetValue<string>(out var stringValue))
+        {
+            value = stringValue;
+            return true;
+        }
+
+        value = null;
+        return false;
     }
 
     internal static bool IsCommandAvailableToApi(ResourceSnapshotCommand command)

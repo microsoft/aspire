@@ -29,6 +29,7 @@ Aspire.Hosting/Aspire.Hosting.ApplicationModel.EnvironmentEditor
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecutableResource
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandContext [ExposeProperties]
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.IAspireStore [interface, ExposeProperties]
+Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeEnvironmentResource [interface]
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationBuilder [interface]
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationResult [interface]
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExpressionValue [interface]
@@ -95,7 +96,7 @@ Aspire.Hosting/Aspire.Hosting.ApplicationModel.CertificateTrustExecutionConfigur
   CertificateDirectoriesPath: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression # The path(s) to the certificate directories in the resource context (e.g., container filesystem).
   IsContainer: boolean # Is this request being generated for a container resource (i.e. does it require Linux style paths?).
   RootCertificatesPath: string # The root path certificates will be written to in the resource context (e.g., container filesystem).
-Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandOptions # Optional configuration for resource commands added with .
+Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandOptions # Optional configuration for resource commands added with `WithCommand``1`.
   Arguments: Aspire.Hosting/Aspire.Hosting.InteractionInput[] # Gets or sets the invocation arguments accepted by the command.
   ConfirmationMessage: string # When a confirmation message is specified, the UI will prompt with an OK/Cancel dialog and the confirmation message before starting the command.
   Description: string # Optional description of the command, to be shown in the UI. Could be used as a tooltip. May be localized.
@@ -103,14 +104,14 @@ Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandOptions # Optional configu
   IconVariant?: enum:Aspire.Hosting.ApplicationModel.IconVariant # The icon variant.
   IsHighlighted: boolean # A flag indicating whether the command is highlighted in the UI.
   Parameter: any # Obsolete optional parameter that configures the command in some way. Clients must return any value provided by the server when invoking the command.
-  UpdateState: callback # A callback that is used to update the command state. The callback is executed when the command's resource snapshot is updated.If a callback isn't specified, the command is always enabled.
+  UpdateState: callback # A callback that is used to update the command state. The callback is executed when the command's resource snapshot is updated. If a callback isn't specified, the command is always enabled.
   ValidateArguments: callback # Gets or sets the callback that validates invocation arguments before the command callback is executed.
   Visibility: enum:Aspire.Hosting.ApplicationModel.ResourceCommandVisibility # Gets or sets where the command is visible to users and clients.
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandResultData # Represents a value produced by a command.
-  DisplayImmediately: boolean # When , the dashboard will immediately display the value in a dialog when the command completes.
-  Format: enum:Aspire.Hosting.ApplicationModel.CommandResultFormat # The format of the  data.
+  DisplayImmediately: boolean # When `true`, the dashboard will immediately display the value in a dialog when the command completes.
+  Format: enum:Aspire.Hosting.ApplicationModel.CommandResultFormat # The format of the `Value` data.
   Value: string # The value data.
-Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandResult # The result of executing a command. Returned from .
+Aspire.Hosting/Aspire.Hosting.ApplicationModel.ExecuteCommandResult # The result of executing a command. Returned from `ExecuteCommand`.
   Canceled: boolean # A flag that indicates whether the command was canceled by the user.
   Data: Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandResultData # An optional value produced by the command.
   ErrorMessage: string # An optional error message that can be set when the command is unsuccessful.
@@ -166,9 +167,9 @@ Aspire.Hosting/Aspire.Hosting.ApplicationModel.ProcessCommandSpecExportData # AT
   StandardInputContent: string # Standard input content to write to the process after it starts.
   WorkingDirectory: string # The working directory for the process.
 Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceUrlAnnotation # A URL that should be displayed for a resource.
-  DisplayLocation: enum:Aspire.Hosting.ApplicationModel.UrlDisplayLocation # Locations where this URL should be shown on the dashboard. Defaults to .
+  DisplayLocation: enum:Aspire.Hosting.ApplicationModel.UrlDisplayLocation # Locations where this URL should be shown on the dashboard. Defaults to `SummaryAndDetails`.
   DisplayText: string # The name of the URL. When rendered as a link this will be used as the linked text.
-  Endpoint: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference # The endpoint associated with this URL. Can be null if this URL is not associated with an endpoint.
+  Endpoint: Aspire.Hosting/Aspire.Hosting.ApplicationModel.EndpointReference # The endpoint associated with this URL. Can be `null` if this URL is not associated with an endpoint.
   Url: string # The URL. When rendered as a link this will be used as the link target.
 Aspire.Hosting/Aspire.Hosting.Ats.AddContainerOptions # Options for configuring a container image in polyglot apphosts.
   Image: string # The container image name.
@@ -211,16 +212,16 @@ Aspire.Hosting/Aspire.Hosting.Ats.ResourceEventDto # DTO for resource events ret
   State: string # The current state text.
   StateStyle: string # The state style (e.g., "success", "warn", "error").
 Aspire.Hosting/Aspire.Hosting.InteractionInput # Represents an input for an interaction.
-  AllowCustomChoice: boolean # Gets a value indicating whether a custom choice is allowed. Only used by  inputs.
+  AllowCustomChoice: boolean # Gets a value indicating whether a custom choice is allowed. Only used by `Choice` inputs.
   Description: string # Gets or sets the description for the input.
-  Disabled: boolean # Gets or sets a value indicating whether a custom choice is allowed. Only used by  inputs.
-  DynamicLoading: Aspire.Hosting/Aspire.Hosting.InputLoadOptions # Gets the  for the input. Dynamic loading is used to load data and update inputs after a prompt has started. It can also be used to reload data and update inputs after a dependant input has changed.
-  EnableDescriptionMarkdown: boolean # Gets or sets a value indicating whether the description should be rendered as Markdown. Setting this to true allows a description to contain Markdown elements such as links, text decoration and lists.
+  Disabled: boolean # Gets or sets a value indicating whether a custom choice is allowed. Only used by `Choice` inputs.
+  DynamicLoading: Aspire.Hosting/Aspire.Hosting.InputLoadOptions # Gets the `InputLoadOptions` for the input. Dynamic loading is used to load data and update inputs after a prompt has started. It can also be used to reload data and update inputs after a dependant input has changed.
+  EnableDescriptionMarkdown: boolean # Gets or sets a value indicating whether the description should be rendered as Markdown. Setting this to `true` allows a description to contain Markdown elements such as links, text decoration and lists.
   InputType: enum:Aspire.Hosting.InputType # Gets or sets the type of the input.
   Label: string # Gets or sets the label for the input. If not specified, the name will be used as the label.
   MaxLength?: number # gets or sets the maximum length for text inputs.
   Name: string # Gets or sets the name for the input. Used for accessing inputs by name from a keyed collection.
-  Options: System.Private.CoreLib/System.Collections.Generic.KeyValuePair`2[[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]][] # Gets or sets the options for the input. Only used by  inputs.
+  Options: System.Private.CoreLib/System.Collections.Generic.KeyValuePair`2[[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e],[System.String, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]][] # Gets or sets the options for the input. Only used by `Choice` inputs.
   Placeholder: string # Gets the placeholder text for the input.
   Required: boolean # Gets or sets a value indicating whether the input is required.
   Value: string # Gets or sets the value of the input.
@@ -579,6 +580,7 @@ Aspire.Hosting/withBuilderRelationship(resourceBuilder: Aspire.Hosting/Aspire.Ho
 Aspire.Hosting/withCertificateTrustConfig(configContextFactory: callback) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IExecutionConfigurationBuilder
 Aspire.Hosting/withCertificateTrustScope(scope: enum:Aspire.Hosting.ApplicationModel.CertificateTrustScope) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment
 Aspire.Hosting/withCommand(name: string, displayName: string, executeCommand: callback, commandOptions?: Aspire.Hosting/Aspire.Hosting.ApplicationModel.CommandOptions) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource
+Aspire.Hosting/withComputeEnvironment(computeEnvironmentResource: Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeEnvironmentResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource
 Aspire.Hosting/withConnectionProperty(name: string, value: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString
 Aspire.Hosting/withContainerCertificatePaths(customCertificatesDestination?: string, defaultCertificateBundlePaths?: string[], defaultCertificateDirectoryPaths?: string[]) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ContainerResource
 Aspire.Hosting/withContainerFilesSource(sourcePath: string) -> Aspire.Hosting/Aspire.Hosting.IResourceWithContainerFiles

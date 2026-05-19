@@ -1,7 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Commands;
 
 namespace Aspire.Cli.Tests.Backchannel;
 
@@ -121,6 +124,97 @@ public class ResourceSnapshotMapperTests
         var command = Assert.Single(result.Commands!);
         Assert.Null(command.Value.DisplayName);
         Assert.Equal("Run custom command", command.Value.Description);
+    }
+
+    [Fact]
+    public void MapToResourceJson_ResolvesWaitingForDependencies()
+    {
+        var dependency = new ResourceSnapshot
+        {
+            Name = "messaging-abcxyz",
+            DisplayName = "messaging",
+            ResourceType = "Container",
+            State = "Running"
+        };
+
+        var resource = new ResourceSnapshot
+        {
+            Name = "frontend",
+            DisplayName = "frontend",
+            ResourceType = "Project",
+            State = "Waiting",
+            WaitingFor = ["messaging-abcxyz"]
+        };
+
+        var result = ResourceSnapshotMapper.MapToResourceJson(resource, [resource, dependency]);
+
+        Assert.NotNull(result.WaitingFor);
+        Assert.Equal(["messaging"], result.WaitingFor);
+    }
+
+    [Fact]
+    public void MapToResourceJson_MapsListPropertiesAsJsonArrays()
+    {
+        var resource = new ResourceSnapshot
+        {
+            Name = "frontend",
+            DisplayName = "frontend",
+            ResourceType = "Project",
+            State = "Waiting",
+            Properties = new Dictionary<string, JsonNode?>
+            {
+                ["custom.list"] = new JsonArray((JsonNode?)JsonValue.Create("one"), (JsonNode?)JsonValue.Create("two"))
+            }
+        };
+
+        var result = ResourceSnapshotMapper.MapToResourceJson(resource, [resource]);
+
+        Assert.NotNull(result.Properties);
+        var listProperty = Assert.IsType<JsonArray>(result.Properties["custom.list"]);
+        Assert.Collection(
+            listProperty,
+            value => Assert.Equal("one", value?.GetValue<string>()),
+            value => Assert.Equal("two", value?.GetValue<string>()));
+
+        var json = JsonSerializer.Serialize(result, ResourcesCommandJsonContext.RelaxedEscaping.ResourceJson);
+        using var document = JsonDocument.Parse(json);
+        var serializedProperty = document.RootElement.GetProperty("properties").GetProperty("custom.list");
+        Assert.Equal(JsonValueKind.Array, serializedProperty.ValueKind);
+        Assert.Equal("one", serializedProperty[0].GetString());
+        Assert.Equal("two", serializedProperty[1].GetString());
+    }
+
+    [Fact]
+    public void MapToResourceJson_UsesUniqueWaitingForNamesForReplicas()
+    {
+        var firstDependency = new ResourceSnapshot
+        {
+            Name = "messaging-abcxyz",
+            DisplayName = "messaging",
+            ResourceType = "Container",
+            State = "Running"
+        };
+        var secondDependency = new ResourceSnapshot
+        {
+            Name = "messaging-defuvw",
+            DisplayName = "messaging",
+            ResourceType = "Container",
+            State = "Running"
+        };
+
+        var resource = new ResourceSnapshot
+        {
+            Name = "frontend",
+            DisplayName = "frontend",
+            ResourceType = "Project",
+            State = "Waiting",
+            WaitingFor = ["messaging-abcxyz"]
+        };
+
+        var result = ResourceSnapshotMapper.MapToResourceJson(resource, [resource, firstDependency, secondDependency]);
+
+        Assert.NotNull(result.WaitingFor);
+        Assert.Equal(["messaging-abcxyz"], result.WaitingFor);
     }
 
     [Fact]

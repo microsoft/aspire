@@ -13,25 +13,25 @@ Aspire.Hosting.Azure.Network/Aspire.Hosting.Azure.AzureVirtualNetworkResource
 # DTO Types
 Aspire.Hosting.Azure.Network/Aspire.Hosting.Azure.AzureNspAccessRule # Represents an access rule configuration for an Azure Network Security Perimeter.
   AddressPrefixes?: Aspire.Hosting/List<string> # Gets the list of inbound address prefixes (CIDR ranges) allowed by this rule.
-  AddressPrefixReferences?: Aspire.Hosting/List<Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression> # Gets the list of inbound address prefixes (CIDR ranges)  values allowed by this rule.
+  AddressPrefixReferences?: Aspire.Hosting/List<Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression> # Gets the list of inbound address prefixes (CIDR ranges) `ReferenceExpression` values allowed by this rule.
   Direction: enum:Azure.Provisioning.Network.NetworkSecurityPerimeterAccessRuleDirection # Gets or sets the direction of the rule.
-  FullyQualifiedDomainNameReferences?: Aspire.Hosting/List<Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression> # Gets the fully qualified domain name  values allowed by this rule.
+  FullyQualifiedDomainNameReferences?: Aspire.Hosting/List<Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression> # Gets the fully qualified domain name `ReferenceExpression` values allowed by this rule.
   FullyQualifiedDomainNames?: Aspire.Hosting/List<string> # Gets the list of fully qualified domain names (FQDNs) allowed by this rule.
   Name: string # Gets or sets the name of the access rule. This name must be unique within the perimeter profile.
-  SubscriptionReferences?: Aspire.Hosting/List<Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression> # Gets the subscription resource ID  values allowed by this rule.
+  SubscriptionReferences?: Aspire.Hosting/List<Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression> # Gets the subscription resource ID `ReferenceExpression` values allowed by this rule.
   Subscriptions?: Aspire.Hosting/List<string> # Gets the list of subscription IDs allowed by this rule.
 Aspire.Hosting.Azure.Network/Aspire.Hosting.Azure.AzureSecurityRule # Represents a security rule configuration for an Azure Network Security Group.
   Access: enum:Azure.Provisioning.Network.SecurityRuleAccess # Gets or sets whether network traffic is allowed or denied.
   Description: string # Gets or sets an optional description for the security rule.
   DestinationAddressPrefix: string # Gets or sets the destination address prefix. Defaults to "*" (any).
-  DestinationAddressPrefixReference: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression # Gets or sets a  whose value is resolved at deploy time and used as the destination address prefix for the rule. Takes precedence over .
+  DestinationAddressPrefixReference: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression # Gets or sets a `ReferenceExpression` whose value is resolved at deploy time and used as the destination address prefix for the rule. Takes precedence over `DestinationAddressPrefix`.
   DestinationPortRange: string # Gets or sets the destination port range. Use "*" for any, or a range like "80-443".
   Direction: enum:Azure.Provisioning.Network.SecurityRuleDirection # Gets or sets the direction of the rule.
   Name: string # Gets or sets the name of the security rule. This name must be unique within the Network Security Group.
   Priority: number # Gets or sets the priority of the rule. Valid values are between 100 and 4096. Lower numbers have higher priority.
   Protocol: enum:Azure.Provisioning.Network.SecurityRuleProtocol # Gets or sets the network protocol this rule applies to.
   SourceAddressPrefix: string # Gets or sets the source address prefix. Defaults to "*" (any).
-  SourceAddressPrefixReference: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression # Gets or sets a  whose value is resolved at deploy time and used as the source address prefix for the rule. Takes precedence over .
+  SourceAddressPrefixReference: Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression # Gets or sets a `ReferenceExpression` whose value is resolved at deploy time and used as the source address prefix for the rule. Takes precedence over `SourceAddressPrefix`.
   SourcePortRange: string # Gets or sets the source port range. Defaults to "*" (any).
 
 # Exported Values

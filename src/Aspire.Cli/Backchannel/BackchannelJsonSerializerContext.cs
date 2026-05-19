@@ -56,6 +56,7 @@ namespace Aspire.Cli.Backchannel;
 [JsonSerializable(typeof(IAsyncEnumerable<ResourceLogBatch>))]
 [JsonSerializable(typeof(MessageFormatterEnumerableTracker.EnumeratorResults<ResourceLogBatch>))]
 [JsonSerializable(typeof(Dictionary<string, JsonElement>))]
+[JsonSerializable(typeof(Dictionary<string, JsonNode?>))]
 [JsonSerializable(typeof(Dictionary<string, string>))]
 [JsonSerializable(typeof(JsonNode))]
 [JsonSerializable(typeof(CapabilitiesInfo))]
