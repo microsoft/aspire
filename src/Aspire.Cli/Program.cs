@@ -841,6 +841,12 @@ public class Program
 
                     // Wait for either the handler to complete or a termination signal to trigger cancellation and timeout.
                     var firstCompletedTask = await Task.WhenAny(handlerTask, cancellationManager.ProcessTerminationCompletionSource.Task);
+                    if (firstCompletedTask != handlerTask)
+                    {
+                        // The termination signal triggered cancellation and the timeout has completed. Kill the process.
+                        logger.LogWarning("Timeout waiting for cancellation from termination signal.");
+                    }
+
                     exitCode = await firstCompletedTask; // return the result or propagate the exception
 
                     // Set telemetry tags based on how the command completed.
@@ -858,32 +864,27 @@ public class Program
                 // Log exit code for debugging
                 logger.LogInformation("Exit code: {ExitCode}", exitCode);
             }
+            catch (OperationCanceledException) when (cancellationManager.IsCancellationRequested)
+            {
+                exitCode = CliExitCodes.Cancelled;
+            }
+            catch (ExtensionOperationCanceledException)
+            {
+                exitCode = CliExitCodes.Cancelled;
+            }
             catch (Exception ex)
             {
-                exitCode = 1;
-                // Catch block is used instead of System.Commandline's default handler behavior.
-                // Allows logging of exceptions to telemetry.
+                exitCode = CliExitCodes.InvalidCommand;
 
-                // Don't log or display cancellation exceptions.
-                // Check both Ctrl+C cancellation (cancellationManager.IsCancellationRequested) and
-                // extension prompt cancellation (ExtensionOperationCanceledException).
-                if (!(ex is OperationCanceledException && cancellationManager.IsCancellationRequested) && ex is not ExtensionOperationCanceledException)
-                {
-                    logger.LogError(ex, "An unexpected error occurred.");
-
-                    telemetry.RecordError("An unexpected error occurred.", ex);
-
-                    errorWriter.WriteLine(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.UnexpectedErrorOccurred, ex.Message));
-                }
-
-                // Log exit code for debugging
-                logger.LogError("Exit code: {ExitCode} (exception)", exitCode);
-
-                mainActivity?.SetTag(TelemetryConstants.Tags.ProcessExitCode, exitCode);
+                logger.LogError(ex, "An unexpected error occurred.");
+                telemetry.RecordError("An unexpected error occurred.", ex);
+                errorWriter.WriteLine(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.UnexpectedErrorOccurred, ex.Message));
             }
-
-            mainActivity?.SetTag(TelemetryConstants.Tags.ProcessExitCode, exitCode);
-            mainActivity?.Stop();
+            finally
+            {
+                mainActivity?.SetTag(TelemetryConstants.Tags.ProcessExitCode, exitCode);
+                mainActivity?.Stop();
+            }
 
             if (profileCaptureSession is not null)
             {

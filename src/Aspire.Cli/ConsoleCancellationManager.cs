@@ -22,8 +22,9 @@ internal sealed class ConsoleCancellationManager : IDisposable
     private readonly PosixSignalRegistration? _sigTermRegistration;
     private readonly CancellationToken _token;
     private Task<int>? _startedHandler;
+    private int _cancelCalled;
 
-    internal readonly TaskCompletionSource<int> _processTerminationCompletionSource = new();
+    internal readonly TaskCompletionSource<int> _processTerminationCompletionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     /// <summary>
     /// A completion source that is signaled with a native exit code when the running handler
@@ -56,11 +57,9 @@ internal sealed class ConsoleCancellationManager : IDisposable
             _sigIntRegistration = PosixSignalRegistration.Create(PosixSignal.SIGINT, OnPosixSignal);
             _sigTermRegistration = PosixSignalRegistration.Create(PosixSignal.SIGTERM, OnPosixSignal);
         }
-        else
-        {
-            Console.CancelKeyPress += OnCancelKeyPress;
-            AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
-        }
+
+        Console.CancelKeyPress += OnCancelKeyPress;
+        AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
     }
 
     public CancellationToken Token => _token;
@@ -83,6 +82,12 @@ internal sealed class ConsoleCancellationManager : IDisposable
 
     private void Cancel(int forcedTerminationExitCode)
     {
+        // Ensure only the first signal triggers cancellation logic; subsequent signals are no-ops.
+        if (Interlocked.CompareExchange(ref _cancelCalled, 1, 0) != 0)
+        {
+            return;
+        }
+
         // Request cancellation so cooperative listeners can begin shutting down.
         try
         {
@@ -114,16 +119,11 @@ internal sealed class ConsoleCancellationManager : IDisposable
 
     public void Dispose()
     {
-        if (_sigIntRegistration is not null)
-        {
-            _sigIntRegistration.Dispose();
-            _sigTermRegistration?.Dispose();
-        }
-        else
-        {
-            Console.CancelKeyPress -= OnCancelKeyPress;
-            AppDomain.CurrentDomain.ProcessExit -= OnProcessExit;
-        }
+        _sigIntRegistration?.Dispose();
+        _sigTermRegistration?.Dispose();
+
+        Console.CancelKeyPress -= OnCancelKeyPress;
+        AppDomain.CurrentDomain.ProcessExit -= OnProcessExit;
 
         _cts.Dispose();
     }
