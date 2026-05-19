@@ -66,7 +66,7 @@ function Set-ExecutablePermission([string]$Path) {
 }
 
 function Get-ArchiveRidFamily([string]$ArchiveFileName) {
-    return switch -Wildcard ($ArchiveFileName) {
+    switch -Wildcard ($ArchiveFileName) {
         '*win-*'   { 'win';   break }
         '*osx-*'   { 'osx';   break }
         '*linux-*' { 'linux'; break }
