@@ -10,6 +10,10 @@ internal static class PackageSourceOverrideMappings
     public static PackageMapping[] Create(string packageSourceOverride, PackageChannel? requestedChannel)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(packageSourceOverride);
+        if (HasCredentialMaterial(packageSourceOverride))
+        {
+            throw new ArgumentException("Credential-bearing HTTP sources cannot be persisted.", nameof(packageSourceOverride));
+        }
 
         var mappings = new List<PackageMapping>
         {
@@ -35,5 +39,15 @@ internal static class PackageSourceOverrideMappings
         }
 
         return [.. mappings.DistinctBy(static mapping => $"{mapping.PackageFilter}\0{mapping.Source}")];
+    }
+
+    public static bool HasCredentialMaterial(string source)
+    {
+        return Uri.TryCreate(source.Trim(), UriKind.Absolute, out var uri) &&
+            (uri.Scheme.Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) ||
+                uri.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase)) &&
+            (!string.IsNullOrEmpty(uri.UserInfo) ||
+                !string.IsNullOrEmpty(uri.Query) ||
+                !string.IsNullOrEmpty(uri.Fragment));
     }
 }

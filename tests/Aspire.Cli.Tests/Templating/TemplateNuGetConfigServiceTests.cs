@@ -163,6 +163,21 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         Assert.False(await service.CreateOrUpdateNuGetConfigForSourceOverrideAsync(sourceOverride: "   ", channelName: "daily", workspace.WorkspaceRoot.FullName, CancellationToken.None));
     }
 
+    [Theory]
+    [InlineData("https://user:token@example.invalid/v3/index.json")]
+    [InlineData("https://example.invalid/v3/index.json?sig=token")]
+    [InlineData("https://example.invalid/v3/index.json#token")]
+    public async Task CreateOrUpdateNuGetConfigForSourceOverrideAsync_CredentialBearingHttpSourceThrows(string sourceOverride)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var service = CreateService();
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            async () => await service.CreateOrUpdateNuGetConfigForSourceOverrideAsync(sourceOverride, channelName: null, workspace.WorkspaceRoot.FullName, CancellationToken.None));
+
+        Assert.False(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config")));
+    }
+
     [Fact]
     public async Task PromptToCreateOrUpdateNuGetConfigAsync_NullChannelName_ShortCircuits()
     {
