@@ -1,4 +1,4 @@
-//! aspire.rs - Capability-based Aspire SDK
+﻿//! aspire.rs - Capability-based Aspire SDK
 //! GENERATED CODE - DO NOT EDIT
 
 use std::collections::HashMap;
@@ -1748,15 +1748,10 @@ pub fn create_builder(options: Option<CreateBuilderOptions>) -> Result<IDistribu
         resolved_options.insert("Args".to_string(), serde_json::to_value(args).unwrap_or(Value::Null));
     }
     if !resolved_options.contains_key("ProjectDirectory") {
-        if let Ok(project_directory) = std::env::var("ASPIRE_PROJECT_DIRECTORY") {
-            if !project_directory.is_empty() {
-                resolved_options.insert("ProjectDirectory".to_string(), Value::String(project_directory));
-            }
-        }
-        if !resolved_options.contains_key("ProjectDirectory") {
-            if let Ok(pwd) = std::env::current_dir() {
-                resolved_options.insert("ProjectDirectory".to_string(), Value::String(pwd.to_string_lossy().to_string()));
-            }
+        if let Some(project_directory) = std::env::var("ASPIRE_PROJECT_DIRECTORY").ok().filter(|s| !s.is_empty()) {
+            resolved_options.insert("ProjectDirectory".to_string(), Value::String(project_directory));
+        } else if let Ok(pwd) = std::env::current_dir() {
+            resolved_options.insert("ProjectDirectory".to_string(), Value::String(pwd.to_string_lossy().to_string()));
         }
     }
     if !resolved_options.contains_key("AppHostFilePath") {

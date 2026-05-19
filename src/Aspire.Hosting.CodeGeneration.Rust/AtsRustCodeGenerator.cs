@@ -739,15 +739,10 @@ internal sealed class AtsRustCodeGenerator : ICodeGenerator
         WriteLine("    if !resolved_options.contains_key(\"ProjectDirectory\") {");
         // ASPIRE_PROJECT_DIRECTORY is set by the CLI so the host reports the correct project
         // directory (not the cwd) when matching --apphost <directory> requests.
-        WriteLine("        if let Ok(project_directory) = std::env::var(\"ASPIRE_PROJECT_DIRECTORY\") {");
-        WriteLine("            if !project_directory.is_empty() {");
-        WriteLine("                resolved_options.insert(\"ProjectDirectory\".to_string(), Value::String(project_directory));");
-        WriteLine("            }");
-        WriteLine("        }");
-        WriteLine("        if !resolved_options.contains_key(\"ProjectDirectory\") {");
-        WriteLine("            if let Ok(pwd) = std::env::current_dir() {");
-        WriteLine("                resolved_options.insert(\"ProjectDirectory\".to_string(), Value::String(pwd.to_string_lossy().to_string()));");
-        WriteLine("            }");
+        WriteLine("        if let Some(project_directory) = std::env::var(\"ASPIRE_PROJECT_DIRECTORY\").ok().filter(|s| !s.is_empty()) {");
+        WriteLine("            resolved_options.insert(\"ProjectDirectory\".to_string(), Value::String(project_directory));");
+        WriteLine("        } else if let Ok(pwd) = std::env::current_dir() {");
+        WriteLine("            resolved_options.insert(\"ProjectDirectory\".to_string(), Value::String(pwd.to_string_lossy().to_string()));");
         WriteLine("        }");
         WriteLine("    }");
         // ASPIRE_APPHOST_FILEPATH is set by the CLI so the host reports the original AppHost file
