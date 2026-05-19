@@ -171,4 +171,105 @@ public class ConfigurationHelperTests(ITestOutputHelper outputHelper)
             Path.Combine(workspace.WorkspaceRoot.FullName, AspireJsonConfiguration.SettingsFolder),
             aspireDirectory.FullName);
     }
+
+    [Fact]
+    public void RegisterSettingsFiles_MigratesLegacySettingsToAspireConfigJsonOnStartup()
+    {
+        // Reproduces https://github.com/microsoft/aspire/issues/15488: a user upgrades the
+        // CLI and runs it against an existing AppHost workspace that only has the legacy
+        // .aspire/settings.json. The CLI must eagerly migrate the workspace to
+        // aspire.config.json on startup, regardless of which command the user runs (even
+        // read-only commands that never pass createSettingsFile: true to ProjectLocator).
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var legacyDir = workspace.CreateDirectory(AspireJsonConfiguration.SettingsFolder);
+        var legacySettingsPath = Path.Combine(legacyDir.FullName, AspireJsonConfiguration.FileName);
+        File.WriteAllText(legacySettingsPath, """
+            {
+              "appHostPath": "MyApp.csproj",
+              "channel": "stable"
+            }
+            """);
+
+        var aspireConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        Assert.False(File.Exists(aspireConfigPath), "Precondition: aspire.config.json should not yet exist.");
+
+        var globalDir = workspace.CreateDirectory("global-aspire");
+        var globalSettingsFile = new FileInfo(Path.Combine(globalDir.FullName, AspireConfigFile.FileName));
+
+        var builder = new ConfigurationBuilder();
+        ConfigurationHelper.RegisterSettingsFiles(builder, workspace.WorkspaceRoot, globalSettingsFile);
+
+        Assert.True(
+            File.Exists(aspireConfigPath),
+            "aspire.config.json should have been created by eager migration during RegisterSettingsFiles.");
+    }
+
+    [Fact]
+    public void RegisterSettingsFiles_DoesNotOverwriteExistingAspireConfigJson()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        // Both files present: the workspace was already migrated but the legacy file was
+        // retained (this is the documented transition state — see AspireConfigFile.LoadOrCreate
+        // and https://github.com/microsoft/aspire/issues/15239). Startup migration must not
+        // clobber the existing aspire.config.json or re-migrate from stale legacy data.
+        var aspireConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        var existingContent = """
+            {
+              "appHost": { "path": "Current.csproj" },
+              "channel": "daily"
+            }
+            """;
+        File.WriteAllText(aspireConfigPath, existingContent);
+
+        var legacyDir = workspace.CreateDirectory(AspireJsonConfiguration.SettingsFolder);
+        var legacySettingsPath = Path.Combine(legacyDir.FullName, AspireJsonConfiguration.FileName);
+        File.WriteAllText(legacySettingsPath, """
+            { "appHostPath": "Stale.csproj", "channel": "stable" }
+            """);
+
+        var globalDir = workspace.CreateDirectory("global-aspire");
+        var globalSettingsFile = new FileInfo(Path.Combine(globalDir.FullName, AspireConfigFile.FileName));
+
+        var builder = new ConfigurationBuilder();
+        ConfigurationHelper.RegisterSettingsFiles(builder, workspace.WorkspaceRoot, globalSettingsFile);
+
+        Assert.Equal(existingContent, File.ReadAllText(aspireConfigPath));
+
+        var config = builder.Build();
+        Assert.Equal("Current.csproj", config["appHost:path"]);
+        Assert.Equal("daily", config["channel"]);
+    }
+
+    [Fact]
+    public void RegisterSettingsFiles_FallsBackToLegacyWhenMigrationFails()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var legacyDir = workspace.CreateDirectory(AspireJsonConfiguration.SettingsFolder);
+        var legacySettingsPath = Path.Combine(legacyDir.FullName, AspireJsonConfiguration.FileName);
+        // Malformed JSON causes AspireConfigFile.LoadOrCreate → AspireJsonConfiguration.Load
+        // to throw. Startup must catch and continue registering the legacy file so the CLI
+        // doesn't crash before any command runs.
+        File.WriteAllText(legacySettingsPath, "{ this is not valid json");
+
+        var globalDir = workspace.CreateDirectory("global-aspire");
+        var globalSettingsFile = new FileInfo(Path.Combine(globalDir.FullName, AspireConfigFile.FileName));
+
+        var builder = new ConfigurationBuilder();
+        var ex = Record.Exception(() =>
+            ConfigurationHelper.RegisterSettingsFiles(builder, workspace.WorkspaceRoot, globalSettingsFile));
+
+        // RegisterSettingsFiles itself shouldn't crash on a malformed legacy file. The
+        // downstream JSON registration may still throw via AddSettingsFile — that's pre-existing
+        // behavior and is the right signal for "your settings.json is broken". The migration
+        // step specifically must not introduce a new crash path.
+        var migratedPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        Assert.False(File.Exists(migratedPath), "Malformed legacy file should not produce a partial aspire.config.json.");
+        // Either no exception (graceful), or the same InvalidOperationException previously
+        // thrown by AddSettingsFile for malformed JSON. Both are acceptable; what we're
+        // proving is that we didn't crash inside the new migration step itself.
+        Assert.True(ex is null or InvalidOperationException, $"Unexpected exception type: {ex?.GetType().FullName}");
+    }
 }
