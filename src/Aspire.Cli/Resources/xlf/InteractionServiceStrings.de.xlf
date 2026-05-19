@@ -3,7 +3,7 @@
   <file datatype="xml" source-language="en" target-language="de" original="../InteractionServiceStrings.resx">
     <body>
       <trans-unit id="AppHostConnectionLost">
-        <source>The connection to the AppHost was lost: {0}.</source>
+        <source>The connection to the AppHost was lost: {0}</source>
         <target state="needs-review-translation">Die Verbindung mit dem App-Host wurde getrennt: {0}.</target>
         <note />
       </trans-unit>
@@ -73,7 +73,7 @@
         <note>Represents a type of link</note>
       </trans-unit>
       <trans-unit id="ErrorConnectingToAppHost">
-        <source>An error occurred while connecting to the AppHost. The AppHost possibly crashed before it was available: {0}.</source>
+        <source>An error occurred while connecting to the AppHost. The AppHost possibly crashed before it was available: {0}</source>
         <target state="needs-review-translation">Fehler beim Herstellen einer Verbindung mit dem App-Host. Der App-Host ist möglicherweise abgestürzt, bevor er verfügbar war: {0}.</target>
         <note />
       </trans-unit>
