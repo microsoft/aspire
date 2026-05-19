@@ -87,13 +87,6 @@ internal sealed class BundleService(
     }
 
     /// <inheritdoc/>
-    public async Task<LayoutConfiguration?> EnsureExtractedAndGetLayoutAsync(CancellationToken cancellationToken = default)
-    {
-        await EnsureExtractedAsync(cancellationToken).ConfigureAwait(false);
-        return layoutDiscovery.DiscoverLayout();
-    }
-
-    /// <inheritdoc/>
     public async Task<BundleLayoutLease?> EnsureExtractedAndAcquireLayoutAsync(string holderKind, string? commandName = null, CancellationToken cancellationToken = default)
     {
         var extractDir = GetBundleExtractDirForCurrentProcess();

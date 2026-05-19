@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Layout;
-
 namespace Aspire.Cli.Bundles;
 
 /// <summary>
@@ -30,15 +28,6 @@ internal interface IBundleService
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The result of the extraction attempt.</returns>
     Task<BundleExtractResult> ExtractAsync(string destinationPath, bool force = false, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Ensures the bundle is extracted and returns the discovered layout.
-    /// Combines <see cref="EnsureExtractedAsync"/> and layout discovery into a single call
-    /// so callers cannot forget to extract before discovering the layout.
-    /// </summary>
-    /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>The discovered layout, or <see langword="null"/> if no layout is found.</returns>
-    Task<LayoutConfiguration?> EnsureExtractedAndGetLayoutAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Ensures the bundle is extracted and returns a version-rooted layout with a lease that prevents cleanup.
