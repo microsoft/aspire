@@ -300,7 +300,7 @@ public class Program
         var globalSettingsFilePath = GetGlobalSettingsPath(startupContext.Logger);
         var globalSettingsFile = new FileInfo(globalSettingsFilePath);
         var workingDirectory = new DirectoryInfo(Environment.CurrentDirectory);
-        ConfigurationHelper.RegisterSettingsFiles(builder.Configuration, workingDirectory, globalSettingsFile);
+        ConfigurationHelper.RegisterSettingsFiles(builder.Configuration, workingDirectory, globalSettingsFile, startupContext.Logger);
 
         TrySetLocaleOverride(LocaleHelpers.GetLocaleOverride(builder.Configuration), startupContext.Logger, startupContext.ErrorWriter);
         WarnIfGlobalSettingsContainAppHostPath(globalSettingsFile, startupContext.ErrorWriter);

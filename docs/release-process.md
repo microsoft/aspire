@@ -61,7 +61,7 @@ Before starting a release:
      pipeline regardless of branch. Pick the build that corresponds to the
      release branch and version you intend to ship.
    - Each build's tags are shown alongside its number — verify the
-     `release-version:X.Y.Z` tag matches the version you intend to ship
+     `release-version - X.Y.Z` tag matches the version you intend to ship
      **before** clicking Run. If the tag is missing, either re-run the
      source build (after the tag-emitting change in `azure-pipelines.yml`
      is on that release branch) or pass an explicit `ReleaseVersion`
@@ -75,7 +75,7 @@ Before starting a release:
 
    | Parameter | Description | Example |
    |-----------|-------------|---------|
-   | `ReleaseVersion` | Override for the version label (used as `v<version>` tag). **Leave as `auto` to derive from the source build's `release-version:*` tag** — the normal case. Only set this when re-shipping under a corrected tag. | `auto` |
+   | `ReleaseVersion` | Override for the version label (used as `v<version>` tag). **Leave as `auto` to derive from the source build's `release-version - *` tag** — the normal case. Only set this when re-shipping under a corrected tag. | `auto` |
    | `IsPrerelease` | `true` for preview releases | `false` |
    | `DryRun` | Set `true` to test without publishing or tagging | `false` |
    | `GaChannelName` | Target GA channel | `Aspire 9.x GA` |

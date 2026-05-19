@@ -533,10 +533,40 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
     }
 
     /// <summary>
+    /// Throws when the caller asked for the staging channel but the running CLI's packaging
+    /// service refuses to synthesize one (daily/local/pr-<c>N</c> identity without
+    /// <c>overrideStagingFeed</c> or the <c>StagingChannelEnabled</c> feature flag). Surfaces
+    /// the same actionable reason the <c>update</c> and <c>new</c> commands display so the
+    /// bundled AppHost restore path doesn't silently downgrade to the daily feed.
+    /// </summary>
+    private void ThrowIfStagingUnavailable(string? requestedChannel)
+    {
+        if (!string.Equals(requestedChannel, PackageChannelNames.Staging, StringComparisons.ChannelName))
+        {
+            return;
+        }
+
+        var reason = _packagingService.GetStagingChannelUnavailableReason();
+        if (reason is not null)
+        {
+            throw new InvalidOperationException(reason);
+        }
+    }
+
+    /// <summary>
     /// Gets NuGet sources from the resolved channel for bundled restore.
     /// </summary>
-    private async Task<IEnumerable<string>?> GetNuGetSourcesAsync(string? requestedChannel, string? packageSourceOverride, CancellationToken cancellationToken)
+    internal async Task<IEnumerable<string>?> GetNuGetSourcesAsync(string? requestedChannel, string? packageSourceOverride, CancellationToken cancellationToken)
     {
+        // Refuse to silently downgrade staging restores to the shared daily feed when the running
+        // CLI cannot synthesize a real staging channel (daily/local/pr-<N>). PackagingService omits
+        // the staging channel in that case; without this check the lookup below falls through to
+        // "all explicit channels" — which on a daily CLI is the shared daily feed — and restore
+        // silently succeeds against the wrong feed. Surfacing the actionable
+        // GetStagingChannelUnavailableReason() mirrors UpdateCommand/NewCommand and closes the
+        // bundled-AppHost arm of https://github.com/microsoft/aspire/issues/16652.
+        ThrowIfStagingUnavailable(requestedChannel);
+
         var sources = new List<string>();
 
         if (!string.IsNullOrWhiteSpace(packageSourceOverride))
@@ -607,7 +637,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         return sources.Count > 0 ? sources : null;
     }
 
-    private async Task<TemporaryNuGetConfig?> TryCreateTemporaryNuGetConfigAsync(string? requestedChannel, string? packageSourceOverride, CancellationToken cancellationToken)
+    internal async Task<TemporaryNuGetConfig?> TryCreateTemporaryNuGetConfigAsync(string? requestedChannel, string? packageSourceOverride, CancellationToken cancellationToken)
     {
         if (!string.IsNullOrWhiteSpace(packageSourceOverride))
         {
@@ -630,7 +660,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
                 {
                     var packageChannels = await _packagingService.GetChannelsAsync(cancellationToken, requestedChannel);
                     var matchedChannel = packageChannels.FirstOrDefault(c =>
-                        string.Equals(c.Name, requestedChannel, StringComparison.OrdinalIgnoreCase));
+                        string.Equals(c.Name, requestedChannel, StringComparisons.ChannelName));
                     if (matchedChannel?.Mappings is not null)
                     {
                         foreach (var mapping in matchedChannel.Mappings)
@@ -670,11 +700,16 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             return null;
         }
 
+        // Same staging refusal as GetNuGetSourcesAsync: if the CLI cannot synthesize staging,
+        // surface the actionable reason instead of returning null and letting restore proceed
+        // against whichever sources the caller resolved separately.
+        ThrowIfStagingUnavailable(requestedChannel);
+
         var channels = await _packagingService.GetChannelsAsync(cancellationToken, requestedChannel);
         var channel = channels.FirstOrDefault(c =>
             c.Type == PackageChannelType.Explicit &&
             c.Mappings is { Length: > 0 } &&
-            string.Equals(c.Name, requestedChannel, StringComparison.OrdinalIgnoreCase));
+            string.Equals(c.Name, requestedChannel, StringComparisons.ChannelName));
 
         if (channel?.Mappings is null)
         {
@@ -688,7 +723,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         // regardless of which CLI identity (CliExecutionContext.IdentityChannel) is running.
         // Keying on the resolved channel.Name (rather than the input requestedChannel) is robust
         // to alias/normalization in the channel lookup above.
-        if (string.Equals(channel.Name, PackageChannelNames.Local, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(channel.Name, PackageChannelNames.Local, StringComparisons.ChannelName))
         {
             return null;
         }
@@ -714,7 +749,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             channel = channels.FirstOrDefault(c =>
                 c.Type == PackageChannelType.Explicit &&
                 c.Mappings is { Length: > 0 } &&
-                string.Equals(c.Name, requestedChannel, StringComparison.OrdinalIgnoreCase));
+                string.Equals(c.Name, requestedChannel, StringComparisons.ChannelName));
         }
         catch (OperationCanceledException)
         {
@@ -771,7 +806,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         var channels = await _packagingService.GetChannelsAsync(cancellationToken, requestedChannel);
         if (!string.IsNullOrEmpty(requestedChannel))
         {
-            var matchingChannel = channels.FirstOrDefault(c => string.Equals(c.Name, requestedChannel, StringComparison.OrdinalIgnoreCase));
+            var matchingChannel = channels.FirstOrDefault(c => string.Equals(c.Name, requestedChannel, StringComparisons.ChannelName));
             if (matchingChannel is not null)
             {
                 return [matchingChannel];

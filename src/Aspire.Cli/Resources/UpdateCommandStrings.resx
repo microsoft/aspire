@@ -180,4 +180,7 @@
   <data name="NuGetConfigDirOptionDescription" xml:space="preserve">
     <value>Directory to create or update the NuGet.config file in</value>
   </data>
+  <data name="NoChannelFoundMatching" xml:space="preserve">
+    <value>No channel found matching '{0}'. Valid options are: {1}.</value>
+  </data>
 </root>

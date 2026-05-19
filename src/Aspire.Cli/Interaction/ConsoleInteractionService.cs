@@ -36,10 +36,22 @@ internal class ConsoleInteractionService : IInteractionService
     /// <summary>
     /// Console used for human-readable messages; routes to stderr when <see cref="Console"/> is set to <see cref="ConsoleOutput.Error"/>.
     /// </summary>
-    private IAnsiConsole MessageConsole => Console == ConsoleOutput.Error ? _errorConsole : _outConsole;
+    private IAnsiConsole MessageConsole => GetConsoleOutput(null);
 
     // Limit logging to prompts and messages. Don't log raw text output since it may contain sensitive information.
-    private ILogger MessageLogger => Console == ConsoleOutput.Error ? _stderrLogger : _stdoutLogger;
+    private ILogger MessageLogger => GetLogger(null);
+
+    private IAnsiConsole GetConsoleOutput(ConsoleOutput? consoleOverride) => (consoleOverride ?? Console) switch
+    {
+        ConsoleOutput.Error => _errorConsole,
+        _ => _outConsole
+    };
+
+    private ILogger GetLogger(ConsoleOutput? consoleOverride) => (consoleOverride ?? Console) switch
+    {
+        ConsoleOutput.Error => _stderrLogger,
+        _ => _stdoutLogger
+    };
 
     public ConsoleOutput Console { get; set; }
 
@@ -373,8 +385,10 @@ internal class ConsoleInteractionService : IInteractionService
         WriteEmojiMessage(_errorConsole, _stderrLogger, KnownEmojis.CrossMark, $"[red bold]{formatted}[/]", allowMarkup: true);
     }
 
-    public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false)
-        => WriteEmojiMessage(MessageConsole, MessageLogger, emoji, message, allowMarkup);
+    public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false, ConsoleOutput? consoleOverride = null)
+    {
+        WriteEmojiMessage(GetConsoleOutput(consoleOverride), GetLogger(consoleOverride), emoji, message, allowMarkup);
+    }
 
     private static void WriteEmojiMessage(IAnsiConsole target, ILogger logger, KnownEmoji emoji, string message, bool allowMarkup)
     {
@@ -533,10 +547,10 @@ internal class ConsoleInteractionService : IInteractionService
             });
     }
 
-    public void DisplayCancellationMessage()
+    public void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null)
     {
-        MessageConsole.WriteLine();
-        DisplayMessage(KnownEmojis.StopSign, $"[teal bold]{InteractionServiceStrings.StoppingAspire}[/]", allowMarkup: true);
+        GetConsoleOutput(consoleOverride).WriteLine();
+        DisplayMessage(KnownEmojis.StopSign, $"[teal bold]{InteractionServiceStrings.StoppingAspire}[/]", allowMarkup: true, consoleOverride: consoleOverride);
     }
 
     public async Task<bool> PromptConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default)

@@ -208,8 +208,31 @@ internal sealed class UpdateCommand : BaseCommand
             if (!string.IsNullOrWhiteSpace(channelName))
             {
                 // Try to find a channel matching the provided channel/quality
-                channel = allChannels.FirstOrDefault(c => string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase))
-                    ?? throw new ChannelNotFoundException($"No channel found matching '{channelName}'. Valid options are: {string.Join(", ", allChannels.Select(c => c.Name))}");
+                var matchedChannel = allChannels.FirstOrDefault(c => string.Equals(c.Name, channelName, StringComparisons.ChannelName));
+                if (matchedChannel is null)
+                {
+                    // When the user explicitly asked for the 'staging' channel and the packaging
+                    // service refused to synthesize it (daily/local/pr-N CLI without an override),
+                    // surface the packaging-service reason instead of the generic "no channel
+                    // matching" message — the generic message hides the actual fix from the user.
+                    // See https://github.com/microsoft/aspire/issues/16652.
+                    if (string.Equals(channelName, PackageChannelNames.Staging, StringComparisons.ChannelName))
+                    {
+                        var stagingUnavailableReason = _packagingService.GetStagingChannelUnavailableReason();
+                        if (stagingUnavailableReason is not null)
+                        {
+                            throw new ChannelNotFoundException(stagingUnavailableReason);
+                        }
+                    }
+
+                    throw new ChannelNotFoundException(string.Format(
+                        CultureInfo.CurrentCulture,
+                        UpdateCommandStrings.NoChannelFoundMatching,
+                        channelName,
+                        string.Join(", ", allChannels.Select(c => c.Name))));
+                }
+
+                channel = matchedChannel;
 
                 if (channelFromConfig)
                 {
@@ -240,9 +263,9 @@ internal sealed class UpdateCommand : BaseCommand
                 var identityChannel = ExecutionContext.IdentityChannel;
                 PackageChannel? identityMatch = null;
                 if (!string.IsNullOrWhiteSpace(identityChannel)
-                    && !string.Equals(identityChannel, PackageChannelNames.Local, StringComparison.OrdinalIgnoreCase))
+                    && !string.Equals(identityChannel, PackageChannelNames.Local, StringComparisons.ChannelName))
                 {
-                    identityMatch = allChannels.FirstOrDefault(c => string.Equals(c.Name, identityChannel, StringComparison.OrdinalIgnoreCase));
+                    identityMatch = allChannels.FirstOrDefault(c => string.Equals(c.Name, identityChannel, StringComparisons.ChannelName));
                 }
 
                 if (identityMatch is not null)
@@ -362,7 +385,7 @@ internal sealed class UpdateCommand : BaseCommand
     private bool IsStagingChannelAvailable()
     {
         return KnownFeatures.IsStagingChannelEnabled(_features, _configuration)
-            || string.Equals(ExecutionContext.IdentityChannel, PackageChannelNames.Staging, StringComparison.OrdinalIgnoreCase);
+            || string.Equals(ExecutionContext.IdentityChannel, PackageChannelNames.Staging, StringComparisons.ChannelName);
     }
 
     private async Task<CommandResult> ExecuteSelfUpdateAsync(ParseResult parseResult, CancellationToken cancellationToken, string? selectedChannel = null)

@@ -152,6 +152,11 @@
         <target state="translated">V souboru NuGet.config se nezjistily žádné změny.</target>
         <note />
       </trans-unit>
+      <trans-unit id="NoChannelFoundMatching">
+        <source>No channel found matching '{0}'. Valid options are: {1}.</source>
+        <target state="new">No channel found matching '{0}'. Valid options are: {1}.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NoPackageFoundFormat">
         <source>No package found with ID '{0}' in channel '{1}'.</source>
         <target state="translated">V kanálu {1} nebyl nalezen žádný balíček s ID {0}.</target>

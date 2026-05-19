@@ -168,5 +168,17 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("OutputPathContainsInvalidCharacters", resourceCulture);
             }
         }
+
+        public static string NoPackageChannelsAvailable {
+            get {
+                return ResourceManager.GetString("NoPackageChannelsAvailable", resourceCulture);
+            }
+        }
+
+        public static string NoChannelFoundMatching {
+            get {
+                return ResourceManager.GetString("NoChannelFoundMatching", resourceCulture);
+            }
+        }
     }
 }

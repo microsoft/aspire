@@ -152,6 +152,11 @@
         <target state="translated">NuGet.config 中未检测到任何更改</target>
         <note />
       </trans-unit>
+      <trans-unit id="NoChannelFoundMatching">
+        <source>No channel found matching '{0}'. Valid options are: {1}.</source>
+        <target state="new">No channel found matching '{0}'. Valid options are: {1}.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NoPackageFoundFormat">
         <source>No package found with ID '{0}' in channel '{1}'.</source>
         <target state="translated">在频道 "{0}" 中找不到 ID 为 "{1}" 的包。</target>

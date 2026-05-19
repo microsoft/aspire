@@ -127,6 +127,6 @@ internal static class KnownFeatures
     public static bool IsStagingChannelEnabled(IFeatures features, IConfiguration configuration)
     {
         return features.IsFeatureEnabled(StagingChannelEnabled, false)
-            || string.Equals(configuration["channel"], PackageChannelNames.Staging, StringComparison.OrdinalIgnoreCase);
+            || string.Equals(configuration["channel"], PackageChannelNames.Staging, StringComparisons.ChannelName);
     }
 }

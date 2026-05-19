@@ -754,7 +754,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         // The command should handle cancellation gracefully
         Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.Equal(1, testInteractionService.DisplayCancellationMessageCount);
+        Assert.Single(testInteractionService.DisplayedCancellations);
 
         // Verify a warning was displayed (not an error)
         var m = Assert.Single(testInteractionService.DisplayedMessages);

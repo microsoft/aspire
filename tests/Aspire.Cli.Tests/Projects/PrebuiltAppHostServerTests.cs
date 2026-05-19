@@ -725,6 +725,130 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         Assert.Equal(expected, PrebuiltAppHostServer.RedactSourceForDisplay(input));
     }
 
+    [Fact]
+    public async Task TryCreateTemporaryNuGetConfig_StagingRequested_RefusesWhenPackagingServiceReportsUnavailable()
+    {
+        // Regression for radical's review of #17235: on a daily/local/pr CLI the packaging service
+        // refuses to synthesize a 'staging' channel and surfaces the actionable reason. The bundled
+        // AppHost restore must not silently fall through to a different feed — it must propagate
+        // that reason so the user sees the same message the update/new commands now show.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var executionContext = CreateContextWithIdentityChannel("daily");
+        const string unavailableReason =
+            "Staging unavailable on this daily CLI build. Set overrideStagingFeed or enable the StagingChannelEnabled feature flag to use it.";
+        var server = CreateServerWithUnavailableStagingChannel(workspace, executionContext, unavailableReason);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => InvokeTryCreateTemporaryNuGetConfigAsync(server, "staging"));
+        Assert.Equal(unavailableReason, ex.Message);
+    }
+
+    [Fact]
+    public async Task GetNuGetSources_StagingRequested_RefusesWhenPackagingServiceReportsUnavailable()
+    {
+        // Companion of the TryCreateTemporaryNuGetConfig test above. Without this guard,
+        // GetNuGetSourcesAsync's "no match -> all explicit channels" fallback hands the
+        // shared daily feed to nuget restore on a daily-identity CLI even though the project
+        // pinned channel: staging.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var executionContext = CreateContextWithIdentityChannel("daily");
+        const string unavailableReason =
+            "Staging unavailable on this daily CLI build. Set overrideStagingFeed or enable the StagingChannelEnabled feature flag to use it.";
+        var server = CreateServerWithUnavailableStagingChannel(workspace, executionContext, unavailableReason);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => server.GetNuGetSourcesAsync("staging", packageSourceOverride: null, CancellationToken.None));
+        Assert.Equal(unavailableReason, ex.Message);
+    }
+
+    [Fact]
+    public async Task GetNuGetSources_NonStagingRequest_NotAffectedByStagingUnavailableReason()
+    {
+        // Negative control: the staging refusal must only fire for requestedChannel == "staging".
+        // A request for any other channel name must continue to resolve normally even when the
+        // packaging service is reporting staging-unavailable.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var executionContext = CreateContextWithIdentityChannel("daily");
+        var mappings = new[]
+        {
+            new PackageMapping(PackageMapping.AllPackages, "https://pkgs.dev.azure.com/fake/v3/index.json")
+        };
+        var dailyChannel = PackageChannel.CreateExplicitChannel(
+            "daily", PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache());
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel]),
+            GetStagingChannelUnavailableReasonCallback = () => "Staging unavailable"
+        };
+
+        var nugetService = new BundleNuGetService(
+            new NullLayoutDiscovery(),
+            new LayoutProcessRunner(new TestProcessExecutionFactory()),
+            new TestFeatures(),
+            executionContext,
+            NullLogger<BundleNuGetService>.Instance);
+
+        var server = new PrebuiltAppHostServer(
+            workspace.WorkspaceRoot.FullName,
+            "test.sock",
+            new LayoutConfiguration(),
+            nugetService,
+            new TestDotNetCliRunner(),
+            new TestDotNetSdkInstaller(),
+            packagingService,
+            executionContext,
+            NullLogger.Instance);
+
+        var sources = await server.GetNuGetSourcesAsync("daily", packageSourceOverride: null, CancellationToken.None);
+
+        Assert.NotNull(sources);
+        Assert.Contains("https://pkgs.dev.azure.com/fake/v3/index.json", sources);
+    }
+
+    private static PrebuiltAppHostServer CreateServerWithUnavailableStagingChannel(
+        TemporaryWorkspace workspace,
+        CliExecutionContext executionContext,
+        string unavailableReason)
+    {
+        // Mirrors what PackagingService does on a daily/local/pr CLI: omits 'staging' from
+        // GetChannelsAsync and surfaces the actionable reason via GetStagingChannelUnavailableReason.
+        // We hand back the 'daily' channel because that is the shared explicit channel the
+        // pre-fix fallback path would have silently picked up.
+        var mappings = new[]
+        {
+            new PackageMapping(PackageMapping.AllPackages, "https://pkgs.dev.azure.com/fake/v3/index.json")
+        };
+        var dailyChannel = PackageChannel.CreateExplicitChannel(
+            "daily", PackageChannelQuality.Both, mappings, new FakeNuGetPackageCache());
+
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel]),
+            GetStagingChannelUnavailableReasonCallback = () => unavailableReason
+        };
+
+        var nugetService = new BundleNuGetService(
+            new NullLayoutDiscovery(),
+            new LayoutProcessRunner(new TestProcessExecutionFactory()),
+            new TestFeatures(),
+            executionContext,
+            NullLogger<BundleNuGetService>.Instance);
+
+        return new PrebuiltAppHostServer(
+            workspace.WorkspaceRoot.FullName,
+            "test.sock",
+            new LayoutConfiguration(),
+            nugetService,
+            new TestDotNetCliRunner(),
+            new TestDotNetSdkInstaller(),
+            packagingService,
+            executionContext,
+            NullLogger.Instance);
+    }
+
     private static CliExecutionContext CreateContextWithIdentityChannel(string identityChannel) =>
         new(new DirectoryInfo(Path.GetTempPath()),
             new DirectoryInfo(Path.Combine(Path.GetTempPath(), "hives")),
