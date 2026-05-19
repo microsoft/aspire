@@ -113,4 +113,67 @@ public sealed class LocalConfigMigrationTests(ITestOutputHelper output)
 
         await pendingRun;
     }
+
+    [CaptureWorkspaceOnFailure]
+    [Fact]
+    public async Task AspireStartUpdatesStaleTypeScriptAppHostPath()
+    {
+        var repoRoot = CliE2ETestHelpers.GetRepoRoot();
+        var strategy = CliInstallStrategy.Detect(output.WriteLine);
+        var workspace = TemporaryWorkspace.Create(output);
+
+        using var terminal = CliE2ETestHelpers.CreateDockerTestTerminal(
+            repoRoot, strategy, output,
+            variant: CliE2ETestHelpers.DockerfileVariant.Polyglot,
+            mountDockerSocket: true,
+            workspace: workspace);
+
+        var pendingRun = terminal.RunAsync(TestContext.Current.CancellationToken);
+
+        var counter = new SequenceCounter();
+        var auto = new Hex1bTerminalAutomator(terminal, defaultTimeout: TimeSpan.FromSeconds(500));
+
+        await auto.PrepareDockerEnvironmentAsync(counter, workspace);
+        await auto.InstallAspireCliAsync(strategy, counter);
+        await auto.AspireNewTypeScriptEmptyAppHostAsync("StaleConfigApp", counter);
+
+        await auto.TypeAsync("cd StaleConfigApp");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.TypeAsync("sed -i 's/apphost.mts/apphost.ts/g' aspire.config.json");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        await auto.TypeAsync("aspire start");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, timeout: TimeSpan.FromMinutes(3));
+
+        var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, "StaleConfigApp", "aspire.config.json");
+        var deadline = DateTime.UtcNow.AddMinutes(1);
+        string content;
+        do
+        {
+            content = File.ReadAllText(configPath);
+            if (content.Contains("\"apphost.mts\"", StringComparison.Ordinal))
+            {
+                break;
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
+        }
+        while (DateTime.UtcNow < deadline);
+
+        Assert.Contains("\"apphost.mts\"", content);
+        Assert.DoesNotContain("\"apphost.ts\"", content);
+
+        await auto.TypeAsync("aspire stop --apphost apphost.mts");
+        await auto.EnterAsync();
+        await auto.WaitForAnyPromptAsync(counter, timeout: TimeSpan.FromMinutes(1));
+
+        await auto.TypeAsync("exit");
+        await auto.EnterAsync();
+
+        await pendingRun;
+    }
 }
