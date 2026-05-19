@@ -1,18 +1,18 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Commands;
 using Aspire.Cli.Profiling;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Telemetry;
 using Aspire.Hosting;
 using Aspire.Shared;
+using Microsoft.DotNet.RemoteExecutor;
 
 namespace Aspire.Cli.Tests;
 
 public class ProfileCaptureOptionsTests(ITestOutputHelper outputHelper)
 {
-    private static readonly object s_environmentLock = new();
-
     [Fact]
     public void TryCreate_ReturnsNull_WhenCaptureProfileIsNotSpecified()
     {
@@ -65,7 +65,7 @@ public class ProfileCaptureOptionsTests(ITestOutputHelper outputHelper)
         Assert.StartsWith(workspace.WorkspaceRoot.FullName, options.OutputPath, StringComparison.Ordinal);
         Assert.EndsWith(".zip", options.OutputPath, StringComparison.Ordinal);
         Assert.Contains("aspire-profile-", Path.GetFileName(options.OutputPath), StringComparison.Ordinal);
-        Assert.Equal(TimeSpan.Zero, options.StartupDelay);
+        Assert.Equal(TimeSpan.FromSeconds(RootCommand.DefaultCaptureProfileDelaySeconds), options.StartupDelay);
     }
 
     [Fact]
@@ -149,7 +149,7 @@ public class ProfileCaptureOptionsTests(ITestOutputHelper outputHelper)
     [Fact]
     public void Apply_ConfiguresAndRestoresProfilingEnvironment()
     {
-        lock (s_environmentLock)
+        using var result = RemoteExecutor.Invoke(static () =>
         {
             var options = new ProfileCaptureOptions(
                 OutputPath: "profile.zip",
@@ -159,51 +159,28 @@ public class ProfileCaptureOptionsTests(ITestOutputHelper outputHelper)
                 SessionId: "test-session",
                 StartupDelay: TimeSpan.FromSeconds(3));
 
-            var names = new[]
+            Environment.SetEnvironmentVariable(KnownConfigNames.ProfilingEnabled, "previous");
+
+            using (ProfileCaptureEnvironment.Apply(options))
             {
-                AspireCliTelemetry.TelemetryOptOutConfigKey,
-                KnownConfigNames.ProfilingEnabled,
-                KnownConfigNames.Legacy.StartupProfilingEnabled,
-                KnownConfigNames.ProfilingSessionId,
-                KnownConfigNames.Legacy.StartupOperationId,
-                KnownOtelConfigNames.ExporterOtlpEndpoint,
-                KnownOtelConfigNames.ExporterOtlpProtocol,
-                KnownOtelConfigNames.BspScheduleDelay
-            };
-            var previousValues = names.ToDictionary(name => name, Environment.GetEnvironmentVariable, StringComparer.Ordinal);
-
-            try
-            {
-                Environment.SetEnvironmentVariable(KnownConfigNames.ProfilingEnabled, "previous");
-
-                using (ProfileCaptureEnvironment.Apply(options))
-                {
-                    Assert.Equal("true", Environment.GetEnvironmentVariable(AspireCliTelemetry.TelemetryOptOutConfigKey));
-                    Assert.Equal("true", Environment.GetEnvironmentVariable(KnownConfigNames.ProfilingEnabled));
-                    Assert.Equal("true", Environment.GetEnvironmentVariable(KnownConfigNames.Legacy.StartupProfilingEnabled));
-                    Assert.Equal("test-session", Environment.GetEnvironmentVariable(KnownConfigNames.ProfilingSessionId));
-                    Assert.Equal("test-session", Environment.GetEnvironmentVariable(KnownConfigNames.Legacy.StartupOperationId));
-                    Assert.Equal("http://127.0.0.1:5001", Environment.GetEnvironmentVariable(KnownOtelConfigNames.ExporterOtlpEndpoint));
-                    Assert.Equal("grpc", Environment.GetEnvironmentVariable(KnownOtelConfigNames.ExporterOtlpProtocol));
-                    Assert.Equal("1000", Environment.GetEnvironmentVariable(KnownOtelConfigNames.BspScheduleDelay));
-                }
-
-                Assert.Equal("previous", Environment.GetEnvironmentVariable(KnownConfigNames.ProfilingEnabled));
+                Assert.Equal("true", Environment.GetEnvironmentVariable(AspireCliTelemetry.TelemetryOptOutConfigKey));
+                Assert.Equal("true", Environment.GetEnvironmentVariable(KnownConfigNames.ProfilingEnabled));
+                Assert.Equal("true", Environment.GetEnvironmentVariable(KnownConfigNames.Legacy.StartupProfilingEnabled));
+                Assert.Equal("test-session", Environment.GetEnvironmentVariable(KnownConfigNames.ProfilingSessionId));
+                Assert.Equal("test-session", Environment.GetEnvironmentVariable(KnownConfigNames.Legacy.StartupOperationId));
+                Assert.Equal("http://127.0.0.1:5001", Environment.GetEnvironmentVariable(KnownOtelConfigNames.ExporterOtlpEndpoint));
+                Assert.Equal("grpc", Environment.GetEnvironmentVariable(KnownOtelConfigNames.ExporterOtlpProtocol));
+                Assert.Equal("1000", Environment.GetEnvironmentVariable(KnownOtelConfigNames.BspScheduleDelay));
             }
-            finally
-            {
-                foreach (var (name, value) in previousValues)
-                {
-                    Environment.SetEnvironmentVariable(name, value);
-                }
-            }
-        }
+
+            Assert.Equal("previous", Environment.GetEnvironmentVariable(KnownConfigNames.ProfilingEnabled));
+        });
     }
 
     [Fact]
     public void AddCurrentToEnvironment_CopiesAppliedProfilingEnvironment()
     {
-        lock (s_environmentLock)
+        using var result = RemoteExecutor.Invoke(static () =>
         {
             var options = new ProfileCaptureOptions(
                 OutputPath: "profile.zip",
@@ -213,45 +190,22 @@ public class ProfileCaptureOptionsTests(ITestOutputHelper outputHelper)
                 SessionId: "test-session",
                 StartupDelay: TimeSpan.FromSeconds(3));
 
-            var names = new[]
+            using (ProfileCaptureEnvironment.Apply(options))
             {
-                AspireCliTelemetry.TelemetryOptOutConfigKey,
-                KnownConfigNames.ProfilingEnabled,
-                KnownConfigNames.Legacy.StartupProfilingEnabled,
-                KnownConfigNames.ProfilingSessionId,
-                KnownConfigNames.Legacy.StartupOperationId,
-                KnownOtelConfigNames.ExporterOtlpEndpoint,
-                KnownOtelConfigNames.ExporterOtlpProtocol,
-                KnownOtelConfigNames.BspScheduleDelay
-            };
-            var previousValues = names.ToDictionary(name => name, Environment.GetEnvironmentVariable, StringComparer.Ordinal);
+                var environmentVariables = new Dictionary<string, string>();
 
-            try
-            {
-                using (ProfileCaptureEnvironment.Apply(options))
-                {
-                    var environmentVariables = new Dictionary<string, string>();
+                ProfileCaptureEnvironment.AddCurrentToEnvironment(environmentVariables);
 
-                    ProfileCaptureEnvironment.AddCurrentToEnvironment(environmentVariables);
-
-                    Assert.Equal("true", environmentVariables[AspireCliTelemetry.TelemetryOptOutConfigKey]);
-                    Assert.Equal("true", environmentVariables[KnownConfigNames.ProfilingEnabled]);
-                    Assert.Equal("true", environmentVariables[KnownConfigNames.Legacy.StartupProfilingEnabled]);
-                    Assert.Equal("test-session", environmentVariables[KnownConfigNames.ProfilingSessionId]);
-                    Assert.Equal("test-session", environmentVariables[KnownConfigNames.Legacy.StartupOperationId]);
-                    Assert.Equal("http://127.0.0.1:5001", environmentVariables[KnownOtelConfigNames.ExporterOtlpEndpoint]);
-                    Assert.Equal("grpc", environmentVariables[KnownOtelConfigNames.ExporterOtlpProtocol]);
-                    Assert.Equal("1000", environmentVariables[KnownOtelConfigNames.BspScheduleDelay]);
-                }
+                Assert.Equal("true", environmentVariables[AspireCliTelemetry.TelemetryOptOutConfigKey]);
+                Assert.Equal("true", environmentVariables[KnownConfigNames.ProfilingEnabled]);
+                Assert.Equal("true", environmentVariables[KnownConfigNames.Legacy.StartupProfilingEnabled]);
+                Assert.Equal("test-session", environmentVariables[KnownConfigNames.ProfilingSessionId]);
+                Assert.Equal("test-session", environmentVariables[KnownConfigNames.Legacy.StartupOperationId]);
+                Assert.Equal("http://127.0.0.1:5001", environmentVariables[KnownOtelConfigNames.ExporterOtlpEndpoint]);
+                Assert.Equal("grpc", environmentVariables[KnownOtelConfigNames.ExporterOtlpProtocol]);
+                Assert.Equal("1000", environmentVariables[KnownOtelConfigNames.BspScheduleDelay]);
             }
-            finally
-            {
-                foreach (var (name, value) in previousValues)
-                {
-                    Environment.SetEnvironmentVariable(name, value);
-                }
-            }
-        }
+        });
     }
 
     private static Func<int> CreatePortProvider(params int[] ports)

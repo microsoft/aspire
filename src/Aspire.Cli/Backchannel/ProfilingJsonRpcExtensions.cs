@@ -17,6 +17,27 @@ namespace Aspire.Cli.Backchannel;
 /// </remarks>
 internal static class ProfilingJsonRpcExtensions
 {
+    /// <summary>
+    /// Controls when the client span for a streaming RPC call ends.
+    /// </summary>
+    internal enum StreamingSpanLifetime
+    {
+        /// <summary>
+        /// The span stays open for the entire enumeration and is disposed when the stream
+        /// completes (or faults). Use when the span is meant to represent the full streaming
+        /// lifetime - for example, a backchannel that streams resource updates for as long
+        /// as the AppHost runs.
+        /// </summary>
+        Enumeration,
+
+        /// <summary>
+        /// The span ends when the first stream item arrives. Use for setup-style RPCs where
+        /// the meaningful work is producing the first response and the rest of the stream is
+        /// long-lived but not interesting for timing (otherwise it dominates duration views).
+        /// </summary>
+        FirstItem
+    }
+
     public static async Task InvokeWithProfilingAsync(
         this JsonRpc rpc,
         ProfilingTelemetry? profilingTelemetry,
@@ -70,7 +91,8 @@ internal static class ProfilingJsonRpcExtensions
         string connectionName,
         string methodName,
         object?[] arguments,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        StreamingSpanLifetime spanLifetime = StreamingSpanLifetime.Enumeration)
     {
         // Do not use `using` here: for a non-null response, activity ownership
         // transfers to the returned enumerable. If a caller obtains the enumerable
@@ -83,7 +105,7 @@ internal static class ProfilingJsonRpcExtensions
             var response = await rpc.InvokeWithCancellationAsync<IAsyncEnumerable<T>>(methodName, arguments, cancellationToken).ConfigureAwait(false);
             activity.AddJsonRpcResponseReceivedEvent();
 
-            return EnumerateWithProfiling(response, activity, cancellationToken);
+            return EnumerateWithProfiling(response, activity, spanLifetime, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -96,12 +118,14 @@ internal static class ProfilingJsonRpcExtensions
     private static async IAsyncEnumerable<T> EnumerateWithProfiling<T>(
         IAsyncEnumerable<T> response,
         ProfilingTelemetry.ActivityScope activity,
+        StreamingSpanLifetime spanLifetime,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        // StreamJsonRpc returns the IAsyncEnumerable before any stream items are read.
-        // Keep the client span alive through enumeration so the measured duration includes
-        // the server producing items, transport time, and caller-side consumption.
+        // StreamJsonRpc returns the IAsyncEnumerable before any stream items are read. Long-lived
+        // startup streams can outlive readiness and dominate duration views, so callers that only
+        // need setup timing can stop the client span as soon as the first item arrives.
         var itemCount = 0;
+        var activityDisposed = false;
         var enumerator = response.GetAsyncEnumerator(cancellationToken);
         try
         {
@@ -119,26 +143,41 @@ internal static class ProfilingJsonRpcExtensions
                 }
                 catch (Exception ex)
                 {
-                    activity.SetError(ex);
+                    if (!activityDisposed)
+                    {
+                        activity.SetError(ex);
+                    }
+
                     throw;
                 }
 
                 if (itemCount == 0)
                 {
                     activity.AddJsonRpcStreamFirstItemEvent();
+                    if (spanLifetime == StreamingSpanLifetime.FirstItem)
+                    {
+                        activity.Dispose();
+                        activityDisposed = true;
+                    }
                 }
 
                 itemCount++;
                 yield return item;
             }
 
-            activity.AddJsonRpcStreamCompletedEvent();
+            if (!activityDisposed)
+            {
+                activity.AddJsonRpcStreamCompletedEvent();
+            }
         }
         finally
         {
             await enumerator.DisposeAsync().ConfigureAwait(false);
-            activity.SetJsonRpcStreamItemCount(itemCount);
-            activity.Dispose();
+            if (!activityDisposed)
+            {
+                activity.SetJsonRpcStreamItemCount(itemCount);
+                activity.Dispose();
+            }
         }
     }
 

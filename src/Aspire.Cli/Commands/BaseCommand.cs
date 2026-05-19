@@ -58,8 +58,10 @@ internal abstract class BaseCommand : Command
             catch (NonInteractiveException)
             {
                 // Error messages have already been displayed by the interaction service.
-                result = CommandResult.Failure((int)CliExitCodes.MissingRequiredArgument);
+                result = CommandResult.Failure(CliExitCodes.MissingRequiredArgument);
             }
+
+            var isErrorExitCode = result.ExitCode != CliExitCodes.Success;
 
             if (result.ErrorMessage is not null)
             {
@@ -74,18 +76,19 @@ internal abstract class BaseCommand : Command
 
             if (result.ShouldDisplayCancellationMessage)
             {
-                interactionService.DisplayCancellationMessage();
+                interactionService.DisplayCancellationMessage(isErrorExitCode ? ConsoleOutput.Error : null);
             }
 
             // Display the CLI log file path on non-zero exit codes so the user knows
             // where to find diagnostic details. Suppress for user-input errors where
             // the log wouldn't contain useful context (e.g., missing required arguments).
-            if (result.ExitCode != CliExitCodes.Success && result.ExitCode != CliExitCodes.MissingRequiredArgument)
+            if (isErrorExitCode && result.ExitCode != CliExitCodes.MissingRequiredArgument)
             {
                 interactionService.DisplayMessage(
                     KnownEmojis.PageFacingUp,
                     string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, MarkupHelpers.SafeFileLink(interactionService, executionContext.LogFilePath)),
-                    allowMarkup: true);
+                    allowMarkup: true,
+                    consoleOverride: ConsoleOutput.Error);
 
                 // If we connected to a running app host, also display the log file path of
                 // the CLI process that launched it so users can diagnose issues in both processes.
@@ -94,7 +97,8 @@ internal abstract class BaseCommand : Command
                     interactionService.DisplayMessage(
                         KnownEmojis.MagnifyingGlassTiltedLeft,
                         string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeAppHostLogsAt, MarkupHelpers.SafeFileLink(interactionService, executionContext.AppHostCliLogFilePath)),
-                        allowMarkup: true);
+                        allowMarkup: true,
+                        consoleOverride: ConsoleOutput.Error);
                 }
             }
 

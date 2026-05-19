@@ -4,10 +4,13 @@
 #pragma warning disable ASPIREBROWSERLOGS001 // Type is for evaluation purposes only
 
 using System.Reflection;
+using Aspire.Hosting.Azure;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.RemoteHost;
 using Aspire.TypeSystem;
 using Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes;
+using Azure.Provisioning.AppContainers;
+using Azure.Provisioning.AppService;
 
 namespace Aspire.Hosting.CodeGeneration.TypeScript.Tests;
 
@@ -22,17 +25,40 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
-    public async Task EmbeddedResource_PackageJson_MatchesSnapshot()
+    public void EmbeddedResource_PackageJson_IsAvailableWithExpectedStructure()
     {
-        var assembly = typeof(AtsTypeScriptCodeGenerator).Assembly;
-        var resourceName = "Aspire.Hosting.CodeGeneration.TypeScript.Resources.package.json";
+        // The package.json under Resources/ is the single source of truth for
+        // the SDK manifest emitted alongside generated TypeScript. Verify the
+        // embedded resource loads and has the structural fields downstream
+        // consumers rely on — without copying its bytes into a snapshot file
+        // that would drift from the resource on every edit.
+        var content = EmbeddedResources.Read("package.json");
 
-        using var stream = assembly.GetManifestResourceStream(resourceName)!;
-        using var reader = new StreamReader(stream);
-        var content = await reader.ReadToEndAsync();
+        Assert.NotEmpty(content);
 
-        await Verify(content, extension: "json")
-            .UseFileName("package");
+        var packageJson = System.Text.Json.Nodes.JsonNode.Parse(content)!.AsObject();
+        Assert.Equal("aspire-host", packageJson["name"]?.GetValue<string>());
+        Assert.Equal("module", packageJson["type"]?.GetValue<string>());
+        Assert.NotNull(packageJson["dependencies"]?["vscode-jsonrpc"]);
+    }
+
+    [Fact]
+    public void GenerateDistributedApplication_EmitsBaseAndTransportResourcesVerbatim()
+    {
+        var atsContext = CreateContextFromTestAssembly();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+
+        Assert.Contains("base.ts", files.Keys);
+        Assert.Contains("transport.ts", files.Keys);
+
+        // base.ts and transport.ts are emitted as embedded-resource pass-throughs,
+        // so asserting equality against the embedded resource (the single source
+        // of truth) keeps the test signal — "the generator emits the resource
+        // verbatim" — without maintaining duplicate *.verified.ts snapshots that
+        // would have to be regenerated on every change to the source resource.
+        Assert.Equal(EmbeddedResources.Read("base.ts"), files["base.ts"]);
+        Assert.Equal(EmbeddedResources.Read("transport.ts"), files["transport.ts"]);
     }
 
     [Fact]
@@ -46,17 +72,13 @@ public class AtsTypeScriptCodeGeneratorTests
 
         // Assert
         Assert.Contains("aspire.ts", files.Keys);
-        Assert.Contains("transport.ts", files.Keys);
-        Assert.Contains("base.ts", files.Keys);
 
+        // aspire.ts is real generated code (composed from scanned types), so a
+        // Verify snapshot is the right tool here. base.ts and transport.ts are
+        // resource pass-throughs and are covered by
+        // GenerateDistributedApplication_EmitsBaseAndTransportResourcesVerbatim.
         await Verify(files["aspire.ts"], extension: "ts")
             .UseFileName("AtsGeneratedAspire");
-
-        await Verify(files["base.ts"], extension: "ts")
-            .UseFileName("base");
-
-        await Verify(files["transport.ts"], extension: "ts")
-            .UseFileName("transport");
     }
 
     [Fact]
@@ -1009,6 +1031,24 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.DoesNotContain("value: string | ReferenceExpression | EndpointReference | ParameterResource | ResourceBuilderBase | EndpointReferenceExpression", aspireTs);
     }
 
+    [Fact]
+    public void Scanner_AzureProvisioningCallbacks_ExposeTypedCustomizationProperties()
+    {
+        var capabilities = ScanCapabilitiesFromAzureAssemblies();
+
+        var publishAsWebsite = Assert.Single(capabilities, c => c.CapabilityId == "Aspire.Hosting.Azure.AppService/publishAsAzureAppServiceWebsite");
+        AssertCallbackParameterTypes(publishAsWebsite, "configure", typeof(AzureResourceInfrastructure), typeof(WebSite));
+        AssertCallbackParameterTypes(publishAsWebsite, "configureSlot", typeof(AzureResourceInfrastructure), typeof(WebSiteSlot));
+
+        var publishAsContainerAppJob = Assert.Single(capabilities, c => c.CapabilityId == "Aspire.Hosting.Azure.AppContainers/publishAsAzureContainerAppJob");
+        AssertCallbackParameterTypes(publishAsContainerAppJob, "configure", typeof(AzureResourceInfrastructure), typeof(ContainerAppJob));
+
+        AssertTargetedMethod(capabilities, "Aspire.Hosting.Azure.AppService/configureWebSiteSiteConfig", "configureSiteConfig", typeof(WebSite), GetRequiredType("Aspire.Hosting.Azure.AzureAppServiceSiteConfig, Aspire.Hosting.Azure.AppService"));
+        AssertTargetedMethod(capabilities, "Aspire.Hosting.Azure.AppService/configureWebSiteSlotSiteConfig", "configureSlotSiteConfig", typeof(WebSiteSlot), GetRequiredType("Aspire.Hosting.Azure.AzureAppServiceSiteConfig, Aspire.Hosting.Azure.AppService"));
+
+        AssertTargetedMethod(capabilities, "Aspire.Hosting.Azure.AppContainers/configureContainerAppScale", "configureScale", typeof(ContainerApp), GetRequiredType("Aspire.Hosting.Azure.AzureContainerAppScaleConfig, Aspire.Hosting.Azure.AppContainers"));
+    }
+
     private static List<AtsCapabilityInfo> ScanCapabilitiesFromTestAssembly()
     {
         var testAssembly = LoadTestAssembly();
@@ -1111,6 +1151,59 @@ public class AtsTypeScriptCodeGeneratorTests
         // Use ScanAssemblies for proper cross-assembly expansion and enum collection
         var result = AtsCapabilityScanner.ScanAssemblies([hostingAssembly, testAssembly]);
         return result.ToAtsContext();
+    }
+
+    private static List<AtsCapabilityInfo> ScanCapabilitiesFromAzureAssemblies()
+    {
+        var result = AtsCapabilityScanner.ScanAssemblies(LoadAzureAssemblies());
+        return result.Capabilities;
+    }
+
+    private static Assembly[] LoadAzureAssemblies()
+    {
+        return
+        [
+            typeof(DistributedApplication).Assembly,
+            typeof(AzureResourceInfrastructure).Assembly,
+            typeof(global::Aspire.Hosting.AzureContainerAppProjectExtensions).Assembly,
+            typeof(global::Aspire.Hosting.AzureAppServiceComputeResourceExtensions).Assembly
+        ];
+    }
+
+    private static void AssertCallbackParameterTypes(AtsCapabilityInfo capability, string parameterName, params Type[] expectedTypes)
+    {
+        var parameter = Assert.Single(capability.Parameters, p => p.Name == parameterName);
+
+        Assert.True(parameter.IsCallback);
+        Assert.NotNull(parameter.CallbackParameters);
+        Assert.Equal(expectedTypes.Select(GetAtsTypeId), parameter.CallbackParameters.Select(p => p.Type?.TypeId));
+    }
+
+    private static void AssertTargetedMethod(IReadOnlyList<AtsCapabilityInfo> capabilities, string capabilityId, string methodName, Type targetType, Type parameterType)
+    {
+        var capability = Assert.Single(capabilities, c => c.CapabilityId == capabilityId);
+        var parameter = Assert.Single(capability.Parameters);
+
+        Assert.Equal(methodName, capability.MethodName);
+        Assert.Equal(GetAtsTypeId(targetType), capability.TargetTypeId);
+        Assert.Equal(GetAtsTypeId(parameterType), parameter.Type?.TypeId);
+    }
+
+    private static Type GetRequiredType(string assemblyQualifiedTypeName)
+    {
+        return Type.GetType(assemblyQualifiedTypeName, throwOnError: true)!;
+    }
+
+    private static string GetAtsTypeId(Type type)
+    {
+        return type switch
+        {
+            _ when type == typeof(string) => "string",
+            _ when type == typeof(bool) => "boolean",
+            _ when type == typeof(byte) || type == typeof(short) || type == typeof(int) || type == typeof(long) ||
+                type == typeof(float) || type == typeof(double) || type == typeof(decimal) => "number",
+            _ => $"{type.Assembly.GetName().Name}/{type.FullName}"
+        };
     }
 
     private static (Assembly testAssembly, Assembly hostingAssembly) LoadBothAssemblies()

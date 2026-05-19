@@ -100,7 +100,8 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         Options.Add(s_suppressAgentInitOption);
 
         // Customize description based on whether staging channel is enabled
-        var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(_features, configuration);
+        var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(_features, configuration)
+            || string.Equals(ExecutionContext.IdentityChannel, PackageChannelNames.Staging, StringComparisons.ChannelName);
         _channelOption = new Option<string?>("--channel")
         {
             Description = isStagingEnabled
@@ -309,9 +310,8 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
             NewCommandStrings.ResolvingTemplateVersion,
             async () =>
             {
-                var channels = await _packagingService.GetChannelsAsync(cancellationToken);
-
                 var configuredChannelName = parseResult.GetValue(_channelOption);
+                var channels = await _packagingService.GetChannelsAsync(cancellationToken, configuredChannelName);
 
                 // When no --channel was passed, prefer the channel whose name matches the running
                 // CLI's identity (CliExecutionContext.IdentityChannel — stable, staging, daily,
@@ -333,20 +333,39 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
                     !string.IsNullOrWhiteSpace(ExecutionContext.IdentityChannel))
                 {
                     identityChannelMatch = channels.FirstOrDefault(c =>
-                        string.Equals(c.Name, ExecutionContext.IdentityChannel, StringComparison.OrdinalIgnoreCase));
+                        string.Equals(c.Name, ExecutionContext.IdentityChannel, StringComparisons.ChannelName));
                 }
 
                 var selectedChannel = string.IsNullOrWhiteSpace(configuredChannelName)
                     ? identityChannelMatch
                         ?? channels.FirstOrDefault(c => c.Type is PackageChannelType.Implicit)
                         ?? channels.FirstOrDefault()
-                    : channels.FirstOrDefault(c => string.Equals(c.Name, configuredChannelName, StringComparison.OrdinalIgnoreCase));
+                    : channels.FirstOrDefault(c => string.Equals(c.Name, configuredChannelName, StringComparisons.ChannelName));
 
                 if (selectedChannel is null)
                 {
-                    var errorMessage = string.IsNullOrWhiteSpace(configuredChannelName)
-                        ? "No package channels are available."
-                        : $"No channel found matching '{configuredChannelName}'. Valid options are: {string.Join(", ", channels.Select(c => c.Name))}";
+                    string errorMessage;
+                    if (string.IsNullOrWhiteSpace(configuredChannelName))
+                    {
+                        errorMessage = NewCommandStrings.NoPackageChannelsAvailable;
+                    }
+                    else if (string.Equals(configuredChannelName, PackageChannelNames.Staging, StringComparisons.ChannelName)
+                        && _packagingService.GetStagingChannelUnavailableReason() is { } stagingReason)
+                    {
+                        // Surface the actionable packaging-service reason (e.g. "daily CLI cannot
+                        // synthesize a staging channel; set overrideStagingFeed") instead of the
+                        // generic channel list, mirroring UpdateCommand's behavior.
+                        // See https://github.com/microsoft/aspire/issues/16652.
+                        errorMessage = stagingReason;
+                    }
+                    else
+                    {
+                        errorMessage = string.Format(
+                            CultureInfo.CurrentCulture,
+                            NewCommandStrings.NoChannelFoundMatching,
+                            configuredChannelName,
+                            string.Join(", ", channels.Select(c => c.Name)));
+                    }
 
                     return new ResolveTemplateVersionResult { ErrorMessage = errorMessage };
                 }

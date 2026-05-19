@@ -21,7 +21,8 @@ public class AzureKubernetesIngressTests
             .WithIngressClass("nginx");
 
         var api = builder.AddContainer("myapi", "nginx")
-            .WithHttpEndpoint(targetPort: 8080);
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
 
         ingress.WithRoute("/", api.GetEndpoint("http"));
 
@@ -128,5 +129,49 @@ public class AzureKubernetesIngressTests
 
         Assert.True(gateway.Resource.GatewayAnnotations.ContainsKey("alb.networking.azure.io/alb-name"));
         Assert.True(gateway.Resource.GatewayAnnotations.ContainsKey("alb.networking.azure.io/alb-namespace"));
+    }
+
+    [Fact]
+    public void AksAddIngress_WithRoute_NonExternalEndpoint_ThrowsOnPublish()
+    {
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var ingress = aks.AddIngress("public").WithIngressClass("nginx");
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        ingress.WithRoute("/", api.GetEndpoint("http"));
+
+        var app = builder.Build();
+        var aggregate = Assert.Throws<AggregateException>(app.Run);
+        var ex = aggregate.Flatten().InnerExceptions.OfType<InvalidOperationException>().First(e => e.Message.Contains("WithExternalHttpEndpoints"));
+
+        Assert.Contains("myapi", ex.Message);
+        Assert.Contains("WithExternalHttpEndpoints", ex.Message);
+    }
+
+    [Fact]
+    public void AksAddGateway_WithRoute_NonExternalEndpoint_ThrowsOnPublish()
+    {
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var gateway = aks.AddGateway("public").WithGatewayClass("nginx");
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        gateway.WithRoute("/", api.GetEndpoint("http"));
+
+        var app = builder.Build();
+        var aggregate = Assert.Throws<AggregateException>(app.Run);
+        var ex = aggregate.Flatten().InnerExceptions.OfType<InvalidOperationException>().First(e => e.Message.Contains("WithExternalHttpEndpoints"));
+
+        Assert.Contains("myapi", ex.Message);
+        Assert.Contains("WithExternalHttpEndpoints", ex.Message);
     }
 }

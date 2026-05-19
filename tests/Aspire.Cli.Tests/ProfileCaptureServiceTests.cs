@@ -351,6 +351,29 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ExportAsync_WritesArchiveWhenDcpSessionSpansUseDcpSessionAttribute()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var options = CreateOptions(workspace, sessionId: "session-a");
+        var handler = CreateTelemetryHandler(_ => JsonResponse(CreateTracesResponse(
+            options.SessionId,
+            sessionTagName: "dcp.profiling.session_id",
+            sessionAttributeOnResource: true)));
+
+        await using var session = CreateSession(
+            options,
+            handler,
+            profileDataTimeout: TimeSpan.FromSeconds(1),
+            profileDataPollInterval: TimeSpan.Zero,
+            profileDataQuietPolls: 2);
+
+        var exitCode = await session.ExportAsync(CancellationToken.None);
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.True(File.Exists(options.OutputPath));
+    }
+
+    [Fact]
     public async Task ExportAsync_ReturnsFailure_WhenNoResourceSpansAreExported()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -586,8 +609,23 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
         };
     }
 
-    private static TelemetryApiResponse CreateTracesResponse(string sessionId)
+    private static TelemetryApiResponse CreateTracesResponse(
+        string sessionId,
+        string sessionTagName = ProfilingTelemetry.Tags.ProfilingSessionId,
+        bool sessionAttributeOnResource = false)
     {
+        var sessionAttribute = new OtlpKeyValueJson
+        {
+            Key = sessionTagName,
+            Value = new OtlpAnyValueJson { StringValue = sessionId }
+        };
+        var resource = TelemetryTestHelper.CreateOtlpResource("apphost", instanceId: null);
+        if (sessionAttributeOnResource)
+        {
+            var existingAttributes = resource.Attributes ?? [];
+            resource.Attributes = [.. existingAttributes, sessionAttribute];
+        }
+
         return new TelemetryApiResponse
         {
             Data = new OtlpTelemetryDataJson
@@ -596,7 +634,7 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
                 [
                     new OtlpResourceSpansJson
                     {
-                        Resource = TelemetryTestHelper.CreateOtlpResource("apphost", instanceId: null),
+                        Resource = resource,
                         ScopeSpans =
                         [
                             new OtlpScopeSpansJson
@@ -612,13 +650,7 @@ public class ProfileCaptureServiceTests(ITestOutputHelper outputHelper)
                                         StartTimeUnixNano = 1,
                                         EndTimeUnixNano = 2,
                                         Attributes =
-                                        [
-                                            new OtlpKeyValueJson
-                                            {
-                                                Key = ProfilingTelemetry.Tags.ProfilingSessionId,
-                                                Value = new OtlpAnyValueJson { StringValue = sessionId }
-                                            }
-                                        ]
+                                            sessionAttributeOnResource ? [] : [sessionAttribute]
                                     }
                                 ]
                             }

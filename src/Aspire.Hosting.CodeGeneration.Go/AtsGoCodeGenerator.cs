@@ -1863,8 +1863,14 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             WriteLine("\t}");
         }
         WriteLine("\tif _, ok := resolved[\"Args\"]; !ok { resolved[\"Args\"] = os.Args[1:] }");
+        // ASPIRE_PROJECT_DIRECTORY is set by the CLI so the host reports the correct project
+        // directory (not the cwd) when matching --apphost <directory> requests.
         WriteLine("\tif projectDirectory, ok := resolved[\"ProjectDirectory\"].(string); !ok || projectDirectory == \"\" {");
-        WriteLine("\t\tif pwd, err := os.Getwd(); err == nil { resolved[\"ProjectDirectory\"] = pwd }");
+        WriteLine("\t\tif projectDirectory := os.Getenv(\"ASPIRE_PROJECT_DIRECTORY\"); projectDirectory != \"\" {");
+        WriteLine("\t\t\tresolved[\"ProjectDirectory\"] = projectDirectory");
+        WriteLine("\t\t} else if pwd, err := os.Getwd(); err == nil {");
+        WriteLine("\t\t\tresolved[\"ProjectDirectory\"] = pwd");
+        WriteLine("\t\t}");
         WriteLine("\t}");
         WriteLine("\tif appHostFilePath, ok := resolved[\"AppHostFilePath\"].(string); !ok || appHostFilePath == \"\" {");
         WriteLine("\t\tif appHostFilePath := os.Getenv(\"ASPIRE_APPHOST_FILEPATH\"); appHostFilePath != \"\" { resolved[\"AppHostFilePath\"] = appHostFilePath }");

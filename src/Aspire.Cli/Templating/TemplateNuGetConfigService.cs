@@ -85,7 +85,7 @@ internal sealed class TemplateNuGetConfigService(
             return;
         }
 
-        var channels = await packagingService.GetChannelsAsync(cancellationToken);
+        var channels = await packagingService.GetChannelsAsync(cancellationToken, channelName);
         var matchingChannel = channels.FirstOrDefault(c =>
             string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
 
@@ -123,7 +123,7 @@ internal sealed class TemplateNuGetConfigService(
             return false;
         }
 
-        var channels = await packagingService.GetChannelsAsync(cancellationToken);
+        var channels = await packagingService.GetChannelsAsync(cancellationToken, channelName);
         var matchingChannel = channels.FirstOrDefault(c =>
             string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
 
@@ -155,7 +155,7 @@ internal sealed class TemplateNuGetConfigService(
     /// <exception cref="EmptyChoicesException">Thrown when no template package versions are available across the considered channels.</exception>
     public async Task<TemplatePackageSelection> ResolveTemplatePackageAsync(TemplatePackageQuery query, CancellationToken cancellationToken)
     {
-        var allChannels = await packagingService.GetChannelsAsync(cancellationToken);
+        var allChannels = await packagingService.GetChannelsAsync(cancellationToken, query.RequestedChannel);
 
         // Honor PR hives only when the caller opts in. Init suppresses this so a developer
         // with stale ~/.aspire/hives/* doesn't get a different template than on a clean machine.

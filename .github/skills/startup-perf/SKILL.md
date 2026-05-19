@@ -16,10 +16,8 @@ Profiling is opt-in and separate from reported telemetry:
 - Enable profiling with `ASPIRE_PROFILING_ENABLED=true` or `1`.
 - CLI profiling spans use the `Aspire.Cli.Profiling` ActivitySource.
 - Hosting profiling spans use the `Aspire.Hosting.Profiling` ActivitySource.
-- DCP startup spans use the `dcp.startup` instrumentation scope.
+- DCP startup spans use the `dcp.startup` instrumentation scope when DCP emits startup telemetry.
 - Reported telemetry must not carry profiling session IDs, high-cardinality profiling tags, or profiling spans.
-
-The older EventSource/dotnet-trace startup measurement scripts still exist for explicit EventSource timing requests. Prefer the self-profile capture flow for current profiling work.
 
 ## Prerequisites
 
@@ -61,7 +59,7 @@ If `--capture-profile-output` is omitted, the CLI writes `aspire-profile-<timest
 | --- | --- |
 | `--capture-profile` | Hidden recursive root option that enables self-profile capture for any Aspire command. |
 | `--capture-profile-output PATH` | Output zip path. Relative paths are rooted at the current working directory. |
-| `--capture-profile-delay SECONDS` | Optional warmup delay before stopping long-lived `run`/`start` commands. Defaults to 0 seconds. Use only when you intentionally want additional post-start resource activity in the capture. |
+| `--capture-profile-delay SECONDS` | Optional warmup delay before stopping long-lived `run`/`start` commands. Defaults to 5 seconds so AppHost-side spans have time to flush before shutdown. Increase it when you intentionally want additional post-start resource activity in the capture. |
 
 ## Output Artifacts
 
@@ -128,17 +126,3 @@ Keep profiling APIs coarse-grained and profiling-specific:
 | Self-profile export contains CLI spans but not Hosting spans | The AppHost did not run through a profiled startup path, or Hosting telemetry did not reach the collector. | Confirm `aspire run` or `aspire start` launched the expected AppHost and inspect `traces/profile.json` for `Aspire.Hosting.Profiling`. |
 | `No exported spans contained aspire.profiling.session_id` | Profiling was not enabled or telemetry was not exported. | Confirm `--capture-profile` was parsed before `--` and inspect `traces/profile.json`. |
 | `No profiling session contained correlated... spans` | CLI/Hosting/DCP spans did not land in one correlated trace. | Inspect `traces/profile.json` for missing scopes or broken parent/trace IDs. |
-
-## Legacy EventSource Tooling
-
-Use the legacy perf scripts only when the task explicitly asks for `Microsoft-Aspire-Hosting` EventSource timing or the `DcpModelCreationStart`/`DcpModelCreationStop` duration:
-
-```bash
-./tools/perf/measure-startup-performance.sh
-```
-
-```powershell
-.\tools\perf\Measure-StartupPerformance.ps1
-```
-
-These scripts collect `dotnet-trace` EventSource data and analyze it with `tools/perf/TraceAnalyzer`. They do not validate OTEL span correlation.

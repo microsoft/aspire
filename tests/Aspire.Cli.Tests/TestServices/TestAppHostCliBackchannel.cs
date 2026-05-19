@@ -10,6 +10,7 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
 {
     public TaskCompletionSource? RequestStopAsyncCalled { get; set; }
     public Func<Task>? RequestStopAsyncCallback { get; set; }
+    public TaskCompletionSource? NotifyAppHostReadyAsyncCalled { get; set; }
 
     public TaskCompletionSource? GetDashboardUrlsAsyncCalled { get; set; }
     public Func<CancellationToken, Task<DashboardUrlsState>>? GetDashboardUrlsAsyncCallback { get; set; }
@@ -43,6 +44,12 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
         {
             return Task.CompletedTask;
         }
+    }
+
+    public Task NotifyAppHostReadyAsync(CancellationToken cancellationToken)
+    {
+        NotifyAppHostReadyAsyncCalled?.SetResult();
+        return Task.CompletedTask;
     }
 
     public Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken)

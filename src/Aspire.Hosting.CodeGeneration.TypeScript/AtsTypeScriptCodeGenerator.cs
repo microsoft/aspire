@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
-using System.Reflection;
 using System.Text;
 using System.Text.Json.Nodes;
 using Aspire.Shared.Json;
@@ -208,7 +207,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             return GetInterfaceName(wrapperClassName);
         }
 
-        return typeRef.Category switch
+        var mappedType = typeRef.Category switch
         {
             AtsTypeCategory.Primitive => MapPrimitiveType(typeRef.TypeId),
             AtsTypeCategory.Enum => MapEnumType(typeRef.TypeId),
@@ -224,6 +223,19 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             AtsTypeCategory.Unknown => "any",  // Unknown types use 'any' since they're not in the ATS universe
             _ => "any"  // Fallback for any unhandled categories
         };
+        return ApplyNullableType(typeRef, mappedType);
+    }
+
+    private static string ApplyNullableType(AtsTypeRef typeRef, string mappedType)
+    {
+        if (typeRef.IsNullable != true || typeRef.Category is not (AtsTypeCategory.Primitive or AtsTypeCategory.Enum))
+        {
+            return mappedType;
+        }
+
+        return typeRef.TypeId is AtsConstants.Void or AtsConstants.Any or AtsConstants.CancellationToken
+            ? mappedType
+            : $"{mappedType} | null";
     }
 
     private string MapDtoPropertyTypeToTypeScript(AtsTypeRef? typeRef)
@@ -755,24 +767,13 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var files = new Dictionary<string, string>();
 
         // Add embedded resource files (transport.ts, base.ts)
-        files["transport.ts"] = GetEmbeddedResource("transport.ts");
-        files["base.ts"] = GetEmbeddedResource("base.ts");
+        files["transport.ts"] = EmbeddedResources.Read("transport.ts");
+        files["base.ts"] = EmbeddedResources.Read("base.ts");
 
         // Generate the capability-based aspire.ts SDK
         files["aspire.ts"] = GenerateAspireSdk(context);
 
         return files;
-    }
-
-    private static string GetEmbeddedResource(string name)
-    {
-        var assembly = Assembly.GetExecutingAssembly();
-        var resourceName = $"Aspire.Hosting.CodeGeneration.TypeScript.Resources.{name}";
-
-        using var stream = assembly.GetManifestResourceStream(resourceName)
-            ?? throw new InvalidOperationException($"Embedded resource '{name}' not found.");
-        using var reader = new StreamReader(stream);
-        return reader.ReadToEnd();
     }
 
     /// <summary>

@@ -3,6 +3,7 @@
 
 using System.Reflection;
 using System.Runtime.Loader;
+using Aspire.Hosting.RemoteHost.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -15,16 +16,24 @@ internal sealed class AssemblyLoader
 {
     private readonly Lazy<IReadOnlyList<Assembly>> _assemblies;
     private readonly string _applicationBasePath;
+    private readonly Lazy<IReadOnlyList<string>> _assemblyNamesToLoad;
     private readonly IntegrationLoadContext _loadContext;
     private readonly IntegrationPackageProbeManifest _packageProbeManifest;
+    private readonly RemoteHostProfilingTelemetry _profilingTelemetry;
 
-    public AssemblyLoader(IConfiguration configuration, ILogger<AssemblyLoader> logger)
+    public AssemblyLoader(
+        IConfiguration configuration,
+        ILogger<AssemblyLoader> logger,
+        RemoteHostProfilingTelemetry profilingTelemetry)
     {
+        _profilingTelemetry = profilingTelemetry;
         _applicationBasePath = AppContext.BaseDirectory;
         var libsPath = configuration[KnownConfigNames.IntegrationLibsPath];
         var probeManifestPath = configuration[KnownConfigNames.IntegrationProbeManifestPath];
         _packageProbeManifest = IntegrationPackageProbeManifest.Load(probeManifestPath);
         _loadContext = CreateLoadContext(libsPath, _applicationBasePath, _packageProbeManifest, logger);
+        _assemblyNamesToLoad = new Lazy<IReadOnlyList<string>>(
+            () => GetAssemblyNamesToLoad(configuration, libsPath, _applicationBasePath, _packageProbeManifest));
 
         // ASPIRE_INTEGRATION_LIBS_PATH is set by the CLI when running guest (polyglot) apphosts
         // that require additional hosting integration packages. See docs/specs/bundle.md for details.
@@ -35,10 +44,27 @@ internal sealed class AssemblyLoader
             string.IsNullOrWhiteSpace(probeManifestPath) ? "<none>" : probeManifestPath);
 
         _assemblies = new Lazy<IReadOnlyList<Assembly>>(
-            () => LoadAssemblies(configuration, _loadContext, logger, libsPath, _applicationBasePath, _packageProbeManifest));
+            () => LoadAssemblies(_assemblyNamesToLoad.Value, _loadContext, logger));
     }
 
-    public IReadOnlyList<Assembly> GetAssemblies() => _assemblies.Value;
+    public IReadOnlyList<Assembly> GetAssemblies()
+    {
+        var cacheHit = _assemblies.IsValueCreated;
+        using var activity = _profilingTelemetry.StartAssemblyLoad(cacheHit);
+        activity.SetAssemblyRequestedNames(_assemblyNamesToLoad.Value);
+        try
+        {
+            var assemblies = _assemblies.Value;
+            activity.SetAssemblyCount(assemblies.Count);
+            activity.SetAssemblyLoadedNames(assemblies);
+            return assemblies;
+        }
+        catch (Exception ex)
+        {
+            activity.SetError(ex);
+            throw;
+        }
+    }
 
     internal static IReadOnlyList<string> GetAssemblyNamesToLoad(
         IConfiguration configuration,
@@ -118,14 +144,10 @@ internal sealed class AssemblyLoader
     }
 
     private static List<Assembly> LoadAssemblies(
-        IConfiguration configuration,
+        IReadOnlyList<string> assemblyNames,
         IntegrationLoadContext loadContext,
-        ILogger logger,
-        string? integrationLibsPath,
-        string applicationBasePath,
-        IntegrationPackageProbeManifest packageProbeManifest)
+        ILogger logger)
     {
-        var assemblyNames = GetAssemblyNamesToLoad(configuration, integrationLibsPath, applicationBasePath, packageProbeManifest);
         var assemblies = new List<Assembly>();
 
         foreach (var name in assemblyNames)

@@ -15,10 +15,10 @@ const _hostAddressValueExpression: string | null = await hostAddressExpression.g
 
 await compose.withProperties(async (environment) => {
     await environment.defaultNetworkName.set("validation-network");
-    const _defaultNetworkName: string = await environment.defaultNetworkName.get();
+    const _defaultNetworkName: string | null = await environment.defaultNetworkName.get();
 
     await environment.dashboardEnabled.set(true);
-    const _dashboardEnabled: boolean = await environment.dashboardEnabled.get();
+    const _dashboardEnabled: boolean | null = await environment.dashboardEnabled.get();
 
     const _environmentName: string = await environment.name();
 });
@@ -80,15 +80,15 @@ await api.publishAsDockerComposeService(async (composeService, service) => {
     const composeEnvironment = await composeService.parent();
     const _composeEnvironmentName: string = await composeEnvironment.name();
 
-    const _serviceContainerName: string = await service.containerName.get();
-    const _serviceRestart: string = await service.restart.get();
+    const _serviceContainerName: string | null = await service.containerName.get();
+    const _serviceRestart: string | null = await service.restart.get();
     const _serviceConfigsCount: number = await service.configs.count();
     const _serviceSecretsCount: number = await service.secrets.count();
     const _serviceUlimitsCount: number = await service.ulimits.count();
 });
 
-const _resolvedDefaultNetworkName: string = await compose.defaultNetworkName.get();
-const _resolvedDashboardEnabled: boolean = await compose.dashboardEnabled.get();
+const _resolvedDefaultNetworkName: string | null = await compose.defaultNetworkName.get();
+const _resolvedDashboardEnabled: boolean | null = await compose.dashboardEnabled.get();
 const _resolvedName: string = await compose.name();
 
 await builder.build().run();

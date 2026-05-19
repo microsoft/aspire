@@ -208,6 +208,12 @@ Aspire.Hosting.Docker.Resources/ComposeFile.setVersion(context: Aspire.Hosting.D
 Aspire.Hosting.Docker.Resources/ComposeFile.setVolumes(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeFile, value: Aspire.Hosting/Dict<string,Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ServiceNodes.Volume>) -> Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeFile
 Aspire.Hosting.Docker.Resources/ComposeFile.version(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeFile) -> string
 Aspire.Hosting.Docker.Resources/ComposeFile.volumes(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeFile) -> Aspire.Hosting/Dict<string,Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ServiceNodes.Volume>
+Aspire.Hosting.Docker/addComposeFileConfig(name: string, file?: string, content?: string, external?: boolean, configure?: callback) -> Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeFile
+Aspire.Hosting.Docker/addComposeFileNetwork(name: string, driver?: string, external?: boolean, configure?: callback) -> Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeFile
+Aspire.Hosting.Docker/addComposeFileSecret(name: string, file?: string, external?: boolean, configure?: callback) -> Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeFile
+Aspire.Hosting.Docker/addComposeFileService(name: string, image?: string, configure?: callback) -> Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeFile
+Aspire.Hosting.Docker/addComposeFileVolume(name: string, driver?: string, external?: boolean, configure?: callback) -> Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeFile
+Aspire.Hosting.Docker/addComposeServiceVolume(source: string, target: string, type?: string, isReadOnly?: boolean, configure?: callback) -> Aspire.Hosting.Docker/Aspire.Hosting.Docker.Resources.ComposeNodes.Service
 Aspire.Hosting.Docker/addDockerComposeEnvironment(name: string) -> Aspire.Hosting.Docker/Aspire.Hosting.Docker.DockerComposeEnvironmentResource
 Aspire.Hosting.Docker/asEnvironmentPlaceholder(dockerComposeService: Aspire.Hosting.Docker/Aspire.Hosting.Docker.DockerComposeServiceResource) -> string
 Aspire.Hosting.Docker/CapturedEnvironmentVariable.defaultValue(context: Aspire.Hosting.Docker/Aspire.Hosting.Docker.CapturedEnvironmentVariable) -> string

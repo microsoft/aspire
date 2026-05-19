@@ -1,0 +1,169 @@
+name: TypeScript API Compatibility
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  typescript_api_compat:
+    name: TypeScript API Compatibility
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
+      - name: Restore
+        run: ./restore.sh
+
+      - name: Build CLI and compatibility tool
+        run: |
+          ./dotnet.sh build src/Aspire.Cli/Aspire.Cli.csproj --configuration Release
+          ./dotnet.sh build tools/TypeScriptApiCompat/TypeScriptApiCompat.csproj --configuration Release
+
+      - name: Generate base ATS surface
+        shell: bash
+        env:
+          BASE_BRANCH: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+
+          BASE_WORKTREE="${RUNNER_TEMP}/base-worktree"
+          BASELINE_DIR="${RUNNER_TEMP}/ats-baseline"
+
+          git fetch --no-tags --depth=1 origin "+refs/heads/${BASE_BRANCH}:refs/remotes/origin/${BASE_BRANCH}"
+          git worktree add --detach "$BASE_WORKTREE" "origin/${BASE_BRANCH}"
+
+          pushd "$BASE_WORKTREE"
+          ./restore.sh
+          ./dotnet.sh build src/Aspire.Cli/Aspire.Cli.csproj --configuration Release
+
+          export ASPIRE_REPO_ROOT="$BASE_WORKTREE"
+          ASPIRE_CLI="./dotnet.sh run --no-build --project src/Aspire.Cli/Aspire.Cli.csproj --configuration Release -- --nologo"
+          PROJECTS_FILE="${RUNNER_TEMP}/ats-base-projects.txt"
+          SORTED_PROJECTS_FILE="${RUNNER_TEMP}/ats-base-projects-sorted.txt"
+
+          mkdir -p "$BASELINE_DIR/src/Aspire.Hosting/api"
+          : > "$PROJECTS_FILE"
+
+          echo "::group::Base Aspire.Hosting (core)"
+          $ASPIRE_CLI sdk dump --format ci -o "$BASELINE_DIR/src/Aspire.Hosting/api/Aspire.Hosting.ats.txt"
+          echo "::endgroup::"
+
+          while IFS= read -r file; do
+            case "$file" in
+              */obj/*|*/bin/*|*Aspire.Hosting.Analyzers*|*Aspire.Hosting.CodeGeneration*|*Aspire.Hosting.RemoteHost*)
+                continue
+                ;;
+            esac
+
+            dir=$(dirname "$file")
+            while [ "$dir" != "." ] && [ "$dir" != "/" ]; do
+              if compgen -G "$dir/*.csproj" > /dev/null; then
+                echo "$dir" >> "$PROJECTS_FILE"
+                break
+              fi
+
+              dir=$(dirname "$dir")
+            done
+          done < <(grep -rl '\[AspireExport(' src/Aspire.Hosting.*/ --include='*.cs' || true)
+
+          sort -u "$PROJECTS_FILE" > "$SORTED_PROJECTS_FILE"
+
+          while IFS= read -r proj; do
+            [ -n "$proj" ] || continue
+            proj_name=$(basename "$proj")
+            csproj="$proj/$proj_name.csproj"
+            if [ -f "$csproj" ]; then
+              echo "::group::Base $proj_name"
+              mkdir -p "$BASELINE_DIR/$proj/api"
+              $ASPIRE_CLI sdk dump --format ci "$csproj" -o "$BASELINE_DIR/$proj/api/$proj_name.ats.txt"
+              echo "::endgroup::"
+            fi
+          done < "$SORTED_PROJECTS_FILE"
+          popd
+
+          echo "BASELINE_DIR=$BASELINE_DIR" >> "$GITHUB_ENV"
+          echo "BASE_SUPPRESSIONS_ROOT=$BASE_WORKTREE" >> "$GITHUB_ENV"
+
+      - name: Generate current ATS surface
+        shell: bash
+        env:
+          ASPIRE_REPO_ROOT: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+
+          CURRENT_DIR="${RUNNER_TEMP}/ats-current"
+          PROJECTS_FILE="${RUNNER_TEMP}/ats-projects.txt"
+          SORTED_PROJECTS_FILE="${RUNNER_TEMP}/ats-projects-sorted.txt"
+          ASPIRE_CLI="./dotnet.sh run --no-build --project src/Aspire.Cli/Aspire.Cli.csproj --configuration Release -- --nologo"
+
+          mkdir -p "$CURRENT_DIR/src/Aspire.Hosting/api"
+          : > "$PROJECTS_FILE"
+
+          echo "::group::Aspire.Hosting (core)"
+          $ASPIRE_CLI sdk dump --format ci -o "$CURRENT_DIR/src/Aspire.Hosting/api/Aspire.Hosting.ats.txt"
+          echo "::endgroup::"
+
+          while IFS= read -r file; do
+            case "$file" in
+              */obj/*|*/bin/*|*Aspire.Hosting.Analyzers*|*Aspire.Hosting.CodeGeneration*|*Aspire.Hosting.RemoteHost*)
+                continue
+                ;;
+            esac
+
+            dir=$(dirname "$file")
+            while [ "$dir" != "." ] && [ "$dir" != "/" ]; do
+              if compgen -G "$dir/*.csproj" > /dev/null; then
+                echo "$dir" >> "$PROJECTS_FILE"
+                break
+              fi
+
+              dir=$(dirname "$dir")
+            done
+          done < <(grep -rl '\[AspireExport(' src/Aspire.Hosting.*/ --include='*.cs' || true)
+
+          sort -u "$PROJECTS_FILE" > "$SORTED_PROJECTS_FILE"
+
+          while IFS= read -r proj; do
+            [ -n "$proj" ] || continue
+            proj_name=$(basename "$proj")
+            csproj="$proj/$proj_name.csproj"
+            if [ -f "$csproj" ]; then
+              echo "::group::$proj_name"
+              mkdir -p "$CURRENT_DIR/$proj/api"
+              $ASPIRE_CLI sdk dump --format ci "$csproj" -o "$CURRENT_DIR/$proj/api/$proj_name.ats.txt"
+              echo "::endgroup::"
+            fi
+          done < "$SORTED_PROJECTS_FILE"
+
+          echo "CURRENT_DIR=$CURRENT_DIR" >> "$GITHUB_ENV"
+
+      - name: Check TypeScript API compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ./dotnet.sh run \
+            --no-build \
+            --project tools/TypeScriptApiCompat/TypeScriptApiCompat.csproj \
+            --configuration Release \
+            -- \
+            --baseline "$BASELINE_DIR" \
+            --current "$CURRENT_DIR" \
+            --suppressions-root "${{ github.workspace }}" \
+            --baseline-suppressions-root "$BASE_SUPPRESSIONS_ROOT" \
+            --report "${RUNNER_TEMP}/typescript-api-compat-report.md" \
+            --github-annotations
+
+      - name: Upload TypeScript API compatibility report
+        if: failure()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: typescript-api-compat-report
+          path: ${{ runner.temp }}/typescript-api-compat-report.md
+          if-no-files-found: ignore
