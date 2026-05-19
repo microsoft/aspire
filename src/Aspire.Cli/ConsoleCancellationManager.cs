@@ -46,6 +46,8 @@ internal sealed class ConsoleCancellationManager : IDisposable
 
         // Prefer PosixSignalRegistration for both SIGINT and SIGTERM as it handles
         // both signals uniformly and allows cancelling SIGTERM (which Console.CancelKeyPress cannot).
+        // Despite the name, PosixSignalRegistration is supported on Windows: the runtime maps
+        // SIGINT to CTRL_C_EVENT and SIGTERM to CTRL_CLOSE_EVENT/CTRL_SHUTDOWN_EVENT.
         if (!OperatingSystem.IsAndroid()
             && !OperatingSystem.IsIOS()
             && !OperatingSystem.IsTvOS()
