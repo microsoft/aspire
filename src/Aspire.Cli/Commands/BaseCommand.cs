@@ -61,6 +61,8 @@ internal abstract class BaseCommand : Command
                 result = CommandResult.Failure((int)CliExitCodes.MissingRequiredArgument);
             }
 
+            var isErrorExitCode = result.ExitCode != CliExitCodes.Success;
+
             if (result.ErrorMessage is not null)
             {
                 interactionService.DisplayError(result.ErrorMessage);
@@ -74,14 +76,13 @@ internal abstract class BaseCommand : Command
 
             if (result.ShouldDisplayCancellationMessage)
             {
-                interactionService.DisplayCancellationMessage(
-                    result.ExitCode != CliExitCodes.Success ? ConsoleOutput.Error : null);
+                interactionService.DisplayCancellationMessage(isErrorExitCode ? ConsoleOutput.Error : null);
             }
 
             // Display the CLI log file path on non-zero exit codes so the user knows
             // where to find diagnostic details. Suppress for user-input errors where
             // the log wouldn't contain useful context (e.g., missing required arguments).
-            if (result.ExitCode != CliExitCodes.Success && result.ExitCode != CliExitCodes.MissingRequiredArgument)
+            if (isErrorExitCode && result.ExitCode != CliExitCodes.MissingRequiredArgument)
             {
                 interactionService.DisplayMessage(
                     KnownEmojis.PageFacingUp,
