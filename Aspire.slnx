@@ -72,8 +72,8 @@
     <Project Path="src/Aspire.Hosting.PostgreSQL/Aspire.Hosting.PostgreSQL.csproj" />
     <Project Path="src/Aspire.Hosting.Python/Aspire.Hosting.Python.csproj" />
     <Project Path="src/Aspire.Hosting.Qdrant/Aspire.Hosting.Qdrant.csproj" />
-    <Project Path="src/Aspire.Hosting.Radius/Aspire.Hosting.Radius.csproj" />
     <Project Path="src/Aspire.Hosting.RabbitMQ/Aspire.Hosting.RabbitMQ.csproj" />
+    <Project Path="src/Aspire.Hosting.Radius/Aspire.Hosting.Radius.csproj" />
     <Project Path="src/Aspire.Hosting.Redis/Aspire.Hosting.Redis.csproj" />
     <Project Path="src/Aspire.Hosting.Seq/Aspire.Hosting.Seq.csproj" />
     <Project Path="src/Aspire.Hosting.SqlServer/Aspire.Hosting.SqlServer.csproj" />
