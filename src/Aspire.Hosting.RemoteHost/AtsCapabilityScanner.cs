@@ -1108,7 +1108,7 @@ public static class AtsCapabilityScanner
 
             var propDocumentation = GetXmlDocumentation(prop);
             var propDescription = propDocumentation?.Summary;
-            var isOptional = !prop.CanWrite || Nullable.GetUnderlyingType(prop.PropertyType) is not null;
+            var isOptional = IsOptionalDtoProperty(prop);
 
             properties.Add(new AtsDtoPropertyInfo
             {
@@ -1146,6 +1146,18 @@ public static class AtsCapabilityScanner
             genericTypeDefinition == typeof(IList<>) ||
             genericTypeDefinition == typeof(Dictionary<,>) ||
             genericTypeDefinition == typeof(IDictionary<,>);
+    }
+
+    private static bool IsOptionalDtoProperty(PropertyInfo property)
+    {
+        if (property.GetCustomAttribute<RequiredMemberAttribute>() is not null)
+        {
+            return false;
+        }
+
+        return !property.CanWrite ||
+            Nullable.GetUnderlyingType(property.PropertyType) is not null ||
+            !CanWriteAfterInitialization(property);
     }
 
     private static void ScanStaticExportedValues(

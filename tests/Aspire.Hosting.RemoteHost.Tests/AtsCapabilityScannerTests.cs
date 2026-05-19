@@ -515,6 +515,19 @@ public class AtsCapabilityScannerTests
     }
 
     [Fact]
+    public void ScanAssembly_InitDtoProperties_AreOptionalUnlessRequired()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+        var dto = Assert.Single(result.DtoTypes, d => d.TypeId == AtsTypeMapping.DeriveTypeId(typeof(InitPropertiesDto)));
+
+        Assert.True(Assert.Single(dto.Properties, p => p.Name == nameof(InitPropertiesDto.DisplayName)).IsOptional);
+        Assert.True(Assert.Single(dto.Properties, p => p.Name == nameof(InitPropertiesDto.Items)).IsOptional);
+        Assert.True(Assert.Single(dto.Properties, p => p.Name == nameof(InitPropertiesDto.Metadata)).IsOptional);
+        Assert.False(Assert.Single(dto.Properties, p => p.Name == nameof(InitPropertiesDto.RequiredDisplayName)).IsOptional);
+        Assert.False(Assert.Single(dto.Properties, p => p.Name == nameof(InitPropertiesDto.RequiredItems)).IsOptional);
+    }
+
+    [Fact]
     public void ScanAssembly_ExportedDtoValueWithIgnoredMutableProperty_IsIncluded()
     {
         var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
@@ -675,6 +688,20 @@ public class AtsCapabilityScannerTests
         public List<string> Items { get; } = [];
 
         public Dictionary<string, string> Metadata { get; } = [];
+    }
+
+    [AspireDto]
+    private sealed class InitPropertiesDto
+    {
+        public string DisplayName { get; init; } = "";
+
+        public List<string> Items { get; init; } = [];
+
+        public Dictionary<string, string> Metadata { get; init; } = [];
+
+        public required string RequiredDisplayName { get; init; }
+
+        public required List<string> RequiredItems { get; init; }
     }
 
     private static class IgnoredPropertyExportedValues
