@@ -288,10 +288,12 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         }
 
         var canQueryCliBundleProperty = !isSingleFileAppHost || !context.NoBuild;
+        BundleLayoutLease? cliBundleLease = null;
         if (canQueryCliBundleProperty && await IsUsingCliBundleAsync(effectiveAppHostFile, cancellationToken))
         {
-            await ConfigureCliBundleEnvironmentAsync(env, cancellationToken);
+            cliBundleLease = await ConfigureCliBundleEnvironmentAsync(env, cancellationToken);
         }
+        using var cliBundleLeaseScope = cliBundleLease;
 
         // RunCommand may display captured AppHost output as soon as BuildCompletionSource is signaled.
         // Store the collector first so failures that occur immediately after preparation are not lost
@@ -677,10 +679,9 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             }
         }
 
-        if (await IsUsingCliBundleAsync(effectiveAppHostFile, cancellationToken))
-        {
-            await ConfigureCliBundleEnvironmentAsync(env, cancellationToken);
-        }
+        using var cliBundleLease = await IsUsingCliBundleAsync(effectiveAppHostFile, cancellationToken)
+            ? await ConfigureCliBundleEnvironmentAsync(env, cancellationToken)
+            : null;
 
         // Build the apphost (unless --no-build is specified)
         if (!isSingleFileAppHost && !context.NoBuild)
@@ -877,13 +878,15 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         return string.Equals(useCliBundleElement.GetString(), "true", StringComparison.OrdinalIgnoreCase);
     }
 
-    private async Task ConfigureCliBundleEnvironmentAsync(Dictionary<string, string> env, CancellationToken cancellationToken)
+    private async Task<BundleLayoutLease?> ConfigureCliBundleEnvironmentAsync(Dictionary<string, string> env, CancellationToken cancellationToken)
     {
-        var layout = await _bundleService.EnsureExtractedAndGetLayoutAsync(cancellationToken);
+        var layoutLease = await _bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "dotnet-apphost", cancellationToken);
+        var layout = layoutLease?.Layout;
         if (layout is null)
         {
+            layoutLease?.Dispose();
             _logger.LogDebug("AspireUseCliBundle is enabled, but the Aspire CLI bundle layout was not available from this CLI process.");
-            return;
+            return null;
         }
 
         if (!env.ContainsKey(BundleDiscovery.DcpPathEnvVar) && layout.GetDcpPath() is { } dcpPath)
@@ -895,6 +898,9 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         {
             env[BundleDiscovery.DashboardPathEnvVar] = managedPath;
         }
+
+        layoutLease?.AddEnvironment(env);
+        return layoutLease;
     }
 
     /// <summary>

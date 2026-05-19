@@ -7,6 +7,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Xml.Linq;
+using Aspire.Cli.Bundles;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Layout;
@@ -24,7 +25,7 @@ namespace Aspire.Cli.Projects;
 /// This is used when running in bundle mode (without .NET SDK) to avoid
 /// dynamic project generation and building.
 /// </summary>
-internal sealed class PrebuiltAppHostServer : IAppHostServerProject
+internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
 {
     internal const string ClosureMetadataFileName = "closure-metadata.txt";
     internal const string ClosureSourcesFileName = "closure-sources.txt";
@@ -44,6 +45,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
     private readonly IPackagingService _packagingService;
     private readonly CliExecutionContext _executionContext;
     private readonly ILogger _logger;
+    private readonly BundleLayoutLease? _layoutLease;
     private readonly string _workingDirectory;
     private readonly string _projectReferencePrepareLockPath;
     private readonly AppHostServerProjectLayoutStore _projectLayoutStore;
@@ -65,6 +67,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
     /// <param name="packagingService">The packaging service for channel resolution.</param>
     /// <param name="executionContext">The CLI execution context providing identity channel information.</param>
     /// <param name="logger">The logger for diagnostic output.</param>
+    /// <param name="layoutLease">The active bundle layout lease, if this server is running from a versioned bundle.</param>
     public PrebuiltAppHostServer(
         string appPath,
         string socketPath,
@@ -74,7 +77,8 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         IDotNetSdkInstaller sdkInstaller,
         IPackagingService packagingService,
         CliExecutionContext executionContext,
-        ILogger logger)
+        ILogger logger,
+        BundleLayoutLease? layoutLease = null)
     {
         _appDirectoryPath = Path.GetFullPath(appPath);
         _socketPath = socketPath;
@@ -85,6 +89,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         _packagingService = packagingService;
         _executionContext = executionContext;
         _logger = logger;
+        _layoutLease = layoutLease;
 
         // Create a working directory for this app host session
         var pathHash = SHA256.HashData(Encoding.UTF8.GetBytes(_appDirectoryPath));
@@ -694,6 +699,11 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             }
         }
 
+        if (_layoutLease?.VersionDirectory is { } versionDirectory)
+        {
+            startInfo.Environment[BundleDiscovery.BundleVersionDirectoryEnvVar] = versionDirectory;
+        }
+
         if (debug)
         {
             startInfo.Environment[KnownConfigNames.AspireLogLevel] = "Debug";
@@ -707,6 +717,12 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
 
     /// <inheritdoc />
     public string GetInstanceIdentifier() => _appDirectoryPath;
+
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        _layoutLease?.Dispose();
+    }
 
     /// <summary>
     /// Reads the project reference assembly names written by the MSBuild target during build.

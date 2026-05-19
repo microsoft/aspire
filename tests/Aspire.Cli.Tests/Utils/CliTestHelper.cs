@@ -673,6 +673,9 @@ internal sealed class NullBundleService : IBundleService
     public Task<Layout.LayoutConfiguration?> EnsureExtractedAndGetLayoutAsync(CancellationToken cancellationToken = default)
         => Task.FromResult<Layout.LayoutConfiguration?>(null);
 
+    public Task<BundleLayoutLease?> EnsureExtractedAndAcquireLayoutAsync(string holderKind, string? commandName = null, CancellationToken cancellationToken = default)
+        => Task.FromResult<BundleLayoutLease?>(null);
+
     public string? GetDefaultExtractDir(string processPath) => null;
 }
 
@@ -702,6 +705,9 @@ internal sealed class TestBundleService(bool isBundle) : IBundleService
 
     public Task<Layout.LayoutConfiguration?> EnsureExtractedAndGetLayoutAsync(CancellationToken cancellationToken = default)
         => Task.FromResult(Layout);
+
+    public Task<BundleLayoutLease?> EnsureExtractedAndAcquireLayoutAsync(string holderKind, string? commandName = null, CancellationToken cancellationToken = default)
+        => Task.FromResult(Layout is null ? null : new BundleLayoutLease(versionId: null, versionDirectory: null, Layout, lease: null));
 
     public string? GetDefaultExtractDir(string processPath) => null;
 }

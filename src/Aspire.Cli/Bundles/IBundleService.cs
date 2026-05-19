@@ -41,6 +41,17 @@ internal interface IBundleService
     Task<LayoutConfiguration?> EnsureExtractedAndGetLayoutAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Ensures the bundle is extracted and returns a version-rooted layout with a lease that prevents cleanup.
+    /// Callers that start bundle-owned processes should use this method and keep the returned lease alive
+    /// until the child process has exited or acquired its own lease.
+    /// </summary>
+    /// <param name="holderKind">Diagnostic category for the lease holder.</param>
+    /// <param name="commandName">Optional command name for diagnostics.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The leased layout, or <see langword="null"/> if no layout is found.</returns>
+    Task<BundleLayoutLease?> EnsureExtractedAndAcquireLayoutAsync(string holderKind, string? commandName = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Determines the default extraction directory for the supplied CLI binary path
     /// by reading the <c>.aspire-install.json</c> sidecar (if any) next to the
     /// resolved binary and switching on its <c>source</c> field. The resulting
