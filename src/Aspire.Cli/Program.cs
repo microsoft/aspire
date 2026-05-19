@@ -864,11 +864,7 @@ public class Program
                 // Log exit code for debugging
                 logger.LogInformation("Exit code: {ExitCode}", exitCode);
             }
-            catch (OperationCanceledException) when (cancellationManager.IsCancellationRequested)
-            {
-                exitCode = CliExitCodes.Cancelled;
-            }
-            catch (ExtensionOperationCanceledException)
+            catch (OperationCanceledException ex) when (cancellationManager.IsCancellationRequested || ex is ExtensionOperationCanceledException)
             {
                 exitCode = CliExitCodes.Cancelled;
             }
