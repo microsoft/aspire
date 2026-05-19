@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
-using System.Reflection;
 using System.Text;
 using System.Text.Json.Nodes;
 using Aspire.Shared.Json;
@@ -738,24 +737,13 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var files = new Dictionary<string, string>();
 
         // Add embedded resource files (transport.mts, base.mts)
-        files["transport.mts"] = GetEmbeddedResource("transport.mts");
-        files["base.mts"] = GetEmbeddedResource("base.mts");
+        files["transport.mts"] = EmbeddedResources.Read("transport.mts");
+        files["base.mts"] = EmbeddedResources.Read("base.mts");
 
         // Generate the capability-based aspire.mts SDK
         files["aspire.mts"] = GenerateAspireSdk(context);
 
         return files;
-    }
-
-    private static string GetEmbeddedResource(string name)
-    {
-        var assembly = Assembly.GetExecutingAssembly();
-        var resourceName = $"Aspire.Hosting.CodeGeneration.TypeScript.Resources.{name}";
-
-        using var stream = assembly.GetManifestResourceStream(resourceName)
-            ?? throw new InvalidOperationException($"Embedded resource '{name}' not found.");
-        using var reader = new StreamReader(stream);
-        return reader.ReadToEnd();
     }
 
     /// <summary>

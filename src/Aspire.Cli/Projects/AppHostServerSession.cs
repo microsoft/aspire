@@ -21,6 +21,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
     private readonly OutputCollector _output;
     private readonly string _socketPath;
     private readonly ProfilingTelemetry.ActivityScope _activity;
+    private readonly ProfilingTelemetry? _profilingTelemetry;
     private IAppHostRpcClient? _rpcClient;
     private bool _disposed;
 
@@ -30,7 +31,8 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         string socketPath,
         string authenticationToken,
         ILogger logger,
-        ProfilingTelemetry.ActivityScope activity = default)
+        ProfilingTelemetry.ActivityScope activity = default,
+        ProfilingTelemetry? profilingTelemetry = null)
     {
         _serverProcess = serverProcess;
         _output = output;
@@ -38,6 +40,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         _authenticationToken = authenticationToken;
         _logger = logger;
         _activity = activity;
+        _profilingTelemetry = profilingTelemetry;
     }
 
     /// <inheritdoc />
@@ -81,6 +84,16 @@ internal sealed class AppHostServerSession : IAppHostServerSession
         var activity = profilingTelemetry is null
             ? default
             : profilingTelemetry.StartAppHostServerLifetime(appHostServerProject.GetType().Name);
+        if (activity.IsRunning)
+        {
+            activity.AddContextToEnvironment(serverEnvironmentVariables);
+        }
+        else
+        {
+            // Profiling may be disabled even when an upstream CLI span is active. Still pass that
+            // ambient context through so the AppHostServer can join the existing startup trace.
+            ProfilingTelemetry.AddCurrentContextToEnvironment(serverEnvironmentVariables);
+        }
 
         string socketPath;
         Process serverProcess;
@@ -108,7 +121,8 @@ internal sealed class AppHostServerSession : IAppHostServerSession
             socketPath,
             authenticationToken,
             logger,
-            activity);
+            activity,
+            profilingTelemetry);
     }
 
     /// <inheritdoc />
@@ -116,7 +130,7 @@ internal sealed class AppHostServerSession : IAppHostServerSession
     {
         ObjectDisposedException.ThrowIf(_disposed, nameof(AppHostServerSession));
 
-        return _rpcClient ??= await AppHostRpcClient.ConnectAsync(_socketPath, _authenticationToken, cancellationToken);
+        return _rpcClient ??= await AppHostRpcClient.ConnectAsync(_socketPath, _authenticationToken, _profilingTelemetry, cancellationToken);
     }
 
     /// <inheritdoc />

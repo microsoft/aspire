@@ -240,7 +240,11 @@ public class Aspire {
             resolvedOptions.put("Args", new String[0]);
         }
         if (resolvedOptions.get("ProjectDirectory") == null) {
-            resolvedOptions.put("ProjectDirectory", System.getProperty("user.dir"));
+            String projectDirectory = System.getenv("ASPIRE_PROJECT_DIRECTORY");
+            if (projectDirectory == null || projectDirectory.isEmpty()) {
+                projectDirectory = System.getProperty("user.dir");
+            }
+            resolvedOptions.put("ProjectDirectory", projectDirectory);
         }
         if (resolvedOptions.get("AppHostFilePath") == null) {
             String appHostFilePath = System.getenv("ASPIRE_APPHOST_FILEPATH");

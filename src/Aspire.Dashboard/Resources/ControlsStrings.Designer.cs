@@ -860,7 +860,7 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ResourceDetailsStateDescriptionHeader", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Type.
         /// </summary>

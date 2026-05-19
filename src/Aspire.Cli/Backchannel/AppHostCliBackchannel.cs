@@ -14,6 +14,7 @@ namespace Aspire.Cli.Backchannel;
 internal interface IAppHostCliBackchannel
 {
     Task RequestStopAsync(CancellationToken cancellationToken);
+    Task NotifyAppHostReadyAsync(CancellationToken cancellationToken);
     Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken);
     IAsyncEnumerable<BackchannelLogEntry> GetAppHostLogEntriesAsync(CancellationToken cancellationToken);
     IAsyncEnumerable<RpcResourceState> GetResourceStatesAsync(CancellationToken cancellationToken);
@@ -69,6 +70,27 @@ internal sealed class AppHostCliBackchannel(
             cancellationToken);
     }
 
+    public async Task NotifyAppHostReadyAsync(CancellationToken cancellationToken)
+    {
+        var rpc = await GetRpcTaskAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        logger.LogDebug("Notifying AppHost startup readiness");
+
+        try
+        {
+            await rpc.InvokeWithProfilingAsync(
+                profilingTelemetry,
+                "apphost",
+                "NotifyAppHostReadyAsync",
+                [],
+                cancellationToken);
+        }
+        catch (RemoteMethodNotFoundException ex)
+        {
+            logger.LogDebug(ex, "NotifyAppHostReadyAsync RPC method not available on the remote AppHost. The AppHost may be running an older version.");
+        }
+    }
+
     public async Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken)
     {
         using var activity = profilingTelemetry.StartBackchannelGetDashboardUrls();
@@ -94,7 +116,7 @@ internal sealed class AppHostCliBackchannel(
     {
         return InvokeStreamingRpcAsync<BackchannelLogEntry>(
             (rpc, ct) => rpc.InvokeStreamingWithProfilingAsync<BackchannelLogEntry>(
-                profilingTelemetry, "apphost", "GetAppHostLogEntriesAsync", [], ct),
+                profilingTelemetry, "apphost", "GetAppHostLogEntriesAsync", [], ct, ProfilingJsonRpcExtensions.StreamingSpanLifetime.FirstItem),
             "AppHost log entries",
             cancellationToken);
     }

@@ -45,6 +45,7 @@ internal sealed class ProfileCaptureService(
     // hang CLI shutdown forever. Five seconds is generous for a local child process to exit after
     // Kill while still being short enough that interactive shutdown stays responsive.
     private static readonly TimeSpan s_dashboardDisposeTimeout = TimeSpan.FromSeconds(5);
+    private const string DcpProfilingSessionIdTag = "dcp.profiling.session_id";
     private const int ProfileDataQuietPolls = 8;
 
     public async Task<ProfileCaptureSession> StartAsync(ProfileCaptureOptions options, CancellationToken cancellationToken)
@@ -387,8 +388,10 @@ internal sealed class ProfileCaptureService(
                     // steady once that count is unchanged for eight 250ms polls (~2 seconds). That
                     // steady-state check is the quietPolls/lastProfileSpanCount logic below, and it
                     // lets late batch exporter flushes from child AppHost processes arrive before
-                    // writing. The session id is carried as a span attribute in the OTLP JSON shape:
-                    //   "attributes":[{"key":"aspire.profiling.session_id","value":{"stringValue":"<session>"}}]
+                    // writing. Aspire profiling spans carry the session id on each span:
+                    //   "spans":[{"attributes":[{"key":"aspire.profiling.session_id","value":{"stringValue":"<session>"}}]}]
+                    // DCP owns its profiling namespace and carries the session id on the resource:
+                    //   "resource":{"attributes":[{"key":"dcp.profiling.session_id","value":{"stringValue":"<session>"}}]}
                     var profileSpanCount = CountSessionSpans(lastResult, _options.SessionId);
                     if (profileSpanCount > 0)
                     {
@@ -440,12 +443,36 @@ internal sealed class ProfileCaptureService(
 
         private static int CountSessionSpans(TelemetryApiResponse? response, string sessionId)
         {
-            return response?.Data?.ResourceSpans?
-                .SelectMany(resourceSpans => resourceSpans.ScopeSpans ?? [])
-                .SelectMany(scopeSpans => scopeSpans.Spans ?? [])
-                .Count(span => span.Attributes?.Any(attribute =>
-                    string.Equals(attribute.Key, AspireCliProfilingTelemetry.Tags.ProfilingSessionId, StringComparison.Ordinal) &&
-                    string.Equals(attribute.Value?.StringValue, sessionId, StringComparison.Ordinal)) is true) ?? 0;
+            var count = 0;
+            foreach (var resourceSpans in response?.Data?.ResourceSpans ?? [])
+            {
+                var resourceHasSessionId = ContainsProfilingSessionId(resourceSpans.Resource?.Attributes, sessionId);
+                foreach (var scopeSpans in resourceSpans.ScopeSpans ?? [])
+                {
+                    foreach (var span in scopeSpans.Spans ?? [])
+                    {
+                        if (resourceHasSessionId || ContainsProfilingSessionId(span.Attributes, sessionId))
+                        {
+                            count++;
+                        }
+                    }
+                }
+            }
+
+            return count;
+        }
+
+        private static bool ContainsProfilingSessionId(IEnumerable<OtlpKeyValueJson>? attributes, string sessionId)
+        {
+            return attributes?.Any(attribute =>
+                IsProfilingSessionIdTag(attribute.Key) &&
+                string.Equals(attribute.Value?.StringValue, sessionId, StringComparison.Ordinal)) is true;
+        }
+
+        private static bool IsProfilingSessionIdTag(string? attributeName)
+        {
+            return string.Equals(attributeName, AspireCliProfilingTelemetry.Tags.ProfilingSessionId, StringComparison.Ordinal) ||
+                string.Equals(attributeName, DcpProfilingSessionIdTag, StringComparison.Ordinal);
         }
 
         private async Task<int> GetDashboardExitCodeAsync()

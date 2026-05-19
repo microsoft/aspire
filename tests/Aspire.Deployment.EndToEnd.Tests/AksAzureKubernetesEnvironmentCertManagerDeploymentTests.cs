@@ -149,6 +149,9 @@ var letsEncrypt = certManager.AddIssuer("letsencrypt-staging")
 // its FQDN, the tls-fqdn-discovery pipeline step patches it onto the listener and the
 // cm-issuer-apply step ensures the ClusterIssuer is present so cert-manager can complete
 // the HTTP-01 challenge against the AGC FQDN.
+// The Gateway route validation requires the routed endpoint to be marked external.
+apiService.WithExternalHttpEndpoints();
+
 aks.AddGateway("api-gw")
     .WithLoadBalancer(publicLb)
     .WithRoute("/", apiService.GetEndpoint("http"))

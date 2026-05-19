@@ -99,11 +99,13 @@ internal sealed class DotNetCliRunner(
         CancellationToken cancellationToken)
     {
         var dotnetCommand = args.Length > 0 ? args[0] : "execute";
+        var backchannelParentContext = Activity.Current?.Context ?? default;
         using var processActivity = profilingTelemetry.StartDotNetProcess(dotnetCommand, projectFile, workingDirectory, options);
 
         // Build the final environment variables by merging caller-provided env with dotnet-specific settings.
         var finalEnv = env?.ToDictionary() ?? new Dictionary<string, string>();
         ConfigureDotNetEnvironment(finalEnv);
+        processActivity.AddContextToEnvironment(finalEnv);
 
         // Resolve the dotnet executable path, preferring the private SDK installation if available.
         var dotnetPath = ResolveDotNetPath(finalEnv);
@@ -140,7 +142,7 @@ internal sealed class DotNetCliRunner(
                     execution.EnvironmentVariables.Select(kvp => new EnvVar { Name = kvp.Key, Value = kvp.Value }).ToList(),
                     options.StartDebugSession);
 
-                _ = StartBackchannelAsync(null, socketPath!, backchannelCompletionSource, cancellationToken);
+                _ = StartBackchannelAsync(null, socketPath!, backchannelCompletionSource, backchannelParentContext, cancellationToken);
 
                 return CliExitCodes.Success;
             }
@@ -157,7 +159,7 @@ internal sealed class DotNetCliRunner(
 
         if (backchannelCompletionSource is not null && socketPath is not null)
         {
-            _ = StartBackchannelAsync(execution, socketPath, backchannelCompletionSource, cancellationToken);
+            _ = StartBackchannelAsync(execution, socketPath, backchannelCompletionSource, backchannelParentContext, cancellationToken);
         }
 
         var exitCode = await execution.WaitForExitAsync(cancellationToken);
@@ -342,9 +344,14 @@ internal sealed class DotNetCliRunner(
         return "dotnet";
     }
 
-    private async Task StartBackchannelAsync(IProcessExecution? execution, string socketPath, TaskCompletionSource<IAppHostCliBackchannel> backchannelCompletionSource, CancellationToken cancellationToken)
+    private async Task StartBackchannelAsync(
+        IProcessExecution? execution,
+        string socketPath,
+        TaskCompletionSource<IAppHostCliBackchannel> backchannelCompletionSource,
+        ActivityContext parentContext,
+        CancellationToken cancellationToken)
     {
-        using var activity = profilingTelemetry.StartBackchannelConnect(socketPath);
+        using var activity = profilingTelemetry.StartBackchannelConnect(socketPath, parentContext);
 
         using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(50));
 

@@ -420,19 +420,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                 _logger.LogWarning("Dashboard API is unsecured. Untrusted apps can access sensitive telemetry data.");
             }
 
-            // Log frontend login URL last at startup so it's easy to find in the logs.
-            if (frontendEndpointInfo != null)
-            {
-                var options = _app.Services.GetRequiredService<IOptionsMonitor<DashboardOptions>>().CurrentValue;
-                if (options.Frontend.AuthMode == FrontendAuthMode.BrowserToken)
-                {
-                    // DOTNET_RUNNING_IN_CONTAINER is a well-known environment variable added by official .NET images.
-                    // https://learn.microsoft.com/dotnet/core/tools/dotnet-environment-variables#dotnet_running_in_container-and-dotnet_running_in_containers
-                    var isContainer = _app.Configuration.GetBool("DOTNET_RUNNING_IN_CONTAINER") ?? false;
-
-                    LoggingHelpers.WriteDashboardUrl(_logger, frontendEndpointInfo.GetResolvedAddress(replaceIPAnyWithLocalhost: true), options.Frontend.BrowserToken, isContainer);
-                }
-            }
+            PrintSummary(frontendEndpointInfo);
 
             // One-off async initialization of telemetry service.
             var telemetryService = _app.Services.GetRequiredService<DashboardTelemetryService>();
@@ -533,6 +521,27 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         _app.MapTelemetryApi(dashboardOptions);
         _app.MapDashboardApi(dashboardOptions);
         _app.MapDashboardHealthChecks();
+    }
+
+    private void PrintSummary(ResolvedEndpointInfo? frontendEndpointInfo)
+    {
+        var options = _app.Services.GetRequiredService<IOptionsMonitor<DashboardOptions>>().CurrentValue;
+        var token = options.Frontend.AuthMode == FrontendAuthMode.BrowserToken ? options.Frontend.BrowserToken : null;
+        var frontendAddress = frontendEndpointInfo?.GetResolvedAddress(replaceIPAnyWithLocalhost: true);
+        var otlpGrpcAddress = _otlpServiceGrpcEndPointAccessor?.Invoke().GetResolvedAddress(replaceIPAnyWithLocalhost: true);
+        var otlpHttpAddress = _otlpServiceHttpEndPointAccessor?.Invoke().GetResolvedAddress(replaceIPAnyWithLocalhost: true);
+
+        // DOTNET_RUNNING_IN_CONTAINER is a well-known environment variable added by official .NET images.
+        // https://learn.microsoft.com/dotnet/core/tools/dotnet-environment-variables#dotnet_running_in_container-and-dotnet_running_in_containers
+        var isContainer = _app.Configuration.GetBool("DOTNET_RUNNING_IN_CONTAINER") ?? false;
+
+        LoggingHelpers.WriteDashboardSummary(
+            _logger,
+            frontendAddress,
+            otlpGrpcAddress,
+            otlpHttpAddress,
+            token,
+            isContainer);
     }
 
     private ILogger<DashboardWebApplication> GetLogger()

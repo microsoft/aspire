@@ -141,6 +141,9 @@ var publicLb = aks.AddLoadBalancer("public", albSubnet);
 // stamps the alb.networking.azure.io association annotations and defaults the
 // gatewayClassName to "azure-alb-external". Routing "/" (Prefix) so any path the
 // starter template's apiservice exposes (/, /weatherforecast) flows through.
+// The Gateway route validation requires the routed endpoint to be marked external.
+apiService.WithExternalHttpEndpoints();
+
 aks.AddGateway("api-gw")
     .WithLoadBalancer(publicLb)
     .WithRoute("/", apiService.GetEndpoint("http"));

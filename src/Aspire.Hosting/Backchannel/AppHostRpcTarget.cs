@@ -19,7 +19,8 @@ internal class AppHostRpcTarget(
     ProfilingTelemetry profilingTelemetry,
     PipelineActivityReporter activityReporter,
     IHostApplicationLifetime lifetime,
-    DistributedApplicationOptions options)
+    DistributedApplicationOptions options,
+    AppHostStartupState startupState)
 {
     private readonly CancellationTokenSource _shutdownCts = new();
 
@@ -173,18 +174,38 @@ internal class AppHostRpcTarget(
 
     public async Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken)
     {
+        using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(GetDashboardUrlsAsync), streaming: false);
         if (!options.DashboardEnabled)
         {
             logger.LogDebug("Dashboard URL requested but dashboard is disabled.");
+            activity.SetDashboardHealthy(false);
             return new DashboardUrlsState { DashboardHealthy = false };
         }
 
-        return await DashboardUrlsHelper.GetDashboardUrlsAsync(serviceProvider, logger, cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var urls = await DashboardUrlsHelper.GetDashboardUrlsAsync(serviceProvider, logger, cancellationToken).ConfigureAwait(false);
+            activity.SetDashboardHealthy(urls.DashboardHealthy);
+            return urls;
+        }
+        catch (Exception ex)
+        {
+            activity.SetError(ex);
+            throw;
+        }
+    }
+
+    public Task NotifyAppHostReadyAsync(CancellationToken cancellationToken)
+    {
+        _ = cancellationToken;
+        startupState.MarkReady();
+        return Task.CompletedTask;
     }
 
 #pragma warning disable CA1822
     public Task<string[]> GetCapabilitiesAsync(CancellationToken cancellationToken)
     {
+        using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(GetCapabilitiesAsync), streaming: false);
         // The purpose of this API is to allow the CLI to determine what API surfaces
         // the AppHost supports. In 9.2 we'll be saying that you need a 9.2 apphost,
         // but the 9.3 CLI might actually support working with 9.2 apphosts. The idea

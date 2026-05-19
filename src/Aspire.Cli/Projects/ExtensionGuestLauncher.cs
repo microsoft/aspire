@@ -1,8 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Projects;
@@ -38,11 +40,13 @@ internal sealed class ExtensionGuestLauncher : IGuestProcessLauncher
         // extension can extract it as the runtimeExecutable for the debug session.
         var allArgs = new List<string> { command };
         allArgs.AddRange(args);
+        var effectiveEnvironmentVariables = environmentVariables.ToDictionary();
+        ProfilingTelemetry.AddActivityContextToEnvironment(Activity.Current, effectiveEnvironmentVariables);
 
         await _extensionInteractionService.LaunchAppHostAsync(
             _appHostFile.FullName,
             allArgs,
-            environmentVariables.Select(kvp => new EnvVar { Name = kvp.Key, Value = kvp.Value }).ToList(),
+            effectiveEnvironmentVariables.Select(kvp => new EnvVar { Name = kvp.Key, Value = kvp.Value }).ToList(),
             _debug);
 
         if (afterLaunchAsync is not null)

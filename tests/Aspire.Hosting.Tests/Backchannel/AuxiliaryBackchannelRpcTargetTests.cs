@@ -1,8 +1,10 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
@@ -52,6 +54,64 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
             ?? "unknown";
 
         Assert.Equal(expectedVersion, result.AspireHostVersion);
+    }
+
+    [Fact]
+    public void AppHostStartupState_IsReadyWhenRemoteAppHostSocketIsAbsent()
+    {
+        var configuration = new ConfigurationBuilder().Build();
+
+        var startupState = new AppHostStartupState(configuration);
+
+        Assert.True(startupState.IsReady);
+    }
+
+    [Fact]
+    public void AppHostStartupState_WaitsForReadyWhenRemoteAppHostSocketIsPresent()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["REMOTE_APP_HOST_SOCKET_PATH"] = "aspire-remote.sock"
+            })
+            .Build();
+        var startupState = new AppHostStartupState(configuration);
+
+        Assert.False(startupState.IsReady);
+
+        startupState.MarkReady();
+
+        Assert.True(startupState.IsReady);
+    }
+
+    [Fact]
+    public async Task WaitForAppHostReadyAsync_CompletesWhenStartupStateIsReady()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["REMOTE_APP_HOST_SOCKET_PATH"] = "aspire-remote.sock"
+            })
+            .Build();
+
+        using var services = new ServiceCollection()
+            .AddSingleton<IConfiguration>(configuration)
+            .AddSingleton<ProfilingTelemetry>()
+            .AddSingleton<AppHostStartupState>()
+            .BuildServiceProvider();
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            configuration,
+            services.GetRequiredService<ProfilingTelemetry>(),
+            services);
+
+        var waitTask = target.WaitForAppHostReadyAsync();
+        Assert.False(waitTask.IsCompleted);
+
+        services.GetRequiredService<AppHostStartupState>().MarkReady();
+        var ready = await waitTask.DefaultTimeout();
+
+        Assert.True(ready.IsReady);
     }
 
     [Fact]
@@ -254,7 +314,8 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
         // Properties (sensitive values should be redacted)
         Assert.True(snapshot.Properties.TryGetValue(CustomResourceKnownProperties.Source, out var normalValue));
-        Assert.Equal("normal-value", normalValue);
+        var normalJsonValue = Assert.IsAssignableFrom<JsonValue>(normalValue);
+        Assert.Equal("normal-value", normalJsonValue.GetValue<string>());
         Assert.True(snapshot.Properties.TryGetValue("ConnectionString", out var sensitiveValue));
         Assert.Null(sensitiveValue);
 
@@ -966,15 +1027,19 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetDashboardUrlsAsync_ReturnsBaseUrl_WhenDashboardAllowsAnonymousAccess()
     {
+        var activities = new List<Activity>();
+        using var listener = CreateActivityListener(ProfilingTelemetry.ActivitySourceName, activities.Add);
         using var builder = TestDistributedApplicationBuilder.Create(
             options => options.DisableDashboard = false,
             outputHelper,
             $"{KnownConfigNames.AspNetCoreUrls}=http://localhost",
             $"{KnownConfigNames.DashboardOtlpGrpcEndpointUrl}=http://localhost",
-            $"{KnownConfigNames.DashboardUnsecuredAllowAnonymous}=true");
+            $"{KnownConfigNames.DashboardUnsecuredAllowAnonymous}=true",
+            $"{KnownConfigNames.ProfilingEnabled}=true");
 
         using var app = builder.Build();
         await app.ExecuteBeforeStartHooksAsync(default).DefaultTimeout();
+        activities.Clear();
 
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         var dashboard = Assert.Single(model.Resources, r => r.Name == KnownResourceNames.AspireDashboard);
@@ -999,6 +1064,64 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         Assert.True(result.DashboardHealthy);
         Assert.Equal("http://localhost:18888", result.BaseUrlWithLoginToken);
         Assert.Null(result.CodespacesUrlWithLoginToken);
+
+        var dashboardActivityNames = activities.Select(activity => activity.OperationName).ToArray();
+        Assert.Contains(ProfilingTelemetry.Activities.JsonRpcServerCall, dashboardActivityNames);
+        Assert.Contains(ProfilingTelemetry.Activities.DashboardGetConnectionInfo, dashboardActivityNames);
+        Assert.Contains(ProfilingTelemetry.Activities.DashboardWaitHealthy, dashboardActivityNames);
+        Assert.Contains(ProfilingTelemetry.Activities.DashboardResolveUrls, dashboardActivityNames);
+
+        var resolveActivity = Assert.Single(activities, activity => activity.OperationName == ProfilingTelemetry.Activities.DashboardResolveUrls);
+        Assert.Equal(ProfilingTelemetry.Values.DashboardUrlSourceResource, resolveActivity.GetTagItem(ProfilingTelemetry.Tags.DashboardUrlSource));
+        Assert.Equal(true, resolveActivity.GetTagItem(ProfilingTelemetry.Tags.DashboardHasApiBaseUrl));
+
+        var connectionInfoActivity = Assert.Single(activities, activity => activity.OperationName == ProfilingTelemetry.Activities.DashboardGetConnectionInfo);
+        Assert.Equal(true, connectionInfoActivity.GetTagItem(ProfilingTelemetry.Tags.DashboardHealthy));
+        Assert.Equal(ProfilingTelemetry.Values.DashboardUrlSourceResource, connectionInfoActivity.GetTagItem(ProfilingTelemetry.Tags.DashboardUrlSource));
+    }
+
+    [Fact]
+    public void JsonRpcServerProfilingSpan_UsesJsonRpcRemoteParent()
+    {
+        var activities = new List<Activity>();
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name is ProfilingTelemetry.ActivitySourceName or "test.client" or "test.jsonrpc",
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = activity =>
+            {
+                if (activity.Source.Name == ProfilingTelemetry.ActivitySourceName)
+                {
+                    activities.Add(activity);
+                }
+            }
+        };
+        ActivitySource.AddActivityListener(listener);
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [KnownConfigNames.ProfilingEnabled] = "true",
+                [KnownConfigNames.ProfilingSessionId] = "session-1"
+            })
+            .Build();
+        var profilingTelemetry = new ProfilingTelemetry(configuration);
+        using var clientSource = new ActivitySource("test.client");
+        using var jsonRpcSource = new ActivitySource("test.jsonrpc");
+        var clientActivity = clientSource.StartActivity("client", ActivityKind.Client);
+        Assert.NotNull(clientActivity);
+        var clientContext = clientActivity.Context;
+        var clientSpanId = clientActivity.SpanId;
+        clientActivity.Dispose();
+
+        using (var jsonRpcActivity = jsonRpcSource.StartActivity("server", ActivityKind.Server, clientContext))
+        {
+            Assert.NotNull(jsonRpcActivity);
+            using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(AuxiliaryBackchannelRpcTarget.GetDashboardUrlsAsync), streaming: false);
+        }
+
+        var serverActivity = Assert.Single(activities, activity => activity.OperationName == ProfilingTelemetry.Activities.JsonRpcServerCall);
+        Assert.Equal(clientSpanId, serverActivity.ParentSpanId);
     }
 
     [Fact]
@@ -1455,6 +1578,19 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         var result = await target.GetAppHostInfoAsync().DefaultTimeout();
 
         Assert.Equal("/logs/cli_session.log", result.CliLogFilePath);
+    }
+
+    private static ActivityListener CreateActivityListener(string sourceName, Action<Activity> activityStopped)
+    {
+        var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == sourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = activityStopped
+        };
+
+        ActivitySource.AddActivityListener(listener);
+        return listener;
     }
 }
 

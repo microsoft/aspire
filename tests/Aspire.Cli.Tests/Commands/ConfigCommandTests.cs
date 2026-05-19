@@ -4,6 +4,7 @@
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Documentation.ApiDocs;
 using Aspire.Cli.Documentation.Docs;
+using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.DependencyInjection;
@@ -845,6 +846,38 @@ public class ConfigCommandTests(ITestOutputHelper outputHelper)
             var json = await File.ReadAllTextAsync(settingsPath);
             Assert.DoesNotContain("AppHost.csproj", json);
         }
+    }
+
+    [Fact]
+    public async Task ConfigSetCommand_GlobalOverrideStagingFeed_IsReadByPackagingService()
+    {
+        const string stagingFeed = "https://example.com/staging/v3/index.json";
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using (var provider = services.BuildServiceProvider())
+        {
+            var command = provider.GetRequiredService<Aspire.Cli.Commands.RootCommand>();
+            var result = command.Parse($"config set -g overrideStagingFeed {stagingFeed}");
+
+            var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+            Assert.Equal(CliExitCodes.Success, exitCode);
+
+            var settingsPath = provider.GetRequiredService<IConfigurationService>().GetSettingsFilePath(isGlobal: true);
+            var json = await File.ReadAllTextAsync(settingsPath);
+            Assert.Contains(stagingFeed, json);
+        }
+
+        var reloadedServices = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var reloadedProvider = reloadedServices.BuildServiceProvider();
+        var packagingService = reloadedProvider.GetRequiredService<IPackagingService>();
+
+        var channels = await packagingService.GetChannelsAsync(requestedChannelName: PackageChannelNames.Staging).DefaultTimeout();
+
+        var stagingChannel = Assert.Single(channels, c => c.Name == PackageChannelNames.Staging);
+        Assert.Equal(PackageChannelQuality.Both, stagingChannel.Quality);
+        Assert.Contains(stagingChannel.Mappings!, m => m.PackageFilter == "Aspire*" && m.Source == stagingFeed);
     }
 
     private static string GetErrorString(string resourceName)

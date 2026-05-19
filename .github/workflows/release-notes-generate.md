@@ -36,6 +36,10 @@ concurrency:
   group: release-notes-generate-${{ github.event.release.tag_name || github.event.inputs.tag_name }}
   cancel-in-progress: false
 
+# Agent runs read-only; the release-body update is performed by a separate,
+# permission-controlled job that gh-aw generates from the `safe-outputs:
+# update-release` declaration below. Direct `contents: write` is disallowed
+# by gh-aw strict mode — safe-outputs are the supported escape hatch.
 permissions:
   contents: read
   pull-requests: read
@@ -45,16 +49,29 @@ network:
     - defaults
     - github
 
+# Use the native `update-release` safe output instead of giving the agent
+# write access to the GitHub MCP. The agent emits a structured update
+# request; gh-aw runs a separate job (with the minimum required permissions)
+# that calls the Releases REST API.
+safe-outputs:
+  update-release:
+    max: 1
+
 tools:
   github:
-    # `repos` exposes get_release_by_tag / list_releases / update_release and
-    # commit-comparison APIs. `pull_requests` and `search` are used to enrich
-    # commits with PR titles/labels/authors when grouping changes by area.
+    # `repos` exposes get_release_by_tag / list_releases and commit-comparison
+    # APIs. `pull_requests` and `search` are used to enrich commits with PR
+    # titles/labels/authors when grouping changes by area. The actual release
+    # body update is performed by the `update-release` safe output, not via
+    # the MCP — so we do not need write toolsets here.
     toolsets: [repos, pull_requests, search]
-    # Keep the guard policy explicit so gh-aw does not inject a separate
-    # auto-lockdown github-script step with an independently resolved action
-    # pin. Mirrors release-update-support-mdx.md.
-    min-integrity: approved
+    # Explicitly set to `none`: the `aspire-repo-bot` legitimately authors
+    # backport PRs and merge commits on release branches. The default
+    # `approved` filter would drop those items from the data set the agent
+    # sees (commit-compare results, PR searches), hurting the generated
+    # notes. The MCP container is still scoped to a single repo via
+    # `allowed-repos` and `github-app`.
+    min-integrity: none
     allowed-repos:
       - microsoft/aspire
     github-app:
@@ -73,10 +90,16 @@ The GitHub Release for this tag was just created by
 Your job is to replace that placeholder with real, human-readable release
 notes that match the tone and structure of recent stable Aspire releases.
 
-This run is best-effort. The release is already published; the placeholder
-already tells users "notes are being generated". If anything in this
-workflow is unsafe to proceed with, **write a clear diagnostic to the run
-summary and exit successfully** rather than failing the run.
+The release is already published, so for **benign no-op cases** (release
+missing, prerelease/draft, tag doesn't match `vX.Y.Z`, body has already
+been edited and no longer contains the placeholder phrase) write a clear
+diagnostic to the run summary and **exit successfully**. But for **real
+errors** when actually trying to update the release (API rejection,
+permission denied on `update_release`, malformed payload, etc.) **fail the
+workflow** — a maintainer needs to see a red X so they can investigate or
+manually backfill. Do **not** open issues to "ask a maintainer to paste
+notes" as a fallback; the workflow has no `create_issue` capability by
+design.
 
 ## Context
 
@@ -218,11 +241,20 @@ it. Only the body changes.
 
 ## Step 7: Update the release in place
 
-Call `update_release` on the `microsoft/aspire` release with `id` from
-Step 1, supplying only the new `body`. Do not touch `name`, `tag_name`,
-`prerelease`, or `draft`.
+This workflow has the `update-release` safe output configured. Emit a
+single structured request as the final agent output, with the release ID
+(or tag name) from Step 1 and the new `body`. Do not include `name`,
+`tag_name`, `prerelease`, or `draft` — only the body should change.
 
-After updating, write a short success line to the run summary:
+gh-aw runs a separate, permission-controlled job after the agent that
+calls the GitHub Releases REST API with the requested payload. If that
+API call fails (HTTP 4xx/5xx, permission denied, malformed payload), the
+safe-output job exits non-zero and the overall workflow shows a red X —
+exactly the loud-failure behavior we want. You do not need to call the
+Releases API directly via MCP; in fact you do not have write access to it.
+
+After emitting the update request, write a short success line to the run
+summary:
 
 > Replaced placeholder release notes for **Aspire `<version>`**
 > ([link](<release_url>)). Diff base: `<prev_tag>`. Sections: `<list>`.
@@ -230,12 +262,41 @@ After updating, write a short success line to the run summary:
 
 ## Step 8: Failure handling
 
-If any GitHub API call fails (rate limit, transient network, App
-permission, missing release), **do not fail the workflow**. Write a clear
-diagnostic to the run summary explaining what happened (which API, which
-tag, the error message) and exit successfully. A maintainer can rerun
-manually via `workflow_dispatch` with the same `tag_name` — the
-idempotency check in Step 2 will keep that safe.
+Two distinct failure classes — handle them differently:
+
+**Benign no-op (exit successfully with a diagnostic, emit NO safe output).**
+These are the early-exit cases already covered by Steps 1 and 2:
+
+- Release not found by tag.
+- `release.draft == true` or `release.prerelease == true`.
+- Tag does not match `^v\d+\.\d+\.\d+$`.
+- Release body has already been edited (does not contain the placeholder
+  phrase) — Step 2 idempotency check.
+
+For these, write a clear diagnostic to the run summary naming the release
+and the reason, then exit 0 **without emitting an `update_release` safe
+output**. The release is already live and these states are expected. The
+safe-output job is a no-op when no request is emitted.
+
+**Real error before reaching Step 7 (FAIL the workflow).** If the agent
+hits an unrecoverable problem before it can produce a final body (search
+APIs all failing, no compare data at all, malformed tag, etc.) — exit
+non-zero so the run shows a red X. Write the failing API, tag, and error
+message to the run summary so a maintainer can investigate. Do **not**
+fall back to creating an issue, opening a PR, or posting a comment with
+the generated notes — this workflow has only `update-release` configured
+in `safe-outputs:`, all other write surfaces are unavailable by design.
+
+**Real error during release update (handled by gh-aw).** If the body looks
+correct but the Releases API itself rejects the update, the gh-aw safe
+output job that calls the API will fail the run for you — you do not
+need to do anything special beyond emitting a well-formed `update_release`
+request.
+
+A maintainer can rerun manually via `workflow_dispatch` with the same
+`tag_name` once the underlying issue is fixed. The Step 2 idempotency
+check makes that safe: if the body has already been edited, the rerun
+will exit cleanly without overwriting.
 
 ## Style notes for the generated body
 

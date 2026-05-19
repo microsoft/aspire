@@ -194,13 +194,9 @@ jobs:
 
   polyglot_validation:
     name: Polyglot SDK Validation
-    # Polyglot validation only makes sense on pull_request runs: the CLI archive baked
-    # for push events to main/release/** carries channel=daily/staging, but
-    # setup-local-cli.sh writes packages into the auto-detected PR hive (hives/pr-<N>/).
-    # On non-PR builds there is no PR suffix in the .nupkg filenames, so the hive label
-    # cannot be derived and the validation would be a silent no-op. See
-    # .github/workflows/polyglot-validation/setup-local-cli.sh for the matching guard.
-    if: ${{ github.event_name == 'pull_request' }}
+    # Pull requests validate the current TypeScript AppHost LTS runtime. Main branch
+    # builds add the older supported LTS runtime without adding that cost to every PR.
+    if: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/main' }}
     uses: ./.github/workflows/polyglot-validation.yml
     needs: [build_packages, build_cli_archive_linux]
     with:
@@ -320,6 +316,10 @@ jobs:
     name: TypeScript SDK Unit Tests
     uses: ./.github/workflows/typescript-sdk-tests.yml
 
+  typescript_api_compat:
+    name: TypeScript API Compatibility
+    uses: ./.github/workflows/typescript-api-compat.yml
+
   results:
     if: ${{ always() && github.repository_owner == 'microsoft' }}
     runs-on: ubuntu-latest
@@ -336,6 +336,7 @@ jobs:
       extension_tests_win,
       cli_starter_validation_windows,
       typescript_sdk_tests,
+      typescript_api_compat,
       tests_no_nugets,
       tests_no_nugets_overflow,
       tests_requires_nugets_linux,
@@ -408,9 +409,8 @@ jobs:
         #   tests, so an empty matrix and 'skipped' result are expected.
         # - cli_starter_validation_windows: this job only runs for pull requests and is expected to
         #   be skipped for other workflow events.
-        # - polyglot_validation: this job only runs for pull requests (the CLI archive baked for
-        #   non-PR events carries channel=daily/staging which setup-local-cli.sh cannot resolve
-        #   to a hive label) and is expected to be skipped for other workflow events.
+        # - polyglot_validation: this job runs for pull requests and main branch builds; it is
+        #   expected to be skipped for other workflow events.
         # All other jobs in this gate are required, and a 'skipped' result is treated as a failure.
         if: >-
           ${{ always() &&
@@ -420,6 +420,7 @@ jobs:
                 (needs.extension_tests_win.result == 'skipped' ||
                  needs.cli_starter_validation_windows.result == 'skipped' ||
                  needs.typescript_sdk_tests.result == 'skipped' ||
+                 needs.typescript_api_compat.result == 'skipped' ||
                  needs.tests_no_nugets.result == 'skipped' ||
                  needs.tests_requires_nugets_linux.result == 'skipped' ||
                  needs.tests_requires_nugets_windows.result == 'skipped' ||
@@ -431,12 +432,14 @@ jobs:
                  needs.polyglot_validation.result == 'skipped')) ||
                (github.event_name != 'pull_request' &&
                 (needs.extension_tests_win.result == 'skipped' ||
-                 needs.typescript_sdk_tests.result == 'skipped' ||
-                 needs.tests_no_nugets.result == 'skipped' ||
-                 needs.tests_requires_nugets_linux.result == 'skipped' ||
-                 needs.tests_requires_nugets_windows.result == 'skipped' ||
-                 (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_macos).include[0] != null &&
-                  needs.tests_requires_nugets_macos.result == 'skipped')))) }}
+                  needs.typescript_sdk_tests.result == 'skipped' ||
+                  needs.tests_no_nugets.result == 'skipped' ||
+                  needs.tests_requires_nugets_linux.result == 'skipped' ||
+                  needs.tests_requires_nugets_windows.result == 'skipped' ||
+                  (github.ref == 'refs/heads/main' &&
+                   needs.polyglot_validation.result == 'skipped') ||
+                  (fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_nugets_macos).include[0] != null &&
+                   needs.tests_requires_nugets_macos.result == 'skipped')))) }}
         run: |
           echo "One or more dependent jobs failed."
           exit 1

@@ -364,7 +364,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await pendingRun.DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.Equal(1, testInteractionService.DisplayCancellationMessageCount);
+        Assert.Single(testInteractionService.DisplayedCancellations);
     }
 
     [Theory]

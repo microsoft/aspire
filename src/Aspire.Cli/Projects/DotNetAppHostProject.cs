@@ -6,6 +6,7 @@ using Aspire.Cli.Backchannel;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
@@ -234,7 +235,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         var effectiveAppHostFile = context.AppHostFile;
         var isExtensionHost = ExtensionHelper.IsExtensionHost(_interactionService, out _, out var extensionBackchannel);
 
-        var buildOutputCollector = new OutputCollector(_fileLoggerProvider, "Build");
+        var buildOutputCollector = new OutputCollector(_fileLoggerProvider, CliLogFormat.Categories.Build);
 
         using var activity = _profilingTelemetry.StartAppHostRun();
 
@@ -295,7 +296,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         // RunCommand may display captured AppHost output as soon as BuildCompletionSource is signaled.
         // Store the collector first so failures that occur immediately after preparation are not lost
         // to a race between the AppHost process and RunCommand's UX path.
-        var runOutputCollector = new OutputCollector(_fileLoggerProvider, "AppHost");
+        var runOutputCollector = new OutputCollector(_fileLoggerProvider, CliLogFormat.Categories.AppHost);
         context.OutputCollector = runOutputCollector;
 
         // Signal that build/preparation is complete
@@ -684,7 +685,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         // Build the apphost (unless --no-build is specified)
         if (!isSingleFileAppHost && !context.NoBuild)
         {
-            var buildOutputCollector = new OutputCollector(_fileLoggerProvider, "Build");
+            var buildOutputCollector = new OutputCollector(_fileLoggerProvider, CliLogFormat.Categories.Build);
             var buildOptions = new ProcessInvocationOptions
             {
                 StandardOutputCallback = buildOutputCollector.AppendOutput,
@@ -712,7 +713,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         }
 
         // Create collector and store in context for exception handling
-        var runOutputCollector = new OutputCollector(_fileLoggerProvider, "AppHost");
+        var runOutputCollector = new OutputCollector(_fileLoggerProvider, CliLogFormat.Categories.AppHost);
         context.OutputCollector = runOutputCollector;
 
         var runOptions = new ProcessInvocationOptions
@@ -743,7 +744,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     /// <inheritdoc />
     public async Task<bool> AddPackageAsync(AddPackageContext context, CancellationToken cancellationToken)
     {
-        var outputCollector = new OutputCollector(_fileLoggerProvider, "Package");
+        var outputCollector = new OutputCollector(_fileLoggerProvider, CliLogFormat.Categories.Package);
         context.OutputCollector = outputCollector;
 
         var options = new ProcessInvocationOptions
