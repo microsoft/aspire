@@ -782,6 +782,8 @@ internal class AddCommandPrompter(IInteractionService interactionService) : IAdd
         var filteredPackages = packages
             .GroupBy(p => p.Package.Id)
             .Select(g => g.OrderByDescending(p => SemVersion.Parse(p.Package.Version), SemVersion.PrecedenceComparer).First())
+            .OrderBy(static p => IntegrationDisplayHelpers.GetIntegrationGroup(p.Package.Id))
+            .ThenBy(static p => p.FriendlyName, StringComparer.OrdinalIgnoreCase)
             .ToArray();
 
         var selectedIntegration = await interactionService.PromptForSelectionAsync(

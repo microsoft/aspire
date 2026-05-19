@@ -3926,6 +3926,51 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AddCommandPrompter_OrdersMicrosoftIntegrationsBeforeCommunityToolkit()
+    {
+        // Arrange
+        List<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>? displayedPackages = null;
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = (sp) =>
+            {
+                var mockInteraction = new TestInteractionService();
+                mockInteraction.PromptForSelectionCallback = (message, choices, formatter, ct) =>
+                {
+                    var choicesList = choices.Cast<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)>().ToList();
+                    displayedPackages = choicesList;
+                    return choicesList.First();
+                };
+                return mockInteraction;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+        var interactionService = provider.GetRequiredService<IInteractionService>();
+
+        var prompter = new AddCommandPrompter(interactionService);
+        var fakeCache = new FakeNuGetPackageCache();
+        var channel = PackageChannel.CreateImplicitChannel(fakeCache);
+
+        var packages = new[]
+        {
+            ("communitytoolkit-mongodb-extensions", new NuGetPackage { Id = "CommunityToolkit.Aspire.Hosting.MongoDB.Extensions", Version = "13.3.0", Source = "nuget" }, channel),
+            ("mongodb", new NuGetPackage { Id = "Aspire.Hosting.MongoDB", Version = "13.4.0-pr.16882.gaf483c9e", Source = "pr-hive" }, channel),
+        };
+
+        // Act
+        await prompter.PromptForIntegrationAsync(packages, CancellationToken.None).DefaultTimeout();
+
+        // Assert
+        Assert.NotNull(displayedPackages);
+        Assert.Collection(
+            displayedPackages!,
+            package => Assert.Equal("Aspire.Hosting.MongoDB", package.Package.Id),
+            package => Assert.Equal("CommunityToolkit.Aspire.Hosting.MongoDB.Extensions", package.Package.Id));
+    }
+
+    [Fact]
     public async Task AddCommandPrompter_SelectsHighestImplicitVersionWithoutPrompting()
     {
         // Arrange
