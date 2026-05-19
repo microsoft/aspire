@@ -5115,11 +5115,6 @@ export interface PipelineStep {
     requiredBySteps(): Promise<AspireList<string>>;
     /** Gets or initializes the list of tags that categorize this step. */
     tags(): Promise<AspireList<string>>;
-    /** Gets or initializes the resource that this step is associated with, if any. */
-    resource: {
-        get: () => Promise<Resource>;
-        set: (value: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>) => Promise<void>;
-    };
     /**
      * Adds a dependency on another step.
      * @param stepName The name of the step to depend on.
@@ -5233,23 +5228,6 @@ class PipelineStepImpl implements PipelineStep {
         }
         return this._tags;
     }
-
-    resource = {
-        get: async (): Promise<Resource> => {
-            const handle = await this._client.invokeCapability<IResourceHandle>(
-                'Aspire.Hosting.Pipelines/PipelineStep.resource',
-                { context: this._handle }
-            );
-            return new ResourceImpl(handle, this._client);
-        },
-        set: async (value: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): Promise<void> => {
-            value = isPromiseLike(value) ? await value : value;
-            await this._client.invokeCapability<void>(
-                'Aspire.Hosting.Pipelines/PipelineStep.setResource',
-                { context: this._handle, value }
-            );
-        }
-    };
 
     /** @internal */
     async _dependsOnInternal(stepName: string): Promise<PipelineStep> {

@@ -14423,21 +14423,21 @@ public class PipelineStep extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the Name property */
+    /** Gets the unique name of the step */
     public String name() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (String) getClient().invokeCapability("Aspire.Hosting.Pipelines/PipelineStep.name", reqArgs);
     }
 
-    /** Gets the Description property */
+    /** Gets the human-readable description of the step */
     public String description() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (String) getClient().invokeCapability("Aspire.Hosting.Pipelines/PipelineStep.description", reqArgs);
     }
 
-    /** Gets the DependsOnSteps property */
+    /** Gets the step names that this step depends on */
     private AspireList<String> dependsOnStepsField;
     public AspireList<String> dependsOnSteps() {
         if (dependsOnStepsField == null) {
@@ -14446,7 +14446,7 @@ public class PipelineStep extends HandleWrapperBase {
         return dependsOnStepsField;
     }
 
-    /** Gets the RequiredBySteps property */
+    /** Gets the step names that require this step to complete */
     private AspireList<String> requiredByStepsField;
     public AspireList<String> requiredBySteps() {
         if (requiredByStepsField == null) {
@@ -14455,32 +14455,13 @@ public class PipelineStep extends HandleWrapperBase {
         return requiredByStepsField;
     }
 
-    /** Gets the Tags property */
+    /** Gets the tags that categorize this step */
     private AspireList<String> tagsField;
     public AspireList<String> tags() {
         if (tagsField == null) {
             tagsField = new AspireList<>(getHandle(), getClient(), "Aspire.Hosting.Pipelines/PipelineStep.tags");
         }
         return tagsField;
-    }
-
-    /** Gets the Resource property */
-    public IResource resource() {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        return (IResource) getClient().invokeCapability("Aspire.Hosting.Pipelines/PipelineStep.resource", reqArgs);
-    }
-
-    /** Sets the Resource property */
-    public PipelineStep setResource(IResource value) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("value", AspireClient.serializeValue(value));
-        return (PipelineStep) getClient().invokeCapability("Aspire.Hosting.Pipelines/PipelineStep.setResource", reqArgs);
-    }
-
-    public PipelineStep setResource(ResourceBuilderBase value) {
-        return setResource(new IResource(value.getHandle(), value.getClient()));
     }
 
     /** Adds a dependency on another step by name */

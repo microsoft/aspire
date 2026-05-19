@@ -5069,7 +5069,7 @@ class PipelineStep:
 
     @_cached_property
     def name(self) -> str:
-        """Gets the Name property"""
+        """Gets the unique name of the step"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.Pipelines/PipelineStep.name',
             {'context': self._handle}
@@ -5078,7 +5078,7 @@ class PipelineStep:
 
     @_cached_property
     def description(self) -> str | None:
-        """Gets the Description property"""
+        """Gets the human-readable description of the step"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.Pipelines/PipelineStep.description',
             {'context': self._handle}
@@ -5087,7 +5087,7 @@ class PipelineStep:
 
     @_cached_property
     def depends_on_steps(self) -> AspireList[str]:
-        """Gets the DependsOnSteps property"""
+        """Gets the step names that this step depends on"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.Pipelines/PipelineStep.dependsOnSteps',
             {'context': self._handle}
@@ -5096,7 +5096,7 @@ class PipelineStep:
 
     @_cached_property
     def required_by_steps(self) -> AspireList[str]:
-        """Gets the RequiredBySteps property"""
+        """Gets the step names that require this step to complete"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.Pipelines/PipelineStep.requiredBySteps',
             {'context': self._handle}
@@ -5105,29 +5105,12 @@ class PipelineStep:
 
     @_cached_property
     def tags(self) -> AspireList[str]:
-        """Gets the Tags property"""
+        """Gets the tags that categorize this step"""
         result = self._client.invoke_capability(
             'Aspire.Hosting.Pipelines/PipelineStep.tags',
             {'context': self._handle}
         )
         return typing.cast(AspireList[str], result)
-
-    @_uncached_property
-    def resource(self) -> AbstractResource:
-        """Gets the Resource property"""
-        result = self._client.invoke_capability(
-            'Aspire.Hosting.Pipelines/PipelineStep.resource',
-            {'context': self._handle}
-        )
-        return typing.cast(AbstractResource, result)
-
-    @resource.setter
-    def resource(self, value: AbstractResource) -> None:
-        """Sets the Resource property"""
-        self._client.invoke_capability(
-            'Aspire.Hosting.Pipelines/PipelineStep.setResource',
-            {'context': self._handle, 'value': value}
-        )
 
     def depends_on(self, step_name: str) -> None:
         """Adds a dependency on another step by name"""
