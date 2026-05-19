@@ -14,6 +14,8 @@ namespace Aspire.Cli.Packaging;
 
 internal class PackageChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, ILogger? logger = null)
 {
+    private const string GuestAppHostSdkPackageId = "Aspire.Hosting";
+
     public string Name { get; } = name;
     public PackageChannelQuality Quality { get; } = quality;
     public PackageMapping[]? Mappings { get; } = mappings;
@@ -86,6 +88,28 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
     public async Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
+        // For local hive channels the Aspire* source is a flat folder of .nupkg files.
+        // dotnet package search does not support local folder sources and returns no results.
+        // When a pinned version is set, enumerate the .nupkg files directly instead.
+        if (PinnedVersion is not null)
+        {
+            var aspireMapping = Mappings?.FirstOrDefault(m =>
+                m.PackageFilter.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase) &&
+                m.PackageFilter != PackageMapping.AllPackages &&
+                !UrlHelper.IsHttpUrl(m.Source));
+
+            if (aspireMapping is not null && Directory.Exists(aspireMapping.Source))
+            {
+                return Directory.EnumerateFiles(aspireMapping.Source, "*.nupkg", SearchOption.TopDirectoryOnly)
+                    .Select(TryGetPackageIdentityFromPackageFileName)
+                    .Where(p => p.HasValue)
+                    .Select(p => p!.Value)
+                    .Where(p => p.PackageId.StartsWith("Aspire.Hosting", StringComparison.OrdinalIgnoreCase))
+                    .Select(p => new NuGetPackage { Id = p.PackageId, Version = PinnedVersion, Source = aspireMapping.Source })
+                    .ToList();
+            }
+        }
+
         var tasks = new List<Task<IEnumerable<NuGetPackage>>>();
 
         using var tempNuGetConfig = Type is PackageChannelType.Explicit ? await TemporaryNuGetConfig.CreateAsync(Mappings!) : null;
@@ -195,6 +219,31 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         });
 
         return filteredPackages;
+    }
+
+    public async Task<NuGetPackage?> GetLatestGuestAppHostSdkPackageAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
+    {
+        // Guest AppHost sdk.version resolves to the base Aspire.Hosting package because
+        // the managed server restores that package to evaluate and generate the AppHost.
+        var packages = await GetPackagesAsync(GuestAppHostSdkPackageId, workingDirectory, cancellationToken);
+
+        NuGetPackage? latestPackage = null;
+        SemVersion? latestVersion = null;
+        foreach (var package in packages)
+        {
+            if (!SemVersion.TryParse(package.Version, SemVersionStyles.Strict, out var version))
+            {
+                continue;
+            }
+
+            if (latestVersion is null || SemVersion.PrecedenceComparer.Compare(version, latestVersion) > 0)
+            {
+                latestPackage = package;
+                latestVersion = version;
+            }
+        }
+
+        return latestPackage;
     }
 
     public async Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(string packageId, DirectoryInfo workingDirectory, CancellationToken cancellationToken)

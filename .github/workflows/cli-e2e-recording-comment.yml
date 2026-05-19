@@ -14,6 +14,10 @@ on:
         description: 'Workflow run ID to download artifacts from'
         required: true
         type: number
+      pr_number:
+        description: 'Optional PR number to comment on (skips the head-SHA lookup; useful for testing against merged PRs)'
+        required: false
+        type: number
 
 jobs:
   add-recording-comment:
@@ -50,14 +54,21 @@ jobs:
               });
               headSha = run.data.head_sha;
 
-              // Find PR by head SHA
-              const prs = await github.rest.pulls.list({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                state: 'open',
-                head: `${context.repo.owner}:${run.data.head_branch}`
-              });
-              prNumber = prs.data.length > 0 ? prs.data[0].number : null;
+              // Allow explicit PR override so we can dry-run against a merged PR's
+              // artifacts without depending on the open-PR head-SHA lookup below.
+              const overridePr = context.payload.inputs.pr_number;
+              if (overridePr) {
+                prNumber = Number(overridePr);
+              } else {
+                // Find PR by head SHA
+                const prs = await github.rest.pulls.list({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  state: 'open',
+                  head: `${context.repo.owner}:${run.data.head_branch}`
+                });
+                prNumber = prs.data.length > 0 ? prs.data[0].number : null;
+              }
             } else {
               // Triggered by workflow_run
               runId = context.payload.workflow_run.id;
@@ -164,28 +175,55 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          # Parse TRX (XML) files to extract test method outcomes using yq (pre-installed on ubuntu-latest).
-          # Produces a JSON map of testMethodName -> outcome for the bash comment step to consume.
-          # When the same test appears in multiple TRX files (e.g. retries), "Failed" wins over other outcomes.
+          # Parse TRX (XML) files to extract test method outcomes using yq + jq
+          # (both pre-installed on ubuntu-latest). Produces a JSON map of
+          # testMethodName -> outcome for the bash comment step to consume.
+          # When the same test appears in multiple TRX files (e.g. retries),
+          # "Failed" wins over other outcomes.
           if compgen -G trx_files/*.trx > /dev/null 2>&1; then
             echo "Parsing TRX files with yq..."
-            # yq can read XML natively; extract testName+outcome from each UnitTestResult.
-            # -s merges all files, producing a combined JSON array of results.
-            # Prefer "Failed" over other outcomes when duplicates exist.
-            yq -p xml -o json '.TestRun.Results.UnitTestResult | (if type == "!!seq" then .[] else . end) | {(."@testName" // ."+@testName"): (."@outcome" // ."+@outcome")}' trx_files/*.trx \
+            # Convert each TRX to JSON with yq (Go yq's expression language is
+            # limited, so do all reshaping in jq). The resulting documents look like:
+            #   { "TestRun": { "Results": { "UnitTestResult": <object|array> } } }
+            # Attribute keys are exposed by yq as "+@<attr>" (newer yq) or
+            # "@<attr>" (older yq), and a single result is emitted as an object
+            # rather than an array, so jq must handle both shapes.
+            yq -p xml -o json '.' trx_files/*.trx \
               | jq -s '
-                  reduce (.[] | to_entries[]) as {$key, $value} ({};
-                    # Extract simple method name (last segment after dot) for .cast file matching
-                    ($key | split(".") | last) as $method |
-                    # Prefer "Failed" over any other outcome
-                    if .[$method] == "Failed" then . else .[$method] = $value end |
-                    if .[$key] == "Failed" then . else .[$key] = $value end
+                  def attr(o; k): o["+@" + k] // o["@" + k];
+                  # Best-effort: also key by the bare method name (with theory
+                  # parameter data stripped) so a .cast file named after the
+                  # CallerMemberName matches a TRX entry like
+                  # "Namespace.Class.Method(toolchain: "pnpm")".
+                  def bare_method(name):
+                    (name | split(".") | last) | sub("\\(.*$"; "");
+                  def fqn_no_params(name):
+                    name | sub("\\(.*$"; "");
+                  def merge(map; key; outcome):
+                    if map[key] == "Failed" then map else map + {(key): outcome} end;
+                  reduce (
+                    .[]
+                    | .TestRun.Results.UnitTestResult
+                    | (if type == "array" then .[] else . end)
+                  ) as $r ({};
+                    attr($r; "testName") as $name |
+                    attr($r; "outcome") as $outcome |
+                    if $name == null or $outcome == null then .
+                    else
+                      merge(.; bare_method($name); $outcome)
+                      | merge(.; fqn_no_params($name); $outcome)
+                      | merge(.; $name; $outcome)
+                    end
                   )
                 ' > test_outcomes.json
 
             OUTCOME_COUNT=$(jq 'length' test_outcomes.json)
             echo "Parsed $OUTCOME_COUNT test outcome(s)"
-            echo "has_outcomes=true" >> "$GITHUB_OUTPUT"
+            if [ "$OUTCOME_COUNT" -gt 0 ]; then
+              echo "has_outcomes=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "has_outcomes=false" >> "$GITHUB_OUTPUT"
+            fi
           else
             echo "No TRX files found"
             echo '{}' > test_outcomes.json
@@ -231,7 +269,9 @@ jobs:
             UPLOAD_COUNT=0
             FAIL_COUNT=0
             TOTAL_COUNT=0
+            TEST_PASS_COUNT=0
             TEST_FAIL_COUNT=0
+            TEST_UNKNOWN_COUNT=0
 
             # Arrays to track failed test recordings separately
             FAILED_TESTS_BODY=""
@@ -252,14 +292,21 @@ jobs:
                 # Look up test outcome from TRX data.
                 # .cast files are named after the test method name (via [CallerMemberName] in CreateTestTerminal),
                 # so the filename matches the method name key in the outcomes JSON.
+                # Per-link label carries the outcome too, so a recording URL copied out of
+                # the table still tells reviewers whether it represents a pass or a failure.
                 TEST_OUTCOME=$(jq -r --arg name "$filename" '.[$name] // "Unknown"' test_outcomes.json)
                 if [ "$TEST_OUTCOME" = "Passed" ]; then
                   STATUS_EMOJI="✅"
+                  LINK_LABEL="✅ ▶️ View recording"
+                  TEST_PASS_COUNT=$((TEST_PASS_COUNT + 1))
                 elif [ "$TEST_OUTCOME" = "Failed" ]; then
                   STATUS_EMOJI="❌"
+                  LINK_LABEL="❌ ▶️ View failure recording"
                   TEST_FAIL_COUNT=$((TEST_FAIL_COUNT + 1))
                 else
                   STATUS_EMOJI="❔"
+                  LINK_LABEL="❔ ▶️ View recording"
+                  TEST_UNKNOWN_COUNT=$((TEST_UNKNOWN_COUNT + 1))
                 fi
 
                 # Upload to asciinema with retry logic for transient failures
@@ -279,14 +326,14 @@ jobs:
 
                 if [ -n "$ASCIINEMA_URL" ]; then
                   TABLE_BODY="${TABLE_BODY}
-          | ${STATUS_EMOJI} | ${safe_filename} | [▶️ View Recording](${ASCIINEMA_URL}) |"
+          | ${STATUS_EMOJI} | ${safe_filename} | [${LINK_LABEL}](${ASCIINEMA_URL}) |"
                   echo "Uploaded: $ASCIINEMA_URL"
                   UPLOAD_COUNT=$((UPLOAD_COUNT + 1))
 
                   # Track failed tests for the prominent section
                   if [ "$TEST_OUTCOME" = "Failed" ]; then
                     FAILED_TESTS_BODY="${FAILED_TESTS_BODY}
-          - ❌ **${safe_filename}** — [▶️ View Recording](${ASCIINEMA_URL})"
+          - ❌ **${safe_filename}** — [${LINK_LABEL}](${ASCIINEMA_URL})"
                   fi
                 else
                   TABLE_BODY="${TABLE_BODY}
@@ -302,18 +349,45 @@ jobs:
               fi
             done
 
-            echo "Uploaded $UPLOAD_COUNT recordings, $FAIL_COUNT upload failures, $TEST_FAIL_COUNT test failures"
+            echo "Uploaded $UPLOAD_COUNT recordings, $FAIL_COUNT upload failures, $TEST_PASS_COUNT passed, $TEST_FAIL_COUNT failed, $TEST_UNKNOWN_COUNT unknown"
 
-            # Build comment with summary outside collapsible and table inside
+            # Build the summary line in the same style as the deployment E2E comment:
+            # "<emoji> **CLI E2E Tests <status>** — X passed, Y failed[, Z unknown]"
+            # Status reflects test outcomes; recording-upload failures are a secondary concern
+            # surfaced in the table rather than the headline status.
+            # Choose headline emoji + status word from the tallied outcomes.
+            # We never let unknowns suppress a real failure, but we do flag
+            # unknowns explicitly when the rest of the run was clean so
+            # reviewers don't read a misleading 'passed'.
+            FALLBACK_TEXT=""
             if [ "$TEST_FAIL_COUNT" -gt 0 ]; then
               SUMMARY_EMOJI="❌"
-              SUMMARY_TEXT="${TEST_FAIL_COUNT} test(s) failed, ${UPLOAD_COUNT} recordings uploaded"
-            elif [ "$FAIL_COUNT" -gt 0 ]; then
-              SUMMARY_EMOJI="⚠️"
-              SUMMARY_TEXT="${UPLOAD_COUNT}/${TOTAL_COUNT} recordings uploaded, ${FAIL_COUNT} upload(s) failed"
-            else
+              SUMMARY_STATUS="failed"
+            elif [ "$TEST_PASS_COUNT" -gt 0 ] && [ "$TEST_UNKNOWN_COUNT" -eq 0 ]; then
+              SUMMARY_EMOJI="✅"
+              SUMMARY_STATUS="passed"
+            elif [ "$TEST_PASS_COUNT" -eq 0 ] && [ "$TEST_FAIL_COUNT" -eq 0 ]; then
+              # No TRX outcomes matched any recording — describe the run by
+              # recording count rather than zero pass/fail counts, which would
+              # read as 'no tests ran' instead of 'outcome data unavailable'.
               SUMMARY_EMOJI="🎬"
-              SUMMARY_TEXT="${UPLOAD_COUNT} recordings uploaded"
+              SUMMARY_STATUS="completed"
+              FALLBACK_TEXT="${TOTAL_COUNT} recording(s), outcomes unavailable"
+            else
+              SUMMARY_EMOJI="❓"
+              SUMMARY_STATUS="unknown"
+            fi
+
+            if [ -n "$FALLBACK_TEXT" ]; then
+              SUMMARY_TEXT="$FALLBACK_TEXT"
+            else
+              SUMMARY_TEXT="${TEST_PASS_COUNT} passed, ${TEST_FAIL_COUNT} failed"
+              if [ "$TEST_UNKNOWN_COUNT" -gt 0 ]; then
+                SUMMARY_TEXT="${SUMMARY_TEXT}, ${TEST_UNKNOWN_COUNT} unknown"
+              fi
+            fi
+            if [ "$FAIL_COUNT" -gt 0 ]; then
+              SUMMARY_TEXT="${SUMMARY_TEXT} (${UPLOAD_COUNT}/${TOTAL_COUNT} recordings uploaded, ${FAIL_COUNT} upload(s) failed)"
             fi
 
             # Build the failed tests section (shown outside the collapsible)
@@ -326,7 +400,7 @@ jobs:
             fi
 
             COMMENT_BODY="${COMMENT_MARKER}
-          ${SUMMARY_EMOJI} **CLI E2E Test Recordings** — ${SUMMARY_TEXT} (commit \`${SHORT_SHA}\`)
+          ${SUMMARY_EMOJI} **CLI E2E Tests ${SUMMARY_STATUS}** — ${SUMMARY_TEXT} (commit \`${SHORT_SHA}\`)
           ${FAILED_SECTION}
           <details>
           <summary>View all recordings</summary>

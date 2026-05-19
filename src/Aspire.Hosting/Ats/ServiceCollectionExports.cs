@@ -4,6 +4,7 @@
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Lifecycle;
+using Aspire.Hosting.Publishing;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Ats;
@@ -74,6 +75,36 @@ internal static class ServiceCollectionExports
         ArgumentNullException.ThrowIfNull(callback);
 
         return context.Eventing.Subscribe<BeforeStartEvent>((@event, _) => callback(@event));
+    }
+
+    /// <summary>
+    /// Subscribes to the BeforePublish event from an eventing subscriber registration context.
+    /// </summary>
+    /// <param name="context">The eventing subscriber registration context.</param>
+    /// <param name="callback">The callback to invoke when the event fires.</param>
+    /// <returns>The event subscription.</returns>
+    [AspireExport("eventingSubscriberOnBeforePublish", MethodName = "onBeforePublish", Description = "Subscribes an eventing subscriber to the BeforePublish event")]
+    public static DistributedApplicationEventSubscription OnBeforePublish(this EventingSubscriberRegistrationContext context, Func<BeforePublishEvent, Task> callback)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(callback);
+
+        return context.Eventing.Subscribe<BeforePublishEvent>((@event, _) => callback(@event));
+    }
+
+    /// <summary>
+    /// Subscribes to the AfterPublish event from an eventing subscriber registration context.
+    /// </summary>
+    /// <param name="context">The eventing subscriber registration context.</param>
+    /// <param name="callback">The callback to invoke when the event fires.</param>
+    /// <returns>The event subscription.</returns>
+    [AspireExport("eventingSubscriberOnAfterPublish", MethodName = "onAfterPublish", Description = "Subscribes an eventing subscriber to the AfterPublish event")]
+    public static DistributedApplicationEventSubscription OnAfterPublish(this EventingSubscriberRegistrationContext context, Func<AfterPublishEvent, Task> callback)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(callback);
+
+        return context.Eventing.Subscribe<AfterPublishEvent>((@event, _) => callback(@event));
     }
 
     /// <summary>

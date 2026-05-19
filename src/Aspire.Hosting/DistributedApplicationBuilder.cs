@@ -18,10 +18,11 @@ using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Cli;
 using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Dcp;
+using Aspire.Hosting.Dcp.Process;
 using Aspire.Hosting.Devcontainers;
 using Aspire.Hosting.Devcontainers.Codespaces;
+using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Eventing;
-using Aspire.Hosting.Exec;
 using Aspire.Hosting.Health;
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Orchestrator;
@@ -29,6 +30,7 @@ using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Pipelines.Internal;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.UserSecrets;
+using Aspire.Shared;
 using Aspire.Shared.UserSecrets;
 using Microsoft.Extensions.Configuration.UserSecrets;
 using Aspire.Hosting.VersionChecking;
@@ -39,6 +41,9 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using OpenTelemetry.Exporter;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 
 namespace Aspire.Hosting;
 
@@ -176,6 +181,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
     public DistributedApplicationBuilder(DistributedApplicationOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
+        ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostBuilderConstructing);
 
         _options = options;
 
@@ -224,6 +230,19 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         // Add the logging configuration again to allow the user to override the defaults
         _innerBuilder.Logging.AddConfiguration(_innerBuilder.Configuration.GetSection("Logging"));
 
+        // The CLI sets ASPIRE_LOGLEVEL to control the default log level for Aspire processes
+        // without polluting child processes (unlike Logging__LogLevel__Default which cascades
+        // through DCP into project processes and overrides their appsettings.json configuration).
+        var aspireLogLevelValue = _innerBuilder.Configuration[KnownConfigNames.AspireLogLevel];
+        if (aspireLogLevelValue is not null && Enum.TryParse<LogLevel>(aspireLogLevelValue, ignoreCase: true, out var aspireLogLevel))
+        {
+            _innerBuilder.Logging.SetMinimumLevel(aspireLogLevel);
+            _innerBuilder.Services.Configure<LoggerFilterOptions>(options =>
+            {
+                options.Rules.Add(new LoggerFilterRule(providerName: null, categoryName: null, logLevel: aspireLogLevel, filter: null));
+            });
+        }
+
         AppHostDirectory = options.ProjectDirectory ?? _innerBuilder.Environment.ContentRootPath;
         var appHostName = options.ProjectName ?? _innerBuilder.Environment.ApplicationName;
         var appHostPath = Path.Join(AppHostDirectory, appHostName);
@@ -238,7 +257,6 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         var aspireDir = GetMetadataValue(assemblyMetadata, "AppHostProjectBaseIntermediateOutputPath");
 
         ConfigurePipelineOptions(options);
-        var isExecMode = ConfigureExecOptions(options);
 
         // Compute the dashboard application name - use DashboardApplicationName if set for file-based apps,
         // otherwise fall back to the environment's ApplicationName
@@ -313,13 +331,6 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             LoadDeploymentState(appHostPathSha);
         }
 
-        // exec
-        if (isExecMode)
-        {
-            _innerBuilder.Services.AddSingleton<ExecResourceManager>();
-            Eventing.Subscribe<BeforeStartEvent>(ExecEventingHandlers.InitializeExecResources);
-        }
-
         // Core things
         // Create and register the directory service (first, so it can be used by other services)
         _directoryService = new FileSystemService(_innerBuilder.Configuration);
@@ -350,6 +361,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton<ResourceNotificationService>();
         _innerBuilder.Services.AddSingleton<ResourceLoggerService>();
         _innerBuilder.Services.AddSingleton<ResourceCommandService>(s => new ResourceCommandService(s.GetRequiredService<ResourceNotificationService>(), s.GetRequiredService<ResourceLoggerService>(), s));
+        _innerBuilder.Services.TryAddSingleton<IProcessRunner, DefaultProcessRunner>();
 #pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
         _innerBuilder.Services.AddSingleton<InteractionService>();
         _innerBuilder.Services.AddSingleton<IInteractionService>(sp => sp.GetRequiredService<InteractionService>());
@@ -393,13 +405,15 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddHostedService<CliOrphanDetector>();
         _innerBuilder.Services.AddSingleton<BackchannelService>();
         _innerBuilder.Services.AddHostedService<BackchannelService>(sp => sp.GetRequiredService<BackchannelService>());
+        _innerBuilder.Services.AddSingleton<ProfilingTelemetry>();
+        _innerBuilder.Services.AddSingleton<AppHostStartupState>();
         _innerBuilder.Services.AddSingleton<AuxiliaryBackchannelService>();
         _innerBuilder.Services.AddHostedService<AuxiliaryBackchannelService>(sp => sp.GetRequiredService<AuxiliaryBackchannelService>());
         _innerBuilder.Services.AddSingleton<AppHostRpcTarget>();
 
         ConfigureHealthChecks();
 
-        if (ExecutionContext.IsRunMode && !isExecMode)
+        if (ExecutionContext.IsRunMode)
         {
             // Dashboard
             if (!options.DisableDashboard)
@@ -489,6 +503,8 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             _innerBuilder.Services.TryAddEventingSubscriber<RequiredCommandValidationEventingSubscriber>();
         }
 
+        ConfigureProfilingTelemetry();
+
         if (ExecutionContext.IsRunMode)
         {
             // Orchestrator
@@ -516,8 +532,8 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         // Publishing support
         Eventing.Subscribe<BeforeStartEvent>(BuiltInDistributedApplicationEventSubscriptionHandlers.MutateHttp2TransportAsync);
-        _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, DockerContainerRuntime>("docker");
-        _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, PodmanContainerRuntime>("podman");
+        _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, DockerContainerRuntime>(KnownContainerRuntimes.Docker);
+        _innerBuilder.Services.AddKeyedSingleton<IContainerRuntime, PodmanContainerRuntime>(KnownContainerRuntimes.Podman);
         _innerBuilder.Services.AddSingleton<IContainerRuntimeResolver, ContainerRuntimeResolver>();
         _innerBuilder.Services.AddSingleton<IResourceContainerImageManager, ResourceContainerImageManager>();
         _innerBuilder.Services.AddSingleton<PipelineActivityReporter>();
@@ -572,6 +588,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         _innerBuilder.Services.AddSingleton(ExecutionContext);
         LogBuilderConstructed(this);
+        ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostBuilderConstructed, _innerBuilder.Configuration);
     }
 
     private void ConfigureHealthChecks()
@@ -622,6 +639,82 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             _innerBuilder.Services.AddSingleton<ResourceHealthCheckService>();
             _innerBuilder.Services.AddHostedService<ResourceHealthCheckService>(sp => sp.GetRequiredService<ResourceHealthCheckService>());
         }
+    }
+
+    private void ConfigureProfilingTelemetry()
+    {
+        if (!ShouldConfigureProfilingTelemetry())
+        {
+            return;
+        }
+
+        var resourceBuilder = OpenTelemetry.Resources.ResourceBuilder.CreateDefault()
+            .AddService(
+                serviceName: "aspire-apphost",
+                serviceVersion: GetAppHostServiceVersion())
+            .AddAttributes(ProfilingTelemetry.CreateAppHostResourceAttributes(AppHostPath, ExecutionContext.Operation.ToString()));
+
+        _innerBuilder.Services.AddOpenTelemetry()
+            .WithTracing(builder =>
+            {
+                builder
+                    .AddSource(ProfilingTelemetry.ActivitySourceName)
+                    .SetResourceBuilder(resourceBuilder);
+
+                if (!string.IsNullOrEmpty(_innerBuilder.Configuration[KnownOtelConfigNames.ExporterOtlpEndpoint]))
+                {
+                    builder.AddOtlpExporter();
+                }
+                else
+                {
+                    var (url, protocol) = OtlpEndpointResolver.ResolveOtlpEndpoint(_innerBuilder.Configuration);
+
+                    builder.AddOtlpExporter(options =>
+                    {
+                        options.Endpoint = new Uri(url);
+                        options.Protocol = protocol switch
+                        {
+                            "http/protobuf" => OtlpExportProtocol.HttpProtobuf,
+                            _ => OtlpExportProtocol.Grpc
+                        };
+
+                        if (_innerBuilder.Configuration["AppHost:OtlpApiKey"] is { } otlpApiKey)
+                        {
+                            options.Headers = $"x-otlp-api-key={otlpApiKey}";
+                        }
+                    });
+                }
+            });
+    }
+
+    private bool ShouldConfigureProfilingTelemetry()
+    {
+        // Dashboard OTLP is normally configured for app telemetry. Profiling
+        // spans are high-cardinality diagnostics, so only export them when requested.
+        // This intentionally supports publish/deploy/inspect operations as well as
+        // run so profiling can follow the full CLI/AppHost/pipeline operation.
+        var profilingEnabled =
+            _innerBuilder.Configuration.GetBool(KnownConfigNames.ProfilingEnabled) ??
+            _innerBuilder.Configuration.GetBool(KnownConfigNames.Legacy.StartupProfilingEnabled);
+        if (profilingEnabled is not true)
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrEmpty(_innerBuilder.Configuration[KnownOtelConfigNames.ExporterOtlpEndpoint]))
+        {
+            return true;
+        }
+
+        var dashboardOtlpGrpcUrl = _innerBuilder.Configuration.GetString(KnownConfigNames.DashboardOtlpGrpcEndpointUrl, KnownConfigNames.Legacy.DashboardOtlpGrpcEndpointUrl);
+        var dashboardOtlpHttpUrl = _innerBuilder.Configuration.GetString(KnownConfigNames.DashboardOtlpHttpEndpointUrl, KnownConfigNames.Legacy.DashboardOtlpHttpEndpointUrl);
+
+        return !string.IsNullOrEmpty(dashboardOtlpGrpcUrl) || !string.IsNullOrEmpty(dashboardOtlpHttpUrl);
+    }
+
+    private static string? GetAppHostServiceVersion()
+    {
+        return typeof(DistributedApplication).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
     }
 
     private void MapTransportOptionsFromCustomKeys(TransportOptions options)
@@ -687,76 +780,34 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         }
     }
 
-    private bool ConfigureExecOptions(DistributedApplicationOptions options)
-    {
-        var switchMappings = new Dictionary<string, string>()
-        {
-            { "--operation", "AppHost:Operation" },
-            { "--resource", "Exec:ResourceName" },
-            { "--start-resource", "Exec:ResourceName" },
-            { "--command", "Exec:Command" },
-            { "--workdir", "Exec:WorkingDirectory" }
-        };
-        _innerBuilder.Configuration.AddCommandLine(options.Args ?? [], switchMappings);
-
-        var execOptionsSection = _innerBuilder.Configuration.GetSection(ExecOptions.SectionName);
-        _innerBuilder.Services
-            .Configure<ExecOptions>(execOptionsSection)
-            .PostConfigure<ExecOptions>(execOptions =>
-        {
-            if (options.Args is null || !options.Args.Any())
-            {
-                return;
-            }
-
-            if (!string.IsNullOrEmpty(execOptions.Command))
-            {
-                execOptions.Enabled = true;
-            }
-
-            if (options.Args.Contains("--start-resource"))
-            {
-                execOptions.StartResource = true;
-            }
-        });
-
-        return options.Args?.Any(arg => arg == "--command") ?? false;
-    }
-
     /// <inheritdoc />
     public DistributedApplication Build()
     {
-        AspireEventSource.Instance.DistributedApplicationBuildStart();
-        try
+        ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostBuildStarted, _innerBuilder.Configuration);
+        LogAppBuilding(this);
+
+        // ResourceCollection enforces unique names on Add/Insert/Set, but IResourceCollection
+        // could have a different implementation that doesn't. Validate as a safety net.
+        foreach (var duplicateResourceName in Resources.GroupBy(r => r.Name, StringComparers.ResourceName)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key))
         {
-            LogAppBuilding(this);
-
-            // ResourceCollection enforces unique names on Add/Insert/Set, but IResourceCollection
-            // could have a different implementation that doesn't. Validate as a safety net.
-            foreach (var duplicateResourceName in Resources.GroupBy(r => r.Name, StringComparers.ResourceName)
-                .Where(g => g.Count() > 1)
-                .Select(g => g.Key))
-            {
-                throw new DistributedApplicationException($"Multiple resources with the name '{duplicateResourceName}'. Resource names are case-insensitive.");
-            }
-
-            // Validate resource names. Resources added directly to the collection bypass AddResource validation.
-            foreach (var resource in Resources)
-            {
-                ValidateResourceName(resource);
-            }
-
-            var application = new DistributedApplication(_innerBuilder.Build());
-
-            _executionContextOptions.ServiceProvider = application.Services.GetRequiredService<IServiceProvider>();
-
-            LogAppBuilt(application);
-            return application;
+            throw new DistributedApplicationException($"Multiple resources with the name '{duplicateResourceName}'. Resource names are case-insensitive.");
         }
-        finally
+
+        // Validate resource names. Resources added directly to the collection bypass AddResource validation.
+        foreach (var resource in Resources)
         {
-            AspireEventSource.Instance.DistributedApplicationBuildStop();
+            ValidateResourceName(resource);
         }
+
+        var application = new DistributedApplication(_innerBuilder.Build());
+
+        _executionContextOptions.ServiceProvider = application.Services.GetRequiredService<IServiceProvider>();
+
+        LogAppBuilt(application);
+        ProfilingTelemetry.RecordAppHostStartupEvent(ProfilingTelemetry.Events.AppHostBuildCompleted, _innerBuilder.Configuration);
+        return application;
     }
 
     /// <inheritdoc />
@@ -845,7 +896,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             policy = NameValidationPolicyAnnotation.Default;
         }
 
-        ModelName.ValidateName(nameof(Resource), resource.Name, policy.MaxLength, policy.ValidateStartsWithLetter, policy.ValidateAllowedCharacters, policy.ValidateNoConsecutiveHyphens, policy.ValidateNoTrailingHyphen);
+        ModelName.ValidateName(nameof(Aspire.Hosting.ApplicationModel.Resource), resource.Name, policy.MaxLength, policy.ValidateStartsWithLetter, policy.ValidateAllowedCharacters, policy.ValidateNoConsecutiveHyphens, policy.ValidateNoTrailingHyphen);
     }
 
     private static bool PathsEqual(string left, string right) =>

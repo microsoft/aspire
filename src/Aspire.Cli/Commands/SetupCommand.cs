@@ -44,7 +44,7 @@ internal sealed class SetupCommand : BaseCommand
         Options.Add(s_forceOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var installPath = parseResult.GetValue(s_installPathOption);
         var force = parseResult.GetValue(s_forceOption);
@@ -52,20 +52,20 @@ internal sealed class SetupCommand : BaseCommand
         var processPath = Environment.ProcessPath;
         if (string.IsNullOrEmpty(processPath))
         {
-            InteractionService.DisplayError("Could not determine the CLI executable path.");
-            return ExitCodeConstants.FailedToBuildArtifacts;
+            return CommandResult.Failure(CliExitCodes.FailedToBuildArtifacts, "Could not determine the CLI executable path.");
         }
 
-        // Determine extraction directory
+        // `aspire setup` uses a route-independent default (parent of the binary's dir).
+        // Do not switch to `_bundleService.GetDefaultExtractDir` — that path is route-aware
+        // and reserved for auto-extract, where managed-route layouts must stay package-owned.
         if (string.IsNullOrEmpty(installPath))
         {
-            installPath = BundleService.GetDefaultExtractDir(processPath);
+            installPath = GetDefaultInstallPath(processPath);
         }
 
         if (string.IsNullOrEmpty(installPath))
         {
-            InteractionService.DisplayError("Could not determine the installation path.");
-            return ExitCodeConstants.FailedToBuildArtifacts;
+            return CommandResult.Failure(CliExitCodes.FailedToBuildArtifacts, "Could not determine the installation path.");
         }
 
         // Extract with spinner
@@ -75,7 +75,7 @@ internal sealed class SetupCommand : BaseCommand
             async () =>
             {
                 result = await _bundleService.ExtractAsync(installPath, force, cancellationToken);
-                return ExitCodeConstants.Success;
+                return CommandResult.Success();
             }, emoji: KnownEmojis.Package);
 
         switch (result)
@@ -93,10 +93,24 @@ internal sealed class SetupCommand : BaseCommand
                 break;
 
             case BundleExtractResult.ExtractionFailed:
-                InteractionService.DisplayError($"Bundle was extracted to {installPath} but layout validation failed.");
-                return ExitCodeConstants.FailedToBuildArtifacts;
+                return CommandResult.Failure(CliExitCodes.FailedToBuildArtifacts, $"Bundle was extracted to {installPath} but layout validation failed.");
         }
 
         return exitCode;
+    }
+
+    /// <summary>
+    /// Returns the parent of <paramref name="processPath"/>'s directory, or <c>null</c> if
+    /// none. Route-independent counterpart to the route-aware <see cref="IBundleService.GetDefaultExtractDir"/>.
+    /// </summary>
+    internal static string? GetDefaultInstallPath(string? processPath)
+    {
+        if (string.IsNullOrEmpty(processPath))
+        {
+            return null;
+        }
+
+        var binaryDir = Path.GetDirectoryName(processPath);
+        return string.IsNullOrEmpty(binaryDir) ? null : Path.GetDirectoryName(binaryDir);
     }
 }

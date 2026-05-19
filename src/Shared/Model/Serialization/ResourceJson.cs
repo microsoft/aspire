@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json.Serialization;
+using System.Text.Json.Nodes;
 
 namespace Aspire.Shared.Model.Serialization;
 
@@ -35,6 +36,11 @@ internal sealed class ResourceJson
     /// The state of the resource.
     /// </summary>
     public string? State { get; set; }
+
+    /// <summary>
+    /// The display names of resources this resource is waiting for.
+    /// </summary>
+    public string[]? WaitingFor { get; set; }
 
     /// <summary>
     /// The state style hint (e.g., "success", "error", "warning").
@@ -95,7 +101,7 @@ internal sealed class ResourceJson
     /// The properties of the resource.
     /// Dictionary key is the property name, value is the property value.
     /// </summary>
-    public Dictionary<string, string?>? Properties { get; set; }
+    public Dictionary<string, JsonNode?>? Properties { get; set; }
 
     /// <summary>
     /// The environment variables associated with the resource.
@@ -213,7 +219,96 @@ internal sealed class ResourceRelationshipJson
 internal sealed class ResourceCommandJson
 {
     /// <summary>
+    /// The display name of the command.
+    /// </summary>
+    public string? DisplayName { get; set; }
+
+    /// <summary>
     /// The description of the command.
     /// </summary>
     public string? Description { get; set; }
+
+    /// <summary>
+    /// Where the command is visible. Omitted when the command uses the default UI and API visibility.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Visibility { get; set; }
+
+    /// <summary>
+    /// The ordered inputs that describe the invocation arguments accepted by the command.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ResourceCommandArgumentJson[]? ArgumentInputs { get; set; }
+}
+
+/// <summary>
+/// Represents a command invocation argument input in JSON format.
+/// Keep this contract in sync with the VS Code extension's ResourceCommandArgumentInputJson
+/// in extension/src/views/AppHostDataRepository.ts.
+/// </summary>
+internal sealed class ResourceCommandArgumentJson
+{
+    /// <summary>
+    /// The argument name.
+    /// </summary>
+    public required string Name { get; set; }
+
+    /// <summary>
+    /// The display label.
+    /// </summary>
+    public string? Label { get; set; }
+
+    /// <summary>
+    /// The argument description.
+    /// </summary>
+    public string? Description { get; set; }
+
+    /// <summary>
+    /// Whether the description should be rendered as Markdown.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool EnableDescriptionMarkdown { get; set; }
+
+    /// <summary>
+    /// The input type.
+    /// </summary>
+    public required string InputType { get; set; }
+
+    /// <summary>
+    /// Whether the argument is required.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Required { get; set; }
+
+    /// <summary>
+    /// The placeholder text.
+    /// </summary>
+    public string? Placeholder { get; set; }
+
+    /// <summary>
+    /// The default value.
+    /// </summary>
+    public string? Value { get; set; }
+
+    /// <summary>
+    /// Choice options keyed by submitted value.
+    /// </summary>
+    public Dictionary<string, string?>? Options { get; set; }
+
+    /// <summary>
+    /// Whether custom choices are allowed.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool AllowCustomChoice { get; set; }
+
+    /// <summary>
+    /// Whether the argument input is disabled.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool Disabled { get; set; }
+
+    /// <summary>
+    /// The maximum length for text inputs.
+    /// </summary>
+    public int? MaxLength { get; set; }
 }

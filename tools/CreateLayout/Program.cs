@@ -302,9 +302,9 @@ internal sealed class LayoutBuilder : IDisposable
     private string? FindDcpPath()
     {
         // DCP is in NuGet packages as Microsoft.DeveloperControlPlane.{os}-{arch}
-        var nugetPackages = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".nuget", "packages");
+        // Respect the NUGET_PACKAGES environment variable, then fall back to the default location.
+        var nugetPackages = Environment.GetEnvironmentVariable("NUGET_PACKAGES")
+            ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".nuget", "packages");
 
         // Map RID to DCP package name format
         // win-x64 -> windows-amd64, linux-x64 -> linux-amd64, osx-arm64 -> darwin-arm64

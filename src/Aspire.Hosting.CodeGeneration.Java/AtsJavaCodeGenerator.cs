@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Reflection;
 using System.Text;
 using System.Text.Json.Nodes;
+using Aspire.Shared.Json;
 using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.Java;
@@ -527,7 +528,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
 
             var dtoName = _dtoNames[dto.TypeId];
             WriteLine($"/** {dto.Name} DTO. */");
-            WriteLine($"class {dtoName} {{");
+            WriteLine($"class {dtoName} implements JsonSerializable {{");
             
             // Fields
             foreach (var property in dto.Properties)
@@ -1017,9 +1018,8 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
 
         foreach (var handleType in handleTypes.OrderBy(t => t.ClassName, StringComparer.Ordinal))
         {
-            var baseClass = handleType.IsResourceBuilder ? "ResourceBuilderBase" : "HandleWrapperBase";
             WriteLine($"/** Wrapper for {handleType.TypeId}. */");
-            WriteLine($"class {handleType.ClassName} extends {baseClass} {{");
+            WriteLine($"class {handleType.ClassName} extends {handleType.BaseClassName} {{");
             WriteLine($"    {handleType.ClassName}(Handle handle, AspireClient client) {{");
             WriteLine("        super(handle, client);");
             WriteLine("    }");
@@ -1840,8 +1840,14 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         WriteLine("            // Note: Java doesn't have easy access to command line args from here");
         WriteLine("            resolvedOptions.put(\"Args\", new String[0]);");
         WriteLine("        }");
+        // ASPIRE_PROJECT_DIRECTORY is set by the CLI so the host reports the correct project
+        // directory (not the JVM's user.dir) when matching --apphost <directory> requests.
         WriteLine("        if (resolvedOptions.get(\"ProjectDirectory\") == null) {");
-        WriteLine("            resolvedOptions.put(\"ProjectDirectory\", System.getProperty(\"user.dir\"));");
+        WriteLine("            String projectDirectory = System.getenv(\"ASPIRE_PROJECT_DIRECTORY\");");
+        WriteLine("            if (projectDirectory == null || projectDirectory.isEmpty()) {");
+        WriteLine("                projectDirectory = System.getProperty(\"user.dir\");");
+        WriteLine("            }");
+        WriteLine("            resolvedOptions.put(\"ProjectDirectory\", projectDirectory);");
         WriteLine("        }");
         WriteLine("        if (resolvedOptions.get(\"AppHostFilePath\") == null) {");
         WriteLine("            String appHostFilePath = System.getenv(\"ASPIRE_APPHOST_FILEPATH\");");
@@ -1906,6 +1912,12 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
                 g => g.Key,
                 g => g.Any(t => t.IsResourceBuilder),
                 StringComparer.Ordinal);
+        var handleTypeInfoMap = context.HandleTypes
+            .GroupBy(t => t.AtsTypeId, StringComparer.Ordinal)
+            .ToDictionary(
+                g => g.Key,
+                g => g.First(),
+                StringComparer.Ordinal);
         var results = new List<JavaHandleType>();
         foreach (var typeId in handleTypeIds)
         {
@@ -1916,7 +1928,21 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
             }
 
             var className = _classNames[typeId];
-            results.Add(new JavaHandleType(typeId, className, isResourceBuilder));
+            var baseClassName = isResourceBuilder ? "ResourceBuilderBase" : "HandleWrapperBase";
+
+            if (handleTypeInfoMap.TryGetValue(typeId, out var handleTypeInfo))
+            {
+                var exportedBaseType = handleTypeInfo.BaseTypeHierarchy
+                    .FirstOrDefault(baseType => !string.Equals(baseType.TypeId, typeId, StringComparison.Ordinal)
+                        && _classNames.ContainsKey(baseType.TypeId));
+
+                if (exportedBaseType is not null)
+                {
+                    baseClassName = _classNames[exportedBaseType.TypeId];
+                }
+            }
+
+            results.Add(new JavaHandleType(typeId, className, isResourceBuilder, baseClassName));
             if (isResourceBuilder)
             {
                 _resourceBuilderHandleClasses.Add(className);
@@ -2239,7 +2265,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         _writer.WriteLine(value);
     }
 
-    private sealed record JavaHandleType(string TypeId, string ClassName, bool IsResourceBuilder);
+    private sealed record JavaHandleType(string TypeId, string ClassName, bool IsResourceBuilder, string BaseClassName);
     private sealed record JavaMethodParameter(
         string Type,
         string Name,

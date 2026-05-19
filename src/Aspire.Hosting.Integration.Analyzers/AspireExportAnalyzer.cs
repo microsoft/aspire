@@ -16,12 +16,78 @@ namespace Aspire.Hosting.Analyzers;
 public partial class AspireExportAnalyzer : DiagnosticAnalyzer
 {
     private const string RunSyncOnBackgroundThreadPropertyName = "RunSyncOnBackgroundThread";
+    private const string ExposeMethodsPropertyName = "ExposeMethods";
+    private const string ExposePropertiesPropertyName = "ExposeProperties";
+    private const string MethodNamePropertyName = "MethodName";
 
     // Matches: valid method name (camelCase identifier, may contain dots for namespacing)
     // Examples: addRedis, addContainer, Dictionary.set
     private static readonly Regex s_exportIdPattern = new(
         @"^[a-zA-Z][a-zA-Z0-9.]*$",
         RegexOptions.Compiled);
+
+    private readonly struct CapabilityExport : IEquatable<CapabilityExport>
+    {
+        public CapabilityExport(string source, Location location)
+        {
+            Source = source;
+            Location = location;
+        }
+
+        public string Source { get; }
+
+        public Location Location { get; }
+
+        public bool Equals(CapabilityExport other)
+        {
+            return Source == other.Source && Location.Equals(other.Location);
+        }
+
+        public override bool Equals(object? obj)
+        {
+            return obj is CapabilityExport other && Equals(other);
+        }
+
+        public override int GetHashCode()
+        {
+            return StringComparer.Ordinal.GetHashCode(Source) ^ Location.GetHashCode();
+        }
+    }
+
+    private readonly struct GeneratedMethodNameExport : IEquatable<GeneratedMethodNameExport>
+    {
+        public GeneratedMethodNameExport(string source, Location location, string effectiveExportId)
+        {
+            Source = source;
+            Location = location;
+            EffectiveExportId = effectiveExportId;
+        }
+
+        public string Source { get; }
+
+        public Location Location { get; }
+
+        public string EffectiveExportId { get; }
+
+        public bool Equals(GeneratedMethodNameExport other)
+        {
+            return Source == other.Source &&
+                Location.Equals(other.Location) &&
+                EffectiveExportId == other.EffectiveExportId;
+        }
+
+        public override bool Equals(object? obj)
+        {
+            return obj is GeneratedMethodNameExport other && Equals(other);
+        }
+
+        public override int GetHashCode()
+        {
+            return StringComparer.Ordinal.GetHashCode(Source) ^
+                Location.GetHashCode() ^
+                StringComparer.Ordinal.GetHashCode(EffectiveExportId);
+        }
+    }
 
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => Diagnostics.SupportedDiagnostics;
 
@@ -76,12 +142,25 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         // Key: (exportId, targetTypeFullName), Value: list of (method, location)
         var exportsByKey = new ConcurrentDictionary<(string ExportId, string TargetType), ConcurrentBag<(IMethodSymbol Method, Location Location)>>();
 
+        // Collection for ASPIREEXPORT013: track generated capability IDs across the assembly.
+        var capabilityIds = new ConcurrentDictionary<string, ConcurrentBag<CapabilityExport>>();
+
+        // Collection for ASPIREEXPORT014: track generated member names per generated target type.
+        var generatedMethodNames = new ConcurrentDictionary<(string MethodName, string TargetType), ConcurrentBag<GeneratedMethodNameExport>>();
+        AnalyzeAssemblyExportedTypes(context.Compilation, aspireExportAttribute, aspireExportIgnoreAttribute, capabilityIds, generatedMethodNames, context.CancellationToken);
+
         context.RegisterSymbolAction(
-            c => AnalyzeMethod(c, wellKnownTypes, aspireExportAttribute, aspireExportIgnoreAttribute, aspireUnionAttribute, currentAssemblyExportedTypes, exportsByKey),
+            c => AnalyzeMethod(c, wellKnownTypes, aspireExportAttribute, aspireExportIgnoreAttribute, aspireUnionAttribute, currentAssemblyExportedTypes, exportsByKey, capabilityIds, generatedMethodNames),
             SymbolKind.Method);
+
+        context.RegisterSymbolAction(
+            c => AnalyzeNamedType(c, aspireExportAttribute, aspireExportIgnoreAttribute, capabilityIds, generatedMethodNames),
+            SymbolKind.NamedType);
 
         // At the end of compilation, report duplicate export IDs
         context.RegisterCompilationEndAction(c => ReportDuplicateExports(c, exportsByKey));
+        context.RegisterCompilationEndAction(c => ReportDuplicateCapabilityIds(c, capabilityIds));
+        context.RegisterCompilationEndAction(c => ReportDuplicateGeneratedMethodNames(c, generatedMethodNames));
 
         // Warn when exported builder methods invoke synchronous callback delegates inline. Deferred callbacks
         // that are stored for later execution are fine, and exports that opt into background-thread dispatch
@@ -123,7 +202,9 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         INamedTypeSymbol? aspireExportIgnoreAttribute,
         INamedTypeSymbol? aspireUnionAttribute,
         HashSet<ITypeSymbol> currentAssemblyExportedTypes,
-        ConcurrentDictionary<(string ExportId, string TargetType), ConcurrentBag<(IMethodSymbol Method, Location Location)>> exportsByKey)
+        ConcurrentDictionary<(string ExportId, string TargetType), ConcurrentBag<(IMethodSymbol Method, Location Location)>> exportsByKey,
+        ConcurrentDictionary<string, ConcurrentBag<CapabilityExport>> capabilityIds,
+        ConcurrentDictionary<(string MethodName, string TargetType), ConcurrentBag<GeneratedMethodNameExport>> generatedMethodNames)
     {
         var method = (IMethodSymbol)context.Symbol;
 
@@ -202,6 +283,28 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         var normalizedExportId = isExportIdFormatValid ? exportId : null;
         var effectiveExportId = normalizedExportId ?? derivedExportId;
 
+        // Track the runtime capability ID for static exports. Instance exports are tracked from
+        // their containing type so ExposeMethods/ExposeProperties semantics match the scanner.
+        if (method.IsStatic && effectiveExportId is not null)
+        {
+            AddCapabilityExport(
+                capabilityIds,
+                $"{context.Compilation.Assembly.Identity.Name}/{effectiveExportId}",
+                GetMethodDisplayString(method),
+                location);
+
+            var generatedMethodName = GetNamedStringArgument(exportAttribute, MethodNamePropertyName) ?? effectiveExportId;
+            var generatedTargetType = GetGeneratedTargetTypeName(method);
+
+            AddGeneratedMethodNameExport(
+                generatedMethodNames,
+                generatedMethodName,
+                generatedTargetType,
+                effectiveExportId,
+                GetMethodDisplayString(method),
+                location);
+        }
+
         // Rule 2b (ASPIREEXPORT011): Warn when explicit id matches the convention-derived name.
         // Suppressed when Rule 7 (ASPIREEXPORT009) also fires — the two give contradictory advice
         // (ASPIREEXPORT011 says "remove the id"; ASPIREEXPORT009 says "make the id more specific"),
@@ -265,6 +368,193 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
 
         // Rule 8 (ASPIREEXPORT012): Check that callback parameter types (Action<T>/Func<T>) have [AspireExport]
         AnalyzeCallbackContextTypes(context, method, aspireExportAttribute, location);
+    }
+
+    private static void AnalyzeNamedType(
+        SymbolAnalysisContext context,
+        INamedTypeSymbol aspireExportAttribute,
+        INamedTypeSymbol? aspireExportIgnoreAttribute,
+        ConcurrentDictionary<string, ConcurrentBag<CapabilityExport>> capabilityIds,
+        ConcurrentDictionary<(string MethodName, string TargetType), ConcurrentBag<GeneratedMethodNameExport>> generatedMethodNames)
+    {
+        var type = (INamedTypeSymbol)context.Symbol;
+        var typeExportAttribute = GetContainingTypeAspireExportAttribute(type, aspireExportAttribute);
+        AnalyzeContextType(type, typeExportAttribute, context.Compilation.Assembly.Identity.Name, aspireExportAttribute, aspireExportIgnoreAttribute, capabilityIds, generatedMethodNames, context.CancellationToken);
+    }
+
+    private static void AnalyzeAssemblyExportedTypes(
+        Compilation compilation,
+        INamedTypeSymbol aspireExportAttribute,
+        INamedTypeSymbol? aspireExportIgnoreAttribute,
+        ConcurrentDictionary<string, ConcurrentBag<CapabilityExport>> capabilityIds,
+        ConcurrentDictionary<(string MethodName, string TargetType), ConcurrentBag<GeneratedMethodNameExport>> generatedMethodNames,
+        CancellationToken cancellationToken)
+    {
+        foreach (var attribute in compilation.Assembly.GetAttributes())
+        {
+            if (!SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, aspireExportAttribute) ||
+                !TryGetAssemblyExportedType(attribute, out var exportedType) ||
+                exportedType is not INamedTypeSymbol namedType ||
+                (!IsBooleanNamedArgumentEnabled(attribute, ExposePropertiesPropertyName) &&
+                 !IsBooleanNamedArgumentEnabled(attribute, ExposeMethodsPropertyName)))
+            {
+                continue;
+            }
+
+            AnalyzeContextType(namedType, attribute, compilation.Assembly.Identity.Name, aspireExportAttribute, aspireExportIgnoreAttribute, capabilityIds, generatedMethodNames, cancellationToken);
+        }
+    }
+
+    private static void AnalyzeContextType(
+        INamedTypeSymbol type,
+        AttributeData? typeExportAttribute,
+        string assemblyName,
+        INamedTypeSymbol aspireExportAttribute,
+        INamedTypeSymbol? aspireExportIgnoreAttribute,
+        ConcurrentDictionary<string, ConcurrentBag<CapabilityExport>> capabilityIds,
+        ConcurrentDictionary<(string MethodName, string TargetType), ConcurrentBag<GeneratedMethodNameExport>> generatedMethodNames,
+        CancellationToken cancellationToken)
+    {
+        if (typeExportAttribute is null)
+        {
+            return;
+        }
+
+        if (HasAspireExportIgnoreAttribute(type, aspireExportIgnoreAttribute))
+        {
+            return;
+        }
+
+        var exposeProperties = IsBooleanNamedArgumentEnabled(typeExportAttribute, ExposePropertiesPropertyName);
+        var exposeMethods = IsBooleanNamedArgumentEnabled(typeExportAttribute, ExposeMethodsPropertyName);
+
+        if (!exposeProperties && !exposeMethods)
+        {
+            var hasExportedMember = type.GetMembers()
+                .Any(member => member is IMethodSymbol or IPropertySymbol &&
+                    GetAspireExportAttribute(member, aspireExportAttribute) is not null);
+
+            if (!hasExportedMember)
+            {
+                return;
+            }
+        }
+
+        var package = GetCapabilityPackage(type, assemblyName);
+        var typeName = GetRuntimeTypeName(type);
+        var typeId = $"{package}/{typeName}";
+        var generatedTargetType = GetGeneratedTargetTypeName(type);
+
+        foreach (var property in GetInstanceProperties(type))
+        {
+            if (property.IsStatic ||
+                HasAspireExportIgnoreAttribute(property, aspireExportIgnoreAttribute))
+            {
+                continue;
+            }
+
+            var memberExportAttribute = GetAspireExportAttribute(property, aspireExportAttribute);
+            var isPublicGetter = property.GetMethod?.DeclaredAccessibility == Accessibility.Public;
+            if (!ShouldExportMember(isPublicGetter, exposeProperties, memberExportAttribute))
+            {
+                continue;
+            }
+
+            var location = GetAttributeLocation(memberExportAttribute, cancellationToken) ??
+                property.Locations.FirstOrDefault() ??
+                Location.None;
+            var customMethodName = memberExportAttribute is null ? null : GetExportId(memberExportAttribute);
+            var methodNameOverride = GetNamedStringArgument(memberExportAttribute, MethodNamePropertyName);
+            var getterMethodName = methodNameOverride ?? ToCamelCase(property.Name);
+
+            if (property.GetMethod is not null)
+            {
+                var getMethodName = customMethodName ?? $"{typeName}.{getterMethodName}";
+                AddCapabilityExport(
+                    capabilityIds,
+                    $"{package}/{getMethodName}",
+                    property.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
+                    location);
+
+                AddGeneratedMethodNameExport(
+                    generatedMethodNames,
+                    getterMethodName,
+                    generatedTargetType,
+                    getMethodName,
+                    property.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
+                    location);
+            }
+
+            if (property.SetMethod is { IsInitOnly: false })
+            {
+                var setterMethodNameSuffix = methodNameOverride is { Length: > 0 }
+                    ? char.ToUpperInvariant(methodNameOverride[0]) + methodNameOverride.Substring(1)
+                    : property.Name;
+                var setterMethodName = $"set{setterMethodNameSuffix}";
+                AddCapabilityExport(
+                    capabilityIds,
+                    $"{typeId}.{setterMethodName}",
+                    property.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
+                    location);
+
+                AddGeneratedMethodNameExport(
+                    generatedMethodNames,
+                    setterMethodName,
+                    generatedTargetType,
+                    $"{typeId}.{setterMethodName}",
+                    property.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat),
+                    location);
+            }
+        }
+
+        foreach (var method in type.GetMembers().OfType<IMethodSymbol>())
+        {
+            if (method.IsStatic ||
+                method.MethodKind != MethodKind.Ordinary ||
+                IsSpecialRuntimeMethod(method) ||
+                method.IsGenericMethod ||
+                HasAspireExportIgnoreAttribute(method, aspireExportIgnoreAttribute))
+            {
+                continue;
+            }
+
+            var memberExportAttribute = GetAspireExportAttribute(method, aspireExportAttribute);
+            if (!ShouldExportMember(method.DeclaredAccessibility == Accessibility.Public, exposeMethods, memberExportAttribute))
+            {
+                continue;
+            }
+
+            var customMethodName = memberExportAttribute is null ? null : GetExportId(memberExportAttribute);
+            var methodCapabilityName = customMethodName ?? (exposeMethods
+                ? $"{typeName}.{ToCamelCase(method.Name)}"
+                : ToCamelCase(method.Name));
+            var location = GetAttributeLocation(memberExportAttribute, cancellationToken) ??
+                method.Locations.FirstOrDefault() ??
+                Location.None;
+
+            AddCapabilityExport(
+                capabilityIds,
+                $"{package}/{methodCapabilityName}",
+                GetMethodDisplayString(method),
+                location);
+        }
+    }
+
+    private static IEnumerable<IPropertySymbol> GetInstanceProperties(INamedTypeSymbol type)
+    {
+        var seenPropertyNames = new HashSet<string>(StringComparer.Ordinal);
+        for (INamedTypeSymbol? current = type; current is not null; current = current.BaseType)
+        {
+            foreach (var property in current.GetMembers().OfType<IPropertySymbol>())
+            {
+                if (property.IsStatic || !seenPropertyNames.Add(property.Name))
+                {
+                    continue;
+                }
+
+                yield return property;
+            }
+        }
     }
 
     private static void AnalyzeMissingExportAttribute(
@@ -660,6 +950,44 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         }
     }
 
+    private static string GetGeneratedTargetTypeName(IMethodSymbol method)
+    {
+        if (!method.IsExtensionMethod || method.Parameters.Length == 0)
+        {
+            return "<global>";
+        }
+
+        var targetType = method.Parameters[0].Type;
+        var targetTypeName = targetType.ToDisplayString();
+        if (targetType is not INamedTypeSymbol { IsGenericType: true } namedTargetType)
+        {
+            return targetTypeName;
+        }
+
+        var typeParameterConstraints = namedTargetType.TypeArguments
+            .OfType<ITypeParameterSymbol>()
+            .Select(typeParameter =>
+            {
+                var constraints = string.Join("&", typeParameter.ConstraintTypes.Select(static t => t.ToDisplayString()));
+                return constraints.Length > 0
+                    ? $"{typeParameter.Name}:{constraints}"
+                    : typeParameter.Name;
+            })
+            .ToArray();
+
+        if (typeParameterConstraints.Length == 0)
+        {
+            return targetTypeName;
+        }
+
+        return $"{targetTypeName} where {string.Join(",", typeParameterConstraints)}";
+    }
+
+    private static string GetGeneratedTargetTypeName(INamedTypeSymbol resourceType)
+    {
+        return $"Aspire.Hosting.ApplicationModel.IResourceBuilder<{resourceType.ToDisplayString()}>";
+    }
+
     /// <summary>
     /// If the type is IResourceBuilder&lt;ConcreteType&gt; (not open generic), returns the ConcreteType name; otherwise null.
     /// </summary>
@@ -952,6 +1280,88 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         }
     }
 
+    private static void ReportDuplicateCapabilityIds(
+        CompilationAnalysisContext context,
+        ConcurrentDictionary<string, ConcurrentBag<CapabilityExport>> capabilityIds)
+    {
+        foreach (var kvp in capabilityIds.OrderBy(kvp => kvp.Key, StringComparer.Ordinal))
+        {
+            var exports = kvp.Value
+                .Distinct()
+                .OrderBy(static e => e.Location.SourceSpan.Start)
+                .ThenBy(static e => e.Source, StringComparer.Ordinal)
+                .ToArray();
+
+            if (exports.Length <= 1)
+            {
+                continue;
+            }
+
+            var sources = string.Join(", ", exports.Select(static e => e.Source).Distinct(StringComparer.Ordinal));
+            foreach (var export in exports)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    Diagnostics.s_duplicatePolyglotCapabilityId,
+                    export.Location,
+                    kvp.Key,
+                    sources));
+            }
+        }
+    }
+
+    private static void ReportDuplicateGeneratedMethodNames(
+        CompilationAnalysisContext context,
+        ConcurrentDictionary<(string MethodName, string TargetType), ConcurrentBag<GeneratedMethodNameExport>> generatedMethodNames)
+    {
+        foreach (var kvp in generatedMethodNames.OrderBy(kvp => kvp.Key.TargetType, StringComparer.Ordinal).ThenBy(kvp => kvp.Key.MethodName, StringComparer.Ordinal))
+        {
+            var exports = kvp.Value
+                .Distinct()
+                .OrderBy(static e => e.Location.SourceSpan.Start)
+                .ThenBy(static e => e.Source, StringComparer.Ordinal)
+                .ToArray();
+
+            if (exports.Length <= 1 ||
+                exports.Select(static e => e.EffectiveExportId).Distinct(StringComparer.Ordinal).Count() <= 1)
+            {
+                continue;
+            }
+
+            var sources = string.Join(", ", exports.Select(static e => e.Source).Distinct(StringComparer.Ordinal));
+            foreach (var export in exports)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    Diagnostics.s_duplicateGeneratedMethodName,
+                    export.Location,
+                    kvp.Key.MethodName,
+                    kvp.Key.TargetType,
+                    sources));
+            }
+        }
+    }
+
+    private static void AddCapabilityExport(
+        ConcurrentDictionary<string, ConcurrentBag<CapabilityExport>> capabilityIds,
+        string capabilityId,
+        string source,
+        Location location)
+    {
+        var bag = capabilityIds.GetOrAdd(capabilityId, _ => []);
+        bag.Add(new CapabilityExport(source, location));
+    }
+
+    private static void AddGeneratedMethodNameExport(
+        ConcurrentDictionary<(string MethodName, string TargetType), ConcurrentBag<GeneratedMethodNameExport>> generatedMethodNames,
+        string methodName,
+        string targetType,
+        string effectiveExportId,
+        string source,
+        Location location)
+    {
+        var bag = generatedMethodNames.GetOrAdd((methodName, targetType), _ => []);
+        bag.Add(new GeneratedMethodNameExport(source, location, effectiveExportId));
+    }
+
     private static string? GetExportId(AttributeData attribute)
     {
         if (attribute.ConstructorArguments.Length > 0 &&
@@ -974,13 +1384,36 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         // Non-static methods auto-exposed via ExposeMethods=true use TypeName.methodName to avoid collisions
         if (!method.IsStatic && IsExposeMethodsEnabled(containingTypeExportAttribute))
         {
-            return $"{method.ContainingType.Name}.{camelCaseName}";
+            return $"{GetRuntimeTypeName(method.ContainingType)}.{camelCaseName}";
         }
 
         return camelCaseName;
     }
 
+    private static string GetRuntimeTypeName(INamedTypeSymbol type)
+    {
+        return type.MetadataName;
+    }
+
+    private static bool IsSpecialRuntimeMethod(IMethodSymbol method)
+    {
+        return method.MethodKind != MethodKind.Ordinary ||
+            method.Name is "GetType" or "ToString" or "Equals" or "GetHashCode";
+    }
+
+    private static string ToCamelCase(string name)
+    {
+        return string.IsNullOrEmpty(name)
+            ? name
+            : char.ToLowerInvariant(name[0]) + name.Substring(1);
+    }
+
     private static bool IsExposeMethodsEnabled(AttributeData? exportAttribute)
+    {
+        return IsBooleanNamedArgumentEnabled(exportAttribute, ExposeMethodsPropertyName);
+    }
+
+    private static bool IsBooleanNamedArgumentEnabled(AttributeData? exportAttribute, string argumentName)
     {
         if (exportAttribute is null)
         {
@@ -989,7 +1422,7 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
 
         foreach (var namedArgument in exportAttribute.NamedArguments)
         {
-            if (namedArgument.Key == "ExposeMethods" &&
+            if (namedArgument.Key == argumentName &&
                 namedArgument.Value.Value is bool enabled)
             {
                 return enabled;
@@ -997,6 +1430,78 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         }
 
         return false;
+    }
+
+    private static string? GetNamedStringArgument(AttributeData? exportAttribute, string argumentName)
+    {
+        if (exportAttribute is null)
+        {
+            return null;
+        }
+
+        foreach (var namedArgument in exportAttribute.NamedArguments)
+        {
+            if (namedArgument.Key == argumentName &&
+                namedArgument.Value.Value is string value)
+            {
+                return value;
+            }
+        }
+
+        return null;
+    }
+
+    private static AttributeData? GetAspireExportAttribute(ISymbol symbol, INamedTypeSymbol aspireExportAttribute)
+    {
+        foreach (var attr in symbol.GetAttributes())
+        {
+            if (SymbolEqualityComparer.Default.Equals(attr.AttributeClass, aspireExportAttribute))
+            {
+                return attr;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool HasAspireExportIgnoreAttribute(ISymbol symbol, INamedTypeSymbol? aspireExportIgnoreAttribute)
+    {
+        if (aspireExportIgnoreAttribute is null)
+        {
+            return false;
+        }
+
+        foreach (var attr in symbol.GetAttributes())
+        {
+            if (SymbolEqualityComparer.Default.Equals(attr.AttributeClass, aspireExportIgnoreAttribute))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool ShouldExportMember(bool isPublic, bool exposeAll, AttributeData? exportAttribute)
+    {
+        return exportAttribute is not null || (exposeAll && isPublic);
+    }
+
+    private static string GetCapabilityPackage(INamedTypeSymbol type, string assemblyName)
+    {
+        return type.ContainingNamespace.IsGlobalNamespace
+            ? assemblyName
+            : type.ContainingNamespace.ToDisplayString();
+    }
+
+    private static string GetMethodDisplayString(IMethodSymbol method)
+    {
+        return method.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat);
+    }
+
+    private static Location? GetAttributeLocation(AttributeData? attribute, CancellationToken cancellationToken)
+    {
+        return attribute?.ApplicationSyntaxReference?.GetSyntax(cancellationToken).GetLocation();
     }
 
     private static bool TryGetEffectiveAspireExportAttribute(IMethodSymbol method, INamedTypeSymbol aspireExportAttribute, out AttributeData? exportAttribute, out AttributeData? containingTypeExportAttribute)

@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
@@ -40,7 +41,8 @@ public class ResourceCommandHelperTests
             NullLogger.Instance,
             "myResource",
             "generate-token",
-            CancellationToken.None).DefaultTimeout();
+            arguments: null,
+            cancellationToken: CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(0, exitCode);
         Assert.NotNull(capturedRawText);
@@ -68,7 +70,8 @@ public class ResourceCommandHelperTests
             NullLogger.Instance,
             "myResource",
             "start",
-            CancellationToken.None).DefaultTimeout();
+            arguments: null,
+            cancellationToken: CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(0, exitCode);
         Assert.False(displayRawTextCalled);
@@ -103,7 +106,8 @@ public class ResourceCommandHelperTests
             NullLogger.Instance,
             "myResource",
             "validate-config",
-            CancellationToken.None).DefaultTimeout();
+            arguments: null,
+            cancellationToken: CancellationToken.None).DefaultTimeout();
 
         Assert.NotEqual(0, exitCode);
         Assert.NotNull(capturedRawText);
@@ -137,10 +141,109 @@ public class ResourceCommandHelperTests
             NullLogger.Instance,
             "myResource",
             "my-command",
-            CancellationToken.None).DefaultTimeout();
+            arguments: null,
+            cancellationToken: CancellationToken.None).DefaultTimeout();
 
         Assert.Equal(0, exitCode);
         // Status messages should be routed to stderr
         Assert.Equal(ConsoleOutput.Error, interactionService.Console);
+    }
+
+    [Fact]
+    public async Task ExecuteGenericCommandAsync_WithArguments_PassesArgumentsToBackchannel()
+    {
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse { Success = true }
+        };
+
+        var interactionService = new TestInteractionService();
+
+        // Command arguments JSON is expected to be an object, for example: { "selector": "#submit" }.
+        var arguments = new JsonObject
+        {
+            ["selector"] = "#submit"
+        };
+
+        var exitCode = await ResourceCommandHelper.ExecuteGenericCommandAsync(
+            connection,
+            interactionService,
+            NullLogger.Instance,
+            "myResource",
+            "click",
+            arguments,
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(0, exitCode);
+        Assert.NotNull(connection.ExecuteResourceCommandArguments);
+        Assert.Equal("#submit", connection.ExecuteResourceCommandArguments["selector"]!.GetValue<string>());
+        Assert.True(connection.ExecuteResourceCommandOptions?.NonInteractive == true);
+    }
+
+    [Fact]
+    public async Task ExecuteGenericCommandAsync_WithValidationErrors_DisplaysArgumentErrors()
+    {
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
+            {
+                Success = false,
+                Message = "Command argument validation failed.",
+                ValidationErrors =
+                [
+                    new ResourceCommandArgumentValidationError
+                    {
+                        ArgumentName = "target",
+                        ErrorMessage = "Target must not be prod."
+                    }
+                ]
+            }
+        };
+
+        var interactionService = new TestInteractionService();
+
+        var exitCode = await ResourceCommandHelper.ExecuteGenericCommandAsync(
+            connection,
+            interactionService,
+            NullLogger.Instance,
+            "myResource",
+            "validate",
+            arguments: null,
+            cancellationToken: CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToExecuteResourceCommand, exitCode);
+        var error = Assert.Single(interactionService.DisplayedErrors);
+        Assert.Contains("Command argument validation failed.", error);
+        Assert.Contains("--target: Target must not be prod.", error);
+    }
+
+    [Fact]
+    public async Task ExecuteGenericCommandAsync_WhenValidationErrorsIsNull_DisplaysCommandError()
+    {
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            ExecuteResourceCommandResult = new ExecuteResourceCommandResponse
+            {
+                Success = false,
+                Message = "Command 'ss' not available for resource 'test-resource'.",
+                ValidationErrors = null!
+            }
+        };
+
+        var interactionService = new TestInteractionService();
+
+        var exitCode = await ResourceCommandHelper.ExecuteGenericCommandAsync(
+            connection,
+            interactionService,
+            NullLogger.Instance,
+            "test-resource",
+            "ss",
+            arguments: null,
+            cancellationToken: CancellationToken.None).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToExecuteResourceCommand, exitCode);
+        var error = Assert.Single(interactionService.DisplayedErrors);
+        Assert.Contains("Failed to execute command 'ss' on resource 'test-resource'", error);
+        Assert.Contains("Command 'ss' not available for resource 'test-resource'.", error);
     }
 }

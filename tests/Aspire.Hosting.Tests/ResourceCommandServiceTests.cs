@@ -8,6 +8,8 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Tests;
 
+#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to describe resource command arguments.
+
 [Trait("Partition", "2")]
 public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
 {
@@ -410,6 +412,26 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         Assert.True(result.Success);
     }
 
+    [Theory]
+    [InlineData("set-parameter", "parameter-set")]
+    [InlineData("delete-parameter", "parameter-delete")]
+    public async Task ExecuteCommandAsync_LegacyParameterCommandName_FallsBackToCurrentName(string currentCommandName, string legacyCommandName)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: currentCommandName,
+                displayName: "Parameter command",
+                executeCommand: _ => Task.FromResult(new ExecuteCommandResult { Success = true }));
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(custom.Resource, legacyCommandName);
+
+        Assert.True(result.Success);
+    }
+
     [Fact]
     public async Task ExecuteCommandAsync_SuccessWithResult_ReturnsResultData()
     {
@@ -448,6 +470,745 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
 
         Assert.True(result.Success);
         Assert.Null(result.Data);
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_WithArgumentCollection_PassesArgumentsToCommand()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        InteractionInputCollection? capturedArguments = null;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: e =>
+                {
+                    capturedArguments = e.Arguments;
+                    return Task.FromResult(CommandResults.Success());
+                },
+                commandOptions: new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "selector",
+                            InputType = InputType.Text
+                        },
+                        new InteractionInput
+                        {
+                            Name = "clickCount",
+                            InputType = InputType.Number
+                        }
+                    ]
+                });
+
+        var arguments = new InteractionInputCollection(
+        [
+            new InteractionInput
+            {
+                Name = "selector",
+                InputType = InputType.Text,
+                Value = "#submit"
+            },
+            new InteractionInput
+            {
+                Name = "clickCount",
+                InputType = InputType.Number,
+                Value = "2"
+            }
+        ]);
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync("myResource", "mycommand", arguments);
+
+        Assert.True(result.Success);
+        Assert.NotNull(capturedArguments);
+        Assert.Equal("#submit", capturedArguments.GetString("selector"));
+        Assert.Equal(2, capturedArguments.GetInt32("clickCount"));
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_SecretTextArgument_PreservesWhitespace()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        InteractionInputCollection? capturedArguments = null;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: e =>
+                {
+                    capturedArguments = e.Arguments;
+                    return Task.FromResult(CommandResults.Success());
+                },
+                commandOptions: new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "password",
+                            InputType = InputType.SecretText,
+                            Required = true
+                        }
+                    ]
+                });
+
+        var arguments = new InteractionInputCollection(
+        [
+            new InteractionInput
+            {
+                Name = "password",
+                InputType = InputType.SecretText,
+                Value = "  secret  "
+            }
+        ]);
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync("myResource", "mycommand", arguments);
+
+        Assert.True(result.Success);
+        Assert.NotNull(capturedArguments);
+        Assert.Equal("  secret  ", capturedArguments.GetString("password"));
+    }
+
+    [Fact]
+    public async Task CreateCommandArguments_WithOrderedArgumentValues_MapsArgumentsByOrder()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: _ => Task.FromResult(CommandResults.Success()),
+                commandOptions: new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "selector",
+                            InputType = InputType.Text
+                        },
+                        new InteractionInput
+                        {
+                            Name = "clickCount",
+                            InputType = InputType.Number,
+                            Value = "1"
+                        },
+                        new InteractionInput
+                        {
+                            Name = "snapshotAfter",
+                            InputType = InputType.Boolean,
+                            Value = "true"
+                        }
+                    ]
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        IReadOnlyList<string?> argumentValues = ["#submit", "2"];
+        var (arguments, errorMessage) = app.ResourceCommands.CreateCommandArguments("myResource", "mycommand", argumentValues);
+
+        Assert.Null(errorMessage);
+        Assert.Equal("#submit", arguments.GetString("selector"));
+        Assert.Equal(2, arguments.GetInt32("clickCount"));
+        Assert.True(arguments.GetBoolean("snapshotAfter"));
+    }
+
+    [Fact]
+    public async Task CreateCommandArguments_TooManyOrderedArgumentValues_ReturnsError()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: _ => Task.FromResult(CommandResults.Success()),
+                commandOptions: new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "selector",
+                            InputType = InputType.Text
+                        }
+                    ]
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        IReadOnlyList<string?> argumentValues = ["#submit", "extra"];
+        var (arguments, errorMessage) = app.ResourceCommands.CreateCommandArguments("myResource", "mycommand", argumentValues);
+
+        Assert.Equal("Command 'mycommand' accepts 1 argument(s), but 2 were provided.", errorMessage);
+        Assert.Null(arguments.GetString("selector"));
+    }
+
+    [Fact]
+    public async Task CreateCommandArguments_UnknownNamedArgumentValues_ReturnsError()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: _ => Task.FromResult(CommandResults.Success()),
+                commandOptions: new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "selector",
+                            InputType = InputType.Text
+                        }
+                    ]
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var argumentValues = new Dictionary<string, string?> { ["selecter"] = "#submit" };
+        var (arguments, errorMessage) = app.ResourceCommands.CreateCommandArguments("myResource", "mycommand", argumentValues);
+
+        Assert.Equal("Unknown argument 'selecter' for command 'mycommand'.", errorMessage);
+        Assert.Null(arguments.GetString("selector"));
+    }
+
+    [Fact]
+    public async Task CreateCommandArguments_DisabledNamedArgumentValues_ReturnsError()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: _ => Task.FromResult(CommandResults.Success()),
+                commandOptions: new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "saveToUserSecrets",
+                            InputType = InputType.Boolean,
+                            Disabled = true
+                        }
+                    ]
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var argumentValues = new Dictionary<string, string?> { ["saveToUserSecrets"] = "true" };
+        var (arguments, errorMessage) = app.ResourceCommands.CreateCommandArguments("myResource", "mycommand", argumentValues);
+
+        Assert.Equal("Argument 'saveToUserSecrets' for command 'mycommand' is disabled.", errorMessage);
+        Assert.Equal("true", arguments.GetString("saveToUserSecrets"));
+    }
+
+    [Fact]
+    public async Task CreateCommandArguments_DisabledOrderedArgumentValues_ReturnsError()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: _ => Task.FromResult(CommandResults.Success()),
+                commandOptions: new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "saveToUserSecrets",
+                            InputType = InputType.Boolean,
+                            Disabled = true
+                        }
+                    ]
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        IReadOnlyList<string?> argumentValues = ["true"];
+        var (arguments, errorMessage) = app.ResourceCommands.CreateCommandArguments("myResource", "mycommand", argumentValues);
+
+        Assert.Equal("Argument 'saveToUserSecrets' for command 'mycommand' is disabled.", errorMessage);
+        Assert.Equal("true", arguments.GetString("saveToUserSecrets"));
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_NoArguments_PassesEmptyArgumentsToCommand()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        InteractionInputCollection? capturedArguments = null;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: e =>
+                {
+                    capturedArguments = e.Arguments;
+                    return Task.FromResult(CommandResults.Success());
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync("myResource", "mycommand");
+
+        Assert.True(result.Success);
+        Assert.NotNull(capturedArguments);
+        Assert.Empty(capturedArguments);
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_InvalidBuiltInArgumentValidation_DoesNotExecuteCommand()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var executed = false;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: e =>
+                {
+                    executed = true;
+                    return Task.FromResult(CommandResults.Success());
+                },
+                commandOptions: new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "selector",
+                            Label = "Selector",
+                            InputType = InputType.Text,
+                            Required = true
+                        }
+                    ]
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync("myResource", "mycommand");
+
+        Assert.False(result.Success);
+        Assert.False(executed);
+        Assert.Equal("Command argument validation failed.", result.Message);
+        Assert.NotNull(result.InvalidArguments);
+        var invalidArgument = Assert.Single(result.InvalidArguments);
+        Assert.Equal("selector", invalidArgument.Name);
+        Assert.Equal("Value is required.", Assert.Single(invalidArgument.ValidationErrors));
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_LoadsDependentChoiceOptionsBeforeBuiltInValidation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var executed = false;
+        var loadCount = 0;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: _ =>
+                {
+                    executed = true;
+                    return Task.FromResult(CommandResults.Success());
+                },
+                commandOptions: new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "subscription",
+                            InputType = InputType.Choice,
+                            Required = true,
+                            Options = [KeyValuePair.Create("sub-a", "Subscription A")]
+                        },
+                        new InteractionInput
+                        {
+                            Name = "location",
+                            InputType = InputType.Choice,
+                            Required = true,
+                            DynamicLoading = new InputLoadOptions
+                            {
+                                DependsOnInputs = ["subscription"],
+                                LoadCallback = context =>
+                                {
+                                    loadCount++;
+                                    Assert.Equal("sub-a", context.AllInputs.GetString("subscription"));
+                                    context.Input.Options = [KeyValuePair.Create("westus", "West US")];
+
+                                    return Task.CompletedTask;
+                                }
+                            }
+                        }
+                    ]
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(
+            "myResource",
+            "mycommand",
+            new ResourceCommandExecutionOptions
+            {
+                ArgumentValues = new Dictionary<string, string?>
+                {
+                    ["subscription"] = "sub-a",
+                    ["location"] = "centralus"
+                },
+                ArgumentsProvided = true,
+                NonInteractive = true
+            },
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.False(executed);
+        Assert.Equal(1, loadCount);
+        Assert.NotNull(result.InvalidArguments);
+        var invalidArgument = Assert.Single(result.InvalidArguments, argument => argument.ValidationErrors.Count > 0);
+        Assert.Equal("location", invalidArgument.Name);
+        Assert.Equal("Value must be one of the provided options.", Assert.Single(invalidArgument.ValidationErrors));
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_UnknownNamedArgumentValues_DoesNotExecuteCommand()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var executed = false;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: _ =>
+                {
+                    executed = true;
+                    return Task.FromResult(CommandResults.Success());
+                },
+                commandOptions: new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "selector",
+                            InputType = InputType.Text,
+                            Required = true
+                        }
+                    ]
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(
+            "myResource",
+            "mycommand",
+            new ResourceCommandExecutionOptions
+            {
+                ArgumentValues = new Dictionary<string, string?> { ["selecter"] = "#submit" },
+                ArgumentsProvided = true,
+                NonInteractive = true
+            },
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.False(executed);
+        Assert.Equal("Unknown argument 'selecter' for command 'mycommand'.", result.Message);
+        Assert.Null(result.InvalidArguments);
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_InteractiveWithoutArguments_PromptsForArguments()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var testInteractionService = new TestInteractionService();
+        builder.Services.AddSingleton<IInteractionService>(testInteractionService);
+
+        InteractionInputCollection? capturedArguments = null;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: e =>
+                {
+                    capturedArguments = e.Arguments;
+                    return Task.FromResult(CommandResults.Success());
+                },
+                commandOptions: new CommandOptions
+                {
+                    Description = "Command description",
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "selector",
+                            Label = "Selector",
+                            InputType = InputType.Text,
+                            Required = true
+                        }
+                    ]
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var resultTask = app.ResourceCommands.ExecuteCommandAsync(
+            "myResource",
+            "mycommand",
+            new ResourceCommandExecutionOptions { NonInteractive = false },
+            CancellationToken.None).DefaultTimeout();
+
+        var interaction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        Assert.Equal("My command", interaction.Title);
+        Assert.Equal("Command description", interaction.Message);
+        var input = Assert.Single(interaction.Inputs);
+        Assert.Equal("selector", input.Name);
+        input.Value = "#submit";
+        interaction.CompletionTcs.SetResult(InteractionResult.Ok(interaction.Inputs));
+
+        var result = await resultTask;
+
+        Assert.True(result.Success);
+        Assert.NotNull(capturedArguments);
+        Assert.Equal("#submit", capturedArguments.GetString("selector"));
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_NonInteractiveWithoutArguments_DoesNotPrompt()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var testInteractionService = new TestInteractionService();
+        builder.Services.AddSingleton<IInteractionService>(testInteractionService);
+
+        var executed = false;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: e =>
+                {
+                    executed = true;
+                    return Task.FromResult(CommandResults.Success());
+                },
+                commandOptions: new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "selector",
+                            Label = "Selector",
+                            InputType = InputType.Text,
+                            Required = true
+                        }
+                    ]
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(
+            "myResource",
+            "mycommand",
+            new ResourceCommandExecutionOptions { NonInteractive = true },
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.False(executed);
+        Assert.False(testInteractionService.Interactions.Reader.TryRead(out _));
+        Assert.NotNull(result.InvalidArguments);
+        var invalidArgument = Assert.Single(result.InvalidArguments);
+        Assert.Equal("selector", invalidArgument.Name);
+        Assert.Equal("Value is required.", Assert.Single(invalidArgument.ValidationErrors));
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_NonInteractive_IsAvailableReturnsFalse()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        bool? isAvailableDuringExecution = null;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: e =>
+                {
+                    var interactionService = e.ServiceProvider.GetRequiredService<IInteractionService>();
+                    isAvailableDuringExecution = interactionService.IsAvailable;
+                    return Task.FromResult(CommandResults.Success());
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(
+            "myResource",
+            "mycommand",
+            new ResourceCommandExecutionOptions { NonInteractive = true },
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.NotNull(isAvailableDuringExecution);
+        Assert.False(isAvailableDuringExecution.Value);
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_Interactive_IsAvailableNotAffectedByScope()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        bool? isAvailableDuringExecution = null;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: e =>
+                {
+                    var interactionService = e.ServiceProvider.GetRequiredService<IInteractionService>();
+                    isAvailableDuringExecution = interactionService.IsAvailable;
+                    return Task.FromResult(CommandResults.Success());
+                });
+
+        var app = builder.Build();
+
+        // Get the baseline IsAvailable value (may be false in test environments where dashboard is disabled)
+        var baselineIsAvailable = app.Services.GetRequiredService<IInteractionService>().IsAvailable;
+
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(
+            "myResource",
+            "mycommand",
+            new ResourceCommandExecutionOptions { NonInteractive = false },
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.NotNull(isAvailableDuringExecution);
+
+        // Interactive mode should not change the baseline IsAvailable value
+        Assert.Equal(baselineIsAvailable, isAvailableDuringExecution.Value);
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_PartialArgumentCollection_ValidatesMissingDeclaredArguments()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var executed = false;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: e =>
+                {
+                    executed = true;
+                    return Task.FromResult(CommandResults.Success());
+                },
+                commandOptions: new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "selector",
+                            InputType = InputType.Text,
+                            Required = true
+                        },
+                        new InteractionInput
+                        {
+                            Name = "target",
+                            InputType = InputType.Text,
+                            Required = true
+                        }
+                    ]
+                });
+
+        var arguments = new InteractionInputCollection(
+        [
+            new InteractionInput
+            {
+                Name = "selector",
+                InputType = InputType.Text,
+                Value = "#submit"
+            }
+        ]);
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync("myResource", "mycommand", arguments);
+
+        Assert.False(result.Success);
+        Assert.False(executed);
+        Assert.NotNull(result.InvalidArguments);
+        var invalidArgument = Assert.Single(result.InvalidArguments, argument => argument.ValidationErrors.Count > 0);
+        Assert.Equal("target", invalidArgument.Name);
+        Assert.Equal("Value is required.", Assert.Single(invalidArgument.ValidationErrors));
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_InvalidCustomArgumentValidation_DoesNotExecuteCommand()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var executed = false;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: e =>
+                {
+                    executed = true;
+                    return Task.FromResult(CommandResults.Success());
+                },
+                commandOptions: new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "target",
+                            Label = "Target",
+                            InputType = InputType.Text,
+                            Value = "prod"
+                        }
+                    ],
+                    ValidateArguments = context =>
+                    {
+                        var target = context.Inputs.Single(argument => argument.Name == "target");
+                        context.AddValidationError(target, "Target must not be prod.");
+
+                        return Task.CompletedTask;
+                    }
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync("myResource", "mycommand");
+
+        Assert.False(result.Success);
+        Assert.False(executed);
+        Assert.NotNull(result.InvalidArguments);
+        var invalidArgument = Assert.Single(result.InvalidArguments);
+        Assert.Equal("target", invalidArgument.Name);
+        Assert.Equal("Target must not be prod.", Assert.Single(invalidArgument.ValidationErrors));
     }
 
     [Fact]
@@ -519,6 +1280,18 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public void CommandResults_SuccessWithResultAndDisplayImmediately_ProducesCorrectResult()
+    {
+        var result = CommandResults.Success("Success.", "{\"key\": \"value\"}", CommandResultFormat.Json, displayImmediately: true);
+
+        Assert.True(result.Success);
+        Assert.NotNull(result.Data);
+        Assert.Equal("{\"key\": \"value\"}", result.Data.Value);
+        Assert.Equal(CommandResultFormat.Json, result.Data.Format);
+        Assert.True(result.Data.DisplayImmediately);
+    }
+
+    [Fact]
     public void CommandResults_SuccessWithTextResult_DefaultsToText()
     {
         var result = CommandResults.Success("Success.", "hello world");
@@ -563,3 +1336,5 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
 
     }
 }
+
+#pragma warning restore ASPIREINTERACTION001

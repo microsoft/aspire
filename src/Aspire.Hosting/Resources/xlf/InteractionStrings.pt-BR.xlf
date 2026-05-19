@@ -93,8 +93,8 @@
         <note />
       </trans-unit>
       <trans-unit id="ParametersInputsDeleteDescription">
-        <source>The value is currently saved in [user secrets](https://aka.ms/aspire/user-secrets).</source>
-        <target state="new">The value is currently saved in [user secrets](https://aka.ms/aspire/user-secrets).</target>
+        <source>Delete a value that is saved in [user secrets](https://aka.ms/aspire/user-secrets).</source>
+        <target state="new">Delete a value that is saved in [user secrets](https://aka.ms/aspire/user-secrets).</target>
         <note>Contains markdown</note>
       </trans-unit>
       <trans-unit id="ParametersInputsDeleteLabel">

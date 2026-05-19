@@ -17,6 +17,11 @@
         <target state="translated">Référentiel Aspire</target>
         <note />
       </trans-unit>
+      <trans-unit id="MainLayoutLaunchAIAgents">
+        <source>AI agents</source>
+        <target state="new">AI agents</target>
+        <note />
+      </trans-unit>
       <trans-unit id="MainLayoutLaunchNotifications">
         <source>Notifications</source>
         <target state="new">Notifications</target>

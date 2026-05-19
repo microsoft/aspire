@@ -3,6 +3,7 @@
 
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Backchannel;
 using Aspire.Shared.Model.Serialization;
@@ -15,10 +16,13 @@ namespace Aspire.Cli.Mcp.Tools;
 [JsonSerializable(typeof(ResourceJson[]))]
 [JsonSerializable(typeof(ResourceUrlJson))]
 [JsonSerializable(typeof(ResourceVolumeJson))]
+[JsonSerializable(typeof(JsonNode))]
+[JsonSerializable(typeof(Dictionary<string, JsonNode?>))]
 [JsonSerializable(typeof(Dictionary<string, string?>))]
 [JsonSerializable(typeof(Dictionary<string, ResourceHealthReportJson>))]
 [JsonSerializable(typeof(ResourceRelationshipJson))]
 [JsonSerializable(typeof(Dictionary<string, ResourceCommandJson>))]
+[JsonSerializable(typeof(ResourceCommandArgumentJson[]))]
 [JsonSourceGenerationOptions(
     WriteIndented = true,
     PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower,

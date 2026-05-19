@@ -17,6 +17,7 @@ using Aspire.Shared.UserSecrets;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.UserSecrets;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Tests;
@@ -153,6 +154,18 @@ public class DistributedApplicationBuilderTests
         var config = app.Services.GetRequiredService<IConfiguration>();
         Assert.Equal(nameof(ResourceServiceAuthMode.ApiKey), config["AppHost:ResourceService:AuthMode"]);
         Assert.False(string.IsNullOrEmpty(config["AppHost:ResourceService:ApiKey"]));
+    }
+
+    [Fact]
+    public void AspireLogLevelOverridesConfiguredDefaultLogLevel()
+    {
+        var appBuilder = DistributedApplication.CreateBuilder(args: [$"{KnownConfigNames.AspireLogLevel}=Trace"]);
+        appBuilder.Configuration["Logging:LogLevel:Default"] = "Information";
+
+        using var app = appBuilder.Build();
+
+        var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("AspireLogLevelTest");
+        Assert.True(logger.IsEnabled(LogLevel.Trace));
     }
 
     [Fact]

@@ -1,12 +1,16 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-#pragma warning disable ASPIREEXTENSION001 // Type is for evaluation purposes only
+#pragma warning disable ASPIREJAVASCRIPT001 // Type is for evaluation purposes only
+#pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only
 
 using System.Diagnostics;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
 using Aspire.TestUtilities;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.JavaScript.Tests;
 
@@ -124,6 +128,188 @@ public class AddJavaScriptAppTests
     }
 
     [Fact]
+    public async Task PublishWithExistingDockerfileThrowsWhenRunScriptNameIsExplicit()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var appDir = CreateJavaScriptAppWithDockerfile(tempDir.Path);
+        var app = builder.AddJavaScriptApp("js", appDir, "migrate")
+            .WithBun();
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => ManifestUtils.GetManifest(app.Resource, tempDir.Path));
+
+        Assert.Contains("runScriptName", exception.Message);
+        Assert.Contains("WithRunScript", exception.Message);
+        Assert.Contains("Dockerfile", exception.Message);
+    }
+
+    [Fact]
+    public async Task PublishModelWithExistingDockerfileThrowsWhenRunScriptNameIsExplicit()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var appDir = CreateJavaScriptAppWithDockerfile(tempDir.Path);
+        builder.AddJavaScriptApp("js", appDir, "migrate")
+            .WithBun();
+
+        using var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => ManifestUtils.GetManifestForModel(appModel, tempDir.Path));
+
+        Assert.Contains("runScriptName", exception.Message);
+        Assert.Contains("WithRunScript", exception.Message);
+        Assert.Contains("Dockerfile", exception.Message);
+    }
+
+    [Fact]
+    public async Task PublishWithExistingDockerfileThrowsWhenWithRunScriptOverridesDefault()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var appDir = CreateJavaScriptAppWithDockerfile(tempDir.Path);
+        var app = builder.AddJavaScriptApp("js", appDir)
+            .WithBun()
+            .WithRunScript("migrate");
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => ManifestUtils.GetManifest(app.Resource, tempDir.Path));
+
+        Assert.Contains("runScriptName", exception.Message);
+        Assert.Contains("WithRunScript", exception.Message);
+        Assert.Contains("Dockerfile", exception.Message);
+    }
+
+    [Fact]
+    public async Task PublishPipelineWithExistingDockerfileThrowsFromValidationStepWhenRunScriptNameIsExplicit()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: "validate-javascript-dockerfile-run-script-js").WithResourceCleanUp(true);
+        builder.Services.AddSingleton<IPipelineActivityReporter, NullPublishingActivityReporter>();
+
+        var appDir = CreateJavaScriptAppWithDockerfile(tempDir.Path);
+        builder.AddJavaScriptApp("js", appDir, "migrate")
+            .WithBun();
+
+        using var app = builder.Build();
+        var pipeline = new DistributedApplicationPipeline();
+        var context = new PipelineContext(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            app.Services.GetRequiredService<ILogger<AddJavaScriptAppTests>>(),
+            CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => pipeline.ExecuteAsync(context));
+
+        Assert.Contains("runScriptName", exception.Message);
+        Assert.Contains("WithRunScript", exception.Message);
+        Assert.Contains("Dockerfile", exception.Message);
+    }
+
+    [Fact]
+    public async Task PublishWithExistingDockerfileAllowsImplicitDefaultRunScript()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var appDir = CreateJavaScriptAppWithDockerfile(tempDir.Path);
+        var app = builder.AddJavaScriptApp("js", appDir)
+            .WithBun();
+
+        var manifest = await ManifestUtils.GetManifest(app.Resource, tempDir.Path);
+
+        Assert.Equal("container.v1", manifest["type"]?.ToString());
+    }
+
+    [Fact]
+    public async Task PublishWithExistingDockerfileAllowsExplicitEntrypointOverride()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var appDir = CreateJavaScriptAppWithDockerfile(tempDir.Path);
+        var app = builder.AddJavaScriptApp("js", appDir, "migrate")
+            .WithBun()
+            .PublishAsDockerFile(container => container
+                .WithEntrypoint("bun")
+                .WithArgs("src/migrate.ts"));
+
+        var manifest = await ManifestUtils.GetManifest(app.Resource, tempDir.Path);
+
+        Assert.Equal("bun", manifest["entrypoint"]?.ToString());
+        Assert.Contains("src/migrate.ts", manifest.ToJsonString());
+    }
+
+    [Fact]
+    public async Task PublishWithExistingDockerfileAllowsWithRunScriptMatchingDefault()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var appDir = CreateJavaScriptAppWithDockerfile(tempDir.Path);
+        var app = builder.AddJavaScriptApp("js", appDir)
+            .WithBun()
+            // Re-stating the default script name explicitly should not be treated as a conflict
+            // with the existing Dockerfile, because the effective run script still matches the default.
+            .WithRunScript("dev");
+
+        var manifest = await ManifestUtils.GetManifest(app.Resource, tempDir.Path);
+
+        Assert.Equal("container.v1", manifest["type"]?.ToString());
+    }
+
+    [Fact]
+    public async Task PublishWithExistingDockerfileThrowsAndIncludesArgsWhenDefaultScriptHasArgs()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var appDir = CreateJavaScriptAppWithDockerfile(tempDir.Path);
+        var app = builder.AddJavaScriptApp("js", appDir)
+            .WithBun()
+            .WithRunScript("dev", ["--port", "8080"]);
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => ManifestUtils.GetManifest(app.Resource, tempDir.Path));
+
+        Assert.Contains("run script 'dev'", exception.Message);
+        Assert.Contains("with args [--port, 8080]", exception.Message);
+        Assert.Contains("Dockerfile", exception.Message);
+    }
+
+    [Fact]
+    public async Task VerifyPnpmDockerfileCopiesWorkspaceFileBeforeInstall()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(tempDir.Path, "js");
+        Directory.CreateDirectory(appDir);
+
+        File.WriteAllText(Path.Combine(appDir, "pnpm-workspace.yaml"), "allowBuilds: {}\n");
+
+        var pnpmApp = builder.AddJavaScriptApp("js", appDir)
+            .WithPnpm(installArgs: ["--prefer-frozen-lockfile"])
+            .WithBuildScript("mybuild");
+
+        await ManifestUtils.GetManifest(pnpmApp.Resource, tempDir.Path);
+
+        var dockerfilePath = Path.Combine(tempDir.Path, "js.Dockerfile");
+        var dockerfileLines = await File.ReadAllLinesAsync(dockerfilePath);
+
+        var copyLineIndex = Array.FindIndex(
+            dockerfileLines,
+            line => line.StartsWith("COPY ", StringComparison.Ordinal)
+                && line.Contains("pnpm-workspace.yaml", StringComparison.Ordinal));
+        var installLineIndex = Array.FindIndex(dockerfileLines, line => line.Contains("pnpm install", StringComparison.Ordinal));
+
+        Assert.NotEqual(-1, copyLineIndex);
+        Assert.NotEqual(-1, installLineIndex);
+        Assert.True(copyLineIndex < installLineIndex);
+    }
+
+    [Fact]
     [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
     [OuterloopTest("Builds a Docker image to verify the generated pnpm Dockerfile works")]
     public async Task VerifyPnpmDockerfileBuildSucceeds()
@@ -213,5 +399,29 @@ public class AddJavaScriptAppTests
 
         // Assert the build succeeded
         Assert.True(process.ExitCode == 0, $"Docker build failed with exit code {process.ExitCode}.\nStdout: {stdout}\nStderr: {stderr}");
+    }
+
+    private static string CreateJavaScriptAppWithDockerfile(string rootDirectory)
+    {
+        var appDir = Path.Combine(rootDirectory, "js");
+        Directory.CreateDirectory(appDir);
+
+        var dockerfile = """
+            FROM oven/bun:1
+            WORKDIR /app
+            COPY . .
+            ENTRYPOINT ["bun","src/index.ts"]
+            """;
+
+        File.WriteAllText(Path.Combine(appDir, "Dockerfile"), dockerfile);
+        File.WriteAllText(Path.Combine(appDir, "package.json"), """
+            {
+              "scripts": {
+                "migrate": "bun src/migrate.ts"
+              }
+            }
+            """);
+
+        return appDir;
     }
 }

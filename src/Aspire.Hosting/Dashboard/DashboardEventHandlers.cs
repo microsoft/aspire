@@ -400,10 +400,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
             distributedApplicationLogger.LogInformation("Now listening on: {DashboardUrl}", dashboardUrl.TrimEnd('/'));
 
-            if (!string.IsNullOrEmpty(browserToken))
-            {
-                LoggingHelpers.WriteDashboardUrl(distributedApplicationLogger, dashboardUrl, browserToken, isContainer: false);
-            }
+            LoggingHelpers.WriteDashboardSummary(distributedApplicationLogger, dashboardUrl, otlpGrpcEndpointUrl, otlpHttpEndpointUrl, browserToken, isContainer: false);
         });
 
         foreach (var d in dashboardUrls?.Split(';', StringSplitOptions.RemoveEmptyEntries) ?? [])

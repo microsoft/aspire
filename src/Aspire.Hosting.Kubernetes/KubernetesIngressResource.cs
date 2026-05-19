@@ -118,11 +118,13 @@ internal sealed record IngressRouteConfig(
     EndpointReference Endpoint);
 
 /// <summary>
-/// Stores TLS configuration for a <see cref="KubernetesIngressResource"/>.
+/// Stores TLS configuration for a <see cref="KubernetesIngressResource"/>. The set of hostnames
+/// covered by this TLS entry is resolved from the ingress's
+/// <see cref="KubernetesIngressResource.Hostnames"/> at manifest-emit time, so callers can register
+/// hostnames before or after WithTls without affecting the generated <c>spec.tls</c> entry.
 /// </summary>
 internal sealed record IngressTlsConfig(
-    ReferenceExpression SecretName,
-    List<ReferenceExpression> Hosts);
+    ReferenceExpression SecretName);
 
 /// <summary>
 /// Stores the default backend configuration for a <see cref="KubernetesIngressResource"/>.

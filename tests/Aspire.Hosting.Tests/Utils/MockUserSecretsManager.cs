@@ -16,6 +16,8 @@ internal sealed class MockUserSecretsManager : IUserSecretsManager
 
     public bool TrySetSecret(string name, string value) => true;
 
+    public bool TryDeleteSecret(string name) => true;
+
     public void GetOrSetSecret(IConfigurationManager configuration, string name, Func<string> valueGenerator)
     {
     }

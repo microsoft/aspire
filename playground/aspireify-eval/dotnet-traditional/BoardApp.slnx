@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="src/BoardApi/BoardApi.csproj" />
+  <Project Path="src/AdminDashboard/AdminDashboard.csproj" />
+  <Project Path="src/MigrationRunner/MigrationRunner.csproj" />
+  <Project Path="src/BoardData/BoardData.csproj" />
+</Solution>

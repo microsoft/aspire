@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
+using System.CommandLine.Help;
 using System.Globalization;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
@@ -35,7 +36,7 @@ internal abstract class BaseCommand : Command
         _executionContext = executionContext;
         InteractionService = interactionService;
         Telemetry = telemetry;
-        SetAction(async (parseResult, cancellationToken) =>
+        SetAction((Func<ParseResult, CancellationToken, Task<int>>)(async (parseResult, cancellationToken) =>
         {
             // Set the command on the execution context so background services can access it
             _executionContext.Command = this;
@@ -49,15 +50,56 @@ internal abstract class BaseCommand : Command
 
             // TODO: SDK install goes here in the future.
 
-            int exitCode;
+            CommandResult result;
             try
             {
-                exitCode = await ExecuteAsync(parseResult, cancellationToken);
+                result = await ExecuteAsync(parseResult, cancellationToken);
             }
             catch (NonInteractiveException)
             {
                 // Error messages have already been displayed by the interaction service.
-                exitCode = ExitCodeConstants.MissingRequiredArgument;
+                result = CommandResult.Failure(CliExitCodes.MissingRequiredArgument);
+            }
+
+            var isErrorExitCode = result.ExitCode != CliExitCodes.Success;
+
+            if (result.ErrorMessage is not null)
+            {
+                interactionService.DisplayError(result.ErrorMessage);
+            }
+
+            if (result.ShouldDisplayHelp)
+            {
+                new HelpAction().Invoke(parseResult);
+                return result.ExitCode;
+            }
+
+            if (result.ShouldDisplayCancellationMessage)
+            {
+                interactionService.DisplayCancellationMessage(isErrorExitCode ? ConsoleOutput.Error : null);
+            }
+
+            // Display the CLI log file path on non-zero exit codes so the user knows
+            // where to find diagnostic details. Suppress for user-input errors where
+            // the log wouldn't contain useful context (e.g., missing required arguments).
+            if (isErrorExitCode && result.ExitCode != CliExitCodes.MissingRequiredArgument)
+            {
+                interactionService.DisplayMessage(
+                    KnownEmojis.PageFacingUp,
+                    string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeLogsAt, MarkupHelpers.SafeFileLink(interactionService, executionContext.LogFilePath)),
+                    allowMarkup: true,
+                    consoleOverride: ConsoleOutput.Error);
+
+                // If we connected to a running app host, also display the log file path of
+                // the CLI process that launched it so users can diagnose issues in both processes.
+                if (executionContext.AppHostCliLogFilePath is not null)
+                {
+                    interactionService.DisplayMessage(
+                        KnownEmojis.MagnifyingGlassTiltedLeft,
+                        string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.SeeAppHostLogsAt, MarkupHelpers.SafeFileLink(interactionService, executionContext.AppHostCliLogFilePath)),
+                        allowMarkup: true,
+                        consoleOverride: ConsoleOutput.Error);
+                }
             }
 
             if (UpdateNotificationsEnabled && features.IsFeatureEnabled(KnownFeatures.UpdateNotificationsEnabled, true))
@@ -72,11 +114,11 @@ internal abstract class BaseCommand : Command
                 }
             }
 
-            return exitCode;
-        });
+            return result.ExitCode;
+        }));
     }
 
-    protected abstract Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken);
+    protected abstract Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken);
 
     /// <summary>
     /// Checks whether this command has a --format option whose parsed value is <see cref="OutputFormat.Json"/>.
@@ -94,30 +136,27 @@ internal abstract class BaseCommand : Command
         return false;
     }
 
-    internal static int HandleProjectLocatorException(ProjectLocatorException ex, IInteractionService interactionService, AspireCliTelemetry telemetry)
+    internal static CommandResult HandleProjectLocatorException(ProjectLocatorException ex, IInteractionService interactionService, AspireCliTelemetry telemetry)
     {
         ArgumentNullException.ThrowIfNull(ex);
         ArgumentNullException.ThrowIfNull(interactionService);
 
-        var (exitCode, errorMessage) = ex.FailureReason switch
-        {
-            ProjectLocatorFailureReason.UnsupportedProjects
-                => (ExitCodeConstants.SdkNotInstalled, "No supported app hosts were found."),
-            ProjectLocatorFailureReason.ProjectFileNotAppHostProject
-                => (ExitCodeConstants.FailedToFindProject, InteractionServiceStrings.SpecifiedProjectFileNotAppHostProject),
-            ProjectLocatorFailureReason.ProjectFileDoesntExist
-                => (ExitCodeConstants.FailedToFindProject, InteractionServiceStrings.ProjectOptionDoesntExist),
-            ProjectLocatorFailureReason.MultipleProjectFilesFound
-                => (ExitCodeConstants.FailedToFindProject, InteractionServiceStrings.ProjectOptionNotSpecifiedMultipleAppHostsFound),
-            ProjectLocatorFailureReason.NoProjectFileFound
-                => (ExitCodeConstants.FailedToFindProject, InteractionServiceStrings.ProjectOptionNotSpecifiedNoCsprojFound),
-            ProjectLocatorFailureReason.AppHostsMayNotBeBuildable
-                => (ExitCodeConstants.FailedToFindProject, InteractionServiceStrings.UnbuildableAppHostsDetected),
-            _ => (ExitCodeConstants.FailedToFindProject, string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.UnexpectedErrorOccurred, ex.Message))
-        };
+        var (exitCode, errorMessage) = ProjectLocatorErrorHelper.GetExitCodeAndMessage(ex);
 
         telemetry.RecordError(errorMessage, ex);
-        interactionService.DisplayError(errorMessage);
-        return exitCode;
+        return CommandResult.Failure(exitCode, errorMessage);
+    }
+
+    internal static void AddNonInteractiveRequiresYesValidator(Command command, Option<bool> yesOption)
+    {
+        command.Validators.Add(result =>
+        {
+            var nonInteractive = result.GetValue(RootCommand.NonInteractiveOption);
+            var yes = result.GetValue(yesOption);
+            if (nonInteractive && !yes)
+            {
+                result.AddError(string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.NonInteractiveRequiresYesFormat, command.Name));
+            }
+        });
     }
 }

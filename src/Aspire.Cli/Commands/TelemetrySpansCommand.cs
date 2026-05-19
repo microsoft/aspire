@@ -6,12 +6,14 @@ using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Utils;
 using Aspire.Otlp.Serialization;
+using Aspire.Shared.ConsoleLogs;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 
@@ -39,6 +41,7 @@ internal sealed class TelemetrySpansCommand : BaseCommand
     private static readonly Option<bool?> s_hasErrorOption = TelemetryCommandHelpers.CreateHasErrorOption();
     private static readonly Option<string?> s_dashboardUrlOption = TelemetryCommandHelpers.CreateDashboardUrlOption();
     private static readonly Option<string?> s_apiKeyOption = TelemetryCommandHelpers.CreateApiKeyOption();
+    private static readonly Option<string?> s_searchOption = TelemetryCommandHelpers.CreateSearchOption();
 
     public TelemetrySpansCommand(
         IInteractionService interactionService,
@@ -46,6 +49,7 @@ internal sealed class TelemetrySpansCommand : BaseCommand
         IFeatures features,
         ICliUpdateNotifier updateNotifier,
         CliExecutionContext executionContext,
+        IProjectLocator projectLocator,
         AspireCliTelemetry telemetry,
         IHttpClientFactory httpClientFactory,
         ResourceColorMap resourceColorMap,
@@ -58,7 +62,7 @@ internal sealed class TelemetrySpansCommand : BaseCommand
         _resourceColorMap = resourceColorMap;
         _timeProvider = timeProvider;
         _logger = logger;
-        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, executionContext, logger);
+        _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, projectLocator, executionContext, logger);
 
         Arguments.Add(s_resourceArgument);
         Options.Add(s_appHostOption);
@@ -69,9 +73,10 @@ internal sealed class TelemetrySpansCommand : BaseCommand
         Options.Add(s_hasErrorOption);
         Options.Add(s_dashboardUrlOption);
         Options.Add(s_apiKeyOption);
+        Options.Add(s_searchOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
@@ -84,23 +89,23 @@ internal sealed class TelemetrySpansCommand : BaseCommand
         var hasError = parseResult.GetValue(s_hasErrorOption);
         var dashboardUrl = parseResult.GetValue(s_dashboardUrlOption);
         var apiKey = parseResult.GetValue(s_apiKeyOption);
+        var search = parseResult.GetValue(s_searchOption);
 
         // Validate --limit value
         if (limit.HasValue && limit.Value < 1)
         {
-            _interactionService.DisplayError(TelemetryCommandStrings.LimitMustBePositive);
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, TelemetryCommandStrings.LimitMustBePositive);
         }
 
         var dashboardApi = await TelemetryCommandHelpers.GetDashboardApiAsync(
-            _connectionResolver, _interactionService, _httpClientFactory, _logger, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: true, ExecutionContext.LogFilePath, cancellationToken);
+            _connectionResolver, _interactionService, _httpClientFactory, _logger, passedAppHostProjectFile, dashboardUrl, apiKey, requireDashboard: true, cancellationToken);
 
         if (!dashboardApi.Success)
         {
-            return dashboardApi.ExitCode;
+            return CommandResult.FromExitCode(dashboardApi.ExitCode);
         }
 
-        return await FetchSpansAsync(dashboardApi.BaseUrl!, dashboardApi.ApiToken!, resourceName, traceId, hasError, limit, follow, format, dashboardOnly: dashboardUrl is not null, dashboardApi.DashboardUrl!, cancellationToken);
+        return CommandResult.FromExitCode(await FetchSpansAsync(dashboardApi.BaseUrl!, dashboardApi.ApiToken!, resourceName, traceId, hasError, limit, follow, format, dashboardOnly: dashboardUrl is not null, dashboardApi.DashboardUrl!, search, cancellationToken));
     }
 
     private async Task<int> FetchSpansAsync(
@@ -114,6 +119,7 @@ internal sealed class TelemetrySpansCommand : BaseCommand
         OutputFormat format,
         bool dashboardOnly,
         string dashboardUrl,
+        string? search,
         CancellationToken cancellationToken)
     {
         try
@@ -131,13 +137,13 @@ internal sealed class TelemetrySpansCommand : BaseCommand
             if (!TelemetryCommandHelpers.TryResolveResourceNames(resource, resources, out var resolvedResources))
             {
                 _interactionService.DisplayError($"Resource '{resource}' not found.");
-                return ExitCodeConstants.InvalidCommand;
+                return CliExitCodes.InvalidCommand;
             }
 
             // Build URL with query parameters
             int? effectiveLimit = (limit.HasValue && !follow) ? limit.Value : null;
 
-            var url = DashboardUrls.TelemetrySpansApiUrl(baseUrl, resolvedResources, traceId: traceId, hasError: hasError, limit: effectiveLimit, follow: follow ? true : null);
+            var url = DashboardUrls.TelemetrySpansApiUrl(baseUrl, resolvedResources, traceId: traceId, hasError: hasError, limit: effectiveLimit, follow: follow ? true : null, search: search);
 
             _logger.LogDebug("Fetching spans from {Url}", url);
 
@@ -154,8 +160,8 @@ internal sealed class TelemetrySpansCommand : BaseCommand
         {
             _logger.LogError(ex, "Failed to fetch spans from Dashboard API");
             var errorInfo = await TelemetryCommandHelpers.FormatTelemetryErrorAsync(ex, baseUrl, dashboardOnly, _httpClientFactory, _logger, cancellationToken);
-            TelemetryCommandHelpers.DisplayTelemetryError(_interactionService, errorInfo, ExecutionContext.LogFilePath);
-            return ExitCodeConstants.DashboardFailure;
+            TelemetryCommandHelpers.DisplayTelemetryError(_interactionService, errorInfo);
+            return CliExitCodes.DashboardFailure;
         }
     }
 
@@ -168,15 +174,17 @@ internal sealed class TelemetrySpansCommand : BaseCommand
 
         if (format == OutputFormat.Json)
         {
-            // Structured output always goes to stdout.
-            _interactionService.DisplayRawText(json, ConsoleOutput.Standard);
+            var apiResponse = JsonSerializer.Deserialize(json, OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+            var resourceSpans = apiResponse?.Data?.ResourceSpans;
+            Func<IOtlpResource, string> getResourceName = s => OtlpHelpers.GetResourceName(s, allResources);
+            _interactionService.DisplayRawText(SharedAIHelpers.SerializeSpansToJson(resourceSpans, getResourceName, dashboardUrl), ConsoleOutput.Standard);
         }
         else
         {
             DisplaySpansSnapshot(json, allResources, dashboardUrl);
         }
 
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private async Task<int> StreamSpansAsync(HttpClient client, string url, OutputFormat format, IReadOnlyList<IOtlpResource> allResources, string dashboardUrl, CancellationToken cancellationToken)
@@ -191,8 +199,10 @@ internal sealed class TelemetrySpansCommand : BaseCommand
         {
             if (format == OutputFormat.Json)
             {
-                // Structured output always goes to stdout.
-                _interactionService.DisplayRawText(line, ConsoleOutput.Standard);
+                var request = JsonSerializer.Deserialize(line, OtlpJsonSerializerContext.Default.OtlpExportTraceServiceRequestJson);
+                var resourceSpans = request?.ResourceSpans;
+                Func<IOtlpResource, string> getResourceName = s => OtlpHelpers.GetResourceName(s, allResources);
+                _interactionService.DisplayRawText(SharedAIHelpers.SerializeSpansToJson(resourceSpans, getResourceName, dashboardUrl), ConsoleOutput.Standard);
             }
             else
             {
@@ -200,7 +210,7 @@ internal sealed class TelemetrySpansCommand : BaseCommand
             }
         }
 
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
     private void DisplaySpansSnapshot(string json, IReadOnlyList<IOtlpResource> allResources, string dashboardUrl)
@@ -263,11 +273,11 @@ internal sealed class TelemetrySpansCommand : BaseCommand
             ? FormatHelpers.FormatConsoleTime(_timeProvider, OtlpHelpers.UnixNanoSecondsToDateTime(span.StartTimeUnixNano.Value))
             : "";
         var shortSpanId = OtlpHelpers.ToShortenedId(spanId);
-        var spanIdLink = TelemetryCommandHelpers.FormatTraceLink(dashboardUrl, traceId, $"[grey]{shortSpanId}[/]", spanId: spanId);
+        var spanIdLink = TelemetryCommandHelpers.FormatTraceLink(_interactionService, dashboardUrl, traceId, shortSpanId, spanId: spanId);
         var durationStr = TelemetryCommandHelpers.FormatDuration(duration);
         var resourceColor = _resourceColorMap.GetColor(resourceName);
 
         var escapedName = name.EscapeMarkup();
-        _interactionService.DisplayMarkupLine($"[grey]{timestamp}[/] [{statusColor}]{statusText}[/] [white]{durationStr,8}[/] [{resourceColor}]{resourceName.EscapeMarkup()}[/]: {escapedName} {spanIdLink}");
+        _interactionService.DisplayMarkupLine($"[grey]{timestamp}[/] [{statusColor}]{statusText}[/] [white]{durationStr,8}[/] [{resourceColor}]{resourceName.EscapeMarkup()}[/]: {escapedName} [grey]{spanIdLink}[/]");
     }
 }

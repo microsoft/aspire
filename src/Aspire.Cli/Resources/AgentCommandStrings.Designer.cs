@@ -241,6 +241,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Aspire deployment target selection, preflight, publish, and deploy workflows.
+        /// </summary>
+        internal static string SkillDescription_AspireDeployment {
+            get {
+                return ResourceManager.GetString("SkillDescription_AspireDeployment", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Browser automation and functional testing.
         /// </summary>
         internal static string SkillDescription_PlaywrightCli {
@@ -255,6 +264,15 @@ namespace Aspire.Cli.Resources {
         internal static string SkillDescription_DotnetInspect {
             get {
                 return ResourceManager.GetString("SkillDescription_DotnetInspect", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to One-time setup: wire up AppHost with discovered projects.
+        /// </summary>
+        internal static string SkillDescription_Aspireify {
+            get {
+                return ResourceManager.GetString("SkillDescription_Aspireify", resourceCulture);
             }
         }
 

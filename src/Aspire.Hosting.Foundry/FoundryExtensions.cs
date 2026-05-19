@@ -246,7 +246,7 @@ public static class FoundryExtensions
     /// <param name="roles">The Microsoft Foundry roles to be assigned (for example, <see cref="FoundryRole.CognitiveServicesOpenAIUser"/>).</param>
     /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
     /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="FoundryRole"/> value.</exception>
-    [AspireExport("withFoundryRoleAssignments", MethodName = "withRoleAssignments", Description = "Assigns Microsoft Foundry roles to a resource")]
+    [AspireExport("withFoundryRoleAssignments", Description = "Assigns Microsoft Foundry roles to a resource")]
     internal static IResourceBuilder<T> WithRoleAssignments<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<FoundryResource> target,
@@ -444,29 +444,35 @@ public static class FoundryExtensions
                     resource.Name = name;
                     return resource;
                 },
-                (infrastructure) => new CognitiveServicesAccount(infrastructure.AspireResource.GetBicepIdentifier())
+                (infrastructure) =>
                 {
-                    Kind = "AIServices",
-                    Sku = new CognitiveServicesSku()
+                    // Cognitive Services account names are limited to 64 characters; reserve room for the unique suffix.
+                    var accountNamePrefix = infrastructure.AspireResource.Name[..Math.Min(infrastructure.AspireResource.Name.Length, 50)];
+                    var accountName = ToLower(Interpolate($"{accountNamePrefix}-{GetUniqueString(GetResourceGroup().Id)}"));
+
+                    return new CognitiveServicesAccount(infrastructure.AspireResource.GetBicepIdentifier())
                     {
-                        Name = "S0"
-                    },
-                    Properties = new CognitiveServicesAccountProperties()
-                    {
-                        // Until this bug is fixed, CustomSubDomainName must be set to the
-                        // account's name: https://msdata.visualstudio.com/Vienna/_workitems/edit/4866592
-                        CustomSubDomainName = ToLower(Take(Concat(infrastructure.AspireResource.Name, GetUniqueString(GetResourceGroup().Id)), 24)),
-                        PublicNetworkAccess = hasPrivateEndpoint
-                            ? ServiceAccountPublicNetworkAccess.Disabled
-                            : ServiceAccountPublicNetworkAccess.Enabled,
-                        DisableLocalAuth = true,
-                        AllowProjectManagement = true
-                    },
-                    Identity = new ManagedServiceIdentity()
-                    {
-                        ManagedServiceIdentityType = ManagedServiceIdentityType.SystemAssigned
-                    },
-                    Tags = { { "aspire-resource-name", infrastructure.AspireResource.Name } }
+                        Name = accountName,
+                        Kind = "AIServices",
+                        Sku = new CognitiveServicesSku()
+                        {
+                            Name = "S0"
+                        },
+                        Properties = new CognitiveServicesAccountProperties()
+                        {
+                            CustomSubDomainName = accountName,
+                            PublicNetworkAccess = hasPrivateEndpoint
+                                ? ServiceAccountPublicNetworkAccess.Disabled
+                                : ServiceAccountPublicNetworkAccess.Enabled,
+                            DisableLocalAuth = true,
+                            AllowProjectManagement = true
+                        },
+                        Identity = new ManagedServiceIdentity()
+                        {
+                            ManagedServiceIdentityType = ManagedServiceIdentityType.SystemAssigned
+                        },
+                        Tags = { { "aspire-resource-name", infrastructure.AspireResource.Name } }
+                    };
                 });
 
         infrastructure.Add(new ProvisioningOutput("aiFoundryApiEndpoint", typeof(string))

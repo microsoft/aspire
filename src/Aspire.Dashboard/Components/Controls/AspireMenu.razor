@@ -3,7 +3,7 @@
 @inherits FluentComponentBase
 
 @* aspire-menu-container is added to the div parent of FluentMenu, not the FluentMenu *@
-<FluentMenu Class="aspire-menu-container" @ref="_menu" Anchor="@Anchor" Anchored="@Anchored" Open="@Open" OpenChanged="OnOpenChanged" Style="@Style" VerticalThreshold="@VerticalThreshold" HorizontalThreshold="200">
+<FluentMenu Class="aspire-menu-container" @ref="_menu" Anchor="@Anchor" Anchored="@Anchored" Open="@Open" OpenChanged="OnOpenChanged" Style="@Style" VerticalThreshold="@CalculatedVerticalThreshold" HorizontalThreshold="200">
     @foreach (var item in Items)
     {
         @RenderMenuItem(item)

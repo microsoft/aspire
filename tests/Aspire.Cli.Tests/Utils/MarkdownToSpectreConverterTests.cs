@@ -107,6 +107,9 @@ public partial class MarkdownToSpectreConverterTests
     [InlineData("[link text](https://example.com)", "[cyan][link=https://example.com]link text[/][/]")]
     [InlineData("Visit [GitHub](https://github.com) for more info.", "Visit [cyan][link=https://github.com]GitHub[/][/] for more info.")]
     [InlineData("[CreateBuilder(string[])](https://aspire.dev/reference/api/csharp/aspire.hosting/distributedapplication/methods.md#createbuilder-string)", "[cyan][link=https://aspire.dev/reference/api/csharp/aspire.hosting/distributedapplication/methods.md#createbuilder-string]CreateBuilder(string[[]])[/][/]")]
+    [InlineData("[ Discord](https://aka.ms/aspire-discord)", "[cyan][link=https://aka.ms/aspire-discord]Discord[/][/]")]
+    [InlineData("[Discord ](https://aka.ms/aspire-discord)", "[cyan][link=https://aka.ms/aspire-discord]Discord[/][/]")]
+    [InlineData("[ GitHub ](https://github.com)", "[cyan][link=https://github.com]GitHub[/][/]")]
     public void ConvertToSpectre_WithLinks_ConvertsCorrectly(string markdown, string expected)
     {
         // Act
@@ -117,17 +120,6 @@ public partial class MarkdownToSpectreConverterTests
     }
 
     [Fact]
-    public void ConvertLinksToPlainText_WithBracketedLinkText_ConvertsCorrectly()
-    {
-        var result = MarkdownToSpectreConverter.ConvertLinksToPlainText(
-            "[CreateBuilder(string[])](https://aspire.dev/reference/api/csharp/aspire.hosting/distributedapplication/methods.md#createbuilder-string)");
-
-        Assert.Equal(
-            "CreateBuilder(string[]) (https://aspire.dev/reference/api/csharp/aspire.hosting/distributedapplication/methods.md#createbuilder-string)",
-            result);
-    }
-
-    [Fact]
     public void ConvertToPlainText_WithLinksAndImages_ConvertsCorrectly()
     {
         var markdown = "Visit [GitHub](https://github.com) and remove ![diagram](https://example.com/diagram.png).";
@@ -135,6 +127,16 @@ public partial class MarkdownToSpectreConverterTests
         var result = MarkdownToSpectreConverter.ConvertToPlainText(markdown);
 
         Assert.Equal("Visit GitHub (https://github.com) and remove .", result);
+    }
+
+    [Fact]
+    public void ConvertToPlainText_TrimsWhitespaceFromLinkText()
+    {
+        var markdown = "Drop by [ Discord](https://aka.ms/aspire-discord) to chat.";
+
+        var result = MarkdownToSpectreConverter.ConvertToPlainText(markdown);
+
+        Assert.Equal("Drop by Discord (https://aka.ms/aspire-discord) to chat.", result);
     }
 
     [Fact]
@@ -721,7 +723,8 @@ Some ~~strikethrough~~ text with ```inline code block```.
         {
             Ansi = AnsiSupport.No,
             ColorSystem = ColorSystemSupport.NoColors,
-            Out = new AnsiConsoleOutput(writer)
+            Out = new AnsiConsoleOutput(writer),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
         });
 
         console.Profile.Width = int.MaxValue;
@@ -782,5 +785,36 @@ npm install[/]
 
 [italic grey]> That's all![/]".Replace("\r\n", "\n").Replace("\r", "\n");
         Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void ConvertToRenderable_WithParagraphBeforeTable_HasSingleBlankLineBetween()
+    {
+        var markdown = """
+            ## API
+
+            The API section configures authentication.
+            | Option | Description |
+            | ------ | ----------- |
+            | `AuthMode` | Can be set to `ApiKey` or `Unsecured`. |
+            """;
+
+        var output = RenderToPlainConsole(MarkdownToSpectreConverter.ConvertToRenderable(markdown));
+
+        var expected = """
+            API
+
+            The API section configures authentication.
+
+            ┌──────────┬────────────────────────────────────┐
+            │ Option   │ Description                        │
+            ├──────────┼────────────────────────────────────┤
+            │ AuthMode │ Can be set to ApiKey or Unsecured. │
+            └──────────┴────────────────────────────────────┘
+
+
+            """;
+
+        Assert.Equal(expected, output, ignoreLineEndingDifferences: true);
     }
 }

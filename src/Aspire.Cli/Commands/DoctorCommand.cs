@@ -40,7 +40,7 @@ internal sealed class DoctorCommand : BaseCommand
         Options.Add(s_formatOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var format = parseResult.GetValue(s_formatOption);
 
@@ -60,7 +60,7 @@ internal sealed class DoctorCommand : BaseCommand
 
         // Exit code: 0 if no failures (warnings are OK), 1 (InvalidCommand) if any failures
         var hasFailures = results.Any(r => r.Status == EnvironmentCheckStatus.Fail);
-        return hasFailures ? ExitCodeConstants.InvalidCommand : ExitCodeConstants.Success;
+        return CommandResult.FromExitCode(hasFailures ? CliExitCodes.InvalidCommand : CliExitCodes.Success);
     }
 
     private void OutputJson(IReadOnlyList<EnvironmentCheckResult> results)
@@ -122,7 +122,7 @@ internal sealed class DoctorCommand : BaseCommand
         if (warnings > 0 || failed > 0)
         {
             const string prerequisitesUrl = "https://aka.ms/aspire-prerequisites";
-            _ansiConsole.MarkupLine(string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DetailedPrerequisitesLink, $"[link]{prerequisitesUrl}[/]"));
+            _ansiConsole.MarkupLine(string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DetailedPrerequisitesLink, MarkupHelpers.SafeLink(InteractionService, prerequisitesUrl)));
         }
     }
 
@@ -160,7 +160,7 @@ internal sealed class DoctorCommand : BaseCommand
 
             if (hasLink)
             {
-                detailGrid.AddRow(new Markup($"See: [link={result.Link!.EscapeMarkup()}]{result.Link!.EscapeMarkup()}[/]"));
+                detailGrid.AddRow(new Markup($"See: {MarkupHelpers.SafeLink(InteractionService, result.Link!)}"));
             }
 
             if (hasDetails)
@@ -189,6 +189,8 @@ internal sealed class DoctorCommand : BaseCommand
         return category switch
         {
             "sdk" => DoctorCommandStrings.SdkCategoryHeader,
+            "aspire" => DoctorCommandStrings.AspireCategoryHeader,
+            "apphost" => DoctorCommandStrings.AppHostCategoryHeader,
             "container" => DoctorCommandStrings.ContainerCategoryHeader,
             "environment" => DoctorCommandStrings.EnvironmentCategoryHeader,
             _ => category
@@ -199,9 +201,11 @@ internal sealed class DoctorCommand : BaseCommand
     {
         return category switch
         {
-            "sdk" => 1,
-            "container" => 2,
-            "environment" => 3,
+            "aspire" => 0,
+            "apphost" => 1,
+            "sdk" => 2,
+            "container" => 3,
+            "environment" => 4,
             _ => 99
         };
     }

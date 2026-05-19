@@ -8,6 +8,14 @@
 #
 # Designed for idempotency - safe to re-run after partial failures.
 #
+# Invocation paths:
+# - Manual: triggered by a release manager via the Actions UI. The `authorize`
+#   job gates on admin/maintain permission for the dispatching user.
+# - Chained: dispatched automatically by the AzDO release-publish-nuget
+#   pipeline running as the aspire-repo-bot GitHub App. The authorize job
+#   recognizes this actor and bypasses the human permission check because
+#   the AzDO pipeline itself gates on AzDO release-publish permissions.
+#
 # For full documentation, see: docs/release-process.md
 
 name: Release GitHub Tasks
@@ -69,36 +77,71 @@ permissions:
   pull-requests: write
 
 jobs:
-  authorize:
-    name: Authorize
+  # Three-job layout:
+  # - `release` does the linear, must-be-sequential work (authorize, tag,
+  #   GitHub release). Splitting these would buy nothing because they
+  #   strictly depend on each other.
+  # - `merge-pr` and `baseline-pr` run in parallel after `release`. They are
+  #   independent (a failure in one must NOT block the other — that was the
+  #   pre-consolidation behavior we want to preserve), so they each pay
+  #   their own runner-provision tax but run concurrently.
+  # - `summary` joins on all three with `if: always()` and prints the final
+  #   status.
+  #
+  # Each step preserves the previous per-job `if:` gating against the
+  # `skip_*` inputs so partial-failure re-runs still behave the same way.
+  release:
+    name: Release Tasks
     runs-on: ubuntu-latest
     steps:
-      - name: Check if user is authorized
+      # --- Authorize ---------------------------------------------------------
+      - name: Authorize
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          echo "Checking if ${{ github.actor }} is authorized to run releases..."
-          
+          ACTOR="${{ github.actor }}"
+          ACTOR_ID="${{ github.actor_id }}"
+          echo "Checking if $ACTOR (id=$ACTOR_ID) is authorized to run releases..."
+
+          # The AzDO release pipeline dispatches this workflow as the
+          # aspire-repo-bot GitHub App. That path is already gated on AzDO
+          # release-publish permissions, so we skip the human admin/maintain
+          # check for the bot after verifying the actor identity.
+          if [[ "$ACTOR" == "aspire-repo-bot[bot]" ]]; then
+            ACTOR_INFO=$(gh api "users/$ACTOR" 2>/dev/null || echo '')
+            ACTOR_TYPE=$(echo "$ACTOR_INFO" | jq -r '.type // empty')
+            ACTOR_API_ID=$(echo "$ACTOR_INFO" | jq -r '.id // empty')
+
+            if [[ "$ACTOR_TYPE" != "Bot" ]]; then
+              echo "❌ ERROR: $ACTOR resolves to account type '$ACTOR_TYPE', expected 'Bot'."
+              exit 1
+            fi
+
+            if [[ -z "$ACTOR_ID" || -z "$ACTOR_API_ID" || "$ACTOR_ID" != "$ACTOR_API_ID" ]]; then
+              echo "❌ ERROR: actor_id mismatch (context=$ACTOR_ID, api=$ACTOR_API_ID)."
+              exit 1
+            fi
+
+            echo "✓ Verified dispatcher is aspire-repo-bot GitHub App (type=Bot, id=$ACTOR_API_ID) — skipping human permission check."
+            exit 0
+          fi
+
           # Get the user's permission level for this repo
-          PERMISSION=$(gh api repos/${{ github.repository }}/collaborators/${{ github.actor }}/permission --jq '.permission')
-          
+          PERMISSION=$(gh api repos/${{ github.repository }}/collaborators/$ACTOR/permission --jq '.permission')
+
           echo "User permission level: $PERMISSION"
-          
+
           # Only allow admin or maintain permission levels
           if [[ "$PERMISSION" != "admin" && "$PERMISSION" != "maintain" ]]; then
-            echo "❌ ERROR: User ${{ github.actor }} does not have sufficient permissions."
+            echo "❌ ERROR: User $ACTOR does not have sufficient permissions."
             echo "Required: 'admin' or 'maintain' permission level."
             echo "Current: '$PERMISSION'"
             exit 1
           fi
-          
-          echo "✓ User ${{ github.actor }} is authorized (permission: $PERMISSION)"
 
-  validate:
-    name: Validate Inputs
-    needs: authorize
-    runs-on: ubuntu-latest
-    steps:
+          echo "✓ User $ACTOR is authorized (permission: $PERMISSION)"
+
+      # --- Validate ----------------------------------------------------------
       - name: Print Parameters
         run: |
           echo "=== Release Workflow Parameters ==="
@@ -112,7 +155,7 @@ jobs:
           echo "Skip Merge PR: ${{ inputs.skip_merge_pr }}"
           echo "Skip Baseline PR: ${{ inputs.skip_baseline_pr }}"
           echo "==================================="
-          
+
           if [ "${{ inputs.dry_run }}" == "true" ]; then
             echo ""
             echo "⚠️  DRY RUN MODE ENABLED"
@@ -140,19 +183,33 @@ jobs:
           fi
           echo "✓ Commit SHA format is valid: $SHA"
 
-  create-tag:
-    name: Create Git Tag
-    needs: validate
-    if: ${{ inputs.skip_tagging != true }}
-    runs-on: ubuntu-latest
-    steps:
+      # --- App token and checkout (shared by all subsequent steps) ----------
+      # Mint the aspire-repo-bot App installation token. Used by every step
+      # that needs to fire a downstream event (release create, PR create,
+      # branch push). Using the App token instead of the default GITHUB_TOKEN
+      # causes the `release: released` event to actually trigger
+      # release-notes-generate.lock.yml (events fired by GITHUB_TOKEN do not
+      # cascade into other workflow runs).
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@df432ceedc7162793a195dd1713ff69aefc7379e # v2.0.6
+        with:
+          app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+
+      # Single checkout with full history. The tag-creation step needs all
+      # branches/tags reachable (fetch-depth: 0). The baseline-pr step
+      # explicitly switches to main before modifying files.
       - name: Checkout Repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
 
+      # --- Create Tag --------------------------------------------------------
       - name: Check if Tag Exists
         id: check-tag
+        if: inputs.skip_tagging != true
         run: |
           TAG_NAME="v${{ inputs.release_version }}"
           if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
@@ -174,18 +231,18 @@ jobs:
           fi
 
       - name: Fail if Tag Exists with Different SHA
-        if: steps.check-tag.outputs.tag_exists == 'true' && steps.check-tag.outputs.tag_matches == 'false'
+        if: inputs.skip_tagging != true && steps.check-tag.outputs.tag_exists == 'true' && steps.check-tag.outputs.tag_matches == 'false'
         run: |
           echo "❌ Tag already exists but points to a different commit!"
           echo "This requires manual resolution."
           exit 1
 
       - name: Create and Push Tag
-        if: steps.check-tag.outputs.tag_exists != 'true'
+        if: inputs.skip_tagging != true && steps.check-tag.outputs.tag_exists != 'true'
         run: |
           TAG_NAME="v${{ inputs.release_version }}"
           DRY_RUN="${{ inputs.dry_run }}"
-          
+
           if [ "$DRY_RUN" == "true" ]; then
             echo "🔍 [DRY RUN] Would create and push tag:"
             echo "   Tag name: $TAG_NAME"
@@ -198,22 +255,12 @@ jobs:
             echo "✓ Created and pushed tag: $TAG_NAME"
           fi
 
-  create-release:
-    name: Create GitHub Release
-    needs: [validate, create-tag]
-    if: |
-      always() &&
-      needs.validate.result == 'success' &&
-      (needs.create-tag.result == 'success' || needs.create-tag.result == 'skipped') &&
-      inputs.skip_github_release != true
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
+      # --- Create GitHub Release --------------------------------------------
       - name: Check if Release Exists
         id: check-release
+        if: inputs.skip_github_release != true
         env:
+          # Read-only check, no event fired — github.token is fine.
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG_NAME="v${{ inputs.release_version }}"
@@ -226,47 +273,31 @@ jobs:
           fi
 
       - name: Generate Release Notes
-        if: steps.check-release.outputs.release_exists != 'true'
+        if: inputs.skip_github_release != true && steps.check-release.outputs.release_exists != 'true'
         id: release-notes
         run: |
-          VERSION="${{ inputs.release_version }}"
-          TAG_NAME="v$VERSION"
-          IS_PRERELEASE="${{ inputs.is_prerelease }}"
-
-          # Create release notes
+          # Write a short placeholder. The real release notes are generated
+          # asynchronously by the release-notes-generate agentic workflow,
+          # which fires on the `release: [released]` event once `gh release
+          # create` below publishes the release, and edits this body in
+          # place.
           cat << EOF > release_notes.md
-          ## What's New in Aspire $VERSION
-
-          See the full changelog and documentation at:
-          - 📖 [Documentation](https://learn.microsoft.com/microsoft/aspire/)
-          - 🐛 [Known Issues](https://github.com/microsoft/aspire/issues?q=is%3Aissue+is%3Aopen+label%3A%22known-issue%22)
-
-          ### Installation
-
-          \`\`\`bash
-          dotnet new install Aspire.ProjectTemplates::$VERSION
-          \`\`\`
-
-          Or update your existing projects:
-
-          \`\`\`bash
-          dotnet workload update
-          \`\`\`
-
-          ### Package Downloads
-
-          All packages are available on [NuGet.org](https://www.nuget.org/packages?q=owner%3Adotnet+aspire).
+          *Release notes are being generated automatically and will be added to this release shortly. If they haven't appeared within a few hours, ping the Aspire team.*
 
           ---
           *Full commit: [${{ inputs.commit_sha }}](https://github.com/${{ github.repository }}/commit/${{ inputs.commit_sha }})*
           EOF
 
-          echo "Release notes generated"
+          echo "Placeholder release notes generated"
 
       - name: Create GitHub Release
-        if: steps.check-release.outputs.release_exists != 'true'
+        if: inputs.skip_github_release != true && steps.check-release.outputs.release_exists != 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
+          # Use the App token here so the `release: released` event is
+          # authored by aspire-repo-bot and downstream workflows
+          # (release-notes-generate.lock.yml) get triggered. Events fired by
+          # GITHUB_TOKEN intentionally do NOT trigger other workflows.
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           TAG_NAME="v${{ inputs.release_version }}"
           DRY_RUN="${{ inputs.dry_run }}"
@@ -296,15 +327,19 @@ jobs:
             echo "✓ Created GitHub Release: $TAG_NAME"
           fi
 
-  create-merge-pr:
+  # ----------------------------------------------------------------------------
+  # merge-pr: runs in parallel with baseline-pr after the release job. A
+  # failure here must NOT block baseline-pr (and vice versa) — that matches
+  # the pre-consolidation per-job design.
+  # ----------------------------------------------------------------------------
+  merge-pr:
     name: Create Merge-Back PR
-    needs: [validate, create-release]
-    if: |
-      always() &&
-      needs.validate.result == 'success' &&
-      (needs.create-release.result == 'success' || needs.create-release.result == 'skipped') &&
-      inputs.skip_merge_pr != true
+    needs: release
+    if: inputs.skip_merge_pr != true
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - name: Generate GitHub App Token
         id: app-token
@@ -317,9 +352,10 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
 
-      - name: Check for Existing PR
-        id: check-pr
+      - name: Check for Existing Merge PR
+        id: check-merge-pr
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
@@ -336,13 +372,13 @@ jobs:
           fi
 
       - name: Dry Run - Show Merge PR Details
-        if: steps.check-pr.outputs.pr_exists != 'true' && inputs.dry_run == true
+        if: steps.check-merge-pr.outputs.pr_exists != 'true' && inputs.dry_run == true
         run: |
           echo "🔍 [DRY RUN] Would create merge PR:"
           echo "   Title: Merge ${{ inputs.release_branch }} to main after v${{ inputs.release_version }} release"
           echo "   Head branch: ${{ inputs.release_branch }}"
           echo "   Base branch: main"
-          echo "   Labels: area-infrastructure, release-automation"
+          echo "   Labels: area-engineering-systems"
           echo ""
           echo "   PR body:"
           echo "   ─────────────────────────────────────"
@@ -355,7 +391,7 @@ jobs:
           echo "   ─────────────────────────────────────"
 
       - name: Create Merge PR
-        if: steps.check-pr.outputs.pr_exists != 'true' && inputs.dry_run != true
+        if: steps.check-merge-pr.outputs.pr_exists != 'true' && inputs.dry_run != true
         uses: ./.github/actions/create-pull-request
         with:
           token: ${{ steps.app-token.outputs.token }}
@@ -374,19 +410,19 @@ jobs:
           base: main
           branch-already-exists: 'true'
           labels: |
-            area-infrastructure
-            release-automation
+            area-engineering-systems
 
-  create-baseline-pr:
+  # ----------------------------------------------------------------------------
+  # baseline-pr: runs in parallel with merge-pr after the release job.
+  # ----------------------------------------------------------------------------
+  baseline-pr:
     name: Create Baseline Version PR
-    needs: [validate, create-release]
-    if: |
-      always() &&
-      needs.validate.result == 'success' &&
-      (needs.create-release.result == 'success' || needs.create-release.result == 'skipped') &&
-      inputs.skip_baseline_pr != true &&
-      inputs.is_prerelease != true
+    needs: release
+    if: inputs.skip_baseline_pr != true && inputs.is_prerelease != true
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - name: Generate GitHub App Token
         id: app-token
@@ -395,15 +431,18 @@ jobs:
           app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
           private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
 
-      - name: Checkout Repository
+      # Checkout main directly — the baseline-update branch is meant to be
+      # branched off main, not off the release branch the workflow was
+      # dispatched from.
+      - name: Checkout main
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: main
-          fetch-depth: 1
+          fetch-depth: 0
           token: ${{ steps.app-token.outputs.token }}
 
-      - name: Check for Existing PR
-        id: check-pr
+      - name: Check for Existing Baseline PR
+        id: check-baseline-pr
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
@@ -420,7 +459,7 @@ jobs:
           fi
 
       - name: Update PackageValidationBaselineVersion
-        if: steps.check-pr.outputs.pr_exists != 'true'
+        if: steps.check-baseline-pr.outputs.pr_exists != 'true'
         run: |
           VERSION="${{ inputs.release_version }}"
           FILE="src/Directory.Build.props"
@@ -441,16 +480,16 @@ jobs:
           git diff "$FILE"
 
       - name: Dry Run - Show Baseline PR Details
-        if: steps.check-pr.outputs.pr_exists != 'true' && inputs.dry_run == true
+        if: steps.check-baseline-pr.outputs.pr_exists != 'true' && inputs.dry_run == true
         run: |
           VERSION="${{ inputs.release_version }}"
           BRANCH_NAME="update-baseline-$VERSION"
-          
+
           echo "🔍 [DRY RUN] Would create baseline version PR:"
           echo "   Title: Update PackageValidationBaselineVersion to $VERSION"
           echo "   Branch: $BRANCH_NAME"
           echo "   Base: main"
-          echo "   Labels: area-infrastructure, release-automation"
+          echo "   Labels: area-engineering-systems"
           echo ""
           echo "   File changes (src/Directory.Build.props):"
           echo "   ─────────────────────────────────────"
@@ -459,8 +498,8 @@ jobs:
           echo ""
           echo "   Commit message: Update PackageValidationBaselineVersion to $VERSION"
 
-      - name: Create Branch and Commit
-        if: steps.check-pr.outputs.pr_exists != 'true' && inputs.dry_run != true
+      - name: Create Branch and Commit for Baseline PR
+        if: steps.check-baseline-pr.outputs.pr_exists != 'true' && inputs.dry_run != true
         run: |
           BRANCH_NAME="update-baseline-${{ inputs.release_version }}"
           VERSION="${{ inputs.release_version }}"
@@ -476,7 +515,7 @@ jobs:
           echo "✓ Created branch: $BRANCH_NAME"
 
       - name: Create Baseline PR
-        if: steps.check-pr.outputs.pr_exists != 'true' && inputs.dry_run != true
+        if: steps.check-baseline-pr.outputs.pr_exists != 'true' && inputs.dry_run != true
         uses: ./.github/actions/create-pull-request
         with:
           token: ${{ steps.app-token.outputs.token }}
@@ -495,12 +534,16 @@ jobs:
           base: main
           branch-already-exists: 'true'
           labels: |
-            area-infrastructure
-            release-automation
+            area-engineering-systems
 
+  # ----------------------------------------------------------------------------
+  # summary: joins all upstream jobs with `if: always()` and reports the
+  # final outcome. Uses `needs.*.result` to surface per-job status because
+  # the work is no longer in a single job.
+  # ----------------------------------------------------------------------------
   summary:
-    name: Release Summary
-    needs: [authorize, validate, create-tag, create-release, create-merge-pr, create-baseline-pr]
+    name: Summary
+    needs: [release, merge-pr, baseline-pr]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -521,18 +564,18 @@ jobs:
           echo "║ Release Branch: ${{ inputs.release_branch }}"
           echo "║ Is Prerelease:  ${{ inputs.is_prerelease }}"
           echo "║ Dry Run:        ${{ inputs.dry_run }}"
+          echo "║ Skip Tagging:        ${{ inputs.skip_tagging }}"
+          echo "║ Skip GitHub Release: ${{ inputs.skip_github_release }}"
+          echo "║ Skip Merge PR:       ${{ inputs.skip_merge_pr }}"
+          echo "║ Skip Baseline PR:    ${{ inputs.skip_baseline_pr }}"
           echo "╠═══════════════════════════════════════════════════════════════╣"
-          echo "║ Job Results:"
-          echo "║   Authorization:  ${{ needs.authorize.result }}"
-          echo "║   Validation:     ${{ needs.validate.result }}"
-          echo "║   Create Tag:     ${{ needs.create-tag.result }}"
-          echo "║   Create Release: ${{ needs.create-release.result }}"
-          echo "║   Merge PR:       ${{ needs.create-merge-pr.result }}"
-          echo "║   Baseline PR:    ${{ needs.create-baseline-pr.result }}"
+          echo "║ Release job:    ${{ needs.release.result }}"
+          echo "║ Merge PR job:   ${{ needs.merge-pr.result }}"
+          echo "║ Baseline PR job: ${{ needs.baseline-pr.result }}"
           echo "╚═══════════════════════════════════════════════════════════════╝"
           echo ""
 
-      - name: Create Summary
+      - name: Create Job Summary
         run: |
           DRY_RUN_BANNER=""
           if [ "${{ inputs.dry_run }}" == "true" ]; then
@@ -544,18 +587,32 @@ jobs:
 
           "
           fi
-          
+
+          # Map a needs.*.result string to an icon for the summary table.
+          render_status() {
+            case "$1" in
+              success)   echo "✅ \`success\`" ;;
+              failure)   echo "❌ \`failure\`" ;;
+              cancelled) echo "⏹️ \`cancelled\`" ;;
+              skipped)   echo "⏭️ \`skipped\`" ;;
+              *)         echo "❔ \`$1\`" ;;
+            esac
+          }
+
+          RELEASE_STATUS=$(render_status "${{ needs.release.result }}")
+          MERGE_STATUS=$(render_status "${{ needs.merge-pr.result }}")
+          BASELINE_STATUS=$(render_status "${{ needs.baseline-pr.result }}")
+
           cat << EOF >> $GITHUB_STEP_SUMMARY
           # Release Summary: v${{ inputs.release_version }}
-          
-          ${DRY_RUN_BANNER}| Task | Status |
-          |------|--------|
-          | Authorization | ${{ needs.authorize.result == 'success' && '✅' || '❌' }} ${{ needs.authorize.result }} |
-          | Validation | ${{ needs.validate.result == 'success' && '✅' || '❌' }} ${{ needs.validate.result }} |
-          | Create Tag | ${{ needs.create-tag.result == 'success' && '✅' || (needs.create-tag.result == 'skipped' && '⏭️' || '❌') }} ${{ needs.create-tag.result }} |
-          | Create Release | ${{ needs.create-release.result == 'success' && '✅' || (needs.create-release.result == 'skipped' && '⏭️' || '❌') }} ${{ needs.create-release.result }} |
-          | Merge PR | ${{ needs.create-merge-pr.result == 'success' && '✅' || (needs.create-merge-pr.result == 'skipped' && '⏭️' || '❌') }} ${{ needs.create-merge-pr.result }} |
-          | Baseline PR | ${{ needs.create-baseline-pr.result == 'success' && '✅' || (needs.create-baseline-pr.result == 'skipped' && '⏭️' || '❌') }} ${{ needs.create-baseline-pr.result }} |
+
+          ${DRY_RUN_BANNER}## Job results
+
+          | Job | Result |
+          |-----|--------|
+          | Release Tasks (tag + GitHub release) | ${RELEASE_STATUS} |
+          | Create Merge-Back PR | ${MERGE_STATUS} |
+          | Create Baseline Version PR | ${BASELINE_STATUS} |
 
           ## Details
           - **Tag**: v${{ inputs.release_version }}
@@ -563,6 +620,10 @@ jobs:
           - **Branch**: ${{ inputs.release_branch }}
           - **Prerelease**: ${{ inputs.is_prerelease }}
           - **Dry Run**: ${{ inputs.dry_run }}
+          - **Skip Tagging**: ${{ inputs.skip_tagging }}
+          - **Skip GitHub Release**: ${{ inputs.skip_github_release }}
+          - **Skip Merge PR**: ${{ inputs.skip_merge_pr }}
+          - **Skip Baseline PR**: ${{ inputs.skip_baseline_pr }}
 
           ## Links
           - [Release](https://github.com/${{ github.repository }}/releases/tag/v${{ inputs.release_version }})

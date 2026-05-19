@@ -168,6 +168,107 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void WithHelm_ConfiguresChartName()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddKubernetesEnvironment("env")
+            .WithHelm(helm => helm.WithChartName("my-chart"));
+
+        var app = builder.Build();
+        var env = app.Services.GetRequiredService<DistributedApplicationModel>()
+            .Resources.OfType<KubernetesEnvironmentResource>().Single();
+
+        Assert.True(env.TryGetLastAnnotation<HelmChartNameAnnotation>(out var annotation));
+        Assert.NotNull(annotation.Name);
+    }
+
+    [Fact]
+    public void WithHelm_ConfiguresChartDescription()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddKubernetesEnvironment("env")
+            .WithHelm(helm => helm.WithChartDescription("My chart description"));
+
+        var app = builder.Build();
+        var env = app.Services.GetRequiredService<DistributedApplicationModel>()
+            .Resources.OfType<KubernetesEnvironmentResource>().Single();
+
+        Assert.True(env.TryGetLastAnnotation<HelmChartDescriptionAnnotation>(out var annotation));
+        Assert.NotNull(annotation.Description);
+    }
+
+    [Fact]
+    public void WithHelm_ChartNameAcceptsParameter()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var nameParam = builder.AddParameter("chart-name");
+
+        builder.AddKubernetesEnvironment("env")
+            .WithHelm(helm => helm.WithChartName(nameParam));
+
+        var app = builder.Build();
+        var env = app.Services.GetRequiredService<DistributedApplicationModel>()
+            .Resources.OfType<KubernetesEnvironmentResource>().Single();
+
+        Assert.True(env.TryGetLastAnnotation<HelmChartNameAnnotation>(out var annotation));
+        Assert.NotNull(annotation.Name);
+    }
+
+    [Fact]
+    public void WithHelm_ChartDescriptionAcceptsParameter()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var descParam = builder.AddParameter("chart-description");
+
+        builder.AddKubernetesEnvironment("env")
+            .WithHelm(helm => helm.WithChartDescription(descParam));
+
+        var app = builder.Build();
+        var env = app.Services.GetRequiredService<DistributedApplicationModel>()
+            .Resources.OfType<KubernetesEnvironmentResource>().Single();
+
+        Assert.True(env.TryGetLastAnnotation<HelmChartDescriptionAnnotation>(out var annotation));
+        Assert.NotNull(annotation.Description);
+    }
+
+    [Fact]
+    public void WithHelm_ConfiguresAllChartMetadata()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddKubernetesEnvironment("env")
+            .WithHelm(helm =>
+            {
+                helm.WithChartName("acme-app");
+                helm.WithChartVersion("1.2.3");
+                helm.WithChartDescription("ACME application chart");
+            });
+
+        var app = builder.Build();
+        var env = app.Services.GetRequiredService<DistributedApplicationModel>()
+            .Resources.OfType<KubernetesEnvironmentResource>().Single();
+
+        Assert.True(env.TryGetLastAnnotation<HelmChartNameAnnotation>(out _));
+        Assert.True(env.TryGetLastAnnotation<HelmChartVersionAnnotation>(out _));
+        Assert.True(env.TryGetLastAnnotation<HelmChartDescriptionAnnotation>(out _));
+    }
+
+    [Fact]
+    public void WithHelm_RepeatedChartNameCallsReplaceAnnotations()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddKubernetesEnvironment("env")
+            .WithHelm(helm => helm.WithChartName("first"))
+            .WithHelm(helm => helm.WithChartName("second"));
+
+        var app = builder.Build();
+        var env = app.Services.GetRequiredService<DistributedApplicationModel>()
+            .Resources.OfType<KubernetesEnvironmentResource>().Single();
+
+        var annotations = env.Annotations.OfType<HelmChartNameAnnotation>().ToList();
+        Assert.Single(annotations);
+    }
+
+    [Fact]
     public void WithHelm_RepeatedCallsReplaceAnnotations()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -510,6 +611,71 @@ public class KubernetesDeployTests(ITestOutputHelper output)
             });
     }
 
+    [Fact]
+    public void HelmChartOptions_WithChartName_ThrowsOnEmpty()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddKubernetesEnvironment("env")
+            .WithHelm(helm =>
+            {
+                Assert.Throws<ArgumentException>(() => helm.WithChartName(string.Empty));
+            });
+    }
+
+    [Fact]
+    public void HelmChartOptions_WithChartDescription_ThrowsOnEmpty()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddKubernetesEnvironment("env")
+            .WithHelm(helm =>
+            {
+                Assert.Throws<ArgumentException>(() => helm.WithChartDescription(string.Empty));
+            });
+    }
+
+    [Theory]
+    [InlineData("invalid name")]
+    [InlineData("with/slash")]
+    [InlineData("with*star")]
+    public void HelmChartOptions_WithChartName_ThrowsOnInvalidName(string value)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddKubernetesEnvironment("env")
+            .WithHelm(helm =>
+            {
+                Assert.Throws<ArgumentException>(() => helm.WithChartName(value));
+            });
+    }
+
+    [Fact]
+    public void HelmChartOptions_WithChartName_ThrowsWhenTooLong()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddKubernetesEnvironment("env")
+            .WithHelm(helm =>
+            {
+                Assert.Throws<ArgumentException>(() => helm.WithChartName(new string('a', 251)));
+            });
+    }
+
+    [Theory]
+    [InlineData("simple-chart")]
+    [InlineData("chart_with_underscore")]
+    [InlineData("chart.with.dots")]
+    [InlineData("Chart-Mixed-Case")]
+    public void HelmChartOptions_WithChartName_AcceptsValidNames(string value)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddKubernetesEnvironment("env")
+            .WithHelm(helm => helm.WithChartName(value));
+
+        var app = builder.Build();
+        var env = app.Services.GetRequiredService<DistributedApplicationModel>()
+            .Resources.OfType<KubernetesEnvironmentResource>().Single();
+
+        Assert.True(env.TryGetLastAnnotation<HelmChartNameAnnotation>(out _));
+    }
+
     [Theory]
     [InlineData("Production")]
     [InlineData("my_namespace")]
@@ -543,7 +709,8 @@ public class KubernetesDeployTests(ITestOutputHelper output)
     [Theory]
     [InlineData("latest")]
     [InlineData("release-candidate")]
-    [InlineData("1.0")]
+    [InlineData("1.0.0.0")]
+    [InlineData("01.2.3")]
     public void HelmChartOptions_WithChartVersion_ThrowsOnInvalidVersion(string value)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -552,6 +719,139 @@ public class KubernetesDeployTests(ITestOutputHelper output)
             {
                 Assert.Throws<ArgumentException>(() => helm.WithChartVersion(value));
             });
+    }
+
+    [Theory]
+    [InlineData("1")]
+    [InlineData("1.2")]
+    [InlineData("1.2.3")]
+    [InlineData("1.2.3-beta.1")]
+    [InlineData("1.2.3-beta.1+ef365")]
+    [InlineData("v1")]
+    [InlineData("v1.2")]
+    [InlineData("v1.2.3")]
+    [InlineData("V1.2.3")]
+    public void HelmChartOptions_WithChartVersion_AcceptsHelmCompatibleVersions(string value)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddKubernetesEnvironment("env")
+            .WithHelm(helm =>
+            {
+                helm.WithChartVersion(value);
+            });
+    }
+
+    [Fact]
+    public async Task WithHelm_PublishThrowsWhenResolvedParameterChartVersionIsInvalid()
+    {
+        using var tempDir = new TestTempDirectory();
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        var versionParam = builder.AddParameter("chart-version", "not-a-version");
+
+        builder.AddKubernetesEnvironment("env")
+            .WithHelm(helm => helm.WithChartVersion(versionParam));
+        builder.AddContainer("svc", "nginx");
+
+        using var app = builder.Build();
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => ExecutePipelineAsync(app));
+        Assert.Contains("not-a-version", ex.Message);
+        Assert.IsType<ArgumentException>(ex.InnerException);
+    }
+
+    private static Task ExecutePipelineAsync(DistributedApplication app)
+    {
+        var pipeline = app.Services.GetRequiredService<IDistributedApplicationPipeline>();
+        var context = new PipelineContext(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            app.Services.GetRequiredService<Microsoft.Extensions.Logging.ILogger<KubernetesDeployTests>>(),
+            CancellationToken.None);
+
+        return pipeline.ExecuteAsync(context);
+    }
+
+    [Fact]
+    public async Task WithHelm_PublishWritesChartMetadataToChartYaml()
+    {
+        using var tempDir = new TestTempDirectory();
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        builder.AddKubernetesEnvironment("env")
+            .WithHelm(helm =>
+            {
+                helm.WithChartName("acme-app");
+                helm.WithChartVersion("2.5.0");
+                helm.WithChartDescription("ACME application chart");
+            });
+        builder.AddContainer("svc", "nginx");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        var chartYaml = await File.ReadAllTextAsync(Path.Combine(tempDir.Path, "Chart.yaml"));
+
+        Assert.Contains("name: \"acme-app\"", chartYaml);
+        Assert.Contains("version: \"2.5.0\"", chartYaml);
+        Assert.Contains("appVersion: \"2.5.0\"", chartYaml);
+        Assert.Contains("description: \"ACME application chart\"", chartYaml);
+    }
+
+    [Fact]
+    public async Task WithHelm_PublishResolvesParameterChartMetadata()
+    {
+        using var tempDir = new TestTempDirectory();
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        var nameParam = builder.AddParameter("chart-name", "param-chart");
+        var versionParam = builder.AddParameter("chart-version", "3.0.0");
+        var descParam = builder.AddParameter("chart-description", "Param-resolved description");
+
+        builder.AddKubernetesEnvironment("env")
+            .WithHelm(helm =>
+            {
+                helm.WithChartName(nameParam);
+                helm.WithChartVersion(versionParam);
+                helm.WithChartDescription(descParam);
+            });
+        builder.AddContainer("svc", "nginx");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        var chartYaml = await File.ReadAllTextAsync(Path.Combine(tempDir.Path, "Chart.yaml"));
+
+        Assert.Contains("name: \"param-chart\"", chartYaml);
+        Assert.Contains("version: \"3.0.0\"", chartYaml);
+        Assert.Contains("appVersion: \"3.0.0\"", chartYaml);
+        Assert.Contains("description: \"Param-resolved description\"", chartYaml);
+    }
+
+    [Fact]
+    public async Task PublishWritesChartNameTemplateLabelOnResources()
+    {
+        using var tempDir = new TestTempDirectory();
+
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        builder.AddKubernetesEnvironment("env")
+            .WithHelm(helm => helm.WithChartName("custom-chart"));
+        builder.AddContainer("svc", "nginx");
+
+        using var app = builder.Build();
+        await app.RunAsync();
+
+        var deploymentYaml = await File.ReadAllTextAsync(Path.Combine(tempDir.Path, "templates", "svc", "deployment.yaml"));
+
+        // The label should use the Helm template variable, not the literal chart name.
+        Assert.Contains("app.kubernetes.io/name: \"{{ .Chart.Name }}\"", deploymentYaml);
+        Assert.DoesNotContain("app.kubernetes.io/name: \"custom-chart\"", deploymentYaml);
     }
 
     [Fact]

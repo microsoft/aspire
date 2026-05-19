@@ -12,10 +12,13 @@ namespace Aspire.Cli.Tests.TestServices;
 
 internal sealed class TestInteractionService : IInteractionService
 {
+    private readonly object _displayLock = new();
     private readonly Queue<(string Response, ResponseType Type)> _responses = new();
     private bool _shouldCancel;
 
     public ConsoleOutput Console { get; set; }
+
+    public bool SupportsLinks { get; set; }
 
     // Callback hooks
     public Action<string>? DisplaySubtleMessageCallback { get; set; }
@@ -23,6 +26,7 @@ internal sealed class TestInteractionService : IInteractionService
     public Func<string, bool, bool>? ConfirmCallback { get; set; }
     public Action<string>? ShowStatusCallback { get; set; }
     public Action<string>? DisplayVersionUpdateNotificationCallback { get; set; }
+    public string? LastVersionUpdateCommand { get; private set; }
 
     /// <summary>
     /// Callback for capturing selection prompts in tests. Uses non-generic IEnumerable and object
@@ -40,8 +44,14 @@ internal sealed class TestInteractionService : IInteractionService
     public List<StringPromptCall> StringPromptCalls { get; } = [];
     public List<BooleanPromptCall> BooleanPromptCalls { get; } = [];
     public List<string> DisplayedErrors { get; } = [];
-    public List<(KnownEmoji Emoji, string Message)> DisplayedMessages { get; } = [];
+    public List<(KnownEmoji Emoji, string Message, ConsoleOutput? ConsoleOverride)> DisplayedMessages { get; } = [];
+    public List<(OutputLineStream Stream, string Line)> DisplayedLines { get; } = [];
+    public List<string> DisplayedPlainText { get; } = [];
+    public List<(string Text, ConsoleOutput? ConsoleOverride)> DisplayedRawText { get; } = [];
+    public List<string> DisplayedSuccess { get; } = [];
+    public List<string> ShownStatuses { get; } = [];
     public int DisplayEmptyLineCount { get; private set; }
+    public List<ConsoleOutput?> DisplayedCancellations { get; } = [];
 
     // Response queue setup methods
     public void SetupStringPromptResponse(string response) => _responses.Enqueue((response, ResponseType.String));
@@ -59,12 +69,22 @@ internal sealed class TestInteractionService : IInteractionService
 
     public Task<T> ShowStatusAsync<T>(string statusText, Func<Task<T>> action, KnownEmoji? emoji = null, bool allowMarkup = false)
     {
+        lock (_displayLock)
+        {
+            ShownStatuses.Add(statusText);
+        }
+
         ShowStatusCallback?.Invoke(statusText);
         return action();
     }
 
     public void ShowStatus(string statusText, Action action, KnownEmoji? emoji = null, bool allowMarkup = false)
     {
+        lock (_displayLock)
+        {
+            ShownStatuses.Add(statusText);
+        }
+
         action();
     }
 
@@ -96,7 +116,7 @@ internal sealed class TestInteractionService : IInteractionService
         return PromptForStringAsync(promptText, validator, isSecret: false, required, binding, cancellationToken);
     }
 
-    public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull
+    public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
     {
         var (wasProvided, value, _) = PromptBinding.Resolve(binding);
         if (wasProvided && value is not null)
@@ -137,7 +157,7 @@ internal sealed class TestInteractionService : IInteractionService
         return Task.FromResult(choices.First());
     }
 
-    public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull
+    public Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
     {
         if (_shouldCancel || cancellationToken.IsCancellationRequested)
         {
@@ -171,26 +191,44 @@ internal sealed class TestInteractionService : IInteractionService
         return 0;
     }
 
-    public void DisplayError(string errorMessage)
+    public void DisplayError(string errorMessage, bool allowMarkup = false)
     {
-        DisplayedErrors.Add(errorMessage);
+        lock (_displayLock)
+        {
+            DisplayedErrors.Add(errorMessage);
+        }
     }
 
-    public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false)
+    public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false, ConsoleOutput? consoleOverride = null)
     {
-        DisplayedMessages.Add((emoji, message));
+        lock (_displayLock)
+        {
+            DisplayedMessages.Add((emoji, message, consoleOverride));
+        }
     }
 
     public void DisplaySuccess(string message, bool allowMarkup = false)
     {
+        lock (_displayLock)
+        {
+            DisplayedSuccess.Add(message);
+        }
     }
 
     public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines)
     {
+        lock (_displayLock)
+        {
+            DisplayedLines.AddRange(lines);
+        }
     }
 
-    public void DisplayCancellationMessage()
+    public void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null)
     {
+        lock (_displayLock)
+        {
+            DisplayedCancellations.Add(consoleOverride);
+        }
     }
 
     public Task<bool> PromptConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default)
@@ -229,21 +267,33 @@ internal sealed class TestInteractionService : IInteractionService
 
     public void DisplayEmptyLine()
     {
-        DisplayEmptyLineCount++;
+        lock (_displayLock)
+        {
+            DisplayEmptyLineCount++;
+        }
     }
 
     public void DisplayPlainText(string text)
     {
+        lock (_displayLock)
+        {
+            DisplayedPlainText.Add(text);
+        }
     }
 
     public Action<string>? DisplayRawTextCallback { get; set; }
 
     public void DisplayRawText(string text, ConsoleOutput? consoleOverride = null)
     {
+        lock (_displayLock)
+        {
+            DisplayedRawText.Add((text, consoleOverride));
+        }
+
         DisplayRawTextCallback?.Invoke(text);
     }
 
-    public void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null)
+    public void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null, int? maxWidth = null)
     {
     }
 
@@ -259,6 +309,7 @@ internal sealed class TestInteractionService : IInteractionService
 
     public void DisplayVersionUpdateNotification(string newerVersion, string? updateCommand = null)
     {
+        LastVersionUpdateCommand = updateCommand;
         DisplayVersionUpdateNotificationCallback?.Invoke(newerVersion);
     }
 

@@ -153,6 +153,9 @@
   <data name="HasErrorOptionDescription" xml:space="preserve">
     <value>Filter by error status (true to show only errors, false to exclude errors)</value>
   </data>
+  <data name="SearchOptionDescription" xml:space="preserve">
+    <value>Full-text search across telemetry text fields, such as log messages, attribute values, names, source, and IDs</value>
+  </data>
   <data name="LimitMustBePositive" xml:space="preserve">
     <value>The --limit value must be a positive number.</value>
   </data>

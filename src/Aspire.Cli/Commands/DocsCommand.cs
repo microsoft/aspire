@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.CommandLine;
-using System.CommandLine.Help;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
@@ -14,7 +12,7 @@ namespace Aspire.Cli.Commands;
 /// <summary>
 /// Parent command for documentation operations. Contains subcommands for listing, searching, and getting docs, including API reference content.
 /// </summary>
-internal sealed class DocsCommand : BaseCommand
+internal sealed class DocsCommand : ParentCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.ToolsAndConfiguration;
 
@@ -34,13 +32,5 @@ internal sealed class DocsCommand : BaseCommand
         Subcommands.Add(searchCommand);
         Subcommands.Add(getCommand);
         Subcommands.Add(apiCommand);
-    }
-
-    protected override bool UpdateNotificationsEnabled => false;
-
-    protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
-    {
-        new HelpAction().Invoke(parseResult);
-        return Task.FromResult(ExitCodeConstants.InvalidCommand);
     }
 }

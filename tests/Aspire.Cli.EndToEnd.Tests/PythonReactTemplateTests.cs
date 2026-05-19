@@ -35,6 +35,10 @@ public sealed class PythonReactTemplateTests(ITestOutputHelper output)
         // Step 1: Create project using aspire new, selecting the FastAPI/React template
         await auto.AspireNewAsync("AspirePyReactApp", counter, template: AspireTemplate.PythonReact, useRedisCache: false);
 
+        GitIgnoreAssertions.AssertContainsEntry(
+            Path.Combine(workspace.WorkspaceRoot.FullName, "AspirePyReactApp"),
+            ".aspire/");
+
         // Step 2: Navigate into the project directory so config resolution finds the
         // project-level aspire.config.json (which has the packages section).
         // See https://github.com/microsoft/aspire/issues/15623
@@ -42,7 +46,10 @@ public sealed class PythonReactTemplateTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Step 3: Start and stop the project
+        // Step 3: Verify the generated TypeScript AppHost builds successfully.
+        await auto.RunCommandFailFastAsync("npm run build", counter, TimeSpan.FromMinutes(2));
+
+        // Step 4: Start and stop the project
         await auto.AspireStartAsync(counter);
         await auto.AspireStopAsync(counter);
 

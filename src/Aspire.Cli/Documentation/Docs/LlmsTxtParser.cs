@@ -58,18 +58,67 @@ internal sealed class LlmsSection
 }
 
 /// <summary>
-/// Parser for llms.txt format documentation with parallel document processing.
+/// Parser for llms.txt format documentation.
 /// </summary>
 /// <remarks>
-/// Supports both standard markdown with headings on separate lines and minified
-/// content with inline headings. Code blocks are properly excluded from heading detection.
+/// <para>
+/// The llms.txt convention is defined at <see href="https://llmstxt.org"/>. A
+/// concatenated llms.txt corpus is a stream of markdown documents separated by
+/// H1 (<c>#</c>) headings. Each document optionally begins with a blockquote
+/// "summary" line, followed by H2+ sections.
+/// </para>
+/// <para>
+/// Two physical formats appear in the wild:
+/// </para>
+/// <list type="number">
+///   <item>
+///     <description>
+///       Standard markdown — headings on their own line, blank lines
+///       between sections. Example:
+///       <code>
+///       # Document Title
+///
+///       > One-line summary in a blockquote.
+///
+///       ## Section One
+///
+///       Section body.
+///
+///       ## Section Two
+///
+///       More body.
+///       </code>
+///     </description>
+///   </item>
+///   <item>
+///     <description>
+///       Minified ("inline") form — newlines collapsed to single spaces
+///       by site-generation plugins (notably Starlight's
+///       <see href="https://github.com/delucis/starlight-llms-txt">starlight-llms-txt</see>),
+///       so the heading marker appears inline with a space prefix
+///       (<c>" ## "</c>) and Starlight emits
+///       <c>[Section titled "Section One"]</c> as an anchor stub directly
+///       after each heading. Example raw line:
+///       <code>
+///       # Document Title [Section titled Document Title] Body text ## Section One [Section titled Section One] Body of section one. ## Section Two ...
+///       </code>
+///       Both formats can appear within the same corpus (and even the same
+///       document).
+///     </description>
+///   </item>
+/// </list>
+/// <para>
+/// Fenced code blocks are detected up front and treated as no-fly zones for all
+/// heading detection so bash <c>#</c> comments and shell prompts don't get
+/// parsed as document or section boundaries.
+/// </para>
 /// </remarks>
 internal static partial class LlmsTxtParser
 {
     private const int MaxDocumentTitleLength = 200;
 
     /// <summary>
-    /// Parses llms.txt content into a collection of documents using parallel processing.
+    /// Parses llms.txt content into a collection of documents.
     /// </summary>
     /// <param name="content">The raw llms.txt content.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
@@ -83,14 +132,23 @@ internal static partial class LlmsTxtParser
 
         cancellationToken.ThrowIfCancellationRequested();
 
+        // Compute fenced code block regions once over the full content. The regions are
+        // used by FindDocumentBoundaries (so bash `#` comments inside fences are not
+        // mistaken for H1s) and again by ParseSections (so `##`/`###` inside fences are
+        // not mistaken for section headings). Doing it once avoids re-scanning every
+        // document's body for ``` runs.
+        var span = content.AsSpan();
+        var codeBlocks = FindCodeBlockRegions(span);
+
         // Find all document boundaries (line indices where H1 headers start)
-        var docBoundaries = FindDocumentBoundaries(content);
+        var docBoundaries = FindDocumentBoundaries(span, codeBlocks);
         if (docBoundaries.Count is 0)
         {
             return Task.FromResult<IReadOnlyList<LlmsDocument>>([]);
         }
 
         var documents = new List<LlmsDocument>(docBoundaries.Count);
+        var slugCounts = new Dictionary<string, int>(docBoundaries.Count, StringComparer.Ordinal);
 
         for (var i = 0; i < docBoundaries.Count; i++)
         {
@@ -101,8 +159,14 @@ internal static partial class LlmsTxtParser
                 ? docBoundaries[i + 1]
                 : content.Length;
 
+            // Slice the globally-computed fence regions down to this document's window
+            // and rebase to document-local indices so ParseSections can treat them the
+            // same way it does today. Document boundaries are guaranteed to lie OUTSIDE
+            // fences (we skipped inside-fence H1s above), so no fence spans a boundary.
+            var docCodeBlocks = SliceCodeBlocks(codeBlocks, startIndex, endIndex);
+
             var docContent = content.AsMemory(startIndex, endIndex - startIndex);
-            var document = ParseDocument(docContent.Span);
+            var document = ParseDocument(docContent.Span, docCodeBlocks, slugCounts);
 
             if (document is not null)
             {
@@ -114,16 +178,68 @@ internal static partial class LlmsTxtParser
     }
 
     /// <summary>
+    /// Slices <paramref name="regions"/> down to the document window
+    /// <c>[<paramref name="startIndex"/>, <paramref name="endIndex"/>)</c> and rebases each
+    /// region's <c>Start</c>/<c>End</c> so they are relative to <paramref name="startIndex"/>.
+    /// </summary>
+    /// <remarks>
+    /// Document boundaries are detected to lie outside fenced code blocks, so no fence
+    /// in <paramref name="regions"/> straddles a boundary; every overlapping region is
+    /// fully contained. Returns a shared empty list when the document has no fences.
+    /// </remarks>
+    private static (int Start, int End)[] SliceCodeBlocks(
+        (int Start, int End)[] regions,
+        int startIndex,
+        int endIndex)
+    {
+        if (regions.Length is 0)
+        {
+            return regions;
+        }
+
+        List<(int Start, int End)>? sliced = null;
+
+        foreach (var (s, e) in regions)
+        {
+            if (e <= startIndex)
+            {
+                continue;
+            }
+
+            if (s >= endIndex)
+            {
+                break;
+            }
+
+            sliced ??= [];
+            sliced.Add((s - startIndex, e - startIndex));
+        }
+
+        return sliced?.ToArray() ?? s_emptyRegions;
+    }
+
+    // Sentinel returned by SliceCodeBlocks for fence-free documents. Most docs in
+    // the live corpus contain zero fenced blocks, so returning a shared instance
+    // avoids hundreds of empty allocations per parse. Using an array (specifically
+    // Array.Empty) over a shared List<T> is deliberate: a shared mutable list
+    // would be silently corrupted for every caller if any future consumer ever
+    // did Add/Clear on the result. An array is fixed-size and can't grow.
+    private static readonly (int Start, int End)[] s_emptyRegions = Array.Empty<(int Start, int End)>();
+
+    /// <summary>
     /// Finds the character indices where each H1 header starts.
     /// </summary>
-    private static List<int> FindDocumentBoundaries(string content)
+    /// <remarks>
+    /// Headings inside fenced code blocks (e.g., bash <c>#</c> comments) are skipped so they
+    /// don't get treated as document boundaries.
+    /// </remarks>
+    private static List<int> FindDocumentBoundaries(ReadOnlySpan<char> span, (int Start, int End)[] codeBlocks)
     {
         var boundaries = new List<int>();
-        var span = content.AsSpan();
         var position = 0;
 
         // Check if content starts with H1
-        if (IsDocumentBoundary(span))
+        if (IsDocumentBoundary(span) && !IsInsideCodeBlock(0, codeBlocks))
         {
             boundaries.Add(0);
         }
@@ -139,7 +255,9 @@ internal static partial class LlmsTxtParser
 
             position += newlineIndex + 1;
 
-            if (position < span.Length && IsDocumentBoundary(span[position..]))
+            if (position < span.Length
+                && !IsInsideCodeBlock(position, codeBlocks)
+                && IsDocumentBoundary(span[position..]))
             {
                 boundaries.Add(position);
             }
@@ -163,8 +281,19 @@ internal static partial class LlmsTxtParser
             return false;
         }
 
-        // Some landing pages emit a second H1 inline with the rest of the body content.
-        // Those should stay inside the current document rather than starting a new one.
+        // Reject H1-looking lines that are actually pieces of minified inline
+        // content rather than real document headings. Examples observed in the
+        // live corpus:
+        //
+        //   "# Document Title ## Section One"
+        //     -> minified form where the H1 and its first H2 share a line; the
+        //        same physical document, not a new one.
+        //   "# Document Title [Section titled Document Title] Body..."
+        //     -> Starlight anchor stub emitted right after the heading; this is
+        //        body content, not a new document.
+        //   "# Whats new in [Aspire 13.3](/whats-new/aspire-13-3)"
+        //     -> markdown link inside what looks like a title; in practice this
+        //        only appears in body prose, not real top-level H1s.
         return title.IndexOf("## ", StringComparison.Ordinal) < 0
             && title.IndexOf("[Section titled", StringComparison.Ordinal) < 0
             && title.IndexOf("](", StringComparison.Ordinal) < 0;
@@ -186,13 +315,24 @@ internal static partial class LlmsTxtParser
 
         return trimmed[0] is '#'
             && trimmed[1] is not '#'
-            && (trimmed[1] is ' ' || trimmed.Length is 1);
+            && trimmed[1] is ' ';
     }
 
     /// <summary>
     /// Parses a single document from a content span.
     /// </summary>
-    private static LlmsDocument? ParseDocument(ReadOnlySpan<char> docSpan)
+    /// <param name="docSpan">The span over the document's content (starting at its H1).</param>
+    /// <param name="docCodeBlocks">Fenced code-block regions within <paramref name="docSpan"/>,
+    /// rebased to document-local indices. Passed through so <see cref="ParseSections"/> does
+    /// not have to re-scan <paramref name="docSpan"/> for ``` runs.</param>
+    /// <param name="slugCounts">Tracks slugs already issued in this parse, so we can append
+    /// a numeric suffix when two documents would otherwise share the same slug. The dictionary
+    /// is mutated in place. Pass <see langword="null"/> only in tests where collision handling
+    /// is not exercised.</param>
+    private static LlmsDocument? ParseDocument(
+        ReadOnlySpan<char> docSpan,
+        (int Start, int End)[] docCodeBlocks,
+        Dictionary<string, int>? slugCounts)
     {
         if (docSpan.IsEmpty)
         {
@@ -216,8 +356,8 @@ internal static partial class LlmsTxtParser
         var remaining = firstNewline >= 0 ? docSpan[(firstNewline + 1)..] : [];
         var summary = FindSummary(remaining);
 
-        // Parse sections
-        var sections = ParseSections(docSpan);
+        // Parse sections, reusing the pre-computed fence regions for this document.
+        var sections = ParseSections(docSpan, docCodeBlocks);
 
         // Content is the full span as string
         var content = docSpan.ToString();
@@ -225,7 +365,7 @@ internal static partial class LlmsTxtParser
         return new LlmsDocument
         {
             Title = titleString,
-            Slug = GenerateSlug(titleString),
+            Slug = GenerateUniqueSlug(titleString, slugCounts),
             Summary = summary,
             Content = content,
             Sections = sections
@@ -317,14 +457,12 @@ internal static partial class LlmsTxtParser
     /// Parses H2+ sections from a document span, supporting both newline-delimited
     /// and inline heading formats. Properly excludes code blocks.
     /// </summary>
-    private static List<LlmsSection> ParseSections(ReadOnlySpan<char> docSpan)
+    private static List<LlmsSection> ParseSections(ReadOnlySpan<char> docSpan, (int Start, int End)[] codeBlocks)
     {
         var sections = new List<LlmsSection>();
 
-        // Find code block regions to exclude
-        var codeBlocks = FindCodeBlockRegions(docSpan);
-
-        // Find all section headings (H2+)
+        // Find all section headings (H2+) using the pre-computed fence regions
+        // passed down from ParseAsync.
         var sectionStarts = FindSectionHeadings(docSpan, codeBlocks);
 
         // Build sections with content
@@ -359,7 +497,7 @@ internal static partial class LlmsTxtParser
     /// <summary>
     /// Finds all code block regions (```...```) to exclude from heading detection.
     /// </summary>
-    private static List<(int Start, int End)> FindCodeBlockRegions(ReadOnlySpan<char> content)
+    private static (int Start, int End)[] FindCodeBlockRegions(ReadOnlySpan<char> content)
     {
         var regions = new List<(int Start, int End)>();
         var position = 0;
@@ -385,7 +523,11 @@ internal static partial class LlmsTxtParser
             var closeIndex = content[searchStart..].IndexOf("```");
             if (closeIndex < 0)
             {
-                // Unclosed code block - treat rest as code
+                // Unclosed fence — extend the region to end-of-content. If the
+                // corpus is ever truncated mid-fence (download interrupted,
+                // upstream regression), this keeps any stray `# `/`## ` lines
+                // inside the unterminated block from being mistaken for real
+                // document or section boundaries.
                 regions.Add((absoluteOpen, content.Length));
                 break;
             }
@@ -395,31 +537,59 @@ internal static partial class LlmsTxtParser
             position = absoluteClose;
         }
 
-        return regions;
+        // Convert the build-time List<T> into a fixed-size array so the result is
+        // not silently mutable; downstream call sites only read via indexer.
+        return regions.Count is 0 ? s_emptyRegions : regions.ToArray();
     }
 
     /// <summary>
     /// Checks if a position is inside any code block region.
     /// </summary>
-    private static bool IsInsideCodeBlock(int position, List<(int Start, int End)> codeBlocks)
+    private static bool IsInsideCodeBlock(int position, (int Start, int End)[] codeBlocks)
+        => TryGetContainingCodeBlock(position, codeBlocks, out _);
+
+    /// <summary>
+    /// If <paramref name="position"/> lies inside one of the (sorted, non-overlapping)
+    /// fenced code block regions in <paramref name="codeBlocks"/>, returns <see langword="true"/>
+    /// and sets <paramref name="end"/> to that region's exclusive end. Otherwise returns
+    /// <see langword="false"/>.
+    /// </summary>
+    /// <remarks>
+    /// Uses binary search over the region list (regions are added in ascending start order
+    /// by <c>FindCodeBlockRegions</c>). This is called in two hot loops:
+    /// <list type="bullet">
+    ///   <item><c>FindDocumentBoundaries</c> tests every newline in the full corpus.</item>
+    ///   <item><c>FindSectionHeadings</c> tests every potential heading position and, on a
+    ///   hit, must jump to the end of the containing fence. Returning the end here lets that
+    ///   callsite skip a second linear walk over the same list.</item>
+    /// </list>
+    /// </remarks>
+    private static bool TryGetContainingCodeBlock(int position, (int Start, int End)[] codeBlocks, out int end)
     {
-        foreach (var (start, end) in codeBlocks)
+        var lo = 0;
+        var hi = codeBlocks.Length - 1;
+
+        while (lo <= hi)
         {
-            if (position >= start && position < end)
+            var mid = lo + ((hi - lo) >> 1);
+            var (start, blockEnd) = codeBlocks[mid];
+
+            if (position < start)
             {
+                hi = mid - 1;
+            }
+            else if (position >= blockEnd)
+            {
+                lo = mid + 1;
+            }
+            else
+            {
+                end = blockEnd;
                 return true;
             }
-
-            // Code blocks are sorted, so if we're past this one, check next
-            if (position >= end)
-            {
-                continue;
-            }
-
-            // We're before this code block, and all remaining are after
-            break;
         }
 
+        end = -1;
         return false;
     }
 
@@ -429,7 +599,7 @@ internal static partial class LlmsTxtParser
     /// </summary>
     private static List<(int Index, int Level, string Heading)> FindSectionHeadings(
         ReadOnlySpan<char> docSpan,
-        List<(int Start, int End)> codeBlocks)
+        (int Start, int End)[] codeBlocks)
     {
         var sectionStarts = new List<(int Index, int Level, string Heading)>();
 
@@ -452,19 +622,10 @@ internal static partial class LlmsTxtParser
 
         while (position < docSpan.Length)
         {
-            // Skip if inside code block
-            if (IsInsideCodeBlock(position, codeBlocks))
+            // Skip if inside code block — jump straight to the fence's end in one binary search.
+            if (TryGetContainingCodeBlock(position, codeBlocks, out var blockEnd))
             {
-                // Jump to end of this code block
-                foreach (var (start, end) in codeBlocks)
-                {
-                    if (position >= start && position < end)
-                    {
-                        position = end;
-                        break;
-                    }
-                }
-
+                position = blockEnd;
                 continue;
             }
 
@@ -546,7 +707,16 @@ internal static partial class LlmsTxtParser
         // Calculate absolute end position
         var absoluteEnd = position + whitespaceSkipped + textStart + headingEnd;
 
-        // Skip past [Section titled...] marker if present
+        // Skip past the Starlight "[Section titled <title>]" anchor stub that
+        // appears immediately after the heading text in minified output. For
+        // example, the raw bytes around an H2 look like:
+        //
+        //   "## Connection string[Section titled Connection string] ..."
+        //
+        // We've already taken "Connection string" as the heading; here we just
+        // advance absoluteEnd past the closing ']' so the next heading scan
+        // doesn't start inside the anchor stub.
+        // See https://github.com/delucis/starlight-llms-txt for the emitter.
         var afterHeading = content[absoluteEnd..];
         if (afterHeading.StartsWith("[Section titled"))
         {
@@ -591,8 +761,21 @@ internal static partial class LlmsTxtParser
     }
 
     /// <summary>
-    /// Finds the next inline heading marker (space followed by ##).
+    /// Finds the next inline heading marker — a space followed by two or more
+    /// <c>#</c> characters — used by the minified llms.txt format where headings
+    /// share a line with body content.
     /// </summary>
+    /// <remarks>
+    /// Matches the boundary between body text and an inline heading. Example raw
+    /// span (one physical line):
+    /// <code>
+    /// "Body text for the previous section. ## Next Section [Section titled Next Section]"
+    /// </code>
+    /// The match position is the space before <c>##</c>, so callers can advance
+    /// past it to land on the <c>##</c>. A leading space is required to avoid
+    /// matching inside identifiers, URLs, or code-like prose (for example
+    /// <c>"file##fragment"</c>).
+    /// </remarks>
     private static int FindNextInlineHeadingMarker(ReadOnlySpan<char> span)
     {
         var position = 0;
@@ -674,11 +857,52 @@ internal static partial class LlmsTxtParser
     }
 
     /// <summary>
+    /// Generates a slug from <paramref name="title"/> and disambiguates it against
+    /// <paramref name="slugCounts"/>. If the base slug has already been issued, returns the
+    /// next available numeric suffix.
+    /// </summary>
+    /// <remarks>
+    /// The live llms-full.txt corpus has slug collisions caused by titles that differ only in
+    /// letter case (for example <c>"Azure Cosmos DB Client integration"</c> versus
+    /// <c>"Azure Cosmos DB client integration"</c>). Without disambiguation the second document
+    /// is unreachable via <c>aspire docs get &lt;slug&gt;</c>.
+    /// </remarks>
+    private static string GenerateUniqueSlug(string title, Dictionary<string, int>? slugCounts)
+    {
+        var baseSlug = GenerateSlug(title);
+        if (slugCounts is null)
+        {
+            return baseSlug;
+        }
+
+        if (slugCounts.TryGetValue(baseSlug, out var count))
+        {
+            var next = count + 1;
+            while (slugCounts.ContainsKey($"{baseSlug}-{next}"))
+            {
+                next++;
+            }
+
+            slugCounts[baseSlug] = next;
+            var disambiguated = $"{baseSlug}-{next}";
+            slugCounts[disambiguated] = 1;
+            return disambiguated;
+        }
+
+        slugCounts[baseSlug] = 1;
+        return baseSlug;
+    }
+
+    /// <summary>
     /// Generates a URL-friendly slug from a title.
     /// </summary>
     private static string GenerateSlug(string title)
     {
-        // Fast path for simple titles
+        // Fast path: if the title is already slug-shaped (lowercase letters,
+        // digits, and hyphens — no spaces, no uppercase, no punctuation) just
+        // return the original string. This avoids renting/copying into a pooled
+        // buffer for titles that already look like slugs (e.g. caller-supplied
+        // identifiers in tests).
         var span = title.AsSpan();
         var needsProcessing = false;
 

@@ -113,16 +113,78 @@ internal static class BackchannelConstants
     /// Computes the hash portion of the socket name from an AppHost path.
     /// </summary>
     /// <remarks>
-    /// The hash is case-sensitive. On case-insensitive file systems (Windows, macOS with default settings),
-    /// "C:\App\MyApp.csproj" and "C:\app\myapp.csproj" will produce different hashes even though they
-    /// reference the same file. This is acceptable because the CLI typically uses the exact path provided
-    /// by MSBuild or the user, which should be consistent within a session.
+    /// On Windows the drive letter is normalized to uppercase before hashing so that
+    /// "C:\App\MyApp.csproj" and "c:\App\MyApp.csproj" produce the same hash.
+    /// Without this, the CLI and AppHost can derive different drive-letter casings
+    /// (e.g. <c>FileInfo.FullName</c> vs MSBuild metadata) and fail to match sockets.
     /// </remarks>
     /// <param name="appHostPath">The full path to the AppHost project file.</param>
     /// <returns>A 16-character lowercase hex string.</returns>
     public static string ComputeHash(string appHostPath)
     {
-        return ComputeStableIdentifier(appHostPath, HashLength);
+        return ComputeStableIdentifier(NormalizePath(appHostPath), HashLength);
+    }
+
+    /// <summary>
+    /// Computes the legacy (pre-normalization) hash for backward compatibility.
+    /// </summary>
+    /// <remarks>
+    /// Older AppHost versions hashed the raw path without case normalization.
+    /// The CLI uses this to find sockets created by older AppHosts.
+    /// Returns <c>null</c> when the legacy hash would be identical to <see cref="ComputeHash"/>.
+    /// </remarks>
+    /// <param name="appHostPath">The full path to the AppHost project file.</param>
+    /// <returns>A 16-character lowercase hex string, or <c>null</c> if it matches the current hash.</returns>
+    // TODO: Remove legacy hash support once all supported AppHost versions use normalized hashing.
+    public static string? ComputeLegacyHash(string appHostPath)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return null;
+        }
+
+        var currentHash = ComputeHash(appHostPath);
+        var legacyHash = ComputeStableIdentifier(appHostPath, HashLength);
+
+        if (!string.Equals(legacyHash, currentHash, StringComparison.Ordinal))
+        {
+            return legacyHash;
+        }
+
+        // If the input path was already normalized (for example, an uppercase drive letter on Windows),
+        // also try the opposite drive-letter casing to preserve compatibility with older AppHosts that
+        // may have hashed the same path with a lowercase drive letter from MSBuild metadata.
+        if (appHostPath.Length >= 2 && appHostPath[1] == ':' && char.IsLetter(appHostPath[0]))
+        {
+            var alternateDriveLetter = char.IsUpper(appHostPath[0])
+                ? char.ToLowerInvariant(appHostPath[0])
+                : char.ToUpperInvariant(appHostPath[0]);
+            var alternatePath = alternateDriveLetter + appHostPath[1..];
+            var alternateLegacyHash = ComputeStableIdentifier(alternatePath, HashLength);
+
+            if (!string.Equals(alternateLegacyHash, currentHash, StringComparison.Ordinal))
+            {
+                return alternateLegacyHash;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Normalizes the path for consistent hashing by uppercasing the Windows drive letter.
+    /// </summary>
+    private static string NormalizePath(string path)
+    {
+        // On Windows, the drive letter casing can differ between callers
+        // (e.g. FileInfo.FullName produces "C:\..." while MSBuild metadata may produce "c:\...").
+        // Uppercase only the drive letter so both sides hash identically.
+        if (OperatingSystem.IsWindows() && path.Length >= 2 && path[1] == ':')
+        {
+            return char.ToUpperInvariant(path[0]) + path[1..];
+        }
+
+        return path;
     }
 
     /// <summary>
@@ -174,20 +236,43 @@ internal static class BackchannelConstants
     /// <returns>An array of socket file paths, or empty if none found.</returns>
     public static string[] FindMatchingSockets(string appHostPath, string homeDirectory)
     {
-        var prefix = ComputeSocketPrefix(appHostPath, homeDirectory);
-        var dir = Path.GetDirectoryName(prefix);
-        var prefixFileName = Path.GetFileName(prefix);
+        var dir = GetBackchannelsDirectory(homeDirectory);
 
-        if (dir is null || !Directory.Exists(dir))
+        if (!Directory.Exists(dir))
         {
             return [];
         }
 
+        var hash = ComputeHash(appHostPath);
+        var prefixFileName = $"{SocketPrefix}.{hash}";
+        var results = FindSocketsByPrefix(dir, prefixFileName);
+
+        // Also search for sockets created by older AppHosts that used the raw (unnormalized) path hash.
+        var legacyHash = ComputeLegacyHash(appHostPath);
+        if (legacyHash is not null)
+        {
+            var legacyPrefixFileName = $"{SocketPrefix}.{legacyHash}";
+            var legacyResults = FindSocketsByPrefix(dir, legacyPrefixFileName);
+            if (legacyResults.Length > 0)
+            {
+                results = [.. results, .. legacyResults];
+            }
+        }
+
+        return results;
+    }
+
+    /// <summary>
+    /// Finds socket files in <paramref name="directory"/> whose names match
+    /// <paramref name="prefixFileName"/> in any of the supported socket name formats.
+    /// </summary>
+    private static string[] FindSocketsByPrefix(string directory, string prefixFileName)
+    {
         // Match old format (auxi.sock.{hash}), previous format (auxi.sock.{hash}.{pid}),
         // and current format (auxi.sock.{hash}.{instanceHash}.{pid})
         // Use pattern with "*" to match optional PID suffix
-        var allMatches = Directory.GetFiles(dir, prefixFileName + "*");
-        
+        var allMatches = Directory.GetFiles(directory, prefixFileName + "*");
+
         // Filter to only include exact match (old format), .{pid} suffix (previous format),
         // or .{instanceHash}.{pid} suffix (current format). This avoids matching
         // auxi.sock.{hash}abc (different hash that starts with same chars) and files

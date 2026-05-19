@@ -38,3 +38,4 @@ internal static class ConsoleHelpers
         return spectreEmojiText + new string(' ', padding);
     }
 }
+

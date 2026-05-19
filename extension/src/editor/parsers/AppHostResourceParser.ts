@@ -28,6 +28,14 @@ export interface AppHostResourceParser {
 
     /** Parse resource definitions from the document. */
     parseResources(document: vscode.TextDocument): ParsedResource[];
+
+    /**
+     * Locates the line containing the builder construction statement
+     * (e.g. `var builder = DistributedApplication.CreateBuilder(args);` for C#,
+     * `const builder = createBuilder();` for TS/JS).
+     * Returns the 0-based line of the start of the statement, or `undefined` if not found.
+     */
+    findBuilderStatementLine?(document: vscode.TextDocument): number | undefined;
 }
 
 const _parsers: AppHostResourceParser[] = [];

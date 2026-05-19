@@ -12,7 +12,7 @@ using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
-using Aspire.TypeSystem;
+using Aspire.Shared.Json;
 using Microsoft.Extensions.Logging;
 using Semver;
 using Spectre.Console;
@@ -68,7 +68,7 @@ internal sealed class SdkDumpCommand : BaseCommand
         Options.Add(s_formatOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var integrationArgs = parseResult.GetValue(s_integrationArgument) ?? [];
         var outputFile = parseResult.GetValue(s_outputOption);
@@ -84,8 +84,7 @@ internal sealed class SdkDumpCommand : BaseCommand
                 var projectFile = new FileInfo(arg);
                 if (!projectFile.Exists)
                 {
-                    InteractionService.DisplayError($"Integration project not found: {projectFile.FullName}");
-                    return ExitCodeConstants.FailedToFindProject;
+                    return CommandResult.Failure(CliExitCodes.FailedToFindProject, $"Integration project not found: {projectFile.FullName}");
                 }
 
                 integrations.Add(IntegrationReference.FromProject(
@@ -100,14 +99,12 @@ internal sealed class SdkDumpCommand : BaseCommand
 
                 if (string.IsNullOrWhiteSpace(packageName) || string.IsNullOrWhiteSpace(packageVersion) || packageName.Contains('@'))
                 {
-                    InteractionService.DisplayError($"Invalid package format '{arg}'. Expected PackageName@Version (e.g. Aspire.Hosting.Redis@9.2.0).");
-                    return ExitCodeConstants.InvalidCommand;
+                    return CommandResult.Failure(CliExitCodes.InvalidCommand, $"Invalid package format '{arg}'. Expected PackageName@Version (e.g. Aspire.Hosting.Redis@9.2.0).");
                 }
 
                 if (!SemVersion.TryParse(packageVersion, SemVersionStyles.Any, out _))
                 {
-                    InteractionService.DisplayError($"Invalid version '{packageVersion}' in '{arg}'. Expected a valid NuGet version (e.g. 9.2.0).");
-                    return ExitCodeConstants.InvalidCommand;
+                    return CommandResult.Failure(CliExitCodes.InvalidCommand, $"Invalid version '{packageVersion}' in '{arg}'. Expected a valid NuGet version (e.g. 9.2.0).");
                 }
 
                 _logger.LogDebug("Parsed package reference {PackageName} version {Version}", packageName, packageVersion);
@@ -115,21 +112,20 @@ internal sealed class SdkDumpCommand : BaseCommand
             }
             else
             {
-                InteractionService.DisplayError($"Invalid integration argument '{arg}'. Expected a .csproj path or PackageName@Version format.");
-                return ExitCodeConstants.InvalidCommand;
+                return CommandResult.Failure(CliExitCodes.InvalidCommand, $"Invalid integration argument '{arg}'. Expected a .csproj path or PackageName@Version format.");
             }
         }
 
         // For file output, skip the interactive spinner
         if (outputFile is not null)
         {
-            return await DumpCapabilitiesAsync(integrations, outputFile, format, cancellationToken);
+            return CommandResult.FromExitCode(await DumpCapabilitiesAsync(integrations, outputFile, format, cancellationToken));
         }
 
-        return await InteractionService.ShowStatusAsync(
+        return CommandResult.FromExitCode(await InteractionService.ShowStatusAsync(
             "Scanning capabilities...",
             async () => await DumpCapabilitiesAsync(integrations, outputFile, format, cancellationToken),
-            emoji: KnownEmojis.MagnifyingGlassTiltedLeft);
+            emoji: KnownEmojis.MagnifyingGlassTiltedLeft));
     }
 
     private async Task<int> DumpCapabilitiesAsync(
@@ -163,7 +159,7 @@ internal sealed class SdkDumpCommand : BaseCommand
                         InteractionService.DisplayMessage(KnownEmojis.Wrench, line);
                     }
                 }
-                return ExitCodeConstants.FailedToBuildArtifacts;
+                return CliExitCodes.FailedToBuildArtifacts;
             }
 
             await using var serverSession = AppHostServerSession.Start(
@@ -232,7 +228,7 @@ internal sealed class SdkDumpCommand : BaseCommand
 
             // Return error code if there are errors in diagnostics
             var hasErrors = capabilities.Diagnostics.Exists(d => d.Severity == "Error");
-            return hasErrors ? ExitCodeConstants.InvalidCommand : ExitCodeConstants.Success;
+            return hasErrors ? CliExitCodes.InvalidCommand : CliExitCodes.Success;
         }
         finally
         {
@@ -591,6 +587,7 @@ internal sealed class CapabilityInfo
     public string? OwningTypeName { get; set; }
     public string QualifiedMethodName { get; set; } = "";
     public string? Description { get; set; }
+    public DocumentationInfo? Documentation { get; set; }
     public string CapabilityKind { get; set; } = "";
     public string? TargetTypeId { get; set; }
     public string? TargetParameterName { get; set; }
@@ -611,12 +608,14 @@ internal sealed class ParameterInfo
     public List<CallbackParameterInfo>? CallbackParameters { get; set; }
     public TypeRefInfo? CallbackReturnType { get; set; }
     public string? DefaultValue { get; set; }
+    public DocumentationInfo? Documentation { get; set; }
 }
 
 internal sealed class CallbackParameterInfo
 {
     public string Name { get; set; } = "";
     public TypeRefInfo? Type { get; set; }
+    public DocumentationInfo? Documentation { get; set; }
 }
 
 internal sealed class TypeRefInfo
@@ -637,6 +636,7 @@ internal sealed class HandleTypeInfo
     public bool IsInterface { get; set; }
     public bool ExposeProperties { get; set; }
     public bool ExposeMethods { get; set; }
+    public DocumentationInfo? Documentation { get; set; }
     public List<TypeRefInfo> ImplementedInterfaces { get; set; } = [];
     public List<TypeRefInfo> BaseTypeHierarchy { get; set; } = [];
 }
@@ -646,6 +646,7 @@ internal sealed class DtoTypeInfo
     public string TypeId { get; set; } = "";
     public string Name { get; set; } = "";
     public string? Description { get; set; }
+    public DocumentationInfo? Documentation { get; set; }
     public List<DtoPropertyInfo> Properties { get; set; } = [];
 }
 
@@ -655,6 +656,7 @@ internal sealed class DtoPropertyInfo
     public TypeRefInfo? Type { get; set; }
     public bool IsOptional { get; set; }
     public string? Description { get; set; }
+    public DocumentationInfo? Documentation { get; set; }
 }
 
 internal sealed class EnumTypeInfo
@@ -662,6 +664,14 @@ internal sealed class EnumTypeInfo
     public string TypeId { get; set; } = "";
     public string Name { get; set; } = "";
     public List<string> Values { get; set; } = [];
+    public List<EnumValueInfo> ValueInfos { get; set; } = [];
+    public DocumentationInfo? Documentation { get; set; }
+}
+
+internal sealed class EnumValueInfo
+{
+    public string Name { get; set; } = "";
+    public DocumentationInfo? Documentation { get; set; }
 }
 
 internal sealed class ExportedValueInfo
@@ -670,6 +680,21 @@ internal sealed class ExportedValueInfo
     public TypeRefInfo Type { get; set; } = null!;
     public JsonNode? Value { get; set; }
     public string? Description { get; set; }
+    public DocumentationInfo? Documentation { get; set; }
+}
+
+internal sealed class DocumentationInfo
+{
+    public string? Summary { get; set; }
+    public string? Remarks { get; set; }
+    public string? Returns { get; set; }
+    public List<ParameterDocumentationInfo> Parameters { get; set; } = [];
+}
+
+internal sealed class ParameterDocumentationInfo
+{
+    public string Name { get; set; } = "";
+    public string Description { get; set; } = "";
 }
 
 internal sealed class DiagnosticInfo
@@ -694,7 +719,10 @@ internal sealed class DiagnosticInfo
 [JsonSerializable(typeof(DtoTypeInfo))]
 [JsonSerializable(typeof(DtoPropertyInfo))]
 [JsonSerializable(typeof(EnumTypeInfo))]
+[JsonSerializable(typeof(EnumValueInfo))]
 [JsonSerializable(typeof(ExportedValueInfo))]
+[JsonSerializable(typeof(DocumentationInfo))]
+[JsonSerializable(typeof(ParameterDocumentationInfo))]
 [JsonSerializable(typeof(DiagnosticInfo))]
 internal partial class CapabilitiesJsonContext : JsonSerializerContext
 {

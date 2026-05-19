@@ -42,11 +42,30 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     bool SupportsV2 { get; }
 
     /// <summary>
+    /// Gets a value indicating whether the AppHost supports v3 API.
+    /// </summary>
+    bool SupportsV3 { get; }
+
+    /// <summary>
+    /// Gets AppHost information using the v2 API.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The AppHost information response.</returns>
+    Task<GetAppHostInfoResponse?> GetAppHostInfoV2Async(CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Gets the Dashboard URLs from the AppHost.
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The dashboard URL state including health and resolved dashboard URLs.</returns>
     Task<DashboardUrlsState?> GetDashboardUrlsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Waits until the AppHost reaches its startup readiness point.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The AppHost startup readiness response, or null if unavailable.</returns>
+    Task<WaitForAppHostReadyResponse?> WaitForAppHostReadyAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Gets the current resource snapshots from the AppHost.
@@ -67,13 +86,33 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     /// <summary>
     /// Gets resource log lines from the AppHost.
     /// </summary>
-    /// <param name="resourceName">Optional resource name. If null, streams logs from all resources (only valid when follow is true).</param>
+    /// <param name="resourceName">Optional resource name. If null, streams logs from all resources.</param>
     /// <param name="follow">If true, continuously streams new logs. If false, returns existing logs and completes.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>An async enumerable of log lines.</returns>
     IAsyncEnumerable<ResourceLogLine> GetResourceLogsAsync(
         string? resourceName = null,
         bool follow = false,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets console log lines from the AppHost.
+    /// </summary>
+    /// <param name="request">The console log request.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>An async enumerable of log lines.</returns>
+    IAsyncEnumerable<ResourceLogLine> GetConsoleLogsAsync(
+        GetConsoleLogsRequest request,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets console log lines from the AppHost in batches.
+    /// </summary>
+    /// <param name="request">The console log request.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>An async enumerable of log batches.</returns>
+    IAsyncEnumerable<ResourceLogBatch> GetConsoleLogBatchesAsync(
+        GetConsoleLogsRequest request,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -110,11 +149,13 @@ internal interface IAppHostAuxiliaryBackchannel : IDisposable
     /// </summary>
     /// <param name="resourceName">The name of the resource.</param>
     /// <param name="commandName">The name of the command (e.g., "start", "stop", "restart").</param>
+    /// <param name="options">Options for command execution.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>The result of the command execution.</returns>
     Task<ExecuteResourceCommandResponse> ExecuteResourceCommandAsync(
         string resourceName,
         string commandName,
+        ExecuteResourceCommandOptions? options = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

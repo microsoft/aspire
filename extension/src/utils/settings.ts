@@ -17,5 +17,5 @@ export function getRegisterMcpServerInWorkspace(): boolean {
 }
 
 export function getEnableAutoRestore(): boolean {
-    return getAspireConfig().get<boolean>('enableAutoRestore', true);
+    return getAspireConfig().get<boolean>('enableAutoRestore', false);
 }

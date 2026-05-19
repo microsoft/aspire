@@ -28,7 +28,22 @@ import {
     AspireList
 } from './base.js';
 
-import type { Awaitable } from './base.js';
+export {
+    InputType,
+    InteractionInputCollection
+} from './base.js';
+
+export type {
+    InteractionInput,
+    InteractionInputOption
+} from './base.js';
+
+import type {
+    Awaitable,
+    InteractionInput,
+    InteractionInputCollection,
+    InputType
+} from './base.js';
 
 // ============================================================================
 // Handle Type Aliases (Internal - not exported to users)
@@ -37,16 +52,16 @@ import type { Awaitable } from './base.js';
 /** Handle to ITestVaultResource */
 type ITestVaultResourceHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestVaultResource'>;
 
-/** Handle to TestCallbackContext */
+/** Test callback context for WithCustomCallback. Also used to verify [AspireExport(ExposeProperties = true)] scanning. */
 type TestCallbackContextHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCallbackContext'>;
 
-/** Handle to TestCollectionContext */
+/** Test context with collection properties to verify consistent code generation. Verifies both List and Dictionary properties generate proper getter patterns. */
 type TestCollectionContextHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestCollectionContext'>;
 
 /** Handle to TestDatabaseResource */
 type TestDatabaseResourceHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestDatabaseResource'>;
 
-/** Handle to TestEnvironmentContext */
+/** Test environment context used in callbacks. Verifies property-like object pattern (ctx.name.get(), ctx.name.set()). */
 type TestEnvironmentContextHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestEnvironmentContext'>;
 
 /** Handle to TestMutableCollectionContext */
@@ -55,7 +70,7 @@ type TestMutableCollectionContextHandle = Handle<'Aspire.Hosting.CodeGeneration.
 /** Handle to TestRedisResource */
 type TestRedisResourceHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestRedisResource'>;
 
-/** Handle to TestResourceContext */
+/** Test context type with exposed instance methods. Verifies [AspireExport(ExposeMethods=true)] generates async methods. */
 type TestResourceContextHandle = Handle<'Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.TestResourceContext'>;
 
 /** Handle to TestVaultResource */
@@ -80,18 +95,22 @@ type IDistributedApplicationBuilderHandle = Handle<'Aspire.Hosting/Aspire.Hostin
 // Enum Types
 // ============================================================================
 
-/** Enum type for TestPersistenceMode */
+/** Test persistence mode enum. */
 export enum TestPersistenceMode {
     None = "None",
     Volume = "Volume",
     Bind = "Bind",
 }
 
-/** Enum type for TestResourceStatus */
+/** Test enum for type generation verification. */
 export enum TestResourceStatus {
+    /** The resource is pending. */
     Pending = "Pending",
+    /** The resource is running. */
     Running = "Running",
+    /** The resource is stopped. */
     Stopped = "Stopped",
+    /** The resource failed. */
     Failed = "Failed",
 }
 
@@ -99,21 +118,27 @@ export enum TestResourceStatus {
 // DTO Interfaces
 // ============================================================================
 
-/** DTO interface for TestConfigDto */
+/** Test DTO to verify [AspireDto] generates TypeScript interfaces. */
 export interface TestConfigDto {
+    /** The name of the test config. */
     name?: string;
+    /** The port used by the test config. */
     port?: number;
+    /** A value indicating whether the test config is enabled. */
     enabled?: boolean;
-    optionalField?: string;
+    /** An optional test config field. */
+    optionalField?: string | null;
 }
 
-/** DTO interface for TestDeeplyNestedDto */
+/** Test DTO with deeply nested generic types. */
 export interface TestDeeplyNestedDto {
+    /** Deeply nested generic: Dictionary containing List of DTOs. */
     nestedData?: AspireDict<string, AspireList<TestConfigDto>>;
+    /** Array of dictionaries. */
     metadataArray?: AspireDict<string, string>[];
 }
 
-/** DTO interface for TestNestedDto */
+/** Test DTO with complex nested types. */
 export interface TestNestedDto {
     id?: string;
     config?: TestConfigDto;
@@ -126,6 +151,7 @@ export interface TestNestedDto {
 // ============================================================================
 
 export namespace TestConfigs {
+    /** The default test configuration. */
     export const Default = { name: "default", port: 6379, enabled: true, optionalField: "cache" } as TestConfigDto;
 
     export namespace Profiles {
@@ -191,16 +217,20 @@ export interface WithPersistenceOptions {
 // TestCallbackContext
 // ============================================================================
 
+/** Test callback context for WithCustomCallback. Also used to verify [AspireExport(ExposeProperties = true)] scanning. */
 export interface TestCallbackContext {
     toJSON(): MarshalledHandle;
+    /** Gets the Name property */
     name: {
-        get: () => Promise<string>;
-        set: (value: string) => Promise<void>;
+        get: () => Promise<string | null>;
+        set: (value: string | null) => Promise<void>;
     };
+    /** Gets the Value property */
     value: {
         get: () => Promise<number>;
         set: (value: number) => Promise<void>;
     };
+    /** CancellationToken is supported by ATS. */
     cancellationToken: {
         get: () => Promise<CancellationToken>;
         set: (value: AbortSignal | CancellationToken) => Promise<void>;
@@ -211,24 +241,21 @@ export interface TestCallbackContext {
 // TestCallbackContextImpl
 // ============================================================================
 
-/**
- * Type class for TestCallbackContext.
- */
+/** Test callback context for WithCustomCallback. Also used to verify [AspireExport(ExposeProperties = true)] scanning. */
 class TestCallbackContextImpl implements TestCallbackContext {
     constructor(private _handle: TestCallbackContextHandle, private _client: AspireClientRpc) {}
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
-    /** Gets the Name property */
     name = {
-        get: async (): Promise<string> => {
-            return await this._client.invokeCapability<string>(
+        get: async (): Promise<string | null> => {
+            return await this._client.invokeCapability<string | null>(
                 'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.name',
                 { context: this._handle }
             );
         },
-        set: async (value: string): Promise<void> => {
+        set: async (value: string | null): Promise<void> => {
             await this._client.invokeCapability<void>(
                 'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.setName',
                 { context: this._handle, value }
@@ -236,7 +263,6 @@ class TestCallbackContextImpl implements TestCallbackContext {
         }
     };
 
-    /** Gets the Value property */
     value = {
         get: async (): Promise<number> => {
             return await this._client.invokeCapability<number>(
@@ -252,7 +278,6 @@ class TestCallbackContextImpl implements TestCallbackContext {
         }
     };
 
-    /** Gets the CancellationToken property */
     cancellationToken = {
         get: async (): Promise<CancellationToken> => {
             const result = await this._client.invokeCapability<string | null>(
@@ -275,9 +300,12 @@ class TestCallbackContextImpl implements TestCallbackContext {
 // TestCollectionContext
 // ============================================================================
 
+/** Test context with collection properties to verify consistent code generation. Verifies both List and Dictionary properties generate proper getter patterns. */
 export interface TestCollectionContext {
     toJSON(): MarshalledHandle;
+    /** List property - should generate AspireList getter like Dictionary properties. */
     items(): Promise<AspireList<string>>;
+    /** Dictionary property - already works with AspireDict getter. */
     metadata(): Promise<AspireDict<string, string>>;
 }
 
@@ -285,16 +313,13 @@ export interface TestCollectionContext {
 // TestCollectionContextImpl
 // ============================================================================
 
-/**
- * Type class for TestCollectionContext.
- */
+/** Test context with collection properties to verify consistent code generation. Verifies both List and Dictionary properties generate proper getter patterns. */
 class TestCollectionContextImpl implements TestCollectionContext {
     constructor(private _handle: TestCollectionContextHandle, private _client: AspireClientRpc) {}
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
-    /** Gets the Items property */
     private _items?: AspireList<string>;
     async items(): Promise<AspireList<string>> {
         if (!this._items) {
@@ -308,7 +333,6 @@ class TestCollectionContextImpl implements TestCollectionContext {
         return this._items;
     }
 
-    /** Gets the Metadata property */
     private _metadata?: AspireDict<string, string>;
     async metadata(): Promise<AspireDict<string, string>> {
         if (!this._metadata) {
@@ -328,16 +352,20 @@ class TestCollectionContextImpl implements TestCollectionContext {
 // TestEnvironmentContext
 // ============================================================================
 
+/** Test environment context used in callbacks. Verifies property-like object pattern (ctx.name.get(), ctx.name.set()). */
 export interface TestEnvironmentContext {
     toJSON(): MarshalledHandle;
+    /** Gets the Name property */
     name: {
         get: () => Promise<string>;
         set: (value: string) => Promise<void>;
     };
+    /** Gets the Description property */
     description: {
-        get: () => Promise<string>;
-        set: (value: string) => Promise<void>;
+        get: () => Promise<string | null>;
+        set: (value: string | null) => Promise<void>;
     };
+    /** Gets the Priority property */
     priority: {
         get: () => Promise<number>;
         set: (value: number) => Promise<void>;
@@ -348,16 +376,13 @@ export interface TestEnvironmentContext {
 // TestEnvironmentContextImpl
 // ============================================================================
 
-/**
- * Type class for TestEnvironmentContext.
- */
+/** Test environment context used in callbacks. Verifies property-like object pattern (ctx.name.get(), ctx.name.set()). */
 class TestEnvironmentContextImpl implements TestEnvironmentContext {
     constructor(private _handle: TestEnvironmentContextHandle, private _client: AspireClientRpc) {}
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
-    /** Gets the Name property */
     name = {
         get: async (): Promise<string> => {
             return await this._client.invokeCapability<string>(
@@ -373,15 +398,14 @@ class TestEnvironmentContextImpl implements TestEnvironmentContext {
         }
     };
 
-    /** Gets the Description property */
     description = {
-        get: async (): Promise<string> => {
-            return await this._client.invokeCapability<string>(
+        get: async (): Promise<string | null> => {
+            return await this._client.invokeCapability<string | null>(
                 'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.description',
                 { context: this._handle }
             );
         },
-        set: async (value: string): Promise<void> => {
+        set: async (value: string | null): Promise<void> => {
             await this._client.invokeCapability<void>(
                 'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestEnvironmentContext.setDescription',
                 { context: this._handle, value }
@@ -389,7 +413,6 @@ class TestEnvironmentContextImpl implements TestEnvironmentContext {
         }
     };
 
-    /** Gets the Priority property */
     priority = {
         get: async (): Promise<number> => {
             return await this._client.invokeCapability<number>(
@@ -413,7 +436,9 @@ class TestEnvironmentContextImpl implements TestEnvironmentContext {
 
 export interface TestMutableCollectionContext {
     toJSON(): MarshalledHandle;
+    /** Gets the Tags property */
     readonly tags: AspireList<string>;
+    /** Gets the Counts property */
     readonly counts: AspireDict<string, number>;
 }
 
@@ -421,9 +446,7 @@ export interface TestMutableCollectionContext {
 // TestMutableCollectionContextImpl
 // ============================================================================
 
-/**
- * Type class for TestMutableCollectionContext.
- */
+/** Type class for TestMutableCollectionContext. */
 class TestMutableCollectionContextImpl implements TestMutableCollectionContext {
     constructor(private _handle: TestMutableCollectionContextHandle, private _client: AspireClientRpc) {}
 
@@ -431,7 +454,6 @@ class TestMutableCollectionContextImpl implements TestMutableCollectionContext {
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
     private _tags?: AspireList<string>;
-    /** Gets the Tags property */
     get tags(): AspireList<string> {
         if (!this._tags) {
             this._tags = new AspireList<string>(
@@ -445,7 +467,6 @@ class TestMutableCollectionContextImpl implements TestMutableCollectionContext {
     }
 
     private _counts?: AspireDict<string, number>;
-    /** Gets the Counts property */
     get counts(): AspireDict<string, number> {
         if (!this._counts) {
             this._counts = new AspireDict<string, number>(
@@ -464,24 +485,33 @@ class TestMutableCollectionContextImpl implements TestMutableCollectionContext {
 // TestResourceContext
 // ============================================================================
 
+/** Test context type with exposed instance methods. Verifies [AspireExport(ExposeMethods=true)] generates async methods. */
 export interface TestResourceContext {
     toJSON(): MarshalledHandle;
+    /** Gets the Name property */
     name: {
         get: () => Promise<string>;
         set: (value: string) => Promise<void>;
     };
+    /** Gets the Value property */
     value: {
         get: () => Promise<number>;
         set: (value: number) => Promise<void>;
     };
+    /** Instance method that should be exposed as async method. */
     getValueAsync(): Promise<string>;
+    /** Instance method with parameter. */
     setValueAsync(value: string): TestResourceContextPromise;
+    /** Instance method with return type. */
     validateAsync(): Promise<boolean>;
 }
 
 export interface TestResourceContextPromise extends PromiseLike<TestResourceContext> {
+    /** Instance method that should be exposed as async method. */
     getValueAsync(): Promise<string>;
+    /** Instance method with parameter. */
     setValueAsync(value: string): TestResourceContextPromise;
+    /** Instance method with return type. */
     validateAsync(): Promise<boolean>;
 }
 
@@ -489,16 +519,13 @@ export interface TestResourceContextPromise extends PromiseLike<TestResourceCont
 // TestResourceContextImpl
 // ============================================================================
 
-/**
- * Type class for TestResourceContext.
- */
+/** Test context type with exposed instance methods. Verifies [AspireExport(ExposeMethods=true)] generates async methods. */
 class TestResourceContextImpl implements TestResourceContext {
     constructor(private _handle: TestResourceContextHandle, private _client: AspireClientRpc) {}
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
-    /** Gets the Name property */
     name = {
         get: async (): Promise<string> => {
             return await this._client.invokeCapability<string>(
@@ -514,7 +541,6 @@ class TestResourceContextImpl implements TestResourceContext {
         }
     };
 
-    /** Gets the Value property */
     value = {
         get: async (): Promise<number> => {
             return await this._client.invokeCapability<number>(
@@ -530,7 +556,7 @@ class TestResourceContextImpl implements TestResourceContext {
         }
     };
 
-    /** Invokes the GetValueAsync method */
+    /** Instance method that should be exposed as async method. */
     async getValueAsync(): Promise<string> {
         const rpcArgs: Record<string, unknown> = { context: this._handle };
         return await this._client.invokeCapability<string>(
@@ -539,7 +565,6 @@ class TestResourceContextImpl implements TestResourceContext {
         );
     }
 
-    /** Invokes the SetValueAsync method */
     /** @internal */
     async _setValueAsyncInternal(value: string): Promise<TestResourceContext> {
         const rpcArgs: Record<string, unknown> = { context: this._handle, value };
@@ -550,11 +575,12 @@ class TestResourceContextImpl implements TestResourceContext {
         return this;
     }
 
+    /** Instance method with parameter. */
     setValueAsync(value: string): TestResourceContextPromise {
         return new TestResourceContextPromiseImpl(this._setValueAsyncInternal(value), this._client);
     }
 
-    /** Invokes the ValidateAsync method */
+    /** Instance method with return type. */
     async validateAsync(): Promise<boolean> {
         const rpcArgs: Record<string, unknown> = { context: this._handle };
         return await this._client.invokeCapability<boolean>(
@@ -580,17 +606,14 @@ class TestResourceContextPromiseImpl implements TestResourceContextPromise {
         return this._promise.then(onfulfilled, onrejected);
     }
 
-    /** Invokes the GetValueAsync method */
     getValueAsync(): Promise<string> {
         return this._promise.then(obj => obj.getValueAsync());
     }
 
-    /** Invokes the SetValueAsync method */
     setValueAsync(value: string): TestResourceContextPromise {
         return new TestResourceContextPromiseImpl(this._promise.then(obj => obj.setValueAsync(value)), this._client);
     }
 
-    /** Invokes the ValidateAsync method */
     validateAsync(): Promise<boolean> {
         return this._promise.then(obj => obj.validateAsync());
     }
@@ -603,12 +626,26 @@ class TestResourceContextPromiseImpl implements TestResourceContextPromise {
 
 export interface DistributedApplicationBuilder {
     toJSON(): MarshalledHandle;
+    /**
+     * Adds a test Redis resource from ATS documentation.
+     * @param name The ATS resource name.
+     * @param options Additional options.
+     * @returns The ATS test Redis resource builder.
+     */
     addTestRedis(name: string, options?: AddTestRedisOptions): TestRedisResourcePromise;
+    /** Targets the concrete TestVaultResource so it gets a builder class named "TestVaultResource". */
     addTestVault(name: string): TestVaultResourcePromise;
 }
 
 export interface DistributedApplicationBuilderPromise extends PromiseLike<DistributedApplicationBuilder> {
+    /**
+     * Adds a test Redis resource from ATS documentation.
+     * @param name The ATS resource name.
+     * @param options Additional options.
+     * @returns The ATS test Redis resource builder.
+     */
     addTestRedis(name: string, options?: AddTestRedisOptions): TestRedisResourcePromise;
+    /** Targets the concrete TestVaultResource so it gets a builder class named "TestVaultResource". */
     addTestVault(name: string): TestVaultResourcePromise;
 }
 
@@ -616,16 +653,13 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
 // DistributedApplicationBuilderImpl
 // ============================================================================
 
-/**
- * Type class for DistributedApplicationBuilder.
- */
+/** Type class for DistributedApplicationBuilder. */
 class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder {
     constructor(private _handle: IDistributedApplicationBuilderHandle, private _client: AspireClientRpc) {}
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
 
-    /** Adds a test Redis resource */
     /** @internal */
     async _addTestRedisInternal(name: string, port?: number): Promise<TestRedisResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
@@ -637,12 +671,17 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
         return new TestRedisResourceImpl(result, this._client);
     }
 
+    /**
+     * Adds a test Redis resource from ATS documentation.
+     * @param name The ATS resource name.
+     * @param options Additional options.
+     * @returns The ATS test Redis resource builder.
+     */
     addTestRedis(name: string, options?: AddTestRedisOptions): TestRedisResourcePromise {
         const port = options?.port;
         return new TestRedisResourcePromiseImpl(this._addTestRedisInternal(name, port), this._client);
     }
 
-    /** Adds a test vault resource */
     /** @internal */
     async _addTestVaultInternal(name: string): Promise<TestVaultResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle, name };
@@ -653,6 +692,7 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
         return new TestVaultResourceImpl(result, this._client);
     }
 
+    /** Targets the concrete TestVaultResource so it gets a builder class named "TestVaultResource". */
     addTestVault(name: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._addTestVaultInternal(name), this._client);
     }
@@ -674,12 +714,10 @@ class DistributedApplicationBuilderPromiseImpl implements DistributedApplication
         return this._promise.then(onfulfilled, onrejected);
     }
 
-    /** Adds a test Redis resource */
     addTestRedis(name: string, options?: AddTestRedisOptions): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.addTestRedis(name, options)), this._client);
     }
 
-    /** Adds a test vault resource */
     addTestVault(name: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.addTestVault(name)), this._client);
     }
@@ -692,58 +730,138 @@ class DistributedApplicationBuilderPromiseImpl implements DistributedApplication
 
 export interface TestDatabaseResource {
     toJSON(): MarshalledHandle;
+    /**
+     * Adds an optional string parameter.
+     * @param options Additional options.
+     */
     withOptionalString(options?: WithOptionalStringOptions): TestDatabaseResourcePromise;
+    /** Tests DTO parameter - verifies [AspireDto] generates TypeScript interface. */
     withConfig(config: TestConfigDto): TestDatabaseResourcePromise;
+    /** Tests callback receiving context wrapper. Verifies callback auto-wraps handle into context class with property-like objects. */
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestDatabaseResourcePromise;
+    /** Tests DateTime parameter - verifies mapping to ISO 8601 string. */
     withCreatedAt(createdAt: string): TestDatabaseResourcePromise;
+    /** Tests DateTimeOffset parameter - verifies mapping to ISO 8601 string. */
     withModifiedAt(modifiedAt: string): TestDatabaseResourcePromise;
+    /** Tests Guid parameter - verifies mapping to string. */
     withCorrelationId(correlationId: string): TestDatabaseResourcePromise;
+    /**
+     * Tests optional callback parameter - verifies conditional callback registration.
+     * @param options Additional options.
+     */
     withOptionalCallback(options?: WithOptionalCallbackOptions): TestDatabaseResourcePromise;
+    /** Tests enum parameter - verifies string literal union generation. */
     withStatus(status: TestResourceStatus): TestDatabaseResourcePromise;
+    /** Tests nested DTO parameter. */
     withNestedConfig(config: TestNestedDto): TestDatabaseResourcePromise;
+    /** Tests async callback with context that returns a value. */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestDatabaseResourcePromise;
+    /** Tests builder passed as parameter to another capability. Verifies wrapper class acceptance with internal handle extraction. */
     testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise;
+    /** Pattern 4/5: Tests interface/concrete type as parameter (not target). The dependency parameter should generate a union type: Handle | ResourceBuilderBase. */
     withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestDatabaseResourcePromise;
+    /** Tests an Aspire union parameter that includes an interface handle. The dependency parameter should generate a union type: string | ResourceBuilderBase. */
     withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): TestDatabaseResourcePromise;
+    /** Tests IReadOnlyList parameter - verifies readonly array handling. */
     withEndpoints(endpoints: string[]): TestDatabaseResourcePromise;
+    /** Tests IReadOnlyDictionary parameter - verifies readonly dict handling. */
     withEnvironmentVariables(variables: Record<string, string>): TestDatabaseResourcePromise;
+    /** Tests CancellationToken in callback parameter - generated TypeScript should materialize host values as CancellationToken. */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestDatabaseResourcePromise;
+    /**
+     * WithDataVolume on TestDatabaseResource — has only name parameter. When combined with the TestRedisResource overload, the generated WithDataVolumeOptions interface must include both name and isReadOnly (the union of all parameters).
+     * @param options Additional options.
+     */
     withDataVolume(options?: WithDataVolumeOptions): TestDatabaseResourcePromise;
+    /** Scenario 1: Single-param merge — one overload has name only, the other adds tag. Tests merge where the option variation is: single type vs tuple(type, type). */
     withMergeLabel(label: string): TestDatabaseResourcePromise;
+    /** Scenario 1b: Overload adds a category param — merge should make category optional. */
     withMergeLabelCategorized(label: string, category: string): TestDatabaseResourcePromise;
+    /** Scenario 2: Tuple-param merge — both have multiple required params, differ by one. Tests merge where the option variation is: tuple(type, type) vs tuple(type, type, type). */
     withMergeEndpoint(endpointName: string, port: number): TestDatabaseResourcePromise;
+    /** Scenario 2b: Overload adds a scheme param — merge should make scheme optional. */
     withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestDatabaseResourcePromise;
+    /**
+     * Scenario 3: Dict/Parameters merge — both have required + optional params, differ by one. Tests merge where the option variation involves Parameters dict.
+     * @param options Additional options.
+     */
     withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestDatabaseResourcePromise;
+    /**
+     * Scenario 3b: Overload adds a logPath param — merge should make logPath optional.
+     * @param options Additional options.
+     */
     withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestDatabaseResourcePromise;
+    /** Scenario 4: Both-dict merge — both overloads have 4+ required params so both use Parameters dicts. The shorter overload has 4 required params, the longer has 5. */
     withMergeRoute(path: string, method: string, handler: string, priority: number): TestDatabaseResourcePromise;
+    /** Scenario 4b: Overload adds a middleware param — merge should make middleware optional. Both variations will use Parameters dicts since they have 4+ required params. */
     withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestDatabaseResourcePromise;
 }
 
 export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseResource> {
+    /**
+     * Adds an optional string parameter.
+     * @param options Additional options.
+     */
     withOptionalString(options?: WithOptionalStringOptions): TestDatabaseResourcePromise;
+    /** Tests DTO parameter - verifies [AspireDto] generates TypeScript interface. */
     withConfig(config: TestConfigDto): TestDatabaseResourcePromise;
+    /** Tests callback receiving context wrapper. Verifies callback auto-wraps handle into context class with property-like objects. */
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestDatabaseResourcePromise;
+    /** Tests DateTime parameter - verifies mapping to ISO 8601 string. */
     withCreatedAt(createdAt: string): TestDatabaseResourcePromise;
+    /** Tests DateTimeOffset parameter - verifies mapping to ISO 8601 string. */
     withModifiedAt(modifiedAt: string): TestDatabaseResourcePromise;
+    /** Tests Guid parameter - verifies mapping to string. */
     withCorrelationId(correlationId: string): TestDatabaseResourcePromise;
+    /**
+     * Tests optional callback parameter - verifies conditional callback registration.
+     * @param options Additional options.
+     */
     withOptionalCallback(options?: WithOptionalCallbackOptions): TestDatabaseResourcePromise;
+    /** Tests enum parameter - verifies string literal union generation. */
     withStatus(status: TestResourceStatus): TestDatabaseResourcePromise;
+    /** Tests nested DTO parameter. */
     withNestedConfig(config: TestNestedDto): TestDatabaseResourcePromise;
+    /** Tests async callback with context that returns a value. */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestDatabaseResourcePromise;
+    /** Tests builder passed as parameter to another capability. Verifies wrapper class acceptance with internal handle extraction. */
     testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise;
+    /** Pattern 4/5: Tests interface/concrete type as parameter (not target). The dependency parameter should generate a union type: Handle | ResourceBuilderBase. */
     withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestDatabaseResourcePromise;
+    /** Tests an Aspire union parameter that includes an interface handle. The dependency parameter should generate a union type: string | ResourceBuilderBase. */
     withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): TestDatabaseResourcePromise;
+    /** Tests IReadOnlyList parameter - verifies readonly array handling. */
     withEndpoints(endpoints: string[]): TestDatabaseResourcePromise;
+    /** Tests IReadOnlyDictionary parameter - verifies readonly dict handling. */
     withEnvironmentVariables(variables: Record<string, string>): TestDatabaseResourcePromise;
+    /** Tests CancellationToken in callback parameter - generated TypeScript should materialize host values as CancellationToken. */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestDatabaseResourcePromise;
+    /**
+     * WithDataVolume on TestDatabaseResource — has only name parameter. When combined with the TestRedisResource overload, the generated WithDataVolumeOptions interface must include both name and isReadOnly (the union of all parameters).
+     * @param options Additional options.
+     */
     withDataVolume(options?: WithDataVolumeOptions): TestDatabaseResourcePromise;
+    /** Scenario 1: Single-param merge — one overload has name only, the other adds tag. Tests merge where the option variation is: single type vs tuple(type, type). */
     withMergeLabel(label: string): TestDatabaseResourcePromise;
+    /** Scenario 1b: Overload adds a category param — merge should make category optional. */
     withMergeLabelCategorized(label: string, category: string): TestDatabaseResourcePromise;
+    /** Scenario 2: Tuple-param merge — both have multiple required params, differ by one. Tests merge where the option variation is: tuple(type, type) vs tuple(type, type, type). */
     withMergeEndpoint(endpointName: string, port: number): TestDatabaseResourcePromise;
+    /** Scenario 2b: Overload adds a scheme param — merge should make scheme optional. */
     withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestDatabaseResourcePromise;
+    /**
+     * Scenario 3: Dict/Parameters merge — both have required + optional params, differ by one. Tests merge where the option variation involves Parameters dict.
+     * @param options Additional options.
+     */
     withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestDatabaseResourcePromise;
+    /**
+     * Scenario 3b: Overload adds a logPath param — merge should make logPath optional.
+     * @param options Additional options.
+     */
     withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestDatabaseResourcePromise;
+    /** Scenario 4: Both-dict merge — both overloads have 4+ required params so both use Parameters dicts. The shorter overload has 4 required params, the longer has 5. */
     withMergeRoute(path: string, method: string, handler: string, priority: number): TestDatabaseResourcePromise;
+    /** Scenario 4b: Overload adds a middleware param — merge should make middleware optional. Both variations will use Parameters dicts since they have 4+ required params. */
     withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestDatabaseResourcePromise;
 }
 
@@ -768,7 +886,10 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Adds an optional string parameter */
+    /**
+     * Adds an optional string parameter.
+     * @param options Additional options.
+     */
     withOptionalString(options?: WithOptionalStringOptions): TestDatabaseResourcePromise {
         const value = options?.value;
         const enabled = options?.enabled;
@@ -785,7 +906,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Configures the resource with a DTO */
+    /** Tests DTO parameter - verifies [AspireDto] generates TypeScript interface. */
     withConfig(config: TestConfigDto): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withConfigInternal(config), this._client);
     }
@@ -805,7 +926,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Configures environment with callback (test version) */
+    /** Tests callback receiving context wrapper. Verifies callback auto-wraps handle into context class with property-like objects. */
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._testWithEnvironmentCallbackInternal(callback), this._client);
     }
@@ -820,7 +941,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Sets the created timestamp */
+    /** Tests DateTime parameter - verifies mapping to ISO 8601 string. */
     withCreatedAt(createdAt: string): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withCreatedAtInternal(createdAt), this._client);
     }
@@ -835,7 +956,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Sets the modified timestamp */
+    /** Tests DateTimeOffset parameter - verifies mapping to ISO 8601 string. */
     withModifiedAt(modifiedAt: string): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withModifiedAtInternal(modifiedAt), this._client);
     }
@@ -850,7 +971,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Sets the correlation ID */
+    /** Tests Guid parameter - verifies mapping to string. */
     withCorrelationId(correlationId: string): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withCorrelationIdInternal(correlationId), this._client);
     }
@@ -871,7 +992,10 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Configures with optional callback */
+    /**
+     * Tests optional callback parameter - verifies conditional callback registration.
+     * @param options Additional options.
+     */
     withOptionalCallback(options?: WithOptionalCallbackOptions): TestDatabaseResourcePromise {
         const callback = options?.callback;
         return new TestDatabaseResourcePromiseImpl(this._withOptionalCallbackInternal(callback), this._client);
@@ -887,7 +1011,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Sets the resource status */
+    /** Tests enum parameter - verifies string literal union generation. */
     withStatus(status: TestResourceStatus): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withStatusInternal(status), this._client);
     }
@@ -902,7 +1026,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Configures with nested DTO */
+    /** Tests nested DTO parameter. */
     withNestedConfig(config: TestNestedDto): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withNestedConfigInternal(config), this._client);
     }
@@ -922,7 +1046,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Adds validation callback */
+    /** Tests async callback with context that returns a value. */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withValidatorInternal(validator), this._client);
     }
@@ -938,7 +1062,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Waits for another resource (test version) */
+    /** Tests builder passed as parameter to another capability. Verifies wrapper class acceptance with internal handle extraction. */
     testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._testWaitForInternal(dependency), this._client);
     }
@@ -954,7 +1078,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Adds a dependency on another resource */
+    /** Pattern 4/5: Tests interface/concrete type as parameter (not target). The dependency parameter should generate a union type: Handle | ResourceBuilderBase. */
     withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withDependencyInternal(dependency), this._client);
     }
@@ -970,7 +1094,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Adds a dependency from a string or another resource */
+    /** Tests an Aspire union parameter that includes an interface handle. The dependency parameter should generate a union type: string | ResourceBuilderBase. */
     withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withUnionDependencyInternal(dependency), this._client);
     }
@@ -985,7 +1109,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Sets the endpoints */
+    /** Tests IReadOnlyList parameter - verifies readonly array handling. */
     withEndpoints(endpoints: string[]): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withEndpointsInternal(endpoints), this._client);
     }
@@ -1000,7 +1124,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Sets environment variables */
+    /** Tests IReadOnlyDictionary parameter - verifies readonly dict handling. */
     withEnvironmentVariables(variables: Record<string, string>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withEnvironmentVariablesInternal(variables), this._client);
     }
@@ -1019,7 +1143,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Performs a cancellable operation */
+    /** Tests CancellationToken in callback parameter - generated TypeScript should materialize host values as CancellationToken. */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withCancellableOperationInternal(operation), this._client);
     }
@@ -1035,7 +1159,10 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Adds a data volume */
+    /**
+     * WithDataVolume on TestDatabaseResource — has only name parameter. When combined with the TestRedisResource overload, the generated WithDataVolumeOptions interface must include both name and isReadOnly (the union of all parameters).
+     * @param options Additional options.
+     */
     withDataVolume(options?: WithDataVolumeOptions): TestDatabaseResourcePromise {
         const name = options?.name;
         return new TestDatabaseResourcePromiseImpl(this._withDataVolumeInternal(name), this._client);
@@ -1051,7 +1178,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Adds a label to the resource */
+    /** Scenario 1: Single-param merge — one overload has name only, the other adds tag. Tests merge where the option variation is: single type vs tuple(type, type). */
     withMergeLabel(label: string): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withMergeLabelInternal(label), this._client);
     }
@@ -1066,7 +1193,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Adds a categorized label to the resource */
+    /** Scenario 1b: Overload adds a category param — merge should make category optional. */
     withMergeLabelCategorized(label: string, category: string): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withMergeLabelCategorizedInternal(label, category), this._client);
     }
@@ -1081,7 +1208,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Configures a named endpoint */
+    /** Scenario 2: Tuple-param merge — both have multiple required params, differ by one. Tests merge where the option variation is: tuple(type, type) vs tuple(type, type, type). */
     withMergeEndpoint(endpointName: string, port: number): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withMergeEndpointInternal(endpointName, port), this._client);
     }
@@ -1096,7 +1223,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Configures a named endpoint with scheme */
+    /** Scenario 2b: Overload adds a scheme param — merge should make scheme optional. */
     withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withMergeEndpointSchemeInternal(endpointName, port, scheme), this._client);
     }
@@ -1113,7 +1240,10 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Configures resource logging */
+    /**
+     * Scenario 3: Dict/Parameters merge — both have required + optional params, differ by one. Tests merge where the option variation involves Parameters dict.
+     * @param options Additional options.
+     */
     withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestDatabaseResourcePromise {
         const enableConsole = options?.enableConsole;
         const maxFiles = options?.maxFiles;
@@ -1132,7 +1262,10 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Configures resource logging with file path */
+    /**
+     * Scenario 3b: Overload adds a logPath param — merge should make logPath optional.
+     * @param options Additional options.
+     */
     withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestDatabaseResourcePromise {
         const enableConsole = options?.enableConsole;
         const maxFiles = options?.maxFiles;
@@ -1149,7 +1282,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Configures a route */
+    /** Scenario 4: Both-dict merge — both overloads have 4+ required params so both use Parameters dicts. The shorter overload has 4 required params, the longer has 5. */
     withMergeRoute(path: string, method: string, handler: string, priority: number): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withMergeRouteInternal(path, method, handler, priority), this._client);
     }
@@ -1164,7 +1297,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Configures a route with middleware */
+    /** Scenario 4b: Overload adds a middleware param — merge should make middleware optional. Both variations will use Parameters dicts since they have 4+ required params. */
     withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withMergeRouteMiddlewareInternal(path, method, handler, priority, middleware), this._client);
     }
@@ -1188,127 +1321,102 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
         return this._promise.then(onfulfilled, onrejected);
     }
 
-    /** Adds an optional string parameter */
     withOptionalString(options?: WithOptionalStringOptions): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withOptionalString(options)), this._client);
     }
 
-    /** Configures the resource with a DTO */
     withConfig(config: TestConfigDto): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withConfig(config)), this._client);
     }
 
-    /** Configures environment with callback (test version) */
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.testWithEnvironmentCallback(callback)), this._client);
     }
 
-    /** Sets the created timestamp */
     withCreatedAt(createdAt: string): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withCreatedAt(createdAt)), this._client);
     }
 
-    /** Sets the modified timestamp */
     withModifiedAt(modifiedAt: string): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withModifiedAt(modifiedAt)), this._client);
     }
 
-    /** Sets the correlation ID */
     withCorrelationId(correlationId: string): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withCorrelationId(correlationId)), this._client);
     }
 
-    /** Configures with optional callback */
     withOptionalCallback(options?: WithOptionalCallbackOptions): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withOptionalCallback(options)), this._client);
     }
 
-    /** Sets the resource status */
     withStatus(status: TestResourceStatus): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withStatus(status)), this._client);
     }
 
-    /** Configures with nested DTO */
     withNestedConfig(config: TestNestedDto): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withNestedConfig(config)), this._client);
     }
 
-    /** Adds validation callback */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withValidator(validator)), this._client);
     }
 
-    /** Waits for another resource (test version) */
     testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.testWaitFor(dependency)), this._client);
     }
 
-    /** Adds a dependency on another resource */
     withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withDependency(dependency)), this._client);
     }
 
-    /** Adds a dependency from a string or another resource */
     withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withUnionDependency(dependency)), this._client);
     }
 
-    /** Sets the endpoints */
     withEndpoints(endpoints: string[]): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withEndpoints(endpoints)), this._client);
     }
 
-    /** Sets environment variables */
     withEnvironmentVariables(variables: Record<string, string>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentVariables(variables)), this._client);
     }
 
-    /** Performs a cancellable operation */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withCancellableOperation(operation)), this._client);
     }
 
-    /** Adds a data volume */
     withDataVolume(options?: WithDataVolumeOptions): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withDataVolume(options)), this._client);
     }
 
-    /** Adds a label to the resource */
     withMergeLabel(label: string): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withMergeLabel(label)), this._client);
     }
 
-    /** Adds a categorized label to the resource */
     withMergeLabelCategorized(label: string, category: string): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withMergeLabelCategorized(label, category)), this._client);
     }
 
-    /** Configures a named endpoint */
     withMergeEndpoint(endpointName: string, port: number): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withMergeEndpoint(endpointName, port)), this._client);
     }
 
-    /** Configures a named endpoint with scheme */
     withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withMergeEndpointScheme(endpointName, port, scheme)), this._client);
     }
 
-    /** Configures resource logging */
     withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withMergeLogging(logLevel, options)), this._client);
     }
 
-    /** Configures resource logging with file path */
     withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withMergeLoggingPath(logLevel, logPath, options)), this._client);
     }
 
-    /** Configures a route */
     withMergeRoute(path: string, method: string, handler: string, priority: number): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withMergeRoute(path, method, handler, priority)), this._client);
     }
 
-    /** Configures a route with middleware */
     withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withMergeRouteMiddleware(path, method, handler, priority, middleware)), this._client);
     }
@@ -1321,80 +1429,212 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
 
 export interface TestRedisResource {
     toJSON(): MarshalledHandle;
+    /**
+     * Adds a child database to a Redis server resource (factory method pattern).
+     *
+     * This method tests the factory method codegen pattern where a method on builder type A
+     * returns builder type B (e.g., SqlServerServerResource.AddDatabase returning SqlServerDatabaseResource).
+     * @param options Additional options.
+     */
     addTestChildDatabase(name: string, options?: AddTestChildDatabaseOptions): TestDatabaseResourcePromise;
+    /**
+     * Configures the Redis resource with persistence.
+     * @param options Additional options.
+     */
     withPersistence(options?: WithPersistenceOptions): TestRedisResourcePromise;
+    /**
+     * Adds an optional string parameter.
+     * @param options Additional options.
+     */
     withOptionalString(options?: WithOptionalStringOptions): TestRedisResourcePromise;
+    /** Tests DTO parameter - verifies [AspireDto] generates TypeScript interface. */
     withConfig(config: TestConfigDto): TestRedisResourcePromise;
+    /** Tests mutable List return type - verifies AspireList wrapper generation. */
     getTags(): Promise<AspireList<string>>;
+    /** Tests mutable Dictionary return type - verifies AspireDict wrapper generation. */
     getMetadata(): Promise<AspireDict<string, string>>;
+    /** Tests ReferenceExpression parameter - verifies special handling (pass directly via toJSON). */
     withConnectionString(connectionString: ReferenceExpression): TestRedisResourcePromise;
+    /** Tests callback receiving context wrapper. Verifies callback auto-wraps handle into context class with property-like objects. */
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestRedisResourcePromise;
+    /** Tests DateTime parameter - verifies mapping to ISO 8601 string. */
     withCreatedAt(createdAt: string): TestRedisResourcePromise;
+    /** Tests DateTimeOffset parameter - verifies mapping to ISO 8601 string. */
     withModifiedAt(modifiedAt: string): TestRedisResourcePromise;
+    /** Tests Guid parameter - verifies mapping to string. */
     withCorrelationId(correlationId: string): TestRedisResourcePromise;
+    /**
+     * Tests optional callback parameter - verifies conditional callback registration.
+     * @param options Additional options.
+     */
     withOptionalCallback(options?: WithOptionalCallbackOptions): TestRedisResourcePromise;
+    /** Tests enum parameter - verifies string literal union generation. */
     withStatus(status: TestResourceStatus): TestRedisResourcePromise;
+    /** Tests nested DTO parameter. */
     withNestedConfig(config: TestNestedDto): TestRedisResourcePromise;
+    /** Tests async callback with context that returns a value. */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestRedisResourcePromise;
+    /** Tests builder passed as parameter to another capability. Verifies wrapper class acceptance with internal handle extraction. */
     testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestRedisResourcePromise;
+    /** Tests readonly array return type - verifies copy/pass directly. */
     getEndpoints(): Promise<string[]>;
+    /** Pattern 2: Tests interface type directly as target (NOT generic constraint). This targets IResourceWithConnectionString directly, not via generic parameter. Should expand to all types implementing IResourceWithConnectionString. */
     withConnectionStringDirect(connectionString: string): TestRedisResourcePromise;
+    /** Pattern 3: Tests concrete type with inheritance. This targets TestRedisResource directly (extends ContainerResource). Should expand to TestRedisResource AND any types that inherit from it. */
     withRedisSpecific(option: string): TestRedisResourcePromise;
+    /** Pattern 4/5: Tests interface/concrete type as parameter (not target). The dependency parameter should generate a union type: Handle | ResourceBuilderBase. */
     withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestRedisResourcePromise;
+    /** Tests an Aspire union parameter that includes an interface handle. The dependency parameter should generate a union type: string | ResourceBuilderBase. */
     withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): TestRedisResourcePromise;
+    /** Tests IReadOnlyList parameter - verifies readonly array handling. */
     withEndpoints(endpoints: string[]): TestRedisResourcePromise;
+    /** Tests IReadOnlyDictionary parameter - verifies readonly dict handling. */
     withEnvironmentVariables(variables: Record<string, string>): TestRedisResourcePromise;
+    /**
+     * Tests CancellationToken parameter - generated TypeScript should accept AbortSignal or CancellationToken for inputs.
+     * @param options Additional options.
+     */
     getStatusAsync(options?: GetStatusAsyncOptions): Promise<string>;
+    /** Tests CancellationToken in callback parameter - generated TypeScript should materialize host values as CancellationToken. */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestRedisResourcePromise;
+    /**
+     * Tests CancellationToken mixed with other parameters.
+     * @param options Additional options.
+     */
     waitForReadyAsync(timeout: number, options?: WaitForReadyAsyncOptions): Promise<boolean>;
+    /** Tests multi-parameter callback with handle types for destructuring codegen. */
     withMultiParamHandleCallback(callback: (arg1: TestCallbackContext, arg2: TestEnvironmentContext) => Promise<void>): TestRedisResourcePromise;
+    /**
+     * WithDataVolume on TestRedisResource — has both name and isReadOnly parameters. Tests that options interfaces merge parameters across overloads targeting different types.
+     * @param options Additional options.
+     */
     withDataVolume(options?: WithDataVolumeOptions): TestRedisResourcePromise;
+    /** Scenario 1: Single-param merge — one overload has name only, the other adds tag. Tests merge where the option variation is: single type vs tuple(type, type). */
     withMergeLabel(label: string): TestRedisResourcePromise;
+    /** Scenario 1b: Overload adds a category param — merge should make category optional. */
     withMergeLabelCategorized(label: string, category: string): TestRedisResourcePromise;
+    /** Scenario 2: Tuple-param merge — both have multiple required params, differ by one. Tests merge where the option variation is: tuple(type, type) vs tuple(type, type, type). */
     withMergeEndpoint(endpointName: string, port: number): TestRedisResourcePromise;
+    /** Scenario 2b: Overload adds a scheme param — merge should make scheme optional. */
     withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestRedisResourcePromise;
+    /**
+     * Scenario 3: Dict/Parameters merge — both have required + optional params, differ by one. Tests merge where the option variation involves Parameters dict.
+     * @param options Additional options.
+     */
     withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestRedisResourcePromise;
+    /**
+     * Scenario 3b: Overload adds a logPath param — merge should make logPath optional.
+     * @param options Additional options.
+     */
     withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestRedisResourcePromise;
+    /** Scenario 4: Both-dict merge — both overloads have 4+ required params so both use Parameters dicts. The shorter overload has 4 required params, the longer has 5. */
     withMergeRoute(path: string, method: string, handler: string, priority: number): TestRedisResourcePromise;
+    /** Scenario 4b: Overload adds a middleware param — merge should make middleware optional. Both variations will use Parameters dicts since they have 4+ required params. */
     withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestRedisResourcePromise;
 }
 
 export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource> {
+    /**
+     * Adds a child database to a Redis server resource (factory method pattern).
+     *
+     * This method tests the factory method codegen pattern where a method on builder type A
+     * returns builder type B (e.g., SqlServerServerResource.AddDatabase returning SqlServerDatabaseResource).
+     * @param options Additional options.
+     */
     addTestChildDatabase(name: string, options?: AddTestChildDatabaseOptions): TestDatabaseResourcePromise;
+    /**
+     * Configures the Redis resource with persistence.
+     * @param options Additional options.
+     */
     withPersistence(options?: WithPersistenceOptions): TestRedisResourcePromise;
+    /**
+     * Adds an optional string parameter.
+     * @param options Additional options.
+     */
     withOptionalString(options?: WithOptionalStringOptions): TestRedisResourcePromise;
+    /** Tests DTO parameter - verifies [AspireDto] generates TypeScript interface. */
     withConfig(config: TestConfigDto): TestRedisResourcePromise;
+    /** Tests mutable List return type - verifies AspireList wrapper generation. */
     getTags(): Promise<AspireList<string>>;
+    /** Tests mutable Dictionary return type - verifies AspireDict wrapper generation. */
     getMetadata(): Promise<AspireDict<string, string>>;
+    /** Tests ReferenceExpression parameter - verifies special handling (pass directly via toJSON). */
     withConnectionString(connectionString: ReferenceExpression): TestRedisResourcePromise;
+    /** Tests callback receiving context wrapper. Verifies callback auto-wraps handle into context class with property-like objects. */
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestRedisResourcePromise;
+    /** Tests DateTime parameter - verifies mapping to ISO 8601 string. */
     withCreatedAt(createdAt: string): TestRedisResourcePromise;
+    /** Tests DateTimeOffset parameter - verifies mapping to ISO 8601 string. */
     withModifiedAt(modifiedAt: string): TestRedisResourcePromise;
+    /** Tests Guid parameter - verifies mapping to string. */
     withCorrelationId(correlationId: string): TestRedisResourcePromise;
+    /**
+     * Tests optional callback parameter - verifies conditional callback registration.
+     * @param options Additional options.
+     */
     withOptionalCallback(options?: WithOptionalCallbackOptions): TestRedisResourcePromise;
+    /** Tests enum parameter - verifies string literal union generation. */
     withStatus(status: TestResourceStatus): TestRedisResourcePromise;
+    /** Tests nested DTO parameter. */
     withNestedConfig(config: TestNestedDto): TestRedisResourcePromise;
+    /** Tests async callback with context that returns a value. */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestRedisResourcePromise;
+    /** Tests builder passed as parameter to another capability. Verifies wrapper class acceptance with internal handle extraction. */
     testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestRedisResourcePromise;
+    /** Tests readonly array return type - verifies copy/pass directly. */
     getEndpoints(): Promise<string[]>;
+    /** Pattern 2: Tests interface type directly as target (NOT generic constraint). This targets IResourceWithConnectionString directly, not via generic parameter. Should expand to all types implementing IResourceWithConnectionString. */
     withConnectionStringDirect(connectionString: string): TestRedisResourcePromise;
+    /** Pattern 3: Tests concrete type with inheritance. This targets TestRedisResource directly (extends ContainerResource). Should expand to TestRedisResource AND any types that inherit from it. */
     withRedisSpecific(option: string): TestRedisResourcePromise;
+    /** Pattern 4/5: Tests interface/concrete type as parameter (not target). The dependency parameter should generate a union type: Handle | ResourceBuilderBase. */
     withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestRedisResourcePromise;
+    /** Tests an Aspire union parameter that includes an interface handle. The dependency parameter should generate a union type: string | ResourceBuilderBase. */
     withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): TestRedisResourcePromise;
+    /** Tests IReadOnlyList parameter - verifies readonly array handling. */
     withEndpoints(endpoints: string[]): TestRedisResourcePromise;
+    /** Tests IReadOnlyDictionary parameter - verifies readonly dict handling. */
     withEnvironmentVariables(variables: Record<string, string>): TestRedisResourcePromise;
+    /**
+     * Tests CancellationToken parameter - generated TypeScript should accept AbortSignal or CancellationToken for inputs.
+     * @param options Additional options.
+     */
     getStatusAsync(options?: GetStatusAsyncOptions): Promise<string>;
+    /** Tests CancellationToken in callback parameter - generated TypeScript should materialize host values as CancellationToken. */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestRedisResourcePromise;
+    /**
+     * Tests CancellationToken mixed with other parameters.
+     * @param options Additional options.
+     */
     waitForReadyAsync(timeout: number, options?: WaitForReadyAsyncOptions): Promise<boolean>;
+    /** Tests multi-parameter callback with handle types for destructuring codegen. */
     withMultiParamHandleCallback(callback: (arg1: TestCallbackContext, arg2: TestEnvironmentContext) => Promise<void>): TestRedisResourcePromise;
+    /**
+     * WithDataVolume on TestRedisResource — has both name and isReadOnly parameters. Tests that options interfaces merge parameters across overloads targeting different types.
+     * @param options Additional options.
+     */
     withDataVolume(options?: WithDataVolumeOptions): TestRedisResourcePromise;
+    /** Scenario 1: Single-param merge — one overload has name only, the other adds tag. Tests merge where the option variation is: single type vs tuple(type, type). */
     withMergeLabel(label: string): TestRedisResourcePromise;
+    /** Scenario 1b: Overload adds a category param — merge should make category optional. */
     withMergeLabelCategorized(label: string, category: string): TestRedisResourcePromise;
+    /** Scenario 2: Tuple-param merge — both have multiple required params, differ by one. Tests merge where the option variation is: tuple(type, type) vs tuple(type, type, type). */
     withMergeEndpoint(endpointName: string, port: number): TestRedisResourcePromise;
+    /** Scenario 2b: Overload adds a scheme param — merge should make scheme optional. */
     withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestRedisResourcePromise;
+    /**
+     * Scenario 3: Dict/Parameters merge — both have required + optional params, differ by one. Tests merge where the option variation involves Parameters dict.
+     * @param options Additional options.
+     */
     withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestRedisResourcePromise;
+    /**
+     * Scenario 3b: Overload adds a logPath param — merge should make logPath optional.
+     * @param options Additional options.
+     */
     withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestRedisResourcePromise;
+    /** Scenario 4: Both-dict merge — both overloads have 4+ required params so both use Parameters dicts. The shorter overload has 4 required params, the longer has 5. */
     withMergeRoute(path: string, method: string, handler: string, priority: number): TestRedisResourcePromise;
+    /** Scenario 4b: Overload adds a middleware param — merge should make middleware optional. Both variations will use Parameters dicts since they have 4+ required params. */
     withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestRedisResourcePromise;
 }
 
@@ -1418,7 +1658,13 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestDatabaseResourceImpl(result, this._client);
     }
 
-    /** Adds a child database to a test Redis resource */
+    /**
+     * Adds a child database to a Redis server resource (factory method pattern).
+     *
+     * This method tests the factory method codegen pattern where a method on builder type A
+     * returns builder type B (e.g., SqlServerServerResource.AddDatabase returning SqlServerDatabaseResource).
+     * @param options Additional options.
+     */
     addTestChildDatabase(name: string, options?: AddTestChildDatabaseOptions): TestDatabaseResourcePromise {
         const databaseName = options?.databaseName;
         return new TestDatabaseResourcePromiseImpl(this._addTestChildDatabaseInternal(name, databaseName), this._client);
@@ -1435,7 +1681,10 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Configures the Redis resource with persistence */
+    /**
+     * Configures the Redis resource with persistence.
+     * @param options Additional options.
+     */
     withPersistence(options?: WithPersistenceOptions): TestRedisResourcePromise {
         const mode = options?.mode;
         return new TestRedisResourcePromiseImpl(this._withPersistenceInternal(mode), this._client);
@@ -1453,7 +1702,10 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Adds an optional string parameter */
+    /**
+     * Adds an optional string parameter.
+     * @param options Additional options.
+     */
     withOptionalString(options?: WithOptionalStringOptions): TestRedisResourcePromise {
         const value = options?.value;
         const enabled = options?.enabled;
@@ -1470,12 +1722,12 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Configures the resource with a DTO */
+    /** Tests DTO parameter - verifies [AspireDto] generates TypeScript interface. */
     withConfig(config: TestConfigDto): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withConfigInternal(config), this._client);
     }
 
-    /** Gets the tags for the resource */
+    /** Tests mutable List return type - verifies AspireList wrapper generation. */
     async getTags(): Promise<AspireList<string>> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         return await this._client.invokeCapability<AspireList<string>>(
@@ -1484,7 +1736,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         );
     }
 
-    /** Gets the metadata for the resource */
+    /** Tests mutable Dictionary return type - verifies AspireDict wrapper generation. */
     async getMetadata(): Promise<AspireDict<string, string>> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         return await this._client.invokeCapability<AspireDict<string, string>>(
@@ -1503,7 +1755,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Sets the connection string using a reference expression */
+    /** Tests ReferenceExpression parameter - verifies special handling (pass directly via toJSON). */
     withConnectionString(connectionString: ReferenceExpression): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withConnectionStringInternal(connectionString), this._client);
     }
@@ -1523,7 +1775,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Configures environment with callback (test version) */
+    /** Tests callback receiving context wrapper. Verifies callback auto-wraps handle into context class with property-like objects. */
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._testWithEnvironmentCallbackInternal(callback), this._client);
     }
@@ -1538,7 +1790,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Sets the created timestamp */
+    /** Tests DateTime parameter - verifies mapping to ISO 8601 string. */
     withCreatedAt(createdAt: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withCreatedAtInternal(createdAt), this._client);
     }
@@ -1553,7 +1805,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Sets the modified timestamp */
+    /** Tests DateTimeOffset parameter - verifies mapping to ISO 8601 string. */
     withModifiedAt(modifiedAt: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withModifiedAtInternal(modifiedAt), this._client);
     }
@@ -1568,7 +1820,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Sets the correlation ID */
+    /** Tests Guid parameter - verifies mapping to string. */
     withCorrelationId(correlationId: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withCorrelationIdInternal(correlationId), this._client);
     }
@@ -1589,7 +1841,10 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Configures with optional callback */
+    /**
+     * Tests optional callback parameter - verifies conditional callback registration.
+     * @param options Additional options.
+     */
     withOptionalCallback(options?: WithOptionalCallbackOptions): TestRedisResourcePromise {
         const callback = options?.callback;
         return new TestRedisResourcePromiseImpl(this._withOptionalCallbackInternal(callback), this._client);
@@ -1605,7 +1860,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Sets the resource status */
+    /** Tests enum parameter - verifies string literal union generation. */
     withStatus(status: TestResourceStatus): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withStatusInternal(status), this._client);
     }
@@ -1620,7 +1875,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Configures with nested DTO */
+    /** Tests nested DTO parameter. */
     withNestedConfig(config: TestNestedDto): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withNestedConfigInternal(config), this._client);
     }
@@ -1640,7 +1895,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Adds validation callback */
+    /** Tests async callback with context that returns a value. */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withValidatorInternal(validator), this._client);
     }
@@ -1656,12 +1911,12 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Waits for another resource (test version) */
+    /** Tests builder passed as parameter to another capability. Verifies wrapper class acceptance with internal handle extraction. */
     testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._testWaitForInternal(dependency), this._client);
     }
 
-    /** Gets the endpoints */
+    /** Tests readonly array return type - verifies copy/pass directly. */
     async getEndpoints(): Promise<string[]> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         return await this._client.invokeCapability<string[]>(
@@ -1680,7 +1935,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Sets connection string using direct interface target */
+    /** Pattern 2: Tests interface type directly as target (NOT generic constraint). This targets IResourceWithConnectionString directly, not via generic parameter. Should expand to all types implementing IResourceWithConnectionString. */
     withConnectionStringDirect(connectionString: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withConnectionStringDirectInternal(connectionString), this._client);
     }
@@ -1695,7 +1950,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Redis-specific configuration */
+    /** Pattern 3: Tests concrete type with inheritance. This targets TestRedisResource directly (extends ContainerResource). Should expand to TestRedisResource AND any types that inherit from it. */
     withRedisSpecific(option: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withRedisSpecificInternal(option), this._client);
     }
@@ -1711,7 +1966,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Adds a dependency on another resource */
+    /** Pattern 4/5: Tests interface/concrete type as parameter (not target). The dependency parameter should generate a union type: Handle | ResourceBuilderBase. */
     withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withDependencyInternal(dependency), this._client);
     }
@@ -1727,7 +1982,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Adds a dependency from a string or another resource */
+    /** Tests an Aspire union parameter that includes an interface handle. The dependency parameter should generate a union type: string | ResourceBuilderBase. */
     withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withUnionDependencyInternal(dependency), this._client);
     }
@@ -1742,7 +1997,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Sets the endpoints */
+    /** Tests IReadOnlyList parameter - verifies readonly array handling. */
     withEndpoints(endpoints: string[]): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withEndpointsInternal(endpoints), this._client);
     }
@@ -1757,12 +2012,15 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Sets environment variables */
+    /** Tests IReadOnlyDictionary parameter - verifies readonly dict handling. */
     withEnvironmentVariables(variables: Record<string, string>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withEnvironmentVariablesInternal(variables), this._client);
     }
 
-    /** Gets the status of the resource asynchronously */
+    /**
+     * Tests CancellationToken parameter - generated TypeScript should accept AbortSignal or CancellationToken for inputs.
+     * @param options Additional options.
+     */
     async getStatusAsync(options?: GetStatusAsyncOptions): Promise<string> {
         const cancellationToken = options?.cancellationToken;
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
@@ -1787,12 +2045,15 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Performs a cancellable operation */
+    /** Tests CancellationToken in callback parameter - generated TypeScript should materialize host values as CancellationToken. */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withCancellableOperationInternal(operation), this._client);
     }
 
-    /** Waits for the resource to be ready */
+    /**
+     * Tests CancellationToken mixed with other parameters.
+     * @param options Additional options.
+     */
     async waitForReadyAsync(timeout: number, options?: WaitForReadyAsyncOptions): Promise<boolean> {
         const cancellationToken = options?.cancellationToken;
         const rpcArgs: Record<string, unknown> = { builder: this._handle, timeout };
@@ -1820,7 +2081,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Tests multi-param callback destructuring */
+    /** Tests multi-parameter callback with handle types for destructuring codegen. */
     withMultiParamHandleCallback(callback: (arg1: TestCallbackContext, arg2: TestEnvironmentContext) => Promise<void>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withMultiParamHandleCallbackInternal(callback), this._client);
     }
@@ -1837,7 +2098,10 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Adds a data volume with persistence */
+    /**
+     * WithDataVolume on TestRedisResource — has both name and isReadOnly parameters. Tests that options interfaces merge parameters across overloads targeting different types.
+     * @param options Additional options.
+     */
     withDataVolume(options?: WithDataVolumeOptions): TestRedisResourcePromise {
         const name = options?.name;
         const isReadOnly = options?.isReadOnly;
@@ -1854,7 +2118,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Adds a label to the resource */
+    /** Scenario 1: Single-param merge — one overload has name only, the other adds tag. Tests merge where the option variation is: single type vs tuple(type, type). */
     withMergeLabel(label: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withMergeLabelInternal(label), this._client);
     }
@@ -1869,7 +2133,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Adds a categorized label to the resource */
+    /** Scenario 1b: Overload adds a category param — merge should make category optional. */
     withMergeLabelCategorized(label: string, category: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withMergeLabelCategorizedInternal(label, category), this._client);
     }
@@ -1884,7 +2148,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Configures a named endpoint */
+    /** Scenario 2: Tuple-param merge — both have multiple required params, differ by one. Tests merge where the option variation is: tuple(type, type) vs tuple(type, type, type). */
     withMergeEndpoint(endpointName: string, port: number): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withMergeEndpointInternal(endpointName, port), this._client);
     }
@@ -1899,7 +2163,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Configures a named endpoint with scheme */
+    /** Scenario 2b: Overload adds a scheme param — merge should make scheme optional. */
     withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withMergeEndpointSchemeInternal(endpointName, port, scheme), this._client);
     }
@@ -1916,7 +2180,10 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Configures resource logging */
+    /**
+     * Scenario 3: Dict/Parameters merge — both have required + optional params, differ by one. Tests merge where the option variation involves Parameters dict.
+     * @param options Additional options.
+     */
     withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestRedisResourcePromise {
         const enableConsole = options?.enableConsole;
         const maxFiles = options?.maxFiles;
@@ -1935,7 +2202,10 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Configures resource logging with file path */
+    /**
+     * Scenario 3b: Overload adds a logPath param — merge should make logPath optional.
+     * @param options Additional options.
+     */
     withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestRedisResourcePromise {
         const enableConsole = options?.enableConsole;
         const maxFiles = options?.maxFiles;
@@ -1952,7 +2222,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Configures a route */
+    /** Scenario 4: Both-dict merge — both overloads have 4+ required params so both use Parameters dicts. The shorter overload has 4 required params, the longer has 5. */
     withMergeRoute(path: string, method: string, handler: string, priority: number): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withMergeRouteInternal(path, method, handler, priority), this._client);
     }
@@ -1967,7 +2237,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         return new TestRedisResourceImpl(result, this._client);
     }
 
-    /** Configures a route with middleware */
+    /** Scenario 4b: Overload adds a middleware param — merge should make middleware optional. Both variations will use Parameters dicts since they have 4+ required params. */
     withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withMergeRouteMiddlewareInternal(path, method, handler, priority, middleware), this._client);
     }
@@ -1991,182 +2261,146 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
         return this._promise.then(onfulfilled, onrejected);
     }
 
-    /** Adds a child database to a test Redis resource */
     addTestChildDatabase(name: string, options?: AddTestChildDatabaseOptions): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.addTestChildDatabase(name, options)), this._client);
     }
 
-    /** Configures the Redis resource with persistence */
     withPersistence(options?: WithPersistenceOptions): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withPersistence(options)), this._client);
     }
 
-    /** Adds an optional string parameter */
     withOptionalString(options?: WithOptionalStringOptions): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withOptionalString(options)), this._client);
     }
 
-    /** Configures the resource with a DTO */
     withConfig(config: TestConfigDto): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withConfig(config)), this._client);
     }
 
-    /** Gets the tags for the resource */
     getTags(): Promise<AspireList<string>> {
         return this._promise.then(obj => obj.getTags());
     }
 
-    /** Gets the metadata for the resource */
     getMetadata(): Promise<AspireDict<string, string>> {
         return this._promise.then(obj => obj.getMetadata());
     }
 
-    /** Sets the connection string using a reference expression */
     withConnectionString(connectionString: ReferenceExpression): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withConnectionString(connectionString)), this._client);
     }
 
-    /** Configures environment with callback (test version) */
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.testWithEnvironmentCallback(callback)), this._client);
     }
 
-    /** Sets the created timestamp */
     withCreatedAt(createdAt: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withCreatedAt(createdAt)), this._client);
     }
 
-    /** Sets the modified timestamp */
     withModifiedAt(modifiedAt: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withModifiedAt(modifiedAt)), this._client);
     }
 
-    /** Sets the correlation ID */
     withCorrelationId(correlationId: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withCorrelationId(correlationId)), this._client);
     }
 
-    /** Configures with optional callback */
     withOptionalCallback(options?: WithOptionalCallbackOptions): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withOptionalCallback(options)), this._client);
     }
 
-    /** Sets the resource status */
     withStatus(status: TestResourceStatus): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withStatus(status)), this._client);
     }
 
-    /** Configures with nested DTO */
     withNestedConfig(config: TestNestedDto): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withNestedConfig(config)), this._client);
     }
 
-    /** Adds validation callback */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withValidator(validator)), this._client);
     }
 
-    /** Waits for another resource (test version) */
     testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.testWaitFor(dependency)), this._client);
     }
 
-    /** Gets the endpoints */
     getEndpoints(): Promise<string[]> {
         return this._promise.then(obj => obj.getEndpoints());
     }
 
-    /** Sets connection string using direct interface target */
     withConnectionStringDirect(connectionString: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withConnectionStringDirect(connectionString)), this._client);
     }
 
-    /** Redis-specific configuration */
     withRedisSpecific(option: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withRedisSpecific(option)), this._client);
     }
 
-    /** Adds a dependency on another resource */
     withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withDependency(dependency)), this._client);
     }
 
-    /** Adds a dependency from a string or another resource */
     withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withUnionDependency(dependency)), this._client);
     }
 
-    /** Sets the endpoints */
     withEndpoints(endpoints: string[]): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withEndpoints(endpoints)), this._client);
     }
 
-    /** Sets environment variables */
     withEnvironmentVariables(variables: Record<string, string>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentVariables(variables)), this._client);
     }
 
-    /** Gets the status of the resource asynchronously */
     getStatusAsync(options?: GetStatusAsyncOptions): Promise<string> {
         return this._promise.then(obj => obj.getStatusAsync(options));
     }
 
-    /** Performs a cancellable operation */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withCancellableOperation(operation)), this._client);
     }
 
-    /** Waits for the resource to be ready */
     waitForReadyAsync(timeout: number, options?: WaitForReadyAsyncOptions): Promise<boolean> {
         return this._promise.then(obj => obj.waitForReadyAsync(timeout, options));
     }
 
-    /** Tests multi-param callback destructuring */
     withMultiParamHandleCallback(callback: (arg1: TestCallbackContext, arg2: TestEnvironmentContext) => Promise<void>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withMultiParamHandleCallback(callback)), this._client);
     }
 
-    /** Adds a data volume with persistence */
     withDataVolume(options?: WithDataVolumeOptions): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withDataVolume(options)), this._client);
     }
 
-    /** Adds a label to the resource */
     withMergeLabel(label: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withMergeLabel(label)), this._client);
     }
 
-    /** Adds a categorized label to the resource */
     withMergeLabelCategorized(label: string, category: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withMergeLabelCategorized(label, category)), this._client);
     }
 
-    /** Configures a named endpoint */
     withMergeEndpoint(endpointName: string, port: number): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withMergeEndpoint(endpointName, port)), this._client);
     }
 
-    /** Configures a named endpoint with scheme */
     withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withMergeEndpointScheme(endpointName, port, scheme)), this._client);
     }
 
-    /** Configures resource logging */
     withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withMergeLogging(logLevel, options)), this._client);
     }
 
-    /** Configures resource logging with file path */
     withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withMergeLoggingPath(logLevel, logPath, options)), this._client);
     }
 
-    /** Configures a route */
     withMergeRoute(path: string, method: string, handler: string, priority: number): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withMergeRoute(path, method, handler, priority)), this._client);
     }
 
-    /** Configures a route with middleware */
     withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withMergeRouteMiddleware(path, method, handler, priority, middleware)), this._client);
     }
@@ -2179,58 +2413,132 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
 
 export interface TestVaultResource {
     toJSON(): MarshalledHandle;
+    /**
+     * Adds an optional string parameter.
+     * @param options Additional options.
+     */
     withOptionalString(options?: WithOptionalStringOptions): TestVaultResourcePromise;
+    /** Tests DTO parameter - verifies [AspireDto] generates TypeScript interface. */
     withConfig(config: TestConfigDto): TestVaultResourcePromise;
+    /** Tests callback receiving context wrapper. Verifies callback auto-wraps handle into context class with property-like objects. */
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestVaultResourcePromise;
+    /** Tests DateTime parameter - verifies mapping to ISO 8601 string. */
     withCreatedAt(createdAt: string): TestVaultResourcePromise;
+    /** Tests DateTimeOffset parameter - verifies mapping to ISO 8601 string. */
     withModifiedAt(modifiedAt: string): TestVaultResourcePromise;
+    /** Tests Guid parameter - verifies mapping to string. */
     withCorrelationId(correlationId: string): TestVaultResourcePromise;
+    /**
+     * Tests optional callback parameter - verifies conditional callback registration.
+     * @param options Additional options.
+     */
     withOptionalCallback(options?: WithOptionalCallbackOptions): TestVaultResourcePromise;
+    /** Tests enum parameter - verifies string literal union generation. */
     withStatus(status: TestResourceStatus): TestVaultResourcePromise;
+    /** Tests nested DTO parameter. */
     withNestedConfig(config: TestNestedDto): TestVaultResourcePromise;
+    /** Tests async callback with context that returns a value. */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestVaultResourcePromise;
+    /** Tests builder passed as parameter to another capability. Verifies wrapper class acceptance with internal handle extraction. */
     testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestVaultResourcePromise;
+    /** Pattern 4/5: Tests interface/concrete type as parameter (not target). The dependency parameter should generate a union type: Handle | ResourceBuilderBase. */
     withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestVaultResourcePromise;
+    /** Tests an Aspire union parameter that includes an interface handle. The dependency parameter should generate a union type: string | ResourceBuilderBase. */
     withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): TestVaultResourcePromise;
+    /** Tests IReadOnlyList parameter - verifies readonly array handling. */
     withEndpoints(endpoints: string[]): TestVaultResourcePromise;
+    /** Tests IReadOnlyDictionary parameter - verifies readonly dict handling. */
     withEnvironmentVariables(variables: Record<string, string>): TestVaultResourcePromise;
+    /** Tests CancellationToken in callback parameter - generated TypeScript should materialize host values as CancellationToken. */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestVaultResourcePromise;
+    /** Directly targets the ITestVaultResource interface. DeriveClassName strips the 'I' prefix producing "TestVaultResource" — the same name as the concrete builder. The codegen must deduplicate to avoid emitting two classes. */
     withVaultDirect(option: string): TestVaultResourcePromise;
+    /** Scenario 1: Single-param merge — one overload has name only, the other adds tag. Tests merge where the option variation is: single type vs tuple(type, type). */
     withMergeLabel(label: string): TestVaultResourcePromise;
+    /** Scenario 1b: Overload adds a category param — merge should make category optional. */
     withMergeLabelCategorized(label: string, category: string): TestVaultResourcePromise;
+    /** Scenario 2: Tuple-param merge — both have multiple required params, differ by one. Tests merge where the option variation is: tuple(type, type) vs tuple(type, type, type). */
     withMergeEndpoint(endpointName: string, port: number): TestVaultResourcePromise;
+    /** Scenario 2b: Overload adds a scheme param — merge should make scheme optional. */
     withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestVaultResourcePromise;
+    /**
+     * Scenario 3: Dict/Parameters merge — both have required + optional params, differ by one. Tests merge where the option variation involves Parameters dict.
+     * @param options Additional options.
+     */
     withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestVaultResourcePromise;
+    /**
+     * Scenario 3b: Overload adds a logPath param — merge should make logPath optional.
+     * @param options Additional options.
+     */
     withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestVaultResourcePromise;
+    /** Scenario 4: Both-dict merge — both overloads have 4+ required params so both use Parameters dicts. The shorter overload has 4 required params, the longer has 5. */
     withMergeRoute(path: string, method: string, handler: string, priority: number): TestVaultResourcePromise;
+    /** Scenario 4b: Overload adds a middleware param — merge should make middleware optional. Both variations will use Parameters dicts since they have 4+ required params. */
     withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestVaultResourcePromise;
 }
 
 export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource> {
+    /**
+     * Adds an optional string parameter.
+     * @param options Additional options.
+     */
     withOptionalString(options?: WithOptionalStringOptions): TestVaultResourcePromise;
+    /** Tests DTO parameter - verifies [AspireDto] generates TypeScript interface. */
     withConfig(config: TestConfigDto): TestVaultResourcePromise;
+    /** Tests callback receiving context wrapper. Verifies callback auto-wraps handle into context class with property-like objects. */
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestVaultResourcePromise;
+    /** Tests DateTime parameter - verifies mapping to ISO 8601 string. */
     withCreatedAt(createdAt: string): TestVaultResourcePromise;
+    /** Tests DateTimeOffset parameter - verifies mapping to ISO 8601 string. */
     withModifiedAt(modifiedAt: string): TestVaultResourcePromise;
+    /** Tests Guid parameter - verifies mapping to string. */
     withCorrelationId(correlationId: string): TestVaultResourcePromise;
+    /**
+     * Tests optional callback parameter - verifies conditional callback registration.
+     * @param options Additional options.
+     */
     withOptionalCallback(options?: WithOptionalCallbackOptions): TestVaultResourcePromise;
+    /** Tests enum parameter - verifies string literal union generation. */
     withStatus(status: TestResourceStatus): TestVaultResourcePromise;
+    /** Tests nested DTO parameter. */
     withNestedConfig(config: TestNestedDto): TestVaultResourcePromise;
+    /** Tests async callback with context that returns a value. */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestVaultResourcePromise;
+    /** Tests builder passed as parameter to another capability. Verifies wrapper class acceptance with internal handle extraction. */
     testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestVaultResourcePromise;
+    /** Pattern 4/5: Tests interface/concrete type as parameter (not target). The dependency parameter should generate a union type: Handle | ResourceBuilderBase. */
     withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestVaultResourcePromise;
+    /** Tests an Aspire union parameter that includes an interface handle. The dependency parameter should generate a union type: string | ResourceBuilderBase. */
     withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): TestVaultResourcePromise;
+    /** Tests IReadOnlyList parameter - verifies readonly array handling. */
     withEndpoints(endpoints: string[]): TestVaultResourcePromise;
+    /** Tests IReadOnlyDictionary parameter - verifies readonly dict handling. */
     withEnvironmentVariables(variables: Record<string, string>): TestVaultResourcePromise;
+    /** Tests CancellationToken in callback parameter - generated TypeScript should materialize host values as CancellationToken. */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestVaultResourcePromise;
+    /** Directly targets the ITestVaultResource interface. DeriveClassName strips the 'I' prefix producing "TestVaultResource" — the same name as the concrete builder. The codegen must deduplicate to avoid emitting two classes. */
     withVaultDirect(option: string): TestVaultResourcePromise;
+    /** Scenario 1: Single-param merge — one overload has name only, the other adds tag. Tests merge where the option variation is: single type vs tuple(type, type). */
     withMergeLabel(label: string): TestVaultResourcePromise;
+    /** Scenario 1b: Overload adds a category param — merge should make category optional. */
     withMergeLabelCategorized(label: string, category: string): TestVaultResourcePromise;
+    /** Scenario 2: Tuple-param merge — both have multiple required params, differ by one. Tests merge where the option variation is: tuple(type, type) vs tuple(type, type, type). */
     withMergeEndpoint(endpointName: string, port: number): TestVaultResourcePromise;
+    /** Scenario 2b: Overload adds a scheme param — merge should make scheme optional. */
     withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestVaultResourcePromise;
+    /**
+     * Scenario 3: Dict/Parameters merge — both have required + optional params, differ by one. Tests merge where the option variation involves Parameters dict.
+     * @param options Additional options.
+     */
     withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestVaultResourcePromise;
+    /**
+     * Scenario 3b: Overload adds a logPath param — merge should make logPath optional.
+     * @param options Additional options.
+     */
     withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestVaultResourcePromise;
+    /** Scenario 4: Both-dict merge — both overloads have 4+ required params so both use Parameters dicts. The shorter overload has 4 required params, the longer has 5. */
     withMergeRoute(path: string, method: string, handler: string, priority: number): TestVaultResourcePromise;
+    /** Scenario 4b: Overload adds a middleware param — merge should make middleware optional. Both variations will use Parameters dicts since they have 4+ required params. */
     withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestVaultResourcePromise;
 }
 
@@ -2255,7 +2563,10 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    /** Adds an optional string parameter */
+    /**
+     * Adds an optional string parameter.
+     * @param options Additional options.
+     */
     withOptionalString(options?: WithOptionalStringOptions): TestVaultResourcePromise {
         const value = options?.value;
         const enabled = options?.enabled;
@@ -2272,7 +2583,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    /** Configures the resource with a DTO */
+    /** Tests DTO parameter - verifies [AspireDto] generates TypeScript interface. */
     withConfig(config: TestConfigDto): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withConfigInternal(config), this._client);
     }
@@ -2292,7 +2603,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    /** Configures environment with callback (test version) */
+    /** Tests callback receiving context wrapper. Verifies callback auto-wraps handle into context class with property-like objects. */
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._testWithEnvironmentCallbackInternal(callback), this._client);
     }
@@ -2307,7 +2618,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    /** Sets the created timestamp */
+    /** Tests DateTime parameter - verifies mapping to ISO 8601 string. */
     withCreatedAt(createdAt: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withCreatedAtInternal(createdAt), this._client);
     }
@@ -2322,7 +2633,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    /** Sets the modified timestamp */
+    /** Tests DateTimeOffset parameter - verifies mapping to ISO 8601 string. */
     withModifiedAt(modifiedAt: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withModifiedAtInternal(modifiedAt), this._client);
     }
@@ -2337,7 +2648,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    /** Sets the correlation ID */
+    /** Tests Guid parameter - verifies mapping to string. */
     withCorrelationId(correlationId: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withCorrelationIdInternal(correlationId), this._client);
     }
@@ -2358,7 +2669,10 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    /** Configures with optional callback */
+    /**
+     * Tests optional callback parameter - verifies conditional callback registration.
+     * @param options Additional options.
+     */
     withOptionalCallback(options?: WithOptionalCallbackOptions): TestVaultResourcePromise {
         const callback = options?.callback;
         return new TestVaultResourcePromiseImpl(this._withOptionalCallbackInternal(callback), this._client);
@@ -2374,7 +2688,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    /** Sets the resource status */
+    /** Tests enum parameter - verifies string literal union generation. */
     withStatus(status: TestResourceStatus): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withStatusInternal(status), this._client);
     }
@@ -2389,7 +2703,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    /** Configures with nested DTO */
+    /** Tests nested DTO parameter. */
     withNestedConfig(config: TestNestedDto): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withNestedConfigInternal(config), this._client);
     }
@@ -2409,7 +2723,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    /** Adds validation callback */
+    /** Tests async callback with context that returns a value. */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withValidatorInternal(validator), this._client);
     }
@@ -2425,7 +2739,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    /** Waits for another resource (test version) */
+    /** Tests builder passed as parameter to another capability. Verifies wrapper class acceptance with internal handle extraction. */
     testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._testWaitForInternal(dependency), this._client);
     }
@@ -2441,7 +2755,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    /** Adds a dependency on another resource */
+    /** Pattern 4/5: Tests interface/concrete type as parameter (not target). The dependency parameter should generate a union type: Handle | ResourceBuilderBase. */
     withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withDependencyInternal(dependency), this._client);
     }
@@ -2457,7 +2771,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    /** Adds a dependency from a string or another resource */
+    /** Tests an Aspire union parameter that includes an interface handle. The dependency parameter should generate a union type: string | ResourceBuilderBase. */
     withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withUnionDependencyInternal(dependency), this._client);
     }
@@ -2472,7 +2786,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    /** Sets the endpoints */
+    /** Tests IReadOnlyList parameter - verifies readonly array handling. */
     withEndpoints(endpoints: string[]): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withEndpointsInternal(endpoints), this._client);
     }
@@ -2487,7 +2801,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    /** Sets environment variables */
+    /** Tests IReadOnlyDictionary parameter - verifies readonly dict handling. */
     withEnvironmentVariables(variables: Record<string, string>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withEnvironmentVariablesInternal(variables), this._client);
     }
@@ -2506,7 +2820,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    /** Performs a cancellable operation */
+    /** Tests CancellationToken in callback parameter - generated TypeScript should materialize host values as CancellationToken. */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withCancellableOperationInternal(operation), this._client);
     }
@@ -2521,7 +2835,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    /** Configures vault using direct interface target */
+    /** Directly targets the ITestVaultResource interface. DeriveClassName strips the 'I' prefix producing "TestVaultResource" — the same name as the concrete builder. The codegen must deduplicate to avoid emitting two classes. */
     withVaultDirect(option: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withVaultDirectInternal(option), this._client);
     }
@@ -2536,7 +2850,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    /** Adds a label to the resource */
+    /** Scenario 1: Single-param merge — one overload has name only, the other adds tag. Tests merge where the option variation is: single type vs tuple(type, type). */
     withMergeLabel(label: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withMergeLabelInternal(label), this._client);
     }
@@ -2551,7 +2865,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    /** Adds a categorized label to the resource */
+    /** Scenario 1b: Overload adds a category param — merge should make category optional. */
     withMergeLabelCategorized(label: string, category: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withMergeLabelCategorizedInternal(label, category), this._client);
     }
@@ -2566,7 +2880,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    /** Configures a named endpoint */
+    /** Scenario 2: Tuple-param merge — both have multiple required params, differ by one. Tests merge where the option variation is: tuple(type, type) vs tuple(type, type, type). */
     withMergeEndpoint(endpointName: string, port: number): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withMergeEndpointInternal(endpointName, port), this._client);
     }
@@ -2581,7 +2895,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    /** Configures a named endpoint with scheme */
+    /** Scenario 2b: Overload adds a scheme param — merge should make scheme optional. */
     withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withMergeEndpointSchemeInternal(endpointName, port, scheme), this._client);
     }
@@ -2598,7 +2912,10 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    /** Configures resource logging */
+    /**
+     * Scenario 3: Dict/Parameters merge — both have required + optional params, differ by one. Tests merge where the option variation involves Parameters dict.
+     * @param options Additional options.
+     */
     withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestVaultResourcePromise {
         const enableConsole = options?.enableConsole;
         const maxFiles = options?.maxFiles;
@@ -2617,7 +2934,10 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    /** Configures resource logging with file path */
+    /**
+     * Scenario 3b: Overload adds a logPath param — merge should make logPath optional.
+     * @param options Additional options.
+     */
     withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestVaultResourcePromise {
         const enableConsole = options?.enableConsole;
         const maxFiles = options?.maxFiles;
@@ -2634,7 +2954,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    /** Configures a route */
+    /** Scenario 4: Both-dict merge — both overloads have 4+ required params so both use Parameters dicts. The shorter overload has 4 required params, the longer has 5. */
     withMergeRoute(path: string, method: string, handler: string, priority: number): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withMergeRouteInternal(path, method, handler, priority), this._client);
     }
@@ -2649,7 +2969,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         return new TestVaultResourceImpl(result, this._client);
     }
 
-    /** Configures a route with middleware */
+    /** Scenario 4b: Overload adds a middleware param — merge should make middleware optional. Both variations will use Parameters dicts since they have 4+ required params. */
     withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withMergeRouteMiddlewareInternal(path, method, handler, priority, middleware), this._client);
     }
@@ -2673,127 +2993,102 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
         return this._promise.then(onfulfilled, onrejected);
     }
 
-    /** Adds an optional string parameter */
     withOptionalString(options?: WithOptionalStringOptions): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withOptionalString(options)), this._client);
     }
 
-    /** Configures the resource with a DTO */
     withConfig(config: TestConfigDto): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withConfig(config)), this._client);
     }
 
-    /** Configures environment with callback (test version) */
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.testWithEnvironmentCallback(callback)), this._client);
     }
 
-    /** Sets the created timestamp */
     withCreatedAt(createdAt: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withCreatedAt(createdAt)), this._client);
     }
 
-    /** Sets the modified timestamp */
     withModifiedAt(modifiedAt: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withModifiedAt(modifiedAt)), this._client);
     }
 
-    /** Sets the correlation ID */
     withCorrelationId(correlationId: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withCorrelationId(correlationId)), this._client);
     }
 
-    /** Configures with optional callback */
     withOptionalCallback(options?: WithOptionalCallbackOptions): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withOptionalCallback(options)), this._client);
     }
 
-    /** Sets the resource status */
     withStatus(status: TestResourceStatus): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withStatus(status)), this._client);
     }
 
-    /** Configures with nested DTO */
     withNestedConfig(config: TestNestedDto): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withNestedConfig(config)), this._client);
     }
 
-    /** Adds validation callback */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withValidator(validator)), this._client);
     }
 
-    /** Waits for another resource (test version) */
     testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.testWaitFor(dependency)), this._client);
     }
 
-    /** Adds a dependency on another resource */
     withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withDependency(dependency)), this._client);
     }
 
-    /** Adds a dependency from a string or another resource */
     withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withUnionDependency(dependency)), this._client);
     }
 
-    /** Sets the endpoints */
     withEndpoints(endpoints: string[]): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withEndpoints(endpoints)), this._client);
     }
 
-    /** Sets environment variables */
     withEnvironmentVariables(variables: Record<string, string>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withEnvironmentVariables(variables)), this._client);
     }
 
-    /** Performs a cancellable operation */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withCancellableOperation(operation)), this._client);
     }
 
-    /** Configures vault using direct interface target */
     withVaultDirect(option: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withVaultDirect(option)), this._client);
     }
 
-    /** Adds a label to the resource */
     withMergeLabel(label: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withMergeLabel(label)), this._client);
     }
 
-    /** Adds a categorized label to the resource */
     withMergeLabelCategorized(label: string, category: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withMergeLabelCategorized(label, category)), this._client);
     }
 
-    /** Configures a named endpoint */
     withMergeEndpoint(endpointName: string, port: number): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withMergeEndpoint(endpointName, port)), this._client);
     }
 
-    /** Configures a named endpoint with scheme */
     withMergeEndpointScheme(endpointName: string, port: number, scheme: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withMergeEndpointScheme(endpointName, port, scheme)), this._client);
     }
 
-    /** Configures resource logging */
     withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withMergeLogging(logLevel, options)), this._client);
     }
 
-    /** Configures resource logging with file path */
     withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withMergeLoggingPath(logLevel, logPath, options)), this._client);
     }
 
-    /** Configures a route */
     withMergeRoute(path: string, method: string, handler: string, priority: number): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withMergeRoute(path, method, handler, priority)), this._client);
     }
 
-    /** Configures a route with middleware */
     withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withMergeRouteMiddleware(path, method, handler, priority, middleware)), this._client);
     }
@@ -2806,52 +3101,120 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
 
 export interface Resource {
     toJSON(): MarshalledHandle;
+    /**
+     * Adds an optional string parameter.
+     * @param options Additional options.
+     */
     withOptionalString(options?: WithOptionalStringOptions): ResourcePromise;
+    /** Tests DTO parameter - verifies [AspireDto] generates TypeScript interface. */
     withConfig(config: TestConfigDto): ResourcePromise;
+    /** Tests DateTime parameter - verifies mapping to ISO 8601 string. */
     withCreatedAt(createdAt: string): ResourcePromise;
+    /** Tests DateTimeOffset parameter - verifies mapping to ISO 8601 string. */
     withModifiedAt(modifiedAt: string): ResourcePromise;
+    /** Tests Guid parameter - verifies mapping to string. */
     withCorrelationId(correlationId: string): ResourcePromise;
+    /**
+     * Tests optional callback parameter - verifies conditional callback registration.
+     * @param options Additional options.
+     */
     withOptionalCallback(options?: WithOptionalCallbackOptions): ResourcePromise;
+    /** Tests enum parameter - verifies string literal union generation. */
     withStatus(status: TestResourceStatus): ResourcePromise;
+    /** Tests nested DTO parameter. */
     withNestedConfig(config: TestNestedDto): ResourcePromise;
+    /** Tests async callback with context that returns a value. */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ResourcePromise;
+    /** Tests builder passed as parameter to another capability. Verifies wrapper class acceptance with internal handle extraction. */
     testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource>): ResourcePromise;
+    /** Pattern 4/5: Tests interface/concrete type as parameter (not target). The dependency parameter should generate a union type: Handle | ResourceBuilderBase. */
     withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): ResourcePromise;
+    /** Tests an Aspire union parameter that includes an interface handle. The dependency parameter should generate a union type: string | ResourceBuilderBase. */
     withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): ResourcePromise;
+    /** Tests IReadOnlyList parameter - verifies readonly array handling. */
     withEndpoints(endpoints: string[]): ResourcePromise;
+    /** Tests CancellationToken in callback parameter - generated TypeScript should materialize host values as CancellationToken. */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ResourcePromise;
+    /** Scenario 1: Single-param merge — one overload has name only, the other adds tag. Tests merge where the option variation is: single type vs tuple(type, type). */
     withMergeLabel(label: string): ResourcePromise;
+    /** Scenario 1b: Overload adds a category param — merge should make category optional. */
     withMergeLabelCategorized(label: string, category: string): ResourcePromise;
+    /** Scenario 2: Tuple-param merge — both have multiple required params, differ by one. Tests merge where the option variation is: tuple(type, type) vs tuple(type, type, type). */
     withMergeEndpoint(endpointName: string, port: number): ResourcePromise;
+    /** Scenario 2b: Overload adds a scheme param — merge should make scheme optional. */
     withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ResourcePromise;
+    /**
+     * Scenario 3: Dict/Parameters merge — both have required + optional params, differ by one. Tests merge where the option variation involves Parameters dict.
+     * @param options Additional options.
+     */
     withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): ResourcePromise;
+    /**
+     * Scenario 3b: Overload adds a logPath param — merge should make logPath optional.
+     * @param options Additional options.
+     */
     withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): ResourcePromise;
+    /** Scenario 4: Both-dict merge — both overloads have 4+ required params so both use Parameters dicts. The shorter overload has 4 required params, the longer has 5. */
     withMergeRoute(path: string, method: string, handler: string, priority: number): ResourcePromise;
+    /** Scenario 4b: Overload adds a middleware param — merge should make middleware optional. Both variations will use Parameters dicts since they have 4+ required params. */
     withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ResourcePromise;
 }
 
 export interface ResourcePromise extends PromiseLike<Resource> {
+    /**
+     * Adds an optional string parameter.
+     * @param options Additional options.
+     */
     withOptionalString(options?: WithOptionalStringOptions): ResourcePromise;
+    /** Tests DTO parameter - verifies [AspireDto] generates TypeScript interface. */
     withConfig(config: TestConfigDto): ResourcePromise;
+    /** Tests DateTime parameter - verifies mapping to ISO 8601 string. */
     withCreatedAt(createdAt: string): ResourcePromise;
+    /** Tests DateTimeOffset parameter - verifies mapping to ISO 8601 string. */
     withModifiedAt(modifiedAt: string): ResourcePromise;
+    /** Tests Guid parameter - verifies mapping to string. */
     withCorrelationId(correlationId: string): ResourcePromise;
+    /**
+     * Tests optional callback parameter - verifies conditional callback registration.
+     * @param options Additional options.
+     */
     withOptionalCallback(options?: WithOptionalCallbackOptions): ResourcePromise;
+    /** Tests enum parameter - verifies string literal union generation. */
     withStatus(status: TestResourceStatus): ResourcePromise;
+    /** Tests nested DTO parameter. */
     withNestedConfig(config: TestNestedDto): ResourcePromise;
+    /** Tests async callback with context that returns a value. */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ResourcePromise;
+    /** Tests builder passed as parameter to another capability. Verifies wrapper class acceptance with internal handle extraction. */
     testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource>): ResourcePromise;
+    /** Pattern 4/5: Tests interface/concrete type as parameter (not target). The dependency parameter should generate a union type: Handle | ResourceBuilderBase. */
     withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): ResourcePromise;
+    /** Tests an Aspire union parameter that includes an interface handle. The dependency parameter should generate a union type: string | ResourceBuilderBase. */
     withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): ResourcePromise;
+    /** Tests IReadOnlyList parameter - verifies readonly array handling. */
     withEndpoints(endpoints: string[]): ResourcePromise;
+    /** Tests CancellationToken in callback parameter - generated TypeScript should materialize host values as CancellationToken. */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ResourcePromise;
+    /** Scenario 1: Single-param merge — one overload has name only, the other adds tag. Tests merge where the option variation is: single type vs tuple(type, type). */
     withMergeLabel(label: string): ResourcePromise;
+    /** Scenario 1b: Overload adds a category param — merge should make category optional. */
     withMergeLabelCategorized(label: string, category: string): ResourcePromise;
+    /** Scenario 2: Tuple-param merge — both have multiple required params, differ by one. Tests merge where the option variation is: tuple(type, type) vs tuple(type, type, type). */
     withMergeEndpoint(endpointName: string, port: number): ResourcePromise;
+    /** Scenario 2b: Overload adds a scheme param — merge should make scheme optional. */
     withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ResourcePromise;
+    /**
+     * Scenario 3: Dict/Parameters merge — both have required + optional params, differ by one. Tests merge where the option variation involves Parameters dict.
+     * @param options Additional options.
+     */
     withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): ResourcePromise;
+    /**
+     * Scenario 3b: Overload adds a logPath param — merge should make logPath optional.
+     * @param options Additional options.
+     */
     withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): ResourcePromise;
+    /** Scenario 4: Both-dict merge — both overloads have 4+ required params so both use Parameters dicts. The shorter overload has 4 required params, the longer has 5. */
     withMergeRoute(path: string, method: string, handler: string, priority: number): ResourcePromise;
+    /** Scenario 4b: Overload adds a middleware param — merge should make middleware optional. Both variations will use Parameters dicts since they have 4+ required params. */
     withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ResourcePromise;
 }
 
@@ -2876,7 +3239,10 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         return new ResourceImpl(result, this._client);
     }
 
-    /** Adds an optional string parameter */
+    /**
+     * Adds an optional string parameter.
+     * @param options Additional options.
+     */
     withOptionalString(options?: WithOptionalStringOptions): ResourcePromise {
         const value = options?.value;
         const enabled = options?.enabled;
@@ -2893,7 +3259,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         return new ResourceImpl(result, this._client);
     }
 
-    /** Configures the resource with a DTO */
+    /** Tests DTO parameter - verifies [AspireDto] generates TypeScript interface. */
     withConfig(config: TestConfigDto): ResourcePromise {
         return new ResourcePromiseImpl(this._withConfigInternal(config), this._client);
     }
@@ -2908,7 +3274,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         return new ResourceImpl(result, this._client);
     }
 
-    /** Sets the created timestamp */
+    /** Tests DateTime parameter - verifies mapping to ISO 8601 string. */
     withCreatedAt(createdAt: string): ResourcePromise {
         return new ResourcePromiseImpl(this._withCreatedAtInternal(createdAt), this._client);
     }
@@ -2923,7 +3289,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         return new ResourceImpl(result, this._client);
     }
 
-    /** Sets the modified timestamp */
+    /** Tests DateTimeOffset parameter - verifies mapping to ISO 8601 string. */
     withModifiedAt(modifiedAt: string): ResourcePromise {
         return new ResourcePromiseImpl(this._withModifiedAtInternal(modifiedAt), this._client);
     }
@@ -2938,7 +3304,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         return new ResourceImpl(result, this._client);
     }
 
-    /** Sets the correlation ID */
+    /** Tests Guid parameter - verifies mapping to string. */
     withCorrelationId(correlationId: string): ResourcePromise {
         return new ResourcePromiseImpl(this._withCorrelationIdInternal(correlationId), this._client);
     }
@@ -2959,7 +3325,10 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         return new ResourceImpl(result, this._client);
     }
 
-    /** Configures with optional callback */
+    /**
+     * Tests optional callback parameter - verifies conditional callback registration.
+     * @param options Additional options.
+     */
     withOptionalCallback(options?: WithOptionalCallbackOptions): ResourcePromise {
         const callback = options?.callback;
         return new ResourcePromiseImpl(this._withOptionalCallbackInternal(callback), this._client);
@@ -2975,7 +3344,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         return new ResourceImpl(result, this._client);
     }
 
-    /** Sets the resource status */
+    /** Tests enum parameter - verifies string literal union generation. */
     withStatus(status: TestResourceStatus): ResourcePromise {
         return new ResourcePromiseImpl(this._withStatusInternal(status), this._client);
     }
@@ -2990,7 +3359,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         return new ResourceImpl(result, this._client);
     }
 
-    /** Configures with nested DTO */
+    /** Tests nested DTO parameter. */
     withNestedConfig(config: TestNestedDto): ResourcePromise {
         return new ResourcePromiseImpl(this._withNestedConfigInternal(config), this._client);
     }
@@ -3010,7 +3379,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         return new ResourceImpl(result, this._client);
     }
 
-    /** Adds validation callback */
+    /** Tests async callback with context that returns a value. */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ResourcePromise {
         return new ResourcePromiseImpl(this._withValidatorInternal(validator), this._client);
     }
@@ -3026,7 +3395,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         return new ResourceImpl(result, this._client);
     }
 
-    /** Waits for another resource (test version) */
+    /** Tests builder passed as parameter to another capability. Verifies wrapper class acceptance with internal handle extraction. */
     testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource>): ResourcePromise {
         return new ResourcePromiseImpl(this._testWaitForInternal(dependency), this._client);
     }
@@ -3042,7 +3411,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         return new ResourceImpl(result, this._client);
     }
 
-    /** Adds a dependency on another resource */
+    /** Pattern 4/5: Tests interface/concrete type as parameter (not target). The dependency parameter should generate a union type: Handle | ResourceBuilderBase. */
     withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): ResourcePromise {
         return new ResourcePromiseImpl(this._withDependencyInternal(dependency), this._client);
     }
@@ -3058,7 +3427,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         return new ResourceImpl(result, this._client);
     }
 
-    /** Adds a dependency from a string or another resource */
+    /** Tests an Aspire union parameter that includes an interface handle. The dependency parameter should generate a union type: string | ResourceBuilderBase. */
     withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): ResourcePromise {
         return new ResourcePromiseImpl(this._withUnionDependencyInternal(dependency), this._client);
     }
@@ -3073,7 +3442,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         return new ResourceImpl(result, this._client);
     }
 
-    /** Sets the endpoints */
+    /** Tests IReadOnlyList parameter - verifies readonly array handling. */
     withEndpoints(endpoints: string[]): ResourcePromise {
         return new ResourcePromiseImpl(this._withEndpointsInternal(endpoints), this._client);
     }
@@ -3092,7 +3461,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         return new ResourceImpl(result, this._client);
     }
 
-    /** Performs a cancellable operation */
+    /** Tests CancellationToken in callback parameter - generated TypeScript should materialize host values as CancellationToken. */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ResourcePromise {
         return new ResourcePromiseImpl(this._withCancellableOperationInternal(operation), this._client);
     }
@@ -3107,7 +3476,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         return new ResourceImpl(result, this._client);
     }
 
-    /** Adds a label to the resource */
+    /** Scenario 1: Single-param merge — one overload has name only, the other adds tag. Tests merge where the option variation is: single type vs tuple(type, type). */
     withMergeLabel(label: string): ResourcePromise {
         return new ResourcePromiseImpl(this._withMergeLabelInternal(label), this._client);
     }
@@ -3122,7 +3491,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         return new ResourceImpl(result, this._client);
     }
 
-    /** Adds a categorized label to the resource */
+    /** Scenario 1b: Overload adds a category param — merge should make category optional. */
     withMergeLabelCategorized(label: string, category: string): ResourcePromise {
         return new ResourcePromiseImpl(this._withMergeLabelCategorizedInternal(label, category), this._client);
     }
@@ -3137,7 +3506,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         return new ResourceImpl(result, this._client);
     }
 
-    /** Configures a named endpoint */
+    /** Scenario 2: Tuple-param merge — both have multiple required params, differ by one. Tests merge where the option variation is: tuple(type, type) vs tuple(type, type, type). */
     withMergeEndpoint(endpointName: string, port: number): ResourcePromise {
         return new ResourcePromiseImpl(this._withMergeEndpointInternal(endpointName, port), this._client);
     }
@@ -3152,7 +3521,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         return new ResourceImpl(result, this._client);
     }
 
-    /** Configures a named endpoint with scheme */
+    /** Scenario 2b: Overload adds a scheme param — merge should make scheme optional. */
     withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ResourcePromise {
         return new ResourcePromiseImpl(this._withMergeEndpointSchemeInternal(endpointName, port, scheme), this._client);
     }
@@ -3169,7 +3538,10 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         return new ResourceImpl(result, this._client);
     }
 
-    /** Configures resource logging */
+    /**
+     * Scenario 3: Dict/Parameters merge — both have required + optional params, differ by one. Tests merge where the option variation involves Parameters dict.
+     * @param options Additional options.
+     */
     withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): ResourcePromise {
         const enableConsole = options?.enableConsole;
         const maxFiles = options?.maxFiles;
@@ -3188,7 +3560,10 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         return new ResourceImpl(result, this._client);
     }
 
-    /** Configures resource logging with file path */
+    /**
+     * Scenario 3b: Overload adds a logPath param — merge should make logPath optional.
+     * @param options Additional options.
+     */
     withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): ResourcePromise {
         const enableConsole = options?.enableConsole;
         const maxFiles = options?.maxFiles;
@@ -3205,7 +3580,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         return new ResourceImpl(result, this._client);
     }
 
-    /** Configures a route */
+    /** Scenario 4: Both-dict merge — both overloads have 4+ required params so both use Parameters dicts. The shorter overload has 4 required params, the longer has 5. */
     withMergeRoute(path: string, method: string, handler: string, priority: number): ResourcePromise {
         return new ResourcePromiseImpl(this._withMergeRouteInternal(path, method, handler, priority), this._client);
     }
@@ -3220,7 +3595,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
         return new ResourceImpl(result, this._client);
     }
 
-    /** Configures a route with middleware */
+    /** Scenario 4b: Overload adds a middleware param — merge should make middleware optional. Both variations will use Parameters dicts since they have 4+ required params. */
     withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ResourcePromise {
         return new ResourcePromiseImpl(this._withMergeRouteMiddlewareInternal(path, method, handler, priority, middleware), this._client);
     }
@@ -3244,112 +3619,90 @@ class ResourcePromiseImpl implements ResourcePromise {
         return this._promise.then(onfulfilled, onrejected);
     }
 
-    /** Adds an optional string parameter */
     withOptionalString(options?: WithOptionalStringOptions): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withOptionalString(options)), this._client);
     }
 
-    /** Configures the resource with a DTO */
     withConfig(config: TestConfigDto): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withConfig(config)), this._client);
     }
 
-    /** Sets the created timestamp */
     withCreatedAt(createdAt: string): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withCreatedAt(createdAt)), this._client);
     }
 
-    /** Sets the modified timestamp */
     withModifiedAt(modifiedAt: string): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withModifiedAt(modifiedAt)), this._client);
     }
 
-    /** Sets the correlation ID */
     withCorrelationId(correlationId: string): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withCorrelationId(correlationId)), this._client);
     }
 
-    /** Configures with optional callback */
     withOptionalCallback(options?: WithOptionalCallbackOptions): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withOptionalCallback(options)), this._client);
     }
 
-    /** Sets the resource status */
     withStatus(status: TestResourceStatus): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withStatus(status)), this._client);
     }
 
-    /** Configures with nested DTO */
     withNestedConfig(config: TestNestedDto): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withNestedConfig(config)), this._client);
     }
 
-    /** Adds validation callback */
     withValidator(validator: (arg: TestResourceContext) => Promise<boolean>): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withValidator(validator)), this._client);
     }
 
-    /** Waits for another resource (test version) */
     testWaitFor(dependency: Awaitable<Resource | ResourceWithConnectionString | ResourceWithEnvironment | TestDatabaseResource | TestRedisResource | TestVaultResource>): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.testWaitFor(dependency)), this._client);
     }
 
-    /** Adds a dependency on another resource */
     withDependency(dependency: Awaitable<ResourceWithConnectionString | TestRedisResource>): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withDependency(dependency)), this._client);
     }
 
-    /** Adds a dependency from a string or another resource */
     withUnionDependency(dependency: string | ResourceWithConnectionString | TestRedisResource | Awaitable<ResourceWithConnectionString | TestRedisResource>): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withUnionDependency(dependency)), this._client);
     }
 
-    /** Sets the endpoints */
     withEndpoints(endpoints: string[]): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withEndpoints(endpoints)), this._client);
     }
 
-    /** Performs a cancellable operation */
     withCancellableOperation(operation: (arg: CancellationToken) => Promise<void>): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withCancellableOperation(operation)), this._client);
     }
 
-    /** Adds a label to the resource */
     withMergeLabel(label: string): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withMergeLabel(label)), this._client);
     }
 
-    /** Adds a categorized label to the resource */
     withMergeLabelCategorized(label: string, category: string): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withMergeLabelCategorized(label, category)), this._client);
     }
 
-    /** Configures a named endpoint */
     withMergeEndpoint(endpointName: string, port: number): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withMergeEndpoint(endpointName, port)), this._client);
     }
 
-    /** Configures a named endpoint with scheme */
     withMergeEndpointScheme(endpointName: string, port: number, scheme: string): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withMergeEndpointScheme(endpointName, port, scheme)), this._client);
     }
 
-    /** Configures resource logging */
     withMergeLogging(logLevel: string, options?: WithMergeLoggingOptions): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withMergeLogging(logLevel, options)), this._client);
     }
 
-    /** Configures resource logging with file path */
     withMergeLoggingPath(logLevel: string, logPath: string, options?: WithMergeLoggingPathOptions): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withMergeLoggingPath(logLevel, logPath, options)), this._client);
     }
 
-    /** Configures a route */
     withMergeRoute(path: string, method: string, handler: string, priority: number): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withMergeRoute(path, method, handler, priority)), this._client);
     }
 
-    /** Configures a route with middleware */
     withMergeRouteMiddleware(path: string, method: string, handler: string, priority: number, middleware: string): ResourcePromise {
         return new ResourcePromiseImpl(this._promise.then(obj => obj.withMergeRouteMiddleware(path, method, handler, priority, middleware)), this._client);
     }
@@ -3362,12 +3715,16 @@ class ResourcePromiseImpl implements ResourcePromise {
 
 export interface ResourceWithConnectionString {
     toJSON(): MarshalledHandle;
+    /** Tests ReferenceExpression parameter - verifies special handling (pass directly via toJSON). */
     withConnectionString(connectionString: ReferenceExpression): ResourceWithConnectionStringPromise;
+    /** Pattern 2: Tests interface type directly as target (NOT generic constraint). This targets IResourceWithConnectionString directly, not via generic parameter. Should expand to all types implementing IResourceWithConnectionString. */
     withConnectionStringDirect(connectionString: string): ResourceWithConnectionStringPromise;
 }
 
 export interface ResourceWithConnectionStringPromise extends PromiseLike<ResourceWithConnectionString> {
+    /** Tests ReferenceExpression parameter - verifies special handling (pass directly via toJSON). */
     withConnectionString(connectionString: ReferenceExpression): ResourceWithConnectionStringPromise;
+    /** Pattern 2: Tests interface type directly as target (NOT generic constraint). This targets IResourceWithConnectionString directly, not via generic parameter. Should expand to all types implementing IResourceWithConnectionString. */
     withConnectionStringDirect(connectionString: string): ResourceWithConnectionStringPromise;
 }
 
@@ -3390,7 +3747,7 @@ class ResourceWithConnectionStringImpl extends ResourceBuilderBase<IResourceWith
         return new ResourceWithConnectionStringImpl(result, this._client);
     }
 
-    /** Sets the connection string using a reference expression */
+    /** Tests ReferenceExpression parameter - verifies special handling (pass directly via toJSON). */
     withConnectionString(connectionString: ReferenceExpression): ResourceWithConnectionStringPromise {
         return new ResourceWithConnectionStringPromiseImpl(this._withConnectionStringInternal(connectionString), this._client);
     }
@@ -3405,7 +3762,7 @@ class ResourceWithConnectionStringImpl extends ResourceBuilderBase<IResourceWith
         return new ResourceWithConnectionStringImpl(result, this._client);
     }
 
-    /** Sets connection string using direct interface target */
+    /** Pattern 2: Tests interface type directly as target (NOT generic constraint). This targets IResourceWithConnectionString directly, not via generic parameter. Should expand to all types implementing IResourceWithConnectionString. */
     withConnectionStringDirect(connectionString: string): ResourceWithConnectionStringPromise {
         return new ResourceWithConnectionStringPromiseImpl(this._withConnectionStringDirectInternal(connectionString), this._client);
     }
@@ -3429,12 +3786,10 @@ class ResourceWithConnectionStringPromiseImpl implements ResourceWithConnectionS
         return this._promise.then(onfulfilled, onrejected);
     }
 
-    /** Sets the connection string using a reference expression */
     withConnectionString(connectionString: ReferenceExpression): ResourceWithConnectionStringPromise {
         return new ResourceWithConnectionStringPromiseImpl(this._promise.then(obj => obj.withConnectionString(connectionString)), this._client);
     }
 
-    /** Sets connection string using direct interface target */
     withConnectionStringDirect(connectionString: string): ResourceWithConnectionStringPromise {
         return new ResourceWithConnectionStringPromiseImpl(this._promise.then(obj => obj.withConnectionStringDirect(connectionString)), this._client);
     }
@@ -3447,12 +3802,16 @@ class ResourceWithConnectionStringPromiseImpl implements ResourceWithConnectionS
 
 export interface ResourceWithEnvironment {
     toJSON(): MarshalledHandle;
+    /** Tests callback receiving context wrapper. Verifies callback auto-wraps handle into context class with property-like objects. */
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): ResourceWithEnvironmentPromise;
+    /** Tests IReadOnlyDictionary parameter - verifies readonly dict handling. */
     withEnvironmentVariables(variables: Record<string, string>): ResourceWithEnvironmentPromise;
 }
 
 export interface ResourceWithEnvironmentPromise extends PromiseLike<ResourceWithEnvironment> {
+    /** Tests callback receiving context wrapper. Verifies callback auto-wraps handle into context class with property-like objects. */
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): ResourceWithEnvironmentPromise;
+    /** Tests IReadOnlyDictionary parameter - verifies readonly dict handling. */
     withEnvironmentVariables(variables: Record<string, string>): ResourceWithEnvironmentPromise;
 }
 
@@ -3480,7 +3839,7 @@ class ResourceWithEnvironmentImpl extends ResourceBuilderBase<IResourceWithEnvir
         return new ResourceWithEnvironmentImpl(result, this._client);
     }
 
-    /** Configures environment with callback (test version) */
+    /** Tests callback receiving context wrapper. Verifies callback auto-wraps handle into context class with property-like objects. */
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): ResourceWithEnvironmentPromise {
         return new ResourceWithEnvironmentPromiseImpl(this._testWithEnvironmentCallbackInternal(callback), this._client);
     }
@@ -3495,7 +3854,7 @@ class ResourceWithEnvironmentImpl extends ResourceBuilderBase<IResourceWithEnvir
         return new ResourceWithEnvironmentImpl(result, this._client);
     }
 
-    /** Sets environment variables */
+    /** Tests IReadOnlyDictionary parameter - verifies readonly dict handling. */
     withEnvironmentVariables(variables: Record<string, string>): ResourceWithEnvironmentPromise {
         return new ResourceWithEnvironmentPromiseImpl(this._withEnvironmentVariablesInternal(variables), this._client);
     }
@@ -3519,12 +3878,10 @@ class ResourceWithEnvironmentPromiseImpl implements ResourceWithEnvironmentPromi
         return this._promise.then(onfulfilled, onrejected);
     }
 
-    /** Configures environment with callback (test version) */
     testWithEnvironmentCallback(callback: (arg: TestEnvironmentContext) => Promise<void>): ResourceWithEnvironmentPromise {
         return new ResourceWithEnvironmentPromiseImpl(this._promise.then(obj => obj.testWithEnvironmentCallback(callback)), this._client);
     }
 
-    /** Sets environment variables */
     withEnvironmentVariables(variables: Record<string, string>): ResourceWithEnvironmentPromise {
         return new ResourceWithEnvironmentPromiseImpl(this._promise.then(obj => obj.withEnvironmentVariables(variables)), this._client);
     }

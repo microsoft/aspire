@@ -187,8 +187,7 @@ internal static class KubernetesDeployTestHelpers
             s => new CellPatternSearcher().Find("Use Redis Cache").Search(s).Count > 0,
             timeout: TimeSpan.FromSeconds(10),
             description: "Redis cache prompt");
-        await auto.DownAsync(); // Navigate to "No"
-        await auto.EnterAsync();
+        await auto.TypeAsync("n");
 
         await auto.WaitUntilAsync(
             s => new CellPatternSearcher().Find("Do you want to create a test project?").Search(s).Count > 0,
@@ -231,7 +230,6 @@ internal static class KubernetesDeployTestHelpers
         // Dismiss agent init prompt (same as DeclineAgentInitPromptAsync)
         await auto.WaitAsync(500);
         await auto.TypeAsync("n");
-        await auto.EnterAsync();
         await auto.WaitForAnyPromptAsync(counter);
 
         // Step 2: cd into the project

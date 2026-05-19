@@ -2,9 +2,12 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.ApplicationModel;
+
+#pragma warning disable ASPIREINTERACTION001 // InteractionInput is used to describe dashboard command arguments.
 
 /// <summary>
 /// Represents a command annotation for a resource.
@@ -26,6 +29,44 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
         string? iconName,
         IconVariant? iconVariant,
         bool isHighlighted)
+        : this(name, displayName, updateState, executeCommand, displayDescription, parameter, arguments: null, confirmationMessage: confirmationMessage, iconName: iconName, iconVariant: iconVariant, isHighlighted: isHighlighted, visibility: ResourceCommandVisibility.UI | ResourceCommandVisibility.Api, validateArguments: null)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ResourceCommandAnnotation"/> class.
+    /// </summary>
+    public ResourceCommandAnnotation(
+        string name,
+        string displayName,
+        Func<UpdateCommandStateContext, ResourceCommandState> updateState,
+        Func<ExecuteCommandContext, Task<ExecuteCommandResult>> executeCommand,
+        string? displayDescription,
+        IReadOnlyList<InteractionInput>? arguments,
+        string? confirmationMessage,
+        string? iconName,
+        IconVariant? iconVariant,
+        bool isHighlighted,
+        ResourceCommandVisibility visibility = ResourceCommandVisibility.UI | ResourceCommandVisibility.Api,
+        Func<InputsDialogValidationContext, Task>? validateArguments = null)
+        : this(name, displayName, updateState, executeCommand, displayDescription, parameter: null, arguments: arguments, confirmationMessage: confirmationMessage, iconName: iconName, iconVariant: iconVariant, isHighlighted: isHighlighted, visibility: visibility, validateArguments: validateArguments)
+    {
+    }
+
+    internal ResourceCommandAnnotation(
+        string name,
+        string displayName,
+        Func<UpdateCommandStateContext, ResourceCommandState> updateState,
+        Func<ExecuteCommandContext, Task<ExecuteCommandResult>> executeCommand,
+        string? displayDescription,
+        object? parameter,
+        IReadOnlyList<InteractionInput>? arguments,
+        string? confirmationMessage,
+        string? iconName,
+        IconVariant? iconVariant,
+        bool isHighlighted,
+        ResourceCommandVisibility visibility = ResourceCommandVisibility.UI | ResourceCommandVisibility.Api,
+        Func<InputsDialogValidationContext, Task>? validateArguments = null)
     {
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(displayName);
@@ -37,11 +78,16 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
         UpdateState = updateState;
         ExecuteCommand = executeCommand;
         DisplayDescription = displayDescription;
+#pragma warning disable CS0618 // Parameter is obsolete but still stored for compatibility.
         Parameter = parameter;
+#pragma warning restore CS0618
+        Arguments = arguments ?? [];
+        ValidateArguments = validateArguments;
         ConfirmationMessage = confirmationMessage;
         IconName = iconName;
         IconVariant = iconVariant;
         IsHighlighted = isHighlighted;
+        Visibility = visibility;
     }
 
     /// <summary>
@@ -73,10 +119,30 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
     public string? DisplayDescription { get; }
 
     /// <summary>
-    /// Optional parameter that configures the command in some way.
+    /// Obsolete optional parameter that configures the command in some way.
     /// Clients must return any value provided by the server when invoking the command.
     /// </summary>
+    [Obsolete("Use Arguments to describe invocation arguments and ExecuteCommandContext.Arguments to read them.")]
     public object? Parameter { get; }
+
+    /// <summary>
+    /// Gets the invocation arguments accepted by the command.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The list order is part of the command contract. CLI positional arguments are mapped to this list by index before the
+    /// command executes. Clients that submit named argument payloads, such as Dashboard and MCP clients, map values by
+    /// <see cref="InteractionInput.Name"/>.
+    /// </para>
+    /// </remarks>
+    [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public IReadOnlyList<InteractionInput> Arguments { get; }
+
+    /// <summary>
+    /// Gets the callback that validates invocation arguments before the command callback is executed.
+    /// </summary>
+    [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public Func<InputsDialogValidationContext, Task>? ValidateArguments { get; }
 
     /// <summary>
     /// When a confirmation message is specified, the UI will prompt with an OK/Cancel dialog
@@ -98,6 +164,11 @@ public sealed class ResourceCommandAnnotation : IResourceAnnotation
     /// A flag indicating whether the command is highlighted in the UI.
     /// </summary>
     public bool IsHighlighted { get; }
+
+    /// <summary>
+    /// Gets where the command is visible to users and clients.
+    /// </summary>
+    public ResourceCommandVisibility Visibility { get; }
 }
 
 /// <summary>
@@ -147,12 +218,31 @@ public static class CommandResults
     public static ExecuteCommandResult Success() => new() { Success = true };
 
     /// <summary>
+    /// Produces a success result.
+    /// </summary>
+    public static ExecuteCommandResult Success(string message) => new() { Success = true, Message = message };
+
+    /// <summary>
     /// Produces a success result with a message and result data.
     /// </summary>
     /// <param name="message">The message associated with the result.</param>
     /// <param name="result">The result data.</param>
     /// <param name="resultFormat">The format of the result data. Defaults to <see cref="CommandResultFormat.Text"/>.</param>
     public static ExecuteCommandResult Success(string message, string result, CommandResultFormat resultFormat = CommandResultFormat.Text) => new() { Success = true, Message = message, Data = new CommandResultData { Value = result, Format = resultFormat } };
+
+    /// <summary>
+    /// Produces a success result with a message and result data.
+    /// </summary>
+    /// <param name="message">The message associated with the result.</param>
+    /// <param name="result">The result data.</param>
+    /// <param name="resultFormat">The format of the result data.</param>
+    /// <param name="displayImmediately">A value indicating whether the result data should be displayed immediately in the dashboard.</param>
+    /// <remarks>
+    /// When <paramref name="displayImmediately"/> is <see langword="true"/>, the dashboard opens the result dialog
+    /// automatically when the command completes. Other clients can still read the result data from
+    /// <see cref="ExecuteCommandResult.Data"/>.
+    /// </remarks>
+    public static ExecuteCommandResult Success(string message, string result, CommandResultFormat resultFormat, bool displayImmediately) => new() { Success = true, Message = message, Data = new CommandResultData { Value = result, Format = resultFormat, DisplayImmediately = displayImmediately } };
 
     /// <summary>
     /// Produces a success result with a message and a value.
@@ -235,6 +325,8 @@ public sealed class ExecuteCommandResult
     /// An optional value produced by the command.
     /// </summary>
     public CommandResultData? Data { get; init; }
+
+    internal InteractionInputCollection? InvalidArguments { get; init; }
 }
 
 /// <summary>
@@ -301,4 +393,19 @@ public sealed class ExecuteCommandContext
     /// The logger for the resource.
     /// </summary>
     public required ILogger Logger { get; init; }
+
+    /// <summary>
+    /// Gets the invocation arguments supplied by the client when the command is executed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The collection contains the arguments described by <see cref="ResourceCommandAnnotation.Arguments"/> with their
+    /// submitted values populated. CLI positional arguments are mapped by declaration order. Dashboard, MCP, and other
+    /// named-payload clients are mapped by <see cref="InteractionInput.Name"/>.
+    /// </para>
+    /// </remarks>
+    public required InteractionInputCollection Arguments { get; init; }
+
 }
+
+#pragma warning restore ASPIREINTERACTION001

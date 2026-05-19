@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Bundles;
-using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
@@ -26,10 +25,10 @@ internal interface IAppHostServerProjectFactory
 internal sealed class AppHostServerProjectFactory(
     IDotNetCliRunner dotNetCliRunner,
     IPackagingService packagingService,
-    IConfigurationService configurationService,
     IBundleService bundleService,
     BundleNuGetService bundleNuGetService,
     IDotNetSdkInstaller sdkInstaller,
+    CliExecutionContext executionContext,
     ILoggerFactory loggerFactory) : IAppHostServerProjectFactory
 {
     public async Task<IAppHostServerProject> CreateAsync(string appPath, CancellationToken cancellationToken = default)
@@ -46,8 +45,8 @@ internal sealed class AppHostServerProjectFactory(
                 repoRoot,
                 dotNetCliRunner,
                 packagingService,
-                configurationService,
-                loggerFactory.CreateLogger<DotNetBasedAppHostServerProject>());
+                loggerFactory.CreateLogger<DotNetBasedAppHostServerProject>(),
+                logFilePath: executionContext.LogFilePath);
         }
 
         // Priority 2: Ensure bundle is extracted and check for layout
@@ -64,7 +63,7 @@ internal sealed class AppHostServerProjectFactory(
                 dotNetCliRunner,
                 sdkInstaller,
                 packagingService,
-                configurationService,
+                executionContext,
                 loggerFactory.CreateLogger<PrebuiltAppHostServer>());
         }
 
