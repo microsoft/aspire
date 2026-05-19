@@ -964,6 +964,54 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PrepareAsync_WhenPackagingServiceThrowsDuringAutoDiscovery_DegradesGracefully()
+    {
+        // Regression guard: an unexpected failure from IPackagingService.GetChannelsAsync during
+        // hive-source auto-discovery must NOT turn `aspire new` into a hard failure. The auto-
+        // discovery path should fall through to "no override discovered" and let restore proceed
+        // on the ambient + channel-sources path, matching the defensive catches in the sibling
+        // channel-lookup helpers.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string channelName = "pr-12345";
+        List<string>? restoreArgs = null;
+
+        await WriteAspireConfigChannelAsync(workspace, channelName);
+
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromException<IEnumerable<PackageChannel>>(
+                new InvalidOperationException("simulated packaging service failure"))
+        };
+        var (server, executionFactory) = CreatePackageReferenceServer(workspace, packagingService);
+        executionFactory.AssertionCallback = (args, _, _, _) =>
+        {
+            if (args is ["nuget", "restore", ..])
+            {
+                restoreArgs = [.. args];
+            }
+        };
+
+        var workingDirectory = GetWorkingDirectory(server);
+
+        try
+        {
+            var result = await server.PrepareAsync(
+                "13.4.0-pr.17141.gf142085f",
+                [IntegrationReference.FromPackage("Aspire.Hosting.CodeGeneration.TypeScript", "13.4.0-pr.17141.gf142085f")]);
+
+            Assert.True(result.Success);
+            Assert.NotNull(restoreArgs);
+            // No override resolved → no exact version pinning, no synthesized [override, nuget.org] source set.
+            Assert.Contains("Aspire.Hosting.CodeGeneration.TypeScript,13.4.0-pr.17141.gf142085f", restoreArgs!);
+            Assert.DoesNotContain("Aspire.Hosting.CodeGeneration.TypeScript,[13.4.0-pr.17141.gf142085f]", restoreArgs!);
+        }
+        finally
+        {
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Fact]
     public async Task PrepareAsync_WithStagingPinnedProjectOutsideLaunchDirectory_UsesStagingSourcesAndNuGetConfig()
     {
         const string stagingFeed = "https://example.com/staging/v3/index.json";

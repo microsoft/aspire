@@ -588,7 +588,27 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             return null;
         }
 
-        var channels = await _packagingService.GetChannelsAsync(cancellationToken, requestedChannel);
+        IEnumerable<PackageChannel> channels;
+        try
+        {
+            channels = await _packagingService.GetChannelsAsync(cancellationToken, requestedChannel);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // Mirror the defensive catch in GetNuGetSourcesAsync: a transient packaging-service
+            // failure must degrade to the ambient nuget.config + nuget.org fallback rather than
+            // failing the whole PrepareAsync. Returning null skips the PSM-bearing temp config;
+            // the caller still gets channel-source composition via GetNuGetSourcesAsync (which
+            // also catches), or, in the package-ref path, the bundled NuGet helper's working-dir
+            // nuget.config discovery.
+            _logger.LogWarning(ex, "Failed to get package channels while creating channel NuGet.config for '{Channel}'.", requestedChannel);
+            return null;
+        }
+
         var channel = channels.FirstOrDefault(c =>
             c.Type == PackageChannelType.Explicit &&
             c.Mappings is { Length: > 0 } &&
@@ -625,11 +645,29 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             return null;
         }
 
-        var channels = await _packagingService.GetChannelsAsync(cancellationToken);
-        var channel = channels.FirstOrDefault(c =>
-            c.Type == PackageChannelType.Explicit &&
-            c.Mappings is { Length: > 0 } &&
-            string.Equals(c.Name, requestedChannel, StringComparison.OrdinalIgnoreCase));
+        PackageChannel? channel;
+        try
+        {
+            var channels = await _packagingService.GetChannelsAsync(cancellationToken, requestedChannel);
+            channel = channels.FirstOrDefault(c =>
+                c.Type == PackageChannelType.Explicit &&
+                c.Mappings is { Length: > 0 } &&
+                string.Equals(c.Name, requestedChannel, StringComparison.OrdinalIgnoreCase));
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // A transient packaging-service failure during auto-discovery must not turn
+            // `aspire new` into a hard failure. Returning null falls through to the existing
+            // ambient + channel-sources path, matching the defensive catches in
+            // TryCreateTemporaryNuGetConfigAsync and GetNuGetSourcesAsync.
+            _logger.LogWarning(ex, "Failed to resolve local Aspire package source for channel '{Channel}'.", requestedChannel);
+            return null;
+        }
+
         var source = channel is null ? null : GetExistingLocalAspirePackageSource(channel);
 
         if (!string.IsNullOrWhiteSpace(source))
