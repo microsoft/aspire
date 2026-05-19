@@ -53,11 +53,12 @@ internal sealed class ConsoleCancellationManager : IDisposable
         {
             _sigIntRegistration = PosixSignalRegistration.Create(PosixSignal.SIGINT, OnPosixSignal);
             _sigTermRegistration = PosixSignalRegistration.Create(PosixSignal.SIGTERM, OnPosixSignal);
-            return;
         }
-
-        Console.CancelKeyPress += OnCancelKeyPress;
-        AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
+        else
+        {
+            Console.CancelKeyPress += OnCancelKeyPress;
+            AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
+        }
     }
 
     public CancellationToken Token => _token;
@@ -115,11 +116,13 @@ internal sealed class ConsoleCancellationManager : IDisposable
         {
             _sigIntRegistration.Dispose();
             _sigTermRegistration?.Dispose();
-            return;
+        }
+        else
+        {
+            Console.CancelKeyPress -= OnCancelKeyPress;
+            AppDomain.CurrentDomain.ProcessExit -= OnProcessExit;
         }
 
-        Console.CancelKeyPress -= OnCancelKeyPress;
-        AppDomain.CurrentDomain.ProcessExit -= OnProcessExit;
         _cts.Dispose();
     }
 }
