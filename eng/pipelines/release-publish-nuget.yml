@@ -763,7 +763,16 @@ extends:
       # without performing a real release.
       - stage: GitHubTasks
         displayName: 'Dispatch GitHub Release Tasks'
-        dependsOn: Release
+        # PrepareArtifacts is listed explicitly (in addition to Release) so the
+        # jobs in this stage can resolve
+        # stageDependencies.PrepareArtifacts.PrepareJob.outputs['deriveReleaseVersion.releaseVersionEffective'].
+        # AzDO only exposes stageDependencies for stages named directly in dependsOn —
+        # the relationship is NOT transitive through Release. Without this, the
+        # ReleaseVersionEffective variable silently evaluates to empty and the GitHub
+        # workflow dispatch fails with HTTP 422 "Required input 'release_version' not provided".
+        dependsOn:
+          - Release
+          - PrepareArtifacts
         condition: |
           and(
             in(dependencies.Release.result, 'Succeeded', 'SucceededWithIssues'),
