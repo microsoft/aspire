@@ -16,9 +16,6 @@ public partial class NotificationEntryComponent : ComponentBase
     [Parameter]
     public EventCallback OnDismiss { get; set; }
 
-    [CascadingParameter]
-    public FluentDialog Dialog { get; set; } = default!;
-
     private string IntentClass => Entry.Intent switch
     {
         MessageIntent.Success => "intent-success",
