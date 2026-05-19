@@ -241,6 +241,67 @@ public class NuGetConfigMergerTests
     }
 
     [Fact]
+    public async Task AddPackageSourceMappingAsync_CreatesConfigWithoutClearingInheritedSources()
+    {
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        var root = workspace.WorkspaceRoot;
+
+        await NuGetConfigMerger.AddPackageSourceMappingAsync(
+            root,
+            new PackageMapping(PackageMapping.AllPackages, "C:\\temp\\aspire-feed")).DefaultTimeout();
+
+        var xml = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
+        var packageSources = xml.Root!.Element("packageSources")!;
+        Assert.DoesNotContain(packageSources.Elements(), element => element.Name == "clear");
+        Assert.Contains(packageSources.Elements("add"), add =>
+            (string?)add.Attribute("key") == "C:\\temp\\aspire-feed" &&
+            (string?)add.Attribute("value") == "C:\\temp\\aspire-feed");
+
+        var packageSourceMapping = xml.Root!.Element("packageSourceMapping")!;
+        var sourceMapping = packageSourceMapping.Elements("packageSource")
+            .Single(packageSource => (string?)packageSource.Attribute("key") == "C:\\temp\\aspire-feed");
+        Assert.Contains(sourceMapping.Elements("package"), package => (string?)package.Attribute("pattern") == PackageMapping.AllPackages);
+    }
+
+    [Fact]
+    public async Task AddPackageSourceMappingAsync_DoesNotRemapExistingWildcardMappings()
+    {
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        var root = workspace.WorkspaceRoot;
+
+        await WriteConfigAsync(root,
+            """
+            <?xml version="1.0"?>
+            <configuration>
+                <packageSources>
+                    <clear />
+                    <add key="dotnet-public" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public/nuget/v3/index.json" />
+                </packageSources>
+                <packageSourceMapping>
+                    <packageSource key="dotnet-public">
+                        <package pattern="*" />
+                    </packageSource>
+                </packageSourceMapping>
+            </configuration>
+            """);
+
+        await NuGetConfigMerger.AddPackageSourceMappingAsync(
+            root,
+            new PackageMapping(PackageMapping.AllPackages, "C:\\temp\\aspire-feed")).DefaultTimeout();
+
+        var xml = XDocument.Load(Path.Combine(root.FullName, "nuget.config"));
+        var packageSourceMapping = xml.Root!.Element("packageSourceMapping")!;
+
+        var dotnetPublicMapping = packageSourceMapping.Elements("packageSource")
+            .Single(packageSource => (string?)packageSource.Attribute("key") == "dotnet-public");
+        Assert.Contains(dotnetPublicMapping.Elements("package"), package => (string?)package.Attribute("pattern") == PackageMapping.AllPackages);
+
+        var localFeedMapping = packageSourceMapping.Elements("packageSource")
+            .Single(packageSource => (string?)packageSource.Attribute("key") == "C:\\temp\\aspire-feed");
+        Assert.Contains(localFeedMapping.Elements("package"), package => (string?)package.Attribute("pattern") == PackageMapping.AllPackages);
+    }
+
+    [Fact]
     public void HasMissingSources_ReturnsTrue_WhenConfigAbsent()
     {
         using var workspace = TemporaryWorkspace.Create(_outputHelper);

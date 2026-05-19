@@ -69,17 +69,11 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
         var packages = packageResults
             .SelectMany(p => p)
-            .DistinctBy(p => $"{p.Id}-{p.Version}");
+            .DistinctBy(p => $"{p.Id}\0{p.Version}");
 
         // When doing a `dotnet package search` the results may include stable packages even when searching for
         // prerelease packages. This filters out this noise.
-        var filteredPackages = packages.Where(p => new { SemVer = SemVersion.Parse(p.Version), Quality = Quality } switch
-        {
-            { Quality: PackageChannelQuality.Both } => true,
-            { Quality: PackageChannelQuality.Stable, SemVer: { IsPrerelease: false } } => true,
-            { Quality: PackageChannelQuality.Prerelease, SemVer: { IsPrerelease: true } } => true,
-            _ => false
-        });
+        var filteredPackages = packages.Where(p => MatchesRequestedQuality(p.Version, Quality));
 
         return filteredPackages;
     }
@@ -126,20 +120,62 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
         var packages = packageResults
             .SelectMany(p => p)
-            .DistinctBy(p => $"{p.Id}-{p.Version}");
+            .DistinctBy(p => $"{p.Id}\0{p.Version}");
 
         // When doing a `dotnet package search` the results may include stable packages even when searching for
         // prerelease packages. This filters out this noise.
-        var filteredPackages = packages.Where(p => new { SemVer = SemVersion.Parse(p.Version), Quality = Quality } switch
-        {
-            { Quality: PackageChannelQuality.Both } => true,
-            { Quality: PackageChannelQuality.Stable, SemVer: { IsPrerelease: false } } => true,
-            { Quality: PackageChannelQuality.Prerelease, SemVer: { IsPrerelease: true } } => true,
-            _ => false
-        });
+        var filteredPackages = packages.Where(p => MatchesRequestedQuality(p.Version, Quality));
 
         // When pinned to a specific version, override the version on each discovered package
         // so the correct version gets installed regardless of what the feed reports as latest.
+        if (PinnedVersion is not null)
+        {
+            return filteredPackages.Select(p => new NuGetPackage { Id = p.Id, Version = PinnedVersion, Source = p.Source });
+        }
+
+        return filteredPackages;
+    }
+
+    public async Task<IEnumerable<NuGetPackage>> SearchPackagesAsync(string query, DirectoryInfo workingDirectory, Func<string, bool>? filter, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(query);
+
+        var tasks = new List<Task<IEnumerable<NuGetPackage>>>();
+
+        using var tempNuGetConfig = Type is PackageChannelType.Explicit ? await TemporaryNuGetConfig.CreateAsync(Mappings!) : null;
+
+        if (Quality is PackageChannelQuality.Stable || Quality is PackageChannelQuality.Both)
+        {
+            tasks.Add(nuGetPackageCache.GetPackagesAsync(
+                workingDirectory: workingDirectory,
+                packageId: query,
+                filter: filter,
+                prerelease: false,
+                nugetConfigFile: tempNuGetConfig?.ConfigFile,
+                useCache: true,
+                cancellationToken: cancellationToken));
+        }
+
+        if (Quality is PackageChannelQuality.Prerelease || Quality is PackageChannelQuality.Both)
+        {
+            tasks.Add(nuGetPackageCache.GetPackagesAsync(
+                workingDirectory: workingDirectory,
+                packageId: query,
+                filter: filter,
+                prerelease: true,
+                nugetConfigFile: tempNuGetConfig?.ConfigFile,
+                useCache: true,
+                cancellationToken: cancellationToken));
+        }
+
+        var packageResults = await Task.WhenAll(tasks);
+
+        var packages = packageResults
+            .SelectMany(p => p)
+            .DistinctBy(p => $"{p.Id}\0{p.Version}");
+
+        var filteredPackages = packages.Where(p => MatchesRequestedQuality(p.Version, Quality));
+
         if (PinnedVersion is not null)
         {
             return filteredPackages.Select(p => new NuGetPackage { Id = p.Id, Version = PinnedVersion, Source = p.Source });
@@ -187,7 +223,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
         var packages = packageResults
             .SelectMany(p => p)
-            .DistinctBy(p => $"{p.Id}-{p.Version}");
+            .DistinctBy(p => $"{p.Id}\0{p.Version}");
 
         // In the event that we have no stable packages we fallback to
         // returning prerelease packages. Example a package that is currently
@@ -208,13 +244,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
         // When doing a `dotnet package search` the results may include stable packages even when searching for
         // prerelease packages. This filters out this noise.
-        var filteredPackages = packages.Where(p => new { SemVer = SemVersion.Parse(p.Version), Quality = Quality } switch
-        {
-            { Quality: PackageChannelQuality.Both } => true,
-            { Quality: PackageChannelQuality.Stable, SemVer: { IsPrerelease: false } } => true,
-            { Quality: PackageChannelQuality.Prerelease, SemVer: { IsPrerelease: true } } => true,
-            _ => false
-        });
+        var filteredPackages = packages.Where(p => MatchesRequestedQuality(p.Version, Quality));
 
         return filteredPackages;
     }
@@ -251,7 +281,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
         var packages = packageResults
             .SelectMany(p => p)
-            .DistinctBy(p => $"{p.Id}-{p.Version}");
+            .DistinctBy(p => $"{p.Id}\0{p.Version}");
 
         // In the event that we have no stable packages we fallback to
         // returning prerelease packages. Example a package that is currently
@@ -271,13 +301,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
         // When doing a `dotnet package search` the results may include stable packages even when searching for
         // prerelease packages. This filters out this noise.
-        var filteredPackages = packages.Where(p => new { SemVer = SemVersion.Parse(p.Version), Quality = Quality } switch
-        {
-            { Quality: PackageChannelQuality.Both } => true,
-            { Quality: PackageChannelQuality.Stable, SemVer: { IsPrerelease: false } } => true,
-            { Quality: PackageChannelQuality.Prerelease, SemVer: { IsPrerelease: true } } => true,
-            _ => false
-        });
+        var filteredPackages = packages.Where(p => MatchesRequestedQuality(p.Version, Quality));
 
         return filteredPackages;
     }
@@ -441,6 +465,17 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         }
 
         return null;
+    }
+
+    private static bool MatchesRequestedQuality(string version, PackageChannelQuality quality)
+    {
+        return SemVersion.TryParse(version, SemVersionStyles.Strict, out var semVersion) && quality switch
+        {
+            PackageChannelQuality.Both => true,
+            PackageChannelQuality.Stable => !semVersion.IsPrerelease,
+            PackageChannelQuality.Prerelease => semVersion.IsPrerelease,
+            _ => false
+        };
     }
 
     private readonly record struct PackageFileMetadata(string PackageId, SemVersion Version, string PackageFilePath);

@@ -133,11 +133,35 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string SourceDoesNotExist
+        {
+            get
+            {
+                return ResourceManager.GetString("SourceDoesNotExist", resourceCulture);
+            }
+        }
+
         public static string FormatOptionDescription
         {
             get
             {
                 return ResourceManager.GetString("FormatOptionDescription", resourceCulture);
+            }
+        }
+
+        public static string DiscoveryScopeOptionDescription
+        {
+            get
+            {
+                return ResourceManager.GetString("DiscoveryScopeOptionDescription", resourceCulture);
+            }
+        }
+
+        public static string InvalidDiscoveryScope
+        {
+            get
+            {
+                return ResourceManager.GetString("InvalidDiscoveryScope", resourceCulture);
             }
         }
 
@@ -170,6 +194,14 @@ namespace Aspire.Cli.Resources {
             get
             {
                 return ResourceManager.GetString("NoPackagesFound", resourceCulture);
+            }
+        }
+
+        public static string IntegrationNameRequiredInNonInteractiveMode
+        {
+            get
+            {
+                return ResourceManager.GetString("IntegrationNameRequiredInNonInteractiveMode", resourceCulture);
             }
         }
 
@@ -237,6 +269,70 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string SelectIntegrationDiscoveryScope
+        {
+            get
+            {
+                return ResourceManager.GetString("SelectIntegrationDiscoveryScope", resourceCulture);
+            }
+        }
+
+        public static string DiscoveryScopeOfficialOnly
+        {
+            get
+            {
+                return ResourceManager.GetString("DiscoveryScopeOfficialOnly", resourceCulture);
+            }
+        }
+
+        public static string DiscoveryScopeIncludeThirdParty
+        {
+            get
+            {
+                return ResourceManager.GetString("DiscoveryScopeIncludeThirdParty", resourceCulture);
+            }
+        }
+
+        public static string ThirdPartyIntegrationWarning
+        {
+            get
+            {
+                return ResourceManager.GetString("ThirdPartyIntegrationWarning", resourceCulture);
+            }
+        }
+
+        public static string ThirdPartyIntegrationConfirmationPrompt
+        {
+            get
+            {
+                return ResourceManager.GetString("ThirdPartyIntegrationConfirmationPrompt", resourceCulture);
+            }
+        }
+
+        public static string ThirdPartyIntegrationConfirmationNo
+        {
+            get
+            {
+                return ResourceManager.GetString("ThirdPartyIntegrationConfirmationNo", resourceCulture);
+            }
+        }
+
+        public static string ThirdPartyIntegrationConfirmationYes
+        {
+            get
+            {
+                return ResourceManager.GetString("ThirdPartyIntegrationConfirmationYes", resourceCulture);
+            }
+        }
+
+        public static string ThirdPartyIntegrationDeclined
+        {
+            get
+            {
+                return ResourceManager.GetString("ThirdPartyIntegrationDeclined", resourceCulture);
+            }
+        }
+
         public static string NoPackagesMatchedSearchTerm
         {
             get
@@ -290,6 +386,38 @@ namespace Aspire.Cli.Resources {
             get
             {
                 return ResourceManager.GetString("HeaderVersion", resourceCulture);
+            }
+        }
+
+        public static string HeaderGroup
+        {
+            get
+            {
+                return ResourceManager.GetString("HeaderGroup", resourceCulture);
+            }
+        }
+
+        public static string IntegrationGroupMicrosoft
+        {
+            get
+            {
+                return ResourceManager.GetString("IntegrationGroupMicrosoft", resourceCulture);
+            }
+        }
+
+        public static string IntegrationGroupCommunityToolkit
+        {
+            get
+            {
+                return ResourceManager.GetString("IntegrationGroupCommunityToolkit", resourceCulture);
+            }
+        }
+
+        public static string IntegrationGroupThirdParty
+        {
+            get
+            {
+                return ResourceManager.GetString("IntegrationGroupThirdParty", resourceCulture);
             }
         }
 

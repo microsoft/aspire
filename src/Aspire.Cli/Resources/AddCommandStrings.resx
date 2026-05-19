@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <root>
-  <!--  
-    Microsoft ResX Schema 
-    
+  <!--
+    Microsoft ResX Schema
+
     Version 2.0
-    
-    The primary goals of this format is to allow a simple XML format 
-    that is mostly human readable. The generation and parsing of the 
-    various data types are done through the TypeConverter classes 
+
+    The primary goals of this format is to allow a simple XML format
+    that is mostly human readable. The generation and parsing of the
+    various data types are done through the TypeConverter classes
     associated with the data types.
-    
+
     Example:
-    
+
     ... ado.net/XML headers & schema ...
     <resheader name="resmimetype">text/microsoft-resx</resheader>
     <resheader name="version">2.0</resheader>
@@ -26,36 +26,36 @@
         <value>[base64 mime encoded string representing a byte array form of the .NET Framework object]</value>
         <comment>This is a comment</comment>
     </data>
-                
-    There are any number of "resheader" rows that contain simple 
+
+    There are any number of "resheader" rows that contain simple
     name/value pairs.
-    
-    Each data row contains a name, and value. The row also contains a 
-    type or mimetype. Type corresponds to a .NET class that support 
-    text/value conversion through the TypeConverter architecture. 
-    Classes that don't support this are serialized and stored with the 
+
+    Each data row contains a name, and value. The row also contains a
+    type or mimetype. Type corresponds to a .NET class that support
+    text/value conversion through the TypeConverter architecture.
+    Classes that don't support this are serialized and stored with the
     mimetype set.
-    
-    The mimetype is used for serialized objects, and tells the 
-    ResXResourceReader how to depersist the object. This is currently not 
+
+    The mimetype is used for serialized objects, and tells the
+    ResXResourceReader how to depersist the object. This is currently not
     extensible. For a given mimetype the value must be set accordingly:
-    
-    Note - application/x-microsoft.net.object.binary.base64 is the format 
-    that the ResXResourceWriter will generate, however the reader can 
+
+    Note - application/x-microsoft.net.object.binary.base64 is the format
+    that the ResXResourceWriter will generate, however the reader can
     read any of the formats listed below.
-    
+
     mimetype: application/x-microsoft.net.object.binary.base64
-    value   : The object must be serialized with 
+    value   : The object must be serialized with
             : System.Runtime.Serialization.Formatters.Binary.BinaryFormatter
             : and then encoded with base64 encoding.
-    
+
     mimetype: application/x-microsoft.net.object.soap.base64
-    value   : The object must be serialized with 
+    value   : The object must be serialized with
             : System.Runtime.Serialization.Formatters.Soap.SoapFormatter
             : and then encoded with base64 encoding.
 
     mimetype: application/x-microsoft.net.object.bytearray.base64
-    value   : The object must be serialized into a byte array 
+    value   : The object must be serialized into a byte array
             : using a System.ComponentModel.TypeConverter
             : and then encoded with base64 encoding.
     -->
@@ -147,8 +147,19 @@
   <data name="SourceArgumentDescription" xml:space="preserve">
     <value>The NuGet source to use for the integration</value>
   </data>
+  <data name="SourceDoesNotExist" xml:space="preserve">
+    <value>The local NuGet source '{0}' does not exist. Create the local feed directory or use a valid package source URL.</value>
+    <comment>{0} is the NuGet source path.</comment>
+  </data>
   <data name="FormatOptionDescription" xml:space="preserve">
     <value>Output format (Table or Json)</value>
+  </data>
+  <data name="DiscoveryScopeOptionDescription" xml:space="preserve">
+    <value>Integration discovery scope: official, all, or third-party</value>
+  </data>
+  <data name="InvalidDiscoveryScope" xml:space="preserve">
+    <value>Invalid discovery scope '{0}'. Use 'official', 'all', or 'third-party'.</value>
+    <comment>{0} is the invalid discovery scope value provided by the user.</comment>
   </data>
   <data name="SearchingForAspirePackages" xml:space="preserve">
     <value>Searching for Aspire integrations...</value>
@@ -162,6 +173,9 @@
   </data>
   <data name="NoPackagesFound" xml:space="preserve">
     <value>No packages found.</value>
+  </data>
+  <data name="IntegrationNameRequiredInNonInteractiveMode" xml:space="preserve">
+    <value>An integration name is required when interactive input is not available.</value>
   </data>
   <data name="UnexpectedNumberOfPackagesFound" xml:space="preserve">
     <value>Unexpected number of packages found.</value>
@@ -190,6 +204,31 @@
   <data name="SelectAnIntegrationToAdd" xml:space="preserve">
     <value>Select an integration to add:</value>
   </data>
+  <data name="SelectIntegrationDiscoveryScope" xml:space="preserve">
+    <value>Select which integrations to show:</value>
+  </data>
+  <data name="DiscoveryScopeOfficialOnly" xml:space="preserve">
+    <value>Official packages only</value>
+  </data>
+  <data name="DiscoveryScopeIncludeThirdParty" xml:space="preserve">
+    <value>Include third-party packages</value>
+  </data>
+  <data name="ThirdPartyIntegrationWarning" xml:space="preserve">
+    <value>Third-party packages are not owned or supported by the Aspire team. Contact the package owner for support.</value>
+  </data>
+  <data name="ThirdPartyIntegrationConfirmationPrompt" xml:space="preserve">
+    <value>⚠️ The package '{0}' is a third-party integration that is not owned or supported by the Aspire team. Do you want to add it?</value>
+    <comment>{0} is the package ID of the third-party integration.</comment>
+  </data>
+  <data name="ThirdPartyIntegrationConfirmationNo" xml:space="preserve">
+    <value>✗ No, do not add this package</value>
+  </data>
+  <data name="ThirdPartyIntegrationConfirmationYes" xml:space="preserve">
+    <value>✓ Yes, add this package; I understand the risks</value>
+  </data>
+  <data name="ThirdPartyIntegrationDeclined" xml:space="preserve">
+    <value>The third-party package was not added.</value>
+  </data>
   <data name="NoPackagesMatchedSearchTerm" xml:space="preserve">
     <value>No packages matched your search term '{0}'. Showing all available packages.</value>
     <comment>{0} is the search term provided by the user.</comment>
@@ -214,6 +253,18 @@
   </data>
   <data name="HeaderVersion" xml:space="preserve">
     <value>Version</value>
+  </data>
+  <data name="HeaderGroup" xml:space="preserve">
+    <value>Group</value>
+  </data>
+  <data name="IntegrationGroupMicrosoft" xml:space="preserve">
+    <value>Microsoft Aspire</value>
+  </data>
+  <data name="IntegrationGroupCommunityToolkit" xml:space="preserve">
+    <value>Community Toolkit</value>
+  </data>
+  <data name="IntegrationGroupThirdParty" xml:space="preserve">
+    <value>Third-party</value>
   </data>
   <data name="SpecifiedVersionNotFoundForPackage" xml:space="preserve">
     <value>The requested version '{1}' was not found for package '{0}'.</value>
