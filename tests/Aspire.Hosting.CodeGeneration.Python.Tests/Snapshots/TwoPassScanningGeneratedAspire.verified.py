@@ -1817,16 +1817,16 @@ class InteractionInput(typing.TypedDict, total=False):
     MaxLength: int | None
 
 class ParameterCustomInputOptions(typing.TypedDict, total=False):
-    InputType: InputType
-    Label: str
-    Description: str
-    EnableDescriptionMarkdown: bool
+    InputType: InputType | None
+    Label: str | None
+    Description: str | None
+    EnableDescriptionMarkdown: bool | None
     Options: typing.Mapping[str, str]
-    Value: str
-    Placeholder: str
-    AllowCustomChoice: bool
-    Disabled: bool
-    MaxLength: int
+    Value: str | None
+    Placeholder: str | None
+    AllowCustomChoice: bool | None
+    Disabled: bool | None
+    MaxLength: int | None
 
 class ProcessCommandExportOptions(typing.TypedDict, total=False):
     ExecutablePath: str | None

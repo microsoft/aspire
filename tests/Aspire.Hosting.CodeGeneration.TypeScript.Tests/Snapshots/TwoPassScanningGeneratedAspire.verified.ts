@@ -1,4 +1,4 @@
-﻿// aspire.ts - Capability-based Aspire SDK
+// aspire.ts - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -915,23 +915,23 @@ export interface ParameterCustomInputOptions {
     /** Gets or sets the type of the input. */
     inputType?: InputType;
     /** Gets or sets the label for the input. */
-    label?: string;
+    label?: string | null;
     /** Gets or sets the description for the input. */
-    description?: string;
+    description?: string | null;
     /** Gets or sets whether the description should be rendered as Markdown. */
-    enableDescriptionMarkdown?: boolean;
+    enableDescriptionMarkdown?: boolean | null;
     /** Gets or sets the choice options keyed by submitted value. */
     options?: Record<string, string>;
     /** Gets or sets the initial value of the input. */
-    value?: string;
+    value?: string | null;
     /** Gets or sets the placeholder text for the input. */
-    placeholder?: string;
+    placeholder?: string | null;
     /** Gets or sets whether custom choices are allowed. */
-    allowCustomChoice?: boolean;
+    allowCustomChoice?: boolean | null;
     /** Gets or sets whether the input is disabled. */
-    disabled?: boolean;
+    disabled?: boolean | null;
     /** Gets or sets the maximum length for text inputs. */
-    maxLength?: number;
+    maxLength?: number | null;
 }
 
 /** ATS-friendly configuration for resource process commands. */
@@ -54668,4 +54668,5 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.IResourceWithContainerFiles
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints', (handle, client) => new ResourceWithEndpointsImpl(handle as IResourceWithEndpointsHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment', (handle, client) => new ResourceWithEnvironmentImpl(handle as IResourceWithEnvironmentHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithWaitSupport', (handle, client) => new ResourceWithWaitSupportImpl(handle as IResourceWithWaitSupportHandle, client));
+
 
