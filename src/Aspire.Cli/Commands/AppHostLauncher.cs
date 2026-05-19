@@ -376,7 +376,7 @@ internal sealed class AppHostLauncher(
                 scanCount++;
 
                 connection ??= backchannelMonitor.GetConnectionsByHash(expectedHash).FirstOrDefault()
-                    ?? (legacyHash is not null ? backchannelMonitor.GetConnectionsByHash(legacyHash).FirstOrDefault() : null);
+                    ?? legacyHashes.SelectMany(backchannelMonitor.GetConnectionsByHash).FirstOrDefault();
                 if (connection is not null)
                 {
                     waitForBackchannelActivity.SetBackchannelScanCount(scanCount);
