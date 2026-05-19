@@ -257,10 +257,6 @@ extends:
 
                   Write-Host "✓ ReleaseVersionEffective: $effective"
                   Write-Host "##vso[task.setvariable variable=releaseVersionEffective;isOutput=true]$effective"
-
-                  # Surface the resolved version on the *release* run header too,
-                  # so it shows up in the AzDO build list / pipeline summary.
-                  Write-Host "##vso[build.addbuildtag]release-version:$effective"
                 name: deriveReleaseVersion
                 displayName: 'Derive ReleaseVersion from source build tag'
                 env:
