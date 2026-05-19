@@ -12,7 +12,7 @@
     <div class="@GetLogContainerClass()" id="logContainer">
         @if (LogEntries is { } logEntries)
         {
-            <Virtualize @ref="VirtualizeRef" ItemsProvider="@GetItems" ItemSize="20" OverscanCount="200" TItem="LogEntry" ItemComparer="LogEntryComparer.Instance">
+            <Virtualize @ref="VirtualizeRef" ItemsProvider="@GetItems" ItemSize="20" OverscanCount="200" TItem="LogEntry" ItemComparer="EqualityComparer<LogEntry>.Default">
                 @if (context.Pause is { } pause)
                 {
                     // If this is a previous pause but no logs were obtained during the pause, we don't need to show anything.

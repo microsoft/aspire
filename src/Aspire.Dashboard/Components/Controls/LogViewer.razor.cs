@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
-using System.Runtime.CompilerServices;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
@@ -140,14 +139,5 @@ public sealed partial class LogViewer
 
         DimensionManager.OnViewportInformationChanged -= OnBrowserResize;
         return ValueTask.CompletedTask;
-    }
-
-    private sealed class LogEntryComparer : IEqualityComparer<LogEntry>
-    {
-        public static readonly LogEntryComparer Instance = new();
-
-        public bool Equals(LogEntry? x, LogEntry? y) => ReferenceEquals(x, y);
-
-        public int GetHashCode(LogEntry obj) => RuntimeHelpers.GetHashCode(obj);
     }
 }
