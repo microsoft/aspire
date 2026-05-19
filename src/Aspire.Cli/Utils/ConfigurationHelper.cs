@@ -7,6 +7,7 @@ using System.Text.Json.Nodes;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Resources;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Utils;
 
@@ -23,7 +24,7 @@ internal static class ConfigurationHelper
         AllowTrailingCommas = true
     };
 
-    internal static void RegisterSettingsFiles(IConfigurationBuilder configuration, DirectoryInfo workingDirectory, FileInfo globalSettingsFile)
+    internal static void RegisterSettingsFiles(IConfigurationBuilder configuration, DirectoryInfo workingDirectory, FileInfo globalSettingsFile, ILogger? logger = null)
     {
         var currentDirectory = workingDirectory;
 
@@ -61,16 +62,24 @@ internal static class ConfigurationHelper
                         var migratedPath = Path.Combine(currentDirectory.FullName, AspireConfigFile.FileName);
                         if (File.Exists(migratedPath))
                         {
+                            logger?.LogInformation(
+                                "Migrated legacy {LegacyPath} to {MigratedPath} on CLI startup.",
+                                legacySettingsPath,
+                                migratedPath);
                             localSettingsFile = new FileInfo(migratedPath);
                             break;
                         }
                     }
-                    catch
+                    catch (Exception ex)
                     {
                         // Migration is best-effort during startup. If it fails (read-only
                         // directory, IO error, malformed legacy JSON), fall back to using the
                         // legacy file directly so the CLI still works. The next command that
                         // writes settings will retry the migration through its normal path.
+                        logger?.LogWarning(
+                            ex,
+                            "Failed to migrate legacy {LegacyPath} to aspire.config.json on startup. Falling back to the legacy file.",
+                            legacySettingsPath);
                     }
                 }
 
