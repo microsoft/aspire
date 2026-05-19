@@ -274,7 +274,15 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         var restoreDir = Path.Combine(_workingDirectory, "integration-restore");
         Directory.CreateDirectory(restoreDir);
 
-        using var temporaryNuGetConfig = await TryCreateTemporaryNuGetConfigAsync(requestedChannel, packageSourceOverride, cancellationToken);
+        // Only emit a synthesized <RestoreConfigFile> when the caller is overriding the Aspire
+        // package source. The temporary nuget.config writes <clear/>, so using it on a plain
+        // explicit-channel restore (staging, daily) would silently bypass any private feeds in
+        // the user's ambient nuget.config that the project's transitive non-Aspire dependencies
+        // rely on. For non-override channels, keep composing channel sources on top of the
+        // ambient config via RestoreAdditionalProjectSources.
+        using var temporaryNuGetConfig = !string.IsNullOrWhiteSpace(packageSourceOverride)
+            ? await TryCreateTemporaryNuGetConfigAsync(requestedChannel, packageSourceOverride, cancellationToken)
+            : null;
         var channelSources = temporaryNuGetConfig is null
             ? await GetNuGetSourcesAsync(requestedChannel, packageSourceOverride, cancellationToken)
             : null;

@@ -875,6 +875,95 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PrepareAsync_WithProjectReferencesAndExplicitChannelButNoOverride_PreservesAmbientNuGetConfig()
+    {
+        // Regression guard: project-reference restores must NOT emit <RestoreConfigFile> when
+        // no --source override is set. TemporaryNuGetConfig writes <clear/>, which would silently
+        // strip any private feeds the user has in their ambient nuget.config that the project's
+        // transitive non-Aspire dependencies depend on.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string channelName = "staging";
+        const string stagingFeed = "https://example.com/staging/v3/index.json";
+        XDocument? generatedProject = null;
+
+        await WriteAspireConfigChannelAsync(workspace, channelName);
+
+        var stagingChannel = PackageChannel.CreateExplicitChannel(
+            channelName,
+            PackageChannelQuality.Both,
+            [
+                new PackageMapping("Aspire*", stagingFeed),
+                new PackageMapping(PackageMapping.AllPackages, NuGetOrgSource)
+            ],
+            new FakeNuGetPackageCache());
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsWithRequestedChannelAsyncCallback = (_, requestedChannelName) => Task.FromResult<IEnumerable<PackageChannel>>(
+                string.Equals(requestedChannelName, channelName, StringComparison.OrdinalIgnoreCase)
+                    ? [stagingChannel]
+                    : [])
+        };
+
+        var closureFiles = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["MyIntegration.dll"] = "integration-v1"
+        };
+        var dotNetCliRunner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (projectFilePath, _, _, _) =>
+            {
+                generatedProject = XDocument.Load(projectFilePath.FullName);
+                WriteClosureInputs(projectFilePath.Directory!, closureFiles, ["MyIntegration"]);
+                return 0;
+            }
+        };
+        var nugetService = new BundleNuGetService(
+            new NullLayoutDiscovery(),
+            new LayoutProcessRunner(new TestProcessExecutionFactory()),
+            new TestFeatures(),
+            TestExecutionContextFactory.CreateTestContext(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<BundleNuGetService>.Instance);
+        var server = new PrebuiltAppHostServer(
+            workspace.WorkspaceRoot.FullName,
+            "test.sock",
+            new LayoutConfiguration(),
+            nugetService,
+            dotNetCliRunner,
+            new TestDotNetSdkInstaller(),
+            packagingService,
+            TestExecutionContextFactory.CreateTestContext(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+        var workingDirectory = GetWorkingDirectory(server);
+
+        try
+        {
+            var result = await server.PrepareAsync(
+                "13.2.0",
+                [
+                    IntegrationReference.FromPackage("Aspire.Hosting.Redis", "13.2.0"),
+                    IntegrationReference.FromProject("MyIntegration", "/path/to/MyIntegration.csproj")
+                ]);
+
+            Assert.True(result.Success);
+            Assert.NotNull(generatedProject);
+
+            var ns = generatedProject.Root!.GetDefaultNamespace();
+            Assert.Null(generatedProject.Descendants(ns + "RestoreConfigFile").FirstOrDefault());
+            var restoreSources = generatedProject.Descendants(ns + "RestoreAdditionalProjectSources").FirstOrDefault()?.Value;
+            Assert.NotNull(restoreSources);
+            Assert.Contains(stagingFeed, restoreSources!);
+
+            // Versions remain unpinned (no exact-version brackets) without an override.
+            var packageElements = generatedProject.Descendants("PackageReference").ToList();
+            Assert.Contains(packageElements, e => e.Attribute("Include")?.Value == "Aspire.Hosting.Redis" && e.Attribute("Version")?.Value == "13.2.0");
+        }
+        finally
+        {
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Fact]
     public async Task PrepareAsync_WithStagingPinnedProjectOutsideLaunchDirectory_UsesStagingSourcesAndNuGetConfig()
     {
         const string stagingFeed = "https://example.com/staging/v3/index.json";
