@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Bug fix: Rust, Go, and Java polyglot SDKs now forward ASPIRE_APPHOST_FILEPATH and ASPIRE_PROJECT_DIRECTORY, fixing --apphost directory resolution",
+  "mergedAt": "2026-05-19T05:23:56Z",
+  "number": 17237,
+  "runDate": "2026-05-19T07:27:23Z",
+  "status": "included",
+  "title": "Forward AppHostFilePath/ProjectDirectory from Rust, Go, and Java SDKs"
+}

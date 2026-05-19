@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Daily, local, and PR CLI builds no longer silently resolve `--channel staging` to daily package versions. These builds now exit with a clear error message naming the running identity and pointing to recovery options (`overrideStagingFeed` config or installing a staging/stable CLI). Stable and staging-identity CLIs are unaffected.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🛡️",
+  "firstMergedAt": "2026-05-19T05:24:23Z",
+  "lastMergedAt": "2026-05-19T05:24:23Z",
+  "name": "Fix staging channel synthesis on non-stable CLI builds",
+  "owner": "mitchdenny",
+  "prs": [
+    17235
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Improvement: increased MCP AI tool data limits for traces, structured logs, and console logs",
+  "mergedAt": "2026-05-19T05:39:35Z",
+  "number": 17238,
+  "runDate": "2026-05-19T07:27:23Z",
+  "status": "included",
+  "title": "Increase MCP AI limits"
+}

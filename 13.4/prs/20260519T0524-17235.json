@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Bug fix: daily/local/PR CLI builds now refuse staging channel synthesis with a clear error instead of silently resolving to daily packages",
+  "mergedAt": "2026-05-19T05:24:23Z",
+  "number": 17235,
+  "runDate": "2026-05-19T07:27:23Z",
+  "status": "included",
+  "title": "Refuse 'staging' channel synthesis on daily/local/pr CLI builds"
+}

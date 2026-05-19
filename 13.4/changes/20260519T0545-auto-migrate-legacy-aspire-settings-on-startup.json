@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The CLI now automatically migrates legacy `.aspire/settings.json` files to the new `aspire.config.json` format on every startup, regardless of which command is run. Previously, read-only commands like `aspire doctor` and `aspire ls` would not trigger migration, leaving workspaces stuck on the old layout.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔄",
+  "firstMergedAt": "2026-05-19T05:45:29Z",
+  "lastMergedAt": "2026-05-19T05:45:29Z",
+  "name": "Auto-migrate legacy .aspire/settings.json on CLI startup",
+  "owner": "mitchdenny",
+  "prs": [
+    17234
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed Rust, Go, and Java polyglot AppHosts not forwarding `ASPIRE_APPHOST_FILEPATH` and `ASPIRE_PROJECT_DIRECTORY` environment variables from the CLI, causing `aspire --apphost <directory>` to fail to find running AppHosts in those languages.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🌐",
+  "firstMergedAt": "2026-05-19T05:23:56Z",
+  "lastMergedAt": "2026-05-19T05:23:56Z",
+  "name": "Fix --apphost directory resolution for Rust, Go, and Java polyglot SDKs",
+  "owner": "mitchdenny",
+  "prs": [
+    17237
+  ]
+}

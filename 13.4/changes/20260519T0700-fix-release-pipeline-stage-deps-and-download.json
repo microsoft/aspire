@@ -1,0 +1,19 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed two release pipeline blockers: the `GitHubTasks` stage now correctly declares its dependency on `PrepareArtifacts` so the release version variable resolves, and the CLI asset download glob pattern is corrected to match the full artifact directory prefix.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🚰",
+  "firstMergedAt": "2026-05-19T07:00:18Z",
+  "lastMergedAt": "2026-05-19T07:00:18Z",
+  "name": "Fix release pipeline stage dependencies and asset download",
+  "owner": "joperezr",
+  "prs": [
+    17248
+  ]
+}

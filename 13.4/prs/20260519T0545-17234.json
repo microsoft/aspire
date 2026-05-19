@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "Improvement: CLI now eagerly migrates legacy .aspire/settings.json to aspire.config.json on startup for any command",
+  "mergedAt": "2026-05-19T05:45:29Z",
+  "number": 17234,
+  "runDate": "2026-05-19T07:27:23Z",
+  "status": "included",
+  "title": "Eagerly migrate legacy .aspire/settings.json to aspire.config.json on CLI startup"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The MCP AI tools now have significantly higher data limits: traces and structured logs increased from 200 to 800, and console logs from 500 to 2000. This provides AI agents with substantially more telemetry context when searching through Aspire dashboard data.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📈",
+  "firstMergedAt": "2026-05-19T05:39:35Z",
+  "lastMergedAt": "2026-05-19T05:39:35Z",
+  "name": "Increased MCP AI tool data limits",
+  "owner": "JamesNK",
+  "prs": [
+    17238
+  ]
+}

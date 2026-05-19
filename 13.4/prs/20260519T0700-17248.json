@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "Bug fix: fixed two release pipeline blockers - GitHubTasks stage deps and aspire-cli-* download pattern",
+  "mergedAt": "2026-05-19T07:00:18Z",
+  "number": 17248,
+  "runDate": "2026-05-19T07:27:23Z",
+  "status": "included",
+  "title": "Fix release pipeline: GitHubTasks stage deps and aspire-cli-* download pattern"
+}
