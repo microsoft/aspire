@@ -10,11 +10,18 @@ public class GuestAppHostProjectSkewTests
     [Theory]
     [InlineData("13.1.0", "13.1.0", false)]
     [InlineData("13.1.0-preview.1.26218.1", "13.1.0-preview.1.26218.1", false)]
-    [InlineData("13.1.0-preview.1.26218.1", "13.1.0-preview.1.26227.1", false)]
+    // Build metadata (everything after '+') is SemVer-spec ignored for precedence.
+    [InlineData("13.1.0-preview.1.26218.1+abc", "13.1.0-preview.1.26218.1+def", false)]
+    // Issue #16709 reproduction: same M.M.P prerelease tag with different daily build numbers
+    // is detected as skew (this was the exact failure case).
+    [InlineData("13.1.0-preview.1.26218.1", "13.1.0-preview.1.26227.1", true)]
+    // Release vs prerelease of the same M.M.P is skew.
+    [InlineData("13.1.0", "13.1.0-preview.1", true)]
+    [InlineData("13.1.0-preview.1", "13.1.0", true)]
     [InlineData("13.1.0", "13.2.0", true)]
     [InlineData("13.1.0", "14.0.0", true)]
     [InlineData("13.1.0", "13.1.1", true)]
-    public void IsKnownIncompatibleSkew_DetectsMajorMinorPatchChanges(string cli, string sdk, bool expected)
+    public void IsKnownIncompatibleSkew_DetectsMajorMinorPatchAndPrereleaseChanges(string cli, string sdk, bool expected)
     {
         var result = GuestAppHostProject.IsKnownIncompatibleSkew(cli, sdk);
 
