@@ -12,7 +12,6 @@
     </packageSource>
     <packageSource key="{PR_HIVE}/packages">
       <package pattern="Aspire*" />
-      <package pattern="*" />
     </packageSource>
     <packageSource key="NuGet">
       <package pattern="*" />
