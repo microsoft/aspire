@@ -1152,6 +1152,75 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task NewCommandWithEmptyTemplateAndSourceOverrideWarnsThatOverrideIsNotPersisted()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string sourceOverride = "/tmp/aspire-pr-hive/packages";
+        string? capturedPackageSourceOverride = null;
+        TestInteractionService? interactionService = null;
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService = new TestInteractionService();
+        });
+
+        services.AddSingleton<IScaffoldingService>(new TestScaffoldingService
+        {
+            ScaffoldAsyncCallback = (context, _) =>
+            {
+                capturedPackageSourceOverride = context.PackageSourceOverride;
+                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, "apphost.ts"), "// test apphost");
+                return Task.FromResult(true);
+            }
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse($"new aspire-empty --name TestApp --output ./output --language typescript --localhost-tld false --suppress-agent-init --source {sourceOverride}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(sourceOverride, capturedPackageSourceOverride);
+        Assert.NotNull(interactionService);
+        Assert.Contains(
+            interactionService!.DisplayedMessages,
+            entry => entry.Emoji.Name == KnownEmojis.Warning.Name
+                && entry.Message == TemplatingStrings.EmptySourceOverrideNotPersistedWarning);
+    }
+
+    [Fact]
+    public async Task NewCommandWithEmptyTemplateWithoutSourceOverrideDoesNotWarn()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        TestInteractionService? interactionService = null;
+
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService = new TestInteractionService();
+        });
+
+        services.AddSingleton<IScaffoldingService>(new TestScaffoldingService
+        {
+            ScaffoldAsyncCallback = (context, _) =>
+            {
+                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, "apphost.ts"), "// test apphost");
+                return Task.FromResult(true);
+            }
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<NewCommand>();
+        var result = command.Parse("new aspire-empty --name TestApp --output ./output --language typescript --localhost-tld false --suppress-agent-init");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(interactionService);
+        Assert.DoesNotContain(
+            interactionService!.DisplayedMessages,
+            entry => entry.Message == TemplatingStrings.EmptySourceOverrideNotPersistedWarning);
+    }
+
+    [Fact]
     public async Task NewCommandWithExplicitJavaEmptyTemplateCreatesJavaAppHost()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
