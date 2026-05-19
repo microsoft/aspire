@@ -224,9 +224,10 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         IAppHostServerProject appHostServerProject,
         string sdkVersion,
         List<IntegrationReference> integrations,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? packageSourceOverride = null)
     {
-        var result = await appHostServerProject.PrepareAsync(sdkVersion, integrations, cancellationToken);
+        var result = await appHostServerProject.PrepareAsync(sdkVersion, integrations, cancellationToken, packageSourceOverride: packageSourceOverride);
         return (result.Success, result.Output, result.ChannelName, result.NeedsCodeGeneration);
     }
 
@@ -234,7 +235,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     /// Builds the AppHost server project and generates SDK code.
     /// </summary>
     /// <returns><see langword="true"/> if the code was generated successfully; otherwise, <see langword="false"/>.</returns>
-    internal async Task<bool> BuildAndGenerateSdkAsync(DirectoryInfo directory, CancellationToken cancellationToken)
+    internal async Task<bool> BuildAndGenerateSdkAsync(DirectoryInfo directory, CancellationToken cancellationToken, string? packageSourceOverride = null)
     {
         var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(directory.FullName, cancellationToken);
 
@@ -243,7 +244,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         var integrations = await GetIntegrationReferencesAsync(config, directory, cancellationToken);
         var sdkVersion = GetPrepareSdkVersion(config);
 
-        var (buildSuccess, buildOutput, _, _) = await PrepareAppHostServerAsync(appHostServerProject, sdkVersion, integrations, cancellationToken);
+        var (buildSuccess, buildOutput, _, _) = await PrepareAppHostServerAsync(appHostServerProject, sdkVersion, integrations, cancellationToken, packageSourceOverride);
         if (!buildSuccess)
         {
             if (buildOutput is not null)
@@ -280,9 +281,9 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         return true;
     }
 
-    Task<bool> IGuestAppHostSdkGenerator.BuildAndGenerateSdkAsync(DirectoryInfo directory, CancellationToken cancellationToken)
+    Task<bool> IGuestAppHostSdkGenerator.BuildAndGenerateSdkAsync(DirectoryInfo directory, CancellationToken cancellationToken, string? packageSourceOverride)
     {
-        return BuildAndGenerateSdkAsync(directory, cancellationToken);
+        return BuildAndGenerateSdkAsync(directory, cancellationToken, packageSourceOverride);
     }
 
     // ═══════════════════════════════════════════════════════════════

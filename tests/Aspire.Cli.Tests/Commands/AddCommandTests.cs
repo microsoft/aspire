@@ -391,7 +391,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 ])
             };
         });
-        services.AddSingleton<IAppHostProjectFactory>(new TestTypeScriptStarterProjectFactory((_, _) => Task.FromResult(true)));
+        services.AddSingleton<IAppHostProjectFactory>(new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true)));
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
@@ -445,7 +445,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 ])
             };
         });
-        services.AddSingleton<IAppHostProjectFactory>(new TestTypeScriptStarterProjectFactory((_, _) => Task.FromResult(true)));
+        services.AddSingleton<IAppHostProjectFactory>(new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true)));
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
@@ -490,7 +490,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
             options.InteractionServiceFactory = _ => testInteractionService;
             options.NuGetPackageCacheFactory = _ => cache;
         });
-        services.AddSingleton<IAppHostProjectFactory>(new TestTypeScriptStarterProjectFactory((_, _) => Task.FromResult(true)));
+        services.AddSingleton<IAppHostProjectFactory>(new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true)));
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
@@ -539,7 +539,7 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 ])
             };
         });
-        services.AddSingleton<IAppHostProjectFactory>(new TestTypeScriptStarterProjectFactory((_, _) => Task.FromResult(true)));
+        services.AddSingleton<IAppHostProjectFactory>(new TestTypeScriptStarterProjectFactory((_, _, _) => Task.FromResult(true)));
         using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();

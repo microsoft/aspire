@@ -89,20 +89,7 @@ internal sealed partial class CliTemplateFactory
                             await ApplyLocalhostTldToScaffoldedRunProfileAsync(outputPath, projectName, cancellationToken);
                         }
 
-                        // The override is consumed only during the initial scaffold restore inside
-                        // PrebuiltAppHostServer; nothing in the scaffolded project records the
-                        // source, so a later `aspire restore`/`aspire add` will use the channel
-                        // feeds resolved from aspire.config.json. Surface that so users supplying
-                        // `--source <pr-hive>/packages` aren't surprised when subsequent commands
-                        // fail to find the same packages. Persisting the feed is tracked as a
-                        // follow-up.
-                        if (!string.IsNullOrWhiteSpace(inputs.Source))
-                        {
-                            _interactionService.DisplayMessage(
-                                KnownEmojis.Warning,
-                                TemplatingStrings.EmptySourceOverrideNotPersistedWarning,
-                                allowMarkup: true);
-                        }
+                        DisplaySourceOverrideNotPersistedWarningIfNeeded(inputs.Source);
                     }
 
                     return new TemplateResult((int)CliExitCodes.Success, outputPath);

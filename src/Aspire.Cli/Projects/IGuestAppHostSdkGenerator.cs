@@ -13,6 +13,7 @@ internal interface IGuestAppHostSdkGenerator
     /// </summary>
     /// <param name="directory">The AppHost project directory.</param>
     /// <param name="cancellationToken">A cancellation token.</param>
+    /// <param name="packageSourceOverride">Optional package source to prefer for Aspire package restore during the build.</param>
     /// <returns><see langword="true"/> if SDK generation succeeded; otherwise, <see langword="false"/>.</returns>
-    Task<bool> BuildAndGenerateSdkAsync(DirectoryInfo directory, CancellationToken cancellationToken);
+    Task<bool> BuildAndGenerateSdkAsync(DirectoryInfo directory, CancellationToken cancellationToken, string? packageSourceOverride = null);
 }

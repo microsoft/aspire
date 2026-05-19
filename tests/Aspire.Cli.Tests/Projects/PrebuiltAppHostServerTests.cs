@@ -1013,9 +1013,51 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
             Assert.NotNull(result.Output);
 
             var combined = string.Join('\n', result.Output!.GetLines().Select(static line => line.Line));
-            Assert.Contains(packageSourceOverride, combined);
-            Assert.Contains("daily", combined);
-            Assert.Contains("Aspire.Hosting.CodeGeneration.TypeScript", combined);
+            Assert.Contains($"--source: {packageSourceOverride}", combined);
+            Assert.Contains("channel:  daily", combined);
+            Assert.Contains("packages: Aspire.Hosting.CodeGeneration.TypeScript 13.4.0-pr.17141.gf142085f", combined);
+        }
+        finally
+        {
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task PrepareAsync_RestoreFailure_WithManyPackages_TruncatesPackageList()
+    {
+        // The package preview caps at 5 entries with a "(+N more)" suffix so the error footer
+        // doesn't explode for projects with large package counts. Pin the truncation shape so
+        // it can't silently regress.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string packageSourceOverride = "/tmp/aspire-pr-hive/packages";
+
+        var (server, executionFactory) = CreatePackageReferenceServer(workspace);
+        executionFactory.DefaultExitCode = 1;
+
+        var packages = Enumerable.Range(0, 8)
+            .Select(i => IntegrationReference.FromPackage($"Aspire.Hosting.Pkg{i}", "1.0.0"))
+            .ToArray();
+
+        var workingDirectory = GetWorkingDirectory(server);
+
+        try
+        {
+            var result = await server.PrepareAsync(
+                "13.4.0-pr.17141.gf142085f",
+                packages,
+                packageSourceOverride: packageSourceOverride);
+
+            Assert.False(result.Success);
+            Assert.NotNull(result.Output);
+
+            var combined = string.Join('\n', result.Output!.GetLines().Select(static line => line.Line));
+            // First five packages appear; later ones are collapsed into a count.
+            Assert.Contains("Aspire.Hosting.Pkg0 1.0.0", combined);
+            Assert.Contains("Aspire.Hosting.Pkg4 1.0.0", combined);
+            Assert.DoesNotContain("Aspire.Hosting.Pkg5 1.0.0", combined);
+            Assert.DoesNotContain("Aspire.Hosting.Pkg7 1.0.0", combined);
+            Assert.Contains("(+3 more)", combined);
         }
         finally
         {

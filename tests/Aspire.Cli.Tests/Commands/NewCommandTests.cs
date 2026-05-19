@@ -1151,8 +1151,10 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, "output", "apphost.ts")));
     }
 
-    [Fact]
-    public async Task NewCommandWithEmptyTemplateAndSourceOverrideWarnsThatOverrideIsNotPersisted()
+    [Theory]
+    [InlineData("typescript", null, "apphost.ts")]
+    [InlineData("java", "experimentalPolyglot:java", "AppHost.java")]
+    public async Task NewCommandWithEmptyTemplateAndSourceOverrideWarnsThatOverrideIsNotPersisted(string language, string? featureFlag, string scaffoldFileName)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         const string sourceOverride = "/tmp/aspire-pr-hive/packages";
@@ -1162,6 +1164,15 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         var services = CreateServiceCollection(workspace, options =>
         {
             options.InteractionServiceFactory = _ => interactionService = new TestInteractionService();
+            if (featureFlag is not null)
+            {
+                options.FeatureFlagsFactory = _ =>
+                {
+                    var features = new TestFeatures();
+                    features.SetFeature(featureFlag, true);
+                    return features;
+                };
+            }
         });
 
         services.AddSingleton<IScaffoldingService>(new TestScaffoldingService
@@ -1169,14 +1180,14 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             ScaffoldAsyncCallback = (context, _) =>
             {
                 capturedPackageSourceOverride = context.PackageSourceOverride;
-                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, "apphost.ts"), "// test apphost");
+                File.WriteAllText(Path.Combine(context.TargetDirectory.FullName, scaffoldFileName), "// test apphost");
                 return Task.FromResult(true);
             }
         });
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<NewCommand>();
-        var result = command.Parse($"new aspire-empty --name TestApp --output ./output --language typescript --localhost-tld false --suppress-agent-init --source {sourceOverride}");
+        var result = command.Parse($"new aspire-empty --name TestApp --output ./output --language {language} --localhost-tld false --suppress-agent-init --source {sourceOverride}");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(CliExitCodes.Success, exitCode);
@@ -1688,7 +1699,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
             };
         });
 
-        services.AddSingleton<IAppHostProjectFactory>(new TestTypeScriptStarterProjectFactory((directory, cancellationToken) =>
+        services.AddSingleton<IAppHostProjectFactory>(new TestTypeScriptStarterProjectFactory((directory, cancellationToken, _) =>
         {
             buildAndGenerateCalled = true;
             var config = AspireConfigFile.Load(directory.FullName);
@@ -1764,7 +1775,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         });
 
         services.AddSingleton<IInteractionService>(interactionService);
-        services.AddSingleton<IAppHostProjectFactory>(new TestTypeScriptStarterProjectFactory((directory, cancellationToken) => Task.FromResult(false)));
+        services.AddSingleton<IAppHostProjectFactory>(new TestTypeScriptStarterProjectFactory((directory, cancellationToken, _) => Task.FromResult(false)));
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
@@ -1775,6 +1786,121 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode);
         Assert.Collection(interactionService.DisplayedErrors,
             error => Assert.Equal("Automatic 'aspire restore' failed for the new TypeScript starter project. Run 'aspire restore' in the project directory for more details.", error));
+    }
+
+    [Fact]
+    public async Task NewCommandWithTypeScriptStarterAndSourceOverrideWarnsAndPlumbsOverride()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string sourceOverride = "/tmp/aspire-pr-hive/packages";
+
+        TestInteractionService? interactionService = null;
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService = new TestInteractionService();
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetSource, useCache, runnerOptions, cancellationToken) =>
+                {
+                    var package = new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = "9.2.0" };
+                    return (0, new NuGetPackage[] { package });
+                }
+            };
+
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = cancellationToken =>
+                {
+                    var dailyCache = new FakeNuGetPackageCache
+                    {
+                        GetTemplatePackagesAsyncCallback = (dir, prerelease, nugetConfig, ct) =>
+                        {
+                            var package = new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = "9.2.0" };
+                            return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
+                        }
+                    };
+                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache);
+                    return Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel]);
+                }
+            };
+        });
+
+        var projectFactory = new TestTypeScriptStarterProjectFactory((directory, cancellationToken, _) =>
+        {
+            var modulesDir = Directory.CreateDirectory(Path.Combine(directory.FullName, ".modules"));
+            File.WriteAllText(Path.Combine(modulesDir.FullName, "aspire.ts"), "// generated sdk");
+            return Task.FromResult(true);
+        });
+        services.AddSingleton<IAppHostProjectFactory>(projectFactory);
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"new aspire-ts-starter --name TestApp --output ./output --channel daily --localhost-tld false --source {sourceOverride}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(sourceOverride, projectFactory.Project.LastPackageSourceOverride);
+        Assert.NotNull(interactionService);
+        Assert.Contains(
+            interactionService!.DisplayedMessages,
+            entry => entry.Emoji.Name == KnownEmojis.Warning.Name
+                && entry.Message == TemplatingStrings.EmptySourceOverrideNotPersistedWarning);
+    }
+
+    [Fact]
+    public async Task NewCommandWithTypeScriptStarterAndFailedRestoreDoesNotWarnAboutSourceOverride()
+    {
+        // The warning is only meaningful when the scaffold succeeded — surfacing it on a failed
+        // restore would just add noise behind a more prominent error. Pin that the starter path
+        // mirrors the empty-template path here.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string sourceOverride = "/tmp/aspire-pr-hive/packages";
+
+        TestInteractionService? interactionService = null;
+        var services = CreateServiceCollection(workspace, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService = new TestInteractionService();
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                SearchPackagesAsyncCallback = (dir, query, exactMatch, prerelease, take, skip, nugetSource, useCache, runnerOptions, cancellationToken) =>
+                {
+                    var package = new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = "9.2.0" };
+                    return (0, new NuGetPackage[] { package });
+                }
+            };
+
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = cancellationToken =>
+                {
+                    var dailyCache = new FakeNuGetPackageCache
+                    {
+                        GetTemplatePackagesAsyncCallback = (dir, prerelease, nugetConfig, ct) =>
+                        {
+                            var package = new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = "9.2.0" };
+                            return Task.FromResult<IEnumerable<NuGetPackage>>([package]);
+                        }
+                    };
+                    var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Both, [], dailyCache);
+                    return Task.FromResult<IEnumerable<PackageChannel>>([dailyChannel]);
+                }
+            };
+        });
+
+        services.AddSingleton<IAppHostProjectFactory>(new TestTypeScriptStarterProjectFactory((directory, cancellationToken, _) => Task.FromResult(false)));
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"new aspire-ts-starter --name TestApp --output ./output --channel daily --localhost-tld false --source {sourceOverride}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToBuildArtifacts, exitCode);
+        Assert.NotNull(interactionService);
+        Assert.DoesNotContain(
+            interactionService!.DisplayedMessages,
+            entry => entry.Message == TemplatingStrings.EmptySourceOverrideNotPersistedWarning);
     }
 
     [Fact]
