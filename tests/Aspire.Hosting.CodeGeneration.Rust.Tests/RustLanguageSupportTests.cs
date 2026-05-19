@@ -56,6 +56,18 @@ public class RustLanguageSupportTests
     }
 
     [Fact]
+    public void Detect_RequiresCargoManifest()
+    {
+        using var testDir = new TestTempDirectory();
+
+        File.WriteAllText(Path.Combine(testDir.Path, "apphost.rs"), "// marker");
+
+        var result = _languageSupport.Detect(testDir.Path);
+
+        Assert.False(result.IsValid);
+    }
+
+    [Fact]
     public void GetRuntimeSpec_UsesCargoRun()
     {
         var runtimeSpec = _languageSupport.GetRuntimeSpec();
