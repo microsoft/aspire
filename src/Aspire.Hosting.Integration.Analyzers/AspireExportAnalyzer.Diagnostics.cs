@@ -131,6 +131,28 @@ public partial class AspireExportAnalyzer
             isEnabledByDefault: true,
             helpLinkUri: $"https://aka.ms/aspire/diagnostics/{CallbackContextTypeMissingExportId}");
 
+        private const string DuplicatePolyglotCapabilityIdId = "ASPIREEXPORT013";
+        internal static readonly DiagnosticDescriptor s_duplicatePolyglotCapabilityId = new(
+            id: DuplicatePolyglotCapabilityIdId,
+            title: "Duplicate polyglot capability ID",
+            messageFormat: "Polyglot capability ID '{0}' is defined by multiple exports in this assembly: {1}. Use unique AspireExport IDs for overloaded or colliding members.",
+            category: "Design",
+            DiagnosticSeverity.Warning,
+            isEnabledByDefault: true,
+            helpLinkUri: $"https://aka.ms/aspire/diagnostics/{DuplicatePolyglotCapabilityIdId}",
+            customTags: [WellKnownDiagnosticTags.CompilationEnd]);
+
+        private const string DuplicateGeneratedMethodNameId = "ASPIREEXPORT014";
+        internal static readonly DiagnosticDescriptor s_duplicateGeneratedMethodName = new(
+            id: DuplicateGeneratedMethodNameId,
+            title: "Duplicate generated polyglot member name",
+            messageFormat: "Generated polyglot member name '{0}' is already used for target type '{1}' by multiple exports: {2}. Use a unique MethodName, or combine overloads into a single export with optional parameters.",
+            category: "Design",
+            DiagnosticSeverity.Error,
+            isEnabledByDefault: true,
+            helpLinkUri: $"https://aka.ms/aspire/diagnostics/{DuplicateGeneratedMethodNameId}",
+            customTags: [WellKnownDiagnosticTags.CompilationEnd]);
+
         public static readonly ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics = ImmutableArray.Create(
             s_exportMethodMustBeStatic,
             s_invalidExportIdFormat,
@@ -143,7 +165,9 @@ public partial class AspireExportAnalyzer
             s_exportNameShouldBeUnique,
             s_exportedSyncDelegateInvokedInline,
             s_redundantExportId,
-            s_callbackContextTypeMissingExport
+            s_callbackContextTypeMissingExport,
+            s_duplicatePolyglotCapabilityId,
+            s_duplicateGeneratedMethodName
         );
     }
 }

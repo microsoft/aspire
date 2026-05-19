@@ -93,6 +93,7 @@ with create_builder() as builder:
 
     # addContainer (pre-existing)
     container = builder.add_container("resource", "image")
+    container.with_otlp_exporter(protocol="HttpJson")
     # addDockerfile
     docker_container = builder.add_dockerfile("resource", ".")
     docker_builder_container = builder.add_dockerfile_builder("builder-resource", ".", configure_dockerfile_builder, stage="runtime")
@@ -119,6 +120,9 @@ with create_builder() as builder:
     docker_container.with_http_endpoint_callback(update_existing_http_endpoint, name="http", create_if_not_exists=False)
     endpoint = docker_container.get_endpoint("http")
     expr = ReferenceExpression.format_string("Host=%s", endpoint)
+    endpoint_host = endpoint.property("Host")
+    endpoint_port = endpoint.property("Port")
+    endpoint_url = ReferenceExpression.format_string("http://%s:%s", endpoint_host, endpoint_port)
     built_connection_string = builder.add_connection_string("connection-string", env_var_name_or_expression=expr)
     env_connection_string = builder.add_connection_string("env-connection-string")
     expression_connection_string = builder.add_connection_string("expression-connection-string", env_var_name_or_expression=expr)
@@ -175,6 +179,8 @@ with create_builder() as builder:
     container.with_environment("MY_ENDPOINT", endpoint)
     # withEnvironment - ParameterResource
     container.with_environment("MY_PARAM", builder.add_parameter("param"))
+    # withEnvironment - endpoint property expression
+    container.with_environment("MY_ENDPOINT_URL", endpoint_url)
     # withEnvironment - connection string resource
     container.with_environment("MY_CONN", env_connection_string)
     container.with_environment("MY_EXPR_CONN", expression_connection_string)
@@ -270,6 +276,18 @@ with create_builder() as builder:
             aspire_store = subscriber_services.get_aspire_store()
             _content_backed_filename = aspire_store.get_file_name_with_content("validation-apphost.py", "apphost.py")
 
+        def on_eventing_before_publish(before_publish_event):
+            before_publish_services = before_publish_event.services
+            before_publish_model = before_publish_event.model
+            _before_publish_eventing = before_publish_services.get_eventing()
+            _before_publish_resources = before_publish_model.get_resources()
+
+        def on_eventing_after_publish(after_publish_event):
+            after_publish_services = after_publish_event.services
+            after_publish_model = after_publish_event.model
+            _after_publish_eventing = after_publish_services.get_eventing()
+            _after_publish_resources = after_publish_model.get_resources()
+
         def on_eventing_after_resources_created(after_resources_created_event):
             after_resources_created_services = after_resources_created_event.services
             after_resources_created_model = after_resources_created_event.model
@@ -277,6 +295,8 @@ with create_builder() as builder:
             _after_resources_created_resources = after_resources_created_model.get_resources()
 
         registration_context.on_before_start(on_eventing_before_start)
+        registration_context.on_before_publish(on_eventing_before_publish)
+        registration_context.on_after_publish(on_eventing_after_publish)
         registration_context.on_after_resources_created(on_eventing_after_resources_created)
 
     builder.add_eventing_subscriber(configure_eventing_subscriber)
@@ -312,9 +332,13 @@ with create_builder() as builder:
     _https_certificate_data = execution_config.get_https_certificate_data()
     before_start_subscription = builder.subscribe_before_start(lambda *_args, **_kwargs: None)
     after_resources_created_subscription = builder.subscribe_after_resources_created(lambda *_args, **_kwargs: None)
+    before_publish_subscription = builder.subscribe_before_publish(lambda *_args, **_kwargs: None)
+    after_publish_subscription = builder.subscribe_after_publish(lambda *_args, **_kwargs: None)
     builder_eventing = builder.eventing
-    builder_eventing.unsubscribe(None)
-    builder_eventing.unsubscribe(None)
+    builder_eventing.unsubscribe(before_start_subscription)
+    builder_eventing.unsubscribe(after_resources_created_subscription)
+    builder_eventing.unsubscribe(before_publish_subscription)
+    builder_eventing.unsubscribe(after_publish_subscription)
     container.on_before_resource_started(lambda *_args, **_kwargs: None)
     container.on_resource_stopped(lambda *_args, **_kwargs: None)
     built_connection_string.on_connection_string_available(lambda *_args, **_kwargs: None)

@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
+using HealthStatus = Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus;
 
 namespace Aspire.Hosting.Tests;
 
@@ -134,6 +135,31 @@ public class ResourceNotificationTests
                 Assert.Equal("CustomResource", c.Snapshot.ResourceType);
                 Assert.Equal("value", c.Snapshot.Properties.Single(p => p.Name == "B").Value);
                 Assert.Null(c.Snapshot.HealthStatus);
+            });
+    }
+
+    [Fact]
+    public async Task PublishedHealthReportsUpdateHealthStatus()
+    {
+        var resource = new CustomResource("myResource");
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        await notificationService.PublishUpdateAsync(resource, snapshot =>
+            (snapshot with { State = KnownResourceStates.Running }).WithHealthReports(
+            [
+                new HealthReportSnapshot("browser-session", HealthStatus.Unhealthy, "Browser session failed.", "InvalidOperationException: Browser crashed.")
+            ])).DefaultTimeout();
+
+        Assert.True(notificationService.TryGetCurrentState(resource.Name, out var resourceEvent));
+        Assert.Equal(HealthStatus.Unhealthy, resourceEvent.Snapshot.HealthStatus);
+        Assert.Collection(
+            resourceEvent.Snapshot.HealthReports,
+            report =>
+            {
+                Assert.Equal("browser-session", report.Name);
+                Assert.Equal(HealthStatus.Unhealthy, report.Status);
+                Assert.Equal("Browser session failed.", report.Description);
+                Assert.Equal("InvalidOperationException: Browser crashed.", report.ExceptionText);
             });
     }
 
@@ -320,6 +346,297 @@ public class ResourceNotificationTests
         {
             await waitTask;
         }).DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task WaitForDependenciesPublishesAndUpdatesWaitingForDependencies()
+    {
+        var dependency1 = new CustomResource("dependency1");
+        var dependency2 = new CustomResource("dependency2");
+        var resource = new CustomResource("resource");
+        resource.Annotations.Add(new WaitAnnotation(dependency1, WaitType.WaitUntilStarted));
+        resource.Annotations.Add(new WaitAnnotation(dependency2, WaitType.WaitUntilStarted));
+
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var waitTask = notificationService.WaitForDependenciesAsync(resource, cts.Token);
+
+        var waitingEvent = await notificationService.WaitForResourceAsync(
+            resource.Name,
+            re => re.Snapshot.State?.Text == KnownResourceStates.Waiting &&
+                GetWaitingForDependencies(re).SequenceEqual(new[] { dependency1.Name, dependency2.Name }),
+            cts.Token).DefaultTimeout();
+
+        Assert.Equal(KnownResourceStates.Waiting, waitingEvent.Snapshot.State?.Text);
+
+        await notificationService.PublishUpdateAsync(dependency1, s => s with
+        {
+            State = KnownResourceStates.Running
+        }).DefaultTimeout();
+
+        var updatedWaitingEvent = await notificationService.WaitForResourceAsync(
+            resource.Name,
+            re => re.Snapshot.State?.Text == KnownResourceStates.Waiting &&
+                  GetWaitingForDependencies(re).SequenceEqual(new[] { dependency2.Name }),
+            cts.Token).DefaultTimeout();
+
+        Assert.Equal(new[] { dependency2.Name }, GetWaitingForDependencies(updatedWaitingEvent));
+
+        await notificationService.PublishUpdateAsync(dependency2, s => s with
+        {
+            State = KnownResourceStates.Running
+        }).DefaultTimeout();
+
+        await waitTask.DefaultTimeout();
+
+        Assert.True(notificationService.TryGetCurrentState(resource.Name, out var completedWaitingEvent));
+        Assert.DoesNotContain(completedWaitingEvent.Snapshot.Properties, p => p.Name == KnownProperties.Resource.WaitingFor);
+    }
+
+    [Fact]
+    public async Task WaitForDependenciesPublishesAndUpdatesWaitingForHealthyDependencies()
+    {
+        var dependency1 = new CustomResource("dependency1");
+        dependency1.Annotations.Add(new HealthCheckAnnotation("dependency1-health"));
+        var dependency2 = new CustomResource("dependency2");
+        dependency2.Annotations.Add(new HealthCheckAnnotation("dependency2-health"));
+        var resource = new CustomResource("resource");
+        resource.Annotations.Add(new WaitAnnotation(dependency1, WaitType.WaitUntilHealthy));
+        resource.Annotations.Add(new WaitAnnotation(dependency2, WaitType.WaitUntilHealthy));
+
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var waitTask = notificationService.WaitForDependenciesAsync(resource, cts.Token);
+
+        var waitingEvent = await notificationService.WaitForResourceAsync(
+            resource.Name,
+            re => re.Snapshot.State?.Text == KnownResourceStates.Waiting &&
+                GetWaitingForDependencies(re).SequenceEqual(new[] { dependency1.Name, dependency2.Name }),
+            cts.Token).DefaultTimeout();
+
+        Assert.Equal(KnownResourceStates.Waiting, waitingEvent.Snapshot.State?.Text);
+
+        await notificationService.PublishUpdateAsync(dependency1, s =>
+            (s with
+            {
+                State = KnownResourceStates.Running,
+                ResourceReadyEvent = new EventSnapshot(Task.CompletedTask)
+            }).WithHealthReports(
+            [
+                new HealthReportSnapshot("dependency1-health", HealthStatus.Healthy, "Dependency is healthy.", null)
+            ])).DefaultTimeout();
+
+        var updatedWaitingEvent = await notificationService.WaitForResourceAsync(
+            resource.Name,
+            re => re.Snapshot.State?.Text == KnownResourceStates.Waiting &&
+                  GetWaitingForDependencies(re).SequenceEqual(new[] { dependency2.Name }),
+            cts.Token).DefaultTimeout();
+
+        Assert.Equal(new[] { dependency2.Name }, GetWaitingForDependencies(updatedWaitingEvent));
+
+        await notificationService.PublishUpdateAsync(dependency2, s =>
+            (s with
+            {
+                State = KnownResourceStates.Running,
+                ResourceReadyEvent = new EventSnapshot(Task.CompletedTask)
+            }).WithHealthReports(
+            [
+                new HealthReportSnapshot("dependency2-health", HealthStatus.Healthy, "Dependency is healthy.", null)
+            ])).DefaultTimeout();
+
+        await waitTask.DefaultTimeout();
+
+        Assert.True(notificationService.TryGetCurrentState(resource.Name, out var completedWaitingEvent));
+        Assert.DoesNotContain(completedWaitingEvent.Snapshot.Properties, p => p.Name == KnownProperties.Resource.WaitingFor);
+    }
+
+    [Fact]
+    public async Task WaitForDependenciesPublishesAndUpdatesWaitingForCompletionDependencies()
+    {
+        var dependency1 = new CustomResource("dependency1");
+        var dependency2 = new CustomResource("dependency2");
+        var resource = new CustomResource("resource");
+        resource.Annotations.Add(new WaitAnnotation(dependency1, WaitType.WaitForCompletion));
+        resource.Annotations.Add(new WaitAnnotation(dependency2, WaitType.WaitForCompletion));
+
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var waitTask = notificationService.WaitForDependenciesAsync(resource, cts.Token);
+
+        var waitingEvent = await notificationService.WaitForResourceAsync(
+            resource.Name,
+            re => re.Snapshot.State?.Text == KnownResourceStates.Waiting &&
+                GetWaitingForDependencies(re).SequenceEqual(new[] { dependency1.Name, dependency2.Name }),
+            cts.Token).DefaultTimeout();
+
+        Assert.Equal(KnownResourceStates.Waiting, waitingEvent.Snapshot.State?.Text);
+
+        await notificationService.PublishUpdateAsync(dependency1, s => s with
+        {
+            State = KnownResourceStates.Finished,
+            ExitCode = 0
+        }).DefaultTimeout();
+
+        var updatedWaitingEvent = await notificationService.WaitForResourceAsync(
+            resource.Name,
+            re => re.Snapshot.State?.Text == KnownResourceStates.Waiting &&
+                  GetWaitingForDependencies(re).SequenceEqual(new[] { dependency2.Name }),
+            cts.Token).DefaultTimeout();
+
+        Assert.Equal(new[] { dependency2.Name }, GetWaitingForDependencies(updatedWaitingEvent));
+
+        await notificationService.PublishUpdateAsync(dependency2, s => s with
+        {
+            State = KnownResourceStates.Finished,
+            ExitCode = 0
+        }).DefaultTimeout();
+
+        await waitTask.DefaultTimeout();
+
+        Assert.True(notificationService.TryGetCurrentState(resource.Name, out var completedWaitingEvent));
+        Assert.DoesNotContain(completedWaitingEvent.Snapshot.Properties, p => p.Name == KnownProperties.Resource.WaitingFor);
+    }
+
+    [Fact]
+    public async Task WaitForDependenciesPublishesResolvedWaitingForDependenciesForReplicas()
+    {
+        var dependency = new CustomResource("dependency");
+        dependency.Annotations.Add(new DcpInstancesAnnotation([
+            new DcpInstance("dependency-abc123", "abc123", 0),
+            new DcpInstance("dependency-def456", "def456", 1)
+        ]));
+
+        var resource = new CustomResource("resource");
+        resource.Annotations.Add(new WaitAnnotation(dependency, WaitType.WaitUntilStarted));
+
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        using var cts = AsyncTestHelpers.CreateDefaultTimeoutTokenSource();
+        var waitTask = notificationService.WaitForDependenciesAsync(resource, cts.Token);
+
+        var waitingEvent = await notificationService.WaitForResourceAsync(
+            resource.Name,
+            re => re.Snapshot.State?.Text == KnownResourceStates.Waiting &&
+                GetWaitingForDependencies(re).SequenceEqual(new[] { "dependency-abc123", "dependency-def456" }),
+            cts.Token).DefaultTimeout();
+
+        Assert.Equal(new[] { "dependency-abc123", "dependency-def456" }, GetWaitingForDependencies(waitingEvent));
+
+        await notificationService.PublishUpdateAsync(dependency, "dependency-abc123", s => s with
+        {
+            State = KnownResourceStates.Running
+        }).DefaultTimeout();
+
+        var partialWaitingEvent = await notificationService.WaitForResourceAsync(
+            resource.Name,
+            re => re.Snapshot.State?.Text == KnownResourceStates.Waiting &&
+                GetWaitingForDependencies(re).SequenceEqual(new[] { "dependency-def456" }),
+            cts.Token).DefaultTimeout();
+
+        Assert.Equal(new[] { "dependency-def456" }, GetWaitingForDependencies(partialWaitingEvent));
+
+        await notificationService.PublishUpdateAsync(dependency, "dependency-def456", s => s with
+        {
+            State = KnownResourceStates.Running
+        }).DefaultTimeout();
+
+        await waitTask.DefaultTimeout();
+
+        Assert.True(notificationService.TryGetCurrentState(resource.Name, out var completedWaitingEvent));
+        Assert.DoesNotContain(completedWaitingEvent.Snapshot.Properties, p => p.Name == KnownProperties.Resource.WaitingFor);
+    }
+
+    [Fact]
+    public async Task PublishUpdateClearsWaitingForDependenciesWhenResourceLeavesWaiting()
+    {
+        var resource = new CustomResource("resource");
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        await notificationService.PublishUpdateAsync(resource, s => s with
+        {
+            State = KnownResourceStates.Waiting,
+            Properties = [new ResourcePropertySnapshot(KnownProperties.Resource.WaitingFor, new[] { "dependency" })]
+        }).DefaultTimeout();
+
+        Assert.True(notificationService.TryGetCurrentState(resource.Name, out var waitingEvent));
+        Assert.Contains(waitingEvent.Snapshot.Properties, p => p.Name == KnownProperties.Resource.WaitingFor);
+
+        await notificationService.PublishUpdateAsync(resource, s => s with
+        {
+            State = KnownResourceStates.Running
+        }).DefaultTimeout();
+
+        Assert.True(notificationService.TryGetCurrentState(resource.Name, out var runningEvent));
+        Assert.DoesNotContain(runningEvent.Snapshot.Properties, p => p.Name == KnownProperties.Resource.WaitingFor);
+    }
+
+    [Fact]
+    public async Task CancellationMessageIncludesWaitingForDependencies()
+    {
+        var resource = new CustomResource("resource");
+        var dependency = new CustomResource("dependency");
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        await notificationService.PublishUpdateAsync(dependency, s => s with
+        {
+            State = KnownResourceStates.Running
+        }).DefaultTimeout();
+
+        await notificationService.PublishUpdateAsync(resource, s => s with
+        {
+            State = KnownResourceStates.Waiting,
+            Properties = [new ResourcePropertySnapshot(KnownProperties.Resource.WaitingFor, new[] { dependency.Name })]
+        }).DefaultTimeout();
+
+        using var cts = new CancellationTokenSource();
+        var waitTask = notificationService.WaitForResourceAsync(resource.Name, KnownResourceStates.Running, cts.Token);
+        await cts.CancelAsync();
+
+        var ex = await Assert.ThrowsAsync<OperationCanceledException>(async () =>
+        {
+            await waitTask;
+        }).DefaultTimeout();
+
+        Assert.Contains("- Waiting For:", ex.Message);
+        Assert.Contains("  - dependency: State = Running, Health = Healthy", ex.Message);
+    }
+
+    [Fact]
+    public async Task WaitForDependenciesCancellationMessageIncludesWaitingForDependencies()
+    {
+        var resource = new CustomResource("resource");
+        var dependency = new CustomResource("dependency");
+        resource.Annotations.Add(new WaitAnnotation(dependency, WaitType.WaitUntilStarted));
+
+        var notificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        await notificationService.PublishUpdateAsync(dependency, s => s with
+        {
+            State = KnownResourceStates.Starting
+        }).DefaultTimeout();
+
+        using var cts = new CancellationTokenSource();
+        var waitTask = notificationService.WaitForDependenciesAsync(resource, cts.Token);
+
+        await notificationService.WaitForResourceAsync(
+            resource.Name,
+            re => re.Snapshot.State?.Text == KnownResourceStates.Waiting &&
+                GetWaitingForDependencies(re).SequenceEqual(new[] { dependency.Name }),
+            TestContext.Current.CancellationToken).DefaultTimeout();
+
+        await cts.CancelAsync();
+
+        var ex = await Assert.ThrowsAsync<OperationCanceledException>(async () =>
+        {
+            await waitTask;
+        }).DefaultTimeout();
+
+        Assert.Contains("Resource 'resource' failed to wait for dependencies before the operation was cancelled.", ex.Message);
+        Assert.Contains("- Waiting For:", ex.Message);
+        Assert.Contains("  - dependency: State = Starting", ex.Message);
     }
 
     [Fact]
@@ -751,5 +1068,11 @@ public class ResourceNotificationTests
         {
             _stoppingCts.Dispose();
         }
+    }
+
+    private static string[] GetWaitingForDependencies(ResourceEvent resourceEvent)
+    {
+        var property = resourceEvent.Snapshot.Properties.SingleOrDefault(p => p.Name == KnownProperties.Resource.WaitingFor);
+        return property?.Value is IEnumerable<string> dependencyNames ? dependencyNames.ToArray() : [];
     }
 }

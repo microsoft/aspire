@@ -28,6 +28,61 @@ function Write-Step  { param([string]$msg) Write-Host "▶ $msg" -ForegroundColo
 function Write-Ok    { param([string]$msg) Write-Host "✅ $msg" -ForegroundColor Green }
 function Write-Err   { param([string]$msg) Write-Host "❌ $msg" -ForegroundColor Red }
 
+function Get-UserHome {
+    if ($env:USERPROFILE) {
+        return $env:USERPROFILE
+    }
+
+    if ($env:HOME) {
+        return $env:HOME
+    }
+
+    throw "Unable to determine the user home directory."
+}
+
+function Test-IsWindows {
+    return [System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([System.Runtime.InteropServices.OSPlatform]::Windows)
+}
+
+function Set-ExecutablePermission([string]$Path) {
+    if (Test-IsWindows) {
+        return
+    }
+
+    & chmod +x $Path
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to mark '$Path' as executable."
+    }
+}
+
+function Test-ArchiveSidecar {
+    # Per-RID CLI archives must ship sidecar-free; each install route writes
+    # its own .aspire-install.json. See docs/specs/install-routes.md.
+    param(
+        [Parameter(Mandatory = $true)][string]$ExtractDir,
+        [Parameter(Mandatory = $true)][string]$ArchiveFileName
+    )
+
+    $ridFamily = switch -Wildcard ($ArchiveFileName) {
+        '*win-*'   { 'win';   break }
+        '*osx-*'   { 'osx';   break }
+        '*linux-*' { 'linux'; break }
+        default    { $null }
+    }
+
+    if ($null -eq $ridFamily) {
+        throw "Archive RID family not recognized in filename '$ArchiveFileName'. Expected the filename to contain 'win-', 'osx-', or 'linux-'."
+    }
+
+    $strays = Get-ChildItem -Path $ExtractDir -Recurse -File -Filter '.aspire-install.json' -Force -ErrorAction SilentlyContinue
+    if ($strays) {
+        $strayPaths = $strays | ForEach-Object { $_.FullName.Substring($ExtractDir.Length + 1).Replace('\', '/') }
+        throw "$ridFamily-* archive '$ArchiveFileName' must not contain '.aspire-install.json' (per-RID archives are shared across install routes; each route authors its own sidecar after extraction). Found: $($strayPaths -join ', ')"
+    }
+    Write-Step "$ridFamily-* archive correctly omits the install-route sidecar."
+}
+
+$userHome = Get-UserHome
 $verifyTmpDir = $null
 $aspireBackup = $null
 
@@ -37,7 +92,7 @@ function Invoke-Cleanup {
         Remove-Item -Recurse -Force $verifyTmpDir -ErrorAction SilentlyContinue
     }
     # Restore ~/.aspire if we backed it up
-    $aspireDir = Join-Path $env:USERPROFILE ".aspire"
+    $aspireDir = Join-Path $userHome ".aspire"
     if ($aspireBackup -and (Test-Path $aspireBackup)) {
         if (Test-Path $aspireDir) {
             Remove-Item -Recurse -Force $aspireDir -ErrorAction SilentlyContinue
@@ -72,7 +127,7 @@ try {
 
     # Step 1: Back up and clean ~/.aspire
     Write-Step "Cleaning ~/.aspire state..."
-    $aspireDir = Join-Path $env:USERPROFILE ".aspire"
+    $aspireDir = Join-Path $userHome ".aspire"
     if (Test-Path $aspireDir) {
         $aspireBackup = Join-Path ([System.IO.Path]::GetTempPath()) "aspire-backup-$([System.IO.Path]::GetRandomFileName())"
         Move-Item $aspireDir $aspireBackup
@@ -113,14 +168,20 @@ try {
     }
     Write-Ok "Extracted CLI binary: $aspireBin"
 
+    # Assert the source sidecar matches the archive's RID family before mutating the
+    # extracted shape. After Copy-Item moves the binary out, the archive layout is
+    # no longer observable.
+    Test-ArchiveSidecar -ExtractDir $extractDir -ArchiveFileName ([System.IO.Path]::GetFileName($ArchivePath))
+
     # Install to ~/.aspire/bin so self-extraction works correctly
     Write-Step "Installing CLI to ~/.aspire/bin..."
-    $aspireDir = Join-Path $env:USERPROFILE ".aspire"
+    $aspireDir = Join-Path $userHome ".aspire"
     $aspireBinDir = Join-Path $aspireDir "bin"
     New-Item -ItemType Directory -Path $aspireBinDir -Force | Out-Null
     Copy-Item $aspireBin (Join-Path $aspireBinDir (Split-Path $aspireBin -Leaf))
     $aspireBin = Join-Path $aspireBinDir (Split-Path $aspireBin -Leaf)
-    $env:PATH = "$aspireBinDir;$env:PATH"
+    Set-ExecutablePermission $aspireBin
+    $env:PATH = "$aspireBinDir$([System.IO.Path]::PathSeparator)$env:PATH"
     Write-Ok "CLI installed to ~/.aspire/bin"
 
     # Step 3: Verify aspire --version

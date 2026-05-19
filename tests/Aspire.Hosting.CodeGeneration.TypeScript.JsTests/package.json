@@ -9,7 +9,9 @@
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "eslint": "^10.0.3",
     "typescript": "^5.8.2",
+    "typescript-eslint": "^8.57.1",
     "vitest": "^3.2.1",
     "vscode-jsonrpc": "^8.2.0"
   },

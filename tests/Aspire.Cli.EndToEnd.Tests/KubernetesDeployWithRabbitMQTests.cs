@@ -86,7 +86,7 @@ public sealed class KubernetesDeployWithRabbitMQTests(ITestOutputHelper output)
                 {
                     await using var channel = await connection.CreateChannelAsync();
                     var queueName = $"test-{Guid.NewGuid():N}";
-                    await channel.QueueDeclareAsync(queue: queueName, durable: false, exclusive: false, autoDelete: true);
+                    await channel.QueueDeclareAsync(queue: queueName, durable: false, exclusive: true, autoDelete: true);
                     await channel.QueueDeleteAsync(queueName);
 
                     return Results.Ok("PASSED: RabbitMQ queue declare+delete works");

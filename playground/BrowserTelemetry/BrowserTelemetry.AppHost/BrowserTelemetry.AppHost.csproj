@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Browsers" />
     <ProjectReference Include="..\BrowserTelemetry.Web\BrowserTelemetry.Web.csproj" />
   </ItemGroup>
 

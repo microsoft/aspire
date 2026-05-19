@@ -47,7 +47,7 @@ internal static class CommandsConfigurationExtensions
                 }
             },
             displayDescription: CommandStrings.StartDescription,
-            parameter: null,
+            arguments: null,
             confirmationMessage: null,
             iconName: "Play",
             iconVariant: IconVariant.Filled,
@@ -80,7 +80,7 @@ internal static class CommandsConfigurationExtensions
                 }
             },
             displayDescription: CommandStrings.StopDescription,
-            parameter: null,
+            arguments: null,
             confirmationMessage: null,
             iconName: "Stop",
             iconVariant: IconVariant.Filled,
@@ -116,7 +116,7 @@ internal static class CommandsConfigurationExtensions
                 }
             },
             displayDescription: restartDescription,
-            parameter: null,
+            arguments: null,
             confirmationMessage: null,
             iconName: "ArrowCounterclockwise",
             iconVariant: IconVariant.Regular,
@@ -169,7 +169,7 @@ internal static class CommandsConfigurationExtensions
                     : ResourceCommandState.Disabled;
             },
             displayDescription: CommandStrings.RebuildDescription,
-            parameter: null,
+            arguments: null,
             confirmationMessage: null,
             iconName: "ArrowSync",
             iconVariant: IconVariant.Regular,

@@ -1,0 +1,11 @@
+<!-- This directory contains evaluation/test data for the aspireify skill.
+     These are intentionally un-aspirified sample apps and should NOT be built
+     by the repo's CI pipeline. -->
+<Project>
+  <!-- Do NOT import parent Directory.Build.props — fully isolate from repo build -->
+  <PropertyGroup>
+    <ImportDirectoryBuildProps>false</ImportDirectoryBuildProps>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+  </PropertyGroup>
+</Project>

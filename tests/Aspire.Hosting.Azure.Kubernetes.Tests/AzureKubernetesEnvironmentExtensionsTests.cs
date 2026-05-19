@@ -3,12 +3,15 @@
 
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIRECOMPUTE003 // Type is for evaluation purposes only
+#pragma warning disable ASPIREPIPELINES001 // PipelineStepAnnotation is evaluation-only
 
 using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.Kubernetes;
 using Aspire.Hosting.Kubernetes;
+using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Azure.Tests;
 
@@ -75,7 +78,6 @@ public class AzureKubernetesEnvironmentExtensionsTests
 
         Assert.True(aks.Resource.OidcIssuerEnabled);
         Assert.True(aks.Resource.WorkloadIdentityEnabled);
-        Assert.Equal(AksSkuTier.Free, aks.Resource.SkuTier);
         Assert.Null(aks.Resource.KubernetesVersion);
         Assert.False(aks.Resource.IsPrivateCluster);
         Assert.False(aks.Resource.ContainerInsightsEnabled);
@@ -90,7 +92,40 @@ public class AzureKubernetesEnvironmentExtensionsTests
         var aks = builder.AddAzureKubernetesEnvironment("aks");
 
         Assert.NotNull(aks.Resource.KubernetesEnvironment);
-        Assert.Equal("aks-k8s", aks.Resource.KubernetesEnvironment.Name);
+        Assert.Equal("aks", aks.Resource.KubernetesEnvironment.Name);
+        Assert.True(aks.Resource.TryGetLastAnnotation<KubernetesEnvironmentAnnotation>(out var annotation));
+    }
+
+    [Fact]
+    public void AddAzureKubernetesEnvironment_AddsOnlyAksComputeEnvironmentToModel()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish);
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        Assert.DoesNotContain(model.Resources, r => r is KubernetesEnvironmentResource);
+
+        var computeEnvironment = Assert.Single(model.Resources.OfType<IComputeEnvironmentResource>());
+        Assert.Same(aks.Resource, computeEnvironment);
+    }
+
+    [Fact]
+    public async Task AddAzureKubernetesEnvironment_AllowsKubernetesServiceCustomizationWithoutVisibleKubernetesEnvironment()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish);
+
+        builder.AddAzureKubernetesEnvironment("aks");
+        builder.AddContainer("api", "myimage")
+            .PublishAsKubernetesService(_ => { });
+
+        await using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
     }
 
     [Fact]
@@ -292,7 +327,9 @@ public class AzureKubernetesEnvironmentExtensionsTests
         await using var app = builder.Build();
         await ExecuteBeforeStartHooksAsync(app, default);
 
-        // The inner K8s environment should have the registry annotation
+        Assert.True(aks.Resource.TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var aksAnnotation));
+        Assert.Same(aks.Resource.DefaultContainerRegistry, aksAnnotation.Registry);
+
         Assert.True(aks.Resource.KubernetesEnvironment
             .TryGetLastAnnotation<ContainerRegistryReferenceAnnotation>(out var annotation));
         Assert.Same(aks.Resource.DefaultContainerRegistry, annotation.Registry);
@@ -401,4 +438,87 @@ public class AzureKubernetesEnvironmentExtensionsTests
 
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
     private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
+
+    [Fact]
+    public async Task AddLoadBalancer_BicepEnablesIngressProfileAndUsesPreviewApi()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
+        var aksSubnet = vnet.AddSubnet("aksnodes", "10.0.0.0/22");
+        var albSubnet = vnet.AddSubnet("alb", "10.0.4.0/24");
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks").WithSubnet(aksSubnet);
+        aks.AddLoadBalancer("lb", albSubnet);
+
+        var manifest = await AzureManifestUtils.GetManifestWithBicep(aks.Resource);
+        await Verify(manifest.BicepText, extension: "bicep");
+    }
+
+    [Fact]
+    public void AddLoadBalancer_AppliesSubnetDelegation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
+        var albSubnet = vnet.AddSubnet("alb", "10.0.4.0/24");
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        aks.AddLoadBalancer("lb", albSubnet);
+
+        Assert.True(aks.Resource.GatewayApiEnabled);
+        Assert.True(aks.Resource.ApplicationLoadBalancerEnabled);
+        Assert.True(aks.Resource.RequiresPreviewIngressApi);
+
+        // AGC requires the subnet be delegated to Microsoft.ServiceNetworking/trafficControllers.
+        Assert.True(albSubnet.Resource.TryGetLastAnnotation<AzureSubnetServiceDelegationAnnotation>(out var delegation));
+        Assert.Equal("Microsoft.ServiceNetworking/trafficControllers", delegation!.ServiceName);
+    }
+
+    [Fact]
+    public void AddLoadBalancer_RegistersPerLBPipelineStep()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
+        var albSubnet = vnet.AddSubnet("alb", "10.0.4.0/24");
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var lb = aks.AddLoadBalancer("lb", albSubnet);
+
+        Assert.Same(aks.Resource, lb.Resource.Parent);
+        Assert.Equal("alb-lb", lb.Resource.AlbName);
+        Assert.True(lb.Resource.TryGetAnnotationsOfType<PipelineStepAnnotation>(out var stepAnnotations));
+        Assert.Single(stepAnnotations);
+    }
+
+    [Fact]
+    public void AddLoadBalancer_MultipleLBs_AllStepsRegistered()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
+        var alb1 = vnet.AddSubnet("alb1", "10.0.4.0/24");
+        var alb2 = vnet.AddSubnet("alb2", "10.0.5.0/24");
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var lb1 = aks.AddLoadBalancer("lb1", alb1);
+        var lb2 = aks.AddLoadBalancer("lb2", alb2);
+
+        Assert.NotSame(lb1.Resource, lb2.Resource);
+        Assert.Equal("alb-lb1", lb1.Resource.AlbName);
+        Assert.Equal("alb-lb2", lb2.Resource.AlbName);
+
+        // Each LB owns its own pipeline step annotation.
+        Assert.True(lb1.Resource.TryGetAnnotationsOfType<PipelineStepAnnotation>(out var lb1Steps));
+        Assert.True(lb2.Resource.TryGetAnnotationsOfType<PipelineStepAnnotation>(out var lb2Steps));
+        Assert.Single(lb1Steps);
+        Assert.Single(lb2Steps);
+
+        // Both LBs share the subnet/delegation requirements but the annotation
+        // is applied idempotently per subnet (one delegation per subnet).
+        Assert.True(alb1.Resource.TryGetLastAnnotation<AzureSubnetServiceDelegationAnnotation>(out _));
+        Assert.True(alb2.Resource.TryGetLastAnnotation<AzureSubnetServiceDelegationAnnotation>(out _));
+    }
+
 }

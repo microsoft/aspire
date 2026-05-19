@@ -9,9 +9,12 @@ using System.Diagnostics;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dashboard;
+using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Lifecycle;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -34,6 +37,7 @@ internal sealed class ApplicationOrchestrator
     private readonly DistributedApplicationExecutionContext _executionContext;
     private readonly ParameterProcessor _parameterProcessor;
     private readonly CancellationTokenSource _shutdownCancellation = new();
+    private IConfiguration? Configuration => _serviceProvider.GetService<IConfiguration>();
 
     public ApplicationOrchestrator(DistributedApplicationModel model,
                                    IDcpExecutor dcpExecutor,
@@ -93,6 +97,7 @@ internal sealed class ApplicationOrchestrator
 
     private async Task WaitForInBeforeResourceStartedEvent(BeforeResourceStartedEvent @event, CancellationToken cancellationToken)
     {
+        using var activity = ProfilingTelemetry.StartResourceBeforeStartWait(Configuration, @event.Resource);
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
         var waitForDependenciesTask = _notificationService.WaitForDependenciesAsync(@event.Resource, cts.Token);
@@ -117,6 +122,11 @@ internal sealed class ApplicationOrchestrator
                 // Make error visible from completed task.
                 await completedTask.ConfigureAwait(false);
             }
+        }
+        catch (Exception ex)
+        {
+            activity.SetError(ex);
+            throw;
         }
         finally
         {

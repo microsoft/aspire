@@ -4,6 +4,7 @@
 using System.Collections;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
@@ -256,17 +257,35 @@ public sealed class LoadInputContext
 /// Represents an input for an interaction.
 /// </summary>
 [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireDto]
 [DebuggerDisplay("Name = {Name}, InputType = {InputType}, Required = {Required}, Value = {Value}")]
 public sealed class InteractionInput
 {
+    private string _name = null!;
+    private bool _required;
+    private InputLoadOptions? _dynamicLoading;
+
     internal string EffectiveLabel => string.IsNullOrWhiteSpace(Label) ? Name : Label;
     internal InputLoadingState? DynamicLoadingState { get; set; }
     internal List<string> ValidationErrors { get; } = [];
+    internal void SetName(string name)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        _name = name;
+    }
+
+    internal void SetRequired(bool required) => _required = required;
+
+    internal void SetDynamicLoading(InputLoadOptions? dynamicLoading) => _dynamicLoading = dynamicLoading;
 
     /// <summary>
     /// Gets or sets the name for the input. Used for accessing inputs by name from a keyed collection.
     /// </summary>
-    public required string Name { get; init; }
+    public required string Name
+    {
+        get => _name;
+        init => _name = value;
+    }
 
     /// <summary>
     /// Gets or sets the label for the input. If not specified, the name will be used as the label.
@@ -292,7 +311,11 @@ public sealed class InteractionInput
     /// <summary>
     /// Gets or sets a value indicating whether the input is required.
     /// </summary>
-    public bool Required { get; init; }
+    public bool Required
+    {
+        get => _required;
+        init => _required = value;
+    }
 
     /// <summary>
     /// Gets or sets the options for the input. Only used by <see cref="InputType.Choice"/> inputs.
@@ -304,7 +327,11 @@ public sealed class InteractionInput
     /// Dynamic loading is used to load data and update inputs after a prompt has started.
     /// It can also be used to reload data and update inputs after a dependant input has changed.
     /// </summary>
-    public InputLoadOptions? DynamicLoading { get; init; }
+    public InputLoadOptions? DynamicLoading
+    {
+        get => _dynamicLoading;
+        init => _dynamicLoading = value;
+    }
 
     /// <summary>
     /// Gets or sets the value of the input.
@@ -348,6 +375,7 @@ public sealed class InteractionInput
 /// A collection of interaction inputs that supports both indexed and name-based access.
 /// </summary>
 [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireExport]
 [DebuggerDisplay("Count = {Count}")]
 public sealed class InteractionInputCollection : IReadOnlyList<InteractionInput>
 {
@@ -429,6 +457,68 @@ public sealed class InteractionInputCollection : IReadOnlyList<InteractionInput>
     }
 
     /// <summary>
+    /// Gets the value of the input with the specified name as a string.
+    /// </summary>
+    /// <param name="name">The name of the input.</param>
+    /// <returns>The value of the input, or <see langword="null"/> when the input has no value.</returns>
+    public string? GetString(string name)
+    {
+        return this[name].Value;
+    }
+
+    /// <summary>
+    /// Gets the value of the input with the specified name as a <see cref="bool"/>.
+    /// </summary>
+    /// <param name="name">The name of the input.</param>
+    /// <returns>The value of the input parsed as a <see cref="bool"/>.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the input has no value.</exception>
+    /// <exception cref="FormatException">Thrown when the input value is not a valid <see cref="bool"/>.</exception>
+    public bool GetBoolean(string name)
+    {
+        return bool.Parse(GetRequiredString(name));
+    }
+
+    /// <summary>
+    /// Gets the value of the input with the specified name as a <see cref="int"/>.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="InputType.Number"/> accepts floating point values. Use <see cref="GetDouble(string)"/> for decimal values,
+    /// or validate that the input is an integer before calling this method.
+    /// </remarks>
+    /// <param name="name">The name of the input.</param>
+    /// <returns>The value of the input parsed as a <see cref="int"/>.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the input has no value.</exception>
+    /// <exception cref="FormatException">Thrown when the input value is not a valid <see cref="int"/>.</exception>
+    /// <exception cref="OverflowException">Thrown when the input value is outside the range of a <see cref="int"/>.</exception>
+    public int GetInt32(string name)
+    {
+        return int.Parse(GetRequiredString(name), NumberStyles.Integer, CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// Gets the value of the input with the specified name as a <see cref="double"/>.
+    /// </summary>
+    /// <param name="name">The name of the input.</param>
+    /// <returns>The value of the input parsed as a <see cref="double"/>.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the input has no value.</exception>
+    /// <exception cref="FormatException">Thrown when the input value is not a valid <see cref="double"/>.</exception>
+    /// <exception cref="OverflowException">Thrown when the input value is outside the range of a <see cref="double"/>.</exception>
+    public double GetDouble(string name)
+    {
+        return double.Parse(GetRequiredString(name), NumberStyles.Float, CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// Gets all inputs in declaration order.
+    /// </summary>
+    /// <returns>A copy of the inputs in declaration order.</returns>
+    [AspireExport("InteractionInputCollection.toArray", MethodName = "toArray")]
+    public InteractionInput[] ToArray()
+    {
+        return [.. _inputs];
+    }
+
+    /// <summary>
     /// Gets the names of all inputs in the collection.
     /// </summary>
     public IEnumerable<string> Names => _inputsByName.Keys;
@@ -446,6 +536,17 @@ public sealed class InteractionInputCollection : IReadOnlyList<InteractionInput>
     IEnumerator IEnumerable.GetEnumerator() => _inputs.GetEnumerator();
 
     internal int IndexOf(InteractionInput input) => _inputs.IndexOf(input);
+
+    private string GetRequiredString(string name)
+    {
+        var value = GetString(name);
+        if (value is null)
+        {
+            throw new InvalidOperationException($"Input '{name}' does not have a value.");
+        }
+
+        return value;
+    }
 }
 
 /// <summary>
@@ -495,6 +596,7 @@ public class InputsDialogInteractionOptions : InteractionOptions
 /// Represents the context for validating inputs in an inputs dialog interaction.
 /// </summary>
 [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireExport(ExposeProperties = true)]
 public sealed class InputsDialogValidationContext
 {
     internal bool HasErrors { get; private set; }
@@ -512,6 +614,7 @@ public sealed class InputsDialogValidationContext
     /// <summary>
     /// Gets the service provider for resolving services during validation.
     /// </summary>
+    [AspireExportIgnore(Reason = "IServiceProvider is not part of the polyglot validation surface.")]
     public required IServiceProvider Services { get; init; }
 
     /// <summary>
@@ -530,6 +633,17 @@ public sealed class InputsDialogValidationContext
 
         input.ValidationErrors.Add(errorMessage);
         HasErrors = true;
+    }
+
+    /// <summary>
+    /// Adds a validation error for the input with the specified name.
+    /// </summary>
+    /// <param name="inputName">The name of the input to add a validation error for.</param>
+    /// <param name="errorMessage">The error message to add.</param>
+    [AspireExport("InputsDialogValidationContext.addValidationError", MethodName = "addValidationError")]
+    public void AddValidationError(string inputName, string errorMessage)
+    {
+        AddValidationError(Inputs[inputName], errorMessage);
     }
 }
 

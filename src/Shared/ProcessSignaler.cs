@@ -22,7 +22,7 @@ internal static partial class ProcessSignaler
 
         if (OperatingSystem.IsWindows())
         {
-            RequestGracefulShutdownWindows(pid, logger);
+            logger.LogDebug("Windows graceful process shutdown is handled by caller-specific process tree signaling.");
         }
         else
         {
@@ -102,22 +102,6 @@ internal static partial class ProcessSignaler
             logger.LogWarning("Could not gracefully stop Aspire application host process {Pid}; the error code from signal send operation was {ErrorCode}", pid, errno);
         }
     }
-
-    private const uint CtrlBreakEvent = 1;
-
-    private static void RequestGracefulShutdownWindows(int pid, ILogger logger)
-    {
-        var success = GenerateConsoleCtrlEvent(CtrlBreakEvent, (uint)pid);
-        if (!success)
-        {
-            // Best effort.
-            logger.LogWarning("Could not gracefully stop Aspire application host process {Pid}", pid);
-        }
-    }
-
-    [LibraryImport("kernel32.dll", SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static partial bool GenerateConsoleCtrlEvent(uint dwCtrlEvent, uint dwProcessGroupId);
 
     // "libc" here is a moniker for standard C library, which .NET maps to system C library on Unix-like systems.
     // See https://developers.redhat.com/blog/2019/03/25/using-net-pinvoke-for-linux-system-functions

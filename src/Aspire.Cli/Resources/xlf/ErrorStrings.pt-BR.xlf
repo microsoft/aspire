@@ -77,6 +77,11 @@
         <target state="translated">Não foi possível analisar a versão do pacote Aspire.Hosting.</target>
         <note />
       </trans-unit>
+      <trans-unit id="DotNetSdkUnavailableAppHostDiscoveryWarning">
+        <source>Warning: Required .NET SDK not found; .NET AppHost projects may be missing from results.</source>
+        <target state="new">Warning: Required .NET SDK not found; .NET AppHost projects may be missing from results.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ErrorDeletingConfiguration">
         <source>Error deleting configuration: {0}</source>
         <target state="translated">Erro ao excluir a configuração: {0}</target>
@@ -96,6 +101,11 @@
         <source>The Aspire extension token must be set if ASPIRE_EXTENSION_ENDPOINT is set. Please ensure that ASPIRE_EXTENSION_TOKEN is set</source>
         <target state="translated">O token de extensão Doam deve ser definido se ASPIRE_EXTENSION_ENDPOINT estiver definido. Verifique se o ASPIRE_EXTENSION_TOKEN está definido</target>
         <note>Do not localize ASPIRE_EXTENSION_TOKEN and ASPIRE_EXTENSION_ENDPOINT</note>
+      </trans-unit>
+      <trans-unit id="FailedToParsePackageSearchResults">
+        <source>Failed to parse package search results.</source>
+        <target state="new">Failed to parse package search results.</target>
+        <note />
       </trans-unit>
       <trans-unit id="FailedToParseTemplateVersionFromStdout">
         <source>Failed to parse template version from stdout.</source>

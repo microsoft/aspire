@@ -5,6 +5,7 @@
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Publishing;
@@ -15,7 +16,7 @@ internal sealed class DockerContainerRuntime : ContainerRuntimeBase<DockerContai
     {
     }
 
-    protected override string RuntimeExecutable => "docker";
+    protected override string RuntimeExecutable => KnownContainerRuntimes.Docker;
     public override string Name => "Docker";
     private async Task RunDockerBuildAsync(string contextPath, string dockerfilePath, ContainerImageBuildOptions? options, Dictionary<string, string?> buildArguments, Dictionary<string, BuildImageSecretValue> buildSecrets, string? stage, CancellationToken cancellationToken)
     {

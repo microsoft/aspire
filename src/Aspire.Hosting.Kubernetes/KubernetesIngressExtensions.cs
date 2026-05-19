@@ -2,8 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Kubernetes;
 
-namespace Aspire.Hosting.Kubernetes;
+namespace Aspire.Hosting;
 
 /// <summary>
 /// Provides extension methods for configuring Kubernetes Ingress resources in the Aspire application model.
@@ -188,7 +189,7 @@ public static class KubernetesIngressExtensions
     ///        .WithHostname("www.example.com");
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds a hostname to a Kubernetes Ingress")]
+    [AspireExport("withIngressHostname", MethodName = "withHostname", Description = "Adds a hostname to a Kubernetes Ingress")]
     public static IResourceBuilder<KubernetesIngressResource> WithHostname(
         this IResourceBuilder<KubernetesIngressResource> builder,
         string hostname)
@@ -225,7 +226,7 @@ public static class KubernetesIngressExtensions
     /// <param name="builder">The ingress resource builder.</param>
     /// <param name="secretName">The name of the Kubernetes <c>kubernetes.io/tls</c> Secret.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
-    [AspireExport(Description = "Configures TLS for a Kubernetes Ingress using a K8S secret")]
+    [AspireExport("withIngressTls", MethodName = "withTls", Description = "Configures TLS for a Kubernetes Ingress using a K8S secret")]
     public static IResourceBuilder<KubernetesIngressResource> WithTls(
         this IResourceBuilder<KubernetesIngressResource> builder,
         string secretName)
@@ -234,8 +235,7 @@ public static class KubernetesIngressExtensions
         ArgumentException.ThrowIfNullOrEmpty(secretName);
 
         builder.Resource.TlsConfigs.Add(new IngressTlsConfig(
-            SecretName: ReferenceExpression.Create($"{secretName}"),
-            Hosts: [.. builder.Resource.Hostnames]));
+            SecretName: ReferenceExpression.Create($"{secretName}")));
 
         return builder;
     }
@@ -255,8 +255,7 @@ public static class KubernetesIngressExtensions
         ArgumentNullException.ThrowIfNull(secretName);
 
         builder.Resource.TlsConfigs.Add(new IngressTlsConfig(
-            SecretName: ReferenceExpression.Create($"{secretName.Resource}"),
-            Hosts: [.. builder.Resource.Hostnames]));
+            SecretName: ReferenceExpression.Create($"{secretName.Resource}")));
 
         return builder;
     }
@@ -275,8 +274,7 @@ public static class KubernetesIngressExtensions
         var secretName = $"{builder.Resource.Name}-tls";
 
         builder.Resource.TlsConfigs.Add(new IngressTlsConfig(
-            SecretName: ReferenceExpression.Create($"{secretName}"),
-            Hosts: [.. builder.Resource.Hostnames]));
+            SecretName: ReferenceExpression.Create($"{secretName}")));
 
         return builder;
     }

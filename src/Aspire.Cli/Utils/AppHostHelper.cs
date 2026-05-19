@@ -95,6 +95,14 @@ internal static class AppHostHelper
         => BackchannelConstants.ComputeSocketPrefix(appHostPath, homeDirectory);
 
     /// <summary>
+    /// Computes the legacy (pre-normalization) hash for backward compatibility with older AppHosts.
+    /// </summary>
+    /// <param name="appHostPath">The full path to the AppHost project file or assembly.</param>
+    /// <returns>The legacy hash, or <c>null</c> if it is identical to the current hash.</returns>
+    internal static string? ComputeLegacyHash(string appHostPath)
+        => BackchannelConstants.ComputeLegacyHash(appHostPath);
+
+    /// <summary>
     /// Finds all socket files matching the given AppHost path.
     /// </summary>
     /// <param name="appHostPath">The full path to the AppHost project file or assembly.</param>

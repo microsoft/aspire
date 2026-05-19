@@ -103,6 +103,9 @@
     <trans-unit id="command.configureLaunchJson">
       <source xml:lang="en">Configure launch.json file</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourceCommandContinue">
+      <source xml:lang="en">Continue</source>
+    </trans-unit>
     <trans-unit id="configuration.aspire.enableAspireDashboardAutoLaunch">
       <source xml:lang="en">Controls what happens with the Aspire Dashboard when debugging starts.</source>
     </trans-unit>
@@ -123,6 +126,9 @@
     </trans-unit>
     <trans-unit id="walkthrough.getStarted.createProject.title">
       <source xml:lang="en">Create a new project</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourceCommandCustomChoiceDescription">
+      <source xml:lang="en">Custom value</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.dcpServerNotInitialized">
       <source xml:lang="en">DCP server not initialized - cannot forward debug output.</source>
@@ -160,6 +166,9 @@
     <trans-unit id="aspire-vscode.strings.doYouWantToSetDefaultApphost">
       <source xml:lang="en">Do you want to set {0} as the default AppHost for this workspace?</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourceCommandDontShowAgain">
+      <source xml:lang="en">Don&apos;t show again</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.dontShowAgainLabel">
       <source xml:lang="en">Don&apos;t show again</source>
     </trans-unit>
@@ -177,6 +186,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.processExceptionOccurred">
       <source xml:lang="en">Encountered an exception ({0}) while running the following command: {1}.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourceCommandInvalidNumber">
+      <source xml:lang="en">Enter a number using invariant culture, for example 1, -1.5, or 1e3.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.enterPipelineStep">
       <source xml:lang="en">Enter the pipeline step to execute</source>
@@ -340,6 +352,9 @@
     <trans-unit id="command.openAppHostSource">
       <source xml:lang="en">Open AppHost source</source>
     </trans-unit>
+    <trans-unit id="command.codeLensOpenDashboard">
+      <source xml:lang="en">Open Aspire Dashboard</source>
+    </trans-unit>
     <trans-unit id="command.openDashboard">
       <source xml:lang="en">Open Aspire Dashboard</source>
     </trans-unit>
@@ -405,6 +420,9 @@
     </trans-unit>
     <trans-unit id="walkthrough.getStarted.runApp.title">
       <source xml:lang="en">Run your app</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourceCommandArgumentsTitle">
+      <source xml:lang="en">Run {0}</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.runProject">
       <source xml:lang="en">Run {0}</source>
@@ -493,6 +511,9 @@
     <trans-unit id="extension.debug.step">
       <source xml:lang="en">The pipeline step name to execute when command is &apos;do&apos;</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourceCommandSecretWarning">
+      <source xml:lang="en">This command has secret arguments. Values are masked while you enter them, but they are passed to the Aspire CLI terminal and may be visible in terminal history or scrollback.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.fieldRequired">
       <source xml:lang="en">This field is required.</source>
     </trans-unit>
@@ -502,11 +523,20 @@
     <trans-unit id="command.update">
       <source xml:lang="en">Update integrations</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourceCommandCustomChoice">
+      <source xml:lang="en">Use &quot;{0}&quot;</source>
+    </trans-unit>
     <trans-unit id="configuration.aspire.dashboardBrowser.openExternalBrowser">
       <source xml:lang="en">Use the system default browser (cannot auto-close).</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourceCommandMaxLength">
+      <source xml:lang="en">Value must be {0} characters or fewer.</source>
+    </trans-unit>
     <trans-unit id="command.verifyCliInstalled">
       <source xml:lang="en">Verify Aspire CLI installation</source>
+    </trans-unit>
+    <trans-unit id="command.codeLensViewAppHostLogs">
+      <source xml:lang="en">View Aspire AppHost logs</source>
     </trans-unit>
     <trans-unit id="command.codeLensViewLogs">
       <source xml:lang="en">View Aspire resource logs</source>
@@ -534,6 +564,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.aspireRestoreFailed">
       <source xml:lang="en">aspire restore failed for {0}: {1}</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourceCommandArgumentInputTitle">
+      <source xml:lang="en">{0}: {1}</source>
     </trans-unit>
   </body></file>
 </xliff>

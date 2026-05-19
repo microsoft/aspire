@@ -18,6 +18,8 @@ Keep these points in mind:
 - In git worktrees or when another local instance may already be running, use `aspire start --isolated`.
 - If the CLI shape may have changed or the skill instructions look older than the local CLI, confirm the exact command form with `aspire --help` or the relevant subcommand help before executing.
 - To restart after AppHost changes, rerun the same start command. In a worktree, rerun `aspire start --isolated`.
+- Treat this as the AppHost-wide restart path. Do not use it as the default response to every resource implementation change while the AppHost is already running.
+- For one changed resource, keep the AppHost running and prefer `aspire resource <resource-name> <command>`, runtime watch/hot reload, dashboard actions, or IDE-managed debugging.
 - Use `aspire stop` only when the ask is explicitly to stop the app or clean up a running AppHost.
 - Avoid `aspire run` in normal agent workflows because it blocks the terminal.
 
@@ -44,6 +46,10 @@ Use these commands when multiple AppHosts may be running locally, when the AppHo
 
 ```bash
 aspire ps
+aspire integration list
+aspire integration list --format Json
+aspire integration search <query>
+aspire integration search <query> --format Json
 aspire add <package>
 aspire update
 aspire restore
@@ -53,6 +59,9 @@ Keep these points in mind:
 
 - Use `aspire ps` first when you need to discover which AppHost is already running.
 - If command arguments may differ across CLI versions, verify the current shape with `aspire <command> --help` before execution.
+- Use `aspire integration list` for read-only discovery when the user asks what integrations are available.
+- Use `aspire integration search <query>` when you need to find the right package name before mutating the AppHost.
+- Use `--format Json` with `integration list` or `integration search` when another tool needs structured integration discovery results.
 - Use `aspire add <package>` when the task is to add a supported integration or regenerate AppHost APIs.
 - Use `aspire update` when the ask is specifically to refresh AppHost package references through the supported CLI workflow.
 - Use `aspire restore` after pulls, cleans, or missing generated files when the AppHost needs its local support restored before running again.

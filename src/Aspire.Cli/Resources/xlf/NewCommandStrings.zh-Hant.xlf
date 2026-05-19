@@ -42,6 +42,16 @@
         <target state="needs-review-translation">要建立專案之名稱。</target>
         <note />
       </trans-unit>
+      <trans-unit id="NoChannelFoundMatching">
+        <source>No channel found matching '{0}'. Valid options are: {1}.</source>
+        <target state="new">No channel found matching '{0}'. Valid options are: {1}.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoPackageChannelsAvailable">
+        <source>No package channels are available.</source>
+        <target state="new">No package channels are available.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NonInteractiveTemplateRequired">
         <source>A template must be specified when running in non-interactive mode. Use 'aspire new &lt;template&gt;'.</source>
         <target state="new">A template must be specified when running in non-interactive mode. Use 'aspire new &lt;template&gt;'.</target>
@@ -50,6 +60,21 @@
       <trans-unit id="OutputArgumentDescription">
         <source>The output path for the project</source>
         <target state="needs-review-translation">專案的輸出路徑。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OutputDirectoryNotEmptyNonInteractive">
+        <source>The output directory '{0}' already exists and is not empty. Specify --output with a different location.</source>
+        <target state="new">The output directory '{0}' already exists and is not empty. Specify --output with a different location.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OutputDirectoryNotEmptyInteractive">
+        <source>The output directory '{0}' already exists and is not empty. Specify a different location.</source>
+        <target state="new">The output directory '{0}' already exists and is not empty. Specify a different location.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="OutputPathContainsInvalidCharacters">
+        <source>The output path '{0}' contains invalid characters.</source>
+        <target state="new">The output path '{0}' contains invalid characters.</target>
         <note />
       </trans-unit>
       <trans-unit id="ResolvingTemplateVersion">

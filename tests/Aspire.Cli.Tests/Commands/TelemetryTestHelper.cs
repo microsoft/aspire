@@ -2,7 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net;
+using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
@@ -124,5 +126,15 @@ internal static class TelemetryTestHelper
         services.Replace(ServiceDescriptor.Singleton<IHttpClientFactory>(new MockHttpClientFactory(handler)));
 
         return services.BuildServiceProvider();
+    }
+
+    internal static string FormatJson(string compactJson)
+    {
+        var node = JsonNode.Parse(compactJson);
+        return node!.ToJsonString(new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        });
     }
 }

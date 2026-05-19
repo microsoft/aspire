@@ -59,7 +59,7 @@ public class AzureCognitiveServicesProjectResource :
                     return Task.CompletedTask;
                 },
                 Resource = this,
-                DependsOnSteps = [AzureEnvironmentResource.PrepareResourcesStepName],
+                DependsOnSteps = [AzureEnvironmentResource.PrepareResourcesStepName, WellKnownPipelineSteps.ValidateComputeEnvironments],
                 RequiredBySteps = [WellKnownPipelineSteps.BeforeStart]
             };
             steps.Add(removeDefaultContainerRegistryStep);
@@ -219,11 +219,13 @@ public class AzureCognitiveServicesProjectResource :
     /// <summary>
     /// This is the encoding that the Microsoft Foundry web portal uses in their URLs, for some reason
     /// </summary>
+    // Foundry portal URLs use big-endian (RFC 4122) GUID encoding, not .NET's mixed-endian ToByteArray().
     internal static string EncodeSubscriptionId(string subscriptionId)
     {
         var guid = Guid.Parse(subscriptionId);
-        var encoded = Base64Url.EncodeToString(guid.ToByteArray());
-        return encoded.TrimEnd('=');
+        // Convert hex pairs from the canonical GUID string to bytes (preserves display order)
+        var bytes = Convert.FromHexString(guid.ToString("N"));
+        return Base64Url.EncodeToString(bytes).TrimEnd('=');
     }
 
     /// <summary>

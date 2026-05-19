@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.InternalTesting;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 using Spectre.Console;
@@ -20,8 +21,8 @@ public class ConsoleInteractionServiceTests
     private static readonly DirectoryInfo s_runtimeDirectory = s_tempRoot.CreateSubdirectory("runtimes");
     private static readonly DirectoryInfo s_logsDirectory = s_tempRoot.CreateSubdirectory("logs");
 
-    private static CliExecutionContext CreateExecutionContext(bool debugMode = false) =>
-        new(new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo("."), s_runtimeDirectory, s_logsDirectory, "test.log", debugMode: debugMode);
+    private static CliExecutionContext CreateExecutionContext(bool debugMode = false, string? logFilePath = null) =>
+        new(new DirectoryInfo("."), new DirectoryInfo("."), new DirectoryInfo("."), s_runtimeDirectory, s_logsDirectory, logFilePath ?? "test.log", debugMode: debugMode);
 
     private static ConsoleInteractionService CreateInteractionService(IAnsiConsole console, CliExecutionContext? executionContext = null, ICliHostEnvironment? hostEnvironment = null)
     {
@@ -205,6 +206,56 @@ public class ConsoleInteractionServiceTests
         Assert.Contains("Target Azure subscription", outputString);
         Assert.True(outputString.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length >= 3);
     }
+
+    [Theory]
+    [MemberData(nameof(DisplayMarkdown_BetweenPlainText_Data))]
+    public void DisplayMarkdown_BetweenPlainText_DoesNotInsertExtraEmptyLine(string markdown, string expectedOutput)
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output))
+        });
+
+        var interactionService = CreateInteractionService(console);
+
+        interactionService.DisplayPlainText("before markdown");
+        interactionService.DisplayMarkdown(markdown);
+        interactionService.DisplayPlainText("after markdown");
+
+        Assert.Equal(expectedOutput, output.ToString(), ignoreLineEndingDifferences: true);
+    }
+
+    public static TheoryData<string, string> DisplayMarkdown_BetweenPlainText_Data => new()
+    {
+        {
+            """
+            # Heading
+
+            This is a paragraph.
+            """,
+            """
+            before markdown
+            Heading
+
+            This is a paragraph.
+
+            after markdown
+
+            """
+        },
+        {
+            "**bold**",
+            """
+            before markdown
+            bold
+            after markdown
+
+            """
+        },
+    };
 
     [Fact]
     public async Task ShowStatusAsync_InDebugMode_DisplaysSubtleMessageInsteadOfSpinner()
@@ -427,6 +478,82 @@ public class ConsoleInteractionServiceTests
     }
 
     [Fact]
+    public void DisplayMessage_WithFileLinkMarkup_RendersClickableLinkWhenAllowMarkup()
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.Yes,
+            ColorSystem = ColorSystemSupport.TrueColor,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Capabilities.Links = true;
+        console.Profile.Width = int.MaxValue;
+
+        var logFilePath = Path.Combine(s_logsDirectory.FullName, "cli [dev team].log");
+        var interactionService = CreateInteractionService(console, CreateExecutionContext(logFilePath: logFilePath));
+
+        var fileLinkMarkup = MarkupHelpers.SafeFileLink(interactionService, logFilePath);
+        interactionService.DisplayMessage(
+            KnownEmojis.PageFacingUp,
+            $"See logs at {fileLinkMarkup}",
+            allowMarkup: true);
+
+        var outputString = output.ToString();
+        var fileUri = new Uri(Path.GetFullPath(logFilePath)).AbsoluteUri;
+        TerminalLinkAssert.ContainsLink(outputString, fileUri, logFilePath);
+    }
+
+    [Fact]
+    public void DisplayError_WithAllowMarkup_RendersMarkupAsIs()
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.Yes,
+            ColorSystem = ColorSystemSupport.TrueColor,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+        console.Profile.Capabilities.Links = true;
+        console.Profile.Width = int.MaxValue;
+
+        var logFilePath = Path.Combine(s_logsDirectory.FullName, "cli [dev team].log");
+        var interactionService = CreateInteractionService(console, CreateExecutionContext(logFilePath: logFilePath));
+
+        var fileLinkMarkup = MarkupHelpers.SafeFileLink(interactionService, logFilePath);
+        interactionService.DisplayError($"Build failed. Logs: {fileLinkMarkup}", allowMarkup: true);
+
+        var outputString = output.ToString();
+        var fileUri = new Uri(Path.GetFullPath(logFilePath)).AbsoluteUri;
+        Assert.Contains("Build failed.", outputString);
+        TerminalLinkAssert.ContainsLink(outputString, fileUri, logFilePath);
+    }
+
+    [Fact]
+    public void DisplayError_WithoutAllowMarkup_EscapesBrackets()
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(output))
+        });
+
+        var interactionService = CreateInteractionService(console);
+
+        // Bracket characters in the error message would normally break Spectre markup parsing,
+        // but DisplayError escapes them by default.
+        var message = "Build failed for [Project Alpha].";
+        var exception = Record.Exception(() => interactionService.DisplayError(message));
+
+        Assert.Null(exception);
+        Assert.Contains("Build failed for [Project Alpha].", output.ToString());
+    }
+
+    [Fact]
     public void DisplayVersionUpdateNotification_WithMarkupCharactersInVersion_DoesNotThrow()
     {
         // Arrange
@@ -481,6 +608,63 @@ public class ConsoleInteractionServiceTests
         // Should contain the original text (not double-escaped like [[Prod]])
         Assert.Contains("[Prod]", outputString);
         Assert.DoesNotContain("[[Prod]]", outputString);
+    }
+
+    [Fact]
+    public void DisplayError_WritesToStderr_RegardlessOfConsoleSetting()
+    {
+        var stdoutOutput = new StringBuilder();
+        var stderrOutput = new StringBuilder();
+        var stdoutConsole = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(stdoutOutput))
+        });
+        var stderrConsole = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(stderrOutput))
+        });
+
+        var executionContext = CreateExecutionContext();
+        var consoleEnvironment = new ConsoleEnvironment(stdoutConsole, stderrConsole);
+        var interactionService = new ConsoleInteractionService(consoleEnvironment, executionContext, TestHelpers.CreateInteractiveHostEnvironment(), NullLoggerFactory.Instance);
+
+        // Console defaults to Standard (stdout), but errors should still go to stderr
+        interactionService.DisplayError("Something went wrong");
+
+        Assert.Empty(stdoutOutput.ToString());
+        Assert.Contains("Something went wrong", stderrOutput.ToString());
+    }
+
+    [Fact]
+    public void DisplayMessage_WritesToStdout_WhenConsoleIsStandard()
+    {
+        var stdoutOutput = new StringBuilder();
+        var stderrOutput = new StringBuilder();
+        var stdoutConsole = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(stdoutOutput))
+        });
+        var stderrConsole = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.No,
+            ColorSystem = ColorSystemSupport.NoColors,
+            Out = new AnsiConsoleOutput(new StringWriter(stderrOutput))
+        });
+
+        var executionContext = CreateExecutionContext();
+        var consoleEnvironment = new ConsoleEnvironment(stdoutConsole, stderrConsole);
+        var interactionService = new ConsoleInteractionService(consoleEnvironment, executionContext, TestHelpers.CreateInteractiveHostEnvironment(), NullLoggerFactory.Instance);
+
+        interactionService.DisplayMessage(KnownEmojis.Information, "Status update");
+
+        Assert.Contains("Status update", stdoutOutput.ToString());
+        Assert.Empty(stderrOutput.ToString());
     }
 
     [Fact]
@@ -881,6 +1065,40 @@ public class ConsoleInteractionServiceTests
         Assert.Equal(defaultValue, result);
     }
 
+    [Theory]
+    [InlineData(true, "y")]
+    [InlineData(true, "Y")]
+    [InlineData(false, "y")]
+    [InlineData(false, "Y")]
+    public async Task ConfirmAsync_WhenUserPressesYWithoutEnter_ReturnsTrue(bool defaultValue, string input)
+    {
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, input);
+        var interactionService = CreateInteractionService(console);
+
+        var result = await interactionService.PromptConfirmAsync("Proceed?", PromptBinding.CreateDefault(defaultValue), cancellationToken: CancellationToken.None);
+
+        Assert.True(result);
+        Assert.EndsWith($"{input}\n", output.ToString().Replace("\r\n", "\n", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(true, "n")]
+    [InlineData(true, "N")]
+    [InlineData(false, "n")]
+    [InlineData(false, "N")]
+    public async Task ConfirmAsync_WhenUserPressesNWithoutEnter_ReturnsFalse(bool defaultValue, string input)
+    {
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, input);
+        var interactionService = CreateInteractionService(console);
+
+        var result = await interactionService.PromptConfirmAsync("Proceed?", PromptBinding.CreateDefault(defaultValue), cancellationToken: CancellationToken.None);
+
+        Assert.False(result);
+        Assert.EndsWith($"{input}\n", output.ToString().Replace("\r\n", "\n", StringComparison.Ordinal));
+    }
+
     [Fact]
     public async Task PromptForStringAsync_CliProvidedValue_RunsValidator()
     {
@@ -972,6 +1190,41 @@ public class ConsoleInteractionServiceTests
         var result = await interactionService.PromptConfirmAsync("Proceed?", binding: binding, cancellationToken: CancellationToken.None);
 
         Assert.True(result);
+    }
+
+    [Fact]
+    public async Task ConfirmAsync_NonInteractive_WithSeparateNonInteractiveDefault_ReturnsNonInteractiveDefault()
+    {
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, "");
+        var interactionService = CreateInteractionService(console, hostEnvironment: TestHelpers.CreateNonInteractiveHostEnvironment());
+
+        var option = new System.CommandLine.Option<bool?>("--confirm");
+        var command = new System.CommandLine.RootCommand { option };
+        var parseResult = command.Parse("");
+        var binding = PromptBinding.CreateBoolConfirm(parseResult, option, interactiveDefault: true, nonInteractiveDefault: false);
+
+        var result = await interactionService.PromptConfirmAsync("Proceed?", binding: binding, cancellationToken: CancellationToken.None);
+
+        Assert.False(result);
+    }
+
+    [Fact]
+    public async Task ConfirmAsync_Interactive_WithSeparateNonInteractiveDefault_UsesInteractiveDefault()
+    {
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, "\n");
+        var interactionService = CreateInteractionService(console);
+
+        var option = new System.CommandLine.Option<bool?>("--confirm");
+        var command = new System.CommandLine.RootCommand { option };
+        var parseResult = command.Parse("");
+        var binding = PromptBinding.CreateBoolConfirm(parseResult, option, interactiveDefault: true, nonInteractiveDefault: false);
+
+        var result = await interactionService.PromptConfirmAsync("Proceed?", binding: binding, cancellationToken: CancellationToken.None);
+
+        Assert.True(result);
+        Assert.Contains("[Y/n]", output.ToString());
     }
 
     [Fact]
@@ -1109,7 +1362,7 @@ public class ConsoleInteractionServiceTests
         var binding = PromptBinding.Create(parseResult, option);
 
         var ex = await Assert.ThrowsAsync<NonInteractiveException>(() =>
-            interactionService.PromptForSelectionAsync("Select:", choices, x => x, binding, CancellationToken.None));
+            interactionService.PromptForSelectionAsync("Select:", choices, x => x, binding, cancellationToken: CancellationToken.None));
 
         var outputString = output.ToString();
         Assert.Contains("option1", outputString);
@@ -1152,7 +1405,7 @@ public class ConsoleInteractionServiceTests
         var parseResult = command.Parse("");
         var binding = PromptBinding.Create(parseResult, option, "option2");
 
-        var result = await interactionService.PromptForSelectionAsync("Select:", choices, x => x, binding, CancellationToken.None);
+        var result = await interactionService.PromptForSelectionAsync("Select:", choices, x => x, binding, cancellationToken: CancellationToken.None);
 
         Assert.Equal("option2", result);
     }
@@ -1170,7 +1423,7 @@ public class ConsoleInteractionServiceTests
         var parseResult = command.Parse("--choice option1");
         var binding = PromptBinding.Create(parseResult, option);
 
-        var result = await interactionService.PromptForSelectionAsync("Select:", choices, x => x, binding, CancellationToken.None);
+        var result = await interactionService.PromptForSelectionAsync("Select:", choices, x => x, binding, cancellationToken: CancellationToken.None);
 
         Assert.Equal("option1", result);
     }
@@ -1208,13 +1461,13 @@ public class ConsoleInteractionServiceTests
     }
 
     [Fact]
-    public void PromptBinding_BoolAsSelection_SymbolDisplayName_IsCorrect()
+    public void PromptBinding_BoolConfirm_SymbolDisplayName_IsCorrect()
     {
         var option = new System.CommandLine.Option<bool?>("--include");
         var command = new System.CommandLine.RootCommand { option };
         var parseResult = command.Parse("--include");
 
-        var binding = PromptBinding.CreateBoolAsSelection(parseResult, option, "Yes", "No");
+        var binding = PromptBinding.CreateBoolConfirm(parseResult, option, defaultValue: false);
 
         Assert.Equal("'--include'", binding.SymbolDisplayName);
     }
@@ -1226,6 +1479,7 @@ public class ConsoleInteractionServiceTests
         var updated = binding.WithDefault("new-value");
 
         Assert.Equal("new-value", updated.DefaultValue);
+        Assert.Equal("new-value", updated.NonInteractiveDefaultValue);
         Assert.True(updated.HasExplicitDefault);
     }
 
@@ -1277,7 +1531,83 @@ public class ConsoleInteractionServiceTests
         var binding = PromptBinding.Create(parseResult, option);
 
         await Assert.ThrowsAsync<NonInteractiveException>(() =>
-            interactionService.PromptForSelectionAsync("Select:", choices, x => x, binding, CancellationToken.None));
+            interactionService.PromptForSelectionAsync("Select:", choices, x => x, binding, cancellationToken: CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task PromptForSelectionAsync_BindingProvided_DoesNotEchoSelection()
+    {
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, "");
+        var interactionService = CreateInteractionService(console);
+        var choices = new[] { "option1", "option2" };
+
+        var option = new System.CommandLine.Option<string?>("--choice");
+        var command = new System.CommandLine.RootCommand { option };
+        var parseResult = command.Parse("--choice option1");
+        var binding = PromptBinding.Create(parseResult, option);
+
+        var result = await interactionService.PromptForSelectionAsync("Select:", choices, x => x, binding, cancellationToken: CancellationToken.None);
+
+        Assert.Equal("option1", result);
+        Assert.Empty(output.ToString());
+    }
+
+    [Fact]
+    public async Task PromptForSelectionsAsync_BindingProvided_DoesNotEchoSelection()
+    {
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, "");
+        var interactionService = CreateInteractionService(console);
+        var choices = new[] { "alpha", "beta", "gamma" };
+
+        var option = new System.CommandLine.Option<string?>("--items");
+        var command = new System.CommandLine.RootCommand { option };
+        var parseResult = command.Parse("--items alpha,gamma");
+        var binding = PromptBinding.Create(parseResult, option);
+
+        var result = await interactionService.PromptForSelectionsAsync("Select:", choices, x => x, binding: binding, cancellationToken: CancellationToken.None);
+
+        Assert.Equal(2, result.Count);
+        Assert.Empty(output.ToString());
+    }
+
+    [Fact]
+    public async Task PromptForSelectionAsync_NonInteractiveDefault_DoesNotEchoSelection()
+    {
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, "");
+        var interactionService = CreateInteractionService(console, hostEnvironment: TestHelpers.CreateNonInteractiveHostEnvironment());
+        var choices = new[] { "option1", "option2" };
+
+        var option = new System.CommandLine.Option<string?>("--choice");
+        var command = new System.CommandLine.RootCommand { option };
+        var parseResult = command.Parse("");
+        var binding = PromptBinding.Create(parseResult, option, "option2");
+
+        var result = await interactionService.PromptForSelectionAsync("Select:", choices, x => x, binding, cancellationToken: CancellationToken.None);
+
+        Assert.Equal("option2", result);
+        Assert.Empty(output.ToString());
+    }
+
+    [Fact]
+    public async Task PromptForSelectionsAsync_NonInteractiveDefault_DoesNotEchoSelection()
+    {
+        var output = new StringBuilder();
+        var console = CreateInteractiveConsoleWithInput(output, "");
+        var interactionService = CreateInteractionService(console, hostEnvironment: TestHelpers.CreateNonInteractiveHostEnvironment());
+        var choices = new[] { "alpha", "beta", "gamma" };
+
+        var option = new System.CommandLine.Option<string?>("--items");
+        var command = new System.CommandLine.RootCommand { option };
+        var parseResult = command.Parse("");
+        var binding = PromptBinding.Create(parseResult, option, "alpha,beta");
+
+        var result = await interactionService.PromptForSelectionsAsync("Select:", choices, x => x, binding: binding, cancellationToken: CancellationToken.None);
+
+        Assert.Equal(2, result.Count);
+        Assert.Empty(output.ToString());
     }
 
     private sealed record TestItem(string Id, string Display)

@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.CommandLine;
-using System.CommandLine.Help;
 using System.Globalization;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
@@ -12,7 +11,7 @@ using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Commands;
 
-internal sealed class CacheCommand : BaseCommand
+internal sealed class CacheCommand : ParentCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.ToolsAndConfiguration;
 
@@ -24,14 +23,6 @@ internal sealed class CacheCommand : BaseCommand
         Subcommands.Add(clearCommand);
     }
 
-    protected override bool UpdateNotificationsEnabled => false;
-
-    protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
-    {
-        new HelpAction().Invoke(parseResult);
-        return Task.FromResult(ExitCodeConstants.InvalidCommand);
-    }
-
     internal sealed class ClearCommand : BaseCommand
     {
         public ClearCommand(IInteractionService interactionService, IFeatures features, ICliUpdateNotifier updateNotifier, CliExecutionContext executionContext, AspireCliTelemetry telemetry)
@@ -41,7 +32,7 @@ internal sealed class CacheCommand : BaseCommand
 
         protected override bool UpdateNotificationsEnabled => false;
 
-        protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+        protected override Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
         {
             try
             {
@@ -64,14 +55,14 @@ internal sealed class CacheCommand : BaseCommand
                     InteractionService.DisplaySuccess(CacheCommandStrings.CacheCleared);
                 }
 
-                return Task.FromResult(ExitCodeConstants.Success);
+                return Task.FromResult(CommandResult.Success());
             }
             catch (Exception ex)
             {
                 var errorMessage = string.Format(CultureInfo.CurrentCulture, CacheCommandStrings.CacheClearFailed, ex.Message);
                 Telemetry.RecordError(errorMessage, ex);
                 InteractionService.DisplayError(errorMessage);
-                return Task.FromResult(ExitCodeConstants.InvalidCommand);
+                return Task.FromResult(CommandResult.Failure(CliExitCodes.InvalidCommand));
             }
         }
 

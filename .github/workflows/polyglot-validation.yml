@@ -11,6 +11,9 @@ on:
         required: false
         type: string
 
+env:
+  POLYGLOT_ASPIRE_CLI_CHANNEL: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'daily' }}
+
 jobs:
   validate_python:
     name: Python SDK Validation
@@ -62,6 +65,7 @@ jobs:
       - name: Run Python SDK validation
         run: |
           docker run --rm \
+            -e ASPIRE_CLI_CHANNEL="${POLYGLOT_ASPIRE_CLI_CHANNEL}" \
             -v "${{ github.workspace }}:/workspace" \
             -v /var/run/docker.sock:/var/run/docker.sock \
             polyglot-python
@@ -109,13 +113,14 @@ jobs:
       - name: Build Go validation image
         run: |
           docker build \
-            -f .github/workflows/polyglot-validation/Dockerfile.go \
+            -f .github/workflows/polyglot-validation/Dockerfile.golang \
             -t polyglot-go \
             .github/workflows/polyglot-validation/
 
       - name: Run Go SDK validation
         run: |
           docker run --rm \
+            -e ASPIRE_CLI_CHANNEL="${POLYGLOT_ASPIRE_CLI_CHANNEL}" \
             -v "${{ github.workspace }}:/workspace" \
             -v /var/run/docker.sock:/var/run/docker.sock \
             polyglot-go
@@ -170,6 +175,7 @@ jobs:
       - name: Run Java SDK validation
         run: |
           docker run --rm \
+            -e ASPIRE_CLI_CHANNEL="${POLYGLOT_ASPIRE_CLI_CHANNEL}" \
             -v "${{ github.workspace }}:/workspace" \
             -v /var/run/docker.sock:/var/run/docker.sock \
             polyglot-java
@@ -226,13 +232,18 @@ jobs:
       - name: Run Rust SDK validation
         run: |
           docker run --rm \
+            -e ASPIRE_CLI_CHANNEL="${POLYGLOT_ASPIRE_CLI_CHANNEL}" \
             -v "${{ github.workspace }}:/workspace" \
             -v /var/run/docker.sock:/var/run/docker.sock \
             polyglot-rust
 
   validate_typescript:
-    name: TypeScript SDK Validation
+    name: TypeScript SDK Validation (Node ${{ matrix.node-version }}.x)
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ${{ fromJson(github.event_name == 'pull_request' && '[24]' || '[22,24]') }}
     steps:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -273,16 +284,18 @@ jobs:
       - name: Build TypeScript validation image
         run: |
           docker build \
+            --build-arg NODE_VERSION=${{ matrix.node-version }} \
             -f .github/workflows/polyglot-validation/Dockerfile.typescript \
-            -t polyglot-typescript \
+            -t polyglot-typescript-node-${{ matrix.node-version }} \
             .github/workflows/polyglot-validation/
 
       - name: Run TypeScript SDK validation
         run: |
           docker run --rm \
+            -e ASPIRE_CLI_CHANNEL="${POLYGLOT_ASPIRE_CLI_CHANNEL}" \
             -v "${{ github.workspace }}:/workspace" \
             -v /var/run/docker.sock:/var/run/docker.sock \
-            polyglot-typescript
+            polyglot-typescript-node-${{ matrix.node-version }}
 
   results:
     if: always()

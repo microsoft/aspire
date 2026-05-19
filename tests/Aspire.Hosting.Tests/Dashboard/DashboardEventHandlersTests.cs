@@ -48,21 +48,17 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         var model = new DistributedApplicationModel(new ResourceCollection());
         await hook.OnBeforeStartAsync(new BeforeStartEvent(new TestServiceProvider(), model), CancellationToken.None).DefaultTimeout();
 
-        await resourceNotificationService.PublishUpdateAsync(model.Resources.Single(), s => s).DefaultTimeout();
-
-        string resourceId = default!;
-        await foreach (var item in resourceLoggerService.WatchAnySubscribersAsync().DefaultTimeout())
-        {
-            if (item.Name.StartsWith(KnownResourceNames.AspireDashboard) && item.AnySubscribers)
-            {
-                resourceId = item.Name;
-                break;
-            }
-        }
+        // Get the resource ID from the DCP instances annotation that was added during OnBeforeStartAsync.
+        var dashboardResource = model.Resources.Single(r => string.Equals(r.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName));
+        var resourceId = dashboardResource.GetResolvedResourceNames()[0];
 
         // Act
+        // Add the log before publishing the notification. The log is stored in-memory and will be
+        // replayed when WatchResourceLogsAsync subscribes after receiving the notification.
         var dashboardLoggerState = resourceLoggerService.GetResourceLoggerState(resourceId);
         dashboardLoggerState.AddLog(LogEntry.Create(timestamp, logMessage, isErrorMessage: false), inMemorySource: true);
+
+        await resourceNotificationService.PublishUpdateAsync(dashboardResource, s => s).DefaultTimeout();
 
         // Assert
         while (true)

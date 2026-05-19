@@ -13,8 +13,9 @@ namespace Aspire.Cli.Processes;
 internal static partial class DetachedProcessLauncher
 {
     /// <summary>
-    /// Windows implementation using CreateProcess with STARTUPINFOEX and
-    /// PROC_THREAD_ATTRIBUTE_HANDLE_LIST to prevent handle inheritance to grandchildren.
+    /// Windows implementation using CreateProcess with CREATE_NEW_CONSOLE,
+    /// STARTUPINFOEX, SW_HIDE, and PROC_THREAD_ATTRIBUTE_HANDLE_LIST
+    /// to detach from the launching console and prevent handle inheritance to grandchildren.
     /// </summary>
     [SupportedOSPlatform("windows")]
     private static Process StartWindows(string fileName, IReadOnlyList<string> arguments, string workingDirectory, Func<string, bool>? shouldRemoveEnvironmentVariable, IReadOnlyDictionary<string, string>? additionalEnvironmentVariables)
@@ -82,12 +83,14 @@ internal static partial class DetachedProcessLauncher
                     si.hStdOutput = nulRawHandle;
                     si.hStdError = nulRawHandle;
                     si.lpAttributeList = attrList;
+                    // CREATE_NO_WINDOW is ignored with CREATE_NEW_CONSOLE; hide the independent
+                    // console through STARTUPINFO instead.
                     si.wShowWindow = ShowWindowHide;
 
                     // Build the command line string: "fileName" arg1 arg2 ...
                     var commandLine = BuildCommandLine(fileName, arguments);
 
-                    var flags = CreateUnicodeEnvironment | ExtendedStartupInfoPresent | CreateNewProcessGroup;
+                    var flags = WindowsDetachedProcessCreationFlags;
 
                     // Build a custom environment block if variables need to be removed or added.
                     // CreateProcessW with lpEnvironment=nint.Zero inherits the parent's
@@ -307,7 +310,9 @@ internal static partial class DetachedProcessLauncher
     private const uint StartfUseShowWindow = 0x00000001;
     private const uint CreateUnicodeEnvironment = 0x00000400;
     private const uint ExtendedStartupInfoPresent = 0x00080000;
-    private const uint CreateNewProcessGroup = 0x00000200;
+    private const uint CreateNewConsole = 0x00000010;
+    private const uint WindowsDetachedProcessCreationFlags =
+        CreateUnicodeEnvironment | ExtendedStartupInfoPresent | CreateNewConsole;
     private const ushort ShowWindowHide = 0x0000;
     private static readonly nint s_procThreadAttributeHandleList = (nint)0x00020002;
 

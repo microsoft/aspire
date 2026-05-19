@@ -61,6 +61,15 @@ export const errorFetchingAppHosts = (error: string) => vscode.l10n.t('Error fet
 export const resourcesGroupLabel = vscode.l10n.t('Resources');
 export const noCommandsAvailable = vscode.l10n.t('No commands available for this resource.');
 export const selectCommandPlaceholder = vscode.l10n.t('Select a command to execute');
+export const resourceCommandArgumentsTitle = (command: string) => vscode.l10n.t('Run {0}', command);
+export const resourceCommandArgumentInputTitle = (command: string, input: string) => vscode.l10n.t('{0}: {1}', command, input);
+export const resourceCommandCustomChoice = (value: string) => vscode.l10n.t('Use "{0}"', value);
+export const resourceCommandCustomChoiceDescription = vscode.l10n.t('Custom value');
+export const resourceCommandSecretWarning = vscode.l10n.t('This command has secret arguments. Values are masked while you enter them, but they are passed to the Aspire CLI terminal and may be visible in terminal history or scrollback.');
+export const resourceCommandContinue = vscode.l10n.t('Continue');
+export const resourceCommandDontShowAgain = vscode.l10n.t("Don't show again");
+export const resourceCommandInvalidNumber = vscode.l10n.t('Enter a number using invariant culture, for example 1, -1.5, or 1e3.');
+export const resourceCommandMaxLength = (length: number) => vscode.l10n.t('Value must be {0} characters or fewer.', length);
 export const selectDashboardPlaceholder = vscode.l10n.t('Select a dashboard to open');
 export const workspaceAppHostLabel = vscode.l10n.t('Workspace AppHost');
 export const resourceCountDescription = (count: number) => vscode.l10n.t('({0} resources)', count);
@@ -110,22 +119,27 @@ export const enterPipelineStep = vscode.l10n.t('Enter the pipeline step to execu
 export const appHostSourceNotFound = vscode.l10n.t('Could not determine the AppHost source file to open.');
 export const appHostSourceOpenFailed = (path: string) => vscode.l10n.t('Failed to open AppHost source file: {0}', path);
 
-// CodeLens strings
-export const codeLensDebugPipelineStep = vscode.l10n.t('$(bug) Debug pipeline step');
-export const codeLensResourceRunning = vscode.l10n.t('$(pass) Running');
-export const codeLensResourceRunningWarning = vscode.l10n.t('$(warning) Running');
-export const codeLensResourceRunningError = vscode.l10n.t('$(error) Running');
-export const codeLensResourceStarting = vscode.l10n.t('$(loading~spin) Starting');
-export const codeLensResourceStopping = vscode.l10n.t('$(loading~spin) Stopping');
-export const codeLensResourceNotStarted = vscode.l10n.t('$(circle-outline) Not Started');
-export const codeLensResourceWaiting = vscode.l10n.t('$(loading~spin) Waiting');
-export const codeLensResourceStopped = vscode.l10n.t('$(circle-outline) Stopped');
-export const codeLensResourceStoppedWithExitCode = (exitCode: number) => vscode.l10n.t('$(circle-outline) Stopped (Exit Code: {0})', exitCode);
-export const codeLensResourceStoppedError = vscode.l10n.t('$(error) Stopped');
-export const codeLensResourceStoppedErrorWithExitCode = (exitCode: number) => vscode.l10n.t('$(error) Stopped (Exit Code: {0})', exitCode);
-export const codeLensResourceError = vscode.l10n.t('$(error) Error');
-export const codeLensRestart = vscode.l10n.t('$(debug-restart) Restart');
-export const codeLensStop = vscode.l10n.t('$(debug-stop) Stop');
-export const codeLensStart = vscode.l10n.t('$(debug-start) Start');
-export const codeLensViewLogs = vscode.l10n.t('$(output) Logs');
-export const codeLensCommand = (name: string) => vscode.l10n.t('$(terminal) {0}', name);
+// CodeLens strings.
+// The "\u200A" between the codicon and the label is U+200A HAIR SPACE; it adds
+// roughly one extra pixel of breathing room between the icon and the text in the
+// CodeLens title. The CodeLens API exposes no other typography control.
+export const codeLensDebugPipelineStep = vscode.l10n.t('$(bug)\u200A Debug pipeline step');
+export const codeLensResourceRunning = vscode.l10n.t('$(pass)\u200A Running');
+export const codeLensResourceRunningWarning = vscode.l10n.t('$(warning)\u200A Running');
+export const codeLensResourceRunningError = vscode.l10n.t('$(error)\u200A Running');
+export const codeLensResourceStarting = vscode.l10n.t('$(loading~spin)\u200A Starting');
+export const codeLensResourceStopping = vscode.l10n.t('$(loading~spin)\u200A Stopping');
+export const codeLensResourceNotStarted = vscode.l10n.t('$(circle-outline)\u200A Not Started');
+export const codeLensResourceWaiting = vscode.l10n.t('$(loading~spin)\u200A Waiting');
+export const codeLensResourceStopped = vscode.l10n.t('$(circle-outline)\u200A Stopped');
+export const codeLensResourceStoppedWithExitCode = (exitCode: number) => vscode.l10n.t('$(circle-outline)\u200A Stopped (Exit Code: {0})', exitCode);
+export const codeLensResourceStoppedError = vscode.l10n.t('$(error)\u200A Stopped');
+export const codeLensResourceStoppedErrorWithExitCode = (exitCode: number) => vscode.l10n.t('$(error)\u200A Stopped (Exit Code: {0})', exitCode);
+export const codeLensResourceError = vscode.l10n.t('$(error)\u200A Error');
+export const codeLensRestart = vscode.l10n.t('$(debug-restart)\u200A Restart');
+export const codeLensStop = vscode.l10n.t('$(debug-stop)\u200A Stop');
+export const codeLensStart = vscode.l10n.t('$(debug-start)\u200A Start');
+export const codeLensViewLogs = vscode.l10n.t('$(output)\u200A Logs');
+export const codeLensCommand = (name: string) => vscode.l10n.t('$(terminal)\u200A {0}', name);
+export const codeLensOpenDashboard = vscode.l10n.t('$(dashboard)\u200A Open Dashboard');
+export const codeLensViewAppHostLogs = vscode.l10n.t('$(output)\u200A View Logs');

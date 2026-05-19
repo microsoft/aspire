@@ -2,8 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Kubernetes;
 
-namespace Aspire.Hosting.Kubernetes;
+namespace Aspire.Hosting;
 
 /// <summary>
 /// Provides extension methods for configuring Kubernetes Gateway API resources in the Aspire application model.
@@ -164,7 +165,7 @@ public static class KubernetesGatewayExtensions
     /// <param name="builder">The gateway resource builder.</param>
     /// <param name="hostname">The hostname to match (e.g., <c>"api.example.com"</c>).</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
-    [AspireExport(Description = "Adds a hostname to a Kubernetes Gateway")]
+    [AspireExport("withGatewayHostname", MethodName = "withHostname", Description = "Adds a hostname to a Kubernetes Gateway")]
     public static IResourceBuilder<KubernetesGatewayResource> WithHostname(
         this IResourceBuilder<KubernetesGatewayResource> builder,
         string hostname)
@@ -203,7 +204,7 @@ public static class KubernetesGatewayExtensions
     /// <param name="builder">The gateway resource builder.</param>
     /// <param name="secretName">The name of the Kubernetes <c>kubernetes.io/tls</c> Secret.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
-    [AspireExport(Description = "Configures TLS on a Kubernetes Gateway listener")]
+    [AspireExport("withGatewayTls", MethodName = "withTls", Description = "Configures TLS on a Kubernetes Gateway listener")]
     public static IResourceBuilder<KubernetesGatewayResource> WithTls(
         this IResourceBuilder<KubernetesGatewayResource> builder,
         string secretName)
@@ -212,8 +213,7 @@ public static class KubernetesGatewayExtensions
         ArgumentException.ThrowIfNullOrEmpty(secretName);
 
         builder.Resource.TlsConfigs.Add(new GatewayTlsConfig(
-            SecretName: ReferenceExpression.Create($"{secretName}"),
-            Hosts: [.. builder.Resource.Hostnames]));
+            SecretName: ReferenceExpression.Create($"{secretName}")));
 
         return builder;
     }
@@ -233,8 +233,7 @@ public static class KubernetesGatewayExtensions
         ArgumentNullException.ThrowIfNull(secretName);
 
         builder.Resource.TlsConfigs.Add(new GatewayTlsConfig(
-            SecretName: ReferenceExpression.Create($"{secretName.Resource}"),
-            Hosts: [.. builder.Resource.Hostnames]));
+            SecretName: ReferenceExpression.Create($"{secretName.Resource}")));
 
         return builder;
     }
@@ -253,8 +252,7 @@ public static class KubernetesGatewayExtensions
         var secretName = $"{builder.Resource.Name}-tls";
 
         builder.Resource.TlsConfigs.Add(new GatewayTlsConfig(
-            SecretName: ReferenceExpression.Create($"{secretName}"),
-            Hosts: [.. builder.Resource.Hostnames]));
+            SecretName: ReferenceExpression.Create($"{secretName}")));
 
         return builder;
     }
@@ -312,4 +310,3 @@ public static class KubernetesGatewayExtensions
         return builder;
     }
 }
-

@@ -3,7 +3,7 @@
   <file datatype="xml" source-language="en" target-language="ko" original="../DoCommandStrings.resx">
     <body>
       <trans-unit id="Description">
-        <source>Execute a specific pipeline step and its dependencies (Preview)</source>
+        <source>Execute a specific pipeline step and its dependencies</source>
         <target state="needs-review-translation">특정 파이프라인 단계와 그에 필요한 종속 항목을 실행하세요. (미리 보기)</target>
         <note />
       </trans-unit>

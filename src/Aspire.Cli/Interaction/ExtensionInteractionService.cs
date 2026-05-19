@@ -252,7 +252,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService
     }
 
     public async Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter,
-        PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull
+        PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
     {
         var (wasProvided, value, _) = PromptBinding.Resolve(binding);
         if (wasProvided && value is not null)
@@ -285,12 +285,12 @@ internal class ExtensionInteractionService : IExtensionInteractionService
         }
         else
         {
-            return await _consoleInteractionService.PromptForSelectionAsync(promptText, choices, choiceFormatter, binding, cancellationToken);
+            return await _consoleInteractionService.PromptForSelectionAsync(promptText, choices, choiceFormatter, binding, echoSelected, cancellationToken);
         }
     }
 
     public async Task<IReadOnlyList<T>> PromptForSelectionsAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter,
-        IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default) where T : notnull
+        IEnumerable<T>? preSelected = null, bool optional = false, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
     {
         var (wasProvided, value, _) = PromptBinding.Resolve(binding);
         if (wasProvided && value is not null)
@@ -325,7 +325,7 @@ internal class ExtensionInteractionService : IExtensionInteractionService
         }
         else
         {
-            return await _consoleInteractionService.PromptForSelectionsAsync(promptText, choices, choiceFormatter, preSelected, optional, binding, cancellationToken);
+            return await _consoleInteractionService.PromptForSelectionsAsync(promptText, choices, choiceFormatter, preSelected, optional, binding, echoSelected, cancellationToken);
         }
     }
 
@@ -337,18 +337,29 @@ internal class ExtensionInteractionService : IExtensionInteractionService
         return _consoleInteractionService.DisplayIncompatibleVersionError(ex, appHostHostingSdkVersion);
     }
 
-    public void DisplayError(string errorMessage)
+    public void DisplayError(string errorMessage, bool allowMarkup = false)
     {
-        var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.DisplayErrorAsync(errorMessage.RemoveSpectreFormatting(), _cancellationToken));
+        // Serialize the local console write onto the same channel as the backchannel call so
+        // it stays ordered with prior queued operations (e.g. DisplayLines). Otherwise the
+        // synchronous Spectre write would land in the IDE debug console (via stdout/stderr
+        // capture) before earlier asynchronous DisplayLines RPCs had flushed, producing
+        // out-of-order output like an error message preceding the lines that explain it.
+        var result = _extensionTaskChannel.Writer.TryWrite(async () =>
+        {
+            await Backchannel.DisplayErrorAsync(errorMessage.RemoveSpectreFormatting(), _cancellationToken);
+            _consoleInteractionService.DisplayError(errorMessage, allowMarkup);
+        });
         Debug.Assert(result);
-        _consoleInteractionService.DisplayError(errorMessage);
     }
 
-    public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false)
+    public void DisplayMessage(KnownEmoji emoji, string message, bool allowMarkup = false, ConsoleOutput? consoleOverride = null)
     {
-        var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.DisplayMessageAsync(emoji.Name, message.RemoveSpectreFormatting(), _cancellationToken));
+        var result = _extensionTaskChannel.Writer.TryWrite(async () =>
+        {
+            await Backchannel.DisplayMessageAsync(emoji.Name, message.RemoveSpectreFormatting(), _cancellationToken);
+            _consoleInteractionService.DisplayMessage(emoji, message, allowMarkup, consoleOverride);
+        });
         Debug.Assert(result);
-        _consoleInteractionService.DisplayMessage(emoji, message, allowMarkup);
     }
 
     public void DisplaySuccess(string message, bool allowMarkup = false)
@@ -378,18 +389,27 @@ internal class ExtensionInteractionService : IExtensionInteractionService
 
     public void DisplayLines(IEnumerable<(OutputLineStream Stream, string Line)> lines)
     {
-        var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.DisplayLinesAsync(lines.Select(line => new DisplayLineState(
+        // Materialize so we can iterate twice without re-enumerating a possibly lazy/one-shot source.
+        var materialized = lines as IReadOnlyCollection<(OutputLineStream Stream, string Line)> ?? lines.ToList();
+
+        var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.DisplayLinesAsync(materialized.Select(line => new DisplayLineState(
             line.Stream == OutputLineStream.StdOut ? "stdout" : "stderr",
             line.Line.RemoveSpectreFormatting())), _cancellationToken));
         Debug.Assert(result);
-        _consoleInteractionService.DisplayLines(lines);
+
+        // Intentionally do NOT also write to the local console here. Unlike most Display* methods
+        // (whose backchannel sinks are distinct from the debug console — popups, status bar, log
+        // channel, etc.), the extension's `displayLines` RPC routes the lines into the active
+        // AppHost debug console. The CLI's stdout/stderr is also captured by the extension and
+        // forwarded into that same debug console, so calling _consoleInteractionService.DisplayLines
+        // here would surface every line twice.
     }
 
-    public void DisplayCancellationMessage()
+    public void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null)
     {
         var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.DisplayCancellationMessageAsync(_cancellationToken));
         Debug.Assert(result);
-        _consoleInteractionService.DisplayCancellationMessage();
+        _consoleInteractionService.DisplayCancellationMessage(consoleOverride);
     }
 
     public void DisplayEmptyLine()
@@ -418,6 +438,8 @@ internal class ExtensionInteractionService : IExtensionInteractionService
         set => _consoleInteractionService.Console = value;
     }
 
+    public bool SupportsLinks => _consoleInteractionService.SupportsLinks;
+
     public void DisplayRawText(string text, ConsoleOutput? consoleOverride = null)
     {
         var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.DisplayPlainTextAsync(text, _cancellationToken));
@@ -425,13 +447,13 @@ internal class ExtensionInteractionService : IExtensionInteractionService
         _consoleInteractionService.DisplayRawText(text, consoleOverride);
     }
 
-    public void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null)
+    public void DisplayMarkdown(string markdown, ConsoleOutput? consoleOverride = null, int? maxWidth = null)
     {
         // Send raw markdown to extension (it can handle markdown natively)
         // Convert to Spectre markup for console display
         var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.LogMessageAsync(LogLevel.Information, markdown, _cancellationToken));
         Debug.Assert(result);
-        _consoleInteractionService.DisplayMarkdown(markdown, consoleOverride);
+        _consoleInteractionService.DisplayMarkdown(markdown, consoleOverride, maxWidth);
     }
 
     public void DisplayMarkupLine(string markup)

@@ -68,8 +68,8 @@
         <note />
       </trans-unit>
       <trans-unit id="DashboardFailedToStart">
-        <source>Aspire Dashboard failed to start.</source>
-        <target state="translated">Aspire Pano başlatılamadı.</target>
+        <source>Aspire Dashboard failed to start or is disabled.</source>
+        <target state="needs-review-translation">Aspire Pano başlatılamadı.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
@@ -153,13 +153,18 @@
         <note />
       </trans-unit>
       <trans-unit id="ProjectArgumentDescription">
-        <source>The path to the Aspire AppHost project file</source>
+        <source>The path to the Aspire AppHost project file or a directory to search</source>
         <target state="needs-review-translation">Aspire AppHost proje dosyasının yolu.</target>
         <note />
       </trans-unit>
       <trans-unit id="ProjectCouldNotBeRun">
         <source>The project could not be run. See logs at {0}</source>
         <target state="translated">Proje çalıştırılamadı. {0} adresinde günlüklere bakın</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="RecentAppHostStartupOutput">
+        <source>Recent AppHost startup output</source>
+        <target state="new">Recent AppHost startup output</target>
         <note />
       </trans-unit>
       <trans-unit id="Resource">

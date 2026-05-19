@@ -115,7 +115,7 @@
                           "description": "Gets the client retry options."
                         }
                       },
-                      "description": "Provides the client configuration options for connecting to Azure Cognitive Search."
+                      "description": "Client options for clients in this library."
                     },
                     "DisableHealthChecks": {
                       "type": "boolean",

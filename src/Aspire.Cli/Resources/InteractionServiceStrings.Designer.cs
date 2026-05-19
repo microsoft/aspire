@@ -223,7 +223,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to [dim]For more information, see: [link]{0}[/][/].
+        ///   Looks up a localized string similar to [dim]For more information, see: {0}[/].
         /// </summary>
         public static string MoreInfoNewCliVersion {
             get {
@@ -237,6 +237,15 @@ namespace Aspire.Cli.Resources {
         public static string NonInteractiveAvailableValues {
             get {
                 return ResourceManager.GetString("NonInteractiveAvailableValues", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to No supported app hosts were found..
+        /// </summary>
+        public static string NoSupportedAppHostsFound {
+            get {
+                return ResourceManager.GetString("NoSupportedAppHostsFound", resourceCulture);
             }
         }
 
@@ -286,7 +295,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The project could not be built. See logs at {0}.
+        ///   Looks up a localized string similar to The project could not be built..
         /// </summary>
         public static string ProjectCouldNotBeBuilt {
             get {
@@ -295,7 +304,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to The app could not be created. See logs at {0}.
+        ///   Looks up a localized string similar to The app could not be created..
         /// </summary>
         public static string ProjectCouldNotBeCreated {
             get {
@@ -309,6 +318,24 @@ namespace Aspire.Cli.Resources {
         public static string ProjectOptionDoesntExist {
             get {
                 return ResourceManager.GetString("ProjectOptionDoesntExist", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The --apphost option specified a directory that contains multiple apphost project files..
+        /// </summary>
+        public static string ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts {
+            get {
+                return ResourceManager.GetString("ProjectOptionSpecifiedDirectoryContainsMultipleAppHosts", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The --apphost option specified a directory that does not contain any apphost project files..
+        /// </summary>
+        public static string ProjectOptionSpecifiedDirectoryContainsNoAppHosts {
+            get {
+                return ResourceManager.GetString("ProjectOptionSpecifiedDirectoryContainsNoAppHosts", resourceCulture);
             }
         }
 
@@ -408,6 +435,15 @@ namespace Aspire.Cli.Resources {
         public static string SeeLogsAt {
             get {
                 return ResourceManager.GetString("SeeLogsAt", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to See app host logs at {0}.
+        /// </summary>
+        public static string SeeAppHostLogsAt {
+            get {
+                return ResourceManager.GetString("SeeAppHostLogsAt", resourceCulture);
             }
         }
 

@@ -581,6 +581,8 @@ public class ApiDocsIndexServiceTests
 
     private sealed class TestApiDocsFetcher(string sitemapContent, IReadOnlyDictionary<string, string> pageContent) : IApiDocsFetcher
     {
+        private readonly object _lock = new();
+
         public List<string> RequestedPageUrls { get; } = [];
 
         public List<string> RequestedMarkdownUrls { get; } = [];
@@ -590,10 +592,15 @@ public class ApiDocsIndexServiceTests
 
         public Task<string?> FetchPageAsync(string pageUrl, CancellationToken cancellationToken = default)
         {
-            RequestedPageUrls.Add(pageUrl);
             var cachePageUrl = pageUrl.Split('#', 2)[0];
             var markdownUrl = cachePageUrl.EndsWith(".md", StringComparison.OrdinalIgnoreCase) ? cachePageUrl : $"{cachePageUrl}.md";
-            RequestedMarkdownUrls.Add(markdownUrl);
+
+            lock (_lock)
+            {
+                RequestedPageUrls.Add(pageUrl);
+                RequestedMarkdownUrls.Add(markdownUrl);
+            }
+
             return Task.FromResult(pageContent.TryGetValue(cachePageUrl, out var content) ? content : pageContent.TryGetValue(markdownUrl, out content) ? content : null);
         }
     }

@@ -165,6 +165,94 @@ builder.AddPythonApp("agent", "./app", "main:app")
 
 In run mode, the agent runs locally with health check endpoints and OpenTelemetry instrumentation. In publish mode, the agent is deployed as a hosted agent in Microsoft Foundry.
 
+## Prompt agent usage
+
+Prompt agents are declarative agents defined by a model, instructions, and tools. They are always deployed to Azure Foundry — even during local development (`aspire run`) — and local services communicate with the cloud-provisioned agent.
+
+Tools are project-level resources that can be reused across multiple agents:
+
+```csharp
+var foundry = builder.AddFoundry("foundry");
+var project = foundry.AddProject("my-project");
+var chat = project.AddModelDeployment("gpt41", FoundryModel.OpenAI.Gpt41);
+
+// Create tools at the project level
+var codeInterp = project.AddCodeInterpreterTool("code-interp");
+var webSearch = project.AddWebSearchTool("web-search");
+
+// Add agent with tools
+var agent = project.AddPromptAgent(chat, "joker-agent",
+    instructions: "You are good at telling jokes.")
+    .WithTool(codeInterp)
+    .WithTool(webSearch);
+
+builder.AddPythonApp("app", "./app", "main:app")
+       .WithReference(agent);
+```
+
+### Available tools
+
+Prompt agents support several tool types, all created as project-level resources:
+
+| Tool | Extension Method | Description |
+|------|-----------------|-------------|
+| Code Interpreter | `project.AddCodeInterpreterTool(name)` | Runs Python code in a sandbox |
+| File Search | `project.AddFileSearchTool(name, vectorStoreIds)` | Searches uploaded documents via vector search |
+| Web Search | `project.AddWebSearchTool(name)` | Retrieves real-time web information |
+| Azure AI Search | `project.AddAISearchTool(name).WithReference(search)` | Grounds responses using Azure AI Search indexes |
+| Bing Grounding | `project.AddBingGroundingTool(name).WithReference(conn)` | Grounds responses using Bing Search |
+| SharePoint | `project.AddSharePointTool(name, connectionIds)` | Searches SharePoint data |
+| Microsoft Fabric | `project.AddFabricTool(name, connectionIds)` | Queries data through Fabric data agents |
+| Azure Functions | `project.AddAzureFunctionTool(name, ...)` | Invokes serverless Azure Functions |
+| Function Calling | `project.AddFunctionTool(name, funcName, params)` | Calls application-defined functions |
+| Image Generation | `project.AddImageGenerationTool(name)` | Generates and edits images (preview) |
+| Computer Use | `project.AddComputerUseTool(name, w, h)` | Interacts with a computer desktop (preview) |
+
+### Azure AI Search tool example
+
+```csharp
+var search = builder.AddAzureSearch("search");
+var aiSearch = project.AddAISearchTool("search-tool").WithReference(search);
+
+var agent = project.AddPromptAgent(chat, "research-agent")
+    .WithTool(aiSearch);
+```
+
+### Bing Grounding tool example
+
+> **Note:** The Bing Search resource (`Microsoft.Bing/accounts`) cannot be provisioned via Bicep or ARM templates.
+> You must create it manually in the [Azure portal](https://portal.azure.com). Once created, Aspire can
+> automatically provision the Foundry project connection for you.
+
+The simplest approach is to pass the Bing resource ID directly — Aspire will create the connection with the correct authentication and metadata:
+
+```csharp
+var bingResourceId = "/subscriptions/{subId}/resourceGroups/{rg}/providers/Microsoft.Bing/accounts/{name}";
+var bing = project.AddBingGroundingTool("bing-tool").WithReference(bingResourceId);
+
+var agent = project.AddPromptAgent(chat, "news-agent")
+    .WithTool(bing);
+```
+
+Alternatively, you can create the connection yourself for full control:
+
+```csharp
+var bingConnection = project.AddBingGroundingConnection("bing-conn", bingResourceId);
+var bing = project.AddBingGroundingTool("bing-tool").WithReference(bingConnection);
+```
+
+### Tool reuse across agents
+
+Tools are project-level resources, so they can be shared across multiple agents:
+
+```csharp
+var codeInterp = project.AddCodeInterpreterTool("code-interp");
+var webSearch = project.AddWebSearchTool("web-search");
+
+var agent1 = project.AddPromptAgent(chat, "agent-1").WithTool(codeInterp).WithTool(webSearch);
+var agent2 = project.AddPromptAgent(chat, "agent-2").WithTool(codeInterp);
+```
+
 ## Additional documentation
 
 * https://learn.microsoft.com/azure/ai-foundry/what-is-azure-ai-foundry

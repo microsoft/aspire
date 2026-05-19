@@ -317,6 +317,11 @@ internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiD
     private const int MemberSearchBatchSize = 8;
     private const string MemberIndexFingerprintVersion = "v2";
 
+    // Cache schema version for the API reference sitemap-driven index. Bump this whenever
+    // a code change would produce a different ApiReferenceItem[] for the same sitemap so
+    // older caches are invalidated on first launch. v1 is the original schema.
+    private const int IndexSchemaVersion = 1;
+
     private readonly IApiDocsFetcher _fetcher = fetcher;
     private readonly IApiDocsCache _cache = cache;
     private readonly string _sitemapUrl = ApiDocsSourceConfiguration.GetSitemapUrl(configuration);
@@ -374,7 +379,7 @@ internal sealed partial class ApiDocsIndexService(IApiDocsFetcher fetcher, IApiD
                 return;
             }
 
-            var currentFingerprint = SourceContentFingerprint.Compute(sitemapContent);
+            var currentFingerprint = SourceContentFingerprint.Compute(sitemapContent, IndexSchemaVersion);
             if (cachedItems is not null && string.Equals(cachedFingerprint, currentFingerprint, StringComparison.Ordinal))
             {
                 SetIndex(cachedItems);

@@ -140,6 +140,36 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
                 return 0;
             });
 
+        // Run a single restore *after* every package edit has been applied. Per-package
+        // 'dotnet package add' calls use --no-restore (see UpdatePackageReferenceInProject)
+        // because, for Explicit channels, NuGetConfigMerger has already rewritten nuget.config
+        // earlier in this method to add a packageSourceMapping pinning Aspire* to the channel's
+        // feed. Restoring after the *first* package add (the old behavior) would run NuGet
+        // against a half-updated reference graph: the package just bumped exists in the new
+        // feed, but the rest are still on their previous (often stable) versions which may
+        // not be carried by that feed. Mapping then blocks the fallback to nuget.org, producing
+        // NU1103 for every not-yet-bumped Aspire reference. Deferring the restore until all
+        // edits are applied means every Aspire* reference resolves against versions that
+        // exist in the configured feed.
+        // Restoring the AppHost project transitively restores referenced projects, so a single
+        // restore here covers both traditional PackageReference and Directory.Packages.props
+        // (CPM) update paths. The 'dotnet restore' command accepts both .csproj and file-based
+        // (apphost.cs) program files as the positional argument.
+        // See https://github.com/dotnet/aspire/issues/15891.
+        await interactionService.ShowStatusAsync(
+            UpdateCommandStrings.RestoringPackagesAfterUpdate,
+            async () =>
+            {
+                var restoreExitCode = await runner.RestoreAsync(projectFile, new(), cancellationToken);
+
+                if (restoreExitCode != 0)
+                {
+                    throw new ProjectUpdaterException(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.FailedToRestoreAfterUpdateFormat, projectFile.FullName));
+                }
+
+                return 0;
+            });
+
         interactionService.DisplayEmptyLine();
 
         interactionService.DisplaySuccess(UpdateCommandStrings.UpdateSuccessfulMessage);
@@ -288,6 +318,18 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         if (!string.IsNullOrEmpty(sdkVersion) && IsValidSemanticVersion(sdkVersion) && sdkVersion == latestSdkPackage?.Version)
         {
             logger.LogInformation("App Host SDK is up to date.");
+
+            // Even when the SDK version itself is current, the project may still
+            // carry a stale Aspire.Hosting.AppHost PackageReference (csproj) or
+            // PackageVersion (Directory.Packages.props). The new SDK implicitly
+            // defines that PackageReference with IsImplicitlyDefined="true", so
+            // an orphan PackageVersion entry causes NU1009 at restore time, and
+            // an explicit PackageReference is now redundant. The SDK-update path
+            // already cleans these up (in UpdateSdkVersionInProjectAppHostAsync);
+            // do the same when no SDK version bump is required so a re-run of
+            // `aspire update` can recover from a partial migration.
+            // See https://github.com/microsoft/aspire/issues/15476.
+            EnqueueLegacyAppHostCleanupStepIfNeeded(context);
             return;
         }
 
@@ -302,6 +344,132 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             latestSdkPackage?.Version ?? "unknown",
             context.AppHostProjectFile);
         context.UpdateSteps.Enqueue(sdkUpdateStep);
+    }
+
+    private static void EnqueueLegacyAppHostCleanupStepIfNeeded(UpdateContext context)
+    {
+        var projectFile = context.AppHostProjectFile;
+
+        if (ProjectFileExtensions.Supported.Contains(projectFile.Extension))
+        {
+            var (hasPackageReference, hasOrphanPackageVersion) = DetectLegacyAppHostReferences(projectFile);
+            if (!hasPackageReference && !hasOrphanPackageVersion)
+            {
+                return;
+            }
+
+            var step = new PackageUpdateStep(
+                UpdateCommandStrings.RemovedObsoleteAppHostPackage,
+                () => RemoveLegacyAppHostPackageReferencesAsync(projectFile, hasPackageReference, hasOrphanPackageVersion),
+                "Aspire.Hosting.AppHost",
+                // The new SDK adds Aspire.Hosting.AppHost implicitly, so there is no
+                // user-visible "current version" to display - report it as implicit.
+                "implicit",
+                "(removed)",
+                projectFile);
+            context.UpdateSteps.Enqueue(step);
+            return;
+        }
+
+        // Single-file AppHosts (.cs with #:sdk directive) bring Aspire.Hosting.AppHost
+        // in implicitly via the SDK, just like the new csproj SDK format does. An
+        // explicit `#:package Aspire.Hosting.AppHost@<version>` directive in the
+        // .cs file is therefore redundant and, after a channel switch, becomes
+        // actively harmful: the deferred restore will fail with NU1103 because
+        // the now-mapped Aspire feed does not carry the user's stable version.
+        // See https://github.com/dotnet/aspire/issues/15891.
+        if (string.Equals(projectFile.Extension, ".cs", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!HasLegacyAppHostPackageDirective(projectFile))
+            {
+                return;
+            }
+
+            var step = new PackageUpdateStep(
+                UpdateCommandStrings.RemovedObsoleteAppHostPackage,
+                () => RemoveLegacyAppHostPackageDirectiveAsync(projectFile),
+                "Aspire.Hosting.AppHost",
+                "implicit",
+                "(removed)",
+                projectFile);
+            context.UpdateSteps.Enqueue(step);
+        }
+    }
+
+    private static (bool HasPackageReference, bool HasOrphanPackageVersion) DetectLegacyAppHostReferences(FileInfo projectFile)
+    {
+        var hasPackageReference = false;
+        var hasOrphanPackageVersion = false;
+
+        try
+        {
+            var projectDocument = new XmlDocument { PreserveWhitespace = true };
+            projectDocument.Load(projectFile.FullName);
+            var projectNode = projectDocument.SelectSingleNode("/Project");
+            if (projectNode is not null)
+            {
+                hasPackageReference = projectNode.SelectSingleNode(
+                    CaseInsensitiveIncludeXPath("//PackageReference", "Aspire.Hosting.AppHost")) is not null;
+            }
+        }
+        catch
+        {
+            // If we cannot parse the csproj here, leave detection to the build.
+            // The SDK migration path is the primary cleanup; this is a defence
+            // for the already-current path.
+        }
+
+        var cpmInfo = DetectCentralPackageManagement(projectFile);
+        if (cpmInfo.UsesCentralPackageManagement && cpmInfo.DirectoryPackagesPropsFile is not null)
+        {
+            try
+            {
+                var propsDocument = new XmlDocument { PreserveWhitespace = true };
+                propsDocument.Load(cpmInfo.DirectoryPackagesPropsFile.FullName);
+                hasOrphanPackageVersion = propsDocument.SelectSingleNode(
+                    CaseInsensitiveIncludeXPath("/Project/ItemGroup/PackageVersion", "Aspire.Hosting.AppHost")) is not null;
+            }
+            catch
+            {
+                // Same as above.
+            }
+        }
+
+        return (hasPackageReference, hasOrphanPackageVersion);
+    }
+
+    private static async Task RemoveLegacyAppHostPackageReferencesAsync(
+        FileInfo projectFile,
+        bool removePackageReference,
+        bool removePackageVersion)
+    {
+        if (removePackageReference)
+        {
+            var projectDocument = new XmlDocument { PreserveWhitespace = true };
+            projectDocument.Load(projectFile.FullName);
+            var projectNode = projectDocument.SelectSingleNode("/Project");
+            if (projectNode is not null)
+            {
+                RemovePackageReference(projectNode, "Aspire.Hosting.AppHost");
+                projectDocument.Save(projectFile.FullName);
+            }
+        }
+
+        if (removePackageVersion)
+        {
+            // Reuses the same NU1009-aware cleanup the SDK migration path uses.
+            // See UpdateSdkVersionInProjectAppHostAsync for the full rationale.
+            RemovePackageVersionFromDirectoryPackagesProps(projectFile, "Aspire.Hosting.AppHost");
+        }
+
+        // The runner already displays the step's Description (which is
+        // RemovedObsoleteAppHostPackage) via ExecutingUpdateStepFormat before
+        // invoking this callback, so we deliberately do not emit the same
+        // message a second time. The migration path in
+        // UpdateSdkVersionInProjectAppHostAsync uses a different step
+        // description (the SDK update format), which is why it can still emit
+        // RemovedObsoleteAppHostPackage as a follow-up message there.
+        await Task.CompletedTask;
     }
 
     private static SdkMigrationInfo DetectMigrationActions(FileInfo projectFile)
@@ -328,7 +496,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             var usesOldFormat = sdkAttribute is null || !ContainsAspireAppHostSdk(sdkAttribute.Value);
 
             // Check if Aspire.Hosting.AppHost package reference exists (will be removed)
-            var hasAppHostPackage = projectNode.SelectSingleNode("//PackageReference[@Include='Aspire.Hosting.AppHost']") is not null;
+            var hasAppHostPackage = projectNode.SelectSingleNode(CaseInsensitiveIncludeXPath("//PackageReference", "Aspire.Hosting.AppHost")) is not null;
 
             return new SdkMigrationInfo(usesOldFormat, hasAppHostPackage);
         }
@@ -483,6 +651,16 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         await Task.CompletedTask;
     }
 
+    // NuGet package IDs are case-insensitive (https://learn.microsoft.com/nuget/concepts/package-identifier),
+    // so XPath lookups that match on @Include must compare case-insensitively. XPath 1.0 has no lower-case()
+    // function, so we use translate() with the ASCII alphabet — package IDs are restricted to ASCII so this
+    // is sufficient (https://learn.microsoft.com/nuget/reference/errors-and-warnings/nu1003).
+    private const string AsciiUpper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    private const string AsciiLower = "abcdefghijklmnopqrstuvwxyz";
+
+    private static string CaseInsensitiveIncludeXPath(string axisAndElement, string packageId)
+        => $"{axisAndElement}[translate(@Include, '{AsciiUpper}', '{AsciiLower}')='{packageId.ToLowerInvariant()}']";
+
     private static void RemoveNodeWithWhitespace(XmlNode node)
     {
         var parent = node.ParentNode;
@@ -503,7 +681,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
 
     private static void RemovePackageReference(XmlNode projectNode, string packageId)
     {
-        var packageNode = projectNode.SelectSingleNode($"//PackageReference[@Include='{packageId}']");
+        var packageNode = projectNode.SelectSingleNode(CaseInsensitiveIncludeXPath("//PackageReference", packageId));
         if (packageNode?.ParentNode is null)
         {
             return;
@@ -556,7 +734,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
             propsDocument.PreserveWhitespace = true;
             propsDocument.Load(cpmInfo.DirectoryPackagesPropsFile.FullName);
 
-            var packageVersionNode = propsDocument.SelectSingleNode($"/Project/ItemGroup/PackageVersion[@Include='{packageId}']");
+            var packageVersionNode = propsDocument.SelectSingleNode(CaseInsensitiveIncludeXPath("/Project/ItemGroup/PackageVersion", packageId));
             if (packageVersionNode?.ParentNode is null)
             {
                 return;
@@ -607,11 +785,51 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         var newDirective = $"#:sdk Aspire.AppHost.Sdk@{package.Version}";
         var updatedContent = SdkDirectiveRegex().Replace(fileContent, newDirective, 1);
 
+        // The new SDK pulls Aspire.Hosting.AppHost in implicitly, so a leftover
+        // explicit `#:package Aspire.Hosting.AppHost@<version>` directive in the
+        // same file is redundant. Strip it here so the SDK-bump path matches
+        // the csproj migration in UpdateSdkVersionInProjectAppHostAsync. The
+        // SDK-already-current path goes through EnqueueLegacyAppHostCleanupStepIfNeeded.
+        updatedContent = LegacyAppHostPackageDirectiveRegex().Replace(updatedContent, string.Empty);
+
         await File.WriteAllTextAsync(projectFile.FullName, updatedContent);
     }
 
     [GeneratedRegex(@"#:sdk\s+Aspire\.AppHost\.Sdk@(?:[\d\.\-a-zA-Z]+|\*)")]
     internal static partial Regex SdkDirectiveRegex();
+
+    // Matches a whole line of the form "#:package Aspire.Hosting.AppHost@<version>"
+    // (case-insensitive on the package id), including trailing line break, so the
+    // whole directive can be removed without leaving a blank line behind. NuGet
+    // package IDs are case-insensitive (https://learn.microsoft.com/nuget/concepts/package-identifier).
+    [GeneratedRegex(@"^[ \t]*#:package\s+Aspire\.Hosting\.AppHost@\S+[ \t]*\r?\n?", RegexOptions.IgnoreCase | RegexOptions.Multiline)]
+    internal static partial Regex LegacyAppHostPackageDirectiveRegex();
+
+    private static bool HasLegacyAppHostPackageDirective(FileInfo projectFile)
+    {
+        try
+        {
+            var fileContent = File.ReadAllText(projectFile.FullName);
+            return LegacyAppHostPackageDirectiveRegex().IsMatch(fileContent);
+        }
+        catch
+        {
+            // If the .cs file cannot be read here, leave detection (and the
+            // resulting failure) to the deferred restore step.
+            return false;
+        }
+    }
+
+    private static async Task RemoveLegacyAppHostPackageDirectiveAsync(FileInfo projectFile)
+    {
+        var fileContent = await File.ReadAllTextAsync(projectFile.FullName);
+        var updatedContent = LegacyAppHostPackageDirectiveRegex().Replace(fileContent, string.Empty);
+
+        if (!string.Equals(fileContent, updatedContent, StringComparison.Ordinal))
+        {
+            await File.WriteAllTextAsync(projectFile.FullName, updatedContent);
+        }
+    }
 
     private async Task AnalyzeProjectAsync(FileInfo projectFile, UpdateContext context, CancellationToken cancellationToken)
     {
@@ -795,7 +1013,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         {
             var doc = new XmlDocument { PreserveWhitespace = true };
             doc.Load(directoryPackagesPropsFile.FullName);
-            var packageVersionNode = doc.SelectSingleNode($"/Project/ItemGroup/PackageVersion[@Include='{packageId}']");
+            var packageVersionNode = doc.SelectSingleNode(CaseInsensitiveIncludeXPath("/Project/ItemGroup/PackageVersion", packageId));
             var versionAttribute = packageVersionNode?.Attributes?["Version"]?.Value;
 
             if (versionAttribute is null)
@@ -894,7 +1112,7 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
         var doc = new XmlDocument { PreserveWhitespace = true };
         doc.Load(directoryPackagesPropsFile.FullName);
 
-        var packageVersionNode = doc.SelectSingleNode($"/Project/ItemGroup/PackageVersion[@Include='{packageId}']");
+        var packageVersionNode = doc.SelectSingleNode(CaseInsensitiveIncludeXPath("/Project/ItemGroup/PackageVersion", packageId));
         if (packageVersionNode?.Attributes?["Version"] is null)
         {
             throw new ProjectUpdaterException(string.Format(CultureInfo.InvariantCulture, UpdateCommandStrings.CouldNotFindPackageVersionInDirectoryPackagesProps, packageId, directoryPackagesPropsFile.FullName));
@@ -908,12 +1126,18 @@ internal sealed partial class ProjectUpdater(ILogger<ProjectUpdater> logger, IDo
 
     private async Task UpdatePackageReferenceInProject(FileInfo projectFile, NuGetPackageCli package, CancellationToken cancellationToken)
     {
+        // Pass --no-restore here so each per-package edit only mutates the project / file-based AppHost.
+        // A single restore is performed once *all* update steps have completed (see UpdateProjectAsync).
+        // Restoring per-package would run NuGet against a half-updated reference graph, which is fatal
+        // when the channel's nuget.config (already merged earlier in UpdateProjectAsync for Explicit
+        // channels) contains a packageSourceMapping pinning Aspire* to a feed that does not carry the
+        // not-yet-bumped versions. See https://github.com/dotnet/aspire/issues/15891.
         var exitCode = await runner.AddPackageAsync(
             projectFilePath: projectFile,
             packageName: package.Id,
             packageVersion: package.Version,
             nugetSource: null,
-            noRestore: false,
+            noRestore: true,
             options: new(),
             cancellationToken: cancellationToken);
 

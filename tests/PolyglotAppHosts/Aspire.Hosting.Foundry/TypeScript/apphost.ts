@@ -1,4 +1,4 @@
-import { AzureContainerRegistryRole, FoundryModels, type FoundryModel, createBuilder } from './.modules/aspire.js';
+import { AzureContainerRegistryRole, FoundryModels, FoundryRole, type FoundryModel, createBuilder } from './.modules/aspire.js';
 
 const builder = await createBuilder();
 
@@ -9,7 +9,7 @@ const chat = await foundry
     .withProperties(async (deployment) => {
         await deployment.deploymentName.set('chat-deployment');
         await deployment.skuCapacity.set(10);
-        const _capacity: number = await deployment.skuCapacity.get();
+        const _capacity: number | null = await deployment.skuCapacity.get();
     });
 
 const model: FoundryModel = FoundryModels.OpenAI.Gpt41Mini;
@@ -38,10 +38,46 @@ await project.withCapabilityHost(storage);
 await project.withCapabilityHost(search);
 await project.withCapabilityHost(foundry);
 
-const _cosmosConnection = await project.addConnection(cosmos);
-const _storageConnection = await project.addConnection(storage);
-const _registryConnection = await project.addConnection(registry);
-const _keyVaultConnection = await project.addConnection(keyVault);
+const _cosmosConnection = await project.addCosmosConnection(cosmos);
+const _storageConnection = await project.addStorageConnection(storage);
+const _registryConnection = await project.addContainerRegistryConnection(registry);
+const _keyVaultConnection = await project.addKeyVaultConnection(keyVault);
+const _searchConnection = await project.addSearchConnection(search);
+
+// Prompt Agent tools
+const codeInterpreter = await project.addCodeInterpreterTool('code-interpreter');
+const fileSearch = await project.addFileSearchTool('file-search', ['vs_placeholder']);
+const webSearch = await project.addWebSearchTool('web-search');
+const imageGen = await project.addImageGenerationTool('image-gen');
+const computerUse = await project.addComputerUseTool('computer-use');
+const aiSearchTool = await project.addAISearchTool('ai-search-tool');
+await aiSearchTool.withReference(search);
+const bingConn = await project.addBingGroundingConnection('bing-conn', '/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.Bing/accounts/bing');
+const bingTool = await project.addBingGroundingTool('bing-tool');
+await bingTool.withReference(bingConn);
+const bingTool2 = await project.addBingGroundingTool('bing-tool-2');
+await bingTool2.withReference('/subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.Bing/accounts/bing');
+const bingParam = await builder.addParameter('bing-resource-id');
+const bingTool3 = await project.addBingGroundingTool('bing-tool-3');
+await bingTool3.withReference(bingParam);
+const sharepoint = await project.addSharePointTool('sharepoint-tool', ['https://contoso.sharepoint.com', 'MySite']);
+const fabric = await project.addFabricTool('fabric-tool', ['workspace-id']);
+const azFunc = await project.addAzureFunctionTool('az-func-tool', 'myFunction', 'Does something', '{}', 'https://queue.core.windows.net', 'input-q', 'https://queue.core.windows.net', 'output-q');
+const funcTool = await project.addFunctionTool('func-tool', 'myFunc', '{}');
+
+// Prompt Agent
+const _promptAgent = await project.addPromptAgent(chat, 'prompt-agent');
+await _promptAgent.withTool(codeInterpreter);
+await _promptAgent.withTool(fileSearch);
+await _promptAgent.withTool(webSearch);
+await _promptAgent.withTool(imageGen);
+await _promptAgent.withTool(computerUse);
+await _promptAgent.withTool(aiSearchTool);
+await _promptAgent.withTool(bingTool);
+await _promptAgent.withTool(sharepoint);
+await _promptAgent.withTool(fabric);
+await _promptAgent.withTool(azFunc);
+await _promptAgent.withTool(funcTool);
 
 const builderProjectFoundry = await builder.addFoundry('builder-project-foundry');
 const builderProject = await builderProjectFoundry.addProject('builder-project');
@@ -80,13 +116,16 @@ await hostedAgent.publishAsHostedAgent({
         await configuration.description.set('Validation hosted agent');
         await configuration.cpu.set(1);
         await configuration.memory.set(2);
-        await configuration.metadata.set('scenario', 'validation');
-        await configuration.environmentVariables.set('VALIDATION_MODE', 'true');
+        const metadata = await configuration.metadata();
+        await metadata.set('scenario', 'validation');
+        const environmentVariables = await configuration.environmentVariables();
+        await environmentVariables.set('VALIDATION_MODE', 'true');
     }
 });
 
 const api = await builder.addContainer('api', 'nginx');
-await foundry.withRoleAssignments(registry, [AzureContainerRegistryRole.AcrPull]);
+await foundry.withContainerRegistryRoleAssignments(registry, [AzureContainerRegistryRole.AcrPull]);
+await api.withFoundryRoleAssignments(foundry, [FoundryRole.CognitiveServicesOpenAIUser]);
 
 const _deploymentName = await chat.deploymentName.get();
 const _modelName = await chat.modelName.get();
