@@ -10,6 +10,11 @@ namespace Aspire.Hosting.Sdk.Tests;
 
 public class AppHostSdkTargetsTests
 {
+    // Sentinel version used purely so the test doesn't have to chase the real AppHost version on
+    // every release bump. Nothing actually restores these packages — the test only asserts on the
+    // PackageReference items the SDK target stamps out.
+    private const string TestAppHostVersion = "99.99.99";
+
     private static readonly string[] s_supportedRids =
     [
         "win-x64",
@@ -74,7 +79,7 @@ public class AppHostSdkTargetsTests
               </PropertyGroup>
 
               <ItemGroup>
-                <PackageReference Include="Aspire.Hosting.AppHost" Version="13.4.0" />
+                <PackageReference Include="Aspire.Hosting.AppHost" Version="{{TestAppHostVersion}}" />
               </ItemGroup>
 
               <Import Project="{{sdkTargetsPath}}" />
@@ -107,8 +112,8 @@ public class AppHostSdkTargetsTests
 
         Assert.Equal(dashboardRid, orchestrationRid);
         Assert.Contains(dashboardRid, s_supportedRids);
-        Assert.Equal($"Aspire.Dashboard.Sdk.{dashboardRid}=13.4.0", dashboardReference);
-        Assert.Equal($"Aspire.Hosting.Orchestration.{dashboardRid}=13.4.0", orchestrationReference);
+        Assert.Equal($"Aspire.Dashboard.Sdk.{dashboardRid}={TestAppHostVersion}", dashboardReference);
+        Assert.Equal($"Aspire.Hosting.Orchestration.{dashboardRid}={TestAppHostVersion}", orchestrationReference);
     }
 
     private static string GetAspireRuntimeIdentifierToolPath()
