@@ -11,4 +11,5 @@ internal static class ScriptPaths
     public static readonly string ReleasePowerShell = Path.Combine(s_scriptsDirectory, "get-aspire-cli.ps1");
     public static readonly string PRShell = Path.Combine(s_scriptsDirectory, "get-aspire-cli-pr.sh");
     public static readonly string PRPowerShell = Path.Combine(s_scriptsDirectory, "get-aspire-cli-pr.ps1");
+    public static readonly string VerifyCliArchivePowerShell = Path.Combine(s_scriptsDirectory, "verify-cli-archive.ps1");
 }
