@@ -546,6 +546,20 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
                 continue;
             }
 
+            // Validate at publish time that every routed endpoint is flagged
+            // external. We do this before BuildIngressObject runs so the user
+            // sees the validation error before any partial work or warnings
+            // about missing deployment targets are emitted.
+            foreach (var route in ingressResource.Routes)
+            {
+                EndpointRoutingValidation.ThrowIfEndpointNotExternal(route.Endpoint, "Ingress", ingressResource.Name);
+            }
+
+            if (ingressResource.DefaultBackend is { } defaultBackend)
+            {
+                EndpointRoutingValidation.ThrowIfEndpointNotExternal(defaultBackend.Endpoint, "Ingress", ingressResource.Name);
+            }
+
             var ingress = await BuildIngressObject(ingressResource, deploymentTargets, logger, cancellationToken).ConfigureAwait(false);
             if (ingress is not null)
             {
@@ -741,6 +755,13 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             {
                 logger.LogWarning("Gateway '{GatewayName}' has no routes configured. Skipping.", gatewayResource.Name);
                 continue;
+            }
+
+            // Validate that every routed endpoint is flagged external before
+            // we materialize the Gateway and HTTPRoute objects.
+            foreach (var route in gatewayResource.Routes)
+            {
+                EndpointRoutingValidation.ThrowIfEndpointNotExternal(route.Endpoint, "Gateway", gatewayResource.Name);
             }
 
             await BuildGatewayObjects(gatewayResource, deploymentTargets, logger, cancellationToken).ConfigureAwait(false);
