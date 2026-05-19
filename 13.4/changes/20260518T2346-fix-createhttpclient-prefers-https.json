@@ -1,0 +1,19 @@
+{
+  "area": "Testing",
+  "areaEmoji": "🧪",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "`CreateHttpClient` and `GetEndpointUriString` in `Aspire.Hosting.Testing` now prefer the `https` endpoint over `http` when no endpoint name is specified, matching the `https+http://` service discovery behavior.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔒",
+  "firstMergedAt": "2026-05-18T23:46:55Z",
+  "lastMergedAt": "2026-05-18T23:46:55Z",
+  "name": "Fix CreateHttpClient to prefer HTTPS endpoints",
+  "owner": "maddymontaquila",
+  "prs": [
+    17095
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Extension bug fix: resourceless AppHosts now visible in Running AppHosts view",
+  "mergedAt": "2026-05-18T23:34:58Z",
+  "number": 17082,
+  "runDate": "2026-05-19T00:38:46Z",
+  "status": "included",
+  "title": "Show running workspace AppHosts without resources"
+}

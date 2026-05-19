@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Menus and popovers in the dashboard now calculate their vertical flip threshold dynamically based on the number of items, ensuring they correctly open above the cursor when there is insufficient space below.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📐",
+  "firstMergedAt": "2026-05-18T23:11:17Z",
+  "lastMergedAt": "2026-05-18T23:11:17Z",
+  "name": "Fix dashboard menu and popover positioning",
+  "owner": "JamesNK",
+  "prs": [
+    17196
+  ]
+}

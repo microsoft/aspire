@@ -1,0 +1,9 @@
+{
+  "author": "maddymontaquila",
+  "comment": "Testing bug fix: CreateHttpClient now prefers https over http",
+  "mergedAt": "2026-05-18T23:46:55Z",
+  "number": 17095,
+  "runDate": "2026-05-19T00:38:46Z",
+  "status": "included",
+  "title": "Fix CreateHttpClient to prefer https endpoint over http"
+}

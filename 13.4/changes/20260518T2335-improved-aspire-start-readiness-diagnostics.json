@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "`aspire start` now waits for the AppHost to reach a stable startup state before detaching, so early startup failures—such as TypeScript syntax errors in a polyglot AppHost or C# compile errors in a .NET AppHost—are surfaced immediately with clear diagnostics rather than silently swallowed.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🩺",
+  "firstMergedAt": "2026-05-18T23:35:04Z",
+  "lastMergedAt": "2026-05-18T23:35:04Z",
+  "name": "Improved aspire start readiness diagnostics",
+  "owner": "danegsta",
+  "prs": [
+    17141
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Improved CLI startup diagnostics that surface early AppHost failures",
+  "mergedAt": "2026-05-18T23:35:04Z",
+  "number": 17141,
+  "runDate": "2026-05-19T00:38:46Z",
+  "status": "included",
+  "title": "Improve aspire start readiness diagnostics"
+}

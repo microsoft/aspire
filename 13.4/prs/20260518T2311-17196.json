@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Dashboard bug fix for menu/popover positioning",
+  "mergedAt": "2026-05-18T23:11:17Z",
+  "number": 17196,
+  "runDate": "2026-05-19T00:38:46Z",
+  "status": "included",
+  "title": "Calculate VerticalThreshold dynamically based on menu/popover content"
+}

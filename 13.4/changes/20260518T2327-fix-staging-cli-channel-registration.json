@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "A CLI binary built with the `staging` channel identity now automatically registers the staging NuGet package source, ensuring commands like `aspire new` use the correct staging channel packages without requiring manual configuration.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📦",
+  "firstMergedAt": "2026-05-18T23:27:48Z",
+  "lastMergedAt": "2026-05-18T23:27:48Z",
+  "name": "Fix staging CLI channel registration",
+  "owner": "radical",
+  "prs": [
+    17155
+  ]
+}

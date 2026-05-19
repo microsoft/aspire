@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "CI fix for PR file detection using correct three-dot diff",
+  "mergedAt": "2026-05-18T22:23:53Z",
+  "number": 17220,
+  "runDate": "2026-05-19T00:38:46Z",
+  "status": "included",
+  "title": "Fix check-changed-files action to use three-dot diff"
+}

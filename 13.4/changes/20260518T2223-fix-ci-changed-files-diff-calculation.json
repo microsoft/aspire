@@ -1,0 +1,19 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The `check-changed-files` GitHub Action now uses a three-dot diff (`BASE...HEAD`) instead of a two-dot diff, ensuring only files actually changed by a PR are detected rather than all files that diverged from the base branch tip.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔀",
+  "firstMergedAt": "2026-05-18T22:23:53Z",
+  "lastMergedAt": "2026-05-18T22:23:53Z",
+  "name": "Fix CI changed-file detection to use three-dot diff",
+  "owner": "joperezr",
+  "prs": [
+    17220
+  ]
+}

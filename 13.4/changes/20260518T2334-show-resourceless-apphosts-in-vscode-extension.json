@@ -1,0 +1,19 @@
+{
+  "area": "Extensions",
+  "areaEmoji": "🧩",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "AppHosts that are running but have no resources are now visible in the VS Code extension's Running AppHosts view, allowing users to access the dashboard and AppHost logs even when no resources have been added yet.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "👁️",
+  "firstMergedAt": "2026-05-18T23:34:58Z",
+  "lastMergedAt": "2026-05-18T23:34:58Z",
+  "name": "Show resourceless AppHosts in VS Code extension",
+  "owner": "adamint",
+  "prs": [
+    17082
+  ]
+}

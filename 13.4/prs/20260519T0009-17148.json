@@ -1,0 +1,9 @@
+{
+  "author": "joperezr",
+  "comment": "RabbitMQ default container image bumped to 4.3",
+  "mergedAt": "2026-05-19T00:09:57Z",
+  "number": 17148,
+  "runDate": "2026-05-19T00:38:46Z",
+  "status": "included",
+  "title": "Bump RabbitMQ container image to 4.3 and fix transient non-exclusive queue declarations in tests"
+}

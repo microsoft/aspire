@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Bug fix for staging CLI not registering staging package channel",
+  "mergedAt": "2026-05-18T23:27:48Z",
+  "number": 17155,
+  "runDate": "2026-05-19T00:38:46Z",
+  "status": "included",
+  "title": "Auto-register staging channel for staging CLI"
+}

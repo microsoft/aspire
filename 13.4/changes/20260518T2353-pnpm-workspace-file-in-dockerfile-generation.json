@@ -1,0 +1,21 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [
+    "@vsantele"
+  ],
+  "description": "When generating Dockerfiles for JavaScript apps using pnpm, the `pnpm-workspace.yaml` file is now copied into the Docker image before the install step, enabling correct pnpm workspace resolution during the container build.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "📋",
+  "firstMergedAt": "2026-05-18T23:53:07Z",
+  "lastMergedAt": "2026-05-18T23:53:07Z",
+  "name": "pnpm workspace file support in Dockerfile generation",
+  "owner": "sebastienros",
+  "prs": [
+    17124
+  ]
+}

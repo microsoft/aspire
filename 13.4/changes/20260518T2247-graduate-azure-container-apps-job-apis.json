@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The Azure Container Apps job publishing APIs (`PublishAsAzureContainerAppJob`) are now stable and no longer require suppressing the `ASPIREAZURE002` experimental warning, completing the graduation of ACA job publishing APIs for general use.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🎓",
+  "firstMergedAt": "2026-05-18T22:47:10Z",
+  "lastMergedAt": "2026-05-18T22:47:10Z",
+  "name": "Graduate Azure Container Apps job APIs to stable",
+  "owner": "eerhardt",
+  "prs": [
+    17219
+  ]
+}

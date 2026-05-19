@@ -1,0 +1,9 @@
+{
+  "author": "vsantele",
+  "comment": "Community contribution: pnpm workspace file copied in Dockerfile generation",
+  "mergedAt": "2026-05-18T23:53:07Z",
+  "number": 17124,
+  "runDate": "2026-05-19T00:38:46Z",
+  "status": "included",
+  "title": "Add support for pnpm workspace file in Dockerfile generation"
+}
