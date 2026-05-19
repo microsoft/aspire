@@ -56,7 +56,7 @@ jobs:
 
           while IFS= read -r file; do
             case "$file" in
-              */obj/*|*/bin/*|*Aspire.Hosting.Analyzers*|*Aspire.Hosting.CodeGeneration*|*Aspire.Hosting.RemoteHost*)
+              */obj/*|*/bin/*|*Aspire.Hosting.Analyzers*|*Aspire.Hosting.Integration.Analyzers*|*Aspire.Hosting.CodeGeneration*|*Aspire.Hosting.RemoteHost*)
                 continue
                 ;;
             esac
@@ -111,7 +111,7 @@ jobs:
 
           while IFS= read -r file; do
             case "$file" in
-              */obj/*|*/bin/*|*Aspire.Hosting.Analyzers*|*Aspire.Hosting.CodeGeneration*|*Aspire.Hosting.RemoteHost*)
+              */obj/*|*/bin/*|*Aspire.Hosting.Analyzers*|*Aspire.Hosting.Integration.Analyzers*|*Aspire.Hosting.CodeGeneration*|*Aspire.Hosting.RemoteHost*)
                 continue
                 ;;
             esac

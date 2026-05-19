@@ -160,6 +160,24 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
+    public async Task CreateProjectFiles_SkipsAspireIntegrationAnalyzerReferences()
+    {
+        var project = CreateProject();
+        var packages = new List<IntegrationReference>
+        {
+            IntegrationReference.FromPackage("Aspire.Hosting", "13.1.0")
+        };
+
+        var (projectPath, _) = await project.CreateProjectFilesAsync(packages).DefaultTimeout();
+
+        var doc = XDocument.Load(projectPath);
+        var skipAnalyzersElement = doc.Descendants("SkipAspireIntegrationAnalyzersReference").SingleOrDefault();
+
+        Assert.NotNull(skipAnalyzersElement);
+        Assert.Equal("true", skipAnalyzersElement.Value);
+    }
+
+    [Fact]
     public void DefaultSdkVersion_ReturnsValidVersion()
     {
         // Act

@@ -43,6 +43,7 @@ jobs:
           PROJECTS=$(grep -rl '\[AspireExport(' src/Aspire.Hosting.*/ --include='*.cs' \
                       | grep -v '/obj/' | grep -v '/bin/' \
                       | grep -v 'Aspire.Hosting.Analyzers' \
+                      | grep -v 'Aspire.Hosting.Integration.Analyzers' \
                       | grep -v 'Aspire.Hosting.CodeGeneration' \
                       | grep -v 'Aspire.Hosting.RemoteHost' \
                       | while read -r file; do
