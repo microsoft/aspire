@@ -68,8 +68,11 @@ public sealed class KubernetesPublishRequiresExternalEndpointTests(ITestOutputHe
             await auto.PrepareDockerEnvironmentAsync(counter, workspace);
             await auto.InstallAspireCliAsync(strategy, counter);
 
-            // EmptyAppHost gives us a minimal csproj-based AppHost we can mutate.
-            await auto.AspireNewAsync(ProjectName, counter, template: AspireTemplate.EmptyAppHost);
+            // The starter template gives us the conventional
+            // `{ProjectName}/{ProjectName}.AppHost/AppHost.cs` layout, matching
+            // KubernetesPublishTests so the AppHost-mutation logic below stays
+            // consistent across both tests.
+            await auto.AspireNewAsync(ProjectName, counter, useRedisCache: false);
 
             // cd into the project so subsequent `aspire add` and `aspire publish`
             // commands resolve the AppHost via repo-root discovery.
