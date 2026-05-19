@@ -26,8 +26,6 @@ internal sealed class FakeNuGetPackageCache : INuGetPackageCache
         => GetCliPackagesAsyncCallback?.Invoke(workingDirectory, prerelease, nugetConfigFile, cancellationToken)
            ?? Task.FromResult<IEnumerable<NuGetPackage>>([]);
 
-    public Func<DirectoryInfo, string, Func<string, bool>?, bool, FileInfo?, bool, CancellationToken, Task<IEnumerable<NuGetPackage>>>? GetPackagesAsyncCallback { get; set; }
-
     public Task<IEnumerable<NuGetPackage>> GetPackagesAsync(DirectoryInfo workingDirectory, string packageId, Func<string, bool>? filter, bool prerelease, FileInfo? nugetConfigFile, bool useCache, CancellationToken cancellationToken)
         => GetPackagesAsyncCallback?.Invoke(workingDirectory, packageId, filter, prerelease, nugetConfigFile, useCache, cancellationToken)
            ?? Task.FromResult<IEnumerable<NuGetPackage>>([]);

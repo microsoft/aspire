@@ -18,6 +18,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 using Microsoft.AspNetCore.InternalTesting;
+using ExitCodeConstants = Aspire.Cli.CliExitCodes;
 
 namespace Aspire.Cli.Tests.Commands;
 

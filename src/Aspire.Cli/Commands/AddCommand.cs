@@ -91,7 +91,7 @@ internal sealed class AddCommand : BaseCommand
             if (TryGetMissingLocalNuGetSource(source, effectiveAppHostProjectFile.Directory!, out var missingSource))
             {
                 InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.SourceDoesNotExist, missingSource));
-                return ExitCodeConstants.FailedToAddPackage;
+                return CommandResult.FromExitCode(CliExitCodes.FailedToAddPackage);
             }
 
             // Get the appropriate project handler
@@ -119,7 +119,7 @@ internal sealed class AddCommand : BaseCommand
                 cancellationToken);
             if (discoveryScopeExitCode is { } scopeExitCode)
             {
-                return scopeExitCode;
+                return CommandResult.FromExitCode(scopeExitCode);
             }
 
             var packagesWithChannels = await InteractionService.ShowStatusAsync(
@@ -146,7 +146,7 @@ internal sealed class AddCommand : BaseCommand
             if (integrationName is null && !_hostEnvironment.SupportsInteractiveInput)
             {
                 InteractionService.DisplayError(AddCommandStrings.IntegrationNameRequiredInNonInteractiveMode);
-                return ExitCodeConstants.FailedToAddPackage;
+                return CommandResult.FromExitCode(CliExitCodes.FailedToAddPackage);
             }
 
             var filteredPackagesWithShortName = packagesWithShortName
@@ -214,7 +214,7 @@ internal sealed class AddCommand : BaseCommand
             if (!filteredPackagesWithShortName.Any() && integrationName is not null && !_hostEnvironment.SupportsInteractiveInput)
             {
                 InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.NoPackagesMatchedSearchTerm, integrationName));
-                return ExitCodeConstants.FailedToAddPackage;
+                return CommandResult.FromExitCode(CliExitCodes.FailedToAddPackage);
             }
 
             // If we didn't match any, show a complete list. If we matched one, and its
@@ -235,7 +235,7 @@ internal sealed class AddCommand : BaseCommand
                 if (!thirdPartyConfirmed)
                 {
                     InteractionService.DisplayError(AddCommandStrings.ThirdPartyIntegrationDeclined);
-                    return ExitCodeConstants.FailedToAddPackage;
+                    return CommandResult.FromExitCode(CliExitCodes.FailedToAddPackage);
                 }
             }
 
@@ -318,7 +318,7 @@ internal sealed class AddCommand : BaseCommand
             }
 
             InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.InvalidDiscoveryScope, requestedDiscoveryScope));
-            return (IntegrationDiscoveryScope.Official, ExitCodeConstants.FailedToAddPackage);
+            return (IntegrationDiscoveryScope.Official, CliExitCodes.FailedToAddPackage);
         }
 
         var mode = IntegrationDiscoveryScopeHelpers.GetConfiguredThirdPartyMode(workingDirectory);
@@ -647,7 +647,7 @@ internal sealed class AddCommand : BaseCommand
                 p => p.Package.Version,
                 out var cliVersionPackage,
                 channelName: null,
-                hasPrHives: ExecutionContext.GetPrHiveCount() > 0))
+                hasPrHives: ExecutionContext.GetHiveCount() > 0))
             {
                 return cliVersionPackage;
             }

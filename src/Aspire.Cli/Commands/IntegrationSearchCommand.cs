@@ -75,7 +75,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
                 if (!IntegrationDiscoveryScopeHelpers.TryParse(requestedDiscoveryScope, out discoveryScope))
                 {
                     InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, AddCommandStrings.InvalidDiscoveryScope, requestedDiscoveryScope));
-                    return ExitCodeConstants.FailedToSearchIntegrations;
+                    return CommandResult.FromExitCode(CliExitCodes.FailedToSearchIntegrations);
                 }
             }
 
@@ -195,7 +195,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
         }
 
         InteractionService.DisplayRenderable(new Rows(rows));
-        return ExitCodeConstants.Success;
+        return CliExitCodes.Success;
     }
 
 }
