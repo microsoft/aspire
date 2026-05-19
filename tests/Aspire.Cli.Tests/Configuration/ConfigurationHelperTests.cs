@@ -243,15 +243,17 @@ public class ConfigurationHelperTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void RegisterSettingsFiles_FallsBackToLegacyWhenMigrationFails()
+    public void RegisterSettingsFiles_GuardRejectsUnparseableLegacyFile()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var legacyDir = workspace.CreateDirectory(AspireJsonConfiguration.SettingsFolder);
         var legacySettingsPath = Path.Combine(legacyDir.FullName, AspireJsonConfiguration.FileName);
-        // Malformed JSON causes AspireConfigFile.LoadOrCreate → AspireJsonConfiguration.Load
-        // to throw. Startup must catch and continue registering the legacy file so the CLI
-        // doesn't crash before any command runs.
+        // Unparseable JSON fails JsonDocument.Parse inside LegacySettingsFileHasMigratableData,
+        // so the guard short-circuits and returns false before migration is attempted. The
+        // downstream JSON registration via AddSettingsFile is what surfaces the parse error
+        // to the user, which is the pre-existing "your settings.json is broken" signal. The
+        // migration step itself must not introduce a new crash path on top of that.
         File.WriteAllText(legacySettingsPath, "{ this is not valid json");
 
         var globalDir = workspace.CreateDirectory("global-aspire");
@@ -261,15 +263,56 @@ public class ConfigurationHelperTests(ITestOutputHelper outputHelper)
         var ex = Record.Exception(() =>
             ConfigurationHelper.RegisterSettingsFiles(builder, workspace.WorkspaceRoot, globalSettingsFile));
 
-        // RegisterSettingsFiles itself shouldn't crash on a malformed legacy file. The
-        // downstream JSON registration may still throw via AddSettingsFile — that's pre-existing
-        // behavior and is the right signal for "your settings.json is broken". The migration
-        // step specifically must not introduce a new crash path.
+        // The guard rejected the file before migration ran, so aspire.config.json must not have
+        // been materialized at the workspace root.
         var migratedPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
-        Assert.False(File.Exists(migratedPath), "Malformed legacy file should not produce a partial aspire.config.json.");
+        Assert.False(File.Exists(migratedPath), "Unparseable legacy file should not produce a partial aspire.config.json.");
         // Either no exception (graceful), or the same InvalidOperationException previously
         // thrown by AddSettingsFile for malformed JSON. Both are acceptable; what we're
-        // proving is that we didn't crash inside the new migration step itself.
+        // proving is that the guard prevented us from crashing inside the new migration step.
         Assert.True(ex is null or InvalidOperationException, $"Unexpected exception type: {ex?.GetType().FullName}");
+    }
+
+    [Fact]
+    public void RegisterSettingsFiles_FallsBackToLegacyWhenMigrationLoadThrows()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var legacyDir = workspace.CreateDirectory(AspireJsonConfiguration.SettingsFolder);
+        var legacySettingsPath = Path.Combine(legacyDir.FullName, AspireJsonConfiguration.FileName);
+        // This file is *parseable* JSON with a valid string appHostPath, so
+        // LegacySettingsFileHasMigratableData returns true and we enter the migration try
+        // block. However, "features" is typed Dictionary<string, bool> with a strict
+        // FlexibleBooleanDictionaryConverter, so passing a string for it causes
+        // AspireJsonConfiguration.Load (invoked by AspireConfigFile.LoadOrCreate) to throw a
+        // JsonException. That exception must be caught and we must fall back to registering
+        // the legacy file directly.
+        File.WriteAllText(legacySettingsPath, """
+            {
+              "appHostPath": "MyApp.csproj",
+              "features": "not-an-object"
+            }
+            """);
+
+        var globalDir = workspace.CreateDirectory("global-aspire");
+        var globalSettingsFile = new FileInfo(Path.Combine(globalDir.FullName, AspireConfigFile.FileName));
+
+        var builder = new ConfigurationBuilder();
+        var ex = Record.Exception(() =>
+            ConfigurationHelper.RegisterSettingsFiles(builder, workspace.WorkspaceRoot, globalSettingsFile));
+
+        Assert.Null(ex);
+
+        // Migration failed inside LoadOrCreate, so aspire.config.json must not exist at the
+        // workspace root. Its absence proves we hit the catch block and continued past the
+        // failed migration rather than half-writing a new config file.
+        var migratedPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        Assert.False(File.Exists(migratedPath), "Failed migration should not produce a partial aspire.config.json.");
+
+        // The fallback registered the legacy file directly, so appHostPath remains readable
+        // from configuration via its flat key (the JSON source flattens nested objects with ':',
+        // but appHostPath is a root-level scalar so its key is unchanged).
+        var config = builder.Build();
+        Assert.Equal("MyApp.csproj", config["appHostPath"]);
     }
 }
