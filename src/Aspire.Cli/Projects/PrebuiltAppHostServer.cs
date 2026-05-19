@@ -546,6 +546,8 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             var channels = !string.IsNullOrWhiteSpace(packageSourceOverride) && string.IsNullOrEmpty(requestedChannel)
                 ? []
                 : await GetExplicitRestoreChannelsAsync(requestedChannel, cancellationToken);
+            var hasOverride = !string.IsNullOrWhiteSpace(packageSourceOverride);
+            var matchedChannelHasAllPackagesMapping = false;
             foreach (var channel in channels)
             {
                 if (channel.Mappings is null)
@@ -555,24 +557,42 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
 
                 foreach (var mapping in channel.Mappings)
                 {
+                    // Stay consistent with TryCreateTemporaryNuGetConfigAsync, which drops the
+                    // matched channel's Aspire* mapping in the override branch: the bundled
+                    // restore tool treats `--source` CLI args as co-eligible with config
+                    // mappings, so re-adding the channel's Aspire feed here would silently
+                    // defeat the override even though the temp NuGet.config's PSM tries to
+                    // pin Aspire* to the override exclusively.
+                    if (hasOverride && mapping.PackageFilter.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    if (mapping.PackageFilter == PackageMapping.AllPackages)
+                    {
+                        matchedChannelHasAllPackagesMapping = true;
+                    }
+
                     if (!sources.Contains(mapping.Source, StringComparer.OrdinalIgnoreCase))
                     {
                         sources.Add(mapping.Source);
                     }
                 }
             }
+
+            // Mirror the temp NuGet.config's catch-all decision: it adds `* -> NuGet.org`
+            // only when the matched channel did not supply its own AllPackages mapping. The
+            // --source argument list must agree so non-Aspire transitives have the same
+            // catch-all source in both views.
+            if (hasOverride && !matchedChannelHasAllPackagesMapping &&
+                !sources.Contains(NuGetOrgSource, StringComparer.OrdinalIgnoreCase))
+            {
+                sources.Add(NuGetOrgSource);
+            }
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to get package channels, relying on nuget.config and nuget.org fallback");
-        }
-
-        if (!string.IsNullOrWhiteSpace(packageSourceOverride) && sources.Count == 1)
-        {
-            // Keep NuGet.org available for unrelated packages and transitives; the temp
-            // NuGet.config maps Aspire* exclusively to the explicit source so Aspire packages
-            // cannot float to NuGet.org or any other co-eligible feed.
-            sources.Add(NuGetOrgSource);
         }
 
         return sources.Count > 0 ? sources : null;

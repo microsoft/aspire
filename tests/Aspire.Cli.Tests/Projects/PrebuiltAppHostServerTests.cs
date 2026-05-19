@@ -638,6 +638,80 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         Assert.Equal([PackageMapping.AllPackages], GetPackagePatternsForSource(doc, NuGetOrgSource));
     }
 
+    [Fact]
+    public async Task GetNuGetSources_WithPackageSourceOverrideAndMatchedChannel_OmitsChannelAspireFeedFromSources()
+    {
+        // Regression: the temp NuGet.config drops the matched channel's Aspire* mapping in
+        // the override branch, but the --source argument list passed to the bundled NuGet
+        // tool also has to drop that source URL. The bundled tool treats extra `--source`
+        // CLI args as co-eligible with config mappings, so re-adding the channel's Aspire
+        // feed here would silently let Aspire packages resolve from it and defeat the
+        // override.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string packageSourceOverride = "/tmp/aspire-packages";
+        const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
+        var stagingChannel = PackageChannel.CreateExplicitChannel(
+            name: "staging",
+            quality: PackageChannelQuality.Both,
+            mappings: [new PackageMapping("Aspire*", channelSource)],
+            nuGetPackageCache: new FakeNuGetPackageCache());
+        var server = CreateServerWithChannel(workspace, stagingChannel, CreateContextWithIdentityChannel("pr-12345"));
+
+        var sources = await InvokeGetNuGetSourcesAsync(server, requestedChannel: "staging", packageSourceOverride: packageSourceOverride);
+
+        Assert.NotNull(sources);
+        Assert.Contains(packageSourceOverride, sources);
+        Assert.DoesNotContain(channelSource, sources);
+        Assert.Contains(NuGetOrgSource, sources);
+    }
+
+    [Fact]
+    public async Task GetNuGetSources_WithPackageSourceOverrideAndMatchedChannelNonAspireMapping_KeepsChannelSourceAndAddsNuGetOrgFallback()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string packageSourceOverride = "/tmp/aspire-packages";
+        const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
+        var stagingChannel = PackageChannel.CreateExplicitChannel(
+            name: "staging",
+            quality: PackageChannelQuality.Both,
+            mappings: [new PackageMapping("CommunityToolkit*", channelSource)],
+            nuGetPackageCache: new FakeNuGetPackageCache());
+        var server = CreateServerWithChannel(workspace, stagingChannel, CreateContextWithIdentityChannel("pr-12345"));
+
+        var sources = await InvokeGetNuGetSourcesAsync(server, requestedChannel: "staging", packageSourceOverride: packageSourceOverride);
+
+        Assert.NotNull(sources);
+        Assert.Contains(packageSourceOverride, sources);
+        Assert.Contains(channelSource, sources);
+        // Matched channel has no AllPackages mapping, so the temp NuGet.config uses NuGet.org
+        // as catch-all and the sources list must include it too.
+        Assert.Contains(NuGetOrgSource, sources);
+    }
+
+    [Fact]
+    public async Task GetNuGetSources_WithPackageSourceOverrideAndMatchedChannelAllPackagesMapping_OmitsNuGetOrgFallback()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string packageSourceOverride = "/tmp/aspire-packages";
+        const string channelSource = "https://pkgs.dev.azure.com/fake/v3/index.json";
+        var stagingChannel = PackageChannel.CreateExplicitChannel(
+            name: "staging",
+            quality: PackageChannelQuality.Both,
+            mappings: [new PackageMapping(PackageMapping.AllPackages, channelSource)],
+            nuGetPackageCache: new FakeNuGetPackageCache());
+        var server = CreateServerWithChannel(workspace, stagingChannel, CreateContextWithIdentityChannel("pr-12345"));
+
+        var sources = await InvokeGetNuGetSourcesAsync(server, requestedChannel: "staging", packageSourceOverride: packageSourceOverride);
+
+        Assert.NotNull(sources);
+        Assert.Contains(packageSourceOverride, sources);
+        Assert.Contains(channelSource, sources);
+        // Matched channel supplied its own AllPackages mapping, so NuGet.org should not be
+        // added as a co-eligible source — the channel's catch-all wins in both the temp
+        // config's PSM and the --source argument list.
+        Assert.DoesNotContain(NuGetOrgSource, sources);
+    }
+
     private static CliExecutionContext CreateContextWithIdentityChannel(string identityChannel) =>
         new(new DirectoryInfo(Path.GetTempPath()),
             new DirectoryInfo(Path.Combine(Path.GetTempPath(), "hives")),
@@ -713,6 +787,21 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
 
         var task = (Task<TemporaryNuGetConfig?>)method.Invoke(server, [requestedChannel, packageSourceOverride, CancellationToken.None])!;
         return await task;
+    }
+
+    private static async Task<IReadOnlyList<string>?> InvokeGetNuGetSourcesAsync(
+        PrebuiltAppHostServer server,
+        string? requestedChannel,
+        string? packageSourceOverride = null)
+    {
+        var method = typeof(PrebuiltAppHostServer).GetMethod(
+            "GetNuGetSourcesAsync",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        Assert.NotNull(method);
+
+        var task = (Task<IEnumerable<string>?>)method.Invoke(server, [requestedChannel, packageSourceOverride, CancellationToken.None])!;
+        var result = await task;
+        return result?.ToList();
     }
 
     [Fact]
