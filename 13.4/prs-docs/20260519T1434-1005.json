@@ -1,0 +1,9 @@
+{
+  "author": "takashiuesaka",
+  "comment": "Test-only changes to twoslash blocks in docs; no matching changelog entry",
+  "mergedAt": "2026-05-19T14:34:24Z",
+  "number": 1005,
+  "runDate": "2026-05-19T17:12:32Z",
+  "status": "excluded",
+  "title": "feat: enhance known type bugs handling for multi-language support"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "New CI tool and workflow for TypeScript API surface compatibility checking",
+  "mergedAt": "2026-05-19T14:30:09Z",
+  "number": 17103,
+  "runDate": "2026-05-19T17:12:32Z",
+  "status": "included",
+  "title": "Add TypeScript API compatibility check"
+}

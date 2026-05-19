@@ -1,0 +1,21 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@Waleed-KH"
+  ],
+  "description": "Fixed a crash that occurred when combining `RunDatabaseUpdateOnStart()` and `PublishAsMigrationBundle()` on an EF Migrations resource. The run mode pipeline no longer fails with an invalid step dependency error when publish steps are also configured.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-05-19T15:22:56Z",
+  "lastMergedAt": "2026-05-19T15:22:56Z",
+  "name": "Fix EF Migrations crash in run mode when publish steps are configured",
+  "owner": "sebastienros",
+  "prs": [
+    17207
+  ]
+}

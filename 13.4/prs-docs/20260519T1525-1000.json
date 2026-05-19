@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "References microsoft/aspire#17031 which is not in the 13.4 milestone; no matching changelog entry",
+  "mergedAt": "2026-05-19T15:25:10Z",
+  "number": 1000,
+  "runDate": "2026-05-19T17:12:32Z",
+  "status": "excluded",
+  "title": "docs(ts-apphost): document supported AppHost-root package managers and Node engine (microsoft/aspire#17031)"
+}

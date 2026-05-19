@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Fix for CLI graceful shutdown race condition with 5s termination timeout",
+  "mergedAt": "2026-05-19T16:31:39Z",
+  "number": 17251,
+  "runDate": "2026-05-19T17:12:32Z",
+  "status": "included",
+  "title": "Improve ConsoleCancellationManager with process termination timeout"
+}

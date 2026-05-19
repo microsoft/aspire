@@ -1,0 +1,19 @@
+{
+  "area": "Engineering",
+  "areaEmoji": "🔧",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "A new CI workflow and tool prevent undeclared breaking changes to the TypeScript AppHost API surface. PRs are automatically validated against the ATS baseline, and intentional breaks require explicit suppressions with full traceability.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔍",
+  "firstMergedAt": "2026-05-19T14:30:09Z",
+  "lastMergedAt": "2026-05-19T14:30:09Z",
+  "name": "TypeScript API compatibility check",
+  "owner": "sebastienros",
+  "prs": [
+    17103
+  ]
+}

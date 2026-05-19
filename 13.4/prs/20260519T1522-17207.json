@@ -1,0 +1,9 @@
+{
+  "author": "Waleed-KH",
+  "comment": "Community fix for EF Migrations crash when combining run and publish pipeline steps",
+  "mergedAt": "2026-05-19T15:22:56Z",
+  "number": 17207,
+  "runDate": "2026-05-19T17:12:32Z",
+  "status": "included",
+  "title": "fix ef migration with publish in run mode"
+}

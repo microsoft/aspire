@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Test-only changes adding E2E coverage for TypeScript JavaScript hosting; no user-facing changes",
+  "mergedAt": "2026-05-19T17:01:25Z",
+  "number": 17057,
+  "runDate": "2026-05-19T17:12:32Z",
+  "status": "excluded",
+  "title": "Add TypeScript JavaScript hosting coverage"
+}

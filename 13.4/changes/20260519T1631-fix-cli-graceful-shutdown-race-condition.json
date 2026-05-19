@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Resolved a race condition between System.CommandLine's built-in cancellation and Aspire CLI signal handling. The CLI now waits up to 5 seconds for graceful shutdown on SIGINT/SIGTERM before forcing termination, with consistent POSIX signal registration across platforms.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "⏱️",
+  "firstMergedAt": "2026-05-19T16:31:39Z",
+  "lastMergedAt": "2026-05-19T16:31:39Z",
+  "name": "Fix CLI graceful shutdown race condition",
+  "owner": "JamesNK",
+  "prs": [
+    17251
+  ]
+}

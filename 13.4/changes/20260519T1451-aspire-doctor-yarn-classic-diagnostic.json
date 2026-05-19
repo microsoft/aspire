@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "`aspire doctor` now correctly reports a structured failure when a TypeScript AppHost workspace uses Yarn Classic (v1), which is not supported. Previously, Yarn Classic workspaces produced no output at all from the TypeScript AppHost diagnostics.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🩺",
+  "firstMergedAt": "2026-05-19T14:51:49Z",
+  "lastMergedAt": "2026-05-19T14:51:49Z",
+  "name": "aspire doctor reports Yarn Classic as unsupported",
+  "owner": "IEvangelist",
+  "prs": [
+    17214
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "aspire doctor now reports Yarn Classic as unsupported for TypeScript AppHost workspaces",
+  "mergedAt": "2026-05-19T14:51:49Z",
+  "number": 17214,
+  "runDate": "2026-05-19T17:12:32Z",
+  "status": "included",
+  "title": "Improve aspire doctor TypeScript AppHost diagnostics across package managers"
+}
