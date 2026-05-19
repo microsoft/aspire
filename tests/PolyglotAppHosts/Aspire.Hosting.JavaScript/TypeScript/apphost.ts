@@ -28,4 +28,26 @@ const _viteAppName = await viteApp.name();
 const _viteAppCommand = await viteApp.command();
 const _viteAppWorkingDirectory = await viteApp.workingDirectory();
 
+const nextJsApp = await builder.addNextJsApp('nextjs-app', './nextjs-app', { runScriptName: 'dev' });
+await nextJsApp.disableBuildValidation();
+await nextJsApp.withNpm({ install: false, installCommand: 'ci' });
+const _nextJsAppName = await nextJsApp.name();
+const _nextJsAppCommand = await nextJsApp.command();
+const _nextJsAppWorkingDirectory = await nextJsApp.workingDirectory();
+
+const staticSiteApp = await builder.addJavaScriptApp('static-site-app', './static-site-app');
+await staticSiteApp.publishAsStaticWebsite({
+    apiPath: '/api',
+    apiTarget: nodeApp,
+    outputPath: 'dist',
+    stripPrefix: true,
+    targetEndpointName: 'http',
+});
+
+await builder.addJavaScriptApp('node-server-app', './node-server-app')
+    .publishAsNodeServer('server.js', { outputPath: 'build' });
+
+await builder.addJavaScriptApp('npm-script-app', './npm-script-app')
+    .publishAsNpmScript({ startScriptName: 'start', runScriptArguments: '-- --port $PORT' });
+
 await builder.build().run();

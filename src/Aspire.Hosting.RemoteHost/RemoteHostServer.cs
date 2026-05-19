@@ -1,13 +1,17 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Reflection;
 using Aspire.Hosting.RemoteHost.Ats;
 using Aspire.Hosting.RemoteHost.CodeGeneration;
+using Aspire.Hosting.RemoteHost.Diagnostics;
 using Aspire.Hosting.RemoteHost.Language;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 
 namespace Aspire.Hosting.RemoteHost;
 
@@ -27,12 +31,22 @@ public static class RemoteHostServer
     /// </remarks>
     /// <param name="args">Command line arguments.</param>
     /// <returns>A task that completes when the server has stopped.</returns>
-    public static Task RunAsync(string[] args)
+    public static async Task RunAsync(string[] args)
     {
         var builder = CreateBuilder(args);
-        var host = builder.Build();
+        using var host = builder.Build();
+        var profilingTelemetry = host.Services.GetRequiredService<RemoteHostProfilingTelemetry>();
 
-        return host.RunAsync();
+        using var activity = profilingTelemetry.StartRemoteHostRun();
+        try
+        {
+            await host.RunAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            activity.SetError(ex);
+            throw;
+        }
     }
 
     internal static HostApplicationBuilder CreateBuilder(string[] args)
@@ -40,6 +54,7 @@ public static class RemoteHostServer
         var builder = Host.CreateApplicationBuilder(args);
         ConfigureAppHostLogLevel(builder.Logging, builder.Configuration);
         ConfigureServices(builder.Services);
+        ConfigureProfilingTelemetry(builder);
 
         return builder;
     }
@@ -62,6 +77,7 @@ public static class RemoteHostServer
         services.AddHostedService<JsonRpcServer>();
 
         // Singletons
+        services.AddSingleton<RemoteHostProfilingTelemetry>();
         services.AddSingleton<AssemblyLoader>();
         services.AddSingleton<AtsContextFactory>();
         services.AddSingleton(sp => sp.GetRequiredService<AtsContextFactory>().GetContext());
@@ -82,5 +98,32 @@ public static class RemoteHostServer
         services.AddScoped<AtsMarshaller>();
         services.AddScoped<CapabilityDispatcher>();
         services.AddScoped<RemoteAppHostService>();
+    }
+
+    private static void ConfigureProfilingTelemetry(HostApplicationBuilder builder)
+    {
+        if (!RemoteHostProfilingTelemetry.ShouldConfigureExporter(builder.Configuration))
+        {
+            return;
+        }
+
+        var resourceBuilder = ResourceBuilder.CreateDefault()
+            .AddService(
+                serviceName: "aspire-remotehost",
+                serviceVersion: GetRemoteHostServiceVersion());
+
+        builder.Services.AddOpenTelemetry()
+            .WithTracing(tracing =>
+            {
+                tracing
+                    .AddSource(RemoteHostProfilingTelemetry.ActivitySourceName)
+                    .SetResourceBuilder(resourceBuilder)
+                    .AddOtlpExporter();
+            });
+    }
+
+    private static string? GetRemoteHostServiceVersion()
+    {
+        return typeof(RemoteHostServer).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
     }
 }

@@ -358,9 +358,9 @@ internal static class TypeScriptAppHostToolchainResolver
             (version.Length == 1 || !char.IsAsciiDigit(version[1]));
     }
 
-    private static InvalidOperationException CreateYarnClassicNotSupportedException(string upgradeTarget)
+    private static YarnClassicNotSupportedException CreateYarnClassicNotSupportedException(string upgradeTarget)
     {
-        return new InvalidOperationException(
+        return new YarnClassicNotSupportedException(
             $"Yarn Classic is not supported for TypeScript AppHosts. Upgrade {upgradeTarget} to Yarn 4 or later, or use npm, pnpm, or Bun.");
     }
 

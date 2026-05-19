@@ -1,12 +1,15 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Dcp;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using OpenTelemetry.Trace;
 
 namespace Aspire.Hosting.Diagnostics;
 
@@ -19,23 +22,35 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
         // Activity names describe AppHost/DCP orchestration work. Keep names stable
         // because profiling exports are queried across CLI and AppHost versions.
         public const string DcpRunApplication = "aspire.hosting.dcp.run_application";
+        public const string AppHostProcessStartup = "aspire.hosting.apphost.process_startup";
+        public const string AppHostStart = "aspire.hosting.apphost.start";
+        public const string AppHostBeforeStart = "aspire.hosting.apphost.before_start";
+        public const string AppHostEventingSubscribers = "aspire.hosting.apphost.eventing_subscribers";
+        public const string AppHostEventingSubscriber = "aspire.hosting.apphost.eventing_subscriber";
+        public const string AppHostPublishEvent = "aspire.hosting.apphost.publish_event";
+        public const string AppHostEventCallback = "aspire.hosting.apphost.event_callback";
+        public const string AppHostLifecycleHooks = "aspire.hosting.apphost.lifecycle_hooks";
+        public const string AppHostLifecycleHook = "aspire.hosting.apphost.lifecycle_hook";
+        public const string AppHostBeforeStartPipeline = "aspire.hosting.apphost.before_start_pipeline";
+        public const string AppHostHostStartup = "aspire.hosting.apphost.host_startup";
         public const string DcpPrepareServices = "aspire.hosting.dcp.prepare_services";
         public const string DcpPrepareResources = "aspire.hosting.dcp.prepare_resources";
         public const string DcpAllocateServiceAddresses = "aspire.hosting.dcp.allocate_service_addresses";
-        public const string DcpCreateObjects = "aspire.hosting.dcp.create_objects";
-        public const string DcpCreateObject = "aspire.hosting.dcp.create_object";
-        public const string DcpCreateRenderedResources = "aspire.hosting.dcp.create_rendered_resources";
         public const string ResourceCreate = "aspire.hosting.resource.create";
-        public const string DcpCreateResourceReplica = "aspire.hosting.dcp.create_resource_replica";
         public const string DcpKubernetesApi = "aspire.hosting.dcp.kubernetes_api";
         public const string DcpEnsureKubernetesClient = "aspire.hosting.dcp.ensure_kubernetes_client";
         public const string DcpResourceObserved = "aspire.hosting.dcp.resource_observed";
+        public const string ResourceStartup = "aspire.hosting.resource.startup";
         public const string ResourceBeforeStartWait = "aspire.hosting.resource.before_start_wait";
         public const string ResourceWaitForDependency = "aspire.hosting.resource.wait_for_dependency";
         public const string ResourceWaitForDependencies = "aspire.hosting.resource.wait_for_dependencies";
         public const string ResourceStop = "aspire.hosting.resource.stop";
         public const string ResourceStart = "aspire.hosting.resource.start";
+        public const string BackchannelStartup = "aspire.hosting.backchannel.startup";
         public const string JsonRpcServerCall = "aspire.hosting.jsonrpc.server";
+        public const string DashboardGetConnectionInfo = "aspire.hosting.dashboard.get_connection_info";
+        public const string DashboardWaitHealthy = "aspire.hosting.dashboard.wait_healthy";
+        public const string DashboardResolveUrls = "aspire.hosting.dashboard.resolve_urls";
     }
 
     internal static class Tags
@@ -46,6 +61,13 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
         public const string LegacyStartupOperationId = "aspire.startup.operation_id";
         public const string AppHostName = "aspire.apphost.name";
         public const string AppHostOperation = "aspire.apphost.operation";
+        public const string AppHostEntryPoint = "aspire.apphost.entry_point";
+        public const string AppHostEventType = "aspire.apphost.event.type";
+        public const string AppHostEventDispatchBehavior = "aspire.apphost.event.dispatch_behavior";
+        public const string AppHostEventSubscriberCount = "aspire.apphost.event.subscriber_count";
+        public const string AppHostLifecycleHookCount = "aspire.apphost.lifecycle_hook_count";
+        public const string AppHostComponentType = "aspire.apphost.component.type";
+        public const string AppHostPipelineStep = "aspire.apphost.pipeline.step";
         public const string ResourceName = "aspire.resource.name";
         public const string ResourceId = "aspire.resource.id";
         public const string ResourceType = "aspire.resource.type";
@@ -82,16 +104,21 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
         public const string DcpApiRetryDelayMilliseconds = "aspire.dcp.api.retry_delay_ms";
         public const string DcpKubeconfigExists = "aspire.dcp.kubeconfig.exists";
         public const string DcpKubeconfigLockWaitMilliseconds = "aspire.dcp.kubeconfig.lock_wait_ms";
+        public const string DcpKubeconfigFileWaitMilliseconds = "aspire.dcp.kubeconfig.file_wait_ms";
+        public const string DcpKubeconfigBuildDurationMilliseconds = "aspire.dcp.kubeconfig.build_duration_ms";
         public const string DcpKubeconfigReadDurationMilliseconds = "aspire.dcp.kubeconfig.read_duration_ms";
+        public const string DcpKubernetesClientWaitMilliseconds = "aspire.dcp.kubernetes_client.wait_ms";
         public const string DcpKubernetesClientAlreadyInitialized = "aspire.dcp.kubernetes_client_already_initialized";
-        public const string DcpCreateObjectId = "aspire.hosting.dcp.create_object.id";
-        public const string DcpCreateObjectKind = "aspire.hosting.dcp.create_object.kind";
-        public const string DcpCreateObjectName = "aspire.hosting.dcp.create_object.name";
-        public const string DcpCreateObjectTraceId = "aspire.hosting.dcp.create_object.trace_id";
-        public const string DcpCreateObjectSpanId = "aspire.hosting.dcp.create_object.span_id";
+        public const string DcpKubernetesClientInitialized = "aspire.dcp.kubernetes_client.initialized";
+        public const string BackchannelSocketPath = "aspire.hosting.backchannel.socket.path";
+        public const string PreviousResourceState = "aspire.resource.previous_state";
+        public const string PreviousResourceHealthStatus = "aspire.resource.previous_health_status";
         public const string JsonRpcMethod = "rpc.method";
         public const string JsonRpcStreaming = "aspire.hosting.jsonrpc.streaming";
         public const string JsonRpcStreamItemCount = "aspire.hosting.jsonrpc.stream.item_count";
+        public const string DashboardHealthy = "aspire.hosting.dashboard.healthy";
+        public const string DashboardUrlSource = "aspire.hosting.dashboard.url.source";
+        public const string DashboardHasApiBaseUrl = "aspire.hosting.dashboard.api_base_url.exists";
         public const string ExceptionType = "exception.type";
         public const string ExceptionMessage = "exception.message";
     }
@@ -102,17 +129,47 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
         // readiness observations, resource wait completions, and exception details.
         public const string DcpServiceAddressAllocated = "aspire.dcp.service_address_allocated";
         public const string DcpServiceAddressAllocationFailed = "aspire.dcp.service_address_allocation_failed";
+        public const string AppHostCreateBuilderEntered = "aspire.hosting.apphost.create_builder_entered";
+        public const string AppHostBuilderConstructing = "aspire.hosting.apphost.builder_constructing";
+        public const string AppHostBuilderConstructed = "aspire.hosting.apphost.builder_constructed";
+        public const string AppHostBuildStarted = "aspire.hosting.apphost.build_started";
+        public const string AppHostBuildCompleted = "aspire.hosting.apphost.build_completed";
+        public const string AppHostStartAsyncEntered = "aspire.hosting.apphost.start_async_entered";
+        public const string AppHostRunAsyncEntered = "aspire.hosting.apphost.run_async_entered";
+        public const string AppHostHostStarting = "aspire.hosting.apphost.host_starting";
+        public const string AppHostHostStarted = "aspire.hosting.apphost.host_started";
         public const string KubernetesApiTimeout = "aspire.hosting.dcp.kubernetes_api.timeout";
         public const string KubernetesApiRetry = "aspire.hosting.dcp.kubernetes_api.retry";
         public const string KubeconfigLockAcquired = "aspire.hosting.dcp.kubeconfig_lock_acquired";
+        public const string KubeconfigFileDetected = "aspire.hosting.dcp.kubeconfig_file_detected";
         public const string KubeconfigReadComplete = "aspire.hosting.dcp.kubeconfig_read_complete";
         public const string KubernetesClientCreated = "aspire.hosting.dcp.kubernetes_client_created";
+        public const string KubernetesClientReady = "aspire.hosting.dcp.kubernetes_client_ready";
+        public const string ResourceStartupObserved = "aspire.resource.startup.observed";
+        public const string ResourceStartupStateChanged = "aspire.resource.startup.state_changed";
+        public const string ResourceStartupHealthChanged = "aspire.resource.startup.health_changed";
+        public const string ResourceStartupReady = "aspire.resource.startup.ready";
         public const string ResourceWaitObserved = "aspire.resource.wait.observed";
         public const string ResourceWaitCompleted = "aspire.resource.wait.completed";
         public const string ResourceWaitCancelled = "aspire.resource.wait.cancelled";
+        public const string BackchannelSocketDeleted = "aspire.hosting.backchannel.socket_deleted";
+        public const string BackchannelListening = "aspire.hosting.backchannel.listening";
+        public const string BackchannelReadyPublished = "aspire.hosting.backchannel.ready_published";
+        public const string BackchannelClientAccepted = "aspire.hosting.backchannel.client_accepted";
+        public const string BackchannelRpcListening = "aspire.hosting.backchannel.rpc_listening";
+        public const string BackchannelConnectedPublished = "aspire.hosting.backchannel.connected_published";
         public const string Exception = "exception";
         public const string JsonRpcStreamFirstItem = "aspire.hosting.jsonrpc.stream.first_item";
         public const string JsonRpcStreamCompleted = "aspire.hosting.jsonrpc.stream.completed";
+        public const string DashboardWaitHealthyCompleted = "aspire.hosting.dashboard.wait_healthy.completed";
+        public const string DashboardWaitHealthyFailed = "aspire.hosting.dashboard.wait_healthy.failed";
+    }
+
+    internal static class Values
+    {
+        public const string DashboardUrlSourceNone = "none";
+        public const string DashboardUrlSourceResource = "resource";
+        public const string DashboardUrlSourceConfiguration = "configuration";
     }
 
     internal static class Annotations
@@ -128,8 +185,55 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
     }
 
     private static readonly ActivitySource s_activitySource = new(ActivitySourceName);
+    private static readonly ConcurrentQueue<AppHostStartupEvent> s_startupEvents = new();
 
     private readonly IConfiguration _configuration = configuration;
+
+    // These static helpers are used before ProfilingTelemetry can be resolved from DI. Some startup
+    // milestones occur before HostApplicationBuilder has created IConfiguration or before OpenTelemetry
+    // has built the TracerProvider, so buffer timestamps here and attach them later to the process-start
+    // span without forcing the full telemetry stack to initialize too soon.
+    public static void RecordAppHostStartupEvent(string eventName, IConfiguration? configuration = null)
+    {
+        // CreateBuilder-entered events happen before IConfiguration exists. Later startup phases
+        // pass configuration explicitly so command-line/config providers are honored as soon as
+        // they are available.
+        if (!IsStartupEventRecordingEnabled(configuration))
+        {
+            return;
+        }
+
+        s_startupEvents.Enqueue(new AppHostStartupEvent(eventName, DateTimeOffset.UtcNow));
+    }
+
+    public static ActivityScope StartAppHostProcessStartup(IConfiguration? configuration)
+    {
+        if (!IsEnabled(configuration))
+        {
+            return default;
+        }
+
+        var activity = StartActivity(configuration, Activities.AppHostProcessStartup, ActivityKind.Internal, GetProcessStartTime());
+        activity.AddAppHostStartupEvents(DrainAppHostStartupEvents());
+        return activity;
+    }
+
+    public static void RecordAppHostProcessStartup(IConfiguration? configuration)
+    {
+        using var activity = StartAppHostProcessStartup(configuration);
+    }
+
+    public static void EnsureInitialized(IServiceProvider services)
+    {
+        var configuration = services.GetRequiredService<IConfiguration>();
+        if (IsEnabled(configuration))
+        {
+            // OpenTelemetry.Extensions.Hosting normally builds the TracerProvider when the host starts.
+            // Before-start hooks run before that, so force provider construction when self-profiling is
+            // enabled or the spans that explain pre-hosted-service startup work would be dropped.
+            _ = services.GetService<TracerProvider>();
+        }
+    }
 
     public static ActivityScope CurrentActivity(IConfiguration? configuration) =>
         IsEnabled(configuration) ? new(Activity.Current, configuration, ownsActivity: false) : default;
@@ -150,6 +254,81 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
         return activity;
     }
 
+    public static ActivityScope StartAppHostStart(IConfiguration? configuration, string entryPoint)
+    {
+        var activity = StartActivity(configuration, Activities.AppHostStart);
+        activity.SetAppHostEntryPoint(entryPoint);
+        return activity;
+    }
+
+    public static ActivityScope StartAppHostBeforeStart(IConfiguration? configuration)
+    {
+        return StartActivity(configuration, Activities.AppHostBeforeStart);
+    }
+
+    public static ActivityScope StartAppHostEventingSubscribers(IConfiguration? configuration, int subscriberCount)
+    {
+        var activity = StartActivity(configuration, Activities.AppHostEventingSubscribers);
+        activity.SetAppHostEventSubscriberCount(subscriberCount);
+        return activity;
+    }
+
+    public static ActivityScope StartAppHostEventingSubscriber(IConfiguration? configuration, Type subscriberType)
+    {
+        var activity = StartActivity(configuration, Activities.AppHostEventingSubscriber);
+        activity.SetAppHostComponentType(subscriberType);
+        return activity;
+    }
+
+    public static ActivityScope StartAppHostPublishEvent(IConfiguration? configuration, Type eventType)
+    {
+        var activity = StartActivity(configuration, Activities.AppHostPublishEvent);
+        activity.SetAppHostEvent(eventType);
+        return activity;
+    }
+
+    public static ActivityScope StartAppHostEventCallback(Type eventType, string dispatchBehavior)
+    {
+        var parentActivity = Activity.Current;
+        if (parentActivity?.Source.Name != ActivitySourceName ||
+            parentActivity.OperationName != Activities.AppHostPublishEvent)
+        {
+            return default;
+        }
+
+        var activity = s_activitySource.StartActivity(Activities.AppHostEventCallback);
+        AddProfilingSessionId(activity, parentActivity.GetBaggageItem(Tags.ProfilingSessionId));
+        var scope = new ActivityScope(activity);
+        scope.SetAppHostEvent(eventType, dispatchBehavior);
+        return scope;
+    }
+
+    public static ActivityScope StartAppHostLifecycleHooks(IConfiguration? configuration, int lifecycleHookCount)
+    {
+        var activity = StartActivity(configuration, Activities.AppHostLifecycleHooks);
+        activity.SetAppHostLifecycleHookCount(lifecycleHookCount);
+        return activity;
+    }
+
+    public static ActivityScope StartAppHostLifecycleHook(IConfiguration? configuration, Type lifecycleHookType)
+    {
+        var activity = StartActivity(configuration, Activities.AppHostLifecycleHook);
+        activity.SetAppHostComponentType(lifecycleHookType);
+        return activity;
+    }
+
+    public static ActivityScope StartAppHostBeforeStartPipeline(IConfiguration? configuration, string pipelineStep)
+    {
+        var activity = StartActivity(configuration, Activities.AppHostBeforeStartPipeline);
+        activity.SetAppHostPipelineStep(pipelineStep);
+        return activity;
+    }
+
+    public ActivityScope StartAppHostHostStartup()
+    {
+        return StartActivity(Activities.AppHostHostStartup);
+    }
+
     public static ActivityScope StartDcpPrepareServices(IConfiguration? configuration)
     {
         return StartActivity(configuration, Activities.DcpPrepareServices);
@@ -167,36 +346,6 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
         return activity;
     }
 
-    public static ActivityScope StartDcpCreateObjects(IConfiguration? configuration, string resourceKind, int resourceCount)
-    {
-        var activity = StartActivity(configuration, Activities.DcpCreateObjects);
-        activity.SetDcpResourceSet(resourceKind, resourceCount);
-        return activity;
-    }
-
-    public static ActivityScope StartDcpCreateObject(IConfiguration? configuration, string resourceKind, string resourceName)
-    {
-        var activity = StartActivity(configuration, Activities.DcpCreateObject);
-        activity.SetDcpResource(resourceKind, resourceName);
-        activity.SetDcpCreateObject(resourceKind, resourceName);
-        return activity;
-    }
-
-    public static ActivityScope StartDcpCreateRenderedResources(IConfiguration? configuration, string resourceKind, int resourceCount)
-    {
-        var activity = StartActivity(configuration, Activities.DcpCreateRenderedResources);
-        activity.SetDcpResourceSet(resourceKind, resourceCount);
-        return activity;
-    }
-
-    public static ActivityScope StartDcpCreateResourceReplica(IConfiguration? configuration, IResource resource, string resourceKind, string resourceName)
-    {
-        var activity = StartActivity(configuration, Activities.DcpCreateResourceReplica);
-        activity.SetResource(resource);
-        activity.SetDcpResource(resourceKind, resourceName);
-        return activity;
-    }
-
     public static ActivityScope StartDcpEnsureKubernetesClient(IConfiguration? configuration, bool kubeconfigExists)
     {
         var activity = StartActivity(configuration, Activities.DcpEnsureKubernetesClient);
@@ -211,8 +360,7 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
         return activity;
     }
 
-    public static ActivityScope StartDcpResourceObserved(
-        IConfiguration? configuration,
+    public ActivityScope StartDcpResourceObserved(
         IResource appModelResource,
         string resourceKind,
         string resourceName,
@@ -221,12 +369,11 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
         DateTime? finishedTimestamp,
         IDictionary<string, string>? annotations)
     {
-        // Resource observations arrive from DCP watch notifications after the create-object span has ended,
-        // so use a short child activity from the annotated trace context instead of an event on Activity.Current.
-        var activity = StartActivityFromTraceAnnotations(configuration, Activities.DcpResourceObserved, annotations);
+        // Resource observations arrive from DCP watch notifications after the outbound Kubernetes create call
+        // has ended, so use a short child activity from the propagated profiling trace context.
+        var activity = StartActivityFromTraceAnnotations(Activities.DcpResourceObserved, annotations);
         activity.SetResource(appModelResource);
         activity.SetDcpResource(resourceKind, resourceName);
-        activity.SetDcpCreateObjectFromTraceAnnotations(resourceKind, resourceName, annotations);
         activity.SetResourceObserved(state, startupTimestamp, finishedTimestamp);
         return activity;
     }
@@ -246,6 +393,18 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
         return activity;
     }
 
+    public static ActivityScope StartResourceStartup(
+        IConfiguration? configuration,
+        IResource resource,
+        string resourceId,
+        CustomResourceSnapshot snapshot,
+        DateTimeOffset startTime)
+    {
+        var activity = StartActivity(configuration, $"{Activities.ResourceStartup} {resource.Name}", ActivityKind.Internal, startTime);
+        activity.SetResourceLifecycle(resource, resourceId, snapshot);
+        return activity;
+    }
+
     public static ActivityScope StartResourceStart(IConfiguration? configuration, IResource resource, string resourceKind, string resourceName, string resourceType)
     {
         var activity = StartActivity(configuration, Activities.ResourceStart);
@@ -255,11 +414,33 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
         return activity;
     }
 
+    public ActivityScope StartBackchannelStartup(string socketPath)
+    {
+        var activity = StartActivity(Activities.BackchannelStartup);
+        activity.SetBackchannelSocketPath(socketPath);
+        return activity;
+    }
+
     public ActivityScope StartJsonRpcServerCall(string methodName, bool streaming, BackchannelTraceContext? traceContext = null)
     {
         var activity = StartActivityFromTraceContext(Activities.JsonRpcServerCall, ActivityKind.Server, traceContext);
         activity.SetJsonRpcCall(methodName, streaming);
         return activity;
+    }
+
+    public ActivityScope StartDashboardGetConnectionInfo()
+    {
+        return StartActivity(Activities.DashboardGetConnectionInfo);
+    }
+
+    public ActivityScope StartDashboardWaitHealthy()
+    {
+        return StartActivity(Activities.DashboardWaitHealthy);
+    }
+
+    public ActivityScope StartDashboardResolveUrls()
+    {
+        return StartActivity(Activities.DashboardResolveUrls);
     }
 
     public static ActivityScope StartResourceStop(IConfiguration? configuration, IResource resource, string resourceKind, string resourceName)
@@ -292,7 +473,8 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
             return default;
         }
 
-        var activity = Activity.Current is null && TryGetProfilingParentContext(configuration, out var parentContext)
+        var activity = (Activity.Current is null || Activity.Current.Source.Name != ActivitySourceName) &&
+            TryGetProfilingParentContext(configuration, out var parentContext)
             ? s_activitySource.StartActivity(name, activityKind, parentContext)
             : s_activitySource.StartActivity(name, activityKind);
 
@@ -300,9 +482,42 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
         return new ActivityScope(activity, configuration);
     }
 
-    private static ActivityScope StartActivityFromTraceAnnotations(IConfiguration? configuration, string name, IDictionary<string, string>? annotations)
+    private static ActivityScope StartActivity(IConfiguration? configuration, string name, ActivityKind activityKind, DateTimeOffset startTime)
     {
         if (!IsEnabled(configuration))
+        {
+            return default;
+        }
+
+        Activity? activity;
+        if (TryGetProfilingParentContext(configuration, out var parentContext))
+        {
+            // Backdated lifecycle spans summarize async resource state changes and can start before the
+            // short-lived publish/update span that observes the milestone. Keep them under the profiling
+            // root instead of making them children of an ambient activity that may start later.
+            activity = s_activitySource.StartActivity(name, activityKind, parentContext, tags: null, links: null, startTime: startTime);
+        }
+        else if (Activity.Current is { } currentActivity)
+        {
+            activity = s_activitySource.StartActivity(name, activityKind, currentActivity.Context, tags: null, links: null, startTime: startTime);
+        }
+        else
+        {
+            activity = s_activitySource.StartActivity(name, activityKind, parentContext: default, tags: null, links: null, startTime: startTime);
+        }
+
+        AddProfilingSessionId(activity, configuration);
+        return new ActivityScope(activity, configuration);
+    }
+
+    private ActivityScope StartActivity(string name, ActivityKind activityKind = ActivityKind.Internal)
+    {
+        return StartActivity(_configuration, name, activityKind);
+    }
+
+    private ActivityScope StartActivityFromTraceAnnotations(string name, IDictionary<string, string>? annotations)
+    {
+        if (!IsEnabled(_configuration))
         {
             return default;
         }
@@ -321,12 +536,12 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
 
         if (activity is null)
         {
-            return StartActivity(configuration, name);
+            return StartActivity(name);
         }
 
-        AddProfilingSessionId(activity, configuration, annotations);
+        AddProfilingSessionId(activity, _configuration, annotations);
 
-        return new ActivityScope(activity, configuration);
+        return new ActivityScope(activity, _configuration);
     }
 
     private ActivityScope StartActivityFromTraceContext(string name, ActivityKind activityKind, BackchannelTraceContext? traceContext)
@@ -336,25 +551,31 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
             return default;
         }
 
-        // StreamJsonRpc's ActivityTracingStrategy creates Activity.Current from the W3C
-        // traceparent/tracestate values on the JSON-RPC request envelope. If the caller is
-        // older or tracing was unavailable, fall back to the configured profiling parent.
-        var activity = Activity.Current is null && TryGetProfilingParentContext(_configuration, out var parentContext)
-            ? s_activitySource.StartActivity(name, activityKind, parentContext)
-            : s_activitySource.StartActivity(name, activityKind);
+        Activity? activity;
+        if (TryGetBackchannelTraceParent(traceContext, out var traceContextParent))
+        {
+            activity = s_activitySource.StartActivity(name, activityKind, traceContextParent);
+        }
+        else if (TryGetAmbientRemoteParentContext(out var ambientParent))
+        {
+            // StreamJsonRpc's ActivityTracingStrategy creates an unexported server activity
+            // from the caller's W3C traceparent. Parent profiling spans to the remote caller
+            // instead of that hidden activity so exported CLI and Hosting spans are adjacent.
+            activity = s_activitySource.StartActivity(name, activityKind, ambientParent);
+        }
+        else if ((Activity.Current is null || Activity.Current.Source.Name != ActivitySourceName) &&
+            TryGetProfilingParentContext(_configuration, out var configuredParent))
+        {
+            activity = s_activitySource.StartActivity(name, activityKind, configuredParent);
+        }
+        else
+        {
+            activity = s_activitySource.StartActivity(name, activityKind);
+        }
 
         AddBaggage(activity, traceContext);
         AddProfilingSessionId(activity, _configuration, traceContext);
         return new ActivityScope(activity, _configuration);
-    }
-
-    private static void SetDcpCreateObjectTags(Activity activity, string resourceKind, string resourceName, string traceId, string spanId)
-    {
-        activity.SetTag(Tags.DcpCreateObjectId, $"{resourceKind}/{resourceName}");
-        activity.SetTag(Tags.DcpCreateObjectKind, resourceKind);
-        activity.SetTag(Tags.DcpCreateObjectName, resourceName);
-        activity.SetTag(Tags.DcpCreateObjectTraceId, traceId);
-        activity.SetTag(Tags.DcpCreateObjectSpanId, spanId);
     }
 
     private static void AddProfilingSessionId(Activity? activity, IConfiguration? configuration, IDictionary<string, string>? annotations = null)
@@ -373,6 +594,18 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
             activity.SetTag(Tags.ProfilingSessionId, sessionId);
             activity.SetTag(Tags.LegacyStartupOperationId, sessionId);
         }
+    }
+
+    private static void AddProfilingSessionId(Activity? activity, string? sessionId)
+    {
+        if (activity is null || string.IsNullOrEmpty(sessionId))
+        {
+            return;
+        }
+
+        activity.SetBaggage(Tags.ProfilingSessionId, sessionId);
+        activity.SetTag(Tags.ProfilingSessionId, sessionId);
+        activity.SetTag(Tags.LegacyStartupOperationId, sessionId);
     }
 
     private static void AddBaggage(Activity? activity, BackchannelTraceContext? traceContext)
@@ -406,6 +639,39 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
         }
     }
 
+    private static bool TryGetBackchannelTraceParent(BackchannelTraceContext? traceContext, out ActivityContext parentContext)
+    {
+        if (!string.IsNullOrEmpty(traceContext?.TraceParent) &&
+            ActivityContext.TryParse(traceContext.TraceParent, traceContext.TraceState, out parentContext))
+        {
+            return true;
+        }
+
+        parentContext = default;
+        return false;
+    }
+
+    private static bool TryGetAmbientRemoteParentContext(out ActivityContext parentContext)
+    {
+        var ambientActivity = Activity.Current;
+        if (ambientActivity is not null &&
+            ambientActivity.Source.Name != ActivitySourceName &&
+            ambientActivity.Parent is null &&
+            ambientActivity.ParentSpanId != default)
+        {
+            parentContext = new ActivityContext(
+                ambientActivity.TraceId,
+                ambientActivity.ParentSpanId,
+                ambientActivity.ActivityTraceFlags,
+                ambientActivity.TraceStateString,
+                isRemote: true);
+            return true;
+        }
+
+        parentContext = default;
+        return false;
+    }
+
     private static bool TryGetProfilingParentContext(IConfiguration? configuration, out ActivityContext parentContext)
     {
         var traceParent = GetConfigurationValue(configuration, KnownConfigNames.ProfilingTraceParent, KnownConfigNames.Legacy.StartupTraceParent);
@@ -421,8 +687,18 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
 
     internal static bool IsEnabled(IConfiguration? configuration)
     {
-        return IsTruthy(configuration?[KnownConfigNames.ProfilingEnabled]) ||
-            IsTruthy(configuration?[KnownConfigNames.Legacy.StartupProfilingEnabled]);
+        return configuration?.GetBool(KnownConfigNames.ProfilingEnabled, KnownConfigNames.Legacy.StartupProfilingEnabled) is true;
+    }
+
+    private static bool IsStartupEventRecordingEnabled(IConfiguration? configuration)
+    {
+        if (configuration is not null)
+        {
+            return IsEnabled(configuration);
+        }
+
+        return IsTruthy(Environment.GetEnvironmentVariable(KnownConfigNames.ProfilingEnabled)) ||
+            IsTruthy(Environment.GetEnvironmentVariable(KnownConfigNames.Legacy.StartupProfilingEnabled));
     }
 
     private static bool TryGetAnnotation(IDictionary<string, string> annotations, string name, string legacyName, out string? value)
@@ -447,6 +723,34 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
         return string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) || value == "1";
     }
 
+    private static DateTimeOffset GetProcessStartTime()
+    {
+        return new DateTimeOffset(Process.GetCurrentProcess().StartTime.ToUniversalTime(), TimeSpan.Zero);
+    }
+
+    private static AppHostStartupEvent[] DrainAppHostStartupEvents()
+    {
+        // Move the pre-DI startup timestamps into the process-start activity exactly once. The queue
+        // is static because the earliest records happen before DI is available, but draining here
+        // prevents the same milestones from leaking into later AppHost instances in this process.
+        // ConcurrentQueue.TryDequeue atomically claims each event, so callers that race with the
+        // drain do not need a separate lock.
+        if (s_startupEvents.IsEmpty)
+        {
+            return [];
+        }
+
+        var events = new List<AppHostStartupEvent>();
+        while (s_startupEvents.TryDequeue(out var startupEvent))
+        {
+            events.Add(startupEvent);
+        }
+
+        return events.ToArray();
+    }
+
+    internal readonly record struct AppHostStartupEvent(string Name, DateTimeOffset Timestamp);
+
     internal readonly struct ActivityScope(Activity? activity, IConfiguration? configuration = null, bool ownsActivity = true) : IDisposable
     {
         public void AddDcpServiceAddressAllocated(string serviceName)
@@ -463,6 +767,23 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
             {
                 [Tags.DcpServiceName] = serviceName
             }));
+        }
+
+        public void AddAppHostHostStarting() => AddEvent(Events.AppHostHostStarting);
+
+        public void AddAppHostHostStarted() => AddEvent(Events.AppHostHostStarted);
+
+        internal void AddAppHostStartupEvents(ReadOnlySpan<AppHostStartupEvent> events)
+        {
+            if (activity is null)
+            {
+                return;
+            }
+
+            foreach (var startupEvent in events)
+            {
+                activity.AddEvent(new ActivityEvent(startupEvent.Name, startupEvent.Timestamp));
+            }
         }
 
         public void AddKubeconfigLockAcquired() => AddEvent(Events.KubeconfigLockAcquired);
@@ -487,6 +808,10 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
         public void AddJsonRpcStreamFirstItemEvent() => AddEvent(Events.JsonRpcStreamFirstItem);
 
         public void AddJsonRpcStreamCompletedEvent() => AddEvent(Events.JsonRpcStreamCompleted);
+
+        public void AddDashboardWaitHealthyCompleted() => AddEvent(Events.DashboardWaitHealthyCompleted);
+
+        public void AddDashboardWaitHealthyFailed() => AddEvent(Events.DashboardWaitHealthyFailed);
 
         public void AddResourceWaitCancelled(string resourceName, string waitCondition)
         {
@@ -532,43 +857,28 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
             }
         }
 
-        public void SetDcpCreateObject(string resourceKind, string resourceName)
-        {
-            if (activity is null)
-            {
-                return;
-            }
-
-            SetDcpCreateObjectTags(activity, resourceKind, resourceName, activity.TraceId.ToString(), activity.SpanId.ToString());
-        }
-
-        public void SetDcpCreateObjectFromTraceAnnotations(string resourceKind, string resourceName, IDictionary<string, string>? annotations)
-        {
-            if (activity is null)
-            {
-                return;
-            }
-
-            if (annotations is not null &&
-                TryGetAnnotation(annotations, Annotations.TraceParent, Annotations.LegacyStartupTraceParent, out var traceParent) &&
-                ActivityContext.TryParse(
-                    traceParent,
-                    TryGetAnnotation(annotations, Annotations.TraceState, Annotations.LegacyStartupTraceState, out var traceState) ? traceState : null,
-                    out var createObjectContext))
-            {
-                SetDcpCreateObjectTags(activity, resourceKind, resourceName, createObjectContext.TraceId.ToString(), createObjectContext.SpanId.ToString());
-            }
-            else
-            {
-                SetDcpCreateObject(resourceKind, resourceName);
-            }
-        }
-
         public void SetDcpKubeconfigExists(bool exists) => SetTag(Tags.DcpKubeconfigExists, exists);
 
         public void SetDcpKubeconfigLockWait(long elapsedMilliseconds) => SetTag(Tags.DcpKubeconfigLockWaitMilliseconds, elapsedMilliseconds);
 
+        public void SetDcpKubeconfigFileWait(long elapsedMilliseconds) => SetTag(Tags.DcpKubeconfigFileWaitMilliseconds, elapsedMilliseconds);
+
+        public void SetDcpKubeconfigBuildDuration(long elapsedMilliseconds) => SetTag(Tags.DcpKubeconfigBuildDurationMilliseconds, elapsedMilliseconds);
+
         public void SetDcpKubeconfigReadDuration(long elapsedMilliseconds) => SetTag(Tags.DcpKubeconfigReadDurationMilliseconds, elapsedMilliseconds);
+
+        public void AddKubeconfigFileDetected() => AddEvent(Events.KubeconfigFileDetected);
+
+        public void AddKubernetesClientReady(long waitMilliseconds, bool initialized)
+        {
+            SetTag(Tags.DcpKubernetesClientWaitMilliseconds, waitMilliseconds);
+            SetTag(Tags.DcpKubernetesClientInitialized, initialized);
+            activity?.AddEvent(new ActivityEvent(Events.KubernetesClientReady, tags: new ActivityTagsCollection
+            {
+                [Tags.DcpKubernetesClientWaitMilliseconds] = waitMilliseconds,
+                [Tags.DcpKubernetesClientInitialized] = initialized
+            }));
+        }
 
         public void SetDcpKubernetesApi(DcpApiOperationType operationType, string resourceType)
         {
@@ -576,7 +886,37 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
             SetTag(Tags.DcpResourceKind, resourceType);
         }
 
+        public void SetAppHostEntryPoint(string entryPoint) => SetTag(Tags.AppHostEntryPoint, entryPoint);
+
+        public void SetAppHostEventSubscriberCount(int subscriberCount) => SetTag(Tags.AppHostEventSubscriberCount, subscriberCount);
+
+        public void SetAppHostLifecycleHookCount(int lifecycleHookCount) => SetTag(Tags.AppHostLifecycleHookCount, lifecycleHookCount);
+
+        public void SetAppHostPipelineStep(string pipelineStep) => SetTag(Tags.AppHostPipelineStep, pipelineStep);
+
+        public void SetAppHostComponentType(Type componentType) => SetTag(Tags.AppHostComponentType, componentType.FullName);
+
+        public void SetAppHostEvent(Type eventType, string? dispatchBehavior = null)
+        {
+            SetTag(Tags.AppHostEventType, eventType.FullName);
+            SetTag(Tags.AppHostEventDispatchBehavior, dispatchBehavior);
+        }
+
         public void SetDcpKubernetesClientAlreadyInitialized() => SetTag(Tags.DcpKubernetesClientAlreadyInitialized, true);
+
+        public void SetBackchannelSocketPath(string socketPath) => SetTag(Tags.BackchannelSocketPath, socketPath);
+
+        public void AddBackchannelSocketDeleted() => AddEvent(Events.BackchannelSocketDeleted);
+
+        public void AddBackchannelListening() => AddEvent(Events.BackchannelListening);
+
+        public void AddBackchannelReadyPublished() => AddEvent(Events.BackchannelReadyPublished);
+
+        public void AddBackchannelClientAccepted() => AddEvent(Events.BackchannelClientAccepted);
+
+        public void AddBackchannelRpcListening() => AddEvent(Events.BackchannelRpcListening);
+
+        public void AddBackchannelConnectedPublished() => AddEvent(Events.BackchannelConnectedPublished);
 
         public void SetJsonRpcCall(string methodName, bool streaming)
         {
@@ -585,6 +925,12 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
         }
 
         public void SetJsonRpcStreamItemCount(int count) => SetTag(Tags.JsonRpcStreamItemCount, count);
+
+        public void SetDashboardHealthy(bool healthy) => SetTag(Tags.DashboardHealthy, healthy);
+
+        public void SetDashboardUrlSource(string source) => SetTag(Tags.DashboardUrlSource, source);
+
+        public void SetDashboardHasApiBaseUrl(bool hasApiBaseUrl) => SetTag(Tags.DashboardHasApiBaseUrl, hasApiBaseUrl);
 
         public void SetDcpPreparedResourceCounts(int containerCount, int executableCount)
         {
@@ -650,6 +996,35 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
 
         public void SetResourceKind(string resourceKind) => SetTag(Tags.ResourceKind, resourceKind);
 
+        public void SetResourceLifecycle(IResource resource, string resourceId, CustomResourceSnapshot snapshot)
+        {
+            SetResource(resource);
+            SetTag(Tags.ResourceId, resourceId);
+            SetTag(Tags.ResourceSnapshotVersion, snapshot.Version);
+            SetTag(Tags.ResourceReady, snapshot.ResourceReadyEvent is not null);
+            SetTag(Tags.ResourceState, snapshot.State?.Text);
+            SetTag(Tags.ResourceHealthStatus, snapshot.HealthStatus?.ToString());
+            SetTag(Tags.ResourceStartTime, snapshot.StartTimeStamp?.ToString("O", CultureInfo.InvariantCulture));
+            SetTag(Tags.ResourceStopTime, snapshot.StopTimeStamp?.ToString("O", CultureInfo.InvariantCulture));
+
+            if (snapshot.ExitCode is { } exitCode)
+            {
+                SetTag(Tags.ResourceExitCode, exitCode);
+            }
+        }
+
+        public void AddResourceStartupObserved(CustomResourceSnapshot snapshot, DateTimeOffset timestamp) =>
+            AddResourceStartupEvent(Events.ResourceStartupObserved, snapshot, timestamp);
+
+        public void AddResourceStartupStateChanged(CustomResourceSnapshot snapshot, DateTimeOffset timestamp, string? previousState) =>
+            AddResourceStartupEvent(Events.ResourceStartupStateChanged, snapshot, timestamp, previousState: previousState);
+
+        public void AddResourceStartupHealthChanged(CustomResourceSnapshot snapshot, DateTimeOffset timestamp, string? previousHealthStatus) =>
+            AddResourceStartupEvent(Events.ResourceStartupHealthChanged, snapshot, timestamp, previousHealthStatus: previousHealthStatus);
+
+        public void AddResourceStartupReady(CustomResourceSnapshot snapshot, DateTimeOffset timestamp) =>
+            AddResourceStartupEvent(Events.ResourceStartupReady, snapshot, timestamp);
+
         public void SetResourceObserved(string? state, DateTime? startupTimestamp, DateTime? finishedTimestamp)
         {
             SetTag(Tags.ResourceState, state);
@@ -713,6 +1088,52 @@ internal sealed class ProfilingTelemetry(IConfiguration configuration)
             }
 
             activity.AddEvent(new ActivityEvent(eventName, tags: tags));
+        }
+
+        private void AddResourceStartupEvent(
+            string eventName,
+            CustomResourceSnapshot snapshot,
+            DateTimeOffset timestamp,
+            string? previousState = null,
+            string? previousHealthStatus = null)
+        {
+            if (activity is null)
+            {
+                return;
+            }
+
+            var tags = new ActivityTagsCollection
+            {
+                [Tags.ResourceSnapshotVersion] = snapshot.Version,
+                [Tags.ResourceReady] = snapshot.ResourceReadyEvent is not null
+            };
+
+            if (previousState is not null)
+            {
+                tags[Tags.PreviousResourceState] = previousState;
+            }
+
+            if (previousHealthStatus is not null)
+            {
+                tags[Tags.PreviousResourceHealthStatus] = previousHealthStatus;
+            }
+
+            if (snapshot.State?.Text is { } state)
+            {
+                tags[Tags.ResourceState] = state;
+            }
+
+            if (snapshot.HealthStatus is { } healthStatus)
+            {
+                tags[Tags.ResourceHealthStatus] = healthStatus.ToString();
+            }
+
+            if (snapshot.ExitCode is { } exitCode)
+            {
+                tags[Tags.ResourceExitCode] = exitCode;
+            }
+
+            activity.AddEvent(new ActivityEvent(eventName, timestamp, tags));
         }
 
         private void SetTag(string key, object? value) => activity?.SetTag(key, value);

@@ -68,6 +68,14 @@ internal static class KnownConfigNames
     // When set, the CLI adds MSBuild binary log arguments to supported dotnet commands and records
     // the emitted binlog path on the profiling span.
     public const string CliDotnetBinlogDirectory = "ASPIRE_CLI_DOTNET_BINLOG_DIR";
+    public const string CliBackchannelConnectTimeoutSeconds = "ASPIRE_CLI_BACKCHANNEL_CONNECT_TIMEOUT_SECONDS";
+
+    // DCP owns these profiling variables. Aspire maps its profiling state to these names when
+    // spawning DCP because DCP intentionally does not read ASPIRE_* configuration names.
+    public const string DcpOtelStartupProfilingEnabled = "DCP_OTEL_STARTUP_PROFILING_ENABLED";
+    public const string DcpOtelStartupTraceParent = "DCP_OTEL_STARTUP_TRACEPARENT";
+    public const string DcpOtelStartupTraceState = "DCP_OTEL_STARTUP_TRACESTATE";
+    public const string DcpOtelProfilingSessionId = "DCP_OTEL_PROFILING_SESSION_ID";
 
     public const string ExtensionEndpoint = "ASPIRE_EXTENSION_ENDPOINT";
     public const string ExtensionPromptEnabled = "ASPIRE_EXTENSION_PROMPT_ENABLED";
@@ -106,9 +114,8 @@ internal static class KnownConfigNames
         public const string DependencyCheckTimeout = "DOTNET_ASPIRE_DEPENDENCY_CHECK_TIMEOUT";
         public const string ServiceStartupWatchTimeout = "DOTNET_ASPIRE_SERVICE_STARTUP_WATCH_TIMEOUT";
 
-        // Legacy startup-profiling names are still read and written because DCP consumes them
-        // when correlating AppHost resource lifecycle spans. Keep them until DCP and older
-        // Aspire tools no longer need startup-named profiling correlation.
+        // Legacy startup-profiling names are still read and written during the profiling
+        // transition so older Aspire tools and AppHosts can correlate startup spans.
         public const string StartupProfilingEnabled = "ASPIRE_STARTUP_PROFILING_ENABLED";
 
         // Legacy profiling session identifier, formerly named for startup-only profiling.

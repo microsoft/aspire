@@ -209,7 +209,8 @@ public static class EFResourceBuilderExtensions
 
     internal static IEnumerable<PipelineStep> CreateMigrationPipelineStep(PipelineStepFactoryContext context)
     {
-        if (context.Resource is not EFMigrationResource migrationResource
+        if (context.PipelineContext.ExecutionContext.IsRunMode
+            || context.Resource is not EFMigrationResource migrationResource
             || (!migrationResource.PublishAsMigrationScript && !migrationResource.PublishAsMigrationBundle))
         {
             return [];

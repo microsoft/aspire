@@ -30,6 +30,9 @@ void main() throws Exception {
         var web = builder.addContainer("web", "myregistry/web:latest");
         web.publishAsAzureContainerApp((infrastructure, app) -> {
             app.configureCustomDomain(customDomain, certificateName);
+            var scale = new AzureContainerAppScaleConfig();
+            scale.setMinReplicas(1.0);
+            app.configureScale(scale);
         });
         // Test publishAsAzureContainerAppJob on an executable resource
         var api = builder.addExecutable("api", "dotnet", ".", new String[] { "run" });
@@ -41,7 +44,6 @@ void main() throws Exception {
         // Test publishAsAzureContainerAppJob (with callback)
         var processor = builder.addContainer("processor", "myregistry/processor:latest");
         processor.publishAsAzureContainerAppJob((infrastructure, job) -> {
-            // Configure the container app job here
         });
         // Test publishAsScheduledAzureContainerAppJob (simple - no callback)
         var scheduler = builder.addContainer("scheduler", "myregistry/scheduler:latest");
@@ -49,7 +51,6 @@ void main() throws Exception {
         // Test publishAsScheduledAzureContainerAppJob (with callback)
         var reporter = builder.addContainer("reporter", "myregistry/reporter:latest");
         reporter.publishAsScheduledAzureContainerAppJob("0 */6 * * *", (infrastructure, job) -> {
-                // Configure the scheduled job here
             });
         builder.build().run();
     }

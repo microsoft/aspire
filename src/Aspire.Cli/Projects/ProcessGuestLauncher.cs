@@ -32,7 +32,8 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
         string[] args,
         DirectoryInfo workingDirectory,
         IDictionary<string, string> environmentVariables,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<Task>? afterLaunchAsync = null)
     {
         var activity = GetCurrentProfilingActivity();
         AddEvent(activity, ProfilingTelemetry.Events.GuestProcessResolveStart);
@@ -50,7 +51,7 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
         var resolvedCommandPath = resolvedCommand ?? throw new InvalidOperationException("Command resolution succeeded without a resolved command path.");
         ProfilingTelemetry.SetProcessInvocation(activity, resolvedCommandPath, args);
         AddEvent(activity, ProfilingTelemetry.Events.GuestProcessResolved, TelemetryConstants.Tags.ProcessExecutablePath, resolvedCommandPath);
-        _logger.LogDebug("Executing: {Command} {Args}", resolvedCommandPath, string.Join(" ", args));
+        _logger.LogDebug("{ExecutingCommandPrefix}{Command} {Args}", CliLogFormat.MessagePrefixes.Executing, resolvedCommandPath, string.Join(" ", args));
 
         var startInfo = new ProcessStartInfo
         {
@@ -67,14 +68,16 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
             startInfo.ArgumentList.Add(arg);
         }
 
-        foreach (var (key, value) in environmentVariables)
+        var effectiveEnvironmentVariables = environmentVariables.ToDictionary();
+        ProfilingTelemetry.AddActivityContextToEnvironment(activity, effectiveEnvironmentVariables);
+        foreach (var (key, value) in effectiveEnvironmentVariables)
         {
             startInfo.EnvironmentVariables[key] = value;
         }
 
         using var process = new Process { StartInfo = startInfo };
 
-        var outputCollector = new OutputCollector(_fileLoggerProvider, "AppHost");
+        var outputCollector = new OutputCollector(_fileLoggerProvider, CliLogFormat.Categories.AppHost);
         var stdoutCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var stderrCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var firstStdoutSeen = 0;
@@ -122,6 +125,11 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
         process.Start();
         activity?.SetTag(TelemetryConstants.Tags.ProcessPid, process.Id);
         AddEvent(activity, ProfilingTelemetry.Events.GuestProcessStarted, TelemetryConstants.Tags.ProcessPid, process.Id);
+        if (afterLaunchAsync is not null)
+        {
+            await afterLaunchAsync().ConfigureAwait(false);
+        }
+
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 

@@ -31,6 +31,7 @@ using Aspire.Cli.Mcp;
 using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Profiling;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -299,7 +300,7 @@ public class Program
         var globalSettingsFilePath = GetGlobalSettingsPath(startupContext.Logger);
         var globalSettingsFile = new FileInfo(globalSettingsFilePath);
         var workingDirectory = new DirectoryInfo(Environment.CurrentDirectory);
-        ConfigurationHelper.RegisterSettingsFiles(builder.Configuration, workingDirectory, globalSettingsFile);
+        ConfigurationHelper.RegisterSettingsFiles(builder.Configuration, workingDirectory, globalSettingsFile, startupContext.Logger);
 
         TrySetLocaleOverride(LocaleHelpers.GetLocaleOverride(builder.Configuration), startupContext.Logger, startupContext.ErrorWriter);
         WarnIfGlobalSettingsContainAppHostPath(globalSettingsFile, startupContext.ErrorWriter);
@@ -374,7 +375,9 @@ public class Program
         builder.Services.AddSingleton<IFeatures, Features>();
         builder.Services.AddTelemetryServices();
         builder.Services.AddTransient<IProcessExecutionFactory, ProcessExecutionFactory>();
+        builder.Services.AddSingleton<IDetachedProcessLauncher, DefaultDetachedProcessLauncher>();
         builder.Services.AddTransient<LayoutProcessRunner>();
+        builder.Services.AddTransient<ProcessShutdownService>();
 
         // Register certificate tool runner - uses native CertificateManager directly (no subprocess needed)
         builder.Services.AddSingleton(sp => CertificateManager.Create(sp.GetRequiredService<ILogger<NativeCertificateToolRunner>>()));
@@ -726,7 +729,7 @@ public class Program
         // Setup handling of CTRL-C and SIGTERM as early as possible so that if
         // we get a signal anywhere that is not handled by Spectre Console
         // already that we know to trigger cancellation.
-        using var cancellationManager = new ConsoleCancellationManager();
+        using var cancellationManager = new ConsoleCancellationManager(processTerminationTimeout: TimeSpan.FromSeconds(5));
 
         Console.OutputEncoding = Encoding.UTF8;
 
@@ -785,7 +788,9 @@ public class Program
         var invokeConfig = new InvocationConfiguration()
         {
             // Disable default exception handler so we can log exceptions to telemetry.
-            EnableDefaultExceptionHandler = false
+            EnableDefaultExceptionHandler = false,
+            // Set timeout to null so that System.Commandline doesn't manage cancellation tokens or timeouts for us.
+            ProcessTerminationTimeout = null
         };
 
         app.Services.GetRequiredService<CliExecutionContext>();
@@ -830,7 +835,22 @@ public class Program
                         profileCommandActivity = profilingTelemetry.StartCommand(commandName);
                     }
 
-                    exitCode = await parseResult.InvokeAsync(invokeConfig, cancellationManager.Token);
+                    // Parse commandline and invoke the handler.
+                    var handlerTask = parseResult.InvokeAsync(invokeConfig, cancellationManager.Token);
+                    cancellationManager.SetStartedHandler(handlerTask);
+
+                    // Wait for either the handler to complete or a termination signal to trigger cancellation and timeout.
+                    var firstCompletedTask = await Task.WhenAny(handlerTask, cancellationManager.ProcessTerminationCompletionSource.Task);
+                    if (firstCompletedTask != handlerTask)
+                    {
+                        // The termination signal triggered cancellation and the timeout has completed. Kill the process.
+                        // handlerTask is not awaited because the process is shutting down and we assume the task is hung.
+                        logger.LogWarning("Timeout waiting for cancellation from termination signal.");
+                    }
+
+                    exitCode = await firstCompletedTask; // return the result or propagate the exception
+
+                    // Set telemetry tags based on how the command completed.
                     profileCommandActivity.SetProcessExitCode(exitCode);
                     if (exitCode != CliExitCodes.Success)
                     {
@@ -845,32 +865,23 @@ public class Program
                 // Log exit code for debugging
                 logger.LogInformation("Exit code: {ExitCode}", exitCode);
             }
+            catch (OperationCanceledException ex) when (cancellationManager.IsCancellationRequested || ex is ExtensionOperationCanceledException)
+            {
+                exitCode = CliExitCodes.Cancelled;
+            }
             catch (Exception ex)
             {
-                exitCode = 1;
-                // Catch block is used instead of System.Commandline's default handler behavior.
-                // Allows logging of exceptions to telemetry.
+                exitCode = CliExitCodes.InvalidCommand;
 
-                // Don't log or display cancellation exceptions.
-                // Check both Ctrl+C cancellation (cancellationManager.IsCancellationRequested) and
-                // extension prompt cancellation (ExtensionOperationCanceledException).
-                if (!(ex is OperationCanceledException && cancellationManager.IsCancellationRequested) && ex is not ExtensionOperationCanceledException)
-                {
-                    logger.LogError(ex, "An unexpected error occurred.");
-
-                    telemetry.RecordError("An unexpected error occurred.", ex);
-
-                    errorWriter.WriteLine(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.UnexpectedErrorOccurred, ex.Message));
-                }
-
-                // Log exit code for debugging
-                logger.LogError("Exit code: {ExitCode} (exception)", exitCode);
-
-                mainActivity?.SetTag(TelemetryConstants.Tags.ProcessExitCode, exitCode);
+                logger.LogError(ex, "An unexpected error occurred.");
+                telemetry.RecordError("An unexpected error occurred.", ex);
+                errorWriter.WriteLine(string.Format(CultureInfo.CurrentCulture, InteractionServiceStrings.UnexpectedErrorOccurred, ex.Message));
             }
-
-            mainActivity?.SetTag(TelemetryConstants.Tags.ProcessExitCode, exitCode);
-            mainActivity?.Stop();
+            finally
+            {
+                mainActivity?.SetTag(TelemetryConstants.Tags.ProcessExitCode, exitCode);
+                mainActivity?.Stop();
+            }
 
             if (profileCaptureSession is not null)
             {

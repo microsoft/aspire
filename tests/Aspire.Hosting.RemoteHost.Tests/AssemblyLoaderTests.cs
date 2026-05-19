@@ -1,7 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Text.Json;
+using Aspire.Hosting.RemoteHost.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
@@ -160,10 +162,35 @@ public class AssemblyLoaderTests
             })
             .Build();
 
-        var loader = new AssemblyLoader(configuration, NullLogger<AssemblyLoader>.Instance);
+        var loader = new AssemblyLoader(configuration, NullLogger<AssemblyLoader>.Instance, CreateProfilingTelemetry());
 
         var assemblies = loader.GetAssemblies();
         Assert.Contains(assemblies, a => string.Equals(a.GetName().Name, "Aspire.Hosting", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void GetAssemblies_AddsAssemblyNamesToProfilingSpan()
+    {
+        var activities = new List<Activity>();
+        using var listener = CreateActivityListener(RemoteHostProfilingTelemetry.ActivitySourceName, activities.Add);
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [RemoteHostProfilingTelemetry.EnvironmentVariables.Enabled] = "true",
+                ["AtsAssemblies:0"] = "Aspire.Hosting"
+            })
+            .Build();
+
+        var loader = new AssemblyLoader(configuration, NullLogger<AssemblyLoader>.Instance, new RemoteHostProfilingTelemetry(configuration));
+
+        var assemblies = loader.GetAssemblies();
+
+        Assert.Contains(assemblies, a => string.Equals(a.GetName().Name, "Aspire.Hosting", StringComparison.Ordinal));
+        var activity = Assert.Single(activities);
+        var requestedNames = Assert.IsType<string[]>(activity.GetTagItem(RemoteHostProfilingTelemetry.Tags.AssemblyRequestedNames));
+        Assert.Contains("Aspire.Hosting", requestedNames);
+        var loadedNames = Assert.IsType<string[]>(activity.GetTagItem(RemoteHostProfilingTelemetry.Tags.AssemblyLoadedNames));
+        Assert.Contains("Aspire.Hosting", loadedNames);
     }
 
     private static void WriteProbeManifest(string manifestPath, IEnumerable<object>? managedAssemblies = null, IEnumerable<object>? nativeLibraries = null)
@@ -206,5 +233,23 @@ public class AssemblyLoaderTests
                 Directory.Delete(Path, recursive: true);
             }
         }
+    }
+
+    private static RemoteHostProfilingTelemetry CreateProfilingTelemetry()
+    {
+        return new RemoteHostProfilingTelemetry(new ConfigurationBuilder().Build());
+    }
+
+    private static ActivityListener CreateActivityListener(string sourceName, Action<Activity> activityStopped)
+    {
+        var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == sourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = activityStopped
+        };
+
+        ActivitySource.AddActivityListener(listener);
+        return listener;
     }
 }

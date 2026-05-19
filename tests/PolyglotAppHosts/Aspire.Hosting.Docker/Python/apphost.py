@@ -8,6 +8,7 @@ with create_builder() as builder:
     compose = builder.add_docker_compose_environment("compose")
     container_name = builder.add_parameter("container-name")
     api = builder.add_container("api", "nginx:alpine")
+    api.with_compute_environment(compose)
     api.with_bind_mount("/host/path/data", "/container/data")
     api.with_http_endpoint(name="http", target_port=80)
     api_endpoint = api.get_endpoint("http")

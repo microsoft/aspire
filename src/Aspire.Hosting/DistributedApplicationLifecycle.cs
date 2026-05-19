@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Hosting.Diagnostics;
 using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
@@ -11,9 +12,12 @@ namespace Aspire.Hosting;
 internal sealed class DistributedApplicationLifecycle(
     ILogger<DistributedApplication> logger,
     IConfiguration configuration,
+    ProfilingTelemetry profilingTelemetry,
     DistributedApplicationExecutionContext executionContext,
     LocaleOverrideContext localeOverrideContext) : IHostedLifecycleService
 {
+    private ProfilingTelemetry.ActivityScope _hostStartupActivity;
+
     public Task StartAsync(CancellationToken cancellationToken)
     {
         return Task.CompletedTask;
@@ -21,6 +25,9 @@ internal sealed class DistributedApplicationLifecycle(
 
     public Task StartedAsync(CancellationToken cancellationToken)
     {
+        _hostStartupActivity.AddAppHostHostStarted();
+        DisposeHostStartupActivity();
+
         if (executionContext.IsRunMode && !cancellationToken.IsCancellationRequested)
         {
             logger.LogInformation("Distributed application started. Press Ctrl+C to shut down.");
@@ -31,6 +38,9 @@ internal sealed class DistributedApplicationLifecycle(
 
     public Task StartingAsync(CancellationToken cancellationToken)
     {
+        _hostStartupActivity = profilingTelemetry.StartAppHostHostStartup();
+        _hostStartupActivity.AddAppHostHostStarting();
+
         if (AssemblyVersionHelper.GetInformationalVersion(GetType().Assembly) is { Length: > 0 } informationalVersion)
         {
             // Write version at info level so it's written to the console by default. Help us debug user issues.
@@ -54,16 +64,25 @@ internal sealed class DistributedApplicationLifecycle(
 
     public Task StopAsync(CancellationToken cancellationToken)
     {
+        DisposeHostStartupActivity();
         return Task.CompletedTask;
     }
 
     public Task StoppedAsync(CancellationToken cancellationToken)
     {
+        DisposeHostStartupActivity();
         return Task.CompletedTask;
     }
 
     public Task StoppingAsync(CancellationToken cancellationToken)
     {
+        DisposeHostStartupActivity();
         return Task.CompletedTask;
+    }
+
+    private void DisposeHostStartupActivity()
+    {
+        _hostStartupActivity.Dispose();
+        _hostStartupActivity = default;
     }
 }

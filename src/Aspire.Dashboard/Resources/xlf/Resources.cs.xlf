@@ -52,6 +52,11 @@
         <target state="translated">Sbalit podřízené prostředky</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourceCommandCanceled">
+        <source>"{0}" canceled</source>
+        <target state="new">"{0}" canceled</target>
+        <note>{0} is the display name of the command.</note>
+      </trans-unit>
       <trans-unit id="ResourceCommandFailed">
         <source>"{0}" failed</source>
         <target state="new">"{0}" failed</target>

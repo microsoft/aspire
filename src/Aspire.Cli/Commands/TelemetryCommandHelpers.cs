@@ -6,6 +6,7 @@ using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
 using Aspire.Cli.Backchannel;
+using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Mcp.Tools;
 using Aspire.Cli.Resources;
@@ -573,12 +574,12 @@ internal static class TelemetryCommandHelpers
     {
         return severityNumber switch
         {
-            >= 21 => "CRIT",
-            >= 17 => "FAIL",
-            >= 13 => "WARN",
-            >= 9 => "INFO",
-            >= 5 => "DBUG",
-            >= 1 => "TRCE",
+            >= 21 => CliLogFormat.FileLevelTokens.Critical,
+            >= 17 => CliLogFormat.FileLevelTokens.Error,
+            >= 13 => CliLogFormat.FileLevelTokens.Warning,
+            >= 9 => CliLogFormat.FileLevelTokens.Information,
+            >= 5 => CliLogFormat.FileLevelTokens.Debug,
+            >= 1 => CliLogFormat.FileLevelTokens.Trace,
             _ => "-"
         };
     }

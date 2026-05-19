@@ -283,6 +283,37 @@ public class BackchannelContractTests
         Assert.Equal("session-1", startedActivity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId));
     }
 
+    [Fact]
+    public void DcpRunApplication_UsesConfiguredProfilingParentWhenAmbientActivityIsNotProfiling()
+    {
+        var activities = new List<Activity>();
+        using var profilingListener = CreateActivityListener(ProfilingTelemetry.ActivitySourceName, activities.Add);
+        using var processSource = new ActivitySource("test.process");
+        using var processListener = CreateActivityListener("test.process");
+        using var processActivity = processSource.StartActivity("process npx.CMD", ActivityKind.Internal);
+        Assert.NotNull(processActivity);
+        var traceParent = processActivity.Id;
+        Assert.NotNull(traceParent);
+
+        processActivity.Stop();
+
+        using var ambientSource = new ActivitySource("test.ambient");
+        using var ambientListener = CreateActivityListener("test.ambient");
+        using var ambientActivity = ambientSource.StartActivity("hidden ambient", ActivityKind.Internal);
+        Assert.NotNull(ambientActivity);
+
+        var configuration = CreateConfiguration(
+            (KnownConfigNames.ProfilingEnabled, "true"),
+            (KnownConfigNames.ProfilingSessionId, "session-1"),
+            (KnownConfigNames.ProfilingTraceParent, traceParent));
+
+        using var activity = ProfilingTelemetry.StartDcpRunApplication(configuration, resourceCount: 1);
+
+        var dcpActivity = Assert.Single(activities, activity => activity.OperationName == ProfilingTelemetry.Activities.DcpRunApplication);
+        Assert.Equal(processActivity.TraceId, dcpActivity.TraceId);
+        Assert.Equal(processActivity.SpanId, dcpActivity.ParentSpanId);
+    }
+
     private static bool IsAllowedCollectionType(Type type)
     {
         var genericDef = type.GetGenericTypeDefinition();

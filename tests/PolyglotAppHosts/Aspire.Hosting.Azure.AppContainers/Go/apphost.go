@@ -55,9 +55,13 @@ func main() {
 	// === PublishAsAzureContainerApp ===
 	// Test PublishAsAzureContainerApp on a container resource with callback
 	web := builder.AddContainer("web", "myregistry/web:latest")
-	web.PublishAsAzureContainerApp(func(infra aspire.AzureResourceInfrastructure, app aspire.ContainerApp) {
+	web.PublishAsAzureContainerApp(func(_ aspire.AzureResourceInfrastructure, app aspire.ContainerApp) {
 		err := app.ConfigureCustomDomain(customDomain, certificateName)
 		if err != nil {
+			log.Fatalf(aspire.FormatError(err))
+		}
+
+		if err := app.ConfigureScale(&aspire.AzureContainerAppScaleConfig{MinReplicas: aspire.Float64Ptr(1)}); err != nil {
 			log.Fatalf(aspire.FormatError(err))
 		}
 	})
@@ -82,7 +86,6 @@ func main() {
 		PublishAsAzureContainerAppJob(
 			&aspire.PublishAsAzureContainerAppJobOptions{
 				Configure: func(_ aspire.AzureResourceInfrastructure, _ aspire.ContainerAppJob) {
-					// Configure the container app job here
 				},
 			})
 	if err := processor.Err(); err != nil {
@@ -101,7 +104,6 @@ func main() {
 		PublishAsScheduledAzureContainerAppJob("0 */6 * * *",
 			&aspire.PublishAsScheduledAzureContainerAppJobOptions{
 				Configure: func(_ aspire.AzureResourceInfrastructure, _ aspire.ContainerAppJob) {
-					// Configure the scheduled job here
 				},
 			})
 	if err := reporter.Err(); err != nil {

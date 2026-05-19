@@ -544,25 +544,19 @@ public class GuestAppHostProjectTests : IDisposable
     }
 
     /// <summary>
-    /// Regression test for wf3: <c>aspire update</c> on a project with an Implicit channel
-    /// (i.e. the user has not pinned a channel via <c>--channel</c>, per-project
-    /// <c>aspire.config.json#channel</c>, or a prompt selection) must NOT silently pin the
-    /// running CLI's identity channel into <c>aspire.config.json#channel</c>.
+    /// Regression test for issue #17077: <c>aspire update</c> must not leave
+    /// <c>aspire.config.json</c> advanced to newer package versions when guest SDK
+    /// regeneration fails.
     /// </summary>
     /// <remarks>
     /// The test drives <see cref="GuestAppHostProject.UpdatePackagesAsync"/> through the
-    /// code path that detects updates and saves the config to disk, then expects the call
-    /// to throw from <c>BuildAndGenerateSdkAsync</c> (because
-    /// <see cref="TestAppHostServerProjectFactory.CreateAsync"/> throws). The channel save
-    /// happens before that throw, so we can inspect the on-disk
-    /// <c>aspire.config.json#channel</c> to assert it was NOT changed.
+    /// code path that detects updates, then expects the call to throw from
+    /// <c>BuildAndGenerateSdkAsync</c> because <see cref="TestAppHostServerProjectFactory.CreateAsync"/>
+    /// throws. The on-disk config should still contain the original versions.
     /// </remarks>
     [Fact]
-    public async Task UpdatePackagesAsync_ImplicitChannel_DoesNotPinIdentityIntoConfig()
+    public async Task UpdatePackagesAsync_WhenRegenerationFails_DoesNotMutateConfig()
     {
-        // Seed aspire.config.json with no channel pinned, an SDK version that is behind,
-        // and a single package entry. The fake nuget cache will return a newer version so
-        // the early "nothing to update" return is not taken.
         var configPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
         await File.WriteAllTextAsync(configPath, """
             {
@@ -587,7 +581,6 @@ public class GuestAppHostProjectTests : IDisposable
 
         var interactionService = new TestInteractionService
         {
-            // Confirm the "Perform updates?" prompt so the channel-write code path runs.
             ConfirmCallback = (_, _) => true
         };
 
@@ -603,17 +596,215 @@ public class GuestAppHostProjectTests : IDisposable
             NuGetConfigDirBinding = PromptBinding.CreateDefault<string?>(null),
         };
 
-        // BuildAndGenerateSdkAsync calls IAppHostServerProjectFactory.CreateAsync, which the
-        // test factory throws from. The channel save happens BEFORE that, so the on-disk
-        // assertion below is still meaningful.
         await Assert.ThrowsAnyAsync<Exception>(
             () => project.UpdatePackagesAsync(context, CancellationToken.None));
 
         var reloaded = AspireConfigFile.Load(_workspace.WorkspaceRoot.FullName);
         Assert.NotNull(reloaded);
-        // Pre-fix, this would have been "pr-99999" (the identity channel). Post-fix, the
-        // implicit-channel update path leaves the channel untouched.
+        Assert.Equal("1.0.0", reloaded.SdkVersion);
+        Assert.NotNull(reloaded.Packages);
+        Assert.Equal("1.0.0", reloaded.Packages["Aspire.Hosting"]);
         Assert.Null(reloaded.Channel);
+    }
+
+    [Fact]
+    public async Task AddPackageAsync_WhenRegenerationFails_DoesNotMutateConfig()
+    {
+        var configPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, """
+            {
+              "sdk": { "version": "1.0.0" },
+              "packages": { "Aspire.Hosting": "1.0.0" }
+            }
+            """);
+
+        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
+        await File.WriteAllTextAsync(appHostPath, "// test apphost");
+
+        var factory = new TestAppHostServerProjectFactory
+        {
+            CreateAsyncCallback = (appPath, _) =>
+                Task.FromResult<IAppHostServerProject>(new FakeFailingAppHostServerProject(appPath))
+        };
+
+        var project = CreateGuestAppHostProject(appHostServerProjectFactory: factory);
+
+        var result = await project.AddPackageAsync(
+            new AddPackageContext
+            {
+                AppHostFile = new FileInfo(appHostPath),
+                PackageId = "Aspire.Hosting.Redis",
+                PackageVersion = "2.0.0",
+            },
+            CancellationToken.None);
+
+        Assert.False(result);
+
+        var reloaded = AspireConfigFile.Load(_workspace.WorkspaceRoot.FullName);
+        Assert.NotNull(reloaded);
+        Assert.Equal("1.0.0", reloaded.SdkVersion);
+        Assert.NotNull(reloaded.Packages);
+        Assert.Equal("1.0.0", reloaded.Packages["Aspire.Hosting"]);
+        Assert.False(reloaded.Packages.ContainsKey("Aspire.Hosting.Redis"));
+    }
+
+    [Fact]
+    public async Task UpdatePackagesAsync_ExplicitStableChannel_WhenRegenerationFails_DoesNotMutateConfig()
+    {
+        var configPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, """
+            {
+              "sdk": { "version": "1.0.0" },
+              "channel": "staging",
+              "packages": { "Aspire.Hosting": "1.0.0" }
+            }
+            """);
+
+        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
+        await File.WriteAllTextAsync(appHostPath, "// test apphost");
+
+        var stableCache = new FakeNuGetPackageCache
+        {
+            GetPackagesAsyncCallback = (_, packageId, _, _, _, _, _) =>
+                Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(
+                [
+                    new Aspire.Shared.NuGetPackageCli { Id = packageId, Version = "2.0.0", Source = "stable" }
+                ])
+        };
+
+        var stableChannel = PackageChannel.CreateExplicitChannel(
+            PackageChannelNames.Stable,
+            PackageChannelQuality.Both,
+            [new PackageMapping("Aspire.*", "stable")],
+            stableCache);
+
+        var interactionService = new TestInteractionService
+        {
+            ConfirmCallback = (_, _) => true
+        };
+
+        var project = CreateGuestAppHostProject(interactionService: interactionService);
+
+        var context = new UpdatePackagesContext
+        {
+            AppHostFile = new FileInfo(appHostPath),
+            Channel = stableChannel,
+            ConfirmBinding = PromptBinding.CreateDefault<bool>(false),
+            NuGetConfigDirBinding = PromptBinding.CreateDefault<string?>(null),
+        };
+
+        await Assert.ThrowsAnyAsync<Exception>(
+            () => project.UpdatePackagesAsync(context, CancellationToken.None));
+
+        var reloaded = AspireConfigFile.Load(_workspace.WorkspaceRoot.FullName);
+        Assert.NotNull(reloaded);
+        Assert.Equal(PackageChannelNames.Staging, reloaded.Channel);
+        Assert.Equal("1.0.0", reloaded.SdkVersion);
+        Assert.Equal("1.0.0", reloaded.Packages?["Aspire.Hosting"]);
+    }
+
+    [Fact]
+    public async Task UpdatePackagesAsync_ExplicitStagingChannel_WhenRegenerationFails_DoesNotMutateConfig()
+    {
+        var configPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, """
+            {
+              "sdk": { "version": "1.0.0" },
+              "packages": { "Aspire.Hosting": "1.0.0" }
+            }
+            """);
+
+        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
+        await File.WriteAllTextAsync(appHostPath, "// test apphost");
+
+        var stagingCache = new FakeNuGetPackageCache
+        {
+            GetPackagesAsyncCallback = (_, packageId, _, _, _, _, _) =>
+                Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(
+                [
+                    new Aspire.Shared.NuGetPackageCli { Id = packageId, Version = "2.0.0", Source = "staging" }
+                ])
+        };
+
+        var stagingChannel = PackageChannel.CreateExplicitChannel(
+            PackageChannelNames.Staging,
+            PackageChannelQuality.Both,
+            [new PackageMapping("Aspire*", "staging")],
+            stagingCache);
+
+        var interactionService = new TestInteractionService
+        {
+            ConfirmCallback = (_, _) => true
+        };
+
+        var project = CreateGuestAppHostProject(interactionService: interactionService);
+
+        var context = new UpdatePackagesContext
+        {
+            AppHostFile = new FileInfo(appHostPath),
+            Channel = stagingChannel,
+            ConfirmBinding = PromptBinding.CreateDefault<bool>(false),
+            NuGetConfigDirBinding = PromptBinding.CreateDefault<string?>(null),
+        };
+
+        await Assert.ThrowsAnyAsync<Exception>(
+            () => project.UpdatePackagesAsync(context, CancellationToken.None));
+
+        var reloaded = AspireConfigFile.Load(_workspace.WorkspaceRoot.FullName);
+        Assert.NotNull(reloaded);
+        Assert.Null(reloaded.Channel);
+        Assert.Equal("1.0.0", reloaded.SdkVersion);
+        Assert.Equal("1.0.0", reloaded.Packages?["Aspire.Hosting"]);
+    }
+
+    [Fact]
+    public async Task UpdatePackagesAsync_ExplicitStableChannel_PersistsStableChannelWhenProjectIsUpToDate()
+    {
+        var configPath = Path.Combine(_workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(configPath, """
+            {
+              "sdk": { "version": "2.0.0" },
+              "channel": "staging",
+              "packages": { "Aspire.Hosting": "2.0.0" }
+            }
+            """);
+
+        var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
+        await File.WriteAllTextAsync(appHostPath, "// test apphost");
+
+        var stableCache = new FakeNuGetPackageCache
+        {
+            GetPackagesAsyncCallback = (_, packageId, _, _, _, _, _) =>
+                Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(
+                [
+                    new Aspire.Shared.NuGetPackageCli { Id = packageId, Version = "2.0.0", Source = "stable" }
+                ])
+        };
+
+        var stableChannel = PackageChannel.CreateExplicitChannel(
+            PackageChannelNames.Stable,
+            PackageChannelQuality.Both,
+            [new PackageMapping("Aspire.*", "stable")],
+            stableCache);
+
+        var project = CreateGuestAppHostProject();
+
+        var context = new UpdatePackagesContext
+        {
+            AppHostFile = new FileInfo(appHostPath),
+            Channel = stableChannel,
+            ConfirmBinding = PromptBinding.CreateDefault<bool>(false),
+            NuGetConfigDirBinding = PromptBinding.CreateDefault<string?>(null),
+        };
+
+        var result = await project.UpdatePackagesAsync(context, CancellationToken.None);
+
+        Assert.True(result.UpdatesApplied);
+        var reloaded = AspireConfigFile.Load(_workspace.WorkspaceRoot.FullName);
+        Assert.NotNull(reloaded);
+        Assert.Equal(PackageChannelNames.Stable, reloaded.Channel);
+        Assert.Equal("2.0.0", reloaded.SdkVersion);
+        Assert.Equal("2.0.0", reloaded.Packages?["Aspire.Hosting"]);
     }
 
     /// <summary>
@@ -725,4 +916,5 @@ public class GuestAppHostProjectTests : IDisposable
             fileLoggerProvider: new FileLoggerProvider(logFilePath, new TestStartupErrorWriter()),
             profilingTelemetry: _profilingTelemetry);
     }
+
 }

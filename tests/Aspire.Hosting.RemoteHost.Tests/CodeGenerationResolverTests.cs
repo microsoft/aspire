@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.RemoteHost.CodeGeneration;
+using Aspire.Hosting.RemoteHost.Diagnostics;
 using Aspire.Hosting.RemoteHost.Language;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -55,6 +56,6 @@ public class CodeGenerationResolverTests
             })
             .Build();
 
-        return new AssemblyLoader(configuration, NullLogger<AssemblyLoader>.Instance);
+        return new AssemblyLoader(configuration, NullLogger<AssemblyLoader>.Instance, new RemoteHostProfilingTelemetry(new ConfigurationBuilder().Build()));
     }
 }

@@ -21,6 +21,8 @@ namespace Aspire.Cli.Commands;
 
 internal sealed class RootCommand : BaseRootCommand
 {
+    internal const int DefaultCaptureProfileDelaySeconds = 5;
+
     public static readonly Option<bool> DebugOption = new(CommonOptionNames.Debug, CommonOptionNames.DebugShort)
     {
         Description = RootCommandStrings.DebugArgumentDescription,
@@ -84,7 +86,7 @@ internal sealed class RootCommand : BaseRootCommand
     {
         Recursive = true,
         Hidden = true,
-        DefaultValueFactory = _ => 0
+        DefaultValueFactory = _ => DefaultCaptureProfileDelaySeconds
     };
 
     /// <summary>
