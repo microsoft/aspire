@@ -33,6 +33,14 @@
     `AspireProjectOrPackageReference` - maps to projects in `src/` or `src/Components/`
   -->
 
+  <!--
+    $(AspireAppHostSdkVersion) is defined in the generated Directory.Packages.Versions.props
+    (produced by the _GeneratePackagesVersionsProps target below) and reaches this file via:
+      Directory.Packages.props -> Directory.Packages.Helix.props -> Directory.Packages.Versions.props
+    It is only set in the out-of-repo (Helix) consumer build — the same scope this Import is gated on
+    by Condition="...TestsRunningOutsideOfRepo == 'true'". For in-repo builds the SDK is resolved
+    through the in-repo ImportGroup further below, not this Import.
+  -->
   <Import Project="Sdk.props" Sdk="Aspire.AppHost.Sdk" Version="$(AspireAppHostSdkVersion)" Condition="'$(IsAspireHost)' == 'true' and '$(RepoRoot)' == '' and '$(TestsRunningOutsideOfRepo)' == 'true'" />
 
   <PropertyGroup>
@@ -197,6 +205,7 @@
     <AspireHostingSDKVersion>$(MajorVersion).$(MinorVersion).$(PatchVersion)</AspireHostingSDKVersion>
   </PropertyGroup>
 
+  <!-- See note on the matching Sdk.props Import at the top of this file for where $(AspireAppHostSdkVersion) comes from. -->
   <Import Project="Sdk.targets" Sdk="Aspire.AppHost.Sdk" Version="$(AspireAppHostSdkVersion)" Condition="'$(IsAspireHost)' == 'true' and '$(RepoRoot)' == '' and '$(TestsRunningOutsideOfRepo)' == 'true'" />
 
 </Project>
