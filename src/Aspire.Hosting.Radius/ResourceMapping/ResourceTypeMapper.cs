@@ -98,6 +98,14 @@ internal sealed class ResourceTypeMapper
         RadiusResourceTypes.RadiusApiVersion);
 
     public ResourceTypeMapper(ILogger<ResourceTypeMapper> logger)
+        : this((ILogger)logger)
+    {
+    }
+
+    // Overload for callers that already have a non-generic ILogger (e.g., a pipeline-step
+    // logger or a test FakeLogger). Allows mapper diagnostics to flow into the same logger
+    // the caller uses, instead of forcing each call site to allocate a LoggerFactory.
+    internal ResourceTypeMapper(ILogger logger)
     {
         _logger = logger;
     }

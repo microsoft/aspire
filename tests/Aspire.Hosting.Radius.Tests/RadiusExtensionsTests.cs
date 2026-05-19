@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIRERADIUS001 // WithContainerImage is marked experimental; opt in for tests.
+
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -141,5 +143,54 @@ public class RadiusExtensionsTests
         var builder = DistributedApplication.CreateBuilder();
 
         Assert.Throws<ArgumentException>(() => builder.AddRadiusEnvironment(""));
+    }
+
+    // The cases below pin the documented behaviour of RadiusExtensions.ParseImageReference
+    // (private), which is exercised through WithContainerImage. The heuristic for splitting
+    // the registry segment from a Docker Hub user namespace (contains '.' or ':' or equals
+    // "localhost") matches Docker/containerd, and we own the documented examples in the
+    // RadiusExtensions.ParseImageReference summary comment — keep this table in sync if
+    // those docs change.
+    [Theory]
+    [InlineData("redis", null, "redis", "latest")]
+    [InlineData("redis:7", null, "redis", "7")]
+    [InlineData("library/redis:7", null, "library/redis", "7")]
+    [InlineData("localhost:5001/api:latest", "localhost:5001", "api", "latest")]
+    [InlineData("ghcr.io/owner/repo:v1", "ghcr.io", "owner/repo", "v1")]
+    public void WithContainerImage_ParsesImageReference(
+        string image, string? expectedRegistry, string expectedImage, string expectedTag)
+    {
+        using var builder = Aspire.Hosting.Utils.TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddProject<ParseImageReferenceProjectMetadata>("webapp");
+
+        project.WithContainerImage(image);
+
+        var annotation = project.Resource.Annotations.OfType<ContainerImageAnnotation>().Single();
+        Assert.Equal(expectedRegistry, annotation.Registry);
+        Assert.Equal(expectedImage, annotation.Image);
+        Assert.Equal(expectedTag, annotation.Tag);
+    }
+
+    [Fact]
+    public void WithContainerImage_ReplacesExistingAnnotation()
+    {
+        // The documented contract on WithContainerImage is that a second call overrides the
+        // first (matches the LastOrDefault() lookup the publisher uses). Pin that here too.
+        using var builder = Aspire.Hosting.Utils.TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddProject<ParseImageReferenceProjectMetadata>("webapp");
+
+        project.WithContainerImage("redis:6");
+        project.WithContainerImage("ghcr.io/owner/repo:v2");
+
+        var annotation = project.Resource.Annotations.OfType<ContainerImageAnnotation>().Single();
+        Assert.Equal("ghcr.io", annotation.Registry);
+        Assert.Equal("owner/repo", annotation.Image);
+        Assert.Equal("v2", annotation.Tag);
+    }
+
+    private sealed class ParseImageReferenceProjectMetadata : IProjectMetadata
+    {
+        public string ProjectPath => "testproject";
+        public LaunchSettings LaunchSettings { get; } = new();
     }
 }

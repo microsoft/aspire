@@ -65,8 +65,11 @@ internal sealed class RadiusInfrastructureBuilder
         var options = new RadiusInfrastructureOptions();
         var envIdentifier = BicepPostProcessor.SanitizeIdentifier(_environment.Name);
 
-        // Classify resources for this environment
-        var (radiusResources, computeResources) = ClassifyResources();
+        // Classify resources for this environment. ResolveResourceType is computed once per
+        // resource here and reused below — calling it repeatedly would re-emit the
+        // ResourceTypeMapper Info/Warning logs (legacy fallback / unmapped type) for every
+        // resource, producing duplicate noise on every publish.
+        var (radiusResources, computeResources, resolvedTypes) = ClassifyResources();
 
         // 1. UDT recipe pack (created first so environment can reference its ID)
         var recipePackIdentifier = "recipepack";
@@ -78,7 +81,7 @@ internal sealed class RadiusInfrastructureBuilder
         // Applications.* types are stashed for inline emission on the legacy env.
         foreach (var resource in radiusResources)
         {
-            var (resourceType, _) = ResolveResourceType(resource);
+            var (resourceType, _) = resolvedTypes[resource];
             var customization = GetCustomization(resource);
 
             if (IsLegacyResourceType(resourceType))
@@ -93,9 +96,9 @@ internal sealed class RadiusInfrastructureBuilder
 
         // Partition flags.
         var hasUdtResources = radiusResources.Any(r =>
-            !IsLegacyResourceType(ResolveResourceType(r).ResourceType));
+            !IsLegacyResourceType(resolvedTypes[r].ResourceType));
         var hasLegacyResources = radiusResources.Any(r =>
-            IsLegacyResourceType(ResolveResourceType(r).ResourceType));
+            IsLegacyResourceType(resolvedTypes[r].ResourceType));
         var hasComputeResources = computeResources.Any();
         var useLegacyContainers = _environment.UseLegacyContainers;
 
@@ -161,7 +164,7 @@ internal sealed class RadiusInfrastructureBuilder
 
         foreach (var resource in radiusResources)
         {
-            var (resourceType, apiVersion) = ResolveResourceType(resource);
+            var (resourceType, apiVersion) = resolvedTypes[resource];
             var identifier = BicepPostProcessor.SanitizeIdentifier(resource.Name);
 
             var customization = GetCustomization(resource);
@@ -456,10 +459,11 @@ internal sealed class RadiusInfrastructureBuilder
         return _typeMapper.MapResource(resource);
     }
 
-    private (List<IResource> radiusResources, List<IResource> computeResources) ClassifyResources()
+    private (List<IResource> radiusResources, List<IResource> computeResources, Dictionary<IResource, (string ResourceType, string ApiVersion)> resolvedTypes) ClassifyResources()
     {
         var radiusTypes = new List<IResource>();
         var compute = new List<IResource>();
+        var resolved = new Dictionary<IResource, (string ResourceType, string ApiVersion)>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (var resource in _model.Resources)
@@ -496,7 +500,9 @@ internal sealed class RadiusInfrastructureBuilder
             // - Explicit container/project resources with Containers mapping → compute workloads
             // - Resources with a specific resource type mapping → resource type instances
             // - Unmapped resources (ParameterResource, etc.) → skip
-            var (resourceType, _) = ResolveResourceType(resource);
+            var resolvedType = ResolveResourceType(resource);
+            resolved[resource] = resolvedType;
+            var resourceType = resolvedType.ResourceType;
 
             if (resource is ProjectResource ||
                 (resource is ContainerResource && resourceType == RadiusResourceTypes.Containers))
@@ -510,7 +516,7 @@ internal sealed class RadiusInfrastructureBuilder
             // else: unmapped resource (e.g., ParameterResource) — skip
         }
 
-        return (radiusTypes, compute);
+        return (radiusTypes, compute, resolved);
     }
 
     private bool IsTargetedToThisEnvironment(IResource resource)
@@ -807,7 +813,7 @@ internal sealed class RadiusInfrastructureBuilder
         RadiusApplicationConstruct appConstruct,
         Dictionary<string, RadiusResourceTypeConstruct> connectionTargets)
     {
-        var construct = new RadiusContainerConstruct(identifier);
+        var construct = new RadiusContainerConstruct(identifier, resourceName);
         construct.ContainerName = resourceName;
         construct.Image = image;
         construct.ApplicationId = BuildIdExpression(appConstruct);

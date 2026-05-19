@@ -16,6 +16,7 @@ namespace Aspire.Hosting.Radius.Publishing.Constructs;
 /// </remarks>
 public sealed class RadiusContainerConstruct : ProvisionableResource
 {
+    private readonly string _containerName;
     private BicepValue<string>? _name;
     private BicepValue<string>? _image;
     private BicepValue<string>? _applicationId;
@@ -52,17 +53,39 @@ public sealed class RadiusContainerConstruct : ProvisionableResource
         set { Initialize(); _connections!.Assign(value); }
     }
 
-    /// <summary>Initializes a new <see cref="RadiusContainerConstruct"/> with the given Bicep identifier.</summary>
-    public RadiusContainerConstruct(string bicepIdentifier)
+    /// <summary>
+    /// Initializes a new <see cref="RadiusContainerConstruct"/> with the given Bicep
+    /// identifier and Radius container resource name.
+    /// </summary>
+    /// <param name="bicepIdentifier">
+    /// The Bicep identifier for this resource. May be sanitized (e.g., hyphens become
+    /// underscores) so it remains a valid C#/Bicep identifier.
+    /// </param>
+    /// <param name="containerName">
+    /// The Radius container resource name as it should appear in the deployed manifest.
+    /// This value is used as the map key under <c>properties.containers</c>, which the
+    /// Radius container v2 schema requires to match the resource <c>name</c> field.
+    /// It must be the unsanitized resource name (hyphens preserved); using
+    /// <c>BicepIdentifier</c> here would emit a key that does not match the <c>name</c>
+    /// when the resource name contains characters that get sanitized.
+    /// </param>
+    public RadiusContainerConstruct(string bicepIdentifier, string containerName)
         : base(bicepIdentifier, new Azure.Core.ResourceType("Radius.Compute/containers"), "2025-08-01-preview")
     {
+        ArgumentException.ThrowIfNullOrEmpty(containerName);
+        _containerName = containerName;
     }
 
     /// <inheritdoc />
     protected override void DefineProvisionableProperties()
     {
         _name = DefineProperty<string>(nameof(ContainerName), ["name"]);
-        _image = DefineProperty<string>(nameof(Image), ["properties", "containers", BicepIdentifier, "image"]);
+        // The container v2 schema keys `properties.containers` by the resource name (the
+        // value emitted at `name:`), not by the Bicep identifier. Using BicepIdentifier
+        // here would (a) snapshot the pre-rename identifier if a ConfigureRadiusInfrastructure
+        // callback renamed it, and (b) emit a key with sanitized characters (hyphens →
+        // underscores) that no longer matches `name`.
+        _image = DefineProperty<string>(nameof(Image), ["properties", "containers", _containerName, "image"]);
         _applicationId = DefineProperty<string>(nameof(ApplicationId), ["properties", "application"]);
         _connections = DefineDictionaryProperty<ConnectionConstruct>(nameof(Connections), ["properties", "connections"]);
     }

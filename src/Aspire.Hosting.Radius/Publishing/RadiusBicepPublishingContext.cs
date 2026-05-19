@@ -123,8 +123,11 @@ internal sealed class RadiusBicepPublishingContext
     internal string GenerateBicep(DistributedApplicationModel model, ILogger? logger = null)
     {
         logger ??= NullLogger.Instance;
-        var typeMapper = new ResourceTypeMapper(
-            new LoggerFactory().CreateLogger<ResourceTypeMapper>());
+        // Reuse the caller's logger for the mapper so legacy-fallback / unmapped-type
+        // diagnostics (e.g., the FakeLogger pattern in ResourceTypeMapperTests) are
+        // observable. Allocating a new LoggerFactory here would leak provider state on
+        // every call and would also drop any logger the caller supplied.
+        var typeMapper = new ResourceTypeMapper(logger);
         var builder = new RadiusInfrastructureBuilder(_environment, model, typeMapper, logger);
 
         var options = builder.Build();
@@ -138,8 +141,8 @@ internal sealed class RadiusBicepPublishingContext
     internal RadiusInfrastructureOptions BuildOptions(DistributedApplicationModel model, ILogger? logger = null)
     {
         logger ??= NullLogger.Instance;
-        var typeMapper = new ResourceTypeMapper(
-            new LoggerFactory().CreateLogger<ResourceTypeMapper>());
+        // See GenerateBicep for the rationale on reusing the caller's logger.
+        var typeMapper = new ResourceTypeMapper(logger);
         var builder = new RadiusInfrastructureBuilder(_environment, model, typeMapper, logger);
 
         return builder.Build();

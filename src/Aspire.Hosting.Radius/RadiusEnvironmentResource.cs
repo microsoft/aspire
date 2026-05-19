@@ -54,7 +54,7 @@ public sealed class RadiusEnvironmentResource : Resource, IComputeEnvironmentRes
             var publishStep = new RadiusBicepPublishingContext(this).CreatePipelineStep();
             var deployStep = new RadiusDeploymentPipelineStep(this).CreatePipelineStep();
 
-            return new[] { prepareStep, publishStep, deployStep };
+            return [prepareStep, publishStep, deployStep];
         }));
     }
 
