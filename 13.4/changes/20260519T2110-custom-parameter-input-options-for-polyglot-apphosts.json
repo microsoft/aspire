@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Polyglot AppHosts (TypeScript, Python, Go, Java) can now configure custom parameter prompts using serializable ParameterCustomInputOptions, enabling the same rich input UX as C# WithCustomInput without leaking the C# delegate model through ATS code generation.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "📋",
+  "firstMergedAt": "2026-05-19T21:10:05Z",
+  "lastMergedAt": "2026-05-19T21:10:05Z",
+  "name": "Custom parameter input options for polyglot AppHosts",
+  "owner": "sebastienros",
+  "prs": [
+    17130
+  ]
+}

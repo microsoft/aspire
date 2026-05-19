@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Bug fix: guest AppHost restore now uses the selected Aspire package source, preventing assembly version mismatches during scaffolding",
+  "mergedAt": "2026-05-19T21:27:35Z",
+  "number": 17166,
+  "runDate": "2026-05-19T22:38:20Z",
+  "status": "included",
+  "title": "fix(cli): keep guest AppHost restore on the selected Aspire package source"
+}

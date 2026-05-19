@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "New feature: custom parameter input options (ParameterCustomInputOptions) for polyglot AppHosts",
+  "mergedAt": "2026-05-19T21:10:05Z",
+  "number": 17130,
+  "runDate": "2026-05-19T22:38:20Z",
+  "status": "included",
+  "title": "Expose custom parameter input for polyglot apphosts"
+}

@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Guest-language aspire new scaffolding now correctly pins Aspire packages to the --source feed (or auto-detected PR/hive channel) during AppHost restore, preventing mismatched Aspire assembly versions and TypeScript codegen failures when using local or PR package sources.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🩹",
+  "firstMergedAt": "2026-05-19T21:27:35Z",
+  "lastMergedAt": "2026-05-19T21:27:35Z",
+  "name": "Fix guest AppHost restore package source selection",
+  "owner": "radical",
+  "prs": [
+    17166
+  ]
+}
