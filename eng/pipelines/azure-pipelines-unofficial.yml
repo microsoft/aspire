@@ -193,10 +193,10 @@ extends:
                   script: |
                     Get-ChildItem -Path "$(Build.SourcesDirectory)\artifacts\packages" -File -Recurse | Select-Object FullName, @{Name="Size(MB)";Expression={[math]::Round($_.Length/1MB,2)}} | Format-Table -AutoSize
 
-              - task: NodeTool@0
+              - task: UseNode@1
                 displayName: 🟣Install node.js
                 inputs:
-                  versionSpec: '20.x'
+                  version: '20.x'
 
               - task: npmAuthenticate@0
                 displayName: 🟣NPM authenticate
@@ -287,6 +287,27 @@ extends:
                     $channel = 'prerelease'
                   }
 
+                  # Safety gate (defense in depth): on a release branch with
+                  # StabilizePackageVersion=true the channel MUST be stable. The
+                  # two signals are normally coupled via eng/Versions.props
+                  # (StabilizePackageVersion=true => DotNetFinalVersionKind=release
+                  # => channel=stable). A mismatch indicates someone overrode one
+                  # property without the other — refuse to build prerelease
+                  # installer artifacts under a stable release-branch name.
+                  $stabilize = dotnet msbuild "$(Build.SourcesDirectory)/eng/Versions.props" -getProperty:StabilizePackageVersion
+                  if ($LASTEXITCODE -ne 0) {
+                    Write-Error "Failed to read StabilizePackageVersion from eng/Versions.props (dotnet msbuild exit code: $LASTEXITCODE). Cannot evaluate release-branch safety gate; refusing to continue."
+                    exit 1
+                  }
+                  $stabilize = $stabilize.Trim()
+                  $isReleaseBranch = '$(Build.SourceBranch)'.StartsWith('refs/heads/release/') -or '$(Build.SourceBranch)'.StartsWith('refs/heads/internal/release/')
+                  Write-Host "StabilizePackageVersion: '$stabilize'"
+                  Write-Host "Build.SourceBranch: '$(Build.SourceBranch)' (isReleaseBranch=$isReleaseBranch)"
+                  if ($isReleaseBranch -and $stabilize -eq 'true' -and $channel -ne 'stable') {
+                    Write-Error "Release branch + StabilizePackageVersion=true but installer channel computed as '$channel'. Refusing to build prerelease installer artifacts on a stable release branch."
+                    exit 1
+                  }
+
                   Write-Host "Installer channel: $channel"
                   Write-Host "##vso[task.setvariable variable=installerChannel;isOutput=true]$channel"
                 name: computeChannel
@@ -370,6 +391,7 @@ extends:
             - template: /eng/pipelines/templates/prepare-homebrew-cask.yml@self
               parameters:
                 version: $(aspireVersion)
+                channel: $(installerChannel)
                 artifactVersion: $(aspireArtifactVersion)
                 archiveRoot: $(Pipeline.Workspace)/native-archives
                 skipUrlValidation: true

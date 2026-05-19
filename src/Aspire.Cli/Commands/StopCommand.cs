@@ -6,6 +6,7 @@ using System.Globalization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
@@ -22,8 +23,8 @@ internal sealed class StopCommand : BaseCommand
     private readonly AppHostConnectionResolver _connectionResolver;
     private readonly ILogger<StopCommand> _logger;
     private readonly ICliHostEnvironment _hostEnvironment;
+    private readonly ProcessShutdownService _processShutdownService;
     private readonly ProfilingTelemetry _profilingTelemetry;
-    private readonly TimeProvider _timeProvider;
 
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", StopCommandStrings.ProjectArgumentDescription);
 
@@ -40,24 +41,24 @@ internal sealed class StopCommand : BaseCommand
         CliExecutionContext executionContext,
         IProjectLocator projectLocator,
         ICliHostEnvironment hostEnvironment,
+        ProcessShutdownService processShutdownService,
         ILogger<StopCommand> logger,
         AspireCliTelemetry telemetry,
-        ProfilingTelemetry profilingTelemetry,
-        TimeProvider? timeProvider = null)
+        ProfilingTelemetry profilingTelemetry)
         : base("stop", StopCommandStrings.Description, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _interactionService = interactionService;
         _connectionResolver = new AppHostConnectionResolver(backchannelMonitor, interactionService, projectLocator, executionContext, logger, profilingTelemetry);
         _hostEnvironment = hostEnvironment;
+        _processShutdownService = processShutdownService;
         _logger = logger;
         _profilingTelemetry = profilingTelemetry;
-        _timeProvider = timeProvider ?? TimeProvider.System;
 
         Options.Add(s_appHostOption);
         Options.Add(s_allOption);
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
         var stopAll = parseResult.GetValue(s_allOption);
@@ -66,23 +67,22 @@ internal sealed class StopCommand : BaseCommand
         // Validate mutual exclusivity of --all and --project
         if (stopAll && passedAppHostProjectFile is not null)
         {
-            _interactionService.DisplayError(string.Format(CultureInfo.InvariantCulture, StopCommandStrings.AllAndProjectMutuallyExclusive, s_allOption.Name, s_appHostOption.Name));
-            return CompleteStopActivity(activity, ExitCodeConstants.FailedToFindProject);
+            return CommandResult.Failure(CompleteStopActivity(activity, CliExitCodes.FailedToFindProject), string.Format(CultureInfo.InvariantCulture, StopCommandStrings.AllAndProjectMutuallyExclusive, s_allOption.Name, s_appHostOption.Name));
         }
 
         // Handle --all: stop all running AppHosts
         if (stopAll)
         {
-            return CompleteStopActivity(activity, await StopAllAppHostsAsync(cancellationToken));
+            return CommandResult.FromExitCode(CompleteStopActivity(activity, await StopAllAppHostsAsync(cancellationToken)));
         }
 
         // In non-interactive mode, try to auto-resolve without prompting
         if (!_hostEnvironment.SupportsInteractiveInput)
         {
-            return CompleteStopActivity(activity, await ExecuteNonInteractiveAsync(passedAppHostProjectFile, cancellationToken));
+            return CommandResult.FromExitCode(CompleteStopActivity(activity, await ExecuteNonInteractiveAsync(passedAppHostProjectFile, cancellationToken)));
         }
 
-        return CompleteStopActivity(activity, await ExecuteInteractiveAsync(passedAppHostProjectFile, cancellationToken));
+        return CommandResult.FromExitCode(CompleteStopActivity(activity, await ExecuteInteractiveAsync(passedAppHostProjectFile, cancellationToken)));
     }
 
     /// <summary>
@@ -105,7 +105,7 @@ internal sealed class StopCommand : BaseCommand
         if (allConnections.Length == 0)
         {
             _interactionService.DisplayError(SharedCommandStrings.AppHostNotRunning);
-            return ExitCodeConstants.FailedToFindProject;
+            return CliExitCodes.FailedToFindProject;
         }
 
         // In non-interactive mode, only consider in-scope AppHosts (under current directory)
@@ -122,7 +122,7 @@ internal sealed class StopCommand : BaseCommand
 
         // Multiple in-scope AppHosts or none in scope: error with guidance
         _interactionService.DisplayError(string.Format(CultureInfo.InvariantCulture, StopCommandStrings.MultipleAppHostsNonInteractive, s_appHostOption.Name, s_allOption.Name));
-        return ExitCodeConstants.FailedToFindProject;
+        return CliExitCodes.FailedToFindProject;
     }
 
     /// <summary>
@@ -159,7 +159,7 @@ internal sealed class StopCommand : BaseCommand
         if (allConnections.Length == 0)
         {
             _interactionService.DisplayError(SharedCommandStrings.AppHostNotRunning);
-            return ExitCodeConstants.FailedToFindProject;
+            return CliExitCodes.FailedToFindProject;
         }
 
         _logger.LogDebug("Found {Count} running AppHost(s) to stop", allConnections.Length);
@@ -183,11 +183,11 @@ internal sealed class StopCommand : BaseCommand
         }).ToArray();
 
         var results = await Task.WhenAll(stopTasks);
-        var allStopped = results.All(exitCode => exitCode == ExitCodeConstants.Success);
+        var allStopped = results.All(exitCode => exitCode == CliExitCodes.Success);
 
         _logger.LogDebug("Stop all completed. All stopped: {AllStopped}", allStopped);
 
-        return allStopped ? ExitCodeConstants.Success : ExitCodeConstants.FailedToDotnetRunAppHost;
+        return allStopped ? CliExitCodes.Success : CliExitCodes.FailedToDotnetRunAppHost;
     }
 
     /// <summary>
@@ -204,94 +204,9 @@ internal sealed class StopCommand : BaseCommand
 
         _interactionService.DisplayMessage(KnownEmojis.StopSign, string.Format(CultureInfo.CurrentCulture, StopCommandStrings.SendingStopSignal, appHostIdentifier));
 
-        if (appHostInfo?.CliProcessId is int cliPid)
-        {
-            _logger.LogDebug("Sending stop signal to CLI process (PID {Pid})", cliPid);
-            try
-            {
-                SendStopSignal(cliPid, appHostInfo?.CliStartedAt);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to send stop signal to CLI process {Pid}", cliPid);
-                _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, StopCommandStrings.FailedToStopAppHost, appHostIdentifier));
-                return CompleteStopActivity(activity, ExitCodeConstants.FailedToDotnetRunAppHost);
-            }
-        }
-        else
-        {
-            // Fallback: Try the RPC method if we don't have CLI process ID.
-            _logger.LogDebug("No CLI process ID available, trying RPC stop");
-            var rpcSucceeded = false;
-            try
-            {
-                rpcSucceeded = await connection.StopAppHostAsync(cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to send stop signal via RPC");
-            }
-
-            // If RPC didn't work, try sending a stop signal to the AppHost process directly.
-            if (!rpcSucceeded && appHostInfo?.ProcessId is int appHostPid)
-            {
-                _logger.LogDebug("RPC stop not available, sending SIGTERM to AppHost PID {Pid}", appHostPid);
-                try
-                {
-                    SendStopSignal(appHostPid, appHostInfo?.StartedAt);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to send stop signal to process {Pid}", appHostPid);
-                    _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, StopCommandStrings.FailedToStopAppHost, appHostIdentifier));
-                    return CompleteStopActivity(activity, ExitCodeConstants.FailedToDotnetRunAppHost);
-                }
-            }
-            else if (!rpcSucceeded)
-            {
-                _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, StopCommandStrings.FailedToStopAppHost, appHostIdentifier));
-                return CompleteStopActivity(activity, ExitCodeConstants.FailedToDotnetRunAppHost);
-            }
-        }
-
-        var manager = new RunningInstanceManager(_logger, _interactionService, _timeProvider);
         var stopped = await _interactionService.ShowStatusAsync(
             string.Format(CultureInfo.CurrentCulture, StopCommandStrings.StoppingAppHost, appHostIdentifier),
-            async () =>
-            {
-                try
-                {
-                    if (appHostInfo is null)
-                    {
-                        return true;
-                    }
-
-                    if (await manager.MonitorProcessesForTerminationAsync(appHostInfo, cancellationToken).ConfigureAwait(false))
-                    {
-                        return true;
-                    }
-
-                    var procsToKill = new HashSet<(int, DateTimeOffset?)> { (appHostInfo.ProcessId, appHostInfo.StartedAt) };
-
-                    if (appHostInfo.CliProcessId is int cliPid)
-                    {
-                        procsToKill.Add((cliPid, appHostInfo.CliStartedAt));
-                    }
-
-                    foreach (var (pid, startTime) in procsToKill)
-                    {
-                        _logger.LogWarning("AppHost did not stop gracefully within timeout. Forcing process {Pid} to terminate.", pid);
-                        ForceKillProcess(pid, startTime);
-                    }
-
-                    return await manager.MonitorProcessesForTerminationAsync(appHostInfo, cancellationToken).ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed while waiting for AppHost to stop");
-                    return false;
-                }
-            });
+            async () => await _processShutdownService.StopAppHostAsync(appHostInfo, connection.StopAppHostAsync, cancellationToken).ConfigureAwait(false));
 
         // Reset cursor position after spinner
         _interactionService.DisplayPlainText("");
@@ -299,19 +214,19 @@ internal sealed class StopCommand : BaseCommand
         if (stopped)
         {
             _interactionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, appHostIdentifier));
-            return CompleteStopActivity(activity, ExitCodeConstants.Success);
+            return CompleteStopActivity(activity, CliExitCodes.Success);
         }
         else
         {
             _interactionService.DisplayError(string.Format(CultureInfo.CurrentCulture, StopCommandStrings.FailedToStopAppHost, appHostIdentifier));
-            return CompleteStopActivity(activity, ExitCodeConstants.FailedToDotnetRunAppHost);
+            return CompleteStopActivity(activity, CliExitCodes.FailedToDotnetRunAppHost);
         }
     }
 
     private static int CompleteStopActivity(ProfilingTelemetry.ActivityScope activity, int exitCode)
     {
         activity.SetProcessExitCode(exitCode);
-        if (exitCode != ExitCodeConstants.Success)
+        if (exitCode != CliExitCodes.Success)
         {
             activity.SetError($"Stop exited with code {exitCode}.");
         }
@@ -351,24 +266,6 @@ internal sealed class StopCommand : BaseCommand
         return includeProcessId && connection.AppHostInfo is { } appHostInfo
             ? string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostIdentifierWithProcessId, displayPath, appHostInfo.ProcessId)
             : displayPath;
-    }
-
-    /// <summary>
-    /// Sends a best-effort graceful shutdown signal to the target process.
-    /// Uses Ctrl-Break on Windows and SIGTERM on non-Windows.
-    /// </summary>
-    private void SendStopSignal(int pid, DateTimeOffset? startTime)
-    {
-        ProcessSignaler.RequestGracefulShutdown(pid, startTime, _logger);
-    }
-
-    /// <summary>
-    /// Forcefully kills the target process after the graceful shutdown timeout elapses.
-    /// This does not terminate the entire process tree.
-    /// </summary>
-    private void ForceKillProcess(int pid, DateTimeOffset? startTime)
-    {
-        ProcessSignaler.ForceKill(pid, startTime, _logger);
     }
 
 }

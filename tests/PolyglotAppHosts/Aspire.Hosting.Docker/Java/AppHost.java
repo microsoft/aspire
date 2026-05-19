@@ -5,6 +5,7 @@ void main() throws Exception {
         var compose = builder.addDockerComposeEnvironment("compose");
         var containerName = builder.addParameter("container-name");
         var api = builder.addContainer("api", "nginx:alpine");
+        api.withComputeEnvironment(compose);
         api.withBindMount("/host/path/data", "/container/data");
         api.withHttpEndpoint(new WithHttpEndpointOptions().name("http").targetPort(80.0));
         var apiEndpoint = api.getEndpoint("http");
@@ -27,9 +28,15 @@ void main() throws Exception {
         compose.configureComposeFile((composeFile) -> {
             composeFile.setName("validation-compose");
             var _composeFileName = composeFile.name();
+            composeFile.addNetwork("validation-network-extra", new AddNetworkOptions().driver("bridge"));
+            composeFile.addService("validation-sidecar", new AddServiceOptions().image("busybox"));
+            composeFile.addVolume("validation-data", new AddVolumeOptions().driver("local"));
+            composeFile.addConfig("validation-config", new AddConfigOptions().content("enabled=true"));
+            composeFile.addSecret("validation-secret", new AddSecretOptions().external(true));
             var composeApi = composeFile.services().get("api");
             composeApi.setPullPolicy("always");
             var _composeApiPullPolicy = composeApi.pullPolicy();
+            composeApi.addVolume("validation-data", "/container/compose-data", new AddVolume1Options().isReadOnly(true));
         });
         compose.withDashboard(false);
         compose.withDashboard();

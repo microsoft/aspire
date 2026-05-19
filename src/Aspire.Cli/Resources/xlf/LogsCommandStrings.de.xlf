@@ -22,6 +22,11 @@
         <target state="needs-review-translation">Protokolle im JSON-Format (NDJSON) ausgeben.</target>
         <note />
       </trans-unit>
+      <trans-unit id="NoLogsFound">
+        <source>No logs found.</source>
+        <target state="new">No logs found.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NoResourcesFound">
         <source>No resources found.</source>
         <target state="translated">Keine Ressourcen gefunden.</target>

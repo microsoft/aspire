@@ -4294,9 +4294,8 @@ public static class ResourceBuilderExtensions
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// This method allows associating a specific compute environment with the compute resource.
-    /// <para>This method is not available in polyglot app hosts.</para>
     /// </remarks>
-    [AspireExportIgnore(Reason = "IComputeEnvironmentResource is a specialized interface — not ATS-compatible.")]
+    [AspireExport(Description = "Configures the compute environment for the compute resource")]
     public static IResourceBuilder<T> WithComputeEnvironment<T>(this IResourceBuilder<T> builder, IResourceBuilder<IComputeEnvironmentResource> computeEnvironmentResource)
         where T : IComputeResource
     {

@@ -17,6 +17,7 @@ using Aspire.Cli.Layout;
 using Aspire.Cli.Mcp;
 using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.NuGet;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Scaffolding;
 using Aspire.Cli.Secrets;
@@ -39,6 +40,7 @@ using Aspire.Cli.Packaging;
 using Aspire.Cli.Caching;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.Npm;
+using Aspire.Cli.Profiling;
 
 namespace Aspire.Cli.Tests.Utils;
 
@@ -79,7 +81,7 @@ internal static class CliTestHelper
 
         var globalSettingsFilePath = Path.Combine(options.WorkingDirectory.FullName, ".aspire", "settings.global.json");
         var globalSettingsFile = new FileInfo(globalSettingsFilePath);
-        ConfigurationHelper.RegisterSettingsFiles(configBuilder, options.WorkingDirectory, globalSettingsFile);
+        ConfigurationHelper.RegisterSettingsFiles(configBuilder, options.WorkingDirectory, globalSettingsFile, NullLogger.Instance);
 
         var configuration = configBuilder.Build();
         services.AddSingleton<IConfiguration>(configuration);
@@ -150,10 +152,13 @@ internal static class CliTestHelper
         // Bundle layout services - return null/no-op implementations to trigger SDK mode fallback
         // This ensures backward compatibility: no layout found = use legacy SDK mode
         services.AddSingleton(options.LayoutDiscoveryFactory);
+        services.AddSingleton<IDetachedProcessLauncher, DefaultDetachedProcessLauncher>();
         services.AddTransient<LayoutProcessRunner>();
+        services.AddTransient<ProcessShutdownService>();
         services.AddSingleton(options.BundlePayloadProviderFactory);
         services.AddSingleton(options.BundleServiceFactory);
         services.AddSingleton<BundleNuGetService>();
+        services.AddSingleton<ProfileCaptureService>();
 
         // AppHost project handlers - must match Program.cs registration pattern
         services.AddSingleton<DotNetAppHostProject>();
@@ -161,8 +166,9 @@ internal static class CliTestHelper
         {
             return language => ActivatorUtilities.CreateInstance<GuestAppHostProject>(sp, language);
         });
-        services.AddSingleton<IAppHostProjectFactory, AppHostProjectFactory>();
+        services.AddSingleton(options.AppHostProjectFactory);
 
+        services.AddSingleton<IEnvironmentCheck, AspireVersionCheck>();
         services.AddSingleton<IEnvironmentCheck, WslEnvironmentCheck>();
         services.AddSingleton<IEnvironmentCheck, DotNetSdkCheck>();
         services.AddSingleton<IEnvironmentCheck, TypeScriptAppHostToolingCheck>();
@@ -277,11 +283,7 @@ internal sealed class CliServiceCollectionTestOptions
 
     private CliExecutionContext CreateDefaultCliExecutionContextFactory(IServiceProvider provider)
     {
-        var hivesDirectory = new DirectoryInfo(Path.Combine(WorkingDirectory.FullName, ".aspire", "hives"));
-        var cacheDirectory = new DirectoryInfo(Path.Combine(WorkingDirectory.FullName, ".aspire", "cache"));
-        var logsDirectory = new DirectoryInfo(Path.Combine(WorkingDirectory.FullName, ".aspire", "logs"));
-        var logFilePath = Path.Combine(logsDirectory.FullName, "test.log");
-        return new CliExecutionContext(WorkingDirectory, hivesDirectory, cacheDirectory, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-sdks")), logsDirectory, logFilePath, packagesDirectory: PackagesDirectory);
+        return TestExecutionContextHelper.CreateExecutionContext(WorkingDirectory, packagesDirectory: PackagesDirectory);
     }
 
     public DirectoryInfo WorkingDirectory { get; set; }
@@ -375,6 +377,7 @@ internal sealed class CliServiceCollectionTestOptions
     public Func<IServiceProvider, IProjectLocator> ProjectLocatorFactory { get; set; }
     public Func<IServiceProvider, ISolutionLocator> SolutionLocatorFactory { get; set; }
     public Func<IServiceProvider, CliExecutionContext> CliExecutionContextFactory { get; set; }
+    public Func<IServiceProvider, IAppHostProjectFactory> AppHostProjectFactory { get; set; } = serviceProvider => ActivatorUtilities.CreateInstance<AppHostProjectFactory>(serviceProvider);
     public Func<IServiceProvider, IFirstTimeUseNoticeSentinel> FirstTimeUseNoticeSentinelFactory { get; set; } = _ => new TestFirstTimeUseNoticeSentinel();
     public Func<IServiceProvider, IBannerService> BannerServiceFactory { get; set; } = _ => new TestBannerService();
 
@@ -669,6 +672,8 @@ internal sealed class NullBundleService : IBundleService
 
     public Task<Layout.LayoutConfiguration?> EnsureExtractedAndGetLayoutAsync(CancellationToken cancellationToken = default)
         => Task.FromResult<Layout.LayoutConfiguration?>(null);
+
+    public string? GetDefaultExtractDir(string processPath) => null;
 }
 
 /// <summary>
@@ -697,6 +702,8 @@ internal sealed class TestBundleService(bool isBundle) : IBundleService
 
     public Task<Layout.LayoutConfiguration?> EnsureExtractedAndGetLayoutAsync(CancellationToken cancellationToken = default)
         => Task.FromResult(Layout);
+
+    public string? GetDefaultExtractDir(string processPath) => null;
 }
 
 internal sealed class TestOutputTextWriter : TextWriter

@@ -5,12 +5,38 @@ using System.CommandLine;
 
 namespace Aspire.Cli;
 
-internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo hivesDirectory, DirectoryInfo cacheDirectory, DirectoryInfo sdksDirectory, DirectoryInfo logsDirectory, string logFilePath, bool debugMode = false, IReadOnlyDictionary<string, string?>? environmentVariables = null, DirectoryInfo? homeDirectory = null, DirectoryInfo? packagesDirectory = null)
+internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, DirectoryInfo hivesDirectory, DirectoryInfo cacheDirectory, DirectoryInfo sdksDirectory, DirectoryInfo logsDirectory, string logFilePath, bool debugMode = false, IReadOnlyDictionary<string, string?>? environmentVariables = null, DirectoryInfo? homeDirectory = null, DirectoryInfo? packagesDirectory = null, string identityChannel = "local")
 {
     public DirectoryInfo WorkingDirectory { get; } = workingDirectory;
     public DirectoryInfo HivesDirectory { get; } = hivesDirectory;
     public DirectoryInfo CacheDirectory { get; } = cacheDirectory;
     public DirectoryInfo SdksDirectory { get; } = sdksDirectory;
+
+    /// <summary>
+    /// Gets the hive label baked into the <strong>running CLI binary</strong>:
+    /// one of <c>local</c>, <c>stable</c>, <c>staging</c>, <c>daily</c>, or the
+    /// per-PR label <c>pr-&lt;N&gt;</c> (for example <c>pr-16820</c>). The value
+    /// is sourced from <c>[AssemblyMetadata("AspireCliChannel", "...")]</c> and
+    /// is consumed verbatim by the packaging service to select the matching
+    /// hive directory for this CLI process.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the <em>CLI's identity</em>, not the channel a project is asking
+    /// restore to use. Restore/packaging decisions that depend on what the
+    /// project requested (for example PSM emission for an apphost) must key on
+    /// the project's <c>aspire.config.json#channel</c>, not this property.
+    /// </para>
+    /// <para>
+    /// Reseed call sites (template factories, scaffolding, guest apphost
+    /// project) write this value into a project's
+    /// <c>aspire.config.json#channel</c> as the default — that is the
+    /// consumer-facing label subsequent CLI runs use to select the right hive.
+    /// CI bakes <c>pr-&lt;PR_NUMBER&gt;</c> directly for PR builds, so no
+    /// runtime "<c>pr</c> + parsed PrNumber" join is required.
+    /// </para>
+    /// </remarks>
+    public string IdentityChannel { get; } = identityChannel;
 
     /// <summary>
     /// Gets the directory where restored NuGet packages are cached for apphost server sessions.
@@ -27,6 +53,12 @@ internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, Direct
     /// Gets the path to the current session's log file.
     /// </summary>
     public string LogFilePath { get; } = logFilePath;
+
+    /// <summary>
+    /// Gets or sets the log file path of the CLI process managing the connected app host.
+    /// This is populated after connecting to a running app host via <see cref="Backchannel.AppHostConnectionResolver"/>.
+    /// </summary>
+    public string? AppHostCliLogFilePath { get; set; }
 
     public DirectoryInfo HomeDirectory { get; } = homeDirectory ?? new DirectoryInfo(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
     public bool DebugMode { get; } = debugMode;
@@ -80,12 +112,13 @@ internal sealed class CliExecutionContext(DirectoryInfo workingDirectory, Direct
     public TaskCompletionSource<Command> CommandSelected { get; } = new();
 
     /// <summary>
-    /// Gets the count of PR hives (PR build directories) on the developer machine.
+    /// Gets the count of hives (per-channel CLI build directories) on the developer machine,
+    /// including the <c>local</c> hive and any <c>pr-*</c> hives.
     /// Hives are detected as subdirectories in the hives directory.
     /// This method accesses the file system.
     /// </summary>
-    /// <returns>The number of PR hive subdirectories, or 0 if the hives directory does not exist.</returns>
-    public int GetPrHiveCount()
+    /// <returns>The number of hive subdirectories, or 0 if the hives directory does not exist.</returns>
+    public int GetHiveCount()
     {
         if (!HivesDirectory.Exists)
         {

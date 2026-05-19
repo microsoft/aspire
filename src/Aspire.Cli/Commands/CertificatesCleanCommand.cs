@@ -27,7 +27,7 @@ internal sealed class CertificatesCleanCommand : BaseCommand
 
     protected override bool UpdateNotificationsEnabled => false;
 
-    protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         InteractionService.DisplayMessage(KnownEmojis.Information, CertificatesCommandStrings.CleanProgress);
 
@@ -36,18 +36,18 @@ internal sealed class CertificatesCleanCommand : BaseCommand
         if (result.Success)
         {
             InteractionService.DisplaySuccess(CertificatesCommandStrings.CleanSuccess);
-            return Task.FromResult(ExitCodeConstants.Success);
+            return Task.FromResult(CommandResult.FromExitCode(CliExitCodes.Success));
         }
 
         if (result.WasCancelled)
         {
             InteractionService.DisplayMessage(KnownEmojis.Warning, CertificatesCommandStrings.CleanCancelled);
-            return Task.FromResult(ExitCodeConstants.FailedToTrustCertificates);
+            return Task.FromResult(CommandResult.FromExitCode(CliExitCodes.FailedToTrustCertificates));
         }
 
         var details = string.Format(CultureInfo.CurrentCulture, CertificatesCommandStrings.CleanFailureDetailsFormat, result.ErrorMessage);
         InteractionService.DisplayError(details);
         InteractionService.DisplayError(CertificatesCommandStrings.CleanFailure);
-        return Task.FromResult(ExitCodeConstants.FailedToTrustCertificates);
+        return Task.FromResult(CommandResult.FromExitCode(CliExitCodes.FailedToTrustCertificates));
     }
 }

@@ -1485,6 +1485,7 @@ public static class JavaScriptHostingExtensions
 
         var workingDirectory = resource.Resource.WorkingDirectory;
         var hasPnpmLock = File.Exists(Path.Combine(workingDirectory, "pnpm-lock.yaml"));
+        var hasPnpmWorkspace = File.Exists(Path.Combine(workingDirectory, "pnpm-workspace.yaml"));
 
         installArgs ??= GetDefaultPnpmInstallArgs(resource, hasPnpmLock);
 
@@ -1492,6 +1493,11 @@ public static class JavaScriptHostingExtensions
         if (hasPnpmLock)
         {
             packageFilesSourcePattern += " pnpm-lock.yaml";
+        }
+
+        if (hasPnpmWorkspace)
+        {
+            packageFilesSourcePattern += " pnpm-workspace.yaml";
         }
 
         resource

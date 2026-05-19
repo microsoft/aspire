@@ -25,7 +25,21 @@
     <DefineConstants>$(DefineConstants);CLI</DefineConstants>
     <EnableConfigurationBindingGenerator>true</EnableConfigurationBindingGenerator>
     <CopyOutputSymbolsToPublishDirectory>false</CopyOutputSymbolsToPublishDirectory>
+    <!-- AspireCliChannel identifies the acquisition channel the CLI binary was built for.
+         For non-PR builds the value is one of: stable | staging | daily | local. For PR
+         builds CI emits the per-PR hive label directly as `pr-<PR_NUMBER>` (no separate
+         PrNumber parse / join at runtime). Local devs and ./build.sh default to 'local'
+         so a locally-built CLI does not impersonate the real 'daily' channel (which would
+         cause PSM guards keyed on identity==channel to short-circuit silently). CI overrides
+         via /p:AspireCliChannel=$(aspireCliChannel). The value is baked into the assembly via
+         AssemblyMetadata below so the runtime IdentityChannelReader can read it without
+         reflection-unsafe lookups. -->
+    <AspireCliChannel Condition="'$(AspireCliChannel)' == ''">local</AspireCliChannel>
   </PropertyGroup>
+
+  <ItemGroup>
+    <AssemblyMetadata Include="AspireCliChannel" Value="$(AspireCliChannel)" />
+  </ItemGroup>
 
   <!-- Set the nuget properties when building as a global tool. -->
   <PropertyGroup Condition="'$(IsCliToolProject)' == 'true'">
@@ -57,6 +71,22 @@
     <RemoveDir Directories="$(PublishDir)" />
     <MakeDir Directories="$(PublishDir)" />
     <Copy SourceFiles="$(PreBuiltCliBinaryPath)" DestinationFolder="$(PublishDir)" />
+
+    <!-- Copy the canonical .aspire-install.json sidecar into RID-specific dotnet-tool packs
+         (clipack passes a RuntimeIdentifier), but NOT into the cross-platform pointer pack
+         (no RuntimeIdentifier) — the pointer nupkg is a routing stub and ships without a
+         sidecar.
+
+         The dotnet-tool source's source-of-truth sidecar lives next to this csproj as
+         dotnet-tool.aspire-install.json. It is copied into the RID-specific tool nupkg
+         under the canonical name .aspire-install.json — the name BundleService and every
+         consumer (winget, brew, scripts, verify-cli-tool-nupkg.ps1) reads. The
+         disambiguated source filename keeps the dotnet-tool variant distinguishable from
+         the other source sidecars (script/winget/brew) that ship through other packaging
+         layers. -->
+    <Copy Condition="'$(IsCliToolProject)' == 'true' and '$(RuntimeIdentifier)' != ''"
+          SourceFiles="$(MSBuildThisFileDirectory)dotnet-tool.aspire-install.json"
+          DestinationFiles="$([MSBuild]::EnsureTrailingSlash('$(PublishDir)')).aspire-install.json" />
   </Target>
 
   <ItemGroup Condition="'$(PublishAot)' == 'true'">
@@ -94,10 +124,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="$(SharedDir)CliExitCodes.cs" Link="CliExitCodes.cs" />
     <Compile Include="$(SharedDir)AppHostProfilePortGenerator.cs" Link="Utils\AppHostProfilePortGenerator.cs" />
+    <Compile Include="$(SharedDir)AssemblyVersionHelper.cs" Link="Utils\AssemblyVersionHelper.cs" />
     <Compile Include="$(SharedDir)BundleDiscovery.cs" Link="Layout\BundleDiscovery.cs" />
+    <Compile Include="$(SharedDir)ChannelExtensions.cs" Link="Utils\ChannelExtensions.cs" />
     <Compile Include="$(SharedDir)EnumerableExtensions.cs" Link="Utils\EnumerableExtensions.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Utils\KnownConfigNames.cs" />
+    <Compile Include="$(SharedDir)IntegrationPackageProbeManifest.cs" Link="Utils\IntegrationPackageProbeManifest.cs" />
     <Compile Include="$(SharedDir)DashboardConfigNames.cs" Link="Utils\DashboardConfigNames.cs" />
     <Compile Include="$(SharedDir)KnownContainerRuntimes.cs" Link="Utils\KnownContainerRuntimes.cs" />
     <Compile Include="$(SharedDir)ContainerRuntimeDetector.cs" Link="Utils\ContainerRuntimeDetector.cs" />
@@ -160,6 +194,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Aspire.Cli.Tests" />
+    <InternalsVisibleTo Include="Aspire.Cli.Benchmarks" />
   </ItemGroup>
 
   <ItemGroup>
@@ -245,6 +280,9 @@
       <WithCulture>false</WithCulture>
     </EmbeddedResource>
     <EmbeddedResource Include="..\..\.agents\skills\aspire\**\*" LogicalName="skills.aspire/%(RecursiveDir)%(Filename)%(Extension)">
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
+    <EmbeddedResource Include="..\..\.agents\skills\aspire-deployment\**\*" LogicalName="skills.aspire-deployment/%(RecursiveDir)%(Filename)%(Extension)">
       <WithCulture>false</WithCulture>
     </EmbeddedResource>
     <EmbeddedResource Include="..\..\.agents\skills\aspireify\**\*" LogicalName="skills.aspireify/%(RecursiveDir)%(Filename)%(Extension)">

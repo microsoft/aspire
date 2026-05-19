@@ -39,7 +39,7 @@ internal sealed class StartCommand : BaseCommand
         TreatUnmatchedTokensAsErrors = false;
     }
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         var passedAppHostProjectFile = parseResult.GetValue(AppHostLauncher.s_appHostOption);
         var format = parseResult.GetValue(AppHostLauncher.s_formatOption);
@@ -53,6 +53,10 @@ internal sealed class StartCommand : BaseCommand
         var waitForDebugger = parseResult.GetValue(RootCommand.WaitForDebuggerOption);
         var globalArgs = RootCommand.GetChildProcessArgs(parseResult);
         var additionalArgs = parseResult.UnmatchedTokens.ToList();
+        var captureProfile = parseResult.GetValue(RootCommand.CaptureProfileOption);
+        var stopAfterLaunchDelay = captureProfile
+            ? TimeSpan.FromSeconds(parseResult.GetValue(RootCommand.CaptureProfileDelayOption))
+            : (TimeSpan?)null;
 
         if (noBuild)
         {
@@ -67,6 +71,7 @@ internal sealed class StartCommand : BaseCommand
             waitForDebugger,
             globalArgs,
             additionalArgs,
+            stopAfterLaunchDelay,
             cancellationToken);
     }
 }

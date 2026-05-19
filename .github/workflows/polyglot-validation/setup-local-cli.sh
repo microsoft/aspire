@@ -36,13 +36,53 @@ echo "=== Extracting bundle ==="
 
 # Set up NuGet hive
 echo "=== Setting up NuGet package hive ==="
-HIVE_DIR="$ASPIRE_HOME/hives/local/packages"
-mkdir -p "$HIVE_DIR"
 
 SHIPPING_DIR="$NUGETS_DIR/Release/Shipping"
 if [ ! -d "$SHIPPING_DIR" ]; then
     SHIPPING_DIR="$NUGETS_DIR"
 fi
+
+# Auto-detect PR identity from .nupkg filenames (e.g. "Aspire.Hosting.AppHost.13.4.0-pr.16820.g3703c5c4.nupkg")
+# so PR-built packages land in the same hive the CLI's CliExecutionContext.Channel
+# resolves to ("pr-<N>").
+#
+# Polyglot validation is PR-only (gated in .github/workflows/tests.yml on
+# github.event_name == 'pull_request'). On non-PR builds the CLI archive is baked
+# with channel=daily/staging, the .nupkg filenames lack the -pr.<N>.gSHA suffix, and
+# this script has no way to derive a hive label that the CLI will look in — so we
+# fail loud instead of silently writing to hives/local/ where the CLI won't read.
+#
+# Anchor on Aspire.Hosting.AppHost because:
+#   - It is the core MSBuild SDK package every AppHost references; removing/renaming it
+#     would require updating every consumer, so it is effectively guaranteed to exist.
+#   - It is packable with no <SuppressFinalPackageVersion>, so its version stamp follows
+#     the standard "{semver}[-pr.<N>.g<sha>]" shape that the regex below expects.
+#   - It only ever lives in the general built-nugets artifact ($SHIPPING_DIR), not the
+#     per-RID built-nugets-for-<rid> artifact ($NUGETS_RID_DIR), so we avoid the
+#     Aspire.Cli pointer-vs-RID ambiguity (Aspire.Cli.<rid>.<ver>.nupkg also matches
+#     "Aspire.Cli.*.nupkg" and could be picked first depending on filesystem order).
+SAMPLE_NUPKG=$(find "$SHIPPING_DIR" -maxdepth 4 -name "Aspire.Hosting.AppHost.*.nupkg" 2>/dev/null | head -1)
+if [ -z "$SAMPLE_NUPKG" ]; then
+    echo "ERROR: Could not find Aspire.Hosting.AppHost.*.nupkg under $SHIPPING_DIR." >&2
+    echo "       PR-suffix detection depends on this package being present in the built-nugets artifact." >&2
+    echo "       Available .nupkg files under $SHIPPING_DIR (first 20):" >&2
+    find "$SHIPPING_DIR" -maxdepth 4 -name "*.nupkg" 2>/dev/null | head -20 >&2
+    exit 1
+fi
+
+SUFFIX=$(basename "$SAMPLE_NUPKG" | sed -nE 's/.*-(pr\.[0-9]+\.[0-9a-g]+).*\.nupkg$/\1/p')
+if [[ "$SUFFIX" =~ ^pr\.([0-9]+)\.[0-9a-g]+$ ]]; then
+    HIVE_LABEL="pr-${BASH_REMATCH[1]}"
+else
+    echo "ERROR: Could not derive PR identity from $(basename "$SAMPLE_NUPKG")." >&2
+    echo "       Polyglot validation is PR-only and expects a '-pr.<N>.g<sha>' suffix on the built nupkgs." >&2
+    echo "       If you are seeing this on a non-PR build, the polyglot_validation job in tests.yml is" >&2
+    echo "       running outside its 'github.event_name == pull_request' guard." >&2
+    exit 1
+fi
+HIVE_DIR="$ASPIRE_HOME/hives/$HIVE_LABEL/packages"
+echo "  Using hive label: $HIVE_LABEL"
+mkdir -p "$HIVE_DIR"
 
 if [ -d "$SHIPPING_DIR" ]; then
     find "$SHIPPING_DIR" -name "*.nupkg" -exec cp {} "$HIVE_DIR/" \;
@@ -55,12 +95,6 @@ if [ -d "$NUGETS_RID_DIR" ]; then
 fi
 
 echo "  Total packages in hive: $(find "$HIVE_DIR" -name "*.nupkg" | wc -l)"
-
-# Set the channel to 'local' so CLI uses our hive
-echo "=== Configuring CLI channel ==="
-"$ASPIRE_HOME/bin/aspire" config set channel local --global || {
-    echo "  Warning: Failed to set channel"
-}
 
 echo ""
 echo "=== Aspire CLI setup complete ==="

@@ -15,7 +15,7 @@ LicenseUrl: https://github.com/microsoft/aspire/blob/main/LICENSE.TXT
 Copyright: (c) Microsoft ${YEAR}
 ShortDescription: CLI tool for building observable, production-ready distributed applications with Aspire
 Description: >
-  Aspire CLI (aspire) is a command-line tool for creating, running, and managing
+  ${PRERELEASE_NOTICE}Aspire CLI (aspire) is a command-line tool for creating, running, and managing
   Aspire applications. It provides commands for project scaffolding, local development,
   and deployment of cloud-native distributed applications.
 Tags:

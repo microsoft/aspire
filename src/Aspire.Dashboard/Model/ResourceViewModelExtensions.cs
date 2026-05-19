@@ -99,6 +99,58 @@ internal static class ResourceViewModelExtensions
         return resource.TryGetCustomDataBoolArray(KnownProperties.Resource.AppArgsSensitivity, out argParams);
     }
 
+    public static bool TryGetWaitingForDependencies(this ResourceViewModel resource, out ImmutableArray<string> dependencies)
+    {
+        return resource.TryGetCustomDataStringArray(KnownProperties.Resource.WaitingFor, out dependencies) && dependencies.Length > 0;
+    }
+
+    public static bool TryGetResolvedWaitingForDependencies(
+        this ResourceViewModel resource,
+        IEnumerable<ResourceViewModel> allResources,
+        out ImmutableArray<string> dependencies)
+    {
+        if (!resource.TryGetWaitingForDependencies(out var waitingForDependencies))
+        {
+            dependencies = default;
+            return false;
+        }
+
+        var resources = allResources.ToArray();
+        var builder = ImmutableArray.CreateBuilder<string>();
+        var seenDependencies = new HashSet<string>(StringComparers.ResourceName);
+
+        foreach (var dependency in waitingForDependencies)
+        {
+            var resolvedDependency = dependency;
+            var matchingResource = resources.FirstOrDefault(r => string.Equals(r.Name, dependency, StringComparisons.ResourceName));
+            if (matchingResource is null)
+            {
+                var matchingResources = resources
+                    .Where(r => string.Equals(r.DisplayName, dependency, StringComparisons.ResourceName))
+                    .Take(2)
+                    .ToArray();
+
+                if (matchingResources.Length == 1)
+                {
+                    matchingResource = matchingResources[0];
+                }
+            }
+
+            if (matchingResource is not null)
+            {
+                resolvedDependency = ResourceViewModel.GetResourceName(matchingResource, resources);
+            }
+
+            if (seenDependencies.Add(resolvedDependency))
+            {
+                builder.Add(resolvedDependency);
+            }
+        }
+
+        dependencies = builder.ToImmutable();
+        return dependencies.Length > 0;
+    }
+
     private static bool TryGetCustomDataString(this ResourceViewModel resource, string key, [NotNullWhen(returnValue: true)] out string? s)
     {
         if (resource.Properties.TryGetValue(key, out var property) && property.Value.TryConvertToString(out var valueString))

@@ -31,7 +31,7 @@ internal class CliDownloader(
     public async Task<string> DownloadLatestCliAsync(string channelName, CancellationToken cancellationToken)
     {
         // Get the channel information from PackagingService
-        var channels = await packagingService.GetChannelsAsync(cancellationToken);
+        var channels = await packagingService.GetChannelsAsync(cancellationToken, channelName);
         var channel = channels.FirstOrDefault(c => c.Name.Equals(channelName, StringComparison.OrdinalIgnoreCase));
         
         if (channel is null)

@@ -218,6 +218,11 @@ public static class CommandResults
     public static ExecuteCommandResult Success() => new() { Success = true };
 
     /// <summary>
+    /// Produces a success result.
+    /// </summary>
+    public static ExecuteCommandResult Success(string message) => new() { Success = true, Message = message };
+
+    /// <summary>
     /// Produces a success result with a message and result data.
     /// </summary>
     /// <param name="message">The message associated with the result.</param>

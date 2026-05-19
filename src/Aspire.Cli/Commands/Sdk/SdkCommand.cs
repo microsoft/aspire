@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.CommandLine;
-using System.CommandLine.Help;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Telemetry;
@@ -14,7 +12,7 @@ namespace Aspire.Cli.Commands.Sdk;
 /// Parent command for SDK-related operations.
 /// Usage: aspire sdk [subcommand]
 /// </summary>
-internal sealed class SdkCommand : BaseCommand
+internal sealed class SdkCommand : ParentCommand
 {
     public SdkCommand(
         SdkGenerateCommand generateCommand,
@@ -29,14 +27,5 @@ internal sealed class SdkCommand : BaseCommand
         Hidden = true;
         Subcommands.Add(generateCommand);
         Subcommands.Add(dumpCommand);
-    }
-
-    protected override bool UpdateNotificationsEnabled => false;
-
-    protected override Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
-    {
-        // When invoked without a subcommand, show help
-        new HelpAction().Invoke(parseResult);
-        return Task.FromResult(ExitCodeConstants.InvalidCommand);
     }
 }

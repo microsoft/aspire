@@ -152,6 +152,55 @@ public class DocsIndexServiceTests
     }
 
     [Fact]
+    public async Task SearchAsync_PreFilterHaystack_CoversEveryScorableField()
+    {
+        // Regression guard for the AllSearchableTextLower reject-filter invariant
+        // declared in IndexedDocument's ctor: the per-doc haystack used by SearchAsync
+        // to early-reject zero-score candidates must be a superset of every field
+        // ScoreDocument can produce a positive score against. If a future change adds
+        // (or removes) a scorable field without keeping the haystack in sync, docs
+        // that match ONLY on that field will be silently filtered out before scoring
+        // and never reach the result list — with no other test failing.
+        //
+        // We build a doc that places a unique sentinel token in each scorable field
+        // and assert SearchAsync returns the doc for every sentinel. If any sentinel
+        // returns empty, the corresponding field has been omitted from the haystack.
+        var content = """
+            # Sentineltitleword Integration
+            > A summary that mentions sentinelsummaryword uniquely.
+
+            ## Sentinelheadingword Overview
+
+            Content body containing sentinelcontentword for verification.
+            Inline code contains `sentinelcodespan`, and SentinelIdentifier is a PascalCase symbol.
+            """;
+
+        var fetcher = CreateMockFetcher(content);
+        var service = CreateService(fetcher);
+
+        // Sentinel name -> field it appears in (for clearer failure messages).
+        var sentinels = new (string Token, string Field)[]
+        {
+            ("sentineltitleword", "title (and derived slug)"),
+            ("sentinelsummaryword", "summary"),
+            ("sentinelheadingword", "section heading"),
+            ("sentinelcontentword", "section content"),
+            ("sentinelcodespan", "code span"),
+            ("sentinelidentifier", "PascalCase identifier"),
+        };
+
+        foreach (var (token, field) in sentinels)
+        {
+            var results = await service.SearchAsync(token);
+            Assert.True(
+                results.Count > 0,
+                $"SearchAsync('{token}') returned no results — the IndexedDocument haystack used by " +
+                $"the early-reject filter is probably missing the {field} field. Update the " +
+                "IndexedDocument constructor to include that field in AllSearchableTextLower.");
+        }
+    }
+
+    [Fact]
     public async Task SearchAsync_FindsCodeIdentifiers()
     {
         var content = """

@@ -189,13 +189,20 @@ public sealed class DashboardCommandExecutor(
         }
         else if (response.Kind == ResourceCommandResponseKind.Cancelled)
         {
+            var canceledTitle = string.Format(CultureInfo.InvariantCulture, loc[nameof(Dashboard.Resources.Resources.ResourceCommandCanceled)], command.GetDisplayName());
+
             // For cancelled commands, just close the existing toast and don't show any success or error message.
             if (!toastClosed)
             {
                 toastService.CloseToast(toastParameters.Id);
             }
 
-            notificationService.RemoveNotification(progressNotificationId);
+            notificationService.ReplaceNotification(progressNotificationId, new NotificationEntry
+            {
+                Title = canceledTitle,
+                Body = response.Message,
+                Intent = FluentMessageIntent.Info,
+            });
             closeToastCts.Dispose();
             return;
         }

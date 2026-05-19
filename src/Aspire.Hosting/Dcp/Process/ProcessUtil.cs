@@ -125,10 +125,6 @@ internal static partial class ProcessUtil
 
         try
         {
-#if ASPIRE_EVENTSOURCE
-            AspireEventSource.Instance.ProcessLaunchStart(processSpec.ExecutablePath, FormatProcessArgumentsForDisplay(processSpec));
-#endif
-
             process.Start();
             processSpec.OnStart?.Invoke(process.Id);
             startupComplete.Set();
@@ -180,9 +176,6 @@ internal static partial class ProcessUtil
         finally
         {
             startupComplete.Set(); // Allow output/error/exit handlers to start processing data.
-#if ASPIRE_EVENTSOURCE
-            AspireEventSource.Instance.ProcessLaunchStop(processSpec.ExecutablePath, FormatProcessArgumentsForDisplay(processSpec));
-#endif
         }
 
         return (processLifetimeTcs.Task, new ProcessDisposable(process, processLifetimeTcs.Task, processSpec.KillEntireProcessTree));

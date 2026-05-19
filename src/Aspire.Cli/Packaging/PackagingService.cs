@@ -3,35 +3,90 @@
 
 using Aspire.Cli.Configuration;
 using Aspire.Cli.NuGet;
+using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Semver;
+using System.Globalization;
 using System.Reflection;
 
 namespace Aspire.Cli.Packaging;
 
 internal interface IPackagingService
 {
-    public Task<IEnumerable<PackageChannel>> GetChannelsAsync(CancellationToken cancellationToken = default);
+    public Task<IEnumerable<PackageChannel>> GetChannelsAsync(CancellationToken cancellationToken = default, string? requestedChannelName = null);
+
+    /// <summary>
+    /// Returns a user-facing reason explaining why the <c>staging</c> package channel cannot be
+    /// synthesized for the running CLI, or <see langword="null"/> when staging IS available.
+    /// </summary>
+    /// <remarks>
+    /// On a CLI whose baked <c>AspireCliChannel</c> identity is <c>daily</c>, <c>local</c>, or
+    /// <c>pr-&lt;N&gt;</c>, there is no deterministic way to produce a real staging feed:
+    /// the SHA-specific darc feed (<c>darc-pub-microsoft-aspire-&lt;hash&gt;</c>) only exists
+    /// for stable release branch builds, and falling back to the shared daily feed silently
+    /// resolves daily packages instead of staging ones. To avoid that downgrade
+    /// (see <see href="https://github.com/microsoft/aspire/issues/16652"/>), the service refuses
+    /// to fabricate a staging channel from those identities unless the caller has set
+    /// <c>overrideStagingFeed</c> or enabled the staging feature flag.
+    /// </remarks>
+    string? GetStagingChannelUnavailableReason();
 }
 
-internal class PackagingService(CliExecutionContext executionContext, INuGetPackageCache nuGetPackageCache, IFeatures features, IConfiguration configuration, ILogger<PackagingService> logger) : IPackagingService
+internal class PackagingService : IPackagingService
 {
-    public Task<IEnumerable<PackageChannel>> GetChannelsAsync(CancellationToken cancellationToken = default)
+    // Configuration key used to override the staging feed URL. When non-empty,
+    // PackagingService treats staging as available regardless of the CLI's
+    // identity channel (see IsStagingChannelSynthesisAllowed). Surfaced from
+    // tests via InternalsVisibleTo so a single literal change can't drift.
+    internal const string OverrideStagingFeedConfigKey = "overrideStagingFeed";
+
+    private readonly CliExecutionContext _executionContext;
+    private readonly INuGetPackageCache _nuGetPackageCache;
+    private readonly IFeatures _features;
+    private readonly IConfiguration _configuration;
+    private readonly ILogger<PackagingService> _logger;
+
+    // Cached result of the staging-channel availability check. The inputs (CLI identity,
+    // overrideStagingFeed, StagingChannelEnabled feature) are effectively static for the
+    // process lifetime, so computing this once avoids re-formatting the localized reason
+    // string on every GetChannelsAsync call (callers fan out across NewCommand,
+    // UpdateCommand, IntegrationPackageSearchService, NuGetPackagePrefetcher, etc.).
+    private readonly Lazy<string?> _stagingUnavailableReasonCache;
+
+    public PackagingService(CliExecutionContext executionContext, INuGetPackageCache nuGetPackageCache, IFeatures features, IConfiguration configuration, ILogger<PackagingService> logger)
     {
-        var defaultChannel = PackageChannel.CreateImplicitChannel(nuGetPackageCache, logger);
+        _executionContext = executionContext;
+        _nuGetPackageCache = nuGetPackageCache;
+        _features = features;
+        _configuration = configuration;
+        _logger = logger;
+        _stagingUnavailableReasonCache = new Lazy<string?>(ComputeStagingChannelUnavailableReason);
+    }
+
+    // One-shot guards so the refusal warning / successful-resolution info line are emitted
+    // at most once per CLI process instead of on every GetChannelsAsync invocation. Many
+    // commands (and the background NuGetPackagePrefetcher) call GetChannelsAsync repeatedly;
+    // logging on each call produced excessive noise — particularly the refusal warning when
+    // a project's aspire.config.json pins `channel: staging` on a daily/local CLI.
+    private int _stagingRefusalLogged;
+    private int _stagingResolutionLogged;
+
+    public Task<IEnumerable<PackageChannel>> GetChannelsAsync(CancellationToken cancellationToken = default, string? requestedChannelName = null)
+    {
+        var defaultChannel = PackageChannel.CreateImplicitChannel(_nuGetPackageCache, _logger);
         
         var stableChannel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Stable, PackageChannelQuality.Stable, new[]
         {
             new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
-        }, nuGetPackageCache, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/ga/daily", logger: logger);
+        }, _nuGetPackageCache, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/ga/daily", logger: _logger);
 
         var dailyChannel = PackageChannel.CreateExplicitChannel(PackageChannelNames.Daily, PackageChannelQuality.Prerelease, new[]
         {
             new PackageMapping("Aspire*", "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json"),
             new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
-        }, nuGetPackageCache, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/daily", logger: logger);
+        }, _nuGetPackageCache, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/daily", logger: _logger);
 
         var prPackageChannels = new List<PackageChannel>();
 
@@ -39,9 +94,9 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
         // intermediate directory structure which may not exist in some
         // contexts (e.g. in our Codespace where we have the CLI on the 
         // path but not in the $HOME/.aspire/bin folder).
-        if (executionContext.HivesDirectory.Exists)
+        if (_executionContext.HivesDirectory.Exists)
         {
-            var prHives = executionContext.HivesDirectory.GetDirectories();
+            var prHives = _executionContext.HivesDirectory.GetDirectories();
             foreach (var prHive in prHives)
             {
                 // The packages subdirectory contains the actual .nupkg files
@@ -54,7 +109,7 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
                 {
                     new PackageMapping("Aspire*", packagesPath),
                     new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
-                }, nuGetPackageCache, pinnedVersion: pinnedVersion, logger: logger);
+                }, _nuGetPackageCache, pinnedVersion: pinnedVersion, logger: _logger);
 
                 prPackageChannels.Add(prChannel);
             }
@@ -62,10 +117,18 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
 
         var channels = new List<PackageChannel>([defaultChannel, stableChannel]);
 
-        // Add staging channel if feature is enabled (after stable, before daily)
-        if (KnownFeatures.IsStagingChannelEnabled(features, configuration))
+        // Add staging channel after stable and before daily. Staging CLI builds should
+        // dogfood staging packages even before a project-level channel pin exists, and
+        // callers that already resolved a staging channel from another project directory
+        // need the channel materialized before they can match it below.
+        var stagingChannelConfigured = string.Equals(_configuration["channel"], PackageChannelNames.Staging, StringComparisons.ChannelName);
+        var stagingChannelRequested = string.Equals(requestedChannelName, PackageChannelNames.Staging, StringComparisons.ChannelName);
+        var stagingIdentityChannel = string.Equals(_executionContext.IdentityChannel, PackageChannelNames.Staging, StringComparisons.ChannelName);
+        var stagingFeatureEnabled = _features.IsFeatureEnabled(KnownFeatures.StagingChannelEnabled, false);
+        if (stagingFeatureEnabled || stagingChannelConfigured || stagingChannelRequested || stagingIdentityChannel)
         {
-            var stagingChannel = CreateStagingChannel();
+            var defaultQuality = stagingChannelConfigured || stagingChannelRequested || stagingIdentityChannel ? PackageChannelQuality.Both : PackageChannelQuality.Stable;
+            var stagingChannel = CreateStagingChannel(defaultQuality);
             if (stagingChannel is not null)
             {
                 channels.Add(stagingChannel);
@@ -79,10 +142,26 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
         return Task.FromResult<IEnumerable<PackageChannel>>(channels);
     }
 
-    private PackageChannel? CreateStagingChannel()
+    private PackageChannel? CreateStagingChannel(PackageChannelQuality defaultQuality)
     {
-        var stagingQuality = GetStagingQuality();
-        var hasExplicitFeedOverride = !string.IsNullOrEmpty(configuration["overrideStagingFeed"]);
+        // Refuse to synthesize a staging channel on CLI identities that cannot produce a real
+        // staging feed (daily, local, pr-<N>). Silently falling back to the shared daily feed or
+        // a non-existent SHA-specific darc feed is the bug tracked by
+        // https://github.com/microsoft/aspire/issues/16652. The escape hatches (explicit
+        // overrideStagingFeed, or the StagingChannelEnabled feature flag) are honored inside
+        // IsStagingChannelSynthesisAllowed below.
+        var unavailableReason = GetStagingChannelUnavailableReason();
+        if (unavailableReason is not null)
+        {
+            if (Interlocked.Exchange(ref _stagingRefusalLogged, 1) == 0)
+            {
+                _logger.LogWarning("Refusing to synthesize 'staging' package channel: {Reason}", unavailableReason);
+            }
+            return null;
+        }
+
+        var stagingQuality = GetStagingQuality(defaultQuality);
+        var hasExplicitFeedOverride = !string.IsNullOrEmpty(_configuration[OverrideStagingFeedConfigKey]);
 
         // When quality is Prerelease or Both and no explicit feed override is set,
         // use the shared daily feed instead of the SHA-specific feed. SHA-specific
@@ -103,15 +182,72 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
         {
             new PackageMapping("Aspire*", stagingFeedUrl),
             new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
-        }, nuGetPackageCache, configureGlobalPackagesFolder: !useSharedFeed, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/rc/daily", pinnedVersion: pinnedVersion, logger: logger);
+        }, _nuGetPackageCache, configureGlobalPackagesFolder: !useSharedFeed, cliDownloadBaseUrl: "https://aka.ms/dotnet/9/aspire/rc/daily", pinnedVersion: pinnedVersion, logger: _logger);
+
+        // Surface the resolved staging routing so users can see what `--channel staging` actually
+        // picked (the "show what was resolved" suggestion from the issue RCA). Pinned version is
+        // optional and only set when configured via stagingPinToCliVersion. Emitted once per
+        // process to avoid repeating on every GetChannelsAsync call.
+        if (Interlocked.Exchange(ref _stagingResolutionLogged, 1) == 0)
+        {
+            _logger.LogInformation(
+                "Resolved 'staging' channel: feed={FeedUrl}, quality={Quality}, pinnedVersion={PinnedVersion}",
+                stagingFeedUrl,
+                stagingQuality,
+                pinnedVersion ?? "(none)");
+        }
 
         return stagingChannel;
     }
 
+    /// <inheritdoc />
+    public string? GetStagingChannelUnavailableReason() => _stagingUnavailableReasonCache.Value;
+
+    private string? ComputeStagingChannelUnavailableReason()
+    {
+        if (IsStagingChannelSynthesisAllowed())
+        {
+            return null;
+        }
+
+        return string.Format(
+            CultureInfo.CurrentCulture,
+            PackagingStrings.StagingChannelUnavailableOnDailyCli,
+            _executionContext.IdentityChannel);
+    }
+
+    private bool IsStagingChannelSynthesisAllowed()
+    {
+        // Explicit feed override always wins: the caller has told us exactly which feed to use,
+        // so we don't need to infer one from the CLI identity.
+        if (!string.IsNullOrEmpty(_configuration[OverrideStagingFeedConfigKey]))
+        {
+            return true;
+        }
+
+        // The staging feature flag is an explicit developer/test opt-in that predates this
+        // gating; preserve it for back-compat with existing developer workflows.
+        if (_features.IsFeatureEnabled(KnownFeatures.StagingChannelEnabled, false))
+        {
+            return true;
+        }
+
+        // Only stable and staging CLI builds can deterministically resolve a staging feed:
+        //   - stable: the SHA-specific darc-pub-microsoft-aspire-<hash> feed exists for the
+        //     stable release branch commit baked into the CLI.
+        //   - staging: dogfoods staging packages (see #17155 which auto-registers the staging
+        //     channel for the staging CLI identity).
+        // For daily, local, and pr-<N> identities, falling back to either the SHA feed (no real
+        // darc feed exists) or the shared daily feed silently resolves daily packages — the
+        // exact bug tracked by https://github.com/microsoft/aspire/issues/16652.
+        return string.Equals(_executionContext.IdentityChannel, PackageChannelNames.Stable, StringComparisons.ChannelName)
+            || string.Equals(_executionContext.IdentityChannel, PackageChannelNames.Staging, StringComparisons.ChannelName);
+    }
+
     private string? GetStagingFeedUrl(bool useSharedFeed)
     {
-        // Check for configuration override first
-        var overrideFeed = configuration["overrideStagingFeed"];
+        // Check for _configuration override first
+        var overrideFeed = _configuration[OverrideStagingFeedConfigKey];
         if (!string.IsNullOrEmpty(overrideFeed))
         {
             // Validate that the override URL is well-formed
@@ -153,10 +289,10 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
         return $"https://pkgs.dev.azure.com/dnceng/public/_packaging/darc-pub-microsoft-aspire-{truncatedHash}/nuget/v3/index.json";
     }
 
-    private PackageChannelQuality GetStagingQuality()
+    private PackageChannelQuality GetStagingQuality(PackageChannelQuality defaultQuality)
     {
-        // Check for configuration override
-        var overrideQuality = configuration["overrideStagingQuality"];
+        // Check for _configuration override
+        var overrideQuality = _configuration["overrideStagingQuality"];
         if (!string.IsNullOrEmpty(overrideQuality))
         {
             // Try to parse the quality value (case-insensitive)
@@ -166,14 +302,15 @@ internal class PackagingService(CliExecutionContext executionContext, INuGetPack
             }
         }
 
-        // Default to Stable if not specified or invalid
-        return PackageChannelQuality.Stable;
+        // Preserve the historical safe fallback for invalid override values while allowing
+        // different staging entry points to choose a better default when no override is set.
+        return string.IsNullOrEmpty(overrideQuality) ? defaultQuality : PackageChannelQuality.Stable;
     }
 
     private string? GetStagingPinnedVersion(bool useSharedFeed)
     {
         // Only pin versions when using the shared feed and the config flag is set
-        var pinToCliVersion = configuration["stagingPinToCliVersion"];
+        var pinToCliVersion = _configuration["stagingPinToCliVersion"];
         if (!useSharedFeed || !string.Equals(pinToCliVersion, "true", StringComparison.OrdinalIgnoreCase))
         {
             return null;

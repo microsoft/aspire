@@ -53,6 +53,11 @@ public sealed class TypeScriptCodegenValidationTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter);
 
         TypeScriptAppHostToolchainTestHelpers.SetPackageManager(workspace.WorkspaceRoot.FullName, toolchain, cleanInstallState: true);
+
+        // LocalHive strategy only: PrepareLocalChannel returned a real channel,
+        // so write the per-project aspire.config.json to point at the in-repo
+        // nupkg hive. Other strategies (script-installed CLI, pre-existing CLI)
+        // return null and rely on the CLI's baked channel + ambient NuGet feeds.
         if (localChannel is not null)
         {
             CliE2ETestHelpers.WriteLocalChannelSettings(workspace.WorkspaceRoot.FullName, localChannel.SdkVersion);

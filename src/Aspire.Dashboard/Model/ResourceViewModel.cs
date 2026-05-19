@@ -229,8 +229,10 @@ public sealed class CommandViewModel
     public const string StartCommand = "start";
     public const string StopCommand = "stop";
     public const string RestartCommand = "restart";
-    public const string SetParameterCommand = "parameter-set";
-    private static readonly string[] s_knownResourceCommands = [StartCommand, StopCommand, RestartCommand];
+    public const string RebuildCommand = "rebuild";
+    public const string SetParameterCommand = "set-parameter";
+    public const string DeleteParameterCommand = "delete-parameter";
+    private static readonly string[] s_knownResourceCommands = [StartCommand, StopCommand, RestartCommand, RebuildCommand, SetParameterCommand, DeleteParameterCommand];
 
     public string Name { get; }
     public CommandViewModelState State { get; }

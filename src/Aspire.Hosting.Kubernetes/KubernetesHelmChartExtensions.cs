@@ -73,6 +73,16 @@ public static partial class KubernetesHelmChartExtensions
         var environment = builder.Resource;
         var resource = new KubernetesHelmChartResource(name, environment, chartReference, chartVersion);
 
+        // Helm chart installation is a publish/deploy-time concern only. In run mode the
+        // parent KubernetesEnvironmentResource isn't added to the model (see
+        // AddKubernetesEnvironment), so any helm-install step that depends on
+        // helm-deploy-{env.Name} would fail step validation with a missing-dependency error.
+        // Mirror AddIngress/AddGateway and skip model registration entirely in run mode.
+        if (builder.ApplicationBuilder.ExecutionContext.IsRunMode)
+        {
+            return builder.ApplicationBuilder.CreateResourceBuilder(resource);
+        }
+
         var chartBuilder = builder.ApplicationBuilder.AddResource(resource);
 
         chartBuilder.WithAnnotation(new PipelineStepAnnotation(_ =>
@@ -210,6 +220,62 @@ public static partial class KubernetesHelmChartExtensions
         return builder;
     }
 
+    /// <summary>
+    /// Opts the Helm chart in to <c>helm upgrade --install --force-conflicts</c>. When set,
+    /// Helm's server-side apply forcibly takes over any fields owned by another field
+    /// manager instead of failing with a conflict.
+    /// </summary>
+    /// <param name="builder">The Helm chart resource builder.</param>
+    /// <returns>The resource builder for chaining.</returns>
+    /// <remarks>
+    /// <para>
+    /// This is most commonly needed for charts whose templates ship admission webhooks
+    /// (cert-manager, kyverno, gatekeeper, opa-gatekeeper, etc.) on clusters where another
+    /// admission controller — such as the AKS <c>admissionsenforcer</c> field manager
+    /// installed by the Azure Policy add-on or Deployment Safeguards — mutates the webhook
+    /// configuration after install. Helm's Server-Side Apply (used by default for charts
+    /// that opt in, including cert-manager) refuses to overwrite fields owned by another
+    /// field manager. Without <c>--force-conflicts</c>, the next <c>helm upgrade</c> fails
+    /// with a "conflict with admissionsenforcer" error on the webhook's
+    /// <c>namespaceSelector</c> (or similar).
+    /// See
+    /// <see href="https://learn.microsoft.com/azure/aks/deployment-safeguards">Deployment Safeguards in AKS</see>
+    /// and
+    /// <see href="https://kubernetes.io/docs/reference/using-api/server-side-apply/#conflicts">Server-Side Apply conflicts</see>
+    /// for background.
+    /// </para>
+    /// <para>
+    /// Unlike the deprecated <c>--force</c> / <c>--force-replace</c> (which delete and
+    /// recreate the resource and are incompatible with Server-Side Apply),
+    /// <c>--force-conflicts</c> is non-destructive — it only changes which field manager
+    /// owns the conflicting field. No resources are deleted or recreated. This flag is
+    /// also distinct from Helm's <c>--take-ownership</c>, which transfers ownership of an
+    /// entire resource between Helm releases and does not address field-level conflicts.
+    /// </para>
+    /// <para>
+    /// Requires Helm v3.18 or later (the version that introduced <c>--force-conflicts</c>
+    /// for <c>helm upgrade --install</c>). Older Helm versions fail with
+    /// <c>Error: unknown flag: --force-conflicts</c>.
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// <code>
+    /// // cert-manager on AKS clusters with Azure Policy / Deployment Safeguards enabled.
+    /// k8s.AddHelmChart("cert-manager", "oci://quay.io/jetstack/charts/cert-manager", "v1.18.2")
+    ///     .WithHelmValue("crds.enabled", "true")
+    ///     .WithForceConflicts();
+    /// </code>
+    /// </example>
+    [AspireExport("withHelmChartForceConflicts", Description = "Passes --force-conflicts to helm upgrade --install for this chart")]
+    public static IResourceBuilder<KubernetesHelmChartResource> WithForceConflicts(
+        this IResourceBuilder<KubernetesHelmChartResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.Resource.ForceConflicts = true;
+        return builder;
+    }
+
     private static async Task InstallHelmChartAsync(
         PipelineStepContext context,
         KubernetesEnvironmentResource environment,
@@ -231,6 +297,36 @@ public static partial class KubernetesHelmChartExtensions
         arguments.Append(" --wait");
 
         arguments.Append(CultureInfo.InvariantCulture, $" --version {chart.ChartVersion}");
+
+        if (chart.ForceConflicts)
+        {
+            // --force-conflicts tells helm's server-side apply to forcibly take over fields
+            // owned by other field managers instead of failing with a conflict. Required
+            // for charts whose admission webhooks are mutated by the AKS admissionsenforcer
+            // / Azure Policy add-on after install — without it, helm's SSA fails on
+            // .webhooks[*].namespaceSelector. Non-destructive (no resource recreate).
+            // Equivalent to `kubectl apply --force-conflicts` and distinct from
+            // --take-ownership (which transfers helm release ownership) and the
+            // deprecated --force / --force-replace (which delete + recreate resources
+            // and are incompatible with SSA).
+            // See KubernetesHelmChartExtensions.WithForceConflicts for the full rationale.
+            //
+            // --server-side is REQUIRED alongside --force-conflicts: helm only registers
+            // the --force-conflicts flag in server-side-apply mode. Both flags arrived
+            // together in helm v3.18.
+            //
+            // We pass --server-side=true (with explicit value) rather than the bare
+            // --server-side flag because helm v4 changed --server-side from a bool flag
+            // to a string flag with "true"|"false"|"auto" values
+            // (https://github.com/helm/helm/pull/13649). The bare form would consume the
+            // following --force-conflicts as the flag value under v4, poisoning the
+            // release metadata with the literal string "--force-conflicts" and breaking
+            // every subsequent `helm upgrade` with
+            // "invalid/unknown release server-side apply method: --force-conflicts".
+            // The =true form parses identically under helm v3.18+ (where the bool flag
+            // also accepts an explicit value) and helm v4.
+            arguments.Append(" --server-side=true --force-conflicts");
+        }
 
         if (environment.KubeConfigPath is not null)
         {

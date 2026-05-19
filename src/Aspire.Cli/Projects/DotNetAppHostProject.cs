@@ -6,6 +6,7 @@ using Aspire.Cli.Backchannel;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
@@ -188,7 +189,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
         if (information.ExitCode == 0 && information.IsAspireHost)
         {
-            return new AppHostValidationResult(IsValid: true);
+            return new AppHostValidationResult(IsValid: true, AspireHostingVersion: information.AspireHostingVersion);
         }
 
         // Check if it's possibly an unbuildable AppHost (has the right name pattern but couldn't be validated)
@@ -197,6 +198,18 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         return new AppHostValidationResult(
             IsValid: false,
             IsPossiblyUnbuildable: isPossiblyUnbuildable);
+    }
+
+    /// <inheritdoc />
+    public async Task<string?> GetAspireHostingVersionAsync(FileInfo appHostFile, CancellationToken cancellationToken)
+    {
+        // Use the same MSBuild-based inspection as validation so version resolution
+        // follows the project model that run/publish already rely on, including
+        // SDK-style projects, package references, and Central Package Management.
+        var information = await _runner.GetAppHostInformationAsync(appHostFile, new ProcessInvocationOptions(), cancellationToken);
+        return information.ExitCode == 0 && information.IsAspireHost
+            ? information.AspireHostingVersion
+            : null;
     }
 
     private static bool IsPossiblyUnbuildableAppHost(FileInfo projectFile)
@@ -216,13 +229,13 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         {
             // Signal build failure so RunCommand doesn't wait forever
             context.BuildCompletionSource?.TrySetResult(false);
-            return ExitCodeConstants.SdkNotInstalled;
+            return CliExitCodes.SdkNotInstalled;
         }
 
         var effectiveAppHostFile = context.AppHostFile;
         var isExtensionHost = ExtensionHelper.IsExtensionHost(_interactionService, out _, out var extensionBackchannel);
 
-        var buildOutputCollector = new OutputCollector(_fileLoggerProvider, "Build");
+        var buildOutputCollector = new OutputCollector(_fileLoggerProvider, CliLogFormat.Categories.Build);
 
         using var activity = _profilingTelemetry.StartAppHostRun();
 
@@ -250,8 +263,8 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         // Enable debug logging in the app host so that debug-level output is
         // captured in the CLI log file for diagnostics. Defaults to Debug but
         // can be overridden via --log-level.
-        var appHostLogLevel = _loggingOptions.ConsoleLogLevel ?? LogLevel.Debug;
-        env["Logging__LogLevel__Default"] = appHostLogLevel.ToString();
+        var aspireLogLevel = _loggingOptions.ConsoleLogLevel ?? LogLevel.Debug;
+        env[KnownConfigNames.AspireLogLevel] = aspireLogLevel.ToString();
 
         if (context.WaitForDebugger)
         {
@@ -283,7 +296,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         // RunCommand may display captured AppHost output as soon as BuildCompletionSource is signaled.
         // Store the collector first so failures that occur immediately after preparation are not lost
         // to a race between the AppHost process and RunCommand's UX path.
-        var runOutputCollector = new OutputCollector(_fileLoggerProvider, "AppHost");
+        var runOutputCollector = new OutputCollector(_fileLoggerProvider, CliLogFormat.Categories.AppHost);
         context.OutputCollector = runOutputCollector;
 
         // Signal that build/preparation is complete
@@ -400,7 +413,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             if (!compatibilityCheck.IsCompatibleAppHost)
             {
                 context.BuildCompletionSource?.TrySetResult(false);
-                return ExitCodeConstants.FailedToDotnetRunAppHost;
+                return CliExitCodes.FailedToDotnetRunAppHost;
             }
 
             return null;
@@ -458,7 +471,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         // generic "project could not be built" message.
         context.OutputCollector = buildOutputCollector;
         context.BuildCompletionSource?.TrySetResult(false);
-        return ExitCodeConstants.FailedToBuildArtifacts;
+        return CliExitCodes.FailedToBuildArtifacts;
     }
 
     private async Task<(bool IsCompatibleAppHost, bool SupportsBackchannel, string? AspireHostingVersion)> CheckAppHostCompatibilityAsync(
@@ -672,7 +685,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         // Build the apphost (unless --no-build is specified)
         if (!isSingleFileAppHost && !context.NoBuild)
         {
-            var buildOutputCollector = new OutputCollector(_fileLoggerProvider, "Build");
+            var buildOutputCollector = new OutputCollector(_fileLoggerProvider, CliLogFormat.Categories.Build);
             var buildOptions = new ProcessInvocationOptions
             {
                 StandardOutputCallback = buildOutputCollector.AppendOutput,
@@ -695,12 +708,12 @@ internal sealed class DotNetAppHostProject : IAppHostProject
                 // Signal the backchannel completion source so the caller doesn't wait forever
                 context.BackchannelCompletionSource?.TrySetException(
                     new InvalidOperationException("The app host build failed."));
-                return ExitCodeConstants.FailedToBuildArtifacts;
+                return CliExitCodes.FailedToBuildArtifacts;
             }
         }
 
         // Create collector and store in context for exception handling
-        var runOutputCollector = new OutputCollector(_fileLoggerProvider, "AppHost");
+        var runOutputCollector = new OutputCollector(_fileLoggerProvider, CliLogFormat.Categories.AppHost);
         context.OutputCollector = runOutputCollector;
 
         var runOptions = new ProcessInvocationOptions
@@ -731,7 +744,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     /// <inheritdoc />
     public async Task<bool> AddPackageAsync(AddPackageContext context, CancellationToken cancellationToken)
     {
-        var outputCollector = new OutputCollector(_fileLoggerProvider, "Package");
+        var outputCollector = new OutputCollector(_fileLoggerProvider, CliLogFormat.Categories.Package);
         context.OutputCollector = outputCollector;
 
         var options = new ProcessInvocationOptions

@@ -57,7 +57,7 @@ internal sealed class DocsGetCommand : BaseCommand
 
     protected override bool UpdateNotificationsEnabled => false;
 
-    protected override async Task<int> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
+    protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         using var activity = Telemetry.StartDiagnosticActivity(Name);
 
@@ -74,8 +74,7 @@ internal sealed class DocsGetCommand : BaseCommand
 
         if (doc is null)
         {
-            InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, DocsCommandStrings.DocumentNotFound, slug));
-            return ExitCodeConstants.InvalidCommand;
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, string.Format(CultureInfo.CurrentCulture, DocsCommandStrings.DocumentNotFound, slug));
         }
 
         if (format is OutputFormat.Json)
@@ -89,6 +88,6 @@ internal sealed class DocsGetCommand : BaseCommand
             InteractionService.DisplayMarkdown(doc.Content, maxWidth: 100);
         }
 
-        return ExitCodeConstants.Success;
+        return CommandResult.Success();
     }
 }

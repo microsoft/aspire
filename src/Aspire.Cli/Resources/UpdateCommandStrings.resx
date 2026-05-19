@@ -13,7 +13,7 @@
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
   <data name="Description" xml:space="preserve">
-    <value>Update integrations in the Aspire project (Preview)</value>
+    <value>Update integrations in the Aspire project</value>
   </data>
   <data name="ProjectArgumentDescription" xml:space="preserve">
     <value>The path to the Aspire AppHost project file or a directory to search</value>
@@ -153,6 +153,12 @@
   <data name="ApplyingUpdates" xml:space="preserve">
     <value>Applying updates...</value>
   </data>
+  <data name="RestoringPackagesAfterUpdate" xml:space="preserve">
+    <value>Restoring packages...</value>
+  </data>
+  <data name="FailedToRestoreAfterUpdateFormat" xml:space="preserve">
+    <value>Failed to restore packages for project {0} after update.</value>
+  </data>
   <data name="ExtractingNewCli" xml:space="preserve">
     <value>Extracting new CLI...</value>
   </data>
@@ -173,5 +179,8 @@
   </data>
   <data name="NuGetConfigDirOptionDescription" xml:space="preserve">
     <value>Directory to create or update the NuGet.config file in</value>
+  </data>
+  <data name="NoChannelFoundMatching" xml:space="preserve">
+    <value>No channel found matching '{0}'. Valid options are: {1}.</value>
   </data>
 </root>

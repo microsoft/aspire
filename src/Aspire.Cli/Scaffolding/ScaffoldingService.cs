@@ -61,14 +61,24 @@ internal sealed class ScaffoldingService : IScaffoldingService
         {
             config.SdkVersion = context.SdkVersion;
         }
-        if (!string.IsNullOrWhiteSpace(context.Channel))
+
+        // Persist the channel only when the caller explicitly resolved one (Explicit `--channel`,
+        // or NewCommand's identity-match against a registered Explicit channel — see
+        // `CliTemplateFactory.EmptyTemplate.cs` for how `ScaffoldContext.Channel` is sourced).
+        // Do NOT fall back to `CliExecutionContext.IdentityChannel`: an identity that isn't a
+        // registered channel (e.g. `daily` on a CLI without the staging feature flag, or `pr-<N>`
+        // on a machine without the matching hive) would otherwise pin a channel name that no
+        // PSM rule can satisfy. When unset, `PrebuiltAppHostServer` aggregates sources from
+        // every registered channel so `aspire add` / `aspire restore` still find the right
+        // packages without a per-project pin.
+        if (!string.IsNullOrEmpty(context.Channel))
         {
             config.Channel = context.Channel;
         }
 
         PreAddJavaScriptHostingForBrownfieldTypeScript(config, directory, language, sdkVersion);
         if (!string.IsNullOrWhiteSpace(context.SdkVersion) ||
-            !string.IsNullOrWhiteSpace(context.Channel))
+            !string.IsNullOrEmpty(context.Channel))
         {
             config.Save(directory.FullName);
         }
@@ -194,10 +204,6 @@ internal sealed class ScaffoldingService : IScaffoldingService
         }
 
         config.Profiles = profiles;
-        if (prepareResult.ChannelName is not null)
-        {
-            config.Channel = prepareResult.ChannelName;
-        }
         config.AppHost ??= new AspireConfigAppHost();
         config.AppHost.Path ??= language.AppHostFileName;
         config.AppHost.Language = language.LanguageId;

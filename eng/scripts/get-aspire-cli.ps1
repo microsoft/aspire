@@ -594,7 +594,7 @@ function Get-CliExecutablePath {
     param(
         [Parameter(Mandatory = $true)]
         [string]$DestinationPath,
-        
+
         [Parameter(Mandatory = $true)]
         [string]$OS
     )
@@ -613,11 +613,11 @@ function Backup-ExistingCliExecutable {
         [Parameter(Mandatory = $true)]
         [string]$TargetExePath
     )
-    
+
     if (Test-Path $TargetExePath) {
         $unixTimestamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
         $backupPath = "$TargetExePath.old.$unixTimestamp"
-        
+
         if ($PSCmdlet.ShouldProcess($TargetExePath, "Backup to $backupPath")) {
             Write-Message "Backing up existing CLI: $TargetExePath -> $backupPath" -Level Verbose
 
@@ -633,7 +633,7 @@ function Backup-ExistingCliExecutable {
             return $backupPath
         }
     }
-    
+
     return $null
 }
 
@@ -643,18 +643,18 @@ function Restore-CliExecutableFromBackup {
     param(
         [Parameter(Mandatory = $true)]
         [string]$BackupPath,
-        
+
         [Parameter(Mandatory = $true)]
         [string]$TargetExePath
     )
-    
+
     if ($PSCmdlet.ShouldProcess($BackupPath, "Restore to $TargetExePath")) {
         Write-Message "Restoring CLI from backup: $BackupPath -> $TargetExePath" -Level Warning
-        
+
         if (Test-Path $TargetExePath) {
             Remove-Item -Path $TargetExePath -Force -ErrorAction SilentlyContinue
         }
-        
+
         Move-Item -Path $BackupPath -Destination $TargetExePath -Force -ErrorAction Stop
     }
 }
@@ -666,15 +666,15 @@ function Remove-OldCliBackupFiles {
         [Parameter(Mandatory = $true)]
         [string]$TargetExePath
     )
-    
+
     $directory = Split-Path -Parent $TargetExePath
     if ([string]::IsNullOrEmpty($directory)) {
         return
     }
-    
+
     $exeName = Split-Path -Leaf $TargetExePath
     $searchPattern = "$exeName.old.*"
-    
+
     $oldBackupFiles = Get-ChildItem -Path $directory -Filter $searchPattern -ErrorAction SilentlyContinue
     foreach ($backupFile in $oldBackupFiles) {
         if ($PSCmdlet.ShouldProcess($backupFile.FullName, "Delete old backup")) {
@@ -779,71 +779,12 @@ function ConvertTo-ChannelName {
         [Parameter(Mandatory = $true)]
         [string]$Quality
     )
-    
+
     switch ($Quality.ToLowerInvariant()) {
         "release" { return "stable" }
         "staging" { return "staging" }
         "dev" { return "daily" }
         default { return $Quality }
-    }
-}
-
-# Function to save global settings using the aspire CLI
-# Uses 'aspire config set -g' to set global configuration values
-# Expected schema of ~/.aspire/globalsettings.json:
-# {
-#   "channel": "string"  // The channel name (e.g., "daily", "staging", "pr-1234")
-# }
-function Save-GlobalSettings {
-    [CmdletBinding(SupportsShouldProcess)]
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$CliPath,
-        
-        [Parameter(Mandatory = $true)]
-        [string]$Key,
-        
-        [Parameter(Mandatory = $true)]
-        [string]$Value
-    )
-    
-    if ($PSCmdlet.ShouldProcess("$Key = $Value", "Set global config via aspire CLI")) {
-        Write-Message "Setting global config: $Key = $Value" -Level Verbose
-        
-        $output = & $CliPath config set -g $Key $Value 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            Write-Message "Failed to set global config via aspire CLI: $output" -Level Warning
-            return
-        }
-        if ($output) {
-            Write-Message "$output" -Level Verbose
-        }
-        Write-Message "Global config saved: $Key = $Value" -Level Verbose
-    }
-}
-
-# Function to remove a global setting using the aspire CLI
-# Uses 'aspire config delete -g' to remove global configuration values
-# This is used when installing the release/stable channel to avoid forcing nuget.config creation
-function Remove-GlobalSettings {
-    [CmdletBinding(SupportsShouldProcess)]
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$CliPath,
-        
-        [Parameter(Mandatory = $true)]
-        [string]$Key
-    )
-    
-    if ($PSCmdlet.ShouldProcess($Key, "Remove global config via aspire CLI")) {
-        Write-Message "Removing global config: $Key" -Level Verbose
-        
-        $output = & $CliPath config delete -g $Key 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            Write-Message "Failed to delete global config via aspire CLI: $output" -Level Verbose
-            return
-        }
-        Write-Message "Global config removed: $Key" -Level Verbose
     }
 }
 
@@ -1239,17 +1180,16 @@ function Install-AspireCli {
             Write-Message "Aspire CLI successfully installed to: $cliPath" -Level Success
         }
 
-        # Save the global channel setting if using quality-based download (not version-specific)
-        # This allows 'aspire new' and 'aspire init' to use the same channel by default
-        # For release/stable channel, remove the setting to avoid forcing nuget.config creation
-        if ([string]::IsNullOrWhiteSpace($Version)) {
-            $channel = ConvertTo-ChannelName -Quality $Quality
-            if ($channel -eq "stable") {
-                Remove-GlobalSettings -CliPath $cliPath -Key "channel"
-            }
-            else {
-                Save-GlobalSettings -CliPath $cliPath -Key "channel" -Value $channel
-            }
+        # Write the script-route install-source sidecar next to the binary.
+        # Under -WhatIf, print the target path and skip the write.
+        # Authorship contract: docs/specs/install-routes.md.
+        $sidecarPath = Join-Path $InstallPath '.aspire-install.json'
+        if ($PSCmdlet.ShouldProcess($sidecarPath, "Write route sidecar")) {
+            [System.IO.Directory]::CreateDirectory($InstallPath) | Out-Null
+            [System.IO.File]::WriteAllText($sidecarPath, "{""source"":""script""}`n")
+        }
+        else {
+            Write-Host "What if: Route sidecar would be written to: $sidecarPath"
         }
 
         # Download and install VS Code extension if requested

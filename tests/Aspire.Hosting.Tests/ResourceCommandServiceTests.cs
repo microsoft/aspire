@@ -412,6 +412,26 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         Assert.True(result.Success);
     }
 
+    [Theory]
+    [InlineData("set-parameter", "parameter-set")]
+    [InlineData("delete-parameter", "parameter-delete")]
+    public async Task ExecuteCommandAsync_LegacyParameterCommandName_FallsBackToCurrentName(string currentCommandName, string legacyCommandName)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: currentCommandName,
+                displayName: "Parameter command",
+                executeCommand: _ => Task.FromResult(new ExecuteCommandResult { Success = true }));
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(custom.Resource, legacyCommandName);
+
+        Assert.True(result.Success);
+    }
+
     [Fact]
     public async Task ExecuteCommandAsync_SuccessWithResult_ReturnsResultData()
     {
@@ -662,6 +682,70 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
 
         Assert.Equal("Unknown argument 'selecter' for command 'mycommand'.", errorMessage);
         Assert.Null(arguments.GetString("selector"));
+    }
+
+    [Fact]
+    public async Task CreateCommandArguments_DisabledNamedArgumentValues_ReturnsError()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: _ => Task.FromResult(CommandResults.Success()),
+                commandOptions: new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "saveToUserSecrets",
+                            InputType = InputType.Boolean,
+                            Disabled = true
+                        }
+                    ]
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var argumentValues = new Dictionary<string, string?> { ["saveToUserSecrets"] = "true" };
+        var (arguments, errorMessage) = app.ResourceCommands.CreateCommandArguments("myResource", "mycommand", argumentValues);
+
+        Assert.Equal("Argument 'saveToUserSecrets' for command 'mycommand' is disabled.", errorMessage);
+        Assert.Equal("true", arguments.GetString("saveToUserSecrets"));
+    }
+
+    [Fact]
+    public async Task CreateCommandArguments_DisabledOrderedArgumentValues_ReturnsError()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: _ => Task.FromResult(CommandResults.Success()),
+                commandOptions: new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "saveToUserSecrets",
+                            InputType = InputType.Boolean,
+                            Disabled = true
+                        }
+                    ]
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        IReadOnlyList<string?> argumentValues = ["true"];
+        var (arguments, errorMessage) = app.ResourceCommands.CreateCommandArguments("myResource", "mycommand", argumentValues);
+
+        Assert.Equal("Argument 'saveToUserSecrets' for command 'mycommand' is disabled.", errorMessage);
+        Assert.Equal("true", arguments.GetString("saveToUserSecrets"));
     }
 
     [Fact]
@@ -955,6 +1039,72 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
         var invalidArgument = Assert.Single(result.InvalidArguments);
         Assert.Equal("selector", invalidArgument.Name);
         Assert.Equal("Value is required.", Assert.Single(invalidArgument.ValidationErrors));
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_NonInteractive_IsAvailableReturnsFalse()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        bool? isAvailableDuringExecution = null;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: e =>
+                {
+                    var interactionService = e.ServiceProvider.GetRequiredService<IInteractionService>();
+                    isAvailableDuringExecution = interactionService.IsAvailable;
+                    return Task.FromResult(CommandResults.Success());
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(
+            "myResource",
+            "mycommand",
+            new ResourceCommandExecutionOptions { NonInteractive = true },
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.NotNull(isAvailableDuringExecution);
+        Assert.False(isAvailableDuringExecution.Value);
+    }
+
+    [Fact]
+    public async Task ExecuteCommandAsync_Interactive_IsAvailableNotAffectedByScope()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        bool? isAvailableDuringExecution = null;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: e =>
+                {
+                    var interactionService = e.ServiceProvider.GetRequiredService<IInteractionService>();
+                    isAvailableDuringExecution = interactionService.IsAvailable;
+                    return Task.FromResult(CommandResults.Success());
+                });
+
+        var app = builder.Build();
+
+        // Get the baseline IsAvailable value (may be false in test environments where dashboard is disabled)
+        var baselineIsAvailable = app.Services.GetRequiredService<IInteractionService>().IsAvailable;
+
+        await app.StartAsync();
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(
+            "myResource",
+            "mycommand",
+            new ResourceCommandExecutionOptions { NonInteractive = false },
+            CancellationToken.None).DefaultTimeout();
+
+        Assert.True(result.Success);
+        Assert.NotNull(isAvailableDuringExecution);
+
+        // Interactive mode should not change the baseline IsAvailable value
+        Assert.Equal(baselineIsAvailable, isAvailableDuringExecution.Value);
     }
 
     [Fact]

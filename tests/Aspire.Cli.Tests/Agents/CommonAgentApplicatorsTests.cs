@@ -8,6 +8,8 @@ namespace Aspire.Cli.Tests.Agents;
 
 public class CommonAgentApplicatorsTests
 {
+    private const int MaxSkillDescriptionLength = 1024;
+
     [Fact]
     public void SkillLocation_All_ContainsAllLocations()
     {
@@ -46,8 +48,9 @@ public class CommonAgentApplicatorsTests
     [Fact]
     public void SkillDefinition_All_ContainsExpectedSkills()
     {
-        Assert.Equal(4, SkillDefinition.All.Count);
+        Assert.Equal(5, SkillDefinition.All.Count);
         Assert.Contains(SkillDefinition.All, s => s == SkillDefinition.Aspire);
+        Assert.Contains(SkillDefinition.All, s => s == SkillDefinition.AspireDeployment);
         Assert.Contains(SkillDefinition.All, s => s == SkillDefinition.Aspireify);
         Assert.Contains(SkillDefinition.All, s => s == SkillDefinition.PlaywrightCli);
         Assert.Contains(SkillDefinition.All, s => s == SkillDefinition.DotnetInspect);
@@ -57,6 +60,7 @@ public class CommonAgentApplicatorsTests
     public void SkillDefinition_DefaultSkills()
     {
         Assert.True(SkillDefinition.Aspire.IsDefault);
+        Assert.True(SkillDefinition.AspireDeployment.IsDefault);
         Assert.True(SkillDefinition.Aspireify.IsDefault);
         Assert.False(SkillDefinition.PlaywrightCli.IsDefault);
         Assert.False(SkillDefinition.DotnetInspect.IsDefault);
@@ -67,6 +71,7 @@ public class CommonAgentApplicatorsTests
     {
         Assert.Equal([KnownLanguageId.CSharp], SkillDefinition.DotnetInspect.ApplicableLanguages);
         Assert.Empty(SkillDefinition.Aspire.ApplicableLanguages);
+        Assert.Empty(SkillDefinition.AspireDeployment.ApplicableLanguages);
         Assert.Empty(SkillDefinition.Aspireify.ApplicableLanguages);
         Assert.Empty(SkillDefinition.PlaywrightCli.ApplicableLanguages);
     }
@@ -77,6 +82,9 @@ public class CommonAgentApplicatorsTests
         Assert.True(SkillDefinition.Aspire.IsApplicableToLanguage(null));
         Assert.True(SkillDefinition.Aspire.IsApplicableToLanguage(new LanguageId(KnownLanguageId.CSharp)));
         Assert.True(SkillDefinition.Aspire.IsApplicableToLanguage(new LanguageId(KnownLanguageId.TypeScript)));
+        Assert.True(SkillDefinition.AspireDeployment.IsApplicableToLanguage(null));
+        Assert.True(SkillDefinition.AspireDeployment.IsApplicableToLanguage(new LanguageId(KnownLanguageId.CSharp)));
+        Assert.True(SkillDefinition.AspireDeployment.IsApplicableToLanguage(new LanguageId(KnownLanguageId.TypeScript)));
     }
 
     [Fact]
@@ -117,6 +125,46 @@ public class CommonAgentApplicatorsTests
     }
 
     [Fact]
+    public async Task SkillDefinition_AspireDeployment_HasEmbeddedSkillAssets()
+    {
+        Assert.Null(SkillDefinition.AspireDeployment.SkillContent);
+        Assert.Equal(CommonAgentApplicators.AspireDeploymentSkillResourceRoot, SkillDefinition.AspireDeployment.EmbeddedResourceRoot);
+
+        var skillFiles = await EmbeddedSkillResourceLoader.LoadTextFilesAsync(SkillDefinition.AspireDeployment.EmbeddedResourceRoot!, CancellationToken.None);
+
+        Assert.Contains(skillFiles, file => file.RelativePath == "SKILL.md");
+        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "preflight.md"));
+        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "docker-compose.md"));
+        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "kubernetes.md"));
+        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "azure.md"));
+        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "aws.md"));
+        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "javascript.md"));
+        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "cicd.md"));
+        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "github-actions-azure-csharp.yml"));
+        Assert.Contains(skillFiles, file => file.RelativePath == Path.Combine("references", "github-actions-azure-typescript.yml"));
+    }
+
+    [Fact]
+    public async Task SkillDefinition_InstallableSkillDescriptionsFitAgentHostLimits()
+    {
+        var installableSkills = SkillDefinition.All
+            .Where(static skill => skill.SkillContent is not null || skill.EmbeddedResourceRoot is not null);
+
+        foreach (var skill in installableSkills)
+        {
+            var skillFiles = await GetInstallableSkillFilesAsync(skill);
+            var skillFile = Assert.Single(skillFiles, static file => file.RelativePath == "SKILL.md");
+            var description = GetFrontmatterValue(skillFile.Content, "description");
+
+            Assert.NotNull(description);
+            Assert.False(string.IsNullOrWhiteSpace(description), $"Skill '{skill.Name}' should define a frontmatter description.");
+            Assert.True(
+                description.Length <= MaxSkillDescriptionLength,
+                $"Skill '{skill.Name}' description is {description.Length} characters; agent hosts such as Codex and Copilot CLI accept at most {MaxSkillDescriptionLength}.");
+        }
+    }
+
+    [Fact]
     public void SkillDefinition_Aspire_ExcludesEvalsFromInstall()
     {
         Assert.Contains(SkillDefinition.Aspire.InstallExcludedRelativePaths, path => path == Path.Combine("evals"));
@@ -130,5 +178,58 @@ public class CommonAgentApplicatorsTests
         Assert.NotNull(SkillDefinition.DotnetInspect.SkillContent);
         Assert.Null(SkillDefinition.DotnetInspect.EmbeddedResourceRoot);
         Assert.Contains("# dotnet-inspect", SkillDefinition.DotnetInspect.SkillContent);
+    }
+
+    private static async Task<IReadOnlyList<SkillAssetFile>> GetInstallableSkillFilesAsync(SkillDefinition skill)
+    {
+        if (skill.SkillContent is not null)
+        {
+            return [new SkillAssetFile("SKILL.md", skill.SkillContent)];
+        }
+
+        if (skill.EmbeddedResourceRoot is not null)
+        {
+            return await EmbeddedSkillResourceLoader.LoadTextFilesAsync(skill.EmbeddedResourceRoot, skill.ShouldInstallFile, CancellationToken.None);
+        }
+
+        throw new InvalidOperationException($"Skill '{skill.Name}' does not define installable files.");
+    }
+
+    private static string? GetFrontmatterValue(string content, string key)
+    {
+        var normalizedContent = content.ReplaceLineEndings("\n");
+        if (!normalizedContent.StartsWith("---\n", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        var frontmatterEndIndex = normalizedContent.IndexOf("\n---\n", 4, StringComparison.Ordinal);
+        if (frontmatterEndIndex < 0)
+        {
+            return null;
+        }
+
+        // Skill files use YAML frontmatter:
+        //   ---
+        //   name: aspire
+        //   description: "Use when..."
+        //   ---
+        var frontmatter = normalizedContent[4..frontmatterEndIndex];
+        var keyPrefix = $"{key}:";
+
+        foreach (var line in frontmatter.Split('\n'))
+        {
+            if (!line.StartsWith(keyPrefix, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var value = line[keyPrefix.Length..].Trim();
+            return value.Length >= 2 && value[0] == '"' && value[^1] == '"'
+                ? value[1..^1]
+                : value;
+        }
+
+        return null;
     }
 }

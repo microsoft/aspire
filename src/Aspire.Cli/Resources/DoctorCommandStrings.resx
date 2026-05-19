@@ -67,6 +67,12 @@
   <data name="EnvironmentCheckHeader" xml:space="preserve">
     <value>Aspire Environment Check</value>
   </data>
+  <data name="AspireCategoryHeader" xml:space="preserve">
+    <value>Aspire</value>
+  </data>
+  <data name="AppHostCategoryHeader" xml:space="preserve">
+    <value>AppHost</value>
+  </data>
   <data name="SdkCategoryHeader" xml:space="preserve">
     <value>.NET SDK</value>
   </data>
@@ -85,6 +91,35 @@
   </data>
   <data name="CheckingPrerequisites" xml:space="preserve">
     <value>Checking Aspire environment...</value>
+  </data>
+  <data name="VersionUnknown" xml:space="preserve">
+    <value>unknown</value>
+  </data>
+  <data name="CliVersionMessageFormat" xml:space="preserve">
+    <value>Aspire CLI version {0}</value>
+    <comment>{0} is the current Aspire CLI version.</comment>
+  </data>
+  <data name="CliVersionOutOfDateMessageFormat" xml:space="preserve">
+    <value>Aspire CLI version {0} is out of date. Latest version is {1}</value>
+    <comment>{0} is the current Aspire CLI version. {1} is the latest available Aspire CLI version.</comment>
+  </data>
+  <data name="CliVersionOutOfDateFixFormat" xml:space="preserve">
+    <value>Run '{0}' to update Aspire CLI.</value>
+    <comment>{0} is the command to update Aspire CLI.</comment>
+  </data>
+  <data name="CliVersionUpdateCheckFailedMessage" xml:space="preserve">
+    <value>Could not check for Aspire CLI updates</value>
+  </data>
+  <data name="AppHostVersionMessageFormat" xml:space="preserve">
+    <value>AppHost version {0} ({1})</value>
+    <comment>{0} is the AppHost Aspire.Hosting version. {1} is the AppHost project path.</comment>
+  </data>
+  <data name="AppHostVersionUnknownMessageFormat" xml:space="preserve">
+    <value>Could not determine AppHost version ({0})</value>
+    <comment>{0} is the AppHost project path.</comment>
+  </data>
+  <data name="AppHostVersionCheckFailedMessage" xml:space="preserve">
+    <value>Could not determine AppHost version</value>
   </data>
   <data name="DevCertsNoCertificateMessage" xml:space="preserve">
     <value>No HTTPS development certificate found</value>

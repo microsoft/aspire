@@ -191,13 +191,36 @@ The primary method for interacting with Aspire. Capabilities are identified by `
 Capabilities are discovered by scanning assemblies for:
 
 1. **[AspireExport]** - Static methods that can be invoked:
+    ```csharp
+    /// <summary>
+    /// Adds a Redis container.
+    /// </summary>
+    /// <param name="builder">The distributed application builder.</param>
+    /// <param name="name">The Redis resource name.</param>
+    /// <param name="port">The optional Redis port.</param>
+    /// <returns>The Redis resource builder.</returns>
+    [AspireExport("addRedis", Description = "Adds a Redis container")]
+    public static IResourceBuilder<RedisResource> AddRedis(
+        IDistributedApplicationBuilder builder,
+        string name,
+        int? port = null)
+    ```
+
+   XML documentation is the primary source for generated polyglot SDK API documentation. The scanner captures `<summary>`, `<param>`, `<returns>`, and `<remarks>` tags for TypeScript JSDoc. First-level `ats-*` tags override the matching standard tags when polyglot SDK docs need different text: `<ats-summary>`, `<ats-param name="...">`, `<ats-returns>`, and `<ats-remarks>`. An empty `ats-*` override intentionally suppresses the matching standard documentation. The `Description` property remains supported as compatibility metadata and is used as a fallback only when the corresponding XML documentation tag is not available.
+
+   ATS documentation can use `<ats-see cref="kind:identifier.path" />` and `<ats-seealso cref="kind:identifier.path" />` for language-neutral references to generated SDK elements. The supported `kind` values are `type`, `method`, and `field`. The reference target uses dot notation over generated polyglot identifiers instead of C# XML documentation `cref` syntax, for example:
+
    ```csharp
-   [AspireExport("addRedis", Description = "Adds a Redis container")]
-   public static IResourceBuilder<RedisResource> AddRedis(
-       IDistributedApplicationBuilder builder,
-       string name,
-       int? port = null)
+   /// <summary>
+   /// Configures <ats-see cref="type:RedisResource" />.
+   /// </summary>
+   /// <remarks>
+   /// See <ats-see cref="method:RedisResource.withPersistence" /> and
+   /// <ats-see cref="field:RedisDefaults.Port" />.
+   /// </remarks>
    ```
+
+   ATS references do not support C# generic type syntax. Use the generated polyglot-visible name for the referenced element so each language generator can translate the same target to that language's documentation link syntax. TypeScript currently renders these references as JSDoc `{@link ...}` links.
 
 2. **[AspireContextType]** - Types whose properties are exposed as capabilities. The type ID is derived as `{AssemblyName}/{TypeName}`:
    ```csharp
