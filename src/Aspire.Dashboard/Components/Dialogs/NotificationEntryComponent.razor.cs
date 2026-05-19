@@ -49,7 +49,15 @@ public partial class NotificationEntryComponent : ComponentBase
     {
         if (Entry.PrimaryAction is { } primaryAction)
         {
-            await primaryAction.OnClick();
+            try
+            {
+                Dialog.Hide();
+                await primaryAction.OnClick();
+            }
+            finally
+            {
+                Dialog.Show();
+            }
         }
     }
 }
