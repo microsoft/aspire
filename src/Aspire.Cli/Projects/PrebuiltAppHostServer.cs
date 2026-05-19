@@ -717,11 +717,32 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         // against whichever sources the caller resolved separately.
         ThrowIfStagingUnavailable(requestedChannel);
 
-        var channels = await _packagingService.GetChannelsAsync(cancellationToken, requestedChannel);
-        var channel = channels.FirstOrDefault(c =>
-            c.Type == PackageChannelType.Explicit &&
-            c.Mappings is { Length: > 0 } &&
-            string.Equals(c.Name, requestedChannel, StringComparisons.ChannelName));
+        PackageChannel? channel;
+        try
+        {
+            var channels = await _packagingService.GetChannelsAsync(cancellationToken, requestedChannel);
+            channel = channels.FirstOrDefault(c =>
+                c.Type == PackageChannelType.Explicit &&
+                c.Mappings is { Length: > 0 } &&
+                string.Equals(c.Name, requestedChannel, StringComparisons.ChannelName));
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // Mirror the defensive catch in the override branch above and in
+            // ResolveLocalPackageSourceOverrideAsync / GetNuGetSourcesAsync: a transient
+            // packaging-service failure must degrade to the ambient nuget.config + the
+            // caller's separately resolved channel-source list, rather than failing the
+            // whole PrepareAsync. Returning null skips the PSM-bearing temp config; for
+            // non-staging channels the caller still gets channel sources via
+            // GetNuGetSourcesAsync (which catches), and for staging the unavailable-reason
+            // refusal above has already short-circuited before we reach this point.
+            _logger.LogWarning(ex, "Failed to get package channels while creating channel NuGet.config for '{Channel}'.", requestedChannel);
+            return null;
+        }
 
         if (channel?.Mappings is null)
         {

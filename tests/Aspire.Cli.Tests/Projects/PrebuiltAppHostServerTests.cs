@@ -1295,6 +1295,127 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PrepareAsync_WhenPackagingServiceThrowsDuringAutoDiscovery_DegradesGracefully()
+    {
+        // Regression guard: an unexpected failure from IPackagingService.GetChannelsAsync during
+        // hive-source auto-discovery must NOT turn `aspire new` into a hard failure. Both call
+        // sites that resolve channels for an effective package source — ResolveLocalPackageSource-
+        // OverrideAsync and TryCreateTemporaryNuGetConfigAsync's no-override branch — catch
+        // transient exceptions and fall through to "no override discovered" / "no PSM-bearing
+        // temp config", matching the defensive catch in GetNuGetSourcesAsync.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        const string channelName = "pr-12345";
+        List<string>? restoreArgs = null;
+
+        var aspireConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(aspireConfigPath, $$"""
+            {
+                "channel": "{{channelName}}"
+            }
+            """);
+
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromException<IEnumerable<PackageChannel>>(
+                new InvalidOperationException("simulated packaging service failure"))
+        };
+        var (server, executionFactory) = CreatePackageReferenceServer(workspace, packagingService);
+        executionFactory.AssertionCallback = (args, _, _, _) =>
+        {
+            if (args is ["nuget", "restore", ..])
+            {
+                restoreArgs = [.. args];
+            }
+        };
+
+        var workingDirectory = GetWorkingDirectory(server);
+
+        try
+        {
+            var result = await server.PrepareAsync(
+                "13.4.0-pr.17141.gf142085f",
+                [IntegrationReference.FromPackage("Aspire.Hosting.CodeGeneration.TypeScript", "13.4.0-pr.17141.gf142085f")]);
+
+            Assert.True(result.Success);
+            Assert.NotNull(restoreArgs);
+            // No override resolved → no exact version pinning, no synthesized [override, nuget.org] source set.
+            Assert.Contains("Aspire.Hosting.CodeGeneration.TypeScript,13.4.0-pr.17141.gf142085f", restoreArgs!);
+            Assert.DoesNotContain("Aspire.Hosting.CodeGeneration.TypeScript,[13.4.0-pr.17141.gf142085f]", restoreArgs!);
+        }
+        finally
+        {
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task PrepareAsync_WithHiveBackedChannelPointingAtMissingLocalDirectory_DoesNotApplyOverride()
+    {
+        // Negative case for ResolveLocalPackageSourceOverrideAsync: a stale aspire.config.json
+        // (e.g. user pinned channel = "pr-12345" but later deleted the local hive directory)
+        // must NOT cause the prebuilt restore to pin Aspire packages to a non-existent local
+        // directory. GetExistingLocalAspirePackageSource skips mappings whose Source does not
+        // exist on disk, so auto-discovery returns null and restore falls through to the
+        // ambient + channel-source path with no exact-pin.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var missingPackageSource = Path.Combine(workspace.WorkspaceRoot.FullName, "this-hive-was-deleted");
+        Assert.False(Directory.Exists(missingPackageSource));
+        List<string>? restoreArgs = null;
+
+        var aspireConfigPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(aspireConfigPath, """
+            {
+                "channel": "pr-12345"
+            }
+            """);
+
+        var channel = PackageChannel.CreateExplicitChannel(
+            name: "pr-12345",
+            quality: PackageChannelQuality.Both,
+            mappings: [new PackageMapping("Aspire*", missingPackageSource)],
+            nuGetPackageCache: new FakeNuGetPackageCache());
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([channel])
+        };
+
+        var (server, executionFactory) = CreatePackageReferenceServer(workspace, packagingService);
+        executionFactory.AssertionCallback = (args, _, _, _) =>
+        {
+            if (args is ["nuget", "restore", ..])
+            {
+                restoreArgs = [.. args];
+            }
+        };
+
+        var workingDirectory = GetWorkingDirectory(server);
+
+        try
+        {
+            var result = await server.PrepareAsync(
+                "13.4.0-pr.17141.gf142085f",
+                [IntegrationReference.FromPackage("Aspire.Hosting.CodeGeneration.TypeScript", "13.4.0-pr.17141.gf142085f")]);
+
+            Assert.True(result.Success);
+            Assert.NotNull(restoreArgs);
+            // The override was not applied (Directory.Exists check failed), so the source list
+            // is just the channel's raw Aspire mapping with no NuGet.org fallback appended (the
+            // fallback only fires on the override path), and no exact-pin is emitted. Contrast
+            // with PrepareAsync_WithHiveBackedChannel_UsesLocalAspireSourceAsOverride where the
+            // existing local directory promotes the channel source to an override and adds the
+            // NuGet.org fallback + exact-pinning.
+            Assert.Equal([missingPackageSource], GetSourceArguments(restoreArgs!));
+            Assert.DoesNotContain(NuGetOrgSource, GetSourceArguments(restoreArgs!));
+            Assert.Contains("Aspire.Hosting.CodeGeneration.TypeScript,13.4.0-pr.17141.gf142085f", restoreArgs!);
+            Assert.DoesNotContain("Aspire.Hosting.CodeGeneration.TypeScript,[13.4.0-pr.17141.gf142085f]", restoreArgs!);
+        }
+        finally
+        {
+            DeleteWorkingDirectory(workingDirectory);
+        }
+    }
+
+    [Fact]
     public async Task PrepareAsync_WithSourceAndChannelHavingAspireMapping_TempConfigDropsChannelAspireMapping()
     {
         // End-to-end check that `aspire new --source <pr> --channel <X>` does not let the channel's

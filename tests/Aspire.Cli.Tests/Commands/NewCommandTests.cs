@@ -1154,6 +1154,9 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     [Theory]
     [InlineData("typescript", null, "apphost.ts")]
     [InlineData("java", "experimentalPolyglot:java", "AppHost.java")]
+    [InlineData("python", "experimentalPolyglot:python", "apphost.py")]
+    [InlineData("go", "experimentalPolyglot:go", "apphost.go")]
+    [InlineData("rust", "experimentalPolyglot:rust", "apphost.rs")]
     public async Task NewCommandWithEmptyTemplateAndSourceOverrideWarnsThatOverrideIsNotPersisted(string language, string? featureFlag, string scaffoldFileName)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
