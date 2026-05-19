@@ -126,6 +126,9 @@ public class AzureKubernetesIngressTests
         Assert.NotNull(gateway.Resource.GatewayClassName);
         var resolvedClass = await gateway.Resource.GatewayClassName!.GetValueAsync(default);
         Assert.Equal("custom-class", resolvedClass);
+
+        Assert.True(gateway.Resource.GatewayAnnotations.ContainsKey("alb.networking.azure.io/alb-name"));
+        Assert.True(gateway.Resource.GatewayAnnotations.ContainsKey("alb.networking.azure.io/alb-namespace"));
     }
 
     [Fact]

@@ -31,11 +31,9 @@ public sealed class KubernetesPublishRequiresExternalEndpointTests(ITestOutputHe
             // publish-time validation in EndpointRoutingValidation should
             // throw before any Helm output is generated.
             appHostBodyExtension: """
-            #pragma warning disable ASPIREHOSTINGAZURE001
             var kube = builder.AddKubernetesEnvironment("kube");
             var api = builder.AddContainer("api", "nginx").WithHttpEndpoint(targetPort: 80);
             kube.AddIngress("public").WithRoute("/", api.GetEndpoint("http"));
-            #pragma warning restore ASPIREHOSTINGAZURE001
             """);
     }
 
@@ -45,11 +43,9 @@ public sealed class KubernetesPublishRequiresExternalEndpointTests(ITestOutputHe
     {
         await RunPublishFailureScenarioAsync(
             appHostBodyExtension: """
-            #pragma warning disable ASPIREHOSTINGAZURE001
             var kube = builder.AddKubernetesEnvironment("kube");
             var api = builder.AddContainer("api", "nginx").WithHttpEndpoint(targetPort: 80);
             kube.AddGateway("public").WithRoute("/", api.GetEndpoint("http"));
-            #pragma warning restore ASPIREHOSTINGAZURE001
             """);
     }
 
