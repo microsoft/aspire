@@ -712,6 +712,19 @@ public class PrebuiltAppHostServerTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain(NuGetOrgSource, sources);
     }
 
+    [Theory]
+    [InlineData("https://api.nuget.org/v3/index.json", "https://api.nuget.org/v3/index.json")]
+    [InlineData("/tmp/aspire-packages", "/tmp/aspire-packages")]
+    [InlineData(@"C:\packages", @"C:\packages")]
+    [InlineData("https://user:pat@feed.example.com/v3/index.json", "https://***@feed.example.com/v3/index.json")]
+    [InlineData("https://feed.blob.core.windows.net/foo/index.json?sv=2024-01&sig=secret-sig", "https://feed.blob.core.windows.net/foo/index.json")]
+    [InlineData("https://user:pat@feed.example.com/v3/index.json?sig=secret", "https://***@feed.example.com/v3/index.json")]
+    [InlineData("https://feed.example.com/v3/index.json#fragment", "https://feed.example.com/v3/index.json")]
+    public void RedactSourceForDisplay_StripsCredentialsAndQueryFromHttpUrlsButPreservesPlainSources(string input, string expected)
+    {
+        Assert.Equal(expected, PrebuiltAppHostServer.RedactSourceForDisplay(input));
+    }
+
     private static CliExecutionContext CreateContextWithIdentityChannel(string identityChannel) =>
         new(new DirectoryInfo(Path.GetTempPath()),
             new DirectoryInfo(Path.Combine(Path.GetTempPath(), "hives")),

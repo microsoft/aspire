@@ -247,7 +247,11 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
 
         if (hasOverride)
         {
-            output.AppendError($"  --source: {packageSourceOverride}");
+            // NuGet feed URLs commonly embed credentials in UserInfo
+            // (https://name:pat@host/...) or as SAS-style tokens in the query string.
+            // This line ends up in the output users copy into bug reports and CI
+            // transcripts, so strip the credential-carrying components before display.
+            output.AppendError($"  --source: {RedactSourceForDisplay(packageSourceOverride!)}");
         }
 
         if (hasChannel)
@@ -715,6 +719,43 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         }
 
         return $"[{version}]";
+    }
+
+    // Returns a display-safe form of a NuGet source for inclusion in user-visible output.
+    // For http/https feeds we strip the UserInfo, query, and fragment because users commonly
+    // pass `https://user:pat@host/...` or SAS-token URLs (`?sv=...&sig=...`) and the failure
+    // output flows into bug reports and CI logs. Local paths and other source forms (file://,
+    // bare paths on Windows/Unix) pass through unchanged — they don't carry credentials.
+    internal static string RedactSourceForDisplay(string source)
+    {
+        if (string.IsNullOrEmpty(source))
+        {
+            return source;
+        }
+
+        if (!Uri.TryCreate(source, UriKind.Absolute, out var uri) ||
+            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            return source;
+        }
+
+        var hasUserInfo = !string.IsNullOrEmpty(uri.UserInfo);
+        var hasQuery = !string.IsNullOrEmpty(uri.Query);
+        var hasFragment = !string.IsNullOrEmpty(uri.Fragment);
+        if (!hasUserInfo && !hasQuery && !hasFragment)
+        {
+            return source;
+        }
+
+        var builder = new UriBuilder(uri)
+        {
+            UserName = hasUserInfo ? "***" : string.Empty,
+            Password = string.Empty,
+            Query = string.Empty,
+            Fragment = string.Empty
+        };
+
+        return builder.Uri.ToString();
     }
 
     /// <inheritdoc />
