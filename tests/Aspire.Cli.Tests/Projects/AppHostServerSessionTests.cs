@@ -134,6 +134,7 @@ public class AppHostServerSessionTests
             string sdkVersion,
             IEnumerable<IntegrationReference> integrations,
             CancellationToken cancellationToken = default,
+            string? requestedChannel = null,
             string? packageSourceOverride = null) =>
             throw new NotSupportedException();
 

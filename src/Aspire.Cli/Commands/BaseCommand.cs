@@ -58,7 +58,7 @@ internal abstract class BaseCommand : Command
             catch (NonInteractiveException)
             {
                 // Error messages have already been displayed by the interaction service.
-                result = CommandResult.Failure((int)CliExitCodes.MissingRequiredArgument);
+                result = CommandResult.Failure(CliExitCodes.MissingRequiredArgument);
             }
 
             var isErrorExitCode = result.ExitCode != CliExitCodes.Success;

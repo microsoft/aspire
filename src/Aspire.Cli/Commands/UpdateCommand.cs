@@ -15,6 +15,7 @@ using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Semver;
 using Spectre.Console;
 
 namespace Aspire.Cli.Commands;
@@ -312,6 +313,12 @@ internal sealed class UpdateCommand : BaseCommand
                 ConfirmBinding = confirmBinding,
                 NuGetConfigDirBinding = nugetConfigDirBinding
             };
+            var cliUpdateResult = await TryUpdateCliBeforeGuestProjectUpdateAsync(project, projectFile, channel, confirmBinding, parseResult, cancellationToken);
+            if (cliUpdateResult is not null)
+            {
+                return cliUpdateResult;
+            }
+
             await project.UpdatePackagesAsync(updateContext, cancellationToken);
 
             // After successful project update, check if CLI update is available and prompt
@@ -380,6 +387,78 @@ internal sealed class UpdateCommand : BaseCommand
         }
 
         return CommandResult.FromExitCode(0);
+    }
+
+    private async Task<CommandResult?> TryUpdateCliBeforeGuestProjectUpdateAsync(
+        IAppHostProject project,
+        FileInfo projectFile,
+        PackageChannel channel,
+        PromptBinding<bool> confirmBinding,
+        ParseResult parseResult,
+        CancellationToken cancellationToken)
+    {
+        if (_cliDownloader is null ||
+            string.IsNullOrEmpty(channel.CliDownloadBaseUrl) ||
+            project.LanguageId.Equals(KnownLanguageId.CSharp, StringComparison.OrdinalIgnoreCase) ||
+            projectFile.Directory is not { } projectDirectory)
+        {
+            return null;
+        }
+
+        var targetSdkVersion = await GetLatestGuestSdkVersionAsync(channel, projectDirectory, cancellationToken);
+        if (targetSdkVersion is null ||
+            !SemVersion.TryParse(VersionHelper.GetDefaultSdkVersion(), SemVersionStyles.Strict, out var currentCliVersion) ||
+            SemVersion.PrecedenceComparer.Compare(targetSdkVersion, currentCliVersion) <= 0)
+        {
+            return null;
+        }
+
+        var shouldUpdateCli = await InteractionService.PromptConfirmAsync(
+            UpdateCommandStrings.UpdateCliBeforeGuestProjectUpdatePrompt,
+            binding: confirmBinding,
+            cancellationToken: cancellationToken);
+
+        if (!shouldUpdateCli)
+        {
+            return null;
+        }
+
+        var dotNetToolUpdateCommand = GetDotNetToolUpdateCommand();
+        if (dotNetToolUpdateCommand is not null)
+        {
+            InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.DotNetToolSelfUpdateMessage);
+            InteractionService.DisplayPlainText($"  {dotNetToolUpdateCommand}");
+            InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.ProjectUpdateSkippedAfterCliUpdateMessage);
+            return CommandResult.Success();
+        }
+
+        var selfUpdateResult = await ExecuteSelfUpdateAsync(parseResult, cancellationToken, channel.Name);
+        if (selfUpdateResult.ExitCode == CliExitCodes.Success)
+        {
+            InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.ProjectUpdateSkippedAfterCliUpdateMessage);
+        }
+
+        return selfUpdateResult;
+    }
+
+    private async Task<SemVersion?> GetLatestGuestSdkVersionAsync(PackageChannel channel, DirectoryInfo projectDirectory, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var sdkPackage = await channel.GetLatestGuestAppHostSdkPackageAsync(projectDirectory, cancellationToken);
+            return sdkPackage is not null && SemVersion.TryParse(sdkPackage.Version, SemVersionStyles.Strict, out var version)
+                ? version
+                : null;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to check target Aspire SDK version before project update");
+            return null;
+        }
     }
 
     private bool IsStagingChannelAvailable()

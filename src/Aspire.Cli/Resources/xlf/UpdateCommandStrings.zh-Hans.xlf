@@ -207,6 +207,11 @@
         <target state="translated">项目已是最新!(无需更新)</target>
         <note />
       </trans-unit>
+      <trans-unit id="ProjectUpdateSkippedAfterCliUpdateMessage">
+        <source>Project update skipped. Update the Aspire CLI, then re-run `aspire update`.</source>
+        <target state="new">Project update skipped. Update the Aspire CLI, then re-run `aspire update`.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="QualityOptionDescription">
         <source>Quality level to update to (stable, daily)</source>
         <target state="translated">要更新到的质量级别(稳定、每日)</target>
@@ -265,6 +270,11 @@
       <trans-unit id="UpdateCliAfterProjectUpdatePrompt">
         <source>An update is available for the Aspire CLI. Would you like to update it now?</source>
         <target state="translated">Aspire CLI 有可用更新。是否现在更新?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UpdateCliBeforeGuestProjectUpdatePrompt">
+        <source>The selected Aspire SDK is newer than this Aspire CLI. Update the Aspire CLI now and re-run `aspire update` to update this project?</source>
+        <target state="new">The selected Aspire SDK is newer than this Aspire CLI. Update the Aspire CLI now and re-run `aspire update` to update this project?</target>
         <note />
       </trans-unit>
       <trans-unit id="UpdatePackageFormat">

@@ -545,6 +545,7 @@
     <Project Path="tools/CreateFailingTestIssue/CreateFailingTestIssue.csproj" />
     <Project Path="tools/CreateLayout/CreateLayout.csproj" />
     <Project Path="tools/GenerateTestSummary/GenerateTestSummary.csproj" />
+    <Project Path="tools/TypeScriptApiCompat/TypeScriptApiCompat.csproj" />
   </Folder>
   <Folder Name="/Tools/QuarantineTools/">
     <Project Path="tools/QuarantineTools/QuarantineTools.csproj" />

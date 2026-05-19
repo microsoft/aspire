@@ -128,12 +128,12 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
         string sdkVersion,
         IEnumerable<IntegrationReference> integrations,
         CancellationToken cancellationToken = default,
+        string? requestedChannel = null,
         string? packageSourceOverride = null)
     {
         var integrationList = integrations.ToList();
         var packageRefs = integrationList.Where(r => r.IsPackageReference).ToList();
         var projectRefs = integrationList.Where(r => r.IsProjectReference).ToList();
-        string? requestedChannel = null;
         // Lifted to outer scope so the failure footer reflects the source actually used by
         // restore — including the auto-discovered local hive resolved by
         // ResolveLocalPackageSourceOverrideAsync — rather than the unset --source the user
@@ -150,7 +150,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             // Resolve the channel the project requests for restore (aspire.config.json#channel,
             // with a legacy .aspire/settings.json#channel fallback). This is independent of the
             // running CLI's identity hive (CliExecutionContext.IdentityChannel).
-            requestedChannel = ResolveRequestedChannel();
+            requestedChannel ??= ResolveRequestedChannel();
             if (string.IsNullOrWhiteSpace(effectivePackageSourceOverride))
             {
                 effectivePackageSourceOverride = await ResolveLocalPackageSourceOverrideAsync(requestedChannel, cancellationToken).ConfigureAwait(false);

@@ -763,7 +763,16 @@ extends:
       # without performing a real release.
       - stage: GitHubTasks
         displayName: 'Dispatch GitHub Release Tasks'
-        dependsOn: Release
+        # PrepareArtifacts is listed explicitly (in addition to Release) so the
+        # jobs in this stage can resolve
+        # stageDependencies.PrepareArtifacts.PrepareJob.outputs['deriveReleaseVersion.releaseVersionEffective'].
+        # AzDO only exposes stageDependencies for stages named directly in dependsOn —
+        # the relationship is NOT transitive through Release. Without this, the
+        # ReleaseVersionEffective variable silently evaluates to empty and the GitHub
+        # workflow dispatch fails with HTTP 422 "Required input 'release_version' not provided".
+        dependsOn:
+          - Release
+          - PrepareArtifacts
         condition: |
           and(
             in(dependencies.Release.result, 'Succeeded', 'SucceededWithIssues'),
@@ -889,7 +898,12 @@ extends:
               - download: aspire-build
                 displayName: 'Download aspire-cli-* from Source Build'
                 artifact: BlobArtifacts
-                patterns: 'aspire-cli-*'
+                # The download task enumerates artifact items with the artifact
+                # name as a path prefix (e.g. 'BlobArtifacts/aspire-cli-...'), so
+                # a bare 'aspire-cli-*' minimatch glob excludes every file and
+                # the target directory never gets created. Use '**/aspire-cli-*'
+                # to match files under the artifact root.
+                patterns: '**/aspire-cli-*'
 
               # pwsh (not powershell): publish-release-cli-assets.ps1 calls
               # Get-AspireBotInstallationToken.ps1, which uses RSA.ImportFromPem

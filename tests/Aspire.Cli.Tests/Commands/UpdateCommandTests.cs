@@ -309,6 +309,178 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task UpdateCommand_GuestProject_WhenTargetSdkNewerThanCli_PromptsForCliUpdateBeforeProjectUpdateAndSkipsWhenAccepted()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var processPathScope = DotNetToolDetection.UseProcessPathForTesting("/home/test/.dotnet/tools/.store/aspire.cli/9.4.0/aspire.cli.linux-x64/9.4.0/tools/net10.0/linux-x64/aspire");
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
+        File.WriteAllText(appHostPath, "// test apphost");
+
+        var updateProjectInvoked = false;
+        string? confirmPrompt = null;
+        var interactionService = new TestInteractionService
+        {
+            ConfirmCallback = (prompt, _) =>
+            {
+                confirmPrompt = prompt;
+                return true;
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator()
+            {
+                UseOrFindAppHostProjectFileAsyncCallback = (_, _, _) => Task.FromResult<FileInfo?>(new FileInfo(appHostPath))
+            };
+
+            options.AppHostProjectFactory = _ => new TestAppHostProjectFactory
+            {
+                CanHandleCallback = _ => true,
+                LanguageId = "typescript/nodejs",
+                DisplayName = "TypeScript (Node.js)",
+                DetectionPatterns = ["apphost.ts"],
+                UpdatePackagesAsyncCallback = (_, _) =>
+                {
+                    updateProjectInvoked = true;
+                    return Task.FromResult(new UpdatePackagesResult { UpdatesApplied = true });
+                }
+            };
+
+            options.InteractionServiceFactory = _ => interactionService;
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(
+                    [CreatePackageChannelWithGuestSdkVersion("99.0.0", cliDownloadBaseUrl: "https://example.test/aspire")])
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --apphost apphost.ts");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(updateProjectInvoked);
+        Assert.NotNull(confirmPrompt);
+        Assert.Contains("newer than this Aspire CLI", confirmPrompt);
+        Assert.Contains("re-run `aspire update`", confirmPrompt);
+        Assert.Contains(interactionService.DisplayedPlainText, text => text.Contains("dotnet tool update -g Aspire.Cli", StringComparison.Ordinal));
+        Assert.Contains(interactionService.DisplayedMessages, message => message.Message.Contains("Project update skipped", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task UpdateCommand_GuestProject_WhenTargetSdkNewerThanCliAndCliUpdateDeclined_ContinuesProjectUpdate()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
+        File.WriteAllText(appHostPath, "// test apphost");
+
+        var updateProjectInvoked = false;
+        var confirmCallbackInvoked = false;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator()
+            {
+                UseOrFindAppHostProjectFileAsyncCallback = (_, _, _) => Task.FromResult<FileInfo?>(new FileInfo(appHostPath))
+            };
+
+            options.AppHostProjectFactory = _ => new TestAppHostProjectFactory
+            {
+                CanHandleCallback = _ => true,
+                LanguageId = "typescript/nodejs",
+                DisplayName = "TypeScript (Node.js)",
+                DetectionPatterns = ["apphost.ts"],
+                UpdatePackagesAsyncCallback = (_, _) =>
+                {
+                    updateProjectInvoked = true;
+                    return Task.FromResult(new UpdatePackagesResult { UpdatesApplied = true });
+                }
+            };
+
+            options.InteractionServiceFactory = _ => new TestInteractionService
+            {
+                ConfirmCallback = (_, _) =>
+                {
+                    confirmCallbackInvoked = true;
+                    return false;
+                }
+            };
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(
+                    [CreatePackageChannelWithGuestSdkVersion("99.0.0", cliDownloadBaseUrl: "https://example.test/aspire")])
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --apphost apphost.ts");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.True(confirmCallbackInvoked);
+        Assert.True(updateProjectInvoked);
+    }
+
+    [Fact]
+    public async Task UpdateCommand_GuestProject_WhenChannelCannotDownloadCli_DoesNotPromptBeforeProjectUpdate()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
+        File.WriteAllText(appHostPath, "// test apphost");
+
+        var updateProjectInvoked = false;
+        var confirmCallbackInvoked = false;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator()
+            {
+                UseOrFindAppHostProjectFileAsyncCallback = (_, _, _) => Task.FromResult<FileInfo?>(new FileInfo(appHostPath))
+            };
+
+            options.AppHostProjectFactory = _ => new TestAppHostProjectFactory
+            {
+                CanHandleCallback = _ => true,
+                LanguageId = "typescript/nodejs",
+                DisplayName = "TypeScript (Node.js)",
+                DetectionPatterns = ["apphost.ts"],
+                UpdatePackagesAsyncCallback = (_, _) =>
+                {
+                    updateProjectInvoked = true;
+                    return Task.FromResult(new UpdatePackagesResult { UpdatesApplied = true });
+                }
+            };
+
+            options.InteractionServiceFactory = _ => new TestInteractionService
+            {
+                ConfirmCallback = (_, _) =>
+                {
+                    confirmCallbackInvoked = true;
+                    return false;
+                }
+            };
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(
+                    [CreatePackageChannelWithGuestSdkVersion("99.0.0", cliDownloadBaseUrl: null)])
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --apphost apphost.ts");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(confirmCallbackInvoked);
+        Assert.True(updateProjectInvoked);
+    }
+
+    [Fact]
     public async Task UpdateCommand_WhenProjectUpdatedSuccessfullyAndRunningAsDotnetTool_DisplaysDotnetToolUpdateCommand()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -2392,6 +2564,26 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     // to roll back any prior write. That rollback path is covered by the stable row of
     // UpdateCommand_SelfUpdate_DoesNotWriteChannelToGlobalConfiguration above (asserts both
     // DoesNotContain set + DoesNotContain delete) — no standalone test required here.
+
+    private static PackageChannel CreatePackageChannelWithGuestSdkVersion(string sdkVersion, string? cliDownloadBaseUrl)
+    {
+        var fakeCache = new FakeNuGetPackageCache
+        {
+            GetPackagesAsyncCallback = (_, packageId, _, _, _, _, _) =>
+                Task.FromResult<IEnumerable<Aspire.Shared.NuGetPackageCli>>(
+                [
+                    new Aspire.Shared.NuGetPackageCli { Id = packageId, Version = sdkVersion, Source = "test" }
+                ])
+        };
+
+        return PackageChannel.CreateExplicitChannel(
+            "stable",
+            PackageChannelQuality.Stable,
+            [new PackageMapping("Aspire*", "https://api.nuget.org/v3/index.json")],
+            fakeCache,
+            configureGlobalPackagesFolder: false,
+            cliDownloadBaseUrl: cliDownloadBaseUrl);
+    }
 }
 
 // Helper class to track DisplayCancellationMessage calls

@@ -14,6 +14,7 @@ using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.ApplicationModel.Docker;
 using Aspire.Hosting.JavaScript;
 using Aspire.Hosting.Pipelines;
+using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -29,6 +30,7 @@ public static class JavaScriptHostingExtensions
 {
     private const string BrowserCapability = "browser";
     private const string DefaultNodeVersion = "22";
+    private const string DefaultJavaScriptRunScriptName = "dev";
     private const string DefaultYarpImage = Yarp.YarpContainerImageTags.Registry + "/" + Yarp.YarpContainerImageTags.Image + ":" + Yarp.YarpContainerImageTags.Tag;
 
     // This is the order of config files that Vite will look for by default
@@ -329,7 +331,7 @@ public static class JavaScriptHostingExtensions
     /// integration.
     /// </remarks>
     [AspireExport(Description = "Adds a JavaScript application resource")]
-    public static IResourceBuilder<JavaScriptAppResource> AddJavaScriptApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string appDirectory, string runScriptName = "dev")
+    public static IResourceBuilder<JavaScriptAppResource> AddJavaScriptApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string appDirectory, string runScriptName = DefaultJavaScriptRunScriptName)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
@@ -873,6 +875,33 @@ public static class JavaScriptHostingExtensions
             .WithBuildScript("build")
             .WithRunScript(runScriptName);
 
+        if (builder.ExecutionContext.IsPublishMode &&
+            builder.TryCreateResourceBuilder<ContainerResource>(resource.Name, out var containerBuilder))
+        {
+            var validationStepName = $"validate-javascript-dockerfile-run-script-{resource.Name}";
+
+            Task WriteValidatedContainerAsync(ManifestPublishingContext context)
+            {
+                ValidateExistingDockerfileRunScript(resource, containerBuilder.Resource);
+                return context.WriteContainerAsync(containerBuilder.Resource);
+            }
+
+            resourceBuilder.WithManifestPublishingCallback(WriteValidatedContainerAsync);
+            containerBuilder.WithManifestPublishingCallback(WriteValidatedContainerAsync);
+            containerBuilder.WithAnnotation(new PipelineStepAnnotation(_ => new PipelineStep
+            {
+                Name = validationStepName,
+                Description = $"Validates that JavaScript app '{resource.Name}' does not publish an ignored run script with an existing Dockerfile.",
+                RequiredBySteps = [WellKnownPipelineSteps.Build, WellKnownPipelineSteps.Publish],
+                Resource = containerBuilder.Resource,
+                Action = _ =>
+                {
+                    ValidateExistingDockerfileRunScript(resource, containerBuilder.Resource);
+                    return Task.CompletedTask;
+                }
+            }));
+        }
+
         resourceBuilder.WithVSCodeDebugging();
 
         // ensure the package manager command is set before starting the resource
@@ -890,6 +919,45 @@ public static class JavaScriptHostingExtensions
         }
 
         return resourceBuilder;
+    }
+
+    private static void ValidateExistingDockerfileRunScript(JavaScriptAppResource resource, ContainerResource containerResource)
+    {
+        if (containerResource.Entrypoint is not null ||
+            !containerResource.TryGetLastAnnotation<DockerfileBuildAnnotation>(out var dockerfileBuildAnnotation) ||
+            dockerfileBuildAnnotation.DockerfileFactory is not null ||
+            !containerResource.TryGetLastAnnotation<JavaScriptRunScriptAnnotation>(out var runScript))
+        {
+            return;
+        }
+
+        // The user's effective run-script intent is captured by the last annotation: AddJavaScriptApp
+        // always adds one with the supplied runScriptName, and any subsequent WithRunScript call
+        // appends another. Comparing the last annotation against the default avoids false positives
+        // when the user re-states the default explicitly (e.g. .WithRunScript("dev")).
+        var hasExplicitRunScript =
+            !string.Equals(runScript.ScriptName, DefaultJavaScriptRunScriptName, StringComparison.Ordinal) ||
+            runScript.Args is { Length: > 0 };
+
+        if (!hasExplicitRunScript)
+        {
+            return;
+        }
+
+        // Include the args in the message when they are the trigger, so the user can see why
+        // a default-named script (e.g. "dev") still produced a conflict.
+        var argsClause = runScript.Args is { Length: > 0 }
+            ? $" with args [{string.Join(", ", runScript.Args)}]"
+            : string.Empty;
+
+        // Existing Dockerfiles are user-authored, so Aspire cannot safely assume that replacing
+        // their entrypoint with a package-manager script will work for the image shape.
+        // If the user provides an explicit container entrypoint above, honor it; otherwise fail
+        // instead of silently publishing an image that ignores the requested run script.
+        throw new DistributedApplicationException(
+            $"JavaScript app resource '{resource.Name}' is configured to run script '{runScript.ScriptName}'{argsClause}, but publish is using the existing Dockerfile '{dockerfileBuildAnnotation.DockerfilePath}'. " +
+            "An existing Dockerfile entrypoint cannot be changed automatically from runScriptName or WithRunScript. " +
+            "Remove or rename the Dockerfile so Aspire can generate one, or call PublishAsDockerFile(...) and set the container entrypoint explicitly.");
     }
 
     /// <summary>

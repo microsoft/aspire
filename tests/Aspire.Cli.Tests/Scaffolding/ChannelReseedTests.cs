@@ -131,6 +131,7 @@ public class ChannelReseedTests(ITestOutputHelper outputHelper)
             string sdkVersion,
             IEnumerable<IntegrationReference> integrations,
             CancellationToken cancellationToken = default,
+            string? requestedChannel = null,
             string? packageSourceOverride = null)
         {
             PackageSourceOverride = packageSourceOverride;
