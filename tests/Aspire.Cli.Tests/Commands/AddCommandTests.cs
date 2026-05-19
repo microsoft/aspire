@@ -3324,7 +3324,8 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                                     new PackageMapping("Aspire*", prHiveSource),
                                     new PackageMapping(PackageMapping.AllPackages, nugetOrgSource)
                                 ],
-                                cache)
+                                cache,
+                                pinnedVersion: "13.4.0-pr.16882.gf2644312")
                         ])
                 };
             };
@@ -3377,6 +3378,9 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(appHostFile.FullName, "<Project Sdk=\"Microsoft.NET.Sdk\"></Project>");
         var prHiveSource = Path.Combine(workspace.WorkspaceRoot.FullName, "pr-hive", "packages");
         Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives", "pr-16882"));
+        Directory.CreateDirectory(prHiveSource);
+        await File.WriteAllTextAsync(Path.Combine(prHiveSource, "Aspire.Hosting.13.4.0-pr.16882.gf2644312.nupkg"), string.Empty);
+        await File.WriteAllTextAsync(Path.Combine(prHiveSource, "Aspire.Hosting.MongoDB.13.4.0-pr.16882.gf2644312.nupkg"), string.Empty);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -3387,6 +3391,8 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                 prompter.PromptForIntegrationCallback = packages =>
                 {
                     promptedPackages = packages.ToList();
+                    var promptedPackageSummary = string.Join(", ", promptedPackages.Select(package => $"{package.Package.Id}@{package.Package.Version}[{package.Channel.Name}]"));
+                    Assert.True(promptedPackages.Any(package => package.Package.Id == "Aspire.Hosting.MongoDB"), promptedPackageSummary);
                     return promptedPackages.Single(package => package.Package.Id == "Aspire.Hosting.MongoDB");
                 };
 
@@ -3407,9 +3413,6 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                             var tagQuery when tagQuery == HostingIntegrationMetadata.DiscoveryQuery => [
                                 new NuGetPackage { Id = "AspireQuartz.Hosting", Version = "1.0.1", Source = nugetOrgSource }
                             ],
-                            "Aspire.Hosting" => [
-                                new NuGetPackage { Id = "Aspire.Hosting.MongoDB", Version = "13.4.0-pr.16882.gf2644312", Source = prHiveSource }
-                            ],
                             _ => []
                         };
 
@@ -3428,7 +3431,8 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
                                     new PackageMapping("Aspire*", prHiveSource),
                                     new PackageMapping(PackageMapping.AllPackages, nugetOrgSource)
                                 ],
-                                cache)
+                                cache,
+                                pinnedVersion: "13.4.0-pr.16882.gf2644312")
                         ])
                 };
             };
@@ -3454,8 +3458,9 @@ public class AddCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(ExitCodeConstants.Success, exitCode);
         Assert.NotNull(promptedPackages);
-        Assert.Contains(promptedPackages, package => package.Package.Id == "AspireQuartz.Hosting");
-        Assert.Contains(promptedPackages, package => package.Package.Id == "Aspire.Hosting.MongoDB");
+        var promptedPackageSummary = string.Join(", ", promptedPackages.Select(package => $"{package.Package.Id}@{package.Package.Version}[{package.Channel.Name}]"));
+        Assert.True(promptedPackages.Any(package => package.Package.Id == "AspireQuartz.Hosting"), promptedPackageSummary);
+        Assert.True(promptedPackages.Any(package => package.Package.Id == "Aspire.Hosting.MongoDB"), promptedPackageSummary);
         Assert.Equal("Aspire.Hosting.MongoDB", addedPackageId);
         Assert.Null(addUsedSource);
     }

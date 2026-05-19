@@ -46,12 +46,13 @@ internal sealed class IntegrationPackageSearchService(
 
             if (discoveryScope is not IntegrationDiscoveryScope.ThirdParty && VersionHelper.IsLocalBuildChannel(channel.Name))
             {
-                var builtInPackages = await channel.SearchPackagesAsync(
-                    "Aspire.Hosting",
-                    workingDirectory,
-                    static packageId => HostingIntegrationMetadata.IsBuiltInHostingPackageId(packageId) &&
-                        !DeprecatedPackages.IsDeprecated(packageId),
-                    ct);
+                // PR/local hive channels can expose Aspire.Hosting packages only as local .nupkg
+                // files, and `dotnet package search Aspire.Hosting` does not reliably surface
+                // those folder-backed packages. Reuse the direct local-hive integration enumeration
+                // path so built-in hosting packages still appear in interactive discovery.
+                var builtInPackages = (await channel.GetIntegrationPackagesAsync(workingDirectory, ct))
+                    .Where(static package => HostingIntegrationMetadata.IsBuiltInHostingPackageId(package.Id) &&
+                        !DeprecatedPackages.IsDeprecated(package.Id));
 
                 integrationPackages = [.. integrationPackages, .. builtInPackages];
             }
