@@ -18,7 +18,9 @@ internal static class CliPathHelper
         => CreateSocketPath(socketPrefix);
 
     internal static string CreateGuestAppHostSocketPath(string socketPrefix)
-        => CreateSocketPath(socketPrefix);
+        => OperatingSystem.IsWindows()
+            ? CreateSocketName(socketPrefix)
+            : CreateSocketPath(socketPrefix);
 
     private static string CreateSocketPath(string socketPrefix)
     {
@@ -26,5 +28,12 @@ internal static class CliPathHelper
         var socketPath = BackchannelConstants.ComputeCliSocketPath(homeDirectory, socketPrefix);
         Directory.CreateDirectory(Path.GetDirectoryName(socketPath)!);
         return socketPath;
+    }
+
+    private static string CreateSocketName(string socketPrefix)
+    {
+        var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var socketPath = BackchannelConstants.ComputeCliSocketPath(homeDirectory, socketPrefix);
+        return Path.GetFileName(socketPath);
     }
 }
