@@ -15,10 +15,12 @@ cask "aspire" do
     skip "ci.dot.net artifact storage has no version index; Aspire release automation manages cask updates"
   end
 
+  depends_on macos: :monterey
+
   binary "aspire"
 
   # Write the sidecar file
   postflight do
-    File.write("#{staged_path}/.aspire-install.json", %({"source":"brew"}\n))
+    File.write("#{staged_path}/.aspire-install.json", %Q({"source":"brew"}\n))
   end
 end

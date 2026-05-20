@@ -17,6 +17,7 @@ brew install --cask aspire              # stable
 | `aspire.rb.template` | Cask template for stable releases |
 | `generate-cask.sh` | Downloads tarballs, computes SHA256 hashes, generates cask from template |
 | `prepare-cask-artifact.sh` | Prepares CI artifacts by generating, validating, and adding dogfood helpers |
+| `validate-cask-artifact.sh` | Runs shared cask syntax, style, audit, and install validation used by GitHub Actions and Azure DevOps |
 | `dogfood.sh` | Installs a generated cask locally, optionally using downloaded native archive artifacts |
 
 ### Pipeline templates
@@ -71,8 +72,13 @@ Prepare validation currently runs:
 
 1. `ruby -c` for syntax validation
 2. `brew style --fix` on the generated cask
-3. `brew audit --cask --online`, or `brew audit --cask --new --online` when the cask does not yet exist upstream
+3. `brew audit --cask --new --online local/aspire/aspire`
 4. `HOMEBREW_NO_INSTALL_FROM_API=1 brew install --cask ...` followed by uninstall validation
+
+PR artifact validation uses the same shared script and local tap, but rewrites
+the cask URLs to loopback archive URLs and passes `--no-signing` to
+`brew audit` because PR archives are not notarized release assets. Release
+preparation keeps the full signing audit.
 
 To dogfood a GitHub Actions artifact locally, download the `homebrew-cask-prerelease`
 artifact and the `cli-native-archives-osx-*` artifacts into the same parent directory, then run:
