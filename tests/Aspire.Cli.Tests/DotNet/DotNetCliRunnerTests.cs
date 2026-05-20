@@ -141,7 +141,6 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
         await File.WriteAllTextAsync(projectFile.FullName, "Not a real project file.");
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        // Add a configuration value that overrides the default
         services.AddSingleton<IConfiguration>(sp =>
         {
             var configBuilder = new ConfigurationBuilder();
