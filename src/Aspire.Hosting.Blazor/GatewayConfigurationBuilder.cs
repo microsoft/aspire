@@ -3,6 +3,8 @@
 
 using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting;
 
@@ -21,7 +23,8 @@ internal static class GatewayConfigurationBuilder
         List<GatewayAppRegistration> apps,
         EndpointReference gatewayEndpoint,
         EndpointReference? httpGatewayEndpoint = null,
-        object? httpOtlpEndpoint = null)
+        object? httpOtlpEndpoint = null,
+        ResourceLoggerService? resourceLoggerService = null)
     {
         var addedClusters = new HashSet<string>();
         var httpClientEndpoint = httpGatewayEndpoint ?? (gatewayEndpoint.IsHttp ? gatewayEndpoint : null);
@@ -48,10 +51,12 @@ internal static class GatewayConfigurationBuilder
                 reg.Resource.Name,
                 services,
                 reg.ProxyTelemetry,
+                httpOtlpEndpoint,
+                resourceLoggerService?.GetLogger(reg.Resource) ?? NullLogger.Instance,
                 reg.OtlpPrefix);
 
             EmitYarpRoutes(env, prefix, reg.Resource.Name, services, reg.ProxyTelemetry, addedClusters,
-                reg.OtlpPrefix);
+                reg.OtlpPrefix, httpOtlpEndpoint);
         }
 
         if (apps.Any(app => app.ProxyTelemetry))
@@ -72,6 +77,7 @@ internal static class GatewayConfigurationBuilder
         IReadOnlyList<HostedClientService> services,
         bool proxyTelemetry,
         object? httpOtlpEndpoint,
+        ILogger? logger = null,
         string otlpPrefix = DefaultOtlpPrefix)
     {
         var httpClientEndpoint = httpHostEndpoint ?? (hostEndpoint.IsHttp ? hostEndpoint : null);
@@ -85,11 +91,13 @@ internal static class GatewayConfigurationBuilder
             resourceName,
             services,
             proxyTelemetry,
+            httpOtlpEndpoint,
+            logger ?? NullLogger.Instance,
             otlpPrefix);
         env["Client__ConfigEndpointPath"] = "/_blazor/_configuration";
 
         EmitYarpRoutes(env, prefix: null, resourceName, services, proxyTelemetry, addedClusters: null,
-            otlpPrefix);
+            otlpPrefix, httpOtlpEndpoint);
 
         if (proxyTelemetry)
         {
@@ -114,7 +122,8 @@ internal static class GatewayConfigurationBuilder
         IReadOnlyList<HostedClientService> services,
         bool proxyTelemetry,
         HashSet<string>? addedClusters,
-        string otlpPrefix = DefaultOtlpPrefix)
+        string otlpPrefix = DefaultOtlpPrefix,
+        object? httpOtlpEndpoint = null)
     {
         var pathBase = prefix != null ? $"/{prefix}" : "";
 
@@ -133,7 +142,7 @@ internal static class GatewayConfigurationBuilder
             }
         }
 
-        if (proxyTelemetry)
+        if (proxyTelemetry && httpOtlpEndpoint is not null)
         {
             var otlpRouteId = prefix != null ? $"route-otlp-{resourceName}" : "route-otlp";
             env[$"ReverseProxy__Routes__{otlpRouteId}__ClusterId"] = "cluster-otlp-dashboard";
@@ -187,6 +196,8 @@ internal static class GatewayConfigurationBuilder
         string resourceName,
         IReadOnlyList<HostedClientService> services,
         bool proxyTelemetry,
+        object? httpOtlpEndpoint,
+        ILogger logger,
         string otlpPrefix = DefaultOtlpPrefix) : IValueProvider, IManifestExpressionProvider
     {
         string IManifestExpressionProvider.ValueExpression =>
@@ -197,6 +208,7 @@ internal static class GatewayConfigurationBuilder
 
         async ValueTask<string?> IValueProvider.GetValueAsync(CancellationToken cancellationToken)
         {
+            LogOtlpWarningIfNeeded();
             var primaryUrl = await primaryEndpoint.GetValueAsync(cancellationToken).ConfigureAwait(false);
             var httpUrl = await ResolveEndpointAsync(httpEndpoint, cancellationToken).ConfigureAwait(false);
             var httpsUrl = await ResolveEndpointAsync(httpsEndpoint, cancellationToken).ConfigureAwait(false);
@@ -205,10 +217,21 @@ internal static class GatewayConfigurationBuilder
 
         async ValueTask<string?> IValueProvider.GetValueAsync(ValueProviderContext context, CancellationToken cancellationToken)
         {
+            LogOtlpWarningIfNeeded();
             var primaryUrl = await primaryEndpoint.GetValueAsync(context, cancellationToken).ConfigureAwait(false);
             var httpUrl = await ResolveEndpointAsync(httpEndpoint, context, cancellationToken).ConfigureAwait(false);
             var httpsUrl = await ResolveEndpointAsync(httpsEndpoint, context, cancellationToken).ConfigureAwait(false);
             return BuildJson(primaryUrl, httpUrl, httpsUrl);
+        }
+
+        private void LogOtlpWarningIfNeeded()
+        {
+            if (proxyTelemetry && httpOtlpEndpoint is null)
+            {
+                logger.LogWarning(
+                    "OTLP telemetry proxying was requested but no dashboard HTTP endpoint could be resolved. " +
+                    "WASM client telemetry will not be forwarded.");
+            }
         }
 
         private static async ValueTask<string?> ResolveEndpointAsync(EndpointReference? endpoint, CancellationToken cancellationToken)
@@ -259,7 +282,7 @@ internal static class GatewayConfigurationBuilder
                 }
             }
 
-            if (proxyTelemetry)
+            if (proxyTelemetry && httpOtlpEndpoint is not null)
             {
                 environment["OTEL_SERVICE_NAME"] = resourceName;
 
