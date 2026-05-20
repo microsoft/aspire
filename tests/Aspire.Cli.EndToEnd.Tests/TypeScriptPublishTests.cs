@@ -413,7 +413,7 @@ public sealed class TypeScriptPublishTests(ITestOutputHelper output)
     {
         foreach (var fixtureName in new[] { "api", "staticsite", "nodeserver", "npmscript", "nextjs" })
         {
-            Microsoft.VisualBasic.FileIO.FileSystem.CopyDirectory(
+            TestDirectoryHelpers.CopyDirectory(
                 Path.Combine(s_jsPublishFixturesDir, fixtureName),
                 Path.Combine(workspace.WorkspaceRoot.FullName, fixtureName));
         }
