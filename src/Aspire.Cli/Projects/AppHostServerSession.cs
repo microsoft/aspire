@@ -212,7 +212,7 @@ internal sealed class AppHostServerSessionFactory : IAppHostServerSessionFactory
         AppHostServerPrepareResult prepareResult;
         try
         {
-            prepareResult = await appHostServerProject.PrepareAsync(sdkVersion, integrations, cancellationToken);
+            prepareResult = await appHostServerProject.PrepareAsync(sdkVersion, integrations, cancellationToken: cancellationToken);
         }
         catch
         {

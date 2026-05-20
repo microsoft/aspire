@@ -8,6 +8,7 @@ namespace Aspire.Cli.Tests.TestServices;
 internal sealed class TestPackagingService : IPackagingService
 {
     public Func<CancellationToken, Task<IEnumerable<PackageChannel>>>? GetChannelsAsyncCallback { get; set; }
+    public string? LastRequestedChannelName { get; private set; }
 
     /// <summary>
     /// Optional callback to control the reason returned by
@@ -19,6 +20,8 @@ internal sealed class TestPackagingService : IPackagingService
 
     public Task<IEnumerable<PackageChannel>> GetChannelsAsync(CancellationToken cancellationToken = default, string? requestedChannelName = null)
     {
+        LastRequestedChannelName = requestedChannelName;
+
         if (GetChannelsAsyncCallback is not null)
         {
             return GetChannelsAsyncCallback(cancellationToken);

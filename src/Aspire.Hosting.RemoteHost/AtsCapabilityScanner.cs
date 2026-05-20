@@ -362,7 +362,7 @@ public static class AtsCapabilityScanner
             // Check for [AspireDto] attribute - scan DTO types for code generation
             if (HasAspireDtoAttribute(type))
             {
-                var dtoInfo = CreateDtoTypeInfo(type, assemblyExportedTypeCache);
+                var dtoInfo = CreateDtoTypeInfo(type, assemblyExportedTypeCache, diagnostics);
                 if (dtoInfo != null)
                 {
                     dtoTypes.Add(dtoInfo);
@@ -1058,7 +1058,8 @@ public static class AtsCapabilityScanner
     /// </summary>
     private static AtsDtoTypeInfo? CreateDtoTypeInfo(
         Type type,
-        AssemblyExportedTypeCache assemblyExportedTypeCache)
+        AssemblyExportedTypeCache assemblyExportedTypeCache,
+        List<AtsDiagnostic> diagnostics)
     {
         var typeId = AtsTypeMapping.DeriveTypeId(type);
         var typeName = type.Name;
@@ -1093,6 +1094,13 @@ public static class AtsCapabilityScanner
             }
             propTypeRef = WithNullability(propTypeRef, prop.PropertyType, nullabilityContext.Create(prop).ReadState);
 
+            if (!prop.CanWrite && IsMutableCollectionType(prop.PropertyType))
+            {
+                diagnostics.Add(AtsDiagnostic.Warning(
+                    $"DTO property '{type.FullName}.{prop.Name}' is a get-only mutable collection. Add an init accessor so System.Text.Json replaces the collection during DTO deserialization; otherwise collection values can be merged with initializer defaults.",
+                    $"{type.FullName}.{prop.Name}"));
+            }
+
             IReadOnlyList<AtsCallbackParameterInfo>? callbackParameters = null;
             AtsTypeRef? callbackReturnType = null;
             if (isCallback)
@@ -1102,7 +1110,7 @@ public static class AtsCapabilityScanner
 
             var propDocumentation = GetXmlDocumentation(prop);
             var propDescription = propDocumentation?.Summary;
-            var isOptional = !prop.CanWrite || Nullable.GetUnderlyingType(prop.PropertyType) is not null;
+            var isOptional = IsOptionalDtoProperty(prop);
 
             properties.Add(new AtsDtoPropertyInfo
             {
@@ -1126,6 +1134,32 @@ public static class AtsCapabilityScanner
             Documentation = typeDocumentation,
             Properties = properties
         };
+    }
+
+    private static bool IsMutableCollectionType(Type type)
+    {
+        if (!type.IsGenericType)
+        {
+            return false;
+        }
+
+        var genericTypeDefinition = type.GetGenericTypeDefinition();
+        return genericTypeDefinition == typeof(List<>) ||
+            genericTypeDefinition == typeof(IList<>) ||
+            genericTypeDefinition == typeof(Dictionary<,>) ||
+            genericTypeDefinition == typeof(IDictionary<,>);
+    }
+
+    private static bool IsOptionalDtoProperty(PropertyInfo property)
+    {
+        if (property.GetCustomAttribute<RequiredMemberAttribute>() is not null)
+        {
+            return false;
+        }
+
+        return !property.CanWrite ||
+            Nullable.GetUnderlyingType(property.PropertyType) is not null ||
+            !CanWriteAfterInitialization(property);
     }
 
     private static void ScanStaticExportedValues(

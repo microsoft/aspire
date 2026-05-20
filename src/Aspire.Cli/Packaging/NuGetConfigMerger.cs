@@ -42,6 +42,27 @@ internal class NuGetConfigMerger
             return;
         }
 
+        await CreateOrUpdateAsync(targetDirectory, mappings, channel.ConfigureGlobalPackagesFolder, confirmationCallback, cancellationToken);
+    }
+
+    /// <summary>
+    /// Creates or updates a NuGet.config file in the specified directory based on the provided package source mappings.
+    /// </summary>
+    public static async Task CreateOrUpdateAsync(
+        DirectoryInfo targetDirectory,
+        PackageMapping[] mappings,
+        bool configureGlobalPackagesFolder = false,
+        Func<FileInfo, XmlDocument?, XmlDocument, CancellationToken, Task<bool>>? confirmationCallback = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(targetDirectory);
+        ArgumentNullException.ThrowIfNull(mappings);
+
+        if (mappings.Length == 0)
+        {
+            return;
+        }
+
         if (!targetDirectory.Exists)
         {
             targetDirectory.Create();
@@ -49,18 +70,17 @@ internal class NuGetConfigMerger
 
         if (!TryFindNuGetConfigInDirectory(targetDirectory, out var nugetConfigFile))
         {
-            await CreateNewNuGetConfigAsync(targetDirectory, channel, confirmationCallback, cancellationToken);
+            await CreateNewNuGetConfigAsync(targetDirectory, mappings, configureGlobalPackagesFolder, confirmationCallback, cancellationToken);
         }
         else
         {
-            await UpdateExistingNuGetConfigAsync(nugetConfigFile, channel, confirmationCallback, cancellationToken);
+            await UpdateExistingNuGetConfigAsync(nugetConfigFile, mappings, configureGlobalPackagesFolder, confirmationCallback, cancellationToken);
         }
     }
 
-    private static async Task CreateNewNuGetConfigAsync(DirectoryInfo targetDirectory, PackageChannel channel, Func<FileInfo, XmlDocument?, XmlDocument, CancellationToken, Task<bool>>? confirmationCallback, CancellationToken cancellationToken)
+    private static async Task CreateNewNuGetConfigAsync(DirectoryInfo targetDirectory, PackageMapping[] mappings, bool configureGlobalPackagesFolder, Func<FileInfo, XmlDocument?, XmlDocument, CancellationToken, Task<bool>>? confirmationCallback, CancellationToken cancellationToken)
     {
-        var mappings = channel.Mappings;
-        if (mappings is null || mappings.Length == 0)
+        if (mappings.Length == 0)
         {
             return;
         }
@@ -83,7 +103,7 @@ internal class NuGetConfigMerger
             }
         }
         
-        if (channel.ConfigureGlobalPackagesFolder)
+        if (configureGlobalPackagesFolder)
         {
             // Need to modify the temporary config to add globalPackagesFolder before copying
             await AddGlobalPackagesFolderToConfigAsync(tmpConfig.ConfigFile);
@@ -92,10 +112,9 @@ internal class NuGetConfigMerger
         File.Copy(tmpConfig.ConfigFile.FullName, targetPath, overwrite: true);
     }
 
-    private static async Task UpdateExistingNuGetConfigAsync(FileInfo nugetConfigFile, PackageChannel channel, Func<FileInfo, XmlDocument?, XmlDocument, CancellationToken, Task<bool>>? confirmationCallback, CancellationToken cancellationToken)
+    private static async Task UpdateExistingNuGetConfigAsync(FileInfo nugetConfigFile, PackageMapping[] mappings, bool configureGlobalPackagesFolder, Func<FileInfo, XmlDocument?, XmlDocument, CancellationToken, Task<bool>>? confirmationCallback, CancellationToken cancellationToken)
     {
-        var mappings = channel.Mappings;
-        if (mappings is null || mappings.Length == 0)
+        if (mappings.Length == 0)
         {
             return;
         }
@@ -136,7 +155,7 @@ internal class NuGetConfigMerger
             }
         }
         
-        if (channel.ConfigureGlobalPackagesFolder)
+        if (configureGlobalPackagesFolder)
         {
             AddGlobalPackagesFolderConfiguration(configContext);
         }
@@ -633,6 +652,17 @@ internal class NuGetConfigMerger
                 var sourceElement = context.ExistingAdds
                     .FirstOrDefault(add => string.Equals((string?)add.Attribute("key"), sourceKey, StringComparison.OrdinalIgnoreCase));
                 var sourceValue = (string?)sourceElement?.Attribute("value");
+                var isRequiredByCurrentChannel = context.RequiredSources.Contains(sourceKey, StringComparer.OrdinalIgnoreCase) ||
+                    context.RequiredSources.Contains(sourceValue ?? "", StringComparer.OrdinalIgnoreCase);
+                var requiredSourceHasWildcard = context.Mappings.Any(m =>
+                    m.PackageFilter == PackageMapping.AllPackages &&
+                    (string.Equals(m.Source, sourceKey, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(m.Source, sourceValue, StringComparison.OrdinalIgnoreCase)));
+
+                if (isRequiredByCurrentChannel && !requiredSourceHasWildcard)
+                {
+                    continue;
+                }
                 
                 // For user-defined sources that still have patterns, also give them wildcard patterns
                 // to ensure they can serve other packages too. But skip Microsoft-controlled sources

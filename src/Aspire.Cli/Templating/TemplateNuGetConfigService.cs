@@ -146,6 +146,55 @@ internal sealed class TemplateNuGetConfigService(
     }
 
     /// <summary>
+    /// Creates or updates a project NuGet.config that maps Aspire packages to an explicit package source override.
+    /// </summary>
+    public async Task<bool> CreateOrUpdateNuGetConfigForSourceOverrideAsync(
+        string? sourceOverride,
+        string? channelName,
+        string outputPath,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(sourceOverride))
+        {
+            return false;
+        }
+
+        PackageChannel? matchingChannel = null;
+
+        if (!string.IsNullOrWhiteSpace(channelName))
+        {
+            var channels = await packagingService.GetChannelsAsync(cancellationToken, channelName);
+            matchingChannel = channels.FirstOrDefault(c =>
+                string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return await CreateOrUpdateNuGetConfigForSourceOverrideAsync(sourceOverride, matchingChannel, outputPath, cancellationToken);
+    }
+
+    /// <summary>
+    /// Creates or updates a project NuGet.config that maps Aspire packages to an explicit package source override.
+    /// </summary>
+    public static async Task<bool> CreateOrUpdateNuGetConfigForSourceOverrideAsync(
+        string? sourceOverride,
+        PackageChannel? channel,
+        string outputPath,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(sourceOverride))
+        {
+            return false;
+        }
+
+        var mappings = PackageSourceOverrideMappings.Create(sourceOverride, channel);
+        await NuGetConfigMerger.CreateOrUpdateAsync(
+            new DirectoryInfo(outputPath),
+            mappings,
+            channel?.ConfigureGlobalPackagesFolder ?? false,
+            cancellationToken: cancellationToken);
+        return true;
+    }
+
+    /// <summary>
     /// Resolves the channel and template package version that should be used to install Aspire project templates.
     /// </summary>
     /// <param name="query">Inputs that control channel/version selection.</param>
