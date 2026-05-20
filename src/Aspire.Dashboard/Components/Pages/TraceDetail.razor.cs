@@ -579,24 +579,14 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
             await _layout.CloseMobileToolbarAsync();
         }
 
-        var title = entry is not null ? FilterLoc[nameof(StructuredFiltering.DialogTitleEditFilter)] : FilterLoc[nameof(StructuredFiltering.DialogTitleAddFilter)];
-        var parameters = new DialogParameters
-        {
-            OnDialogResult = DialogService.CreateDialogCallback(this, HandleFilterDialog),
-            Title = title,
-            Alignment = HorizontalAlignment.Right,
-            PrimaryAction = null,
-            SecondaryAction = null,
-            Width = "450px"
-        };
-        var data = new FilterDialogViewModel
-        {
-            Filter = entry,
-            PropertyKeys = GetTraceSpanPropertyKeys(),
-            KnownKeys = KnownTraceFields.AllFields,
-            GetFieldValues = GetTraceSpanFieldValues
-        };
-        await DialogService.ShowPanelAsync<FilterDialog>(data, parameters);
+        await FilterHelpers.OpenFilterAsync(
+            entry,
+            DialogService,
+            DialogService.CreateDialogCallback(this, HandleFilterDialog),
+            propertyKeys: GetTraceSpanPropertyKeys(),
+            knownKeys: KnownTraceFields.AllFields,
+            getFieldValues: GetTraceSpanFieldValues,
+            FilterLoc);
     }
 
     private async Task HandleFilterDialog(DialogResult result)
@@ -655,102 +645,23 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     // Computed fresh on each dialog open for the same reason as GetTraceSpanPropertyKeys.
     private Dictionary<string, int> GetTraceSpanFieldValues(string attributeName)
     {
-        var attributeValues = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-
         if (_trace is null)
         {
-            return attributeValues;
+            return new Dictionary<string, int>(StringComparers.OtlpAttribute);
         }
 
-        foreach (var span in _trace.Spans)
-        {
-            var values = OtlpSpan.GetFieldValue(span, attributeName);
-            if (values.Value1 != null)
-            {
-                if (!attributeValues.TryGetValue(values.Value1, out var count))
-                {
-                    count = 0;
-                }
-                attributeValues[values.Value1] = count + 1;
-            }
-            if (values.Value2 != null)
-            {
-                if (!attributeValues.TryGetValue(values.Value2, out var count))
-                {
-                    count = 0;
-                }
-                attributeValues[values.Value2] = count + 1;
-            }
-        }
-
-        return attributeValues;
+        return OtlpSpan.GetFieldValuesFromTraces([_trace], attributeName);
     }
 
     private List<MenuButtonItem> GetFilterMenuItems()
     {
-        var filterMenuItems = new List<MenuButtonItem>();
-
-        foreach (var filter in _filters)
-        {
-            filterMenuItems.Add(new MenuButtonItem
-            {
-                OnClick = () => OpenFilterAsync(filter),
-                Text = filter.GetDisplayText(FilterLoc),
-                Icon = filter.Enabled ? new Icons.Regular.Size16.Play() : new Icons.Regular.Size16.Pause(),
-                Class = "filter-menu-item",
-            });
-        }
-
-        filterMenuItems.Add(new MenuButtonItem
-        {
-            IsDivider = true
-        });
-
-        if (_filters.GetEnabledFilters().Any())
-        {
-            filterMenuItems.Add(new MenuButtonItem
-            {
-                Text = DialogsLoc[nameof(Dashboard.Resources.Dialogs.FilterDialogDisableAll)],
-                Icon = new Icons.Regular.Size16.Pause(),
-                OnClick = async () =>
-                {
-                    foreach (var filter in _filters)
-                    {
-                        filter.Enabled = false;
-                    }
-                    await RefreshAfterFilterChangeAsync();
-                }
-            });
-        }
-        else
-        {
-            filterMenuItems.Add(new MenuButtonItem
-            {
-                Text = DialogsLoc[nameof(Dashboard.Resources.Dialogs.FilterDialogEnableAll)],
-                Icon = new Icons.Regular.Size16.Play(),
-                OnClick = async () =>
-                {
-                    foreach (var filter in _filters)
-                    {
-                        filter.Enabled = true;
-                    }
-                    await RefreshAfterFilterChangeAsync();
-                }
-            });
-        }
-
-        filterMenuItems.Add(new MenuButtonItem
-        {
-            Text = DialogsLoc[nameof(Dashboard.Resources.Dialogs.SettingsRemoveAllButtonText)],
-            Icon = new Icons.Regular.Size16.Delete(),
-            OnClick = async () =>
-            {
-                _filters.Clear();
-                await RefreshAfterFilterChangeAsync();
-            }
-        });
-
-        return filterMenuItems;
+        return FilterHelpers.GetFilterMenuItems(
+            _filters,
+            clearFilters: _filters.Clear,
+            openFilterAsync: OpenFilterAsync,
+            afterChangeAsync: RefreshAfterFilterChangeAsync,
+            filterLoc: FilterLoc,
+            dialogsLoc: DialogsLoc);
     }
 
     public void Dispose()
