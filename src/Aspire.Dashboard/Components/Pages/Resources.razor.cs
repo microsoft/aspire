@@ -179,6 +179,13 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: false);
     }
 
+    private async Task OnColumnFilterChangedAsync()
+    {
+        await VisibleResourcesChangedAsync();
+        UpdateMenuButtons();
+        await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: false);
+    }
+
     private async Task HandleSearchFilterChangedAsync()
     {
         await VisibleResourcesChangedAsync();
