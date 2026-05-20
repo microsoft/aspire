@@ -53,7 +53,7 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
         await auto.WaitUntilAsync(
             s => s.ContainsText("dev-certs") && s.ContainsText("partially trusted"),
             timeout: TimeSpan.FromSeconds(60), description: "doctor to complete with partial trust warning");
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
         await auto.TypeAsync("exit");
         await auto.EnterAsync();
 
@@ -106,7 +106,7 @@ public sealed class DoctorCommandTests(ITestOutputHelper output)
 
             return s.ContainsText("certificate is trusted");
         }, timeout: TimeSpan.FromSeconds(60), description: "doctor to complete with trusted certificate");
-        await auto.WaitForSuccessPromptAsync(counter);
+        await auto.WaitForSuccessPromptFailFastAsync(counter);
         await auto.TypeAsync("exit");
         await auto.EnterAsync();
 
