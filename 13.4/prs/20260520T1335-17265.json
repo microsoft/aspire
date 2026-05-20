@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Bug fix: surfaces error diagnostics when endpoint references fail to resolve during environment configuration",
+  "mergedAt": "2026-05-20T13:35:37Z",
+  "number": 17265,
+  "runDate": "2026-05-20T15:54:48Z",
+  "status": "included",
+  "title": "Surface diagnostics when endpoint references fail to resolve"
+}

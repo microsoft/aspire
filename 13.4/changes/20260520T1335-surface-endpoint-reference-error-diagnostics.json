@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "When a resource fails to start because it references an endpoint that doesn't exist on another resource (e.g., calling `GetEndpoint('https')` on a resource that only exposes `http`), the error is now surfaced in resource logs and shown in the dashboard instead of being silently lost.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔦",
+  "firstMergedAt": "2026-05-20T13:35:37Z",
+  "lastMergedAt": "2026-05-20T13:35:37Z",
+  "name": "Surface endpoint reference error diagnostics",
+  "owner": "IEvangelist",
+  "prs": [
+    17265
+  ]
+}
