@@ -27,7 +27,11 @@
   <!-- Scripts are file-based C# apps, not part of this library's compilation -->
   <ItemGroup>
     <Compile Remove="Scripts\**" />
-    <Content Include="Scripts\**" CopyToOutputDirectory="PreserveNewest" />
+    <!-- PrefixEndpoints.cs ships as-is (no version tokens); Gateway.cs is generated from .in template -->
+    <Content Include="Scripts\PrefixEndpoints.cs" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Scripts\Gateway.cs.in" />
   </ItemGroup>
+
+  <Import Project="targets\GenerateScripts.targets" />
 
 </Project>
