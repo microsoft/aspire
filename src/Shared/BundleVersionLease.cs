@@ -6,7 +6,8 @@
 
 using System.Diagnostics;
 using System.Globalization;
-using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Aspire.Shared;
 
@@ -68,9 +69,8 @@ internal sealed class BundleVersionLease : IDisposable
 
         try
         {
-            var metadata = CreateMetadataJson(fullVersionDirectory, holderKind, commandName);
-            var bytes = Encoding.UTF8.GetBytes(metadata);
-            stream.Write(bytes);
+            var metadata = CreateMetadata(fullVersionDirectory, holderKind, commandName);
+            JsonSerializer.Serialize(stream, metadata, BundleVersionLeaseJsonSerializerContext.Default.BundleVersionLeaseMetadata);
             stream.Flush(flushToDisk: true);
 
             return new BundleVersionLease(fullVersionDirectory, leasePath, stream);
@@ -208,49 +208,31 @@ internal sealed class BundleVersionLease : IDisposable
         }
     }
 
-    private static string CreateMetadataJson(string versionDirectory, string holderKind, string? commandName)
+    private static BundleVersionLeaseMetadata CreateMetadata(string versionDirectory, string holderKind, string? commandName)
     {
         var versionId = Path.GetFileName(versionDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
         var startTicks = GetCurrentProcessStartTimeTicks();
-        var acquired = DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture);
 
-        return $$"""
-            {
-              "versionId": "{{EscapeJson(versionId)}}",
-              "versionDirectory": "{{EscapeJson(versionDirectory)}}",
-              "processId": {{Environment.ProcessId}},
-              "processStartTimeUtcTicks": {{startTicks}},
-              "holderKind": "{{EscapeJson(holderKind)}}",
-              "commandName": "{{EscapeJson(commandName)}}",
-              "acquiredUtc": "{{acquired}}"
-            }
-            """;
-    }
-
-    private static string EscapeJson(string? value)
-    {
-        if (string.IsNullOrEmpty(value))
-        {
-            return string.Empty;
-        }
-
-        var builder = new StringBuilder(value.Length);
-        foreach (var ch in value)
-        {
-            _ = ch switch
-            {
-                '"' => builder.Append("\\\""),
-                '\\' => builder.Append("\\\\"),
-                '\b' => builder.Append("\\b"),
-                '\f' => builder.Append("\\f"),
-                '\n' => builder.Append("\\n"),
-                '\r' => builder.Append("\\r"),
-                '\t' => builder.Append("\\t"),
-                < ' ' => builder.Append(CultureInfo.InvariantCulture, $"\\u{(int)ch:x4}"),
-                _ => builder.Append(ch)
-            };
-        }
-
-        return builder.ToString();
+        return new BundleVersionLeaseMetadata(
+            VersionId: versionId,
+            VersionDirectory: versionDirectory,
+            ProcessId: Environment.ProcessId,
+            ProcessStartTimeUtcTicks: startTicks,
+            HolderKind: holderKind,
+            CommandName: commandName,
+            AcquiredUtc: DateTimeOffset.UtcNow);
     }
 }
+
+internal sealed record BundleVersionLeaseMetadata(
+    string? VersionId,
+    string VersionDirectory,
+    int ProcessId,
+    long ProcessStartTimeUtcTicks,
+    string HolderKind,
+    string? CommandName,
+    DateTimeOffset AcquiredUtc);
+
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, WriteIndented = true)]
+[JsonSerializable(typeof(BundleVersionLeaseMetadata))]
+internal sealed partial class BundleVersionLeaseJsonSerializerContext : JsonSerializerContext;
