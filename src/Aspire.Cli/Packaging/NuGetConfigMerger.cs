@@ -263,9 +263,9 @@ internal class NuGetConfigMerger
         RemoveOrphanedSafeToRemoveSources(context, sourcesInUse);
     }
 
-    // Strip safe-to-remove sources (e.g. ~/.aspire/hives/pr-<N>/packages) from <packageSources>
+    // Strip safe-to-remove sources (e.g. ~/.aspire/hives/*/packages) from <packageSources>
     // when they have no corresponding <packageSourceMapping> entry after the merge and are not
-    // required by the new channel. Without this, a previous PR hive that was listed in
+    // required by the new channel. Without this, CLI-managed dogfood feeds that were listed in
     // <packageSources> but never mapped (or whose mapping was rewritten by an earlier merge)
     // would linger forever and break `dotnet restore` with NU1301 once the hive directory is
     // cleaned up on disk.
@@ -723,7 +723,7 @@ internal class NuGetConfigMerger
 
     private static bool IsSourceSafeToRemove(string sourceKey, string? sourceValue)
     {
-        // Only remove sources that we know are tied to Aspire channels or PR hives
+        // Only remove sources that we know are tied to Aspire channels or CLI-managed hive feeds
         if (string.IsNullOrEmpty(sourceKey) && string.IsNullOrEmpty(sourceValue))
         {
             return false;
@@ -731,7 +731,7 @@ internal class NuGetConfigMerger
 
         var urlToCheck = sourceValue ?? sourceKey;
         
-        // Check if this is an Aspire PR hive
+        // Check if this is an Aspire hive feed
         if (!string.IsNullOrEmpty(urlToCheck) && urlToCheck.Contains(".aspire") && urlToCheck.Contains("hives"))
         {
             return true;
