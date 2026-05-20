@@ -9,7 +9,7 @@ description: |
 
 on:
   release:
-    types: [released]
+    types: [published]
   workflow_dispatch:
     inputs:
       tag_name:

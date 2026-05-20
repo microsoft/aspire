@@ -175,7 +175,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     /// </summary>
     private string MapTypeRefToTypeScript(AtsTypeRef? typeRef)
     {
-        if (typeRef == null)
+        if (typeRef is null)
         {
             return "unknown";
         }
@@ -236,6 +236,36 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         return typeRef.TypeId is AtsConstants.Void or AtsConstants.Any or AtsConstants.CancellationToken
             ? mappedType
             : $"{mappedType} | null";
+    }
+
+    private string MapDtoPropertyTypeToTypeScript(AtsTypeRef? typeRef)
+    {
+        if (typeRef is null)
+        {
+            return "unknown";
+        }
+
+        return typeRef.Category switch
+        {
+            AtsTypeCategory.Array or AtsTypeCategory.List => $"{MapDtoPropertyTypeToTypeScript(typeRef.ElementType)}[]",
+            AtsTypeCategory.Dict => $"Record<{MapDtoPropertyTypeToTypeScript(typeRef.KeyType)}, {MapDtoPropertyTypeToTypeScript(typeRef.ValueType)}>",
+            AtsTypeCategory.Union => MapDtoUnionTypeToTypeScript(typeRef),
+            _ => MapTypeRefToTypeScript(typeRef)
+        };
+    }
+
+    private string MapDtoUnionTypeToTypeScript(AtsTypeRef typeRef)
+    {
+        if (typeRef.UnionTypes is null || typeRef.UnionTypes.Count == 0)
+        {
+            return "unknown";
+        }
+
+        var memberTypes = typeRef.UnionTypes
+            .Select(MapDtoPropertyTypeToTypeScript)
+            .Distinct();
+
+        return string.Join(" | ", memberTypes);
     }
 
     /// <summary>
@@ -1078,7 +1108,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             {
                 var tsType = prop.IsCallback
                     ? GenerateCallbackTypeSignature(prop.CallbackParameters, prop.CallbackReturnType)
-                    : MapTypeRefToTypeScript(prop.Type);
+                    : MapDtoPropertyTypeToTypeScript(prop.Type);
                 // All DTO properties are optional in TypeScript to allow partial objects
                 // Convert PascalCase to camelCase for TypeScript
                 var propName = ToCamelCase(prop.Name);

@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <AspireProjectOrPackageReference Include="Aspire.Hosting.AppHost" />
+    <AspireProjectOrPackageReference Include="Aspire.Hosting.Docker" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.JavaScript" />
     <AspireProjectOrPackageReference Include="Aspire.Hosting.Redis" />
   </ItemGroup>

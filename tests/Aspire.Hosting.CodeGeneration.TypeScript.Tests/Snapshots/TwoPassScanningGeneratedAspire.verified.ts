@@ -1045,17 +1045,17 @@ export interface TestConfigDto {
 /** Test DTO with deeply nested generic types. */
 export interface TestDeeplyNestedDto {
     /** Deeply nested generic: Dictionary containing List of DTOs. */
-    nestedData?: AspireDict<string, AspireList<TestConfigDto>>;
+    nestedData?: Record<string, TestConfigDto[]>;
     /** Array of dictionaries. */
-    metadataArray?: AspireDict<string, string>[];
+    metadataArray?: Record<string, string>[];
 }
 
 /** Test DTO with complex nested types. */
 export interface TestNestedDto {
     id?: string;
     config?: TestConfigDto;
-    tags?: AspireList<string>;
-    counts?: AspireDict<string, number>;
+    tags?: string[];
+    counts?: Record<string, number>;
 }
 
 // ============================================================================
