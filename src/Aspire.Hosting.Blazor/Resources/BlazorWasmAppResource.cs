@@ -11,12 +11,21 @@ namespace Aspire.Hosting;
 /// static web assets are served through a Gateway.
 /// Implements IResourceWithEnvironment so that WithReference() can be used
 /// to declare service dependencies (the annotations are read at orchestration time).
+/// Implements IResourceWithParent so that the orchestrator mirrors the gateway's
+/// lifecycle state (Running, Stopped, etc.) to this child resource automatically.
 /// </summary>
-public class BlazorWasmAppResource(string name, string projectPath) : Resource(name), IResourceWithEnvironment
+public class BlazorWasmAppResource(string name, string projectPath) : Resource(name), IResourceWithEnvironment, IResourceWithParent
 {
     /// <summary>Fully-qualified path to the .csproj file.</summary>
     public string ProjectPath { get; } = projectPath;
 
     /// <summary>Directory containing the .csproj file.</summary>
     public string ProjectDirectory => Path.GetDirectoryName(ProjectPath)!;
+
+    /// <summary>
+    /// Gets the parent gateway resource whose lifecycle state is mirrored to this resource.
+    /// Set internally when <see cref="BlazorGatewayExtensions.WithBlazorClientApp"/> associates
+    /// this WASM app with a gateway.
+    /// </summary>
+    public IResource Parent { get; internal set; } = null!;
 }
