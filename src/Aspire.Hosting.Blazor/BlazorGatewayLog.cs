@@ -46,6 +46,9 @@ internal static partial class BlazorGatewayLog
     [LoggerMessage(Level = LogLevel.Debug, Message = "Merged runtime manifest for '{ResourceName}' under '{Prefix}/' (offset={Offset}, roots={RootCount})")]
     public static partial void MergedRuntimeManifest(ILogger logger, string resourceName, string prefix, int offset, int rootCount);
 
+    [LoggerMessage(Level = LogLevel.Error, Message = "Failed to parse manifest JSON output from MSBuild for {ProjectPath}")]
+    public static partial void ManifestJsonParseFailed(ILogger logger, string projectPath, Exception exception);
+
     [LoggerMessage(Level = LogLevel.Debug, Message = "Wrote merged runtime manifest to {OutputPath}")]
     public static partial void WroteMergedManifest(ILogger logger, string outputPath);
 }

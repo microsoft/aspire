@@ -93,7 +93,17 @@ internal static class BlazorWasmAppBuilder
             return null;
         }
 
-        var output = JsonSerializer.Deserialize(stdout.Trim(), ManifestJsonContext.Default.MSBuildPropertiesOutput);
+        MSBuildPropertiesOutput? output;
+        try
+        {
+            output = JsonSerializer.Deserialize(stdout.Trim(), ManifestJsonContext.Default.MSBuildPropertiesOutput);
+        }
+        catch (JsonException ex)
+        {
+            BlazorGatewayLog.ManifestJsonParseFailed(logger, projectPath, ex);
+            return null;
+        }
+
         var props = output?.Properties;
 
         if (props == null

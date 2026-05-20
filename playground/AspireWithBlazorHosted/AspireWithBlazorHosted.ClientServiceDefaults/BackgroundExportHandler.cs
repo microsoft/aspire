@@ -24,7 +24,7 @@ internal sealed class BackgroundExportHandler(
         var snapshot = RequestSnapshot.Capture(request);
 
         // Send the real request with retries in the background.
-        _ = SendWithRetryAsync(snapshot, cancellationToken);
+        _ = SendWithRetryAsync(snapshot, CancellationToken.None);
 
         // Return 200 immediately so the SDK's sync .GetResult() unblocks.
         return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
