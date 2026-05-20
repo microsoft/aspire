@@ -3,15 +3,32 @@
 #
 # Purpose
 # -------
-# This is a moderate-coverage smoke that lives outside the regular CI test path so it can
-# always exercise the "everything is stable" build shape, regardless of whether the rest of
-# the PR's CI is running on prerelease versions (which it is — see ci.yml). It catches:
+# Most regular PR CI runs unstable (DotNetFinalVersionKind=prerelease), which means a class of
+# bugs that only show up under "everything is stable" is invisible until the actual
+# stabilization PR. The canonical case:
 #
-#   * Restore-time failures for stable AppHosts referencing packages whose csproj sets
-#     SuppressFinalPackageVersion=true (the bucket of issues that historically forced past
-#     stabilization PRs to hand-skip whole test classes).
-#   * Template version-pinning regressions where `aspire init` emits an SDK or package
-#     reference that doesn't resolve against the stable feed.
+#   Suppose Aspire.Hosting.Foo (which is NOT marked <SuppressFinalPackageVersion>true</...>,
+#   so it ships as stable when we stabilize) adds a PackageReference to Foo.Lib, but Foo.Lib
+#   is still publishing preview versions only. Under a prerelease PR build, both Aspire.Hosting.Foo
+#   and Foo.Lib are prerelease and restore happily. The moment we flip StabilizePackageVersion
+#   on, Aspire.Hosting.Foo becomes stable while its transitive dep is still prerelease — and
+#   the build breaks (NU5104 at pack time, or restore failures downstream).
+#
+# Without a check like this one we only catch that class of regression at stabilization time,
+# usually within days of a release. With this check it surfaces on the PR that introduces the
+# preview dependency, so the integration author can decide up front whether to:
+#   - flip <SuppressFinalPackageVersion>true</...> on Aspire.Hosting.Foo (ship it as preview), or
+#   - request Foo.Lib to stabilize before our next stable release.
+#
+# This script (the smoke) handles the end-to-end consumer flow specifically:
+#   * That `aspire init` emits an SDK / package reference shape that actually resolves against
+#     the stable feed (catches template version-pinning regressions).
+#   * That `aspire restore` succeeds end-to-end against a feed that contains only the stable
+#     packages we'd ship — i.e. no silent fallback to nuget.org papering over a missing dep.
+#
+# The pack-time NU5104 check (which is the primary detector for the Foo.Lib scenario above) is
+# the previous step in the stabilization_check job in ci.yml — this script complements it by
+# exercising the user-visible CLI workflow against the same stably-built feed.
 #
 # Prerequisites
 # -------------
