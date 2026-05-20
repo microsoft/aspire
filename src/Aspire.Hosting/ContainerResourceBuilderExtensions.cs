@@ -24,16 +24,27 @@ namespace Aspire.Hosting;
 public static class ContainerResourceBuilderExtensions
 {
     /// <summary>
-    /// Set whether a container resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource.
+    /// Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource.
     /// </summary>
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <param name="proxyEnabled">Should endpoints for the resource support using a proxy?</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExportIgnore(Reason = "Binary compatibility shim for the resource-level WithEndpointProxySupport overload.")]
-    public static IResourceBuilder<T> WithEndpointProxySupport<T>(this IResourceBuilder<T> builder, bool proxyEnabled) where T : ContainerResource
+    /// <remarks>
+    /// This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
+    /// port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
+    /// The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
+    /// endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
+    /// </remarks>
+    // Keep this method on ContainerResourceBuilderExtensions for binary compatibility; moving it changes the declaring type in metadata.
+    [AspireExport(Description = "Configures endpoint proxy support")]
+    public static IResourceBuilder<T> WithEndpointProxySupport<T>(this IResourceBuilder<T> builder, bool proxyEnabled) where T : IResourceWithEndpoints
     {
-        return ResourceBuilderExtensions.WithEndpointProxySupportCore(builder, proxyEnabled);
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.WithAnnotation(new ProxySupportAnnotation { ProxyEnabled = proxyEnabled }, ResourceAnnotationMutationBehavior.Replace);
+
+        return builder;
     }
 
     /// <summary>

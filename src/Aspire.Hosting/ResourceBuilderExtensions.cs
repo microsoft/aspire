@@ -1647,48 +1647,6 @@ public static class ResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource.
-    /// If set to <c>false</c>, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
-    /// </summary>
-    /// <param name="builder">The resource builder.</param>
-    /// <param name="proxyEnabled">Should endpoints for the resource support using a proxy?</param>
-    /// <returns>The resource builder.</returns>
-    /// <remarks>
-    /// This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
-    /// port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
-    /// The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
-    /// endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
-    /// </remarks>
-    [AspireExport(Description = "Configures endpoint proxy support")]
-    public static IResourceBuilder<IResourceWithEndpoints> WithEndpointProxySupport(this IResourceBuilder<IResourceWithEndpoints> builder, bool proxyEnabled)
-    {
-        return WithEndpointProxySupportCore(builder, proxyEnabled);
-    }
-
-    /// <inheritdoc cref="WithEndpointProxySupport(IResourceBuilder{IResourceWithEndpoints}, bool)" />
-    [AspireExportIgnore(Reason = "C# typed overload for the resource-level WithEndpointProxySupport export.")]
-    public static IResourceBuilder<ProjectResource> WithEndpointProxySupport(this IResourceBuilder<ProjectResource> builder, bool proxyEnabled)
-    {
-        return WithEndpointProxySupportCore(builder, proxyEnabled);
-    }
-
-    /// <inheritdoc cref="WithEndpointProxySupport(IResourceBuilder{IResourceWithEndpoints}, bool)" />
-    [AspireExportIgnore(Reason = "C# typed overload for the resource-level WithEndpointProxySupport export.")]
-    public static IResourceBuilder<ExecutableResource> WithEndpointProxySupport(this IResourceBuilder<ExecutableResource> builder, bool proxyEnabled)
-    {
-        return WithEndpointProxySupportCore(builder, proxyEnabled);
-    }
-
-    internal static IResourceBuilder<T> WithEndpointProxySupportCore<T>(IResourceBuilder<T> builder, bool proxyEnabled) where T : IResourceWithEndpoints
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-
-        builder.WithAnnotation(new ProxySupportAnnotation { ProxyEnabled = proxyEnabled }, ResourceAnnotationMutationBehavior.Replace);
-
-        return builder;
-    }
-
-    /// <summary>
     /// Exposes an endpoint on a resource. This endpoint reference can be retrieved using <see cref="ResourceBuilderExtensions.GetEndpoint{T}(IResourceBuilder{T}, string, NetworkIdentifier)"/>.
     /// The endpoint name will be the scheme name if not specified.
     /// </summary>

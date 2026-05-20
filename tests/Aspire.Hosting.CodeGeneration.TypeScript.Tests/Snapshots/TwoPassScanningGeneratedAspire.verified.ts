@@ -1,4 +1,4 @@
-﻿// aspire.ts - Capability-based Aspire SDK
+// aspire.ts - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -12804,6 +12804,17 @@ export interface ContainerResource {
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ContainerResourcePromise;
     /**
+     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource.
+     *
+     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
+     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
+     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
+     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
+     * @param proxyEnabled Should endpoints for the resource support using a proxy?
+     * @returns The `IResourceBuilder`1`.
+     */
+    withEndpointProxySupport(proxyEnabled: boolean): ContainerResourcePromise;
+    /**
      * Adds a bind mount to a container resource.
      *
      * Bind mounts are used to mount files or directories from the host file-system into the container. If the host doesn't require access to the files, consider
@@ -13155,17 +13166,6 @@ export interface ContainerResource {
      * @returns The `IResourceBuilder`1`.
      */
     withEndpoint(options?: WithEndpointOptions): ContainerResourcePromise;
-    /**
-     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
-     *
-     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
-     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
-     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
-     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
-     * @param proxyEnabled Should endpoints for the resource support using a proxy?
-     * @returns The `IResourceBuilder`1`.
-     */
-    withEndpointProxySupport(proxyEnabled: boolean): ContainerResourcePromise;
     /**
      * Exposes an HTTP endpoint on a resource, or updates the existing HTTP endpoint if one with the same name already exists. This endpoint reference can be retrieved using `GetEndpoint``1`. The endpoint name will be "http" if not specified.
      *
@@ -13714,6 +13714,17 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ContainerResourcePromise;
     /**
+     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource.
+     *
+     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
+     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
+     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
+     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
+     * @param proxyEnabled Should endpoints for the resource support using a proxy?
+     * @returns The `IResourceBuilder`1`.
+     */
+    withEndpointProxySupport(proxyEnabled: boolean): ContainerResourcePromise;
+    /**
      * Adds a bind mount to a container resource.
      *
      * Bind mounts are used to mount files or directories from the host file-system into the container. If the host doesn't require access to the files, consider
@@ -14065,17 +14076,6 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      * @returns The `IResourceBuilder`1`.
      */
     withEndpoint(options?: WithEndpointOptions): ContainerResourcePromise;
-    /**
-     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
-     *
-     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
-     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
-     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
-     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
-     * @param proxyEnabled Should endpoints for the resource support using a proxy?
-     * @returns The `IResourceBuilder`1`.
-     */
-    withEndpointProxySupport(proxyEnabled: boolean): ContainerResourcePromise;
     /**
      * Exposes an HTTP endpoint on a resource, or updates the existing HTTP endpoint if one with the same name already exists. This endpoint reference can be retrieved using `GetEndpoint``1`. The endpoint name will be "http" if not specified.
      *
@@ -14644,6 +14644,30 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._withContainerRegistryInternal(registry), this._client);
+    }
+
+    /** @internal */
+    private async _withEndpointProxySupportInternal(proxyEnabled: boolean): Promise<ContainerResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, proxyEnabled };
+        const result = await this._client.invokeCapability<ContainerResourceHandle>(
+            'Aspire.Hosting/withEndpointProxySupport',
+            rpcArgs
+        );
+        return new ContainerResourceImpl(result, this._client);
+    }
+
+    /**
+     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource.
+     *
+     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
+     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
+     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
+     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
+     * @param proxyEnabled Should endpoints for the resource support using a proxy?
+     * @returns The `IResourceBuilder`1`.
+     */
+    withEndpointProxySupport(proxyEnabled: boolean): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._withEndpointProxySupportInternal(proxyEnabled), this._client);
     }
 
     /** @internal */
@@ -15559,30 +15583,6 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
         const isExternal = options?.isExternal;
         const protocol = options?.protocol;
         return new ContainerResourcePromiseImpl(this._withEndpointInternal(port, targetPort, scheme, name, env, isProxied, isExternal, protocol), this._client);
-    }
-
-    /** @internal */
-    private async _withEndpointProxySupportInternal(proxyEnabled: boolean): Promise<ContainerResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, proxyEnabled };
-        const result = await this._client.invokeCapability<ContainerResourceHandle>(
-            'Aspire.Hosting/withEndpointProxySupport',
-            rpcArgs
-        );
-        return new ContainerResourceImpl(result, this._client);
-    }
-
-    /**
-     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
-     *
-     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
-     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
-     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
-     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
-     * @param proxyEnabled Should endpoints for the resource support using a proxy?
-     * @returns The `IResourceBuilder`1`.
-     */
-    withEndpointProxySupport(proxyEnabled: boolean): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._withEndpointProxySupportInternal(proxyEnabled), this._client);
     }
 
     /** @internal */
@@ -17167,6 +17167,10 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withContainerRegistry(registry)), this._client);
     }
 
+    withEndpointProxySupport(proxyEnabled: boolean): ContainerResourcePromise {
+        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withEndpointProxySupport(proxyEnabled)), this._client);
+    }
+
     withBindMount(source: string, target: string, options?: WithBindMountOptions): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withBindMount(source, target, options)), this._client);
     }
@@ -17309,10 +17313,6 @@ class ContainerResourcePromiseImpl implements ContainerResourcePromise {
 
     withEndpoint(options?: WithEndpointOptions): ContainerResourcePromise {
         return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withEndpoint(options)), this._client);
-    }
-
-    withEndpointProxySupport(proxyEnabled: boolean): ContainerResourcePromise {
-        return new ContainerResourcePromiseImpl(this._promise.then(obj => obj.withEndpointProxySupport(proxyEnabled)), this._client);
     }
 
     withHttpEndpoint(options?: WithHttpEndpointOptions): ContainerResourcePromise {
@@ -17601,6 +17601,17 @@ export interface CSharpAppResource {
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): CSharpAppResourcePromise;
     /**
+     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource.
+     *
+     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
+     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
+     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
+     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
+     * @param proxyEnabled Should endpoints for the resource support using a proxy?
+     * @returns The `IResourceBuilder`1`.
+     */
+    withEndpointProxySupport(proxyEnabled: boolean): CSharpAppResourcePromise;
+    /**
      * Configures custom base images for generated Dockerfiles.
      *
      * This extension method allows customization of the base images used in generated Dockerfiles.
@@ -17793,17 +17804,6 @@ export interface CSharpAppResource {
      * @returns The `IResourceBuilder`1`.
      */
     withEndpoint(options?: WithEndpointOptions): CSharpAppResourcePromise;
-    /**
-     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
-     *
-     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
-     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
-     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
-     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
-     * @param proxyEnabled Should endpoints for the resource support using a proxy?
-     * @returns The `IResourceBuilder`1`.
-     */
-    withEndpointProxySupport(proxyEnabled: boolean): CSharpAppResourcePromise;
     /**
      * Exposes an HTTP endpoint on a resource, or updates the existing HTTP endpoint if one with the same name already exists. This endpoint reference can be retrieved using `GetEndpoint``1`. The endpoint name will be "http" if not specified.
      *
@@ -18344,6 +18344,17 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): CSharpAppResourcePromise;
     /**
+     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource.
+     *
+     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
+     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
+     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
+     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
+     * @param proxyEnabled Should endpoints for the resource support using a proxy?
+     * @returns The `IResourceBuilder`1`.
+     */
+    withEndpointProxySupport(proxyEnabled: boolean): CSharpAppResourcePromise;
+    /**
      * Configures custom base images for generated Dockerfiles.
      *
      * This extension method allows customization of the base images used in generated Dockerfiles.
@@ -18536,17 +18547,6 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      * @returns The `IResourceBuilder`1`.
      */
     withEndpoint(options?: WithEndpointOptions): CSharpAppResourcePromise;
-    /**
-     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
-     *
-     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
-     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
-     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
-     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
-     * @param proxyEnabled Should endpoints for the resource support using a proxy?
-     * @returns The `IResourceBuilder`1`.
-     */
-    withEndpointProxySupport(proxyEnabled: boolean): CSharpAppResourcePromise;
     /**
      * Exposes an HTTP endpoint on a resource, or updates the existing HTTP endpoint if one with the same name already exists. This endpoint reference can be retrieved using `GetEndpoint``1`. The endpoint name will be "http" if not specified.
      *
@@ -19109,6 +19109,30 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /** @internal */
+    private async _withEndpointProxySupportInternal(proxyEnabled: boolean): Promise<CSharpAppResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, proxyEnabled };
+        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
+            'Aspire.Hosting/withEndpointProxySupport',
+            rpcArgs
+        );
+        return new CSharpAppResourceImpl(result, this._client);
+    }
+
+    /**
+     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource.
+     *
+     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
+     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
+     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
+     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
+     * @param proxyEnabled Should endpoints for the resource support using a proxy?
+     * @returns The `IResourceBuilder`1`.
+     */
+    withEndpointProxySupport(proxyEnabled: boolean): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._withEndpointProxySupportInternal(proxyEnabled), this._client);
+    }
+
+    /** @internal */
     private async _withDockerfileBaseImageInternal(buildImage?: string, runtimeImage?: string): Promise<CSharpAppResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (buildImage !== undefined) rpcArgs.buildImage = buildImage;
@@ -19651,30 +19675,6 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
         const isExternal = options?.isExternal;
         const protocol = options?.protocol;
         return new CSharpAppResourcePromiseImpl(this._withEndpointInternal(port, targetPort, scheme, name, env, isProxied, isExternal, protocol), this._client);
-    }
-
-    /** @internal */
-    private async _withEndpointProxySupportInternal(proxyEnabled: boolean): Promise<CSharpAppResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, proxyEnabled };
-        const result = await this._client.invokeCapability<CSharpAppResourceHandle>(
-            'Aspire.Hosting/withEndpointProxySupport',
-            rpcArgs
-        );
-        return new CSharpAppResourceImpl(result, this._client);
-    }
-
-    /**
-     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
-     *
-     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
-     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
-     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
-     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
-     * @param proxyEnabled Should endpoints for the resource support using a proxy?
-     * @returns The `IResourceBuilder`1`.
-     */
-    withEndpointProxySupport(proxyEnabled: boolean): CSharpAppResourcePromise {
-        return new CSharpAppResourcePromiseImpl(this._withEndpointProxySupportInternal(proxyEnabled), this._client);
     }
 
     /** @internal */
@@ -21248,6 +21248,10 @@ class CSharpAppResourcePromiseImpl implements CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withContainerRegistry(registry)), this._client);
     }
 
+    withEndpointProxySupport(proxyEnabled: boolean): CSharpAppResourcePromise {
+        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withEndpointProxySupport(proxyEnabled)), this._client);
+    }
+
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withDockerfileBaseImage(options)), this._client);
     }
@@ -21330,10 +21334,6 @@ class CSharpAppResourcePromiseImpl implements CSharpAppResourcePromise {
 
     withEndpoint(options?: WithEndpointOptions): CSharpAppResourcePromise {
         return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withEndpoint(options)), this._client);
-    }
-
-    withEndpointProxySupport(proxyEnabled: boolean): CSharpAppResourcePromise {
-        return new CSharpAppResourcePromiseImpl(this._promise.then(obj => obj.withEndpointProxySupport(proxyEnabled)), this._client);
     }
 
     withHttpEndpoint(options?: WithHttpEndpointOptions): CSharpAppResourcePromise {
@@ -21622,6 +21622,17 @@ export interface DotnetToolResource {
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): DotnetToolResourcePromise;
     /**
+     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource.
+     *
+     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
+     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
+     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
+     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
+     * @param proxyEnabled Should endpoints for the resource support using a proxy?
+     * @returns The `IResourceBuilder`1`.
+     */
+    withEndpointProxySupport(proxyEnabled: boolean): DotnetToolResourcePromise;
+    /**
      * Configures custom base images for generated Dockerfiles.
      *
      * This extension method allows customization of the base images used in generated Dockerfiles.
@@ -21822,17 +21833,6 @@ export interface DotnetToolResource {
      * @returns The `IResourceBuilder`1`.
      */
     withEndpoint(options?: WithEndpointOptions): DotnetToolResourcePromise;
-    /**
-     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
-     *
-     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
-     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
-     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
-     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
-     * @param proxyEnabled Should endpoints for the resource support using a proxy?
-     * @returns The `IResourceBuilder`1`.
-     */
-    withEndpointProxySupport(proxyEnabled: boolean): DotnetToolResourcePromise;
     /**
      * Exposes an HTTP endpoint on a resource, or updates the existing HTTP endpoint if one with the same name already exists. This endpoint reference can be retrieved using `GetEndpoint``1`. The endpoint name will be "http" if not specified.
      *
@@ -22367,6 +22367,17 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): DotnetToolResourcePromise;
     /**
+     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource.
+     *
+     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
+     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
+     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
+     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
+     * @param proxyEnabled Should endpoints for the resource support using a proxy?
+     * @returns The `IResourceBuilder`1`.
+     */
+    withEndpointProxySupport(proxyEnabled: boolean): DotnetToolResourcePromise;
+    /**
      * Configures custom base images for generated Dockerfiles.
      *
      * This extension method allows customization of the base images used in generated Dockerfiles.
@@ -22567,17 +22578,6 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      * @returns The `IResourceBuilder`1`.
      */
     withEndpoint(options?: WithEndpointOptions): DotnetToolResourcePromise;
-    /**
-     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
-     *
-     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
-     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
-     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
-     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
-     * @param proxyEnabled Should endpoints for the resource support using a proxy?
-     * @returns The `IResourceBuilder`1`.
-     */
-    withEndpointProxySupport(proxyEnabled: boolean): DotnetToolResourcePromise;
     /**
      * Exposes an HTTP endpoint on a resource, or updates the existing HTTP endpoint if one with the same name already exists. This endpoint reference can be retrieved using `GetEndpoint``1`. The endpoint name will be "http" if not specified.
      *
@@ -23131,6 +23131,30 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._withContainerRegistryInternal(registry), this._client);
+    }
+
+    /** @internal */
+    private async _withEndpointProxySupportInternal(proxyEnabled: boolean): Promise<DotnetToolResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, proxyEnabled };
+        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
+            'Aspire.Hosting/withEndpointProxySupport',
+            rpcArgs
+        );
+        return new DotnetToolResourceImpl(result, this._client);
+    }
+
+    /**
+     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource.
+     *
+     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
+     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
+     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
+     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
+     * @param proxyEnabled Should endpoints for the resource support using a proxy?
+     * @returns The `IResourceBuilder`1`.
+     */
+    withEndpointProxySupport(proxyEnabled: boolean): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._withEndpointProxySupportInternal(proxyEnabled), this._client);
     }
 
     /** @internal */
@@ -23760,30 +23784,6 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
         const isExternal = options?.isExternal;
         const protocol = options?.protocol;
         return new DotnetToolResourcePromiseImpl(this._withEndpointInternal(port, targetPort, scheme, name, env, isProxied, isExternal, protocol), this._client);
-    }
-
-    /** @internal */
-    private async _withEndpointProxySupportInternal(proxyEnabled: boolean): Promise<DotnetToolResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, proxyEnabled };
-        const result = await this._client.invokeCapability<DotnetToolResourceHandle>(
-            'Aspire.Hosting/withEndpointProxySupport',
-            rpcArgs
-        );
-        return new DotnetToolResourceImpl(result, this._client);
-    }
-
-    /**
-     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
-     *
-     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
-     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
-     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
-     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
-     * @param proxyEnabled Should endpoints for the resource support using a proxy?
-     * @returns The `IResourceBuilder`1`.
-     */
-    withEndpointProxySupport(proxyEnabled: boolean): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromiseImpl(this._withEndpointProxySupportInternal(proxyEnabled), this._client);
     }
 
     /** @internal */
@@ -25337,6 +25337,10 @@ class DotnetToolResourcePromiseImpl implements DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withContainerRegistry(registry)), this._client);
     }
 
+    withEndpointProxySupport(proxyEnabled: boolean): DotnetToolResourcePromise {
+        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withEndpointProxySupport(proxyEnabled)), this._client);
+    }
+
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withDockerfileBaseImage(options)), this._client);
     }
@@ -25443,10 +25447,6 @@ class DotnetToolResourcePromiseImpl implements DotnetToolResourcePromise {
 
     withEndpoint(options?: WithEndpointOptions): DotnetToolResourcePromise {
         return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withEndpoint(options)), this._client);
-    }
-
-    withEndpointProxySupport(proxyEnabled: boolean): DotnetToolResourcePromise {
-        return new DotnetToolResourcePromiseImpl(this._promise.then(obj => obj.withEndpointProxySupport(proxyEnabled)), this._client);
     }
 
     withHttpEndpoint(options?: WithHttpEndpointOptions): DotnetToolResourcePromise {
@@ -25738,6 +25738,17 @@ export interface ExecutableResource {
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ExecutableResourcePromise;
     /**
+     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource.
+     *
+     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
+     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
+     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
+     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
+     * @param proxyEnabled Should endpoints for the resource support using a proxy?
+     * @returns The `IResourceBuilder`1`.
+     */
+    withEndpointProxySupport(proxyEnabled: boolean): ExecutableResourcePromise;
+    /**
      * Configures custom base images for generated Dockerfiles.
      *
      * This extension method allows customization of the base images used in generated Dockerfiles.
@@ -25905,17 +25916,6 @@ export interface ExecutableResource {
      * @returns The `IResourceBuilder`1`.
      */
     withEndpoint(options?: WithEndpointOptions): ExecutableResourcePromise;
-    /**
-     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
-     *
-     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
-     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
-     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
-     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
-     * @param proxyEnabled Should endpoints for the resource support using a proxy?
-     * @returns The `IResourceBuilder`1`.
-     */
-    withEndpointProxySupport(proxyEnabled: boolean): ExecutableResourcePromise;
     /**
      * Exposes an HTTP endpoint on a resource, or updates the existing HTTP endpoint if one with the same name already exists. This endpoint reference can be retrieved using `GetEndpoint``1`. The endpoint name will be "http" if not specified.
      *
@@ -26450,6 +26450,17 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ExecutableResourcePromise;
     /**
+     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource.
+     *
+     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
+     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
+     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
+     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
+     * @param proxyEnabled Should endpoints for the resource support using a proxy?
+     * @returns The `IResourceBuilder`1`.
+     */
+    withEndpointProxySupport(proxyEnabled: boolean): ExecutableResourcePromise;
+    /**
      * Configures custom base images for generated Dockerfiles.
      *
      * This extension method allows customization of the base images used in generated Dockerfiles.
@@ -26617,17 +26628,6 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      * @returns The `IResourceBuilder`1`.
      */
     withEndpoint(options?: WithEndpointOptions): ExecutableResourcePromise;
-    /**
-     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
-     *
-     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
-     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
-     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
-     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
-     * @param proxyEnabled Should endpoints for the resource support using a proxy?
-     * @returns The `IResourceBuilder`1`.
-     */
-    withEndpointProxySupport(proxyEnabled: boolean): ExecutableResourcePromise;
     /**
      * Exposes an HTTP endpoint on a resource, or updates the existing HTTP endpoint if one with the same name already exists. This endpoint reference can be retrieved using `GetEndpoint``1`. The endpoint name will be "http" if not specified.
      *
@@ -27191,6 +27191,30 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /** @internal */
+    private async _withEndpointProxySupportInternal(proxyEnabled: boolean): Promise<ExecutableResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, proxyEnabled };
+        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
+            'Aspire.Hosting/withEndpointProxySupport',
+            rpcArgs
+        );
+        return new ExecutableResourceImpl(result, this._client);
+    }
+
+    /**
+     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource.
+     *
+     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
+     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
+     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
+     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
+     * @param proxyEnabled Should endpoints for the resource support using a proxy?
+     * @returns The `IResourceBuilder`1`.
+     */
+    withEndpointProxySupport(proxyEnabled: boolean): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._withEndpointProxySupportInternal(proxyEnabled), this._client);
+    }
+
+    /** @internal */
     private async _withDockerfileBaseImageInternal(buildImage?: string, runtimeImage?: string): Promise<ExecutableResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (buildImage !== undefined) rpcArgs.buildImage = buildImage;
@@ -27706,30 +27730,6 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
         const isExternal = options?.isExternal;
         const protocol = options?.protocol;
         return new ExecutableResourcePromiseImpl(this._withEndpointInternal(port, targetPort, scheme, name, env, isProxied, isExternal, protocol), this._client);
-    }
-
-    /** @internal */
-    private async _withEndpointProxySupportInternal(proxyEnabled: boolean): Promise<ExecutableResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, proxyEnabled };
-        const result = await this._client.invokeCapability<ExecutableResourceHandle>(
-            'Aspire.Hosting/withEndpointProxySupport',
-            rpcArgs
-        );
-        return new ExecutableResourceImpl(result, this._client);
-    }
-
-    /**
-     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
-     *
-     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
-     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
-     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
-     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
-     * @param proxyEnabled Should endpoints for the resource support using a proxy?
-     * @returns The `IResourceBuilder`1`.
-     */
-    withEndpointProxySupport(proxyEnabled: boolean): ExecutableResourcePromise {
-        return new ExecutableResourcePromiseImpl(this._withEndpointProxySupportInternal(proxyEnabled), this._client);
     }
 
     /** @internal */
@@ -29283,6 +29283,10 @@ class ExecutableResourcePromiseImpl implements ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withContainerRegistry(registry)), this._client);
     }
 
+    withEndpointProxySupport(proxyEnabled: boolean): ExecutableResourcePromise {
+        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withEndpointProxySupport(proxyEnabled)), this._client);
+    }
+
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withDockerfileBaseImage(options)), this._client);
     }
@@ -29365,10 +29369,6 @@ class ExecutableResourcePromiseImpl implements ExecutableResourcePromise {
 
     withEndpoint(options?: WithEndpointOptions): ExecutableResourcePromise {
         return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withEndpoint(options)), this._client);
-    }
-
-    withEndpointProxySupport(proxyEnabled: boolean): ExecutableResourcePromise {
-        return new ExecutableResourcePromiseImpl(this._promise.then(obj => obj.withEndpointProxySupport(proxyEnabled)), this._client);
     }
 
     withHttpEndpoint(options?: WithHttpEndpointOptions): ExecutableResourcePromise {
@@ -34149,6 +34149,17 @@ export interface ProjectResource {
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ProjectResourcePromise;
     /**
+     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource.
+     *
+     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
+     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
+     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
+     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
+     * @param proxyEnabled Should endpoints for the resource support using a proxy?
+     * @returns The `IResourceBuilder`1`.
+     */
+    withEndpointProxySupport(proxyEnabled: boolean): ProjectResourcePromise;
+    /**
      * Configures custom base images for generated Dockerfiles.
      *
      * This extension method allows customization of the base images used in generated Dockerfiles.
@@ -34341,17 +34352,6 @@ export interface ProjectResource {
      * @returns The `IResourceBuilder`1`.
      */
     withEndpoint(options?: WithEndpointOptions): ProjectResourcePromise;
-    /**
-     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
-     *
-     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
-     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
-     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
-     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
-     * @param proxyEnabled Should endpoints for the resource support using a proxy?
-     * @returns The `IResourceBuilder`1`.
-     */
-    withEndpointProxySupport(proxyEnabled: boolean): ProjectResourcePromise;
     /**
      * Exposes an HTTP endpoint on a resource, or updates the existing HTTP endpoint if one with the same name already exists. This endpoint reference can be retrieved using `GetEndpoint``1`. The endpoint name will be "http" if not specified.
      *
@@ -34892,6 +34892,17 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): ProjectResourcePromise;
     /**
+     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource.
+     *
+     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
+     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
+     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
+     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
+     * @param proxyEnabled Should endpoints for the resource support using a proxy?
+     * @returns The `IResourceBuilder`1`.
+     */
+    withEndpointProxySupport(proxyEnabled: boolean): ProjectResourcePromise;
+    /**
      * Configures custom base images for generated Dockerfiles.
      *
      * This extension method allows customization of the base images used in generated Dockerfiles.
@@ -35084,17 +35095,6 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      * @returns The `IResourceBuilder`1`.
      */
     withEndpoint(options?: WithEndpointOptions): ProjectResourcePromise;
-    /**
-     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
-     *
-     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
-     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
-     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
-     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
-     * @param proxyEnabled Should endpoints for the resource support using a proxy?
-     * @returns The `IResourceBuilder`1`.
-     */
-    withEndpointProxySupport(proxyEnabled: boolean): ProjectResourcePromise;
     /**
      * Exposes an HTTP endpoint on a resource, or updates the existing HTTP endpoint if one with the same name already exists. This endpoint reference can be retrieved using `GetEndpoint``1`. The endpoint name will be "http" if not specified.
      *
@@ -35658,6 +35658,30 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /** @internal */
+    private async _withEndpointProxySupportInternal(proxyEnabled: boolean): Promise<ProjectResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, proxyEnabled };
+        const result = await this._client.invokeCapability<ProjectResourceHandle>(
+            'Aspire.Hosting/withEndpointProxySupport',
+            rpcArgs
+        );
+        return new ProjectResourceImpl(result, this._client);
+    }
+
+    /**
+     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource.
+     *
+     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
+     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
+     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
+     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
+     * @param proxyEnabled Should endpoints for the resource support using a proxy?
+     * @returns The `IResourceBuilder`1`.
+     */
+    withEndpointProxySupport(proxyEnabled: boolean): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._withEndpointProxySupportInternal(proxyEnabled), this._client);
+    }
+
+    /** @internal */
     private async _withDockerfileBaseImageInternal(buildImage?: string, runtimeImage?: string): Promise<ProjectResource> {
         const rpcArgs: Record<string, unknown> = { builder: this._handle };
         if (buildImage !== undefined) rpcArgs.buildImage = buildImage;
@@ -36200,30 +36224,6 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
         const isExternal = options?.isExternal;
         const protocol = options?.protocol;
         return new ProjectResourcePromiseImpl(this._withEndpointInternal(port, targetPort, scheme, name, env, isProxied, isExternal, protocol), this._client);
-    }
-
-    /** @internal */
-    private async _withEndpointProxySupportInternal(proxyEnabled: boolean): Promise<ProjectResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, proxyEnabled };
-        const result = await this._client.invokeCapability<ProjectResourceHandle>(
-            'Aspire.Hosting/withEndpointProxySupport',
-            rpcArgs
-        );
-        return new ProjectResourceImpl(result, this._client);
-    }
-
-    /**
-     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
-     *
-     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
-     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
-     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
-     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
-     * @param proxyEnabled Should endpoints for the resource support using a proxy?
-     * @returns The `IResourceBuilder`1`.
-     */
-    withEndpointProxySupport(proxyEnabled: boolean): ProjectResourcePromise {
-        return new ProjectResourcePromiseImpl(this._withEndpointProxySupportInternal(proxyEnabled), this._client);
     }
 
     /** @internal */
@@ -37797,6 +37797,10 @@ class ProjectResourcePromiseImpl implements ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withContainerRegistry(registry)), this._client);
     }
 
+    withEndpointProxySupport(proxyEnabled: boolean): ProjectResourcePromise {
+        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withEndpointProxySupport(proxyEnabled)), this._client);
+    }
+
     withDockerfileBaseImage(options?: WithDockerfileBaseImageOptions): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withDockerfileBaseImage(options)), this._client);
     }
@@ -37879,10 +37883,6 @@ class ProjectResourcePromiseImpl implements ProjectResourcePromise {
 
     withEndpoint(options?: WithEndpointOptions): ProjectResourcePromise {
         return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withEndpoint(options)), this._client);
-    }
-
-    withEndpointProxySupport(proxyEnabled: boolean): ProjectResourcePromise {
-        return new ProjectResourcePromiseImpl(this._promise.then(obj => obj.withEndpointProxySupport(proxyEnabled)), this._client);
     }
 
     withHttpEndpoint(options?: WithHttpEndpointOptions): ProjectResourcePromise {
@@ -38170,6 +38170,17 @@ export interface TestDatabaseResource {
      * @returns The resource builder for chaining.
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise;
+    /**
+     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource.
+     *
+     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
+     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
+     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
+     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
+     * @param proxyEnabled Should endpoints for the resource support using a proxy?
+     * @returns The `IResourceBuilder`1`.
+     */
+    withEndpointProxySupport(proxyEnabled: boolean): TestDatabaseResourcePromise;
     /**
      * Adds a bind mount to a container resource.
      *
@@ -38522,17 +38533,6 @@ export interface TestDatabaseResource {
      * @returns The `IResourceBuilder`1`.
      */
     withEndpoint(options?: WithEndpointOptions): TestDatabaseResourcePromise;
-    /**
-     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
-     *
-     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
-     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
-     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
-     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
-     * @param proxyEnabled Should endpoints for the resource support using a proxy?
-     * @returns The `IResourceBuilder`1`.
-     */
-    withEndpointProxySupport(proxyEnabled: boolean): TestDatabaseResourcePromise;
     /**
      * Exposes an HTTP endpoint on a resource, or updates the existing HTTP endpoint if one with the same name already exists. This endpoint reference can be retrieved using `GetEndpoint``1`. The endpoint name will be "http" if not specified.
      *
@@ -39081,6 +39081,17 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise;
     /**
+     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource.
+     *
+     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
+     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
+     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
+     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
+     * @param proxyEnabled Should endpoints for the resource support using a proxy?
+     * @returns The `IResourceBuilder`1`.
+     */
+    withEndpointProxySupport(proxyEnabled: boolean): TestDatabaseResourcePromise;
+    /**
      * Adds a bind mount to a container resource.
      *
      * Bind mounts are used to mount files or directories from the host file-system into the container. If the host doesn't require access to the files, consider
@@ -39432,17 +39443,6 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      * @returns The `IResourceBuilder`1`.
      */
     withEndpoint(options?: WithEndpointOptions): TestDatabaseResourcePromise;
-    /**
-     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
-     *
-     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
-     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
-     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
-     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
-     * @param proxyEnabled Should endpoints for the resource support using a proxy?
-     * @returns The `IResourceBuilder`1`.
-     */
-    withEndpointProxySupport(proxyEnabled: boolean): TestDatabaseResourcePromise;
     /**
      * Exposes an HTTP endpoint on a resource, or updates the existing HTTP endpoint if one with the same name already exists. This endpoint reference can be retrieved using `GetEndpoint``1`. The endpoint name will be "http" if not specified.
      *
@@ -40010,6 +40010,30 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._withContainerRegistryInternal(registry), this._client);
+    }
+
+    /** @internal */
+    private async _withEndpointProxySupportInternal(proxyEnabled: boolean): Promise<TestDatabaseResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, proxyEnabled };
+        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
+            'Aspire.Hosting/withEndpointProxySupport',
+            rpcArgs
+        );
+        return new TestDatabaseResourceImpl(result, this._client);
+    }
+
+    /**
+     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource.
+     *
+     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
+     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
+     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
+     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
+     * @param proxyEnabled Should endpoints for the resource support using a proxy?
+     * @returns The `IResourceBuilder`1`.
+     */
+    withEndpointProxySupport(proxyEnabled: boolean): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._withEndpointProxySupportInternal(proxyEnabled), this._client);
     }
 
     /** @internal */
@@ -40925,30 +40949,6 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
         const isExternal = options?.isExternal;
         const protocol = options?.protocol;
         return new TestDatabaseResourcePromiseImpl(this._withEndpointInternal(port, targetPort, scheme, name, env, isProxied, isExternal, protocol), this._client);
-    }
-
-    /** @internal */
-    private async _withEndpointProxySupportInternal(proxyEnabled: boolean): Promise<TestDatabaseResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, proxyEnabled };
-        const result = await this._client.invokeCapability<TestDatabaseResourceHandle>(
-            'Aspire.Hosting/withEndpointProxySupport',
-            rpcArgs
-        );
-        return new TestDatabaseResourceImpl(result, this._client);
-    }
-
-    /**
-     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
-     *
-     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
-     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
-     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
-     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
-     * @param proxyEnabled Should endpoints for the resource support using a proxy?
-     * @returns The `IResourceBuilder`1`.
-     */
-    withEndpointProxySupport(proxyEnabled: boolean): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._withEndpointProxySupportInternal(proxyEnabled), this._client);
     }
 
     /** @internal */
@@ -42533,6 +42533,10 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withContainerRegistry(registry)), this._client);
     }
 
+    withEndpointProxySupport(proxyEnabled: boolean): TestDatabaseResourcePromise {
+        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withEndpointProxySupport(proxyEnabled)), this._client);
+    }
+
     withBindMount(source: string, target: string, options?: WithBindMountOptions): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withBindMount(source, target, options)), this._client);
     }
@@ -42675,10 +42679,6 @@ class TestDatabaseResourcePromiseImpl implements TestDatabaseResourcePromise {
 
     withEndpoint(options?: WithEndpointOptions): TestDatabaseResourcePromise {
         return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withEndpoint(options)), this._client);
-    }
-
-    withEndpointProxySupport(proxyEnabled: boolean): TestDatabaseResourcePromise {
-        return new TestDatabaseResourcePromiseImpl(this._promise.then(obj => obj.withEndpointProxySupport(proxyEnabled)), this._client);
     }
 
     withHttpEndpoint(options?: WithHttpEndpointOptions): TestDatabaseResourcePromise {
@@ -42966,6 +42966,17 @@ export interface TestRedisResource {
      * @returns The resource builder for chaining.
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestRedisResourcePromise;
+    /**
+     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource.
+     *
+     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
+     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
+     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
+     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
+     * @param proxyEnabled Should endpoints for the resource support using a proxy?
+     * @returns The `IResourceBuilder`1`.
+     */
+    withEndpointProxySupport(proxyEnabled: boolean): TestRedisResourcePromise;
     /**
      * Adds a bind mount to a container resource.
      *
@@ -43334,17 +43345,6 @@ export interface TestRedisResource {
      * @returns The `IResourceBuilder`1`.
      */
     withEndpoint(options?: WithEndpointOptions): TestRedisResourcePromise;
-    /**
-     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
-     *
-     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
-     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
-     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
-     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
-     * @param proxyEnabled Should endpoints for the resource support using a proxy?
-     * @returns The `IResourceBuilder`1`.
-     */
-    withEndpointProxySupport(proxyEnabled: boolean): TestRedisResourcePromise;
     /**
      * Exposes an HTTP endpoint on a resource, or updates the existing HTTP endpoint if one with the same name already exists. This endpoint reference can be retrieved using `GetEndpoint``1`. The endpoint name will be "http" if not specified.
      *
@@ -43941,6 +43941,17 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestRedisResourcePromise;
     /**
+     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource.
+     *
+     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
+     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
+     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
+     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
+     * @param proxyEnabled Should endpoints for the resource support using a proxy?
+     * @returns The `IResourceBuilder`1`.
+     */
+    withEndpointProxySupport(proxyEnabled: boolean): TestRedisResourcePromise;
+    /**
      * Adds a bind mount to a container resource.
      *
      * Bind mounts are used to mount files or directories from the host file-system into the container. If the host doesn't require access to the files, consider
@@ -44308,17 +44319,6 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      * @returns The `IResourceBuilder`1`.
      */
     withEndpoint(options?: WithEndpointOptions): TestRedisResourcePromise;
-    /**
-     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
-     *
-     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
-     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
-     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
-     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
-     * @param proxyEnabled Should endpoints for the resource support using a proxy?
-     * @returns The `IResourceBuilder`1`.
-     */
-    withEndpointProxySupport(proxyEnabled: boolean): TestRedisResourcePromise;
     /**
      * Exposes an HTTP endpoint on a resource, or updates the existing HTTP endpoint if one with the same name already exists. This endpoint reference can be retrieved using `GetEndpoint``1`. The endpoint name will be "http" if not specified.
      *
@@ -44934,6 +44934,30 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._withContainerRegistryInternal(registry), this._client);
+    }
+
+    /** @internal */
+    private async _withEndpointProxySupportInternal(proxyEnabled: boolean): Promise<TestRedisResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, proxyEnabled };
+        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
+            'Aspire.Hosting/withEndpointProxySupport',
+            rpcArgs
+        );
+        return new TestRedisResourceImpl(result, this._client);
+    }
+
+    /**
+     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource.
+     *
+     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
+     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
+     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
+     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
+     * @param proxyEnabled Should endpoints for the resource support using a proxy?
+     * @returns The `IResourceBuilder`1`.
+     */
+    withEndpointProxySupport(proxyEnabled: boolean): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._withEndpointProxySupportInternal(proxyEnabled), this._client);
     }
 
     /** @internal */
@@ -45885,30 +45909,6 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
         const isExternal = options?.isExternal;
         const protocol = options?.protocol;
         return new TestRedisResourcePromiseImpl(this._withEndpointInternal(port, targetPort, scheme, name, env, isProxied, isExternal, protocol), this._client);
-    }
-
-    /** @internal */
-    private async _withEndpointProxySupportInternal(proxyEnabled: boolean): Promise<TestRedisResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, proxyEnabled };
-        const result = await this._client.invokeCapability<TestRedisResourceHandle>(
-            'Aspire.Hosting/withEndpointProxySupport',
-            rpcArgs
-        );
-        return new TestRedisResourceImpl(result, this._client);
-    }
-
-    /**
-     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
-     *
-     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
-     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
-     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
-     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
-     * @param proxyEnabled Should endpoints for the resource support using a proxy?
-     * @returns The `IResourceBuilder`1`.
-     */
-    withEndpointProxySupport(proxyEnabled: boolean): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._withEndpointProxySupportInternal(proxyEnabled), this._client);
     }
 
     /** @internal */
@@ -47704,6 +47704,10 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withContainerRegistry(registry)), this._client);
     }
 
+    withEndpointProxySupport(proxyEnabled: boolean): TestRedisResourcePromise {
+        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withEndpointProxySupport(proxyEnabled)), this._client);
+    }
+
     withBindMount(source: string, target: string, options?: WithBindMountOptions): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withBindMount(source, target, options)), this._client);
     }
@@ -47854,10 +47858,6 @@ class TestRedisResourcePromiseImpl implements TestRedisResourcePromise {
 
     withEndpoint(options?: WithEndpointOptions): TestRedisResourcePromise {
         return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withEndpoint(options)), this._client);
-    }
-
-    withEndpointProxySupport(proxyEnabled: boolean): TestRedisResourcePromise {
-        return new TestRedisResourcePromiseImpl(this._promise.then(obj => obj.withEndpointProxySupport(proxyEnabled)), this._client);
     }
 
     withHttpEndpoint(options?: WithHttpEndpointOptions): TestRedisResourcePromise {
@@ -48197,6 +48197,17 @@ export interface TestVaultResource {
      * @returns The resource builder for chaining.
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestVaultResourcePromise;
+    /**
+     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource.
+     *
+     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
+     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
+     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
+     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
+     * @param proxyEnabled Should endpoints for the resource support using a proxy?
+     * @returns The `IResourceBuilder`1`.
+     */
+    withEndpointProxySupport(proxyEnabled: boolean): TestVaultResourcePromise;
     /**
      * Adds a bind mount to a container resource.
      *
@@ -48549,17 +48560,6 @@ export interface TestVaultResource {
      * @returns The `IResourceBuilder`1`.
      */
     withEndpoint(options?: WithEndpointOptions): TestVaultResourcePromise;
-    /**
-     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
-     *
-     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
-     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
-     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
-     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
-     * @param proxyEnabled Should endpoints for the resource support using a proxy?
-     * @returns The `IResourceBuilder`1`.
-     */
-    withEndpointProxySupport(proxyEnabled: boolean): TestVaultResourcePromise;
     /**
      * Exposes an HTTP endpoint on a resource, or updates the existing HTTP endpoint if one with the same name already exists. This endpoint reference can be retrieved using `GetEndpoint``1`. The endpoint name will be "http" if not specified.
      *
@@ -49110,6 +49110,17 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestVaultResourcePromise;
     /**
+     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource.
+     *
+     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
+     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
+     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
+     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
+     * @param proxyEnabled Should endpoints for the resource support using a proxy?
+     * @returns The `IResourceBuilder`1`.
+     */
+    withEndpointProxySupport(proxyEnabled: boolean): TestVaultResourcePromise;
+    /**
      * Adds a bind mount to a container resource.
      *
      * Bind mounts are used to mount files or directories from the host file-system into the container. If the host doesn't require access to the files, consider
@@ -49461,17 +49472,6 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      * @returns The `IResourceBuilder`1`.
      */
     withEndpoint(options?: WithEndpointOptions): TestVaultResourcePromise;
-    /**
-     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
-     *
-     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
-     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
-     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
-     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
-     * @param proxyEnabled Should endpoints for the resource support using a proxy?
-     * @returns The `IResourceBuilder`1`.
-     */
-    withEndpointProxySupport(proxyEnabled: boolean): TestVaultResourcePromise;
     /**
      * Exposes an HTTP endpoint on a resource, or updates the existing HTTP endpoint if one with the same name already exists. This endpoint reference can be retrieved using `GetEndpoint``1`. The endpoint name will be "http" if not specified.
      *
@@ -50041,6 +50041,30 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
      */
     withContainerRegistry(registry: Awaitable<CSharpAppResource | ComputeEnvironmentResource | ComputeResource | ContainerFilesDestinationResource | ContainerRegistryResource | ContainerResource | DotnetToolResource | ExecutableResource | ExternalServiceResource | ParameterResource | ProjectResource | Resource | ResourceWithArgs | ResourceWithConnectionString | ResourceWithContainerFiles | ResourceWithEndpoints | ResourceWithEnvironment | ResourceWithWaitSupport | TestDatabaseResource | TestRedisResource | TestVaultResource>): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._withContainerRegistryInternal(registry), this._client);
+    }
+
+    /** @internal */
+    private async _withEndpointProxySupportInternal(proxyEnabled: boolean): Promise<TestVaultResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, proxyEnabled };
+        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
+            'Aspire.Hosting/withEndpointProxySupport',
+            rpcArgs
+        );
+        return new TestVaultResourceImpl(result, this._client);
+    }
+
+    /**
+     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource.
+     *
+     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
+     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
+     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
+     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
+     * @param proxyEnabled Should endpoints for the resource support using a proxy?
+     * @returns The `IResourceBuilder`1`.
+     */
+    withEndpointProxySupport(proxyEnabled: boolean): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._withEndpointProxySupportInternal(proxyEnabled), this._client);
     }
 
     /** @internal */
@@ -50956,30 +50980,6 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
         const isExternal = options?.isExternal;
         const protocol = options?.protocol;
         return new TestVaultResourcePromiseImpl(this._withEndpointInternal(port, targetPort, scheme, name, env, isProxied, isExternal, protocol), this._client);
-    }
-
-    /** @internal */
-    private async _withEndpointProxySupportInternal(proxyEnabled: boolean): Promise<TestVaultResource> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, proxyEnabled };
-        const result = await this._client.invokeCapability<TestVaultResourceHandle>(
-            'Aspire.Hosting/withEndpointProxySupport',
-            rpcArgs
-        );
-        return new TestVaultResourceImpl(result, this._client);
-    }
-
-    /**
-     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
-     *
-     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
-     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
-     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
-     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
-     * @param proxyEnabled Should endpoints for the resource support using a proxy?
-     * @returns The `IResourceBuilder`1`.
-     */
-    withEndpointProxySupport(proxyEnabled: boolean): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._withEndpointProxySupportInternal(proxyEnabled), this._client);
     }
 
     /** @internal */
@@ -52579,6 +52579,10 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withContainerRegistry(registry)), this._client);
     }
 
+    withEndpointProxySupport(proxyEnabled: boolean): TestVaultResourcePromise {
+        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withEndpointProxySupport(proxyEnabled)), this._client);
+    }
+
     withBindMount(source: string, target: string, options?: WithBindMountOptions): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withBindMount(source, target, options)), this._client);
     }
@@ -52721,10 +52725,6 @@ class TestVaultResourcePromiseImpl implements TestVaultResourcePromise {
 
     withEndpoint(options?: WithEndpointOptions): TestVaultResourcePromise {
         return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withEndpoint(options)), this._client);
-    }
-
-    withEndpointProxySupport(proxyEnabled: boolean): TestVaultResourcePromise {
-        return new TestVaultResourcePromiseImpl(this._promise.then(obj => obj.withEndpointProxySupport(proxyEnabled)), this._client);
     }
 
     withHttpEndpoint(options?: WithHttpEndpointOptions): TestVaultResourcePromise {
@@ -55963,6 +55963,17 @@ class ResourceWithContainerFilesPromiseImpl implements ResourceWithContainerFile
 export interface ResourceWithEndpoints {
     toJSON(): MarshalledHandle;
     /**
+     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource.
+     *
+     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
+     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
+     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
+     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
+     * @param proxyEnabled Should endpoints for the resource support using a proxy?
+     * @returns The `IResourceBuilder`1`.
+     */
+    withEndpointProxySupport(proxyEnabled: boolean): ResourceWithEndpointsPromise;
+    /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
@@ -55992,17 +56003,6 @@ export interface ResourceWithEndpoints {
      * @returns The `IResourceBuilder`1`.
      */
     withEndpoint(options?: WithEndpointOptions): ResourceWithEndpointsPromise;
-    /**
-     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
-     *
-     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
-     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
-     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
-     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
-     * @param proxyEnabled Should endpoints for the resource support using a proxy?
-     * @returns The `IResourceBuilder`1`.
-     */
-    withEndpointProxySupport(proxyEnabled: boolean): ResourceWithEndpointsPromise;
     /**
      * Exposes an HTTP endpoint on a resource, or updates the existing HTTP endpoint if one with the same name already exists. This endpoint reference can be retrieved using `GetEndpoint``1`. The endpoint name will be "http" if not specified.
      *
@@ -56078,6 +56078,17 @@ export interface ResourceWithEndpoints {
 
 export interface ResourceWithEndpointsPromise extends PromiseLike<ResourceWithEndpoints> {
     /**
+     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource.
+     *
+     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
+     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
+     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
+     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
+     * @param proxyEnabled Should endpoints for the resource support using a proxy?
+     * @returns The `IResourceBuilder`1`.
+     */
+    withEndpointProxySupport(proxyEnabled: boolean): ResourceWithEndpointsPromise;
+    /**
      * Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
      *
      * This method adds an `McpServerEndpointAnnotation` to the resource, enabling the Aspire tooling
@@ -56107,17 +56118,6 @@ export interface ResourceWithEndpointsPromise extends PromiseLike<ResourceWithEn
      * @returns The `IResourceBuilder`1`.
      */
     withEndpoint(options?: WithEndpointOptions): ResourceWithEndpointsPromise;
-    /**
-     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
-     *
-     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
-     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
-     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
-     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
-     * @param proxyEnabled Should endpoints for the resource support using a proxy?
-     * @returns The `IResourceBuilder`1`.
-     */
-    withEndpointProxySupport(proxyEnabled: boolean): ResourceWithEndpointsPromise;
     /**
      * Exposes an HTTP endpoint on a resource, or updates the existing HTTP endpoint if one with the same name already exists. This endpoint reference can be retrieved using `GetEndpoint``1`. The endpoint name will be "http" if not specified.
      *
@@ -56199,6 +56199,30 @@ export interface ResourceWithEndpointsPromise extends PromiseLike<ResourceWithEn
 class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpointsHandle> implements ResourceWithEndpoints {
     constructor(handle: IResourceWithEndpointsHandle, client: AspireClientRpc) {
         super(handle, client);
+    }
+
+    /** @internal */
+    private async _withEndpointProxySupportInternal(proxyEnabled: boolean): Promise<ResourceWithEndpoints> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, proxyEnabled };
+        const result = await this._client.invokeCapability<IResourceWithEndpointsHandle>(
+            'Aspire.Hosting/withEndpointProxySupport',
+            rpcArgs
+        );
+        return new ResourceWithEndpointsImpl(result, this._client);
+    }
+
+    /**
+     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource.
+     *
+     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
+     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
+     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
+     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
+     * @param proxyEnabled Should endpoints for the resource support using a proxy?
+     * @returns The `IResourceBuilder`1`.
+     */
+    withEndpointProxySupport(proxyEnabled: boolean): ResourceWithEndpointsPromise {
+        return new ResourceWithEndpointsPromiseImpl(this._withEndpointProxySupportInternal(proxyEnabled), this._client);
     }
 
     /** @internal */
@@ -56339,30 +56363,6 @@ class ResourceWithEndpointsImpl extends ResourceBuilderBase<IResourceWithEndpoin
         const isExternal = options?.isExternal;
         const protocol = options?.protocol;
         return new ResourceWithEndpointsPromiseImpl(this._withEndpointInternal(port, targetPort, scheme, name, env, isProxied, isExternal, protocol), this._client);
-    }
-
-    /** @internal */
-    private async _withEndpointProxySupportInternal(proxyEnabled: boolean): Promise<ResourceWithEndpoints> {
-        const rpcArgs: Record<string, unknown> = { builder: this._handle, proxyEnabled };
-        const result = await this._client.invokeCapability<IResourceWithEndpointsHandle>(
-            'Aspire.Hosting/withEndpointProxySupport',
-            rpcArgs
-        );
-        return new ResourceWithEndpointsImpl(result, this._client);
-    }
-
-    /**
-     * Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
-     *
-     * This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
-     * port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
-     * The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
-     * endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
-     * @param proxyEnabled Should endpoints for the resource support using a proxy?
-     * @returns The `IResourceBuilder`1`.
-     */
-    withEndpointProxySupport(proxyEnabled: boolean): ResourceWithEndpointsPromise {
-        return new ResourceWithEndpointsPromiseImpl(this._withEndpointProxySupportInternal(proxyEnabled), this._client);
     }
 
     /** @internal */
@@ -56612,6 +56612,10 @@ class ResourceWithEndpointsPromiseImpl implements ResourceWithEndpointsPromise {
         return this._promise.then(onfulfilled, onrejected);
     }
 
+    withEndpointProxySupport(proxyEnabled: boolean): ResourceWithEndpointsPromise {
+        return new ResourceWithEndpointsPromiseImpl(this._promise.then(obj => obj.withEndpointProxySupport(proxyEnabled)), this._client);
+    }
+
     withMcpServer(options?: WithMcpServerOptions): ResourceWithEndpointsPromise {
         return new ResourceWithEndpointsPromiseImpl(this._promise.then(obj => obj.withMcpServer(options)), this._client);
     }
@@ -56630,10 +56634,6 @@ class ResourceWithEndpointsPromiseImpl implements ResourceWithEndpointsPromise {
 
     withEndpoint(options?: WithEndpointOptions): ResourceWithEndpointsPromise {
         return new ResourceWithEndpointsPromiseImpl(this._promise.then(obj => obj.withEndpoint(options)), this._client);
-    }
-
-    withEndpointProxySupport(proxyEnabled: boolean): ResourceWithEndpointsPromise {
-        return new ResourceWithEndpointsPromiseImpl(this._promise.then(obj => obj.withEndpointProxySupport(proxyEnabled)), this._client);
     }
 
     withHttpEndpoint(options?: WithHttpEndpointOptions): ResourceWithEndpointsPromise {
@@ -57627,4 +57627,5 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.IResourceWithContainerFiles
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints', (handle, client) => new ResourceWithEndpointsImpl(handle as IResourceWithEndpointsHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment', (handle, client) => new ResourceWithEnvironmentImpl(handle as IResourceWithEnvironmentHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithWaitSupport', (handle, client) => new ResourceWithWaitSupportImpl(handle as IResourceWithWaitSupportHandle, client));
+
 
