@@ -59,8 +59,16 @@ internal sealed class AuxiliaryBackchannelService(
             var appHostPath = configuration["AppHost:FilePath"] ?? configuration["AppHost:Path"];
             if (!string.IsNullOrEmpty(appHostPath))
             {
-                var hash = BackchannelConstants.ComputeHash(appHostPath);
-                var orphansDeleted = BackchannelConstants.CleanupOrphanedSockets(directory!, hash, Environment.ProcessId);
+                var appHostId = BackchannelConstants.ComputeAppHostId(appHostPath);
+                var orphansDeleted = BackchannelConstants.CleanupOrphanedSockets(directory!, appHostId, Environment.ProcessId);
+
+                var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                var legacyDirectory = BackchannelConstants.GetLegacyBackchannelsDirectory(homeDirectory);
+                foreach (var legacyHash in BackchannelConstants.ComputeLegacyHashes(appHostPath))
+                {
+                    orphansDeleted += BackchannelConstants.CleanupOrphanedSockets(legacyDirectory, legacyHash, Environment.ProcessId);
+                }
+
                 if (orphansDeleted > 0)
                 {
                     logger.LogDebug("Cleaned up {Count} orphaned socket(s) from previous instances.", orphansDeleted);
@@ -209,9 +217,8 @@ internal sealed class AuxiliaryBackchannelService(
             return BackchannelConstants.ComputeSocketPath(appHostPath, homeDirectory, Environment.ProcessId);
         }
 
-        // Fallback: Generate socket path using process ID as the "hash" (rare edge case)
-        var backchannelsDir = BackchannelConstants.GetBackchannelsDirectory(homeDirectory);
-        var fallbackHash = BackchannelConstants.ComputeHash(Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        return Path.Combine(backchannelsDir, $"{BackchannelConstants.SocketPrefix}.{fallbackHash}.{Environment.ProcessId}");
+        // Fallback: Generate socket path using process ID as the AppHost ID seed (rare edge case)
+        var fallbackAppHostId = BackchannelConstants.ComputeAppHostId(Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        return BackchannelConstants.ComputeSocketPathFromAppHostId(fallbackAppHostId, homeDirectory, Environment.ProcessId);
     }
 }
