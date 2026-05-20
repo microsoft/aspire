@@ -15,6 +15,7 @@ namespace Aspire.Hosting.Kubernetes;
 /// <see cref="KubernetesEnvironmentExtensions.WithHelm(IResourceBuilder{KubernetesEnvironmentResource}, Action{HelmChartOptions})"/>.
 /// Each method adds a corresponding annotation to the environment resource.
 /// </remarks>
+/// <ats-summary>Provides options for configuring Helm chart deployment settings on a <ats-see cref="!:type:KubernetesEnvironmentResource" />.</ats-summary>
 [AspireExport(ExposeMethods = true)]
 public sealed partial class HelmChartOptions
 {
@@ -61,7 +62,8 @@ public sealed partial class HelmChartOptions
         return this;
     }
 
-    [AspireExport(MethodName = "withNamespace", Description = "Sets the target Kubernetes namespace for deployment.")]
+    /// <ats-summary>Sets the target Kubernetes namespace for deployment.</ats-summary>
+    [AspireExport(MethodName = "withNamespace")]
     internal HelmChartOptions WithNamespace([AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object @namespace)
     {
         ArgumentNullException.ThrowIfNull(@namespace);
@@ -105,7 +107,8 @@ public sealed partial class HelmChartOptions
         return this;
     }
 
-    [AspireExport(MethodName = "withReleaseName", Description = "Sets the Helm release name for deployment.")]
+    /// <ats-summary>Sets the Helm release name for deployment.</ats-summary>
+    [AspireExport(MethodName = "withReleaseName")]
     internal HelmChartOptions WithReleaseName([AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object releaseName)
     {
         ArgumentNullException.ThrowIfNull(releaseName);
@@ -154,7 +157,8 @@ public sealed partial class HelmChartOptions
         return this;
     }
 
-    [AspireExport(MethodName = "withChartVersion", Description = "Sets the Helm chart version for deployment.")]
+    /// <ats-summary>Sets the Helm chart version for deployment.</ats-summary>
+    [AspireExport(MethodName = "withChartVersion")]
     internal HelmChartOptions WithChartVersion([AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object version)
     {
         ArgumentNullException.ThrowIfNull(version);
@@ -198,7 +202,8 @@ public sealed partial class HelmChartOptions
         return this;
     }
 
-    [AspireExport(MethodName = "withChartName", Description = "Sets the Helm chart name written to the generated Chart.yaml.")]
+    /// <ats-summary>Sets the Helm chart name written to the generated Chart.yaml.</ats-summary>
+    [AspireExport(MethodName = "withChartName")]
     internal HelmChartOptions WithChartName([AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object name)
     {
         ArgumentNullException.ThrowIfNull(name);
@@ -242,7 +247,8 @@ public sealed partial class HelmChartOptions
         return this;
     }
 
-    [AspireExport(MethodName = "withChartDescription", Description = "Sets the Helm chart description written to the generated Chart.yaml.")]
+    /// <ats-summary>Sets the Helm chart description written to the generated Chart.yaml.</ats-summary>
+    [AspireExport(MethodName = "withChartDescription")]
     internal HelmChartOptions WithChartDescription([AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object description)
     {
         ArgumentNullException.ThrowIfNull(description);

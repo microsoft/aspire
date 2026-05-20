@@ -30,7 +30,10 @@ public static class AzureOpenAIExtensions
     ///
     /// These can be replaced by calling <see cref="WithRoleAssignments{T}(IResourceBuilder{T}, IResourceBuilder{AzureOpenAIResource}, CognitiveServicesBuiltInRole[])"/>.
     /// </remarks>
-    [AspireExport(Description = "Adds an Azure OpenAI resource")]
+    /// <ats-summary>Adds an Azure OpenAI resource</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IDistributedApplicationBuilder" />.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<AzureOpenAIResource> AddAzureOpenAI(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -182,7 +185,9 @@ public static class AzureOpenAIExtensions
     /// <param name="modelName">The name of the model to deploy.</param>
     /// <param name="modelVersion">The version of the model to deploy.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds an Azure OpenAI deployment resource")]
+    /// <ats-summary>Adds an Azure OpenAI deployment resource</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureOpenAIDeploymentResource> AddDeployment(this IResourceBuilder<AzureOpenAIResource> builder, [ResourceName] string name, string modelName, string modelVersion)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -202,7 +207,10 @@ public static class AzureOpenAIExtensions
     /// <param name="builder">The Azure OpenAI Deployment resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the <see cref="AzureOpenAIDeploymentResource"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Configures properties of an Azure OpenAI deployment", RunSyncOnBackgroundThread = true)]
+    /// <ats-summary>Configures properties of an Azure OpenAI deployment</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    /// <ats-param name="configure">A method that can be used for customizing the <ats-see cref="!:type:AzureOpenAIDeploymentResource" />.</ats-param>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureOpenAIDeploymentResource> WithProperties(this IResourceBuilder<AzureOpenAIDeploymentResource> builder, Action<AzureOpenAIDeploymentResource> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -255,7 +263,10 @@ public static class AzureOpenAIExtensions
     /// <param name="roles">The Azure OpenAI roles to be assigned (for example, <see cref="AzureOpenAIRole.CognitiveServicesOpenAIUser"/>).</param>
     /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
     /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="AzureOpenAIRole"/> value.</exception>
-    [AspireExport("withCognitiveServicesRoleAssignments", Description = "Assigns Cognitive Services roles to a resource")]
+    /// <ats-summary>Assigns Cognitive Services roles to a resource</ats-summary>
+    /// <ats-returns>The updated <ats-see cref="!:type:IResourceBuilder" /> with the applied role assignments.</ats-returns>
+    /// <ats-param name="roles">The Azure OpenAI roles to be assigned (for example, <ats-see cref="!:type:AzureOpenAIRole.CognitiveServicesOpenAIUser" />).</ats-param>
+    [AspireExport("withCognitiveServicesRoleAssignments")]
     internal static IResourceBuilder<T> WithRoleAssignments<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<AzureOpenAIResource> target,

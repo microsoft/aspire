@@ -30,7 +30,9 @@ public static class AzurePublicIPAddressExtensions
     /// var pip = builder.AddPublicIPAddress("my-pip");
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds an Azure Public IP Address resource to the application model.")]
+    /// <ats-summary>Adds an Azure Public IP Address resource to the application model.</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzurePublicIPAddressResource> AddPublicIPAddress(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name)

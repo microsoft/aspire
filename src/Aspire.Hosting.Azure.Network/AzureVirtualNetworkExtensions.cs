@@ -76,7 +76,8 @@ public static class AzureVirtualNetworkExtensions
         return AddAzureVirtualNetworkCore(builder, resource);
     }
 
-    [AspireExport("addAzureVirtualNetwork", Description = "Adds an Azure Virtual Network resource to the application model.")]
+    /// <ats-summary>Adds an Azure Virtual Network resource to the application model.</ats-summary>
+    [AspireExport("addAzureVirtualNetwork")]
     internal static IResourceBuilder<AzureVirtualNetworkResource> AddAzureVirtualNetworkForPolyglot(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -236,7 +237,8 @@ public static class AzureVirtualNetworkExtensions
         return AddSubnetCore(builder, subnet);
     }
 
-    [AspireExport("addSubnet", Description = "Adds an Azure subnet resource to an Azure Virtual Network resource.")]
+    /// <ats-summary>Adds an Azure subnet resource to an Azure Virtual Network resource.</ats-summary>
+    [AspireExport("addSubnet")]
     internal static IResourceBuilder<AzureSubnetResource> AddSubnetForPolyglot(
         this IResourceBuilder<AzureVirtualNetworkResource> builder,
         [ResourceName] string name,
@@ -292,7 +294,9 @@ public static class AzureVirtualNetworkExtensions
     ///     .WithDelegatedSubnet(subnet);
     /// </code>
     /// </example>
-    [AspireExport("withSubnetDelegatedSubnet", MethodName = "withDelegatedSubnet", Description = "Associates a delegated Azure subnet resource with an Azure resource that supports subnet delegation.")]
+    /// <ats-summary>Associates a delegated Azure subnet resource with an Azure resource that supports subnet delegation.</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport("withSubnetDelegatedSubnet", MethodName = "withDelegatedSubnet")]
     public static IResourceBuilder<T> WithDelegatedSubnet<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<AzureSubnetResource> subnet)
@@ -334,7 +338,9 @@ public static class AzureVirtualNetworkExtensions
     ///     .WithNatGateway(natGateway);
     /// </code>
     /// </example>
-    [AspireExport(Description = "Associates an Azure NAT Gateway resource with an Azure subnet resource.")]
+    /// <ats-summary>Associates an Azure NAT Gateway resource with an Azure subnet resource.</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureSubnetResource> WithNatGateway(
         this IResourceBuilder<AzureSubnetResource> builder,
         IResourceBuilder<AzureNatGatewayResource> natGateway)
@@ -366,7 +372,9 @@ public static class AzureVirtualNetworkExtensions
     /// (<see cref="AllowInbound"/>, <see cref="DenyInbound"/>, <see cref="AllowOutbound"/>, <see cref="DenyOutbound"/>).
     /// Use either shorthand methods or an explicit NSG, not both.
     /// </exception>
-    [AspireExport(Description = "Associates an Azure Network Security Group resource with an Azure subnet resource.")]
+    /// <ats-summary>Associates an Azure Network Security Group resource with an Azure subnet resource.</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureSubnetResource> WithNetworkSecurityGroup(
         this IResourceBuilder<AzureSubnetResource> builder,
         IResourceBuilder<AzureNetworkSecurityGroupResource> nsg)
@@ -408,7 +416,10 @@ public static class AzureVirtualNetworkExtensions
     ///     .DenyInbound(from: AzureServiceTags.Internet);
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds an inbound allow rule to the Azure subnet resource's Network Security Group.")]
+    /// <ats-summary>Adds an inbound allow rule to the Azure subnet resource's Network Security Group.</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
+    /// <ats-param name="protocol">The network protocol. Defaults to <ats-see cref="!:type:SecurityRuleProtocol.Asterisk" /> (any).</ats-param>
+    [AspireExport]
     public static IResourceBuilder<AzureSubnetResource> AllowInbound(
         this IResourceBuilder<AzureSubnetResource> builder,
         string? port = null,
@@ -435,7 +446,10 @@ public static class AzureVirtualNetworkExtensions
     /// <remarks>
     /// If no Network Security Group has been associated with the subnet, one is automatically created.
     /// </remarks>
-    [AspireExport(Description = "Adds an inbound deny rule to the Azure subnet resource's Network Security Group.")]
+    /// <ats-summary>Adds an inbound deny rule to the Azure subnet resource's Network Security Group.</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
+    /// <ats-param name="protocol">The network protocol. Defaults to <ats-see cref="!:type:SecurityRuleProtocol.Asterisk" /> (any).</ats-param>
+    [AspireExport]
     public static IResourceBuilder<AzureSubnetResource> DenyInbound(
         this IResourceBuilder<AzureSubnetResource> builder,
         string? port = null,
@@ -462,7 +476,10 @@ public static class AzureVirtualNetworkExtensions
     /// <remarks>
     /// If no Network Security Group has been associated with the subnet, one is automatically created.
     /// </remarks>
-    [AspireExport(Description = "Adds an outbound allow rule to the Azure subnet resource's Network Security Group.")]
+    /// <ats-summary>Adds an outbound allow rule to the Azure subnet resource's Network Security Group.</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
+    /// <ats-param name="protocol">The network protocol. Defaults to <ats-see cref="!:type:SecurityRuleProtocol.Asterisk" /> (any).</ats-param>
+    [AspireExport]
     public static IResourceBuilder<AzureSubnetResource> AllowOutbound(
         this IResourceBuilder<AzureSubnetResource> builder,
         string? port = null,
@@ -489,7 +506,10 @@ public static class AzureVirtualNetworkExtensions
     /// <remarks>
     /// If no Network Security Group has been associated with the subnet, one is automatically created.
     /// </remarks>
-    [AspireExport(Description = "Adds an outbound deny rule to the Azure subnet resource's Network Security Group.")]
+    /// <ats-summary>Adds an outbound deny rule to the Azure subnet resource's Network Security Group.</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
+    /// <ats-param name="protocol">The network protocol. Defaults to <ats-see cref="!:type:SecurityRuleProtocol.Asterisk" /> (any).</ats-param>
+    [AspireExport]
     public static IResourceBuilder<AzureSubnetResource> DenyOutbound(
         this IResourceBuilder<AzureSubnetResource> builder,
         string? port = null,

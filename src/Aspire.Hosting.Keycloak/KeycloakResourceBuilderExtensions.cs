@@ -48,7 +48,12 @@ public static class KeycloakResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Adds a Keycloak container resource")]
+    /// <ats-summary>Adds a Keycloak container resource</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IDistributedApplicationBuilder" />.</ats-param>
+    /// <ats-param name="adminUsername">The parameter used as the admin for the Keycloak resource. If `null` a default value will be used.</ats-param>
+    /// <ats-param name="adminPassword">The parameter used as the admin password for the Keycloak resource. If `null` a default password will be used.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<KeycloakResource> AddKeycloak(
         this IDistributedApplicationBuilder builder,
         string name,
@@ -155,7 +160,9 @@ public static class KeycloakResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Adds a data volume for Keycloak")]
+    /// <ats-summary>Adds a data volume for Keycloak</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<KeycloakResource> WithDataVolume(this IResourceBuilder<KeycloakResource> builder, string? name = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -179,7 +186,9 @@ public static class KeycloakResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Adds a data bind mount for Keycloak")]
+    /// <ats-summary>Adds a data bind mount for Keycloak</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<KeycloakResource> WithDataBindMount(this IResourceBuilder<KeycloakResource> builder, string source)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -257,7 +266,9 @@ public static class KeycloakResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="features">Names of features to enable for the keycloak resource</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Enables Keycloak features")]
+    /// <ats-summary>Enables Keycloak features</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<KeycloakResource> WithEnabledFeatures(
         this IResourceBuilder<KeycloakResource> builder,
         params string[] features)
@@ -278,7 +289,9 @@ public static class KeycloakResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="features">Names of features to disable for the keycloak resource</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Disables Keycloak features")]
+    /// <ats-summary>Disables Keycloak features</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<KeycloakResource> WithDisabledFeatures(
         this IResourceBuilder<KeycloakResource> builder,
         params string[] features)
@@ -316,7 +329,8 @@ public static class KeycloakResourceBuilderExtensions
         return builder;
     }
 
-    [AspireExport("withOtlpExporter", Description = "Configures the OTLP exporter for Keycloak")]
+    /// <ats-summary>Configures the OTLP exporter for Keycloak</ats-summary>
+    [AspireExport("withOtlpExporter")]
     internal static IResourceBuilder<KeycloakResource> WithOtlpExporterForPolyglot(
         this IResourceBuilder<KeycloakResource> builder,
         OtlpProtocol? protocol = null)
@@ -355,7 +369,8 @@ public static class KeycloakResourceBuilderExtensions
     /// <summary>
     /// Adds a realm import to a Keycloak container resource.
     /// </summary>
-    [AspireExport("withRealmImport", Description = "Imports a Keycloak realm configuration")]
+    /// <ats-summary>Imports a Keycloak realm configuration</ats-summary>
+    [AspireExport("withRealmImport")]
     internal static IResourceBuilder<KeycloakResource> WithRealmImportInternal(
         this IResourceBuilder<KeycloakResource> builder,
         string importPath)

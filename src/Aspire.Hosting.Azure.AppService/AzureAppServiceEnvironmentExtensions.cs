@@ -81,7 +81,9 @@ public static partial class AzureAppServiceEnvironmentExtensions
     /// <param name="builder">The distributed application builder.</param>
     /// <param name="name">The name of the resource.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
-    [AspireExport(Description = "Adds an Azure App Service environment resource")]
+    /// <ats-summary>Adds an Azure App Service environment resource</ats-summary>
+    /// <ats-returns><ats-see cref="!:type:IResourceBuilder" /></ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> AddAzureAppServiceEnvironment(this IDistributedApplicationBuilder builder, string name)
     {
         builder.AddAzureAppServiceInfrastructureCore();
@@ -286,7 +288,10 @@ public static partial class AzureAppServiceEnvironmentExtensions
     ///     .WithHttpsUpgrade(false);
     /// </code>
     /// </example>
-    [AspireExport(Description = "Configures whether HTTP endpoints are automatically upgraded to HTTPS in Azure App Service")]
+    /// <ats-summary>Configures whether HTTP endpoints are automatically upgraded to HTTPS in Azure App Service</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining additional configuration.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IResourceBuilder" /> to configure.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithHttpsUpgrade(this IResourceBuilder<AzureAppServiceEnvironmentResource> builder, bool upgrade = true)
     {
         builder.Resource.PreserveHttpEndpoints = !upgrade;
@@ -299,7 +304,10 @@ public static partial class AzureAppServiceEnvironmentExtensions
     /// <param name="builder">The <see cref="IResourceBuilder{AzureAppServiceEnvironmentResource}"/> to configure.</param>
     /// <param name="enable">Whether to include the Aspire dashboard. Default is true.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining additional configuration.</returns>
-    [AspireExport(Description = "Configures whether the Aspire dashboard is included in the Azure App Service environment")]
+    /// <ats-summary>Configures whether the Aspire dashboard is included in the Azure App Service environment</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining additional configuration.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IResourceBuilder" /> to configure.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithDashboard(this IResourceBuilder<AzureAppServiceEnvironmentResource> builder, bool enable = true)
     {
         builder.Resource.EnableDashboard = enable;
@@ -319,7 +327,8 @@ public static partial class AzureAppServiceEnvironmentExtensions
         return builder;
     }
 
-    [AspireExport("withAzureApplicationInsights", Description = "Enables Azure Application Insights for the Azure App Service environment")]
+    /// <ats-summary>Enables Azure Application Insights for the Azure App Service environment</ats-summary>
+    [AspireExport("withAzureApplicationInsights")]
     internal static IResourceBuilder<AzureAppServiceEnvironmentResource> WithAzureApplicationInsightsForPolyglot(
         this IResourceBuilder<AzureAppServiceEnvironmentResource> builder,
         [AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>), typeof(IResourceBuilder<AzureApplicationInsightsResource>))] object? applicationInsights = null)
@@ -396,7 +405,8 @@ public static partial class AzureAppServiceEnvironmentExtensions
         return builder;
     }
 
-    [AspireExport("withDeploymentSlot", Description = "Configures the deployment slot for all Azure App Services in the environment")]
+    /// <ats-summary>Configures the deployment slot for all Azure App Services in the environment</ats-summary>
+    [AspireExport("withDeploymentSlot")]
     internal static IResourceBuilder<AzureAppServiceEnvironmentResource> WithDeploymentSlotForPolyglot(
         this IResourceBuilder<AzureAppServiceEnvironmentResource> builder,
         [AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object deploymentSlot)

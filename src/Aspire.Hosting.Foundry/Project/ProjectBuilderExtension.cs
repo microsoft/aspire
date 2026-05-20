@@ -34,7 +34,10 @@ public static class AzureCognitiveServicesProjectExtensions
     /// <param name="builder">The <see cref="IResourceBuilder{T}"/> for the parent Microsoft Foundry account resource.</param>
     /// <param name="name">The name of the Microsoft Foundry project resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the Microsoft Foundry project resource.</returns>
-    [AspireExport(Description = "Adds a Microsoft Foundry project resource to a Microsoft Foundry resource.")]
+    /// <ats-summary>Adds a Microsoft Foundry project resource to a Microsoft Foundry resource.</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for the Microsoft Foundry project resource.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IResourceBuilder" /> for the parent Microsoft Foundry account resource.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<AzureCognitiveServicesProjectResource> AddProject(
         this IResourceBuilder<FoundryResource> builder,
         string name)
@@ -81,7 +84,9 @@ public static class AzureCognitiveServicesProjectExtensions
     /// <param name="keyVault">The Key Vault resource to associate with the project.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <exception cref="InvalidOperationException">Thrown when the project already has a Key Vault connection configured.</exception>
-    [AspireExport(Description = "Associates an Azure Key Vault resource with a Microsoft Foundry project.")]
+    /// <ats-summary>Associates an Azure Key Vault resource with a Microsoft Foundry project.</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureCognitiveServicesProjectResource> WithKeyVault(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         IResourceBuilder<AzureKeyVaultResource> keyVault)
@@ -106,7 +111,9 @@ public static class AzureCognitiveServicesProjectExtensions
     /// <param name="builder">The resource builder for the Microsoft Foundry project.</param>
     /// <param name="appInsights">The Application Insights resource to associate with the project.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport(Description = "Associates an Azure Application Insights resource with a Microsoft Foundry project.")]
+    /// <ats-summary>Associates an Azure Application Insights resource with a Microsoft Foundry project.</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureCognitiveServicesProjectResource> WithAppInsights(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         IResourceBuilder<AzureApplicationInsightsResource> appInsights)
@@ -150,7 +157,8 @@ public static class AzureCognitiveServicesProjectExtensions
     /// <param name="builder">The resource builder for the Microsoft Foundry project.</param>
     /// <param name="name">The name of the capability host.</param>
     /// <returns>A reference to the project builder for chaining capability host configuration.</returns>
-    [AspireExport("addCapabilityHostProject", MethodName = "addCapabilityHost", Description = "Adds a capability host to a Microsoft Foundry project.")]
+    /// <ats-summary>Adds a capability host to a Microsoft Foundry project.</ats-summary>
+    [AspireExport("addCapabilityHostProject", MethodName = "addCapabilityHost")]
     internal static IResourceBuilder<AzureCognitiveServicesProjectResource> AddCapabilityHostExport(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         [ResourceName] string name)
@@ -240,7 +248,8 @@ public static class AzureCognitiveServicesProjectExtensions
     /// <param name="builder">The resource builder for the Microsoft Foundry project.</param>
     /// <param name="resource">The supported capability host resource.</param>
     /// <returns>A reference to the project builder for chaining capability host configuration.</returns>
-    [AspireExport(Description = "Associates a supported resource with a capability host on a Microsoft Foundry project.")]
+    /// <ats-summary>Associates a supported resource with a capability host on a Microsoft Foundry project.</ats-summary>
+    [AspireExport]
     internal static IResourceBuilder<AzureCognitiveServicesProjectResource> WithCapabilityHost(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         [AspireUnion(
@@ -280,7 +289,8 @@ public static class AzureCognitiveServicesProjectExtensions
         return builder.ApplicationBuilder.CreateResourceBuilder(builder.Resource.Parent).AddDeployment(name, model);
     }
 
-    [AspireExport("addModelDeployment", Description = "Adds a model deployment to the parent Microsoft Foundry resource.")]
+    /// <ats-summary>Adds a model deployment to the parent Microsoft Foundry resource.</ats-summary>
+    [AspireExport("addModelDeployment")]
     internal static IResourceBuilder<FoundryDeploymentResource> AddModelDeploymentForPolyglot(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         [ResourceName] string name,

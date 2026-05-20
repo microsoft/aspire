@@ -153,6 +153,17 @@ public partial class AspireExportAnalyzer
             helpLinkUri: $"https://aka.ms/aspire/diagnostics/{DuplicateGeneratedMethodNameId}",
             customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
+        private const string DescriptionShouldUseXmlDocsId = "ASPIREEXPORT015";
+        internal static readonly DiagnosticDescriptor s_descriptionShouldUseXmlDocs = new(
+            id: DescriptionShouldUseXmlDocsId,
+            title: "AspireExport description should use XML documentation",
+            messageFormat: "AspireExport Description is compatibility metadata. Use XML documentation with ATS tags such as <ats-summary> for generated polyglot SDK documentation.",
+            category: "Design",
+            DiagnosticSeverity.Error,
+            isEnabledByDefault: true,
+            helpLinkUri: $"https://aka.ms/aspire/diagnostics/{DescriptionShouldUseXmlDocsId}",
+            customTags: [WellKnownDiagnosticTags.CompilationEnd]);
+
         public static readonly ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics = ImmutableArray.Create(
             s_exportMethodMustBeStatic,
             s_invalidExportIdFormat,
@@ -167,7 +178,8 @@ public partial class AspireExportAnalyzer
             s_redundantExportId,
             s_callbackContextTypeMissingExport,
             s_duplicatePolyglotCapabilityId,
-            s_duplicateGeneratedMethodName
+            s_duplicateGeneratedMethodName,
+            s_descriptionShouldUseXmlDocs
         );
     }
 }

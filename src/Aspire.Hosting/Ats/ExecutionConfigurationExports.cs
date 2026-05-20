@@ -20,7 +20,8 @@ internal static class ExecutionConfigurationExports
     /// </summary>
     /// <param name="resource">The resource to build the execution configuration for.</param>
     /// <returns>The execution configuration builder.</returns>
-    [AspireExport(Description = "Creates an execution configuration builder")]
+    /// <ats-summary>Creates an execution configuration builder</ats-summary>
+    [AspireExport]
     public static IExecutionConfigurationBuilder CreateExecutionConfiguration(this IResource resource)
     {
         ArgumentNullException.ThrowIfNull(resource);
@@ -36,7 +37,8 @@ internal static class ExecutionConfigurationExports
     /// <param name="resourceLogger">The logger used while resolving values.</param>
     /// <param name="cancellationToken">A cancellation token.</param>
     /// <returns>The resolved execution configuration.</returns>
-    [AspireExport("buildExecutionConfiguration", MethodName = "build", Description = "Builds the execution configuration")]
+    /// <ats-summary>Builds the execution configuration</ats-summary>
+    [AspireExport("buildExecutionConfiguration", MethodName = "build")]
     public static Task<IExecutionConfigurationResult> Build(
         this IExecutionConfigurationBuilder builder,
         DistributedApplicationExecutionContext executionContext,
@@ -55,7 +57,8 @@ internal static class ExecutionConfigurationExports
     /// <param name="builder">The execution configuration builder.</param>
     /// <param name="configContextFactory">The factory that creates the HTTPS certificate configuration context.</param>
     /// <returns>The execution configuration builder.</returns>
-    [AspireExport("withHttpsCertificateConfigExport", MethodName = "withHttpsCertificateConfig", Description = "Adds an HTTPS certificate configuration gatherer")]
+    /// <ats-summary>Adds an HTTPS certificate configuration gatherer</ats-summary>
+    [AspireExport("withHttpsCertificateConfigExport", MethodName = "withHttpsCertificateConfig")]
     public static IExecutionConfigurationBuilder WithHttpsCertificateConfig(
         this IExecutionConfigurationBuilder builder,
         Func<HttpsCertificateInfo, HttpsCertificateExecutionConfigurationContext> configContextFactory)
@@ -73,7 +76,8 @@ internal static class ExecutionConfigurationExports
     /// </summary>
     /// <param name="configuration">The execution configuration result.</param>
     /// <returns>The certificate trust data. When no additional data is present, an empty DTO is returned.</returns>
-    [AspireExport(Description = "Gets certificate trust execution-configuration data")]
+    /// <ats-summary>Gets certificate trust execution-configuration data</ats-summary>
+    [AspireExport]
     public static CertificateTrustExecutionConfigurationExportData GetCertificateTrustData(this IExecutionConfigurationResult configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
@@ -101,7 +105,8 @@ internal static class ExecutionConfigurationExports
     /// </summary>
     /// <param name="configuration">The execution configuration result.</param>
     /// <returns>The HTTPS certificate data. When no additional data is present, an empty DTO is returned.</returns>
-    [AspireExport(Description = "Gets HTTPS certificate execution-configuration data")]
+    /// <ats-summary>Gets HTTPS certificate execution-configuration data</ats-summary>
+    [AspireExport]
     public static HttpsCertificateExecutionConfigurationExportData GetHttpsCertificateData(this IExecutionConfigurationResult configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);

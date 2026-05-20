@@ -28,7 +28,8 @@ public class PipelineStep
     /// <remarks>
     /// This projection avoids exporting an ATS setter for the public init-only <see cref="Name"/> property.
     /// </remarks>
-    [AspireExport(MethodName = "name", Description = "Gets the unique name of the step")]
+    /// <ats-summary>Gets the unique name of the step</ats-summary>
+    [AspireExport(MethodName = "name")]
     internal string ExportedName => Name;
 
     /// <summary>
@@ -46,7 +47,8 @@ public class PipelineStep
     /// <remarks>
     /// This projection avoids exporting an ATS setter for the public init-only <see cref="Description"/> property.
     /// </remarks>
-    [AspireExport(MethodName = "description", Description = "Gets the human-readable description of the step")]
+    /// <ats-summary>Gets the human-readable description of the step</ats-summary>
+    [AspireExport(MethodName = "description")]
     internal string? ExportedDescription => Description;
 
     /// <summary>
@@ -79,7 +81,8 @@ public class PipelineStep
     /// Adds a dependency on another step.
     /// </summary>
     /// <param name="stepName">The name of the step to depend on.</param>
-    [AspireExport(Description = "Adds a dependency on another step by name")]
+    /// <ats-summary>Adds a dependency on another step by name</ats-summary>
+    [AspireExport]
     public void DependsOn(string stepName)
     {
         DependsOnSteps.Add(stepName);
@@ -99,7 +102,8 @@ public class PipelineStep
     /// This creates the inverse relationship where the other step will depend on this step.
     /// </summary>
     /// <param name="stepName">The name of the step that requires this step.</param>
-    [AspireExport(Description = "Specifies that another step requires this step by name")]
+    /// <ats-summary>Specifies that another step requires this step by name</ats-summary>
+    [AspireExport]
     public void RequiredBy(string stepName)
     {
         RequiredBySteps.Add(stepName);
@@ -109,7 +113,8 @@ public class PipelineStep
     /// Adds a tag to the step.
     /// </summary>
     /// <param name="tag">The tag to add.</param>
-    [AspireExport(Description = "Adds a tag to the step")]
+    /// <ats-summary>Adds a tag to the step</ats-summary>
+    [AspireExport]
     internal void AddTag(string tag)
     {
         ArgumentNullException.ThrowIfNull(tag);

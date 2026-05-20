@@ -43,7 +43,9 @@ public static class AzureManagedRedisExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Adds an Azure Managed Redis resource")]
+    /// <ats-summary>Adds an Azure Managed Redis resource</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureManagedRedisResource> AddAzureManagedRedis(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name)
@@ -81,7 +83,9 @@ public static class AzureManagedRedisExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Configures Azure Managed Redis to run in a local container", RunSyncOnBackgroundThread = true)]
+    /// <ats-summary>Configures Azure Managed Redis to run in a local container</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> builder.</ats-returns>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureManagedRedisResource> RunAsContainer(
         this IResourceBuilder<AzureManagedRedisResource> builder,
         Action<IResourceBuilder<RedisResource>>? configureContainer = null)
@@ -151,7 +155,8 @@ public static class AzureManagedRedisExtensions
         return builder.WithAccessKeyAuthentication(kv);
     }
 
-    [AspireExport("withAccessKeyAuthentication", Description = "Configures Azure Managed Redis to use access key authentication")]
+    /// <ats-summary>Configures Azure Managed Redis to use access key authentication</ats-summary>
+    [AspireExport("withAccessKeyAuthentication")]
     internal static IResourceBuilder<AzureManagedRedisResource> WithAccessKeyAuthenticationForPolyglot(
         this IResourceBuilder<AzureManagedRedisResource> builder,
         IResourceBuilder<IAzureKeyVaultResource>? keyVaultBuilder = null)

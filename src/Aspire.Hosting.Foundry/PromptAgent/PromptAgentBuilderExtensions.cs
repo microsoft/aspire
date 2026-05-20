@@ -54,7 +54,10 @@ public static class PromptAgentBuilderExtensions
     ///     .WithTool(codeInterp);
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds a prompt agent to a Microsoft Foundry project.")]
+    /// <ats-summary>Adds a prompt agent to a Microsoft Foundry project.</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for the prompt agent resource.</ats-returns>
+    /// <ats-param name="project">The <ats-see cref="!:type:IResourceBuilder" /> for the parent Microsoft Foundry project resource.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<AzurePromptAgentResource> AddPromptAgent(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
         IResourceBuilder<FoundryDeploymentResource> model,
@@ -131,7 +134,9 @@ public static class PromptAgentBuilderExtensions
     /// <param name="agent">The prompt agent resource builder.</param>
     /// <param name="tool">The tool resource to attach to this agent.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport(Description = "Adds a tool to a prompt agent.")]
+    /// <ats-summary>Adds a tool to a prompt agent.</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzurePromptAgentResource> WithTool(
         this IResourceBuilder<AzurePromptAgentResource> agent,
         IResourceBuilder<FoundryToolResource> tool)
@@ -156,7 +161,10 @@ public static class PromptAgentBuilderExtensions
     /// <param name="project">The <see cref="IResourceBuilder{T}"/> for the Microsoft Foundry project.</param>
     /// <param name="name">The name of the tool resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the tool resource.</returns>
-    [AspireExport(Description = "Adds a Code Interpreter tool to a Microsoft Foundry project.")]
+    /// <ats-summary>Adds a Code Interpreter tool to a Microsoft Foundry project.</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for the tool resource.</ats-returns>
+    /// <ats-param name="project">The <ats-see cref="!:type:IResourceBuilder" /> for the Microsoft Foundry project.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<CodeInterpreterToolResource> AddCodeInterpreterTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
         string name)
@@ -177,7 +185,10 @@ public static class PromptAgentBuilderExtensions
     /// <param name="name">The name of the tool resource.</param>
     /// <param name="vectorStoreIds">Optional vector store IDs to search. If empty, the agent's default stores are used.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the tool resource.</returns>
-    [AspireExport(Description = "Adds a File Search tool to a Microsoft Foundry project.")]
+    /// <ats-summary>Adds a File Search tool to a Microsoft Foundry project.</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for the tool resource.</ats-returns>
+    /// <ats-param name="project">The <ats-see cref="!:type:IResourceBuilder" /> for the Microsoft Foundry project.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<FileSearchToolResource> AddFileSearchTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
         string name,
@@ -201,7 +212,10 @@ public static class PromptAgentBuilderExtensions
     /// <param name="project">The <see cref="IResourceBuilder{T}"/> for the Microsoft Foundry project.</param>
     /// <param name="name">The name of the tool resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the tool resource.</returns>
-    [AspireExport(Description = "Adds a Web Search tool to a Microsoft Foundry project.")]
+    /// <ats-summary>Adds a Web Search tool to a Microsoft Foundry project.</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for the tool resource.</ats-returns>
+    /// <ats-param name="project">The <ats-see cref="!:type:IResourceBuilder" /> for the Microsoft Foundry project.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<WebSearchToolResource> AddWebSearchTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
         string name)
@@ -221,7 +235,10 @@ public static class PromptAgentBuilderExtensions
     /// <param name="project">The <see cref="IResourceBuilder{T}"/> for the Microsoft Foundry project.</param>
     /// <param name="name">The name of the tool resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the tool resource.</returns>
-    [AspireExport(Description = "Adds an Image Generation tool to a Microsoft Foundry project.")]
+    /// <ats-summary>Adds an Image Generation tool to a Microsoft Foundry project.</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for the tool resource.</ats-returns>
+    /// <ats-param name="project">The <ats-see cref="!:type:IResourceBuilder" /> for the Microsoft Foundry project.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<ImageGenerationToolResource> AddImageGenerationTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
         string name)
@@ -244,7 +261,10 @@ public static class PromptAgentBuilderExtensions
     /// <param name="displayHeight">The height of the display in pixels.</param>
     /// <param name="environment">The environment identifier. Defaults to "browser".</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the tool resource.</returns>
-    [AspireExport(Description = "Adds a Computer Use tool to a Microsoft Foundry project.")]
+    /// <ats-summary>Adds a Computer Use tool to a Microsoft Foundry project.</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for the tool resource.</ats-returns>
+    /// <ats-param name="project">The <ats-see cref="!:type:IResourceBuilder" /> for the Microsoft Foundry project.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<ComputerToolResource> AddComputerUseTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
         string name,
@@ -276,7 +296,10 @@ public static class PromptAgentBuilderExtensions
     /// <param name="name">The name of the tool resource.</param>
     /// <param name="indexName">Optional name of the search index to query. If not specified, the agent must be told which index to use.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the tool resource.</returns>
-    [AspireExport(Description = "Adds an Azure AI Search tool to a Microsoft Foundry project.")]
+    /// <ats-summary>Adds an Azure AI Search tool to a Microsoft Foundry project.</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for the tool resource.</ats-returns>
+    /// <ats-param name="project">The <ats-see cref="!:type:IResourceBuilder" /> for the Microsoft Foundry project.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<AzureAISearchToolResource> AddAISearchTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
         string name,
@@ -300,7 +323,9 @@ public static class PromptAgentBuilderExtensions
     /// <param name="tool">The Azure AI Search tool resource builder.</param>
     /// <param name="search">The Azure AI Search resource to use for grounding.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport(Description = "Links an Azure AI Search tool to a backing search resource.")]
+    /// <ats-summary>Links an Azure AI Search tool to a backing search resource.</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureAISearchToolResource> WithReference(
         this IResourceBuilder<AzureAISearchToolResource> tool,
         IResourceBuilder<AzureSearchResource> search)
@@ -336,7 +361,10 @@ public static class PromptAgentBuilderExtensions
     /// <param name="project">The <see cref="IResourceBuilder{T}"/> for the Microsoft Foundry project.</param>
     /// <param name="name">The name of the tool resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the tool resource.</returns>
-    [AspireExport(Description = "Adds a Bing Grounding tool to a Microsoft Foundry project.")]
+    /// <ats-summary>Adds a Bing Grounding tool to a Microsoft Foundry project.</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for the tool resource.</ats-returns>
+    /// <ats-param name="project">The <ats-see cref="!:type:IResourceBuilder" /> for the Microsoft Foundry project.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<BingGroundingToolResource> AddBingGroundingTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
         string name)
@@ -402,7 +430,8 @@ public static class PromptAgentBuilderExtensions
         return WithReference(tool, (object)bingResourceId);
     }
 
-    [AspireExport("withBingReference", MethodName = "withReference", Description = "Links a Bing Grounding tool to a Bing Search resource or connection.")]
+    /// <ats-summary>Links a Bing Grounding tool to a Bing Search resource or connection.</ats-summary>
+    [AspireExport("withBingReference", MethodName = "withReference")]
     internal static IResourceBuilder<BingGroundingToolResource> WithReference(
         this IResourceBuilder<BingGroundingToolResource> tool,
         [AspireUnion(
@@ -461,7 +490,10 @@ public static class PromptAgentBuilderExtensions
     /// <param name="name">The name of the tool resource.</param>
     /// <param name="projectConnectionIds">The Foundry project connection IDs for the SharePoint sites.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the tool resource.</returns>
-    [AspireExport(Description = "Adds a SharePoint grounding tool to a Microsoft Foundry project.")]
+    /// <ats-summary>Adds a SharePoint grounding tool to a Microsoft Foundry project.</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for the tool resource.</ats-returns>
+    /// <ats-param name="project">The <ats-see cref="!:type:IResourceBuilder" /> for the Microsoft Foundry project.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<SharePointToolResource> AddSharePointTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
         string name,
@@ -483,7 +515,10 @@ public static class PromptAgentBuilderExtensions
     /// <param name="name">The name of the tool resource.</param>
     /// <param name="projectConnectionIds">The Foundry project connection IDs for the Fabric data agents.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the tool resource.</returns>
-    [AspireExport(Description = "Adds a Microsoft Fabric data agent tool to a Microsoft Foundry project.")]
+    /// <ats-summary>Adds a Microsoft Fabric data agent tool to a Microsoft Foundry project.</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for the tool resource.</ats-returns>
+    /// <ats-param name="project">The <ats-see cref="!:type:IResourceBuilder" /> for the Microsoft Foundry project.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<FabricToolResource> AddFabricTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
         string name,
@@ -551,7 +586,10 @@ public static class PromptAgentBuilderExtensions
     /// <param name="outputQueueEndpoint">The Azure Storage Queue endpoint for output binding.</param>
     /// <param name="outputQueueName">The queue name for output binding.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the tool resource.</returns>
-    [AspireExport(Description = "Adds an Azure Function tool to a Microsoft Foundry project.")]
+    /// <ats-summary>Adds an Azure Function tool to a Microsoft Foundry project.</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for the tool resource.</ats-returns>
+    /// <ats-param name="project">The <ats-see cref="!:type:IResourceBuilder" /> for the Microsoft Foundry project.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<AzureFunctionToolResource> AddAzureFunctionTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
         string name,
@@ -608,7 +646,10 @@ public static class PromptAgentBuilderExtensions
     /// <param name="description">A description of what the function does.</param>
     /// <param name="strictModeEnabled">Whether to enable strict mode for parameter validation.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the tool resource.</returns>
-    [AspireExport(Description = "Adds a function calling tool to a Microsoft Foundry project.")]
+    /// <ats-summary>Adds a function calling tool to a Microsoft Foundry project.</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for the tool resource.</ats-returns>
+    /// <ats-param name="project">The <ats-see cref="!:type:IResourceBuilder" /> for the Microsoft Foundry project.</ats-param>
+    [AspireExport]
     internal static IResourceBuilder<FunctionToolResource> AddFunctionTool(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> project,
         string name,

@@ -34,7 +34,11 @@ public static class QdrantBuilderExtensions
     /// <param name="grpcPort">The host port of gRPC endpoint of Qdrant database.</param>
     /// <param name="httpPort">The host port of HTTP endpoint of Qdrant database.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{QdrantServerResource}"/>.</returns>
-    [AspireExport(Description = "Adds a Qdrant resource to the application. A container is used for local development.")]
+    /// <ats-summary>Adds a Qdrant resource to the application. A container is used for local development.</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IDistributedApplicationBuilder" />.</ats-param>
+    /// <ats-param name="apiKey">The parameter used to provide the API Key for the Qdrant resource. If `null` a random key will be generated as {name}-Key.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<QdrantServerResource> AddQdrant(this IDistributedApplicationBuilder builder,
         string name,
         IResourceBuilder<ParameterResource>? apiKey = null,
@@ -105,7 +109,9 @@ public static class QdrantBuilderExtensions
     /// <param name="name">The name of the volume. Defaults to an auto-generated name based on the resource name.</param>
     /// <param name="isReadOnly">A flag that indicates if this is a read-only volume.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a named volume for the data folder to a Qdrant container resource.")]
+    /// <ats-summary>Adds a named volume for the data folder to a Qdrant container resource.</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<QdrantServerResource> WithDataVolume(this IResourceBuilder<QdrantServerResource> builder, string? name = null, bool isReadOnly = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -121,7 +127,9 @@ public static class QdrantBuilderExtensions
     /// <param name="source">The source directory on the host to mount into the container.</param>
     /// <param name="isReadOnly">A flag that indicates if this is a read-only mount.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a bind mount for the data folder to a Qdrant container resource.")]
+    /// <ats-summary>Adds a bind mount for the data folder to a Qdrant container resource.</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<QdrantServerResource> WithDataBindMount(this IResourceBuilder<QdrantServerResource> builder, string source, bool isReadOnly = false)
     {
         ArgumentNullException.ThrowIfNull(builder);

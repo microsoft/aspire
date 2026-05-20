@@ -3608,6 +3608,11 @@ public static class AtsCapabilityScanner
 
     private static bool TryParseAtsDocumentationReference(string value, out string kind, out string target)
     {
+        if (value.StartsWith("!:", StringComparison.Ordinal))
+        {
+            value = value[2..];
+        }
+
         var separatorIndex = value.IndexOf(':', StringComparison.Ordinal);
         if (separatorIndex < 1 || separatorIndex == value.Length - 1)
         {

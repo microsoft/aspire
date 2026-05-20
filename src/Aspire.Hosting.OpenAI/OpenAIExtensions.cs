@@ -19,7 +19,9 @@ public static class OpenAIExtensions
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
     /// <param name="name">The name of the OpenAI resource.</param>
     /// <returns>The OpenAI resource builder.</returns>
-    [AspireExport(Description = "Adds an OpenAI resource to the distributed application model.")]
+    /// <ats-summary>Adds an OpenAI resource to the distributed application model.</ats-summary>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IDistributedApplicationBuilder" />.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<OpenAIResource> AddOpenAI(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -100,7 +102,8 @@ public static class OpenAIExtensions
     /// <param name="name">The name of the model resource. This name is used as the connection string name.</param>
     /// <param name="model">The model identifier, e.g., "gpt-4o-mini".</param>
     /// <returns>The model resource builder.</returns>
-    [AspireExport(Description = "Adds an OpenAI model resource.")]
+    /// <ats-summary>Adds an OpenAI model resource.</ats-summary>
+    [AspireExport]
     public static IResourceBuilder<OpenAIModelResource> AddModel(this IResourceBuilder<OpenAIResource> builder, [ResourceName] string name, string model)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -141,7 +144,8 @@ public static class OpenAIExtensions
     /// </summary>
     /// <param name="builder">The OpenAI parent resource builder.</param>
     /// <param name="endpoint">The endpoint URI, e.g., https://mygateway.example.com/v1.</param>
-    [AspireExport(Description = "Configures the endpoint URI for the OpenAI resource.")]
+    /// <ats-summary>Configures the endpoint URI for the OpenAI resource.</ats-summary>
+    [AspireExport]
     public static IResourceBuilder<OpenAIResource> WithEndpoint(this IResourceBuilder<OpenAIResource> builder, string endpoint)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -154,7 +158,8 @@ public static class OpenAIExtensions
     /// <summary>
     /// Configures the API key for the OpenAI parent resource from a parameter.
     /// </summary>
-    [AspireExport(Description = "Configures the API key for the OpenAI resource.")]
+    /// <ats-summary>Configures the API key for the OpenAI resource.</ats-summary>
+    [AspireExport]
     public static IResourceBuilder<OpenAIResource> WithApiKey(this IResourceBuilder<OpenAIResource> builder, IResourceBuilder<ParameterResource> apiKey)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -197,7 +202,8 @@ public static class OpenAIExtensions
     /// the model is not working as expected. Furthermore, the health check will run a single time per application instance.
     /// </para>
     /// </remarks>
-    [AspireExport(Description = "Adds a health check for the OpenAI model resource.")]
+    /// <ats-summary>Adds a health check for the OpenAI model resource.</ats-summary>
+    [AspireExport]
     public static IResourceBuilder<OpenAIModelResource> WithHealthCheck(this IResourceBuilder<OpenAIModelResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);

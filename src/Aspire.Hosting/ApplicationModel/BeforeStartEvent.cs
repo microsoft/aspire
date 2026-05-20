@@ -26,6 +26,8 @@ namespace Aspire.Hosting.ApplicationModel;
 /// });
 /// </code>
 /// </example>
+/// <ats-param name="services">The <ats-see cref="!:type:IServiceProvider" /> instance.</ats-param>
+/// <ats-param name="model">The <ats-see cref="!:type:DistributedApplicationModel" /> instance.</ats-param>
 [AspireExport(ExposeProperties = true)]
 public class BeforeStartEvent(IServiceProvider services, DistributedApplicationModel model) : IDistributedApplicationEvent
 {

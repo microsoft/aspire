@@ -11,6 +11,8 @@ namespace Aspire.Hosting.Publishing;
 /// </summary>
 /// <param name="services">The <see cref="IServiceProvider"/> for the app host.</param>
 /// <param name="model">The <see cref="DistributedApplicationModel"/>.</param>
+/// <ats-param name="services">The <ats-see cref="!:type:IServiceProvider" /> for the app host.</ats-param>
+/// <ats-param name="model">The <ats-see cref="!:type:DistributedApplicationModel" />.</ats-param>
 [AspireExport(ExposeProperties = true)]
 public sealed class BeforePublishEvent(IServiceProvider services, DistributedApplicationModel model) : IDistributedApplicationEvent
 {

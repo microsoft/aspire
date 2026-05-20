@@ -104,7 +104,8 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// <summary>
     /// Adds CosmosDB to a project as a connection
     /// </summary>
-    [AspireExport("addCosmosConnection", Description = "Adds an Azure Cosmos DB connection to a Microsoft Foundry project.")]
+    /// <ats-summary>Adds an Azure Cosmos DB connection to a Microsoft Foundry project.</ats-summary>
+    [AspireExport("addCosmosConnection")]
     public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         IResourceBuilder<AzureCosmosDBResource> db)
@@ -143,7 +144,8 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// <summary>
     /// Adds an Azure Storage account to a project as a connection.
     /// </summary>
-    [AspireExport("addStorageConnection", Description = "Adds an Azure Storage connection to a Microsoft Foundry project.")]
+    /// <ats-summary>Adds an Azure Storage connection to a Microsoft Foundry project.</ats-summary>
+    [AspireExport("addStorageConnection")]
     public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         IResourceBuilder<AzureStorageResource> storage)
@@ -188,7 +190,8 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// Adds a container registry connection to the Microsoft Foundry project.
     /// </summary>
     /// <returns></returns>
-    [AspireExport("addContainerRegistryConnection", Description = "Adds an Azure Container Registry connection to a Microsoft Foundry project.")]
+    /// <ats-summary>Adds an Azure Container Registry connection to a Microsoft Foundry project.</ats-summary>
+    [AspireExport("addContainerRegistryConnection")]
     public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         IResourceBuilder<AzureContainerRegistryResource> registry)
@@ -227,7 +230,8 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// <summary>
     /// Adds an Azure AI Search connection to a Microsoft Foundry project.
     /// </summary>
-    [AspireExport("addSearchConnection", Description = "Adds an Azure AI Search connection to a Microsoft Foundry project.")]
+    /// <ats-summary>Adds an Azure AI Search connection to a Microsoft Foundry project.</ats-summary>
+    [AspireExport("addSearchConnection")]
     public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         IResourceBuilder<AzureSearchResource> search)
@@ -246,7 +250,8 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// As such, we recommend adding this connection *before* any others, so that those connections
     /// can leverage the Key Vault connection for secret storage.
     /// </remarks>
-    [AspireExport("addKeyVaultConnection", Description = "Adds an Azure Key Vault connection to a Microsoft Foundry project.")]
+    /// <ats-summary>Adds an Azure Key Vault connection to a Microsoft Foundry project.</ats-summary>
+    [AspireExport("addKeyVaultConnection")]
     public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         IResourceBuilder<AzureKeyVaultResource> keyVault)
@@ -278,7 +283,8 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
             });
     }
 
-    [AspireExport("addConnection", Description = "Adds a connection to a Microsoft Foundry project.")]
+    /// <ats-summary>Adds a connection to a Microsoft Foundry project.</ats-summary>
+    [AspireExport("addConnection")]
     internal static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnectionForPolyglot(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         [AspireUnion(
@@ -325,7 +331,10 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// (e.g., <c>/subscriptions/{subId}/resourceGroups/{rg}/providers/Microsoft.Bing/accounts/{name}</c>).
     /// </param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the connection resource.</returns>
-    [AspireExport(Description = "Adds a Grounding with Bing Search connection to a Microsoft Foundry project.")]
+    /// <ats-summary>Adds a Grounding with Bing Search connection to a Microsoft Foundry project.</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for the connection resource.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IResourceBuilder" /> for the parent Microsoft Foundry project resource.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<BingGroundingConnectionResource> AddBingGroundingConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         string name,
@@ -378,7 +387,10 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// A parameter resource containing the full Azure resource ID of the Bing Search resource.
     /// </param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the connection resource.</returns>
-    [AspireExport("addBingGroundingConnectionFromParameter", Description = "Adds a Grounding with Bing Search connection to a Microsoft Foundry project using a parameter.")]
+    /// <ats-summary>Adds a Grounding with Bing Search connection to a Microsoft Foundry project using a parameter.</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for the connection resource.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IResourceBuilder" /> for the parent Microsoft Foundry project resource.</ats-param>
+    [AspireExport("addBingGroundingConnectionFromParameter")]
     public static IResourceBuilder<BingGroundingConnectionResource> AddBingGroundingConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
         string name,

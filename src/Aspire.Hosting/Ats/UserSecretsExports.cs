@@ -19,7 +19,8 @@ internal static class UserSecretsExports
     /// </summary>
     /// <param name="serviceProvider">The service provider handle.</param>
     /// <returns>A user secrets manager handle.</returns>
-    [AspireExport(Description = "Gets the user secrets manager from the service provider")]
+    /// <ats-summary>Gets the user secrets manager from the service provider</ats-summary>
+    [AspireExport]
     public static IUserSecretsManager GetUserSecretsManager(this IServiceProvider serviceProvider)
     {
         ArgumentNullException.ThrowIfNull(serviceProvider);
@@ -34,7 +35,8 @@ internal static class UserSecretsExports
     /// <param name="json">The JSON object payload to persist.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>A task that completes when the state is saved.</returns>
-    [AspireExport(Description = "Saves state to user secrets from a JSON string")]
+    /// <ats-summary>Saves state to user secrets from a JSON string</ats-summary>
+    [AspireExport]
     public static Task SaveStateJson(this IUserSecretsManager userSecretsManager, string json, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(userSecretsManager);
@@ -53,7 +55,8 @@ internal static class UserSecretsExports
     /// <param name="resourceBuilder">A resource builder from the target application.</param>
     /// <param name="name">The secret name.</param>
     /// <param name="value">The value to persist when the secret is missing.</param>
-    [AspireExport(Description = "Gets a secret value if it exists, or sets it to the provided value if it does not")]
+    /// <ats-summary>Gets a secret value if it exists, or sets it to the provided value if it does not</ats-summary>
+    [AspireExport]
     public static void GetOrSetSecret<T>(this IUserSecretsManager userSecretsManager, IResourceBuilder<T> resourceBuilder, string name, string value)
         where T : IResource
     {

@@ -116,7 +116,10 @@ public static class AzureFunctionsProjectResourceExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Adds an Azure Functions project to the distributed application")]
+    /// <ats-summary>Adds an Azure Functions project to the distributed application</ats-summary>
+    /// <ats-returns>An <ats-see cref="!:type:IResourceBuilder" /> for the added Azure Functions project resource.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IDistributedApplicationBuilder" /> to which the Azure Functions project will be added.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<AzureFunctionsProjectResource> AddAzureFunctionsProject(this IDistributedApplicationBuilder builder, [ResourceName] string name, string projectPath)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -316,7 +319,8 @@ public static class AzureFunctionsProjectResourceExtensions
     /// <param name="builder">The resource builder for the Azure Functions project resource.</param>
     /// <param name="storage">The resource builder for the Azure Storage resource to be used as host storage.</param>
     /// <returns>The resource builder for the Azure Functions project resource, configured with the specified host storage.</returns>
-    [AspireExport(Description = "Configures the Azure Functions project to use specified Azure Storage as host storage")]
+    /// <ats-summary>Configures the Azure Functions project to use specified Azure Storage as host storage</ats-summary>
+    [AspireExport]
     public static IResourceBuilder<AzureFunctionsProjectResource> WithHostStorage(this IResourceBuilder<AzureFunctionsProjectResource> builder, IResourceBuilder<AzureStorageResource> storage)
     {
         ArgumentNullException.ThrowIfNull(builder);

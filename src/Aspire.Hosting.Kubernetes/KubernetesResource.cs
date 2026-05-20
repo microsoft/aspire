@@ -86,7 +86,8 @@ public partial class KubernetesResource(string name, IResource resource, Kuberne
     /// <param name="name">The Kubernetes metadata name for the manifest.</param>
     /// <param name="configure">A callback that configures the manifest fields.</param>
     /// <returns>The added Kubernetes manifest resource.</returns>
-    [AspireExport(Description = "Adds an arbitrary Kubernetes manifest to this service's generated Helm chart", RunSyncOnBackgroundThread = true)]
+    /// <ats-summary>Adds an arbitrary Kubernetes manifest to this service's generated Helm chart</ats-summary>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     internal KubernetesManifestResource AddManifest(string apiVersion, string kind, string name, Action<KubernetesManifestResource>? configure = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(apiVersion);

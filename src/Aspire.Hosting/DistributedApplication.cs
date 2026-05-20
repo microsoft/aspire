@@ -52,6 +52,7 @@ namespace Aspire.Hosting;
 /// </code>
 /// </example>
 /// </remarks>
+/// <ats-summary>Represents a distributed application that implements the <ats-see cref="!:type:IHost" /> and <ats-see cref="!:type:IAsyncDisposable" /> interfaces.</ats-summary>
 [DebuggerDisplay("{_host}")]
 [DebuggerTypeProxy(typeof(DistributedApplicationDebuggerProxy))]
 [AspireExport]
@@ -250,7 +251,8 @@ public class DistributedApplication : IHost, IAsyncDisposable
         return new DistributedApplicationBuilder(realOptions);
     }
 
-    [AspireExport("createBuilder", Description = "Creates a new distributed application builder")]
+    /// <ats-summary>Creates a new distributed application builder</ats-summary>
+    [AspireExport("createBuilder")]
     internal static IDistributedApplicationBuilder CreateBuilderForPolyglot(
         [AspireUnion(typeof(string[]), typeof(CreateBuilderOptions))] object? argsOrOptions = null)
     {
@@ -510,7 +512,9 @@ public class DistributedApplication : IHost, IAsyncDisposable
     /// in refer to <see cref="DistributedApplicationExecutionContext" />.
     /// </para>
     /// </remarks>
-    [AspireExport("run", Description = "Runs the distributed application")]
+    /// <ats-summary>Runs the distributed application</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:Promise" /> that represents the asynchronous operation.</ats-returns>
+    [AspireExport("run")]
     public virtual async Task RunAsync(CancellationToken cancellationToken = default)
     {
         ProfilingTelemetry.EnsureInitialized(_host.Services);

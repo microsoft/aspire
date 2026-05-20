@@ -108,7 +108,8 @@ public static class ProjectResourceBuilderExtensions
         return builder.AddProject(name, projectPath, _ => { });
     }
 
-    [AspireExport("addProject", Description = "Adds a .NET project resource")]
+    /// <ats-summary>Adds a .NET project resource</ats-summary>
+    [AspireExport("addProject")]
     internal static IResourceBuilder<ProjectResource> AddProjectForPolyglot(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -357,8 +358,9 @@ public static class ProjectResourceBuilderExtensions
         return builder.AddCSharpApp(name, path, _ => { });
     }
 
+    /// <ats-summary>Adds a C# application resource</ats-summary>
     [Experimental("ASPIRECSHARPAPPS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExport("addCSharpApp", Description = "Adds a C# application resource")]
+    [AspireExport("addCSharpApp")]
     internal static IResourceBuilder<CSharpAppResource> AddCSharpAppForPolyglot(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -790,7 +792,9 @@ public static class ProjectResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Sets the number of replicas")]
+    /// <ats-summary>Sets the number of replicas</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<ProjectResource> WithReplicas(this IResourceBuilder<ProjectResource> builder, int replicas)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -825,7 +829,9 @@ public static class ProjectResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Disables forwarded headers for the project")]
+    /// <ats-summary>Disables forwarded headers for the project</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<ProjectResource> DisableForwardedHeaders(this IResourceBuilder<ProjectResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -868,7 +874,9 @@ public static class ProjectResourceBuilderExtensions
     /// <param name="builder">Resource builder</param>
     /// <param name="configure">Optional action to configure the container resource</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("publishProjectAsDockerFileWithConfigure", MethodName = "publishAsDockerFile", Description = "Publishes a project as a Docker file with optional container configuration", RunSyncOnBackgroundThread = true)]
+    /// <ats-summary>Publishes a project as a Docker file with optional container configuration</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport("publishProjectAsDockerFileWithConfigure", MethodName = "publishAsDockerFile", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<T> PublishAsDockerFile<T>(this IResourceBuilder<T> builder, Action<IResourceBuilder<ContainerResource>>? configure = null)
         where T : ProjectResource
     {

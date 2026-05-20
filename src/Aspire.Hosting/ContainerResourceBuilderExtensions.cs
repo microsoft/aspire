@@ -125,7 +125,10 @@ public static class ContainerResourceBuilderExtensions
     /// <param name="name">The name of the resource.</param>
     /// <param name="image">The image name or image options for the container.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport("addContainer", Description = "Adds a container resource")]
+    /// <ats-summary>Adds a container resource</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IDistributedApplicationBuilder" />.</ats-param>
+    [AspireExport("addContainer")]
     internal static IResourceBuilder<ContainerResource> AddContainerForPolyglot(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -292,7 +295,9 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Adds a bind mount")]
+    /// <ats-summary>Adds a bind mount</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithBindMount<T>(this IResourceBuilder<T> builder, string source, string target, bool isReadOnly = false) where T : ContainerResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -312,7 +317,9 @@ public static class ContainerResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="entrypoint">The new entrypoint for the container.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Sets the container entrypoint")]
+    /// <ats-summary>Sets the container entrypoint</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithEntrypoint<T>(this IResourceBuilder<T> builder, string entrypoint) where T : ContainerResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -329,7 +336,9 @@ public static class ContainerResourceBuilderExtensions
     /// <param name="builder">Builder for the container resource.</param>
     /// <param name="tag">Tag value.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Sets the container image tag")]
+    /// <ats-summary>Sets the container image tag</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithImageTag<T>(this IResourceBuilder<T> builder, string tag) where T : ContainerResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -360,7 +369,9 @@ public static class ContainerResourceBuilderExtensions
     /// <param name="builder">Builder for the container resource.</param>
     /// <param name="registry">Registry value.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Sets the container image registry")]
+    /// <ats-summary>Sets the container image registry</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithImageRegistry<T>(this IResourceBuilder<T> builder, string? registry) where T : ContainerResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -382,7 +393,9 @@ public static class ContainerResourceBuilderExtensions
     /// <param name="image">Image value.</param>
     /// <param name="tag">Tag value.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Sets the container image")]
+    /// <ats-summary>Sets the container image</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithImage<T>(this IResourceBuilder<T> builder, string image, string? tag = null) where T : ContainerResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -449,7 +462,9 @@ public static class ContainerResourceBuilderExtensions
     /// <param name="builder">Builder for the container resource.</param>
     /// <param name="sha256">Registry value.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Sets the image SHA256 digest")]
+    /// <ats-summary>Sets the image SHA256 digest</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithImageSHA256<T>(this IResourceBuilder<T> builder, string sha256) where T : ContainerResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -474,7 +489,9 @@ public static class ContainerResourceBuilderExtensions
     /// <param name="builder">Builder for the container resource.</param>
     /// <param name="args">The arguments to be passed to the container runtime run command when the container resource is started.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds runtime arguments for the container")]
+    /// <ats-summary>Adds runtime arguments for the container</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithContainerRuntimeArgs<T>(this IResourceBuilder<T> builder, params string[] args) where T : ContainerResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -547,7 +564,10 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Sets the lifetime behavior of the container resource")]
+    /// <ats-summary>Sets the lifetime behavior of the container resource</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    /// <ats-param name="lifetime">The lifetime behavior of the container resource. The defaults behavior is <ats-see cref="!:type:ContainerLifetime.Session" />.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<T> WithLifetime<T>(this IResourceBuilder<T> builder, ContainerLifetime lifetime) where T : ContainerResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -562,7 +582,9 @@ public static class ContainerResourceBuilderExtensions
     /// <param name="builder">Builder for the container resource.</param>
     /// <param name="pullPolicy">The pull policy behavior for the container resource.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Sets the container image pull policy")]
+    /// <ats-summary>Sets the container image pull policy</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithImagePullPolicy<T>(this IResourceBuilder<T> builder, ImagePullPolicy pullPolicy) where T : ContainerResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -579,7 +601,9 @@ public static class ContainerResourceBuilderExtensions
     /// </summary>
     /// <param name="builder">Resource builder.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Configures the resource to be published as a container")]
+    /// <ats-summary>Configures the resource to be published as a container</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> PublishAsContainer<T>(this IResourceBuilder<T> builder) where T : ContainerResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -624,7 +648,11 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Configures the resource to use a Dockerfile")]
+    /// <ats-summary>Configures the resource to use a Dockerfile</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IResourceBuilder" />.</ats-param>
+    /// <ats-param name="dockerfilePath">Path to the Dockerfile relative to the `contextPath`. Defaults to "Dockerfile" if not specified.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<T> WithDockerfile<T>(this IResourceBuilder<T> builder, string contextPath, string? dockerfilePath = null, string? stage = null) where T : ContainerResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -858,7 +886,11 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Adds a container resource built from a Dockerfile")]
+    /// <ats-summary>Adds a container resource built from a Dockerfile</ats-summary>
+    /// <ats-returns>A <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IDistributedApplicationBuilder" />.</ats-param>
+    /// <ats-param name="dockerfilePath">Path to the Dockerfile relative to the `contextPath`. Defaults to "Dockerfile" if not specified.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<ContainerResource> AddDockerfile(this IDistributedApplicationBuilder builder, [ResourceName] string name, string contextPath, string? dockerfilePath = null, string? stage = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -966,7 +998,11 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Adds a container resource built from a programmatically generated Dockerfile")]
+    /// <ats-summary>Adds a container resource built from a programmatically generated Dockerfile</ats-summary>
+    /// <ats-returns>A <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IDistributedApplicationBuilder" />.</ats-param>
+    /// <ats-param name="callback">A callback that uses the <ats-see cref="!:type:ApplicationModel.Docker.DockerfileBuilder" /> API to construct the Dockerfile.</ats-param>
+    [AspireExport]
     [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<ContainerResource> AddDockerfileBuilder(this IDistributedApplicationBuilder builder, [ResourceName] string name, string contextPath, Func<DockerfileBuilderCallbackContext, Task> callback, string? stage = null)
     {
@@ -1040,7 +1076,9 @@ public static class ContainerResourceBuilderExtensions
     /// <param name="builder">The resource builder for the container resource.</param>
     /// <param name="name">The desired container name. Must be a valid container name or your runtime will report an error.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Sets the container name")]
+    /// <ats-summary>Sets the container name</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithContainerName<T>(this IResourceBuilder<T> builder, string name) where T : ContainerResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -1155,7 +1193,9 @@ public static class ContainerResourceBuilderExtensions
     /// <param name="name">The name of the build argument.</param>
     /// <param name="value">The build argument value, either a string or a parameter resource.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("withBuildArg", Description = "Adds a build argument from a string value or parameter resource")]
+    /// <ats-summary>Adds a build argument from a string value or parameter resource</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport("withBuildArg")]
     internal static IResourceBuilder<T> WithBuildArgExport<T>(
         this IResourceBuilder<T> builder,
         string name,
@@ -1208,7 +1248,9 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport("withParameterBuildSecret", MethodName = "withBuildSecret", Description = "Adds a build secret from a parameter resource")]
+    /// <ats-summary>Adds a build secret from a parameter resource</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport("withParameterBuildSecret", MethodName = "withBuildSecret")]
     public static IResourceBuilder<T> WithBuildSecret<T>(this IResourceBuilder<T> builder, string name, IResourceBuilder<ParameterResource> value) where T : ContainerResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -1261,7 +1303,8 @@ public static class ContainerResourceBuilderExtensions
     /// <param name="defaultCertificateBundlePaths">Default certificate bundle paths in the container that will be replaced.</param>
     /// <param name="defaultCertificateDirectoryPaths">Default certificate directory paths in the container that may be appended.</param>
     /// <returns>The updated resource builder.</returns>
-    [AspireExport("withContainerCertificatePaths", Description = "Overrides container certificate bundle and directory paths used for trust configuration")]
+    /// <ats-summary>Overrides container certificate bundle and directory paths used for trust configuration</ats-summary>
+    [AspireExport("withContainerCertificatePaths")]
     internal static IResourceBuilder<TResource> WithContainerCertificatePathsExport<TResource>(
         this IResourceBuilder<TResource> builder,
         string? customCertificatesDestination = null,
@@ -1476,7 +1519,9 @@ public static class ContainerResourceBuilderExtensions
     /// The user needs to be careful to ensure that container endpoints are using unique ports when disabling proxy support as by default for proxy-less
     /// endpoints, Aspire will allocate the internal container port as the host port, which will increase the chance of port conflicts.
     /// </remarks>
-    [AspireExport(Description = "Configures endpoint proxy support")]
+    /// <ats-summary>Configures endpoint proxy support</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithEndpointProxySupport<T>(this IResourceBuilder<T> builder, bool proxyEnabled) where T : ContainerResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -1524,7 +1569,11 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Configures the resource to use a programmatically generated Dockerfile")]
+    /// <ats-summary>Configures the resource to use a programmatically generated Dockerfile</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IResourceBuilder" />.</ats-param>
+    /// <ats-param name="callback">A callback that uses the <ats-see cref="!:type:ApplicationModel.Docker.DockerfileBuilder" /> API to construct the Dockerfile.</ats-param>
+    [AspireExport]
     [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<T> WithDockerfileBuilder<T>(this IResourceBuilder<T> builder, string contextPath, Func<DockerfileBuilderCallbackContext, Task> callback, string? stage = null) where T : ContainerResource
     {
@@ -1669,7 +1718,9 @@ public static class ContainerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Sets the base image for a Dockerfile build")]
+    /// <ats-summary>Sets the base image for a Dockerfile build</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     [Experimental("ASPIREDOCKERFILEBUILDER001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<T> WithDockerfileBaseImage<T>(this IResourceBuilder<T> builder, string? buildImage = null, string? runtimeImage = null) where T : IResource
     {
@@ -1704,7 +1755,9 @@ public static class ContainerResourceBuilderExtensions
     /// Multiple aliases can be added by calling this method multiple times.
     /// </para>
     /// </remarks>
-    [AspireExport(Description = "Adds a network alias for the container")]
+    /// <ats-summary>Adds a network alias for the container</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithContainerNetworkAlias<T>(this IResourceBuilder<T> builder, string alias) where T : ContainerResource
     {
         return builder.WithAnnotation(new ContainerNetworkAliasAnnotation(alias) { Network = KnownNetworkIdentifiers.DefaultAspireContainerNetwork });

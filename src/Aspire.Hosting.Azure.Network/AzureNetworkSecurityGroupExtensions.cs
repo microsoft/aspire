@@ -34,7 +34,9 @@ public static class AzureNetworkSecurityGroupExtensions
     ///     });
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds an Azure Network Security Group resource to the application model.")]
+    /// <ats-summary>Adds an Azure Network Security Group resource to the application model.</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureNetworkSecurityGroupResource> AddNetworkSecurityGroup(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name)
@@ -84,7 +86,9 @@ public static class AzureNetworkSecurityGroupExtensions
     ///     });
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds a security rule to an Azure Network Security Group resource.")]
+    /// <ats-summary>Adds a security rule to an Azure Network Security Group resource.</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureNetworkSecurityGroupResource> WithSecurityRule(
         this IResourceBuilder<AzureNetworkSecurityGroupResource> builder,
         AzureSecurityRule rule)

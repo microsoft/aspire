@@ -137,7 +137,9 @@ public static class AzurePostgresExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Adds an Azure PostgreSQL Flexible Server resource")]
+    /// <ats-summary>Adds an Azure PostgreSQL Flexible Server resource</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzurePostgresFlexibleServerResource> AddAzurePostgresFlexibleServer(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -158,7 +160,10 @@ public static class AzurePostgresExtensions
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <param name="databaseName">The name of the database. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds an Azure PostgreSQL database")]
+    /// <ats-summary>Adds an Azure PostgreSQL database</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    /// <ats-param name="databaseName">The name of the database. If not provided, this defaults to the same value as `name`.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<AzurePostgresFlexibleServerDatabaseResource> AddDatabase(this IResourceBuilder<AzurePostgresFlexibleServerResource> builder, [ResourceName] string name, string? databaseName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -211,7 +216,9 @@ public static class AzurePostgresExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Configures the Azure PostgreSQL Flexible Server resource to run locally in a container", RunSyncOnBackgroundThread = true)]
+    /// <ats-summary>Configures the Azure PostgreSQL Flexible Server resource to run locally in a container</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> builder.</ats-returns>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzurePostgresFlexibleServerResource> RunAsContainer(this IResourceBuilder<AzurePostgresFlexibleServerResource> builder, Action<IResourceBuilder<PostgresServerResource>>? configureContainer = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -319,7 +326,8 @@ public static class AzurePostgresExtensions
         return builder.WithPasswordAuthentication(kv, userName, password);
     }
 
-    [AspireExport("withPasswordAuthentication", Description = "Configures password authentication for Azure PostgreSQL Flexible Server")]
+    /// <ats-summary>Configures password authentication for Azure PostgreSQL Flexible Server</ats-summary>
+    [AspireExport("withPasswordAuthentication")]
     internal static IResourceBuilder<AzurePostgresFlexibleServerResource> WithPasswordAuthenticationForPolyglot(
         this IResourceBuilder<AzurePostgresFlexibleServerResource> builder,
         IResourceBuilder<IAzureKeyVaultResource>? keyVaultBuilder = null,
@@ -399,7 +407,9 @@ public static class AzurePostgresExtensions
     /// </para>
     /// </remarks>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a Postgres MCP server container", RunSyncOnBackgroundThread = true)]
+    /// <ats-summary>Adds a Postgres MCP server container</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     [Experimental("ASPIREPOSTGRES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzurePostgresFlexibleServerDatabaseResource> WithPostgresMcp(
         this IResourceBuilder<AzurePostgresFlexibleServerDatabaseResource> builder,

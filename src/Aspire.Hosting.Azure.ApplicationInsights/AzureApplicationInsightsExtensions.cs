@@ -20,7 +20,10 @@ public static class AzureApplicationInsightsExtensions
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureApplicationInsightsResource}"/>.</returns>
-    [AspireExport(Description = "Adds an Azure Application Insights resource")]
+    /// <ats-summary>Adds an Azure Application Insights resource</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IDistributedApplicationBuilder" />.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<AzureApplicationInsightsResource> AddAzureApplicationInsights(this IDistributedApplicationBuilder builder, [ResourceName] string name)
         => AddAzureApplicationInsights(builder, name, logAnalyticsWorkspace: null);
 
@@ -145,7 +148,11 @@ public static class AzureApplicationInsightsExtensions
     /// <param name="builder">The resource builder for <see cref="AzureApplicationInsightsResource"/>.</param>
     /// <param name="logAnalyticsWorkspace">The resource builder for the <see cref="AzureLogAnalyticsWorkspaceResource"/>.</param>
     /// <returns>The <see cref="IResourceBuilder{AzureApplicationInsightsResource}"/> for chaining.</returns>
-    [AspireExport(Description = "Configures the Application Insights resource to use a Log Analytics Workspace")]
+    /// <ats-summary>Configures the Application Insights resource to use a Log Analytics Workspace</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
+    /// <ats-param name="builder">The resource builder for <ats-see cref="!:type:AzureApplicationInsightsResource" />.</ats-param>
+    /// <ats-param name="logAnalyticsWorkspace">The resource builder for the <ats-see cref="!:type:AzureLogAnalyticsWorkspaceResource" />.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<AzureApplicationInsightsResource> WithLogAnalyticsWorkspace(
         this IResourceBuilder<AzureApplicationInsightsResource> builder,
         IResourceBuilder<AzureLogAnalyticsWorkspaceResource> logAnalyticsWorkspace)

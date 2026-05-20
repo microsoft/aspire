@@ -127,7 +127,8 @@ public static class AzureSignalRExtensions
             .WithDefaultRoleAssignments(SignalRBuiltInRole.GetBuiltInRoleName, defaultRoles.ToArray());
     }
 
-    [AspireExport("addAzureSignalR", Description = "Adds an Azure SignalR resource to the application model.")]
+    /// <ats-summary>Adds an Azure SignalR resource to the application model.</ats-summary>
+    [AspireExport("addAzureSignalR")]
     internal static IResourceBuilder<AzureSignalRResource> AddAzureSignalRForPolyglot(this IDistributedApplicationBuilder builder, [ResourceName] string name)
         => AddAzureSignalR(builder, name);
 
@@ -140,7 +141,9 @@ public static class AzureSignalRExtensions
     /// <param name="builder">The Azure SignalR resource builder.</param>
     /// <param name="configureContainer">Callback that exposes underlying container used for emulation to allow for customization.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Configures an Azure SignalR resource to be emulated. This resource requires an Azure SignalR resource to be added to the application model. Please note that the resource will be emulated in Serverless mode.", RunSyncOnBackgroundThread = true)]
+    /// <ats-summary>Configures an Azure SignalR resource to be emulated. This resource requires an Azure SignalR resource to be added to the application model. Please note that the resource will be emulated in Serverless mode.</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureSignalRResource> RunAsEmulator(this IResourceBuilder<AzureSignalRResource> builder, Action<IResourceBuilder<AzureSignalREmulatorResource>>? configureContainer = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -211,7 +214,10 @@ public static class AzureSignalRExtensions
     /// <param name="roles">The Azure SignalR roles to be assigned (for example, <see cref="AzureSignalRRole.SignalRContributor"/>).</param>
     /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
     /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="AzureSignalRRole"/> value.</exception>
-    [AspireExport("withSignalRRoleAssignments", Description = "Assigns Azure SignalR roles to a resource")]
+    /// <ats-summary>Assigns Azure SignalR roles to a resource</ats-summary>
+    /// <ats-returns>The updated <ats-see cref="!:type:IResourceBuilder" /> with the applied role assignments.</ats-returns>
+    /// <ats-param name="roles">The Azure SignalR roles to be assigned (for example, <ats-see cref="!:type:AzureSignalRRole.SignalRContributor" />).</ats-param>
+    [AspireExport("withSignalRRoleAssignments")]
     internal static IResourceBuilder<T> WithRoleAssignments<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<AzureSignalRResource> target,

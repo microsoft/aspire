@@ -107,7 +107,11 @@ public static class ValkeyBuilderExtensions
     /// </example>
     /// </remarks>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a Valkey container resource")]
+    /// <ats-summary>Adds a Valkey container resource</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IDistributedApplicationBuilder" />.</ats-param>
+    /// <ats-param name="password">The parameter used to provide the password for the Valkey resource. If `null` a random password will be generated.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<ValkeyResource> AddValkey(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -203,7 +207,9 @@ public static class ValkeyBuilderExtensions
     /// </example>
     /// </remarks>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a data volume for Valkey and enables persistence")]
+    /// <ats-summary>Adds a data volume for Valkey and enables persistence</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<ValkeyResource> WithDataVolume(
         this IResourceBuilder<ValkeyResource> builder,
         string? name = null,
@@ -241,7 +247,9 @@ public static class ValkeyBuilderExtensions
     /// </example>
     /// </remarks>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a data bind mount for Valkey and enables persistence")]
+    /// <ats-summary>Adds a data bind mount for Valkey and enables persistence</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<ValkeyResource> WithDataBindMount(
         this IResourceBuilder<ValkeyResource> builder,
         string source,
@@ -277,7 +285,9 @@ public static class ValkeyBuilderExtensions
     /// </example>
     /// </remarks>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Configures Valkey persistence")]
+    /// <ats-summary>Configures Valkey persistence</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<ValkeyResource> WithPersistence(
         this IResourceBuilder<ValkeyResource> builder,
         TimeSpan? interval = null,

@@ -18,7 +18,9 @@ public static class AzureResourceExtensions
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <returns>The configured <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Publishes an Azure resource to the manifest as a connection string")]
+    /// <ats-summary>Publishes an Azure resource to the manifest as a connection string</ats-summary>
+    /// <ats-returns>The configured <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> PublishAsConnectionString<T>(this IResourceBuilder<T> builder)
         where T : IAzureResource, IResourceWithConnectionString
     {
@@ -31,7 +33,8 @@ public static class AzureResourceExtensions
     /// </summary>
     /// <param name="resource">The Azure resource.</param>
     /// <returns>A valid Bicep identifier.</returns>
-    [AspireExport(Description = "Gets the normalized Bicep identifier for an Azure resource")]
+    /// <ats-summary>Gets the normalized Bicep identifier for an Azure resource</ats-summary>
+    [AspireExport]
     public static string GetBicepIdentifier(this IAzureResource resource) =>
         Infrastructure.NormalizeBicepIdentifier(resource.Name);
 
@@ -59,7 +62,9 @@ public static class AzureResourceExtensions
     ///     .WithReference(keyVault);
     /// </code>
     /// </example>
-    [AspireExport(Description = "Clears the default Azure role assignments from a resource")]
+    /// <ats-summary>Clears the default Azure role assignments from a resource</ats-summary>
+    /// <ats-returns>The configured <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> ClearDefaultRoleAssignments<T>(this IResourceBuilder<T> builder)
         where T : IAzureResource
     {

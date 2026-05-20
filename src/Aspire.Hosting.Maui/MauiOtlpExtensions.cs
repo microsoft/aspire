@@ -49,7 +49,8 @@ public static class MauiOtlpExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
-    [AspireExport(Description = "Configures a .NET MAUI platform resource to send OpenTelemetry data through a development tunnel.")]
+    /// <ats-summary>Configures a .NET MAUI platform resource to send OpenTelemetry data through a development tunnel.</ats-summary>
+    [AspireExport]
     public static IResourceBuilder<T> WithOtlpDevTunnel<T>(
         this IResourceBuilder<T> builder)
         where T : IMauiPlatformResource, IResourceWithEnvironment

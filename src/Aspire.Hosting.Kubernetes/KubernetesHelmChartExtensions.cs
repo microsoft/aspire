@@ -55,7 +55,8 @@ public static partial class KubernetesHelmChartExtensions
     ///     .WithHelmValue("crds.enabled", "true");
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds an external Helm chart to a Kubernetes environment")]
+    /// <ats-summary>Adds an external Helm chart to a Kubernetes environment</ats-summary>
+    [AspireExport]
     public static IResourceBuilder<KubernetesHelmChartResource> AddHelmChart(
         this IResourceBuilder<KubernetesEnvironmentResource> builder,
         [ResourceName] string name,
@@ -131,7 +132,8 @@ public static partial class KubernetesHelmChartExtensions
     /// <param name="key">The value key using dot notation (e.g., <c>config.enableGatewayAPI</c>).</param>
     /// <param name="value">The value to set.</param>
     /// <returns>The resource builder for chaining.</returns>
-    [AspireExport(Description = "Sets a Helm value for chart installation")]
+    /// <ats-summary>Sets a Helm value for chart installation</ats-summary>
+    [AspireExport]
     public static IResourceBuilder<KubernetesHelmChartResource> WithHelmValue(
         this IResourceBuilder<KubernetesHelmChartResource> builder,
         string key,
@@ -155,7 +157,8 @@ public static partial class KubernetesHelmChartExtensions
     /// <param name="builder">The Helm chart resource builder.</param>
     /// <param name="namespace">The namespace to install the chart into.</param>
     /// <returns>The resource builder for chaining.</returns>
-    [AspireExport("withHelmChartNamespace", Description = "Sets the namespace for Helm chart installation")]
+    /// <ats-summary>Sets the namespace for Helm chart installation</ats-summary>
+    [AspireExport("withHelmChartNamespace")]
     public static IResourceBuilder<KubernetesHelmChartResource> WithNamespace(
         this IResourceBuilder<KubernetesHelmChartResource> builder,
         string @namespace)
@@ -176,7 +179,8 @@ public static partial class KubernetesHelmChartExtensions
     /// <param name="builder">The Helm chart resource builder.</param>
     /// <param name="releaseName">The Helm release name.</param>
     /// <returns>The resource builder for chaining.</returns>
-    [AspireExport("withHelmChartReleaseName", Description = "Sets the release name for Helm chart installation")]
+    /// <ats-summary>Sets the release name for Helm chart installation</ats-summary>
+    [AspireExport("withHelmChartReleaseName")]
     public static IResourceBuilder<KubernetesHelmChartResource> WithReleaseName(
         this IResourceBuilder<KubernetesHelmChartResource> builder,
         string releaseName)
@@ -210,7 +214,8 @@ public static partial class KubernetesHelmChartExtensions
     ///     .WithDestroy();
     /// </code>
     /// </example>
-    [AspireExport("withHelmChartDestroy", Description = "Uninstalls the Helm chart on aspire destroy")]
+    /// <ats-summary>Uninstalls the Helm chart on aspire destroy</ats-summary>
+    [AspireExport("withHelmChartDestroy")]
     public static IResourceBuilder<KubernetesHelmChartResource> WithDestroy(
         this IResourceBuilder<KubernetesHelmChartResource> builder)
     {
@@ -266,7 +271,8 @@ public static partial class KubernetesHelmChartExtensions
     ///     .WithForceConflicts();
     /// </code>
     /// </example>
-    [AspireExport("withHelmChartForceConflicts", Description = "Passes --force-conflicts to helm upgrade --install for this chart")]
+    /// <ats-summary>Passes --force-conflicts to helm upgrade --install for this chart</ats-summary>
+    [AspireExport("withHelmChartForceConflicts")]
     public static IResourceBuilder<KubernetesHelmChartResource> WithForceConflicts(
         this IResourceBuilder<KubernetesHelmChartResource> builder)
     {

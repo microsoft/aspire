@@ -33,7 +33,8 @@ internal static class CollectionExports
     /// <param name="dict">The dictionary handle.</param>
     /// <param name="key">The key to look up.</param>
     /// <returns>The value, or null if not found.</returns>
-    [AspireExport("Dict.get", Description = "Gets a value from a dictionary")]
+    /// <ats-summary>Gets a value from a dictionary</ats-summary>
+    [AspireExport("Dict.get")]
     public static object? DictGet(this IDictionary dict, object key)
     {
         var normalizedKey = NormalizeDictionaryKey(dict, key);
@@ -46,7 +47,8 @@ internal static class CollectionExports
     /// <param name="dict">The dictionary handle.</param>
     /// <param name="key">The key to set.</param>
     /// <param name="value">The value to set.</param>
-    [AspireExport("Dict.set", Description = "Sets a value in a dictionary")]
+    /// <ats-summary>Sets a value in a dictionary</ats-summary>
+    [AspireExport("Dict.set")]
     public static void DictSet(this IDictionary dict, object key, object value)
         => dict[NormalizeDictionaryKey(dict, key)] = value;
 
@@ -56,7 +58,8 @@ internal static class CollectionExports
     /// <param name="dict">The dictionary handle.</param>
     /// <param name="key">The key to remove.</param>
     /// <returns>True if the key was removed, false if not found.</returns>
-    [AspireExport("Dict.remove", Description = "Removes a key from a dictionary")]
+    /// <ats-summary>Removes a key from a dictionary</ats-summary>
+    [AspireExport("Dict.remove")]
     public static bool DictRemove(this IDictionary dict, object key)
     {
         var normalizedKey = NormalizeDictionaryKey(dict, key);
@@ -74,7 +77,8 @@ internal static class CollectionExports
     /// </summary>
     /// <param name="dict">The dictionary handle.</param>
     /// <returns>An array of all keys.</returns>
-    [AspireExport("Dict.keys", Description = "Gets all keys from a dictionary")]
+    /// <ats-summary>Gets all keys from a dictionary</ats-summary>
+    [AspireExport("Dict.keys")]
     public static object?[] DictKeys(this IDictionary dict)
         => [.. dict.Keys.Cast<object?>()];
 
@@ -84,7 +88,8 @@ internal static class CollectionExports
     /// <param name="dict">The dictionary handle.</param>
     /// <param name="key">The key to check.</param>
     /// <returns>True if the key exists.</returns>
-    [AspireExport("Dict.has", Description = "Checks if a dictionary contains a key")]
+    /// <ats-summary>Checks if a dictionary contains a key</ats-summary>
+    [AspireExport("Dict.has")]
     public static bool DictHas(this IDictionary dict, object key)
         => dict.Contains(NormalizeDictionaryKey(dict, key));
 
@@ -93,7 +98,8 @@ internal static class CollectionExports
     /// </summary>
     /// <param name="dict">The dictionary handle.</param>
     /// <returns>The number of key-value pairs.</returns>
-    [AspireExport("Dict.count", Description = "Gets the number of entries in a dictionary")]
+    /// <ats-summary>Gets the number of entries in a dictionary</ats-summary>
+    [AspireExport("Dict.count")]
     public static int DictCount(this IDictionary dict)
         => dict.Count;
 
@@ -101,7 +107,8 @@ internal static class CollectionExports
     /// Clears all entries from a dictionary.
     /// </summary>
     /// <param name="dict">The dictionary handle.</param>
-    [AspireExport("Dict.clear", Description = "Clears all entries from a dictionary")]
+    /// <ats-summary>Clears all entries from a dictionary</ats-summary>
+    [AspireExport("Dict.clear")]
     public static void DictClear(this IDictionary dict)
         => dict.Clear();
 
@@ -110,7 +117,8 @@ internal static class CollectionExports
     /// </summary>
     /// <param name="dict">The dictionary handle.</param>
     /// <returns>An array of all values.</returns>
-    [AspireExport("Dict.values", Description = "Gets all values from a dictionary")]
+    /// <ats-summary>Gets all values from a dictionary</ats-summary>
+    [AspireExport("Dict.values")]
     public static object?[] DictValues(this IDictionary dict)
         => [.. dict.Values.Cast<object?>()];
 
@@ -119,7 +127,8 @@ internal static class CollectionExports
     /// </summary>
     /// <param name="dict">The dictionary handle.</param>
     /// <returns>A copy of the dictionary as an object.</returns>
-    [AspireExport("Dict.toObject", Description = "Converts a dictionary to a plain object")]
+    /// <ats-summary>Converts a dictionary to a plain object</ats-summary>
+    [AspireExport("Dict.toObject")]
     public static Dictionary<string, object?> DictToObject(this IDictionary dict)
     {
         var result = new Dictionary<string, object?>(dict.Count);
@@ -211,7 +220,8 @@ internal static class CollectionExports
     /// <param name="list">The list handle.</param>
     /// <param name="index">The zero-based index.</param>
     /// <returns>The item at the specified index.</returns>
-    [AspireExport("List.get", Description = "Gets an item from a list by index")]
+    /// <ats-summary>Gets an item from a list by index</ats-summary>
+    [AspireExport("List.get")]
     public static object? ListGet(this IList list, int index)
         => index >= 0 && index < list.Count ? list[index] : null;
 
@@ -221,7 +231,8 @@ internal static class CollectionExports
     /// <param name="list">The list handle.</param>
     /// <param name="index">The zero-based index.</param>
     /// <param name="value">The value to set.</param>
-    [AspireExport("List.set", Description = "Sets an item in a list at a specific index")]
+    /// <ats-summary>Sets an item in a list at a specific index</ats-summary>
+    [AspireExport("List.set")]
     public static void ListSet(this IList list, int index, object value)
     {
         if (index >= 0 && index < list.Count)
@@ -235,7 +246,8 @@ internal static class CollectionExports
     /// </summary>
     /// <param name="list">The list handle.</param>
     /// <param name="item">The item to add.</param>
-    [AspireExport("List.add", Description = "Adds an item to the end of a list")]
+    /// <ats-summary>Adds an item to the end of a list</ats-summary>
+    [AspireExport("List.add")]
     public static void ListAdd(this IList list, object item)
         => list.Add(item);
 
@@ -245,7 +257,8 @@ internal static class CollectionExports
     /// <param name="list">The list handle.</param>
     /// <param name="index">The zero-based index of the item to remove.</param>
     /// <returns>True if the item was removed.</returns>
-    [AspireExport("List.removeAt", Description = "Removes an item at a specific index from a list")]
+    /// <ats-summary>Removes an item at a specific index from a list</ats-summary>
+    [AspireExport("List.removeAt")]
     public static bool ListRemoveAt(this IList list, int index)
     {
         if (index >= 0 && index < list.Count)
@@ -261,7 +274,8 @@ internal static class CollectionExports
     /// </summary>
     /// <param name="list">The list handle.</param>
     /// <returns>The number of items.</returns>
-    [AspireExport("List.length", Description = "Gets the number of items in a list")]
+    /// <ats-summary>Gets the number of items in a list</ats-summary>
+    [AspireExport("List.length")]
     public static int ListLength(this IList list)
         => list.Count;
 
@@ -269,7 +283,8 @@ internal static class CollectionExports
     /// Clears all items from a list.
     /// </summary>
     /// <param name="list">The list handle.</param>
-    [AspireExport("List.clear", Description = "Clears all items from a list")]
+    /// <ats-summary>Clears all items from a list</ats-summary>
+    [AspireExport("List.clear")]
     public static void ListClear(this IList list)
         => list.Clear();
 
@@ -279,7 +294,8 @@ internal static class CollectionExports
     /// <param name="list">The list handle.</param>
     /// <param name="index">The zero-based index at which to insert.</param>
     /// <param name="item">The item to insert.</param>
-    [AspireExport("List.insert", Description = "Inserts an item at a specific index in a list")]
+    /// <ats-summary>Inserts an item at a specific index in a list</ats-summary>
+    [AspireExport("List.insert")]
     public static void ListInsert(this IList list, int index, object item)
     {
         if (index >= 0 && index <= list.Count)
@@ -294,7 +310,8 @@ internal static class CollectionExports
     /// <param name="list">The list handle.</param>
     /// <param name="item">The item to find.</param>
     /// <returns>The zero-based index, or -1 if not found.</returns>
-    [AspireExport("List.indexOf", Description = "Gets the index of an item in a list")]
+    /// <ats-summary>Gets the index of an item in a list</ats-summary>
+    [AspireExport("List.indexOf")]
     public static int ListIndexOf(this IList list, object item)
         => list.IndexOf(item);
 
@@ -303,7 +320,8 @@ internal static class CollectionExports
     /// </summary>
     /// <param name="list">The list handle.</param>
     /// <returns>An array containing all items.</returns>
-    [AspireExport("List.toArray", Description = "Converts a list to an array")]
+    /// <ats-summary>Converts a list to an array</ats-summary>
+    [AspireExport("List.toArray")]
     public static object?[] ListToArray(this IList list)
         => [.. list.Cast<object?>()];
 

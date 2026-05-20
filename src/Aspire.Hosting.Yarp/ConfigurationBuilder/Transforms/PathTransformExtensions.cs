@@ -36,7 +36,9 @@ public static class PathTransformExtensions
     /// <param name="route">The route to configure.</param>
     /// <param name="path">The path value to set.</param>
     /// <returns>The configured <see cref="YarpRoute"/>.</returns>
-    [AspireExport(Description = "Adds the transform which sets the request path with the given value.")]
+    /// <ats-summary>Adds the transform which sets the request path with the given value.</ats-summary>
+    /// <ats-returns>The configured <ats-see cref="!:type:YarpRoute" />.</ats-returns>
+    [AspireExport]
     internal static YarpRoute WithTransformPathSet(this YarpRoute route, string path)
     {
         ArgumentNullException.ThrowIfNull(route);
@@ -68,7 +70,9 @@ public static class PathTransformExtensions
     /// <param name="route">The route to configure.</param>
     /// <param name="prefix">The path prefix to add.</param>
     /// <returns>The configured <see cref="YarpRoute"/>.</returns>
-    [AspireExport(Description = "Adds the transform which will prefix the request path with the given value.")]
+    /// <ats-summary>Adds the transform which will prefix the request path with the given value.</ats-summary>
+    /// <ats-returns>The configured <ats-see cref="!:type:YarpRoute" />.</ats-returns>
+    [AspireExport]
     internal static YarpRoute WithTransformPathPrefix(this YarpRoute route, string prefix)
     {
         ArgumentNullException.ThrowIfNull(route);
@@ -100,7 +104,9 @@ public static class PathTransformExtensions
     /// <param name="route">The route to configure.</param>
     /// <param name="prefix">The matching prefix to remove.</param>
     /// <returns>The configured <see cref="YarpRoute"/>.</returns>
-    [AspireExport(Description = "Adds the transform which will remove the matching prefix from the request path.")]
+    /// <ats-summary>Adds the transform which will remove the matching prefix from the request path.</ats-summary>
+    /// <ats-returns>The configured <ats-see cref="!:type:YarpRoute" />.</ats-returns>
+    [AspireExport]
     internal static YarpRoute WithTransformPathRemovePrefix(this YarpRoute route, string prefix)
     {
         ArgumentNullException.ThrowIfNull(route);
@@ -132,7 +138,9 @@ public static class PathTransformExtensions
     /// <param name="route">The route to configure.</param>
     /// <param name="pattern">The route pattern to apply.</param>
     /// <returns>The configured <see cref="YarpRoute"/>.</returns>
-    [AspireExport(Description = "Adds the transform which will set the request path with route values.")]
+    /// <ats-summary>Adds the transform which will set the request path with route values.</ats-summary>
+    /// <ats-returns>The configured <ats-see cref="!:type:YarpRoute" />.</ats-returns>
+    [AspireExport]
     internal static YarpRoute WithTransformPathRouteValues(this YarpRoute route, [StringSyntax("Route")] string pattern)
     {
         ArgumentNullException.ThrowIfNull(route);

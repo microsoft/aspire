@@ -23,7 +23,9 @@ public static class AzureUserAssignedIdentityExtensions
     /// The resource is added to the infrastructure only if the application is not in run mode.
     /// </remarks>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureUserAssignedIdentityResource}"/> builder.</returns>
-    [AspireExport(Description = "Adds an Azure user-assigned identity resource")]
+    /// <ats-summary>Adds an Azure user-assigned identity resource</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> builder.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureUserAssignedIdentityResource> AddAzureUserAssignedIdentity(
         this IDistributedApplicationBuilder builder,
         string name)
@@ -57,7 +59,11 @@ public static class AzureUserAssignedIdentityExtensions
     ///     .WithAzureUserAssignedIdentity(identity);
     /// </code>
     /// </example>
-    [AspireExport("withUserAssignedIdentityAzureUserAssignedIdentity", MethodName = "withAzureUserAssignedIdentity", Description = "Associates an Azure user-assigned identity with a compute resource")]
+    /// <ats-summary>Associates an Azure user-assigned identity with a compute resource</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> builder.</ats-returns>
+    /// <ats-param name="builder">The builder for the <ats-see cref="!:type:IComputeResource" /> the identity will be associated with.</ats-param>
+    /// <ats-param name="identityResourceBuilder">The builder for the <ats-see cref="!:type:AzureUserAssignedIdentityResource" />.</ats-param>
+    [AspireExport("withUserAssignedIdentityAzureUserAssignedIdentity", MethodName = "withAzureUserAssignedIdentity")]
     public static IResourceBuilder<T> WithAzureUserAssignedIdentity<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<AzureUserAssignedIdentityResource> identityResourceBuilder)

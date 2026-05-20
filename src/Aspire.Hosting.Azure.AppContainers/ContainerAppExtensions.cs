@@ -54,7 +54,8 @@ public static class ContainerAppExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExport(Description = "Configures the custom domain for the container app")]
+    /// <ats-summary>Configures the custom domain for the container app</ats-summary>
+    [AspireExport]
     [Experimental("ASPIREACADOMAINS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static void ConfigureCustomDomain(this ContainerApp app, IResourceBuilder<ParameterResource> customDomain, IResourceBuilder<ParameterResource> certificateName)
     {
@@ -200,7 +201,8 @@ public static class ContainerAppExtensions
         });
     }
 
-    [AspireExport("publishAsAzureContainerAppJob", Description = "Configures the compute resource as an Azure Container App Job")]
+    /// <ats-summary>Configures the compute resource as an Azure Container App Job</ats-summary>
+    [AspireExport("publishAsAzureContainerAppJob")]
     internal static IResourceBuilder<T> PublishAsAzureContainerAppJobForPolyglot<T>(
         this IResourceBuilder<T> resource,
         Action<AzureResourceInfrastructure, ContainerAppJob>? configure = null)
@@ -249,7 +251,8 @@ public static class ContainerAppExtensions
         });
     }
 
-    [AspireExport("publishAsScheduledAzureContainerAppJob", Description = "Configures the compute resource as a scheduled Azure Container App Job")]
+    /// <ats-summary>Configures the compute resource as a scheduled Azure Container App Job</ats-summary>
+    [AspireExport("publishAsScheduledAzureContainerAppJob")]
     internal static IResourceBuilder<T> PublishAsScheduledAzureContainerAppJobForPolyglot<T>(
         this IResourceBuilder<T> resource,
         string cronExpression,

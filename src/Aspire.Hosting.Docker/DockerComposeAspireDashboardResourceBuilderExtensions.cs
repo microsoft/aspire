@@ -52,7 +52,10 @@ public static class DockerComposeAspireDashboardResourceBuilderExtensions
     /// <returns>
     /// The <see cref="IResourceBuilder{DockerComposeAspireDashboardResource}"/> instance for chaining.
     /// </returns>
-    [AspireExport(Description = "Sets the host port for the Aspire dashboard")]
+    /// <ats-summary>Sets the host port for the Aspire dashboard</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" /> instance for chaining.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IResourceBuilder" /> instance to configure.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<DockerComposeAspireDashboardResource> WithHostPort(
         this IResourceBuilder<DockerComposeAspireDashboardResource> builder,
         int? port = null)
@@ -75,7 +78,10 @@ public static class DockerComposeAspireDashboardResourceBuilderExtensions
     /// container. When enabled, the dashboard will process <c>X-Forwarded-Host</c> and <c>X-Forwarded-Proto</c>
     /// headers which is required when the dashboard is accessed through a reverse proxy or load balancer.
     /// </remarks>
-    [AspireExport(Description = "Enables or disables forwarded headers support for the Aspire dashboard")]
+    /// <ats-summary>Enables or disables forwarded headers support for the Aspire dashboard</ats-summary>
+    /// <ats-returns>The same <ats-see cref="!:type:IResourceBuilder" /> to allow chaining.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IResourceBuilder" /> instance.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<DockerComposeAspireDashboardResource> WithForwardedHeaders(
         this IResourceBuilder<DockerComposeAspireDashboardResource> builder,
         bool enabled = true)

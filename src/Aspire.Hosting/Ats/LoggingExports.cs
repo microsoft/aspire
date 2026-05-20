@@ -17,7 +17,8 @@ internal static class LoggingExports
     /// </summary>
     /// <param name="serviceProvider">The service provider handle.</param>
     /// <returns>A logger factory handle.</returns>
-    [AspireExport(Description = "Gets the logger factory from the service provider")]
+    /// <ats-summary>Gets the logger factory from the service provider</ats-summary>
+    [AspireExport]
     public static ILoggerFactory GetLoggerFactory(this IServiceProvider serviceProvider)
     {
         ArgumentNullException.ThrowIfNull(serviceProvider);
@@ -28,7 +29,8 @@ internal static class LoggingExports
     /// <summary>
     /// Logs an information message.
     /// </summary>
-    [AspireExport(Description = "Logs an information message")]
+    /// <ats-summary>Logs an information message</ats-summary>
+    [AspireExport]
     public static void LogInformation(this ILogger logger, string message)
     {
         logger.LogInformation("{Message}", message);
@@ -37,7 +39,8 @@ internal static class LoggingExports
     /// <summary>
     /// Logs a warning message.
     /// </summary>
-    [AspireExport(Description = "Logs a warning message")]
+    /// <ats-summary>Logs a warning message</ats-summary>
+    [AspireExport]
     public static void LogWarning(this ILogger logger, string message)
     {
         logger.LogWarning("{Message}", message);
@@ -46,7 +49,8 @@ internal static class LoggingExports
     /// <summary>
     /// Logs an error message.
     /// </summary>
-    [AspireExport(Description = "Logs an error message")]
+    /// <ats-summary>Logs an error message</ats-summary>
+    [AspireExport]
     public static void LogError(this ILogger logger, string message)
     {
         logger.LogError("{Message}", message);
@@ -55,7 +59,8 @@ internal static class LoggingExports
     /// <summary>
     /// Logs a debug message.
     /// </summary>
-    [AspireExport(Description = "Logs a debug message")]
+    /// <ats-summary>Logs a debug message</ats-summary>
+    [AspireExport]
     public static void LogDebug(this ILogger logger, string message)
     {
         logger.LogDebug("{Message}", message);
@@ -64,7 +69,8 @@ internal static class LoggingExports
     /// <summary>
     /// Logs a message with a specified log level.
     /// </summary>
-    [AspireExport(Description = "Logs a message with specified level")]
+    /// <ats-summary>Logs a message with specified level</ats-summary>
+    [AspireExport]
     public static void Log(this ILogger logger, string level, string message)
     {
         logger.Log(ParseLogLevel(level), "{Message}", message);
@@ -76,7 +82,8 @@ internal static class LoggingExports
     /// <param name="loggerFactory">The logger factory handle.</param>
     /// <param name="categoryName">The category name.</param>
     /// <returns>A logger handle.</returns>
-    [AspireExport(Description = "Creates a logger for a category")]
+    /// <ats-summary>Creates a logger for a category</ats-summary>
+    [AspireExport]
     public static ILogger CreateLogger(this ILoggerFactory loggerFactory, string categoryName)
     {
         ArgumentNullException.ThrowIfNull(loggerFactory);
@@ -90,7 +97,8 @@ internal static class LoggingExports
     /// </summary>
     /// <param name="serviceProvider">The service provider handle.</param>
     /// <returns>A resource logger service handle.</returns>
-    [AspireExport(Description = "Gets the resource logger service from the service provider")]
+    /// <ats-summary>Gets the resource logger service from the service provider</ats-summary>
+    [AspireExport]
     public static ResourceLoggerService GetResourceLoggerService(this IServiceProvider serviceProvider)
     {
         ArgumentNullException.ThrowIfNull(serviceProvider);
@@ -101,7 +109,8 @@ internal static class LoggingExports
     /// <summary>
     /// Completes the log stream for a resource.
     /// </summary>
-    [AspireExport(Description = "Completes the log stream for a resource")]
+    /// <ats-summary>Completes the log stream for a resource</ats-summary>
+    [AspireExport]
     public static void CompleteLog(this ResourceLoggerService loggerService, IResourceBuilder<IResource> resource)
     {
         loggerService.Complete(resource.Resource);
@@ -110,7 +119,8 @@ internal static class LoggingExports
     /// <summary>
     /// Completes the log stream by resource name.
     /// </summary>
-    [AspireExport(Description = "Completes the log stream by resource name")]
+    /// <ats-summary>Completes the log stream by resource name</ats-summary>
+    [AspireExport]
     public static void CompleteLogByName(this ResourceLoggerService loggerService, string resourceName)
     {
         loggerService.Complete(resourceName);

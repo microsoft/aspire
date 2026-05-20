@@ -26,7 +26,9 @@ public static class DurableTaskResourceExtensions
     /// var scheduler = builder.AddDurableTaskScheduler("scheduler");
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds a Durable Task scheduler resource to the distributed application.")]
+    /// <ats-summary>Adds a Durable Task scheduler resource to the distributed application.</ats-summary>
+    /// <ats-returns>An <ats-see cref="!:type:IResourceBuilder" /> for the scheduler resource.</ats-returns>
+    [AspireExport]
     [Experimental("ASPIREDURABLETASK001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<DurableTaskSchedulerResource> AddDurableTaskScheduler(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
@@ -99,7 +101,8 @@ public static class DurableTaskResourceExtensions
         return builder;
     }
 
-    [AspireExport("runAsExisting", Description = "Configures the Durable Task scheduler to use an existing scheduler instance from a connection string or parameter resource.")]
+    /// <ats-summary>Configures the Durable Task scheduler to use an existing scheduler instance from a connection string or parameter resource.</ats-summary>
+    [AspireExport("runAsExisting")]
 #pragma warning disable ASPIREDURABLETASK001
     internal static IResourceBuilder<DurableTaskSchedulerResource> RunAsExistingCore(
         this IResourceBuilder<DurableTaskSchedulerResource> builder,
@@ -126,7 +129,9 @@ public static class DurableTaskResourceExtensions
     ///     .RunAsEmulator();
     /// </code>
     /// </example>
-    [AspireExport(Description = "Configures the Durable Task scheduler to run using the local emulator.", RunSyncOnBackgroundThread = true)]
+    /// <ats-summary>Configures the Durable Task scheduler to run using the local emulator.</ats-summary>
+    /// <ats-returns>The same <ats-see cref="!:type:IResourceBuilder" /> instance for chaining.</ats-returns>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     [Experimental("ASPIREDURABLETASK001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<DurableTaskSchedulerResource> RunAsEmulator(this IResourceBuilder<DurableTaskSchedulerResource> builder, Action<IResourceBuilder<DurableTaskSchedulerEmulatorResource>>? configureContainer = null)
     {
@@ -206,7 +211,9 @@ public static class DurableTaskResourceExtensions
     ///     .WithTaskHubName("MyTaskHub");
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds a Durable Task hub resource associated with the scheduler.")]
+    /// <ats-summary>Adds a Durable Task hub resource associated with the scheduler.</ats-summary>
+    /// <ats-returns>An <ats-see cref="!:type:IResourceBuilder" /> for the task hub resource.</ats-returns>
+    [AspireExport]
     [Experimental("ASPIREDURABLETASK001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<DurableTaskHubResource> AddTaskHub(this IResourceBuilder<DurableTaskSchedulerResource> builder, [ResourceName] string name)
     {
@@ -281,7 +288,8 @@ public static class DurableTaskResourceExtensions
         return builder.WithAnnotation(new DurableTaskHubNameAnnotation(taskHubName.Resource));
     }
 
-    [AspireExport("withTaskHubName", Description = "Sets the Durable Task hub name from a string or parameter resource.")]
+    /// <ats-summary>Sets the Durable Task hub name from a string or parameter resource.</ats-summary>
+    [AspireExport("withTaskHubName")]
 #pragma warning disable ASPIREDURABLETASK001
     internal static IResourceBuilder<DurableTaskHubResource> WithTaskHubNameCore(
         this IResourceBuilder<DurableTaskHubResource> builder,

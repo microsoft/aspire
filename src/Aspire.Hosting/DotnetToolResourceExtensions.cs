@@ -24,7 +24,10 @@ public static class DotnetToolResourceExtensions
     /// <param name="name">The name of the resource.</param>
     /// <param name="packageId">The package id of the tool.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a .NET tool resource")]
+    /// <ats-summary>Adds a .NET tool resource</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IDistributedApplicationBuilder" />.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<DotnetToolResource> AddDotnetTool(this IDistributedApplicationBuilder builder, [ResourceName] string name, string packageId)
         => builder.AddDotnetTool(new DotnetToolResource(name, packageId));
 
@@ -122,7 +125,10 @@ public static class DotnetToolResourceExtensions
     /// <param name="builder">The <see cref="IResourceBuilder{T}"/>.</param>
     /// <param name="packageId">The package identifier to assign to the tool configuration. Cannot be null.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport(Description = "Sets the tool package ID")]
+    /// <ats-summary>Sets the tool package ID</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IResourceBuilder" />.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<T> WithToolPackage<T>(this IResourceBuilder<T> builder, string packageId)
         where T : DotnetToolResource
     {
@@ -137,7 +143,10 @@ public static class DotnetToolResourceExtensions
     /// <param name="builder">The <see cref="IResourceBuilder{T}"/>.</param>
     /// <param name="version">The package version to use</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport(Description = "Sets the tool version")]
+    /// <ats-summary>Sets the tool version</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IResourceBuilder" />.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<T> WithToolVersion<T>(this IResourceBuilder<T> builder, string version)
         where T : DotnetToolResource
     {
@@ -151,7 +160,10 @@ public static class DotnetToolResourceExtensions
     /// <typeparam name="T">The type of resource being built. Must inherit from DotnetToolResource.</typeparam>
     /// <param name="builder">The <see cref="IResourceBuilder{T}"/>.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport(Description = "Allows prerelease tool versions")]
+    /// <ats-summary>Allows prerelease tool versions</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IResourceBuilder" />.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<T> WithToolPrerelease<T>(this IResourceBuilder<T> builder)
         where T : DotnetToolResource
     {
@@ -166,7 +178,10 @@ public static class DotnetToolResourceExtensions
     /// <param name="builder">The <see cref="IResourceBuilder{T}"/>.</param>
     /// <param name="source">The source to add.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport(Description = "Adds a NuGet source for the tool")]
+    /// <ats-summary>Adds a NuGet source for the tool</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IResourceBuilder" />.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<T> WithToolSource<T>(this IResourceBuilder<T> builder, string source)
         where T : DotnetToolResource
     {
@@ -180,7 +195,10 @@ public static class DotnetToolResourceExtensions
     /// <typeparam name="T">The Dotnet Tool resource type</typeparam>
     /// <param name="builder">The <see cref="IResourceBuilder{T}"/>.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport(Description = "Ignores existing NuGet feeds")]
+    /// <ats-summary>Ignores existing NuGet feeds</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IResourceBuilder" />.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<T> WithToolIgnoreExistingFeeds<T>(this IResourceBuilder<T> builder)
         where T : DotnetToolResource
     {
@@ -194,7 +212,10 @@ public static class DotnetToolResourceExtensions
     /// <typeparam name="T">The Dotnet Tool resource type</typeparam>
     /// <param name="builder">The <see cref="IResourceBuilder{T}"/>.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport(Description = "Ignores failed NuGet sources")]
+    /// <ats-summary>Ignores failed NuGet sources</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IResourceBuilder" />.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<T> WithToolIgnoreFailedSources<T>(this IResourceBuilder<T> builder)
         where T : DotnetToolResource
     {

@@ -10,6 +10,9 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </summary>
 /// <param name="resource">The <see cref="IResource"/> for the event.</param>
 /// <param name="services">The <see cref="IServiceProvider"/> for the app host.</param>
+/// <ats-summary>The <ats-see cref="!:type:ConnectionStringAvailableEvent" /> is raised when a connection string becomes available for a resource.</ats-summary>
+/// <ats-param name="resource">The <ats-see cref="!:type:IResource" /> for the event.</ats-param>
+/// <ats-param name="services">The <ats-see cref="!:type:IServiceProvider" /> for the app host.</ats-param>
 [AspireExport(ExposeProperties = true)]
 public class ConnectionStringAvailableEvent(IResource resource, IServiceProvider services) : IDistributedApplicationResourceEvent
 {

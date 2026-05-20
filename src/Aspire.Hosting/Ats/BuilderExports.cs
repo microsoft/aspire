@@ -48,7 +48,8 @@ internal static class BuilderExports
     /// </summary>
     /// <param name="builder">The distributed application builder.</param>
     /// <returns>The configuration handle.</returns>
-    [AspireExport(Description = "Gets the application configuration")]
+    /// <ats-summary>Gets the application configuration</ats-summary>
+    [AspireExport]
     public static IConfiguration GetConfiguration(this IDistributedApplicationBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -62,7 +63,8 @@ internal static class BuilderExports
     /// <param name="configuration">The configuration handle.</param>
     /// <param name="key">The configuration key (e.g., "ConnectionStrings:Default").</param>
     /// <returns>The configuration value, or null if not found.</returns>
-    [AspireExport(Description = "Gets a configuration value by key")]
+    /// <ats-summary>Gets a configuration value by key</ats-summary>
+    [AspireExport]
     public static string? GetConfigValue(this IConfiguration configuration, string key)
     {
         return configuration[key];
@@ -74,7 +76,8 @@ internal static class BuilderExports
     /// <param name="configuration">The configuration handle.</param>
     /// <param name="name">The connection string name.</param>
     /// <returns>The connection string value, or null if not found.</returns>
-    [AspireExport(Description = "Gets a connection string by name")]
+    /// <ats-summary>Gets a connection string by name</ats-summary>
+    [AspireExport]
     public static string? GetConnectionString(this IConfiguration configuration, string name)
     {
         ArgumentNullException.ThrowIfNull(configuration);
@@ -89,7 +92,8 @@ internal static class BuilderExports
     /// <param name="configuration">The configuration handle.</param>
     /// <param name="key">The configuration key.</param>
     /// <returns>The configuration section handle.</returns>
-    [AspireExport(Description = "Gets a configuration section by key")]
+    /// <ats-summary>Gets a configuration section by key</ats-summary>
+    [AspireExport]
     public static IConfigurationSection GetSection(this IConfiguration configuration, string key)
     {
         ArgumentNullException.ThrowIfNull(configuration);
@@ -103,7 +107,8 @@ internal static class BuilderExports
     /// </summary>
     /// <param name="configuration">The configuration handle.</param>
     /// <returns>The child sections.</returns>
-    [AspireExport(Description = "Gets child configuration sections")]
+    /// <ats-summary>Gets child configuration sections</ats-summary>
+    [AspireExport]
     public static IConfigurationSection[] GetChildren(this IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
@@ -117,7 +122,9 @@ internal static class BuilderExports
     /// <param name="configuration">The configuration handle.</param>
     /// <param name="key">The configuration key.</param>
     /// <returns><see langword="true"/> when the section exists; otherwise, <see langword="false"/>.</returns>
-    [AspireExport(Description = "Checks whether a configuration section exists")]
+    /// <ats-summary>Checks whether a configuration section exists</ats-summary>
+    /// <ats-returns>`true` when the section exists; otherwise, `false`.</ats-returns>
+    [AspireExport]
     public static bool Exists(this IConfiguration configuration, string key)
     {
         ArgumentNullException.ThrowIfNull(configuration);
@@ -135,7 +142,8 @@ internal static class BuilderExports
     /// </summary>
     /// <param name="environment">The host environment handle.</param>
     /// <returns>True if running in Development environment.</returns>
-    [AspireExport(Description = "Checks if running in Development environment")]
+    /// <ats-summary>Checks if running in Development environment</ats-summary>
+    [AspireExport]
     public static bool IsDevelopment(this IHostEnvironment environment)
     {
         ArgumentNullException.ThrowIfNull(environment);
@@ -148,7 +156,8 @@ internal static class BuilderExports
     /// </summary>
     /// <param name="environment">The host environment handle.</param>
     /// <returns>True if running in Production environment.</returns>
-    [AspireExport(Description = "Checks if running in Production environment")]
+    /// <ats-summary>Checks if running in Production environment</ats-summary>
+    [AspireExport]
     public static bool IsProduction(this IHostEnvironment environment)
     {
         ArgumentNullException.ThrowIfNull(environment);
@@ -161,7 +170,8 @@ internal static class BuilderExports
     /// </summary>
     /// <param name="environment">The host environment handle.</param>
     /// <returns>True if running in Staging environment.</returns>
-    [AspireExport(Description = "Checks if running in Staging environment")]
+    /// <ats-summary>Checks if running in Staging environment</ats-summary>
+    [AspireExport]
     public static bool IsStaging(this IHostEnvironment environment)
     {
         ArgumentNullException.ThrowIfNull(environment);
@@ -175,7 +185,8 @@ internal static class BuilderExports
     /// <param name="environment">The host environment handle.</param>
     /// <param name="environmentName">The environment name to compare against.</param>
     /// <returns>True if the environment matches the specified name.</returns>
-    [AspireExport(Description = "Checks if the environment matches the specified name")]
+    /// <ats-summary>Checks if the environment matches the specified name</ats-summary>
+    [AspireExport]
     public static bool IsEnvironment(this IHostEnvironment environment, string environmentName)
     {
         ArgumentNullException.ThrowIfNull(environment);
@@ -198,7 +209,8 @@ internal static class BuilderExports
     /// <param name="builder">The builder handle.</param>
     /// <param name="callback">A callback that receives the exported event when the event fires.</param>
     /// <returns>A subscription handle that can be used to unsubscribe.</returns>
-    [AspireExport(Description = "Subscribes to the BeforeStart event")]
+    /// <ats-summary>Subscribes to the BeforeStart event</ats-summary>
+    [AspireExport]
     public static DistributedApplicationEventSubscription SubscribeBeforeStart(
         this IDistributedApplicationBuilder builder,
         Func<BeforeStartEvent, Task> callback)
@@ -222,7 +234,8 @@ internal static class BuilderExports
     /// <param name="builder">The builder handle.</param>
     /// <param name="callback">A callback that receives the exported event when the event fires.</param>
     /// <returns>A subscription handle that can be used to unsubscribe.</returns>
-    [AspireExport(Description = "Subscribes to the BeforePublish event")]
+    /// <ats-summary>Subscribes to the BeforePublish event</ats-summary>
+    [AspireExport]
     public static DistributedApplicationEventSubscription SubscribeBeforePublish(
         this IDistributedApplicationBuilder builder,
         Func<BeforePublishEvent, Task> callback)
@@ -246,7 +259,8 @@ internal static class BuilderExports
     /// <param name="builder">The builder handle.</param>
     /// <param name="callback">A callback that receives the exported event when the event fires.</param>
     /// <returns>A subscription handle that can be used to unsubscribe.</returns>
-    [AspireExport(Description = "Subscribes to the AfterPublish event")]
+    /// <ats-summary>Subscribes to the AfterPublish event</ats-summary>
+    [AspireExport]
     public static DistributedApplicationEventSubscription SubscribeAfterPublish(
         this IDistributedApplicationBuilder builder,
         Func<AfterPublishEvent, Task> callback)
@@ -270,7 +284,8 @@ internal static class BuilderExports
     /// <param name="builder">The builder handle.</param>
     /// <param name="callback">A callback that receives the exported event when the event fires.</param>
     /// <returns>A subscription handle that can be used to unsubscribe.</returns>
-    [AspireExport(Description = "Subscribes to the AfterResourcesCreated event")]
+    /// <ats-summary>Subscribes to the AfterResourcesCreated event</ats-summary>
+    [AspireExport]
     public static DistributedApplicationEventSubscription SubscribeAfterResourcesCreated(
         this IDistributedApplicationBuilder builder,
         Func<AfterResourcesCreatedEvent, Task> callback)

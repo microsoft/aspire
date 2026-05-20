@@ -59,7 +59,10 @@ public static class KubernetesAspireDashboardResourceBuilderExtensions
     /// configure the environment's <see cref="KubernetesEnvironmentResource.DefaultServiceType"/>
     /// to <c>NodePort</c> or <c>LoadBalancer</c>.
     /// </remarks>
-    [AspireExport(Description = "Sets the Kubernetes Service port for the Aspire dashboard")]
+    /// <ats-summary>Sets the Kubernetes Service port for the Aspire dashboard</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" /> instance for chaining.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IResourceBuilder" /> instance to configure.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<KubernetesAspireDashboardResource> WithServicePort(
         this IResourceBuilder<KubernetesAspireDashboardResource> builder,
         int? port = null)
@@ -88,7 +91,10 @@ public static class KubernetesAspireDashboardResourceBuilderExtensions
     /// in the cluster send telemetry to these Service ports. Use standard OTLP ports (4317 for gRPC,
     /// 4318 for HTTP) if your services are configured with those defaults.
     /// </remarks>
-    [AspireExport(Description = "Sets the Kubernetes Service ports for the OTLP endpoints")]
+    /// <ats-summary>Sets the Kubernetes Service ports for the OTLP endpoints</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" /> instance for chaining.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IResourceBuilder" /> instance to configure.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<KubernetesAspireDashboardResource> WithOtlpServicePort(
         this IResourceBuilder<KubernetesAspireDashboardResource> builder,
         int? grpcPort = null,
@@ -120,7 +126,10 @@ public static class KubernetesAspireDashboardResourceBuilderExtensions
     /// container. When enabled, the dashboard will process <c>X-Forwarded-Host</c> and <c>X-Forwarded-Proto</c>
     /// headers which is required when the dashboard is accessed through a reverse proxy or ingress controller.
     /// </remarks>
-    [AspireExport(Description = "Enables or disables forwarded headers support for the Aspire dashboard")]
+    /// <ats-summary>Enables or disables forwarded headers support for the Aspire dashboard</ats-summary>
+    /// <ats-returns>The same <ats-see cref="!:type:IResourceBuilder" /> to allow chaining.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IResourceBuilder" /> instance.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<KubernetesAspireDashboardResource> WithForwardedHeaders(
         this IResourceBuilder<KubernetesAspireDashboardResource> builder,
         bool enabled = true)

@@ -67,7 +67,12 @@ public static class GoHostingExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds a Go application resource")]
+    /// <ats-summary>Adds a Go application resource</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IDistributedApplicationBuilder" /> to add the resource to.</ats-param>
+    /// <ats-param name="packagePath">The Go package to run or build, relative to `appDirectory`. Defaults to <c>"."</c> (the module root itself). Use a sub-path such as <c>"./cmd/server"</c> when the main package is not at the module root (e.g. <c>api/cmd/server/main.go</c> with <c>api/go.mod</c>). This value is passed to <c>go run</c>, <c>dlv debug</c>, and <c>go build</c> consistently.</ats-param>
+    /// <ats-param name="raceDetector">When `true`, enables the Go race detector by passing <c>-race</c> to <c>go run</c>.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<GoAppResource> AddGoApp(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -334,7 +339,9 @@ public static class GoHostingExtensions
     /// <param name="builder">The resource builder for the Go application.</param>
     /// <param name="args">The program arguments (e.g., <c>"serve"</c>, <c>"--config"</c>, <c>"prod.yaml"</c>).</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport(Description = "Passes extra arguments to the Go program at runtime (after go run . in normal mode, or after -- in Delve mode)")]
+    /// <ats-summary>Passes extra arguments to the Go program at runtime (after go run . in normal mode, or after -- in Delve mode)</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithAppArgs<T>(this IResourceBuilder<T> builder, params object[] args)
         where T : GoAppResource
     {
@@ -350,7 +357,9 @@ public static class GoHostingExtensions
     /// <typeparam name="T">The type of the Go application resource.</typeparam>
     /// <param name="builder">The resource builder for the Go application.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport(Description = "Runs go mod tidy before starting the application to ensure go.sum is up to date")]
+    /// <ats-summary>Runs go mod tidy before starting the application to ensure go.sum is up to date</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithModTidy<T>(this IResourceBuilder<T> builder)
         where T : GoAppResource
     {
@@ -400,7 +409,9 @@ public static class GoHostingExtensions
     /// <typeparam name="T">The type of the Go application resource.</typeparam>
     /// <param name="builder">The resource builder for the Go application.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport(Description = "Runs go mod vendor before starting the application to cache module dependencies locally")]
+    /// <ats-summary>Runs go mod vendor before starting the application to cache module dependencies locally</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithModVendor<T>(this IResourceBuilder<T> builder)
         where T : GoAppResource
     {
@@ -445,7 +456,9 @@ public static class GoHostingExtensions
     /// <typeparam name="T">The type of the Go application resource.</typeparam>
     /// <param name="builder">The resource builder for the Go application.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport(Description = "Runs go mod download before starting the application to pre-fetch module dependencies into the local cache")]
+    /// <ats-summary>Runs go mod download before starting the application to pre-fetch module dependencies into the local cache</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithModDownload<T>(this IResourceBuilder<T> builder)
         where T : GoAppResource
     {
@@ -492,7 +505,9 @@ public static class GoHostingExtensions
     /// <typeparam name="T">The type of the Go application resource.</typeparam>
     /// <param name="builder">The resource builder for the Go application.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    [AspireExport(Description = "Runs go vet ./... before starting the application to catch static analysis issues")]
+    /// <ats-summary>Runs go vet ./... before starting the application to catch static analysis issues</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithVetTool<T>(this IResourceBuilder<T> builder)
         where T : GoAppResource
     {
@@ -563,7 +578,9 @@ public static class GoHostingExtensions
     /// docker build --build-arg GIT_USER=myuser --secret id=gittoken,src=~/.git-token .
     /// </code>
     /// </example>
-    [AspireExport(Description = "Configures private Go module authentication for publish-time Dockerfile generation")]
+    /// <ats-summary>Configures private Go module authentication for publish-time Dockerfile generation</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithGoPrivate<T>(
         this IResourceBuilder<T> builder,
         string[] privatePatterns,
@@ -629,7 +646,9 @@ public static class GoHostingExtensions
     ///        .WithDelveServer(port: 2345);
     /// </code>
     /// </example>
-    [AspireExport(Description = "Starts a headless Delve server for remote debugging (GoLand, VS Code attach, any DAP client)")]
+    /// <ats-summary>Starts a headless Delve server for remote debugging (GoLand, VS Code attach, any DAP client)</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<T> WithDelveServer<T>(this IResourceBuilder<T> builder, int port = 2345)
         where T : GoAppResource
     {

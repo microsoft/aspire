@@ -56,6 +56,7 @@ namespace Aspire.Hosting;
 /// </code>
 /// </example>
 /// </remarks>
+/// <ats-summary>A builder for creating instances of <ats-see cref="!:type:DistributedApplication" />.</ats-summary>
 [AspireExport(ExposeProperties = true)]
 public interface IDistributedApplicationBuilder
 {
@@ -270,6 +271,8 @@ public interface IDistributedApplicationBuilder
     /// when the process exists.
     /// </para>
     /// </remarks>
-    [AspireExport(Description = "Builds the distributed application")]
+    /// <ats-summary>Builds the distributed application</ats-summary>
+    /// <ats-returns>A new <ats-see cref="!:type:DistributedApplication" /> instance.</ats-returns>
+    [AspireExport]
     DistributedApplication Build();
 }

@@ -41,7 +41,10 @@ public static class AzureKustoBuilderExtensions
     /// - <see cref="KustoDatabasePrincipalRole.User"/>
     /// </para>
     /// </remarks>
-    [AspireExport(Description = "Adds an Azure Data Explorer (Kusto) cluster resource")]
+    /// <ats-summary>Adds an Azure Data Explorer (Kusto) cluster resource</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IDistributedApplicationBuilder" />.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<AzureKustoClusterResource> AddAzureKustoCluster(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -103,7 +106,10 @@ public static class AzureKustoBuilderExtensions
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <param name="databaseName">The name of the database. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a Kusto read-write database resource")]
+    /// <ats-summary>Adds a Kusto read-write database resource</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    /// <ats-param name="databaseName">The name of the database. If not provided, this defaults to the same value as `name`.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<AzureKustoReadWriteDatabaseResource> AddReadWriteDatabase(this IResourceBuilder<AzureKustoClusterResource> builder, [ResourceName] string name, string? databaseName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -149,7 +155,8 @@ public static class AzureKustoBuilderExtensions
     /// Optional action to configure the Kusto emulator container.
     /// </param>
     /// <returns>The resource builder.</returns>
-    [AspireExport(Description = "Configures the Kusto cluster to run using the local emulator", RunSyncOnBackgroundThread = true)]
+    /// <ats-summary>Configures the Kusto cluster to run using the local emulator</ats-summary>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureKustoClusterResource> RunAsEmulator(
         this IResourceBuilder<AzureKustoClusterResource> builder,
         Action<IResourceBuilder<AzureKustoEmulatorResource>>? configureContainer = null)
@@ -194,7 +201,8 @@ public static class AzureKustoBuilderExtensions
     /// <param name="builder">The resource builder to configure.</param>
     /// <param name="script">KQL script to create databases, tables, or data.</param>
     /// <returns>The resource builder.</returns>
-    [AspireExport(Description = "Defines the KQL script used to create the database")]
+    /// <ats-summary>Defines the KQL script used to create the database</ats-summary>
+    [AspireExport]
     public static IResourceBuilder<AzureKustoReadWriteDatabaseResource> WithCreationScript(this IResourceBuilder<AzureKustoReadWriteDatabaseResource> builder, string script)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -212,7 +220,9 @@ public static class AzureKustoBuilderExtensions
     /// <param name="builder">Kusto emulator resource builder.</param>
     /// <param name="port">Host port to use.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/> for the <see cref="AzureKustoEmulatorResource"/>.</returns>
-    [AspireExport(Description = "Sets the host port for the Kusto emulator endpoint")]
+    /// <ats-summary>Sets the host port for the Kusto emulator endpoint</ats-summary>
+    /// <ats-returns>An <ats-see cref="!:type:IResourceBuilder" /> for the <ats-see cref="!:type:AzureKustoEmulatorResource" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureKustoEmulatorResource> WithHostPort(this IResourceBuilder<AzureKustoEmulatorResource> builder, int port)
     {
         ArgumentNullException.ThrowIfNull(builder);

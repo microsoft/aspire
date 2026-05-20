@@ -28,7 +28,8 @@ internal sealed class LogFacade
     /// Writes an informational log message.
     /// </summary>
     /// <param name="message">The message to write.</param>
-    [AspireExport(Description = "Writes an informational log message")]
+    /// <ats-summary>Writes an informational log message</ats-summary>
+    [AspireExport]
     public void Info(string message)
     {
         ArgumentNullException.ThrowIfNull(message);
@@ -39,7 +40,8 @@ internal sealed class LogFacade
     /// Writes a warning log message.
     /// </summary>
     /// <param name="message">The message to write.</param>
-    [AspireExport(Description = "Writes a warning log message")]
+    /// <ats-summary>Writes a warning log message</ats-summary>
+    [AspireExport]
     public void Warning(string message)
     {
         ArgumentNullException.ThrowIfNull(message);
@@ -50,7 +52,8 @@ internal sealed class LogFacade
     /// Writes an error log message.
     /// </summary>
     /// <param name="message">The message to write.</param>
-    [AspireExport(Description = "Writes an error log message")]
+    /// <ats-summary>Writes an error log message</ats-summary>
+    [AspireExport]
     public void Error(string message)
     {
         ArgumentNullException.ThrowIfNull(message);
@@ -61,7 +64,8 @@ internal sealed class LogFacade
     /// Writes a debug log message.
     /// </summary>
     /// <param name="message">The message to write.</param>
-    [AspireExport(Description = "Writes a debug log message")]
+    /// <ats-summary>Writes a debug log message</ats-summary>
+    [AspireExport]
     public void Debug(string message)
     {
         ArgumentNullException.ThrowIfNull(message);

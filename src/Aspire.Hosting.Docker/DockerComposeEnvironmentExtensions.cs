@@ -69,7 +69,10 @@ public static class DockerComposeEnvironmentExtensions
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
     /// <param name="name">The name of the Docker Compose environment resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{DockerComposeEnvironmentResource}"/>.</returns>
-    [AspireExport(Description = "Adds a Docker Compose publishing environment")]
+    /// <ats-summary>Adds a Docker Compose publishing environment</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IDistributedApplicationBuilder" />.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<DockerComposeEnvironmentResource> AddDockerComposeEnvironment(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name)
@@ -105,7 +108,10 @@ public static class DockerComposeEnvironmentExtensions
     /// <param name="builder">The Docker Compose environment resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the <see cref="DockerComposeEnvironmentResource"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Configures properties of the Docker Compose environment", RunSyncOnBackgroundThread = true)]
+    /// <ats-summary>Configures properties of the Docker Compose environment</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    /// <ats-param name="configure">A method that can be used for customizing the <ats-see cref="!:type:DockerComposeEnvironmentResource" />.</ats-param>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<DockerComposeEnvironmentResource> WithProperties(this IResourceBuilder<DockerComposeEnvironmentResource> builder, Action<DockerComposeEnvironmentResource> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -126,7 +132,10 @@ public static class DockerComposeEnvironmentExtensions
     /// This callback runs after the Docker Compose model has been generated and before it is written to disk.
     /// Use it to customize the generated <see cref="ComposeFile"/> for the environment.
     /// </remarks>
-    [AspireExport(Description = "Configures the generated Docker Compose file before it is written to disk")]
+    /// <ats-summary>Configures the generated Docker Compose file before it is written to disk</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    /// <ats-param name="configure">A method that can be used for customizing the <ats-see cref="!:type:ComposeFile" />.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<DockerComposeEnvironmentResource> ConfigureComposeFile(this IResourceBuilder<DockerComposeEnvironmentResource> builder, Action<ComposeFile> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -148,7 +157,9 @@ public static class DockerComposeEnvironmentExtensions
     /// that will be written to the environment-specific <c>.env</c> file adjacent to the Docker Compose file.
     /// </para>
     /// </remarks>
-    [AspireExport(Description = "Configures the captured environment variables written to the Docker Compose .env file")]
+    /// <ats-summary>Configures the captured environment variables written to the Docker Compose .env file</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<DockerComposeEnvironmentResource> ConfigureEnvFile(this IResourceBuilder<DockerComposeEnvironmentResource> builder, Action<IDictionary<string, CapturedEnvironmentVariable>> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -164,7 +175,9 @@ public static class DockerComposeEnvironmentExtensions
     /// <param name="builder">The Docker Compose environment resource builder.</param>
     /// <param name="enabled">Whether to enable the dashboard. Default is true.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Enables or disables the Aspire dashboard for the Docker Compose environment")]
+    /// <ats-summary>Enables or disables the Aspire dashboard for the Docker Compose environment</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<DockerComposeEnvironmentResource> WithDashboard(this IResourceBuilder<DockerComposeEnvironmentResource> builder, bool enabled = true)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -180,7 +193,9 @@ public static class DockerComposeEnvironmentExtensions
     /// <param name="builder">The Docker Compose environment resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the dashboard service.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport("configureDashboard", MethodName = "configureDashboard", Description = "Configures the Aspire dashboard resource for the Docker Compose environment", RunSyncOnBackgroundThread = true)]
+    /// <ats-summary>Configures the Aspire dashboard resource for the Docker Compose environment</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport("configureDashboard", MethodName = "configureDashboard", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<DockerComposeEnvironmentResource> WithDashboard(this IResourceBuilder<DockerComposeEnvironmentResource> builder, Action<IResourceBuilder<DockerComposeAspireDashboardResource>> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);

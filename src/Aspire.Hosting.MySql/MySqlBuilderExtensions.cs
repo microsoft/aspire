@@ -31,7 +31,11 @@ public static class MySqlBuilderExtensions
     /// <param name="password">The parameter used to provide the root password for the MySQL resource. If <see langword="null"/> a random password will be generated.</param>
     /// <param name="port">The host port for MySQL.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a MySQL server resource")]
+    /// <ats-summary>Adds a MySQL server resource</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IDistributedApplicationBuilder" />.</ats-param>
+    /// <ats-param name="password">The parameter used to provide the root password for the MySQL resource. If `null` a random password will be generated.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<MySqlServerResource> AddMySql(this IDistributedApplicationBuilder builder, [ResourceName] string name, IResourceBuilder<ParameterResource>? password = null, int? port = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -109,7 +113,10 @@ public static class MySqlBuilderExtensions
     /// The database creation happens automatically as part of the resource lifecycle.
     /// </para>
     /// </remarks>
-    [AspireExport(Description = "Adds a MySQL database")]
+    /// <ats-summary>Adds a MySQL database</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    /// <ats-param name="databaseName">The name of the database. If not provided, this defaults to the same value as `name`.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<MySqlDatabaseResource> AddDatabase(this IResourceBuilder<MySqlServerResource> builder, [ResourceName] string name, string? databaseName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -183,7 +190,10 @@ public static class MySqlBuilderExtensions
     /// <remarks>
     /// <value>Default script is <code>CREATE DATABASE IF NOT EXISTS `QUOTED_DATABASE_NAME`;</code></value>
     /// </remarks>
-    [AspireExport(Description = "Defines the SQL script for database creation")]
+    /// <ats-summary>Defines the SQL script for database creation</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    /// <ats-param name="builder">The builder for the <ats-see cref="!:type:MySqlDatabaseResource" />.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<MySqlDatabaseResource> WithCreationScript(this IResourceBuilder<MySqlDatabaseResource> builder, string script)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -200,7 +210,9 @@ public static class MySqlBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="password">The parameter used to provide the password for the MySQL resource.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Configures the MySQL password")]
+    /// <ats-summary>Configures the MySQL password</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<MySqlServerResource> WithPassword(this IResourceBuilder<MySqlServerResource> builder, IResourceBuilder<ParameterResource> password)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -220,7 +232,9 @@ public static class MySqlBuilderExtensions
     /// <param name="configureContainer">Callback to configure PhpMyAdmin container resource.</param>
     /// <param name="containerName">The name of the container (Optional).</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds phpMyAdmin management UI", RunSyncOnBackgroundThread = true)]
+    /// <ats-summary>Adds phpMyAdmin management UI</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<T> WithPhpMyAdmin<T>(this IResourceBuilder<T> builder, Action<IResourceBuilder<PhpMyAdminContainerResource>>? configureContainer = null, string? containerName = null) where T : MySqlServerResource
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -309,7 +323,9 @@ public static class MySqlBuilderExtensions
     /// <param name="builder">The resource builder for PGAdmin.</param>
     /// <param name="port">The port to bind on the host. If <see langword="null"/> is used, a random port will be assigned.</param>
     /// <returns>The resource builder for PGAdmin.</returns>
-    [AspireExport(Description = "Sets the host port for phpMyAdmin")]
+    /// <ats-summary>Sets the host port for phpMyAdmin</ats-summary>
+    /// <ats-param name="port">The port to bind on the host. If `null` is used, a random port will be assigned.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<PhpMyAdminContainerResource> WithHostPort(this IResourceBuilder<PhpMyAdminContainerResource> builder, int? port)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -327,7 +343,9 @@ public static class MySqlBuilderExtensions
     /// <param name="name">The name of the volume. Defaults to an auto-generated name based on the application and resource names.</param>
     /// <param name="isReadOnly">A flag that indicates if this is a read-only volume.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a data volume for MySQL")]
+    /// <ats-summary>Adds a data volume for MySQL</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<MySqlServerResource> WithDataVolume(this IResourceBuilder<MySqlServerResource> builder, string? name = null, bool isReadOnly = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -342,7 +360,9 @@ public static class MySqlBuilderExtensions
     /// <param name="source">The source directory on the host to mount into the container.</param>
     /// <param name="isReadOnly">A flag that indicates if this is a read-only mount.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a data bind mount for MySQL")]
+    /// <ats-summary>Adds a data bind mount for MySQL</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<MySqlServerResource> WithDataBindMount(this IResourceBuilder<MySqlServerResource> builder, string source, bool isReadOnly = false)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -373,7 +393,9 @@ public static class MySqlBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="source">The source file or directory on the host to copy into the container.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Copies init files to MySQL")]
+    /// <ats-summary>Copies init files to MySQL</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<MySqlServerResource> WithInitFiles(this IResourceBuilder<MySqlServerResource> builder, string source)
     {
         ArgumentNullException.ThrowIfNull(builder);

@@ -37,7 +37,9 @@ public static class AzureEventHubsExtensions
     ///
     /// These can be replaced by calling <see cref="WithRoleAssignments{T}(IResourceBuilder{T}, IResourceBuilder{AzureEventHubsResource}, EventHubsBuiltInRole[])"/>.
     /// </remarks>
-    [AspireExport(Description = "Adds an Azure Event Hubs namespace resource")]
+    /// <ats-summary>Adds an Azure Event Hubs namespace resource</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<AzureEventHubsResource> AddAzureEventHubs(
         this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
@@ -152,7 +154,10 @@ public static class AzureEventHubsExtensions
     /// <param name="name">The name of the Event Hub resource.</param>
     /// <param name="hubName">The name of the Event Hub. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds an Azure Event Hub resource")]
+    /// <ats-summary>Adds an Azure Event Hub resource</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    /// <ats-param name="hubName">The name of the Event Hub. If not provided, this defaults to the same value as `name`.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<AzureEventHubResource> AddHub(this IResourceBuilder<AzureEventHubsResource> builder, [ResourceName] string name, string? hubName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -173,7 +178,10 @@ public static class AzureEventHubsExtensions
     /// <param name="builder">The Azure Event Hub resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the <see cref="AzureEventHubResource"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Configures properties of an Azure Event Hub", RunSyncOnBackgroundThread = true)]
+    /// <ats-summary>Configures properties of an Azure Event Hub</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    /// <ats-param name="configure">A method that can be used for customizing the <ats-see cref="!:type:AzureEventHubResource" />.</ats-param>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureEventHubResource> WithProperties(this IResourceBuilder<AzureEventHubResource> builder, Action<AzureEventHubResource> configure)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -191,7 +199,10 @@ public static class AzureEventHubsExtensions
     /// <param name="name">The name of the Event Hub Consumer Group resource.</param>
     /// <param name="groupName">The name of the Consumer Group. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds an Azure Event Hub consumer group resource")]
+    /// <ats-summary>Adds an Azure Event Hub consumer group resource</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    /// <ats-param name="groupName">The name of the Consumer Group. If not provided, this defaults to the same value as `name`.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<AzureEventHubConsumerGroupResource> AddConsumerGroup(
         this IResourceBuilder<AzureEventHubResource> builder,
         [ResourceName] string name,
@@ -237,7 +248,9 @@ public static class AzureEventHubsExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
-    [AspireExport(Description = "Configures the Azure Event Hubs resource to run with the local emulator", RunSyncOnBackgroundThread = true)]
+    /// <ats-summary>Configures the Azure Event Hubs resource to run with the local emulator</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureEventHubsResource> RunAsEmulator(this IResourceBuilder<AzureEventHubsResource> builder, Action<IResourceBuilder<AzureEventHubsEmulatorResource>>? configureContainer = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -405,7 +418,9 @@ public static class AzureEventHubsExtensions
     /// <param name="builder">Builder for the Azure Event Hubs emulator container</param>
     /// <param name="port">The port to bind on the host. If <see langword="null"/> is used, a random port will be assigned.</param>
     /// <returns>Azure Event Hubs emulator resource builder.</returns>
-    [AspireExport(Description = "Sets the host port for the Event Hubs emulator endpoint")]
+    /// <ats-summary>Sets the host port for the Event Hubs emulator endpoint</ats-summary>
+    /// <ats-param name="port">The port to bind on the host. If `null` is used, a random port will be assigned.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<AzureEventHubsEmulatorResource> WithHostPort(this IResourceBuilder<AzureEventHubsEmulatorResource> builder, int? port)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -422,7 +437,10 @@ public static class AzureEventHubsExtensions
     /// <param name="builder">The builder for the <see cref="AzureEventHubsEmulatorResource"/>.</param>
     /// <param name="path">Path to the file on the AppHost where the emulator configuration is located.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Sets the emulator configuration file path")]
+    /// <ats-summary>Sets the emulator configuration file path</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    /// <ats-param name="builder">The builder for the <ats-see cref="!:type:AzureEventHubsEmulatorResource" />.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<AzureEventHubsEmulatorResource> WithConfigurationFile(this IResourceBuilder<AzureEventHubsEmulatorResource> builder, string path)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -530,7 +548,9 @@ public static class AzureEventHubsExtensions
     /// <param name="roles">The Event Hubs roles to be assigned.</param>
     /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
     /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="AzureEventHubsRole"/> value.</exception>
-    [AspireExport("withEventHubsRoleAssignments", Description = "Assigns Event Hubs roles to a resource")]
+    /// <ats-summary>Assigns Event Hubs roles to a resource</ats-summary>
+    /// <ats-returns>The updated <ats-see cref="!:type:IResourceBuilder" /> with the applied role assignments.</ats-returns>
+    [AspireExport("withEventHubsRoleAssignments")]
     internal static IResourceBuilder<T> WithRoleAssignments<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<AzureEventHubsResource> target,

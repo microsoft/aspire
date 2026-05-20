@@ -13,6 +13,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <remarks>
 /// Resources that are created by orchestrators may not yet be ready to handle requests.
 /// </remarks>
+/// <ats-param name="services">The <ats-see cref="!:type:IServiceProvider" /> for the app host.</ats-param>
 [AspireExport(ExposeProperties = true)]
 public class BeforeResourceStartedEvent(IResource resource, IServiceProvider services) : IDistributedApplicationResourceEvent
 {

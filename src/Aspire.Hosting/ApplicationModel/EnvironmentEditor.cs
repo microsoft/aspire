@@ -16,7 +16,8 @@ internal sealed class EnvironmentEditor(Dictionary<string, object> environmentVa
     /// </summary>
     /// <param name="name">The name of the environment variable.</param>
     /// <param name="value">The value to assign to the environment variable.</param>
-    [AspireExport(Description = "Sets an environment variable")]
+    /// <ats-summary>Sets an environment variable</ats-summary>
+    [AspireExport]
     public void Set(
         string name,
         [AspireUnion(

@@ -174,7 +174,8 @@ public static class GarnetBuilderExtensions
             });
     }
 
-    [AspireExport("addGarnet", Description = "Adds a Garnet container resource to the application model.")]
+    /// <ats-summary>Adds a Garnet container resource to the application model.</ats-summary>
+    [AspireExport("addGarnet")]
     internal static IResourceBuilder<GarnetResource> AddGarnetForPolyglot(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -202,7 +203,9 @@ public static class GarnetBuilderExtensions
     /// Defaults to <c>false</c>.
     /// </param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a persistent data volume to the Garnet resource.")]
+    /// <ats-summary>Adds a persistent data volume to the Garnet resource.</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<GarnetResource> WithDataVolume(this IResourceBuilder<GarnetResource> builder,
         string? name = null, bool isReadOnly = false)
     {
@@ -238,7 +241,9 @@ public static class GarnetBuilderExtensions
     /// Defaults to <c>false</c>.
     /// </param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Mounts a host directory as the Garnet data directory.")]
+    /// <ats-summary>Mounts a host directory as the Garnet data directory.</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<GarnetResource> WithDataBindMount(this IResourceBuilder<GarnetResource> builder,
         string source, bool isReadOnly = false)
     {
@@ -292,7 +297,9 @@ public static class GarnetBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="interval">The interval between snapshot exports. Defaults to 60 seconds.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Configures snapshot persistence for the Garnet resource.")]
+    /// <ats-summary>Configures snapshot persistence for the Garnet resource.</ats-summary>
+    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    [AspireExport]
     public static IResourceBuilder<GarnetResource> WithPersistence(this IResourceBuilder<GarnetResource> builder,
         TimeSpan? interval = null)
     {

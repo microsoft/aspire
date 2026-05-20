@@ -23,7 +23,8 @@ public static class OrleansServiceExtensions
     /// <param name="builder">The application builder.</param>
     /// <param name="name">The name of the Orleans service.</param>
     /// <returns>The Orleans service builder.</returns>
-    [AspireExport(Description = "Adds an Orleans service configuration")]
+    /// <ats-summary>Adds an Orleans service configuration</ats-summary>
+    [AspireExport]
     public static OrleansService AddOrleans(
         this IDistributedApplicationBuilder builder,
         string name)
@@ -35,7 +36,8 @@ public static class OrleansServiceExtensions
     /// <param name="orleansServiceBuilder">The target Orleans service builder.</param>
     /// <param name="clusterId">The ClusterId value.</param>
     /// <returns>The Orleans service builder.</returns>
-    [AspireExport(Description = "Sets the Orleans cluster ID")]
+    /// <ats-summary>Sets the Orleans cluster ID</ats-summary>
+    [AspireExport]
     public static OrleansService WithClusterId(
         this OrleansService orleansServiceBuilder,
         string clusterId)
@@ -66,7 +68,8 @@ public static class OrleansServiceExtensions
     /// <param name="orleansServiceBuilder">The target Orleans service builder.</param>
     /// <param name="serviceId">The ServiceId value.</param>
     /// <returns>The Orleans service builder.</returns>
-    [AspireExport(Description = "Sets the Orleans service ID")]
+    /// <ats-summary>Sets the Orleans service ID</ats-summary>
+    [AspireExport]
     public static OrleansService WithServiceId(
         this OrleansService orleansServiceBuilder,
         string serviceId)
@@ -97,7 +100,8 @@ public static class OrleansServiceExtensions
     /// <param name="orleansServiceBuilder">The target Orleans service builder.</param>
     /// <param name="provider">The provider.</param>
     /// <returns>The Orleans service builder.</returns>
-    [AspireExport(Description = "Configures Orleans clustering using a resource connection")]
+    /// <ats-summary>Configures Orleans clustering using a resource connection</ats-summary>
+    [AspireExport]
     public static OrleansService WithClustering(
         this OrleansService orleansServiceBuilder,
         IResourceBuilder<IResourceWithConnectionString> provider)
@@ -124,7 +128,8 @@ public static class OrleansServiceExtensions
     /// </summary>
     /// <param name="orleansServiceBuilder">The target Orleans service builder.</param>
     /// <returns>The Orleans service builder.</returns>
-    [AspireExport(Description = "Configures Orleans development clustering")]
+    /// <ats-summary>Configures Orleans development clustering</ats-summary>
+    [AspireExport]
     public static OrleansService WithDevelopmentClustering(
         this OrleansService orleansServiceBuilder)
         => WithClustering(orleansServiceBuilder, s_developmentClustering);
@@ -149,7 +154,8 @@ public static class OrleansServiceExtensions
     /// <param name="name">The name of the provider. This is the name the application will use to resolve the provider.</param>
     /// <param name="provider">The provider to add.</param>
     /// <returns>The Orleans service builder.</returns>
-    [AspireExport(Description = "Adds an Orleans grain storage provider")]
+    /// <ats-summary>Adds an Orleans grain storage provider</ats-summary>
+    [AspireExport]
     public static OrleansService WithGrainStorage(
         this OrleansService orleansServiceBuilder,
         string name,
@@ -180,7 +186,8 @@ public static class OrleansServiceExtensions
     /// <param name="orleansServiceBuilder">The target Orleans service builder.</param>
     /// <param name="name">The name of the provider. This is the name the application will use to resolve the provider.</param>
     /// <returns>The Orleans service builder.</returns>
-    [AspireExport(Description = "Adds in-memory Orleans grain storage")]
+    /// <ats-summary>Adds in-memory Orleans grain storage</ats-summary>
+    [AspireExport]
     public static OrleansService WithMemoryGrainStorage(
         this OrleansService orleansServiceBuilder,
         string name)
@@ -206,7 +213,8 @@ public static class OrleansServiceExtensions
     /// <param name="name">The name of the provider. This is the name the application will use to resolve the provider.</param>
     /// <param name="provider">The provider to add.</param>
     /// <returns>The Orleans service builder.</returns>
-    [AspireExport(Description = "Adds an Orleans stream provider")]
+    /// <ats-summary>Adds an Orleans stream provider</ats-summary>
+    [AspireExport]
     public static OrleansService WithStreaming(
         this OrleansService orleansServiceBuilder,
         string name,
@@ -237,7 +245,8 @@ public static class OrleansServiceExtensions
     /// <param name="orleansServiceBuilder">The target Orleans service builder.</param>
     /// <param name="name">The name of the provider. This is the name the application will use to resolve the provider.</param>
     /// <returns>The Orleans service builder.</returns>
-    [AspireExport(Description = "Adds in-memory Orleans streaming")]
+    /// <ats-summary>Adds in-memory Orleans streaming</ats-summary>
+    [AspireExport]
     public static OrleansService WithMemoryStreaming(
         this OrleansService orleansServiceBuilder,
         string name)
@@ -267,7 +276,8 @@ public static class OrleansServiceExtensions
     /// <param name="orleansServiceBuilder">The target Orleans service builder.</param>
     /// <param name="name">The name of the provider. This is the name the application will use to resolve the provider.</param>
     /// <returns>The Orleans service builder.</returns>
-    [AspireExport(Description = "Adds an Orleans broadcast channel provider")]
+    /// <ats-summary>Adds an Orleans broadcast channel provider</ats-summary>
+    [AspireExport]
     public static OrleansService WithBroadcastChannel(
         this OrleansService orleansServiceBuilder,
         string name)
@@ -279,7 +289,8 @@ public static class OrleansServiceExtensions
     /// <param name="orleansServiceBuilder">The target Orleans service builder.</param>
     /// <param name="provider">The reminder storage provider.</param>
     /// <returns>The Orleans service builder.</returns>
-    [AspireExport(Description = "Configures Orleans reminder storage")]
+    /// <ats-summary>Configures Orleans reminder storage</ats-summary>
+    [AspireExport]
     public static OrleansService WithReminders(
         this OrleansService orleansServiceBuilder,
         IResourceBuilder<IResourceWithConnectionString> provider)
@@ -306,7 +317,8 @@ public static class OrleansServiceExtensions
     /// </summary>
     /// <param name="orleansServiceBuilder">The target Orleans service builder.</param>
     /// <returns>The Orleans service builder.</returns>
-    [AspireExport(Description = "Configures in-memory Orleans reminders")]
+    /// <ats-summary>Configures in-memory Orleans reminders</ats-summary>
+    [AspireExport]
     public static OrleansService WithMemoryReminders(
         this OrleansService orleansServiceBuilder)
     {
@@ -334,7 +346,8 @@ public static class OrleansServiceExtensions
     /// <param name="name">The name of the provider. This is the name the application will use to resolve the provider.</param>
     /// <param name="provider">The provider to add.</param>
     /// <returns>The Orleans service builder.</returns>
-    [AspireExport(Description = "Adds an Orleans grain directory provider")]
+    /// <ats-summary>Adds an Orleans grain directory provider</ats-summary>
+    [AspireExport]
     public static OrleansService WithGrainDirectory(
         this OrleansService orleansServiceBuilder,
         string name,
@@ -364,7 +377,8 @@ public static class OrleansServiceExtensions
     /// </summary>
     /// <param name="orleansService">The Orleans service</param>
     /// <returns>A model of the clients of an Orleans service.</returns>
-    [AspireExport(Description = "Creates an Orleans client view for the service")]
+    /// <ats-summary>Creates an Orleans client view for the service</ats-summary>
+    [AspireExport]
     public static OrleansServiceClient AsClient(this OrleansService orleansService)
     {
         return new OrleansServiceClient(orleansService);
@@ -377,7 +391,8 @@ public static class OrleansServiceExtensions
     /// <param name="orleansService">The Orleans service, containing clustering, etc.</param>
     /// <returns>The resource builder.</returns>
     /// <exception cref="InvalidOperationException">Clustering has not been configured.</exception>
-    [AspireExport("withOrleansReference", Description = "Adds an Orleans silo reference to a resource")]
+    /// <ats-summary>Adds an Orleans silo reference to a resource</ats-summary>
+    [AspireExport("withOrleansReference")]
     public static IResourceBuilder<T> WithReference<T>(
         this IResourceBuilder<T> builder,
         OrleansService orleansService)

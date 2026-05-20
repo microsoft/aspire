@@ -16,7 +16,8 @@ internal static class ModelExports
     /// </summary>
     /// <param name="serviceProvider">The service provider handle.</param>
     /// <returns>The distributed application model handle.</returns>
-    [AspireExport(Description = "Gets the distributed application model from the service provider")]
+    /// <ats-summary>Gets the distributed application model from the service provider</ats-summary>
+    [AspireExport]
     public static DistributedApplicationModel GetDistributedApplicationModel(this IServiceProvider serviceProvider)
     {
         ArgumentNullException.ThrowIfNull(serviceProvider);
@@ -29,7 +30,8 @@ internal static class ModelExports
     /// </summary>
     /// <param name="model">The distributed application model handle.</param>
     /// <returns>The resources in the model.</returns>
-    [AspireExport(Description = "Gets resources from the distributed application model")]
+    /// <ats-summary>Gets resources from the distributed application model</ats-summary>
+    [AspireExport]
     public static IResource[] GetResources(this DistributedApplicationModel model)
     {
         ArgumentNullException.ThrowIfNull(model);
@@ -43,7 +45,9 @@ internal static class ModelExports
     /// <param name="model">The distributed application model handle.</param>
     /// <param name="name">The resource name.</param>
     /// <returns>The matching resource, or <see langword="null"/> when not found.</returns>
-    [AspireExport(Description = "Finds a resource by name")]
+    /// <ats-summary>Finds a resource by name</ats-summary>
+    /// <ats-returns>The matching resource, or `null` when not found.</ats-returns>
+    [AspireExport]
     public static IResource? FindResourceByName(this DistributedApplicationModel model, string name)
     {
         ArgumentNullException.ThrowIfNull(model);

@@ -20,7 +20,10 @@ public static class AzureBicepResourceExtensions
     /// <param name="name">The name of the resource. This name will be used as the deployment name.</param>
     /// <param name="bicepFile">The path to the bicep file on disk. This path is relative to the apphost's project directory.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds an Azure Bicep template resource from a file")]
+    /// <ats-summary>Adds an Azure Bicep template resource from a file</ats-summary>
+    /// <ats-returns>An <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IDistributedApplicationBuilder" />.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<AzureBicepResource> AddBicepTemplate(this IDistributedApplicationBuilder builder, [ResourceName] string name, string bicepFile)
     {
         builder.AddAzureProvisioning();
@@ -37,7 +40,10 @@ public static class AzureBicepResourceExtensions
     /// <param name="name">The name of the resource. This name will be used as the deployment name.</param>
     /// <param name="bicepContent">A string that represents a snippet of bicep.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds an Azure Bicep template resource from inline Bicep content")]
+    /// <ats-summary>Adds an Azure Bicep template resource from inline Bicep content</ats-summary>
+    /// <ats-returns>An <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IDistributedApplicationBuilder" />.</ats-param>
+    [AspireExport]
     public static IResourceBuilder<AzureBicepResource> AddBicepTemplateString(this IDistributedApplicationBuilder builder, [ResourceName] string name, string bicepContent)
     {
         builder.AddAzureProvisioning();
@@ -52,7 +58,9 @@ public static class AzureBicepResourceExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="name">Name of the output.</param>
     /// <returns>A <see cref="BicepOutputReference"/> that represents the output.</returns>
-    [AspireExport(Description = "Gets an output reference from an Azure Bicep template resource")]
+    /// <ats-summary>Gets an output reference from an Azure Bicep template resource</ats-summary>
+    /// <ats-returns>A <ats-see cref="!:type:BicepOutputReference" /> that represents the output.</ats-returns>
+    [AspireExport]
     public static BicepOutputReference GetOutput(this IResourceBuilder<AzureBicepResource> builder, string name)
     {
         return new BicepOutputReference(name, builder.Resource);
@@ -134,7 +142,8 @@ public static class AzureBicepResourceExtensions
         return builder;
     }
 
-    [AspireExport("withParameter", Description = "Adds a Bicep parameter")]
+    /// <ats-summary>Adds a Bicep parameter</ats-summary>
+    [AspireExport("withParameter")]
     internal static IResourceBuilder<T> WithParameterForPolyglot<T>(
         this IResourceBuilder<T> builder,
         string name,

@@ -13,13 +13,15 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <param name="resource">The resource.</param>
 /// <param name="urls">The URLs for the resource.</param>
 /// <param name="cancellationToken">A <see cref="CancellationToken"/>.</param>
+/// <ats-param name="cancellationToken">A <ats-see cref="!:type:CancellationToken" />.</ats-param>
 [AspireExport]
 public class ResourceUrlsCallbackContext(DistributedApplicationExecutionContext executionContext, IResource resource, List<ResourceUrlAnnotation>? urls = null, CancellationToken cancellationToken = default)
 {
     /// <summary>
     /// Gets the resource this the URLs are associated with.
     /// </summary>
-    [AspireExport(Description = "Gets the resource associated with these URLs")]
+    /// <ats-summary>Gets the resource associated with these URLs</ats-summary>
+    [AspireExport]
     public IResource Resource { get; } = resource;
 
     /// <summary>
@@ -27,7 +29,8 @@ public class ResourceUrlsCallbackContext(DistributedApplicationExecutionContext 
     /// If <see cref="Resource"/> does not implement <see cref="IResourceWithEndpoints"/> then returns <c>null</c>.
     /// </summary>
     /// <param name="name">The name of the endpoint.</param>
-    [AspireExport(Description = "Gets an endpoint reference from the associated resource")]
+    /// <ats-summary>Gets an endpoint reference from the associated resource</ats-summary>
+    [AspireExport]
     public EndpointReference? GetEndpoint(string name) =>
         Resource switch
         {
@@ -66,18 +69,21 @@ public class ResourceUrlsCallbackContext(DistributedApplicationExecutionContext 
     /// <summary>
     /// Gets the editor used to manipulate displayed URLs in polyglot callbacks.
     /// </summary>
-    [AspireExport("ResourceUrlsCallbackContext.urls", MethodName = "urls", Description = "Gets the URL editor")]
+    /// <ats-summary>Gets the URL editor</ats-summary>
+    [AspireExport("ResourceUrlsCallbackContext.urls", MethodName = "urls")]
     internal ResourceUrlsEditor UrlsEditor => new(ExecutionContext, Urls, CancellationToken);
 
     /// <summary>
     /// Gets the logger facade used by polyglot callbacks.
     /// </summary>
-    [AspireExport(Description = "Gets the callback logger facade")]
+    /// <ats-summary>Gets the callback logger facade</ats-summary>
+    [AspireExport]
     internal LogFacade Log => new(() => Logger);
 
     /// <summary>
     /// Gets the execution context associated with this invocation of the AppHost.
     /// </summary>
-    [AspireExport(Description = "Gets the execution context for this callback invocation")]
+    /// <ats-summary>Gets the execution context for this callback invocation</ats-summary>
+    [AspireExport]
     public DistributedApplicationExecutionContext ExecutionContext { get; } = executionContext ?? throw new ArgumentNullException(nameof(executionContext));
 }

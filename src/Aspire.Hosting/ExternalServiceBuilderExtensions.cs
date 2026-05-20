@@ -39,7 +39,8 @@ public static class ExternalServiceBuilderExtensions
         return AddExternalServiceImpl(builder, name, uri);
     }
 
-    [AspireExport("addExternalService", Description = "Adds an external service resource")]
+    /// <ats-summary>Adds an external service resource</ats-summary>
+    [AspireExport("addExternalService")]
     internal static IResourceBuilder<ExternalServiceResource> AddExternalServiceForPolyglot(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -272,7 +273,8 @@ public static class ExternalServiceBuilderExtensions
     /// <summary>
     /// Adds an HTTP health check to the external service for polyglot app hosts.
     /// </summary>
-    [AspireExport("withExternalServiceHttpHealthCheck", MethodName = "withHttpHealthCheck", Description = "Adds an HTTP health check to the external service")]
+    /// <ats-summary>Adds an HTTP health check to the external service</ats-summary>
+    [AspireExport("withExternalServiceHttpHealthCheck", MethodName = "withHttpHealthCheck")]
     internal static IResourceBuilder<ExternalServiceResource> WithHttpHealthCheckExport(this IResourceBuilder<ExternalServiceResource> builder, string? path = null, int? statusCode = null, string? endpointName = null)
     {
         ArgumentNullException.ThrowIfNull(builder);

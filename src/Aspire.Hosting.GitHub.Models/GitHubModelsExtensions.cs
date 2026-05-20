@@ -115,7 +115,11 @@ public static class GitHubModelsExtensions
     /// <param name="model">The known model name from the <see cref="GitHubModelName"/> enumeration.</param>
     /// <param name="organization">The organization login associated with the organization to which the request is to be attributed.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a GitHub Model resource to the distributed application model.")]
+    /// <ats-summary>Adds a GitHub Model resource to the distributed application model.</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IDistributedApplicationBuilder" />.</ats-param>
+    /// <ats-param name="model">The known model name from the <ats-see cref="!:type:GitHubModelName" /> enumeration.</ats-param>
+    [AspireExport]
     internal static IResourceBuilder<GitHubModelResource> AddGitHubModel(this IDistributedApplicationBuilder builder, [ResourceName] string name, GitHubModelName model, IResourceBuilder<ParameterResource>? organization = null)
     {
         return AddGitHubModel(builder, name, GitHubModel.GetModelId(model), organization);
@@ -129,7 +133,10 @@ public static class GitHubModelsExtensions
     /// <param name="modelId">The model identifier string, for example <c>"openai/gpt-4o"</c>.</param>
     /// <param name="organization">The organization login associated with the organization to which the request is to be attributed.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    [AspireExport(Description = "Adds a GitHub Model resource using a model identifier string.")]
+    /// <ats-summary>Adds a GitHub Model resource using a model identifier string.</ats-summary>
+    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
+    /// <ats-param name="builder">The <ats-see cref="!:type:IDistributedApplicationBuilder" />.</ats-param>
+    [AspireExport]
     internal static IResourceBuilder<GitHubModelResource> AddGitHubModelById(this IDistributedApplicationBuilder builder, [ResourceName] string name, string modelId, IResourceBuilder<ParameterResource>? organization = null)
     {
         return AddGitHubModel(builder, name, modelId, organization);
@@ -142,7 +149,8 @@ public static class GitHubModelsExtensions
     /// <param name="apiKey">The API key parameter.</param>
     /// <returns>The resource builder.</returns>
     /// <exception cref="ArgumentException">Thrown when the provided parameter is not marked as secret.</exception>
-    [AspireExport(Description = "Configures the API key for the GitHub Model resource.")]
+    /// <ats-summary>Configures the API key for the GitHub Model resource.</ats-summary>
+    [AspireExport]
     public static IResourceBuilder<GitHubModelResource> WithApiKey(this IResourceBuilder<GitHubModelResource> builder, IResourceBuilder<ParameterResource> apiKey)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -186,7 +194,8 @@ public static class GitHubModelsExtensions
     /// the model is not working as expected. Furthermore, the health check will run a single time per application instance.
     /// </para>
     /// </remarks>
-    [AspireExport("enableHealthCheck", Description = "Adds a health check for the GitHub Model resource.")]
+    /// <ats-summary>Adds a health check for the GitHub Model resource.</ats-summary>
+    [AspireExport("enableHealthCheck")]
     public static IResourceBuilder<GitHubModelResource> WithHealthCheck(this IResourceBuilder<GitHubModelResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
