@@ -388,7 +388,7 @@ public sealed class TypeScriptPublishTests(ITestOutputHelper output)
             const builder = await createBuilder();
 
             const compose = await builder.addDockerComposeEnvironment('compose');
-            await compose.withDashboard(false);
+            await compose.withDashboard({ enabled: false });
 
             const api = await builder.addNodeApp('api', './api', 'server.js')
                 .withHttpEndpoint({ port: 3001, env: 'PORT' });
