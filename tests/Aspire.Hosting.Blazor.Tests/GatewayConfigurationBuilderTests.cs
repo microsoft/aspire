@@ -238,7 +238,7 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
 
         var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
 
-        var registration = new GatewayAppRegistration(wasmApp, "store", [], ProxyTelemetry: false);
+        var registration = new GatewayAppRegistration(wasmApp, "store", [], ProxyBlazorTelemetry: false);
         var apps = new List<GatewayAppRegistration> { registration };
         var env = new Dictionary<string, object>();
 
@@ -457,7 +457,7 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
 
         GatewayConfigurationBuilder.EmitHostedProxyConfiguration(
             env, hostEndpoint, httpHostEndpoint: null, "blazorapp",
-            services, proxyTelemetry: true, httpOtlpEndpoint: "http://localhost:18889");
+            services, ProxyBlazorTelemetry: true, httpOtlpEndpoint: "http://localhost:18889");
 
         Assert.Equal("http://localhost:18889",
             env["ReverseProxy__Clusters__cluster-otlp-dashboard__Destinations__d1__Address"]);

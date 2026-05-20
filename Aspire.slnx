@@ -118,18 +118,18 @@
     <File Path="playground/README.md" />
     <Project Path="playground/Playground.ServiceDefaults/Playground.ServiceDefaults.csproj" />
   </Folder>
-  <Folder Name="/playground/AspireWithBlazorHosted/">
-    <Project Path="playground/AspireWithBlazorHosted/AspireWithBlazorHosted.AppHost/AspireWithBlazorHosted.AppHost.csproj" />
-    <Project Path="playground/AspireWithBlazorHosted/AspireWithBlazorHosted.Server/AspireWithBlazorHosted.csproj" />
-    <Project Path="playground/AspireWithBlazorHosted/AspireWithBlazorHosted.Client/AspireWithBlazorHosted.Client.csproj" />
-    <Project Path="playground/AspireWithBlazorHosted/AspireWithBlazorHosted.ClientServiceDefaults/AspireWithBlazorHosted.ClientServiceDefaults.csproj" />
-    <Project Path="playground/AspireWithBlazorHosted/AspireWithBlazorHosted.WeatherApi/AspireWithBlazorHosted.WeatherApi.csproj" />
+  <Folder Name="/playground/BlazorHosted/">
+    <Project Path="playground/BlazorHosted/BlazorHosted.AppHost/BlazorHosted.AppHost.csproj" />
+    <Project Path="playground/BlazorHosted/BlazorHosted.Server/BlazorHosted.csproj" />
+    <Project Path="playground/BlazorHosted/BlazorHosted.Client/BlazorHosted.Client.csproj" />
+    <Project Path="playground/BlazorHosted/BlazorHosted.ClientServiceDefaults/BlazorHosted.ClientServiceDefaults.csproj" />
+    <Project Path="playground/BlazorHosted/BlazorHosted.WeatherApi/BlazorHosted.WeatherApi.csproj" />
   </Folder>
-  <Folder Name="/playground/AspireWithBlazorStandalone/">
-    <Project Path="playground/AspireWithBlazorStandalone/AspireWithBlazorStandalone.AppHost/AspireWithBlazorStandalone.AppHost.csproj" />
-    <Project Path="playground/AspireWithBlazorStandalone/AspireWithBlazorStandalone/AspireWithBlazorStandalone.csproj" />
-    <Project Path="playground/AspireWithBlazorStandalone/AspireWithBlazorStandalone.ClientServiceDefaults/AspireWithBlazorStandalone.ClientServiceDefaults.csproj" />
-    <Project Path="playground/AspireWithBlazorStandalone/AspireWithBlazorStandalone.WeatherApi/AspireWithBlazorStandalone.WeatherApi.csproj" />
+  <Folder Name="/playground/BlazorStandalone/">
+    <Project Path="playground/BlazorStandalone/BlazorStandalone.AppHost/BlazorStandalone.AppHost.csproj" />
+    <Project Path="playground/BlazorStandalone/BlazorStandalone/BlazorStandalone.csproj" />
+    <Project Path="playground/BlazorStandalone/BlazorStandalone.ClientServiceDefaults/BlazorStandalone.ClientServiceDefaults.csproj" />
+    <Project Path="playground/BlazorStandalone/BlazorStandalone.WeatherApi/BlazorStandalone.WeatherApi.csproj" />
   </Folder>
   <Folder Name="/playground/AspireWithJavaScript/">
     <Project Path="playground/AspireWithJavaScript/AspireJavaScript.AppHost/AspireJavaScript.AppHost.csproj" />

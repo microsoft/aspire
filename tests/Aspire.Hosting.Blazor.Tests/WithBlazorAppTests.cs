@@ -105,7 +105,7 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
         var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj")
             .WithReference(weatherApi);
 
-        gateway.WithClient(wasmApp);
+        gateway.WithBlazorClientApp(wasmApp);
 
         // The gateway should now have a reference to weatherapi
         var gatewayRefs = gateway.Resource.Annotations
@@ -132,7 +132,7 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
         var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj")
             .WithReference(weatherApi);
 
-        gateway.WithClient(wasmApp);
+        gateway.WithBlazorClientApp(wasmApp);
 
         // Count references to weatherapi on the gateway
         var weatherRefs = gateway.Resource.Annotations
@@ -152,7 +152,7 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
             .WithHttpEndpoint();
 
         // Gateway already has WaitFor(weatherApi) but not WithReference(weatherApi).
-        // WithClient should still forward the reference so YARP gets service discovery env vars.
+        // WithBlazorClientApp should still forward the reference so YARP gets service discovery env vars.
         var gateway = builder.AddProject<TestProjectMetadata>("gateway")
             .WithHttpEndpoint()
             .WithHttpsEndpoint()
@@ -161,7 +161,7 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
         var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj")
             .WithReference(weatherApi);
 
-        gateway.WithClient(wasmApp);
+        gateway.WithBlazorClientApp(wasmApp);
 
         var refs = gateway.Resource.Annotations
             .OfType<ResourceRelationshipAnnotation>()
@@ -182,7 +182,7 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
 
         var wasmApp = builder.AddBlazorWasmApp("storefront", "Store/Store.csproj");
 
-        gateway.WithClient(wasmApp);
+        gateway.WithBlazorClientApp(wasmApp);
 
         var annotation = gateway.Resource.Annotations.OfType<GatewayAppsAnnotation>().SingleOrDefault();
         Assert.NotNull(annotation);
@@ -200,11 +200,11 @@ public class WithBlazorAppTests(ITestOutputHelper testOutputHelper)
 
         var wasmApp = builder.AddBlazorWasmApp("store", "Store/Store.csproj");
 
-        gateway.WithClient(wasmApp, proxyTelemetry: false);
+        gateway.WithBlazorClientApp(wasmApp, proxyTelemetry: false);
 
         var annotation = gateway.Resource.Annotations.OfType<GatewayAppsAnnotation>().SingleOrDefault();
         Assert.NotNull(annotation);
-        Assert.False(annotation.Apps[0].ProxyTelemetry);
+        Assert.False(annotation.Apps[0].ProxyBlazorTelemetry);
     }
 
     private sealed class TestProjectMetadata : IProjectMetadata

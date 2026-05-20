@@ -19,7 +19,7 @@ public class BlazorWasmHostingTests(ITestOutputHelper testOutput)
     [Fact]
     public async Task HostedBlazorWasm_ServesAppAndWeatherApi()
     {
-        await using var app = await CreateAppAsync(typeof(Projects.AspireWithBlazorHosted_AppHost));
+        await using var app = await CreateAppAsync(typeof(Projects.BlazorHosted_AppHost));
 
         using var blazorClient = AppHostTests.CreateHttpClientWithResilience(app, "blazorapp");
 
@@ -49,7 +49,7 @@ public class BlazorWasmHostingTests(ITestOutputHelper testOutput)
     [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task HostedBlazorWasm_BrowserRendersWeatherAndSendsTelemetry()
     {
-        await using var app = await CreateAppAsync(typeof(Projects.AspireWithBlazorHosted_AppHost));
+        await using var app = await CreateAppAsync(typeof(Projects.BlazorHosted_AppHost));
 
         var baseUrl = app.GetEndpoint("blazorapp").ToString().TrimEnd('/');
 
@@ -95,7 +95,7 @@ public class BlazorWasmHostingTests(ITestOutputHelper testOutput)
     [Fact]
     public async Task StandaloneBlazorWasm_GatewayServesAppAndWeatherApi()
     {
-        await using var app = await CreateAppAsync(typeof(Projects.AspireWithBlazorStandalone_AppHost));
+        await using var app = await CreateAppAsync(typeof(Projects.BlazorStandalone_AppHost));
 
         using var gatewayClient = AppHostTests.CreateHttpClientWithResilience(app, "gateway");
 
@@ -125,7 +125,7 @@ public class BlazorWasmHostingTests(ITestOutputHelper testOutput)
     [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task StandaloneBlazorWasm_BrowserRendersWeatherAndSendsTelemetry()
     {
-        await using var app = await CreateAppAsync(typeof(Projects.AspireWithBlazorStandalone_AppHost));
+        await using var app = await CreateAppAsync(typeof(Projects.BlazorStandalone_AppHost));
 
         var baseUrl = app.GetEndpoint("gateway").ToString().TrimEnd('/');
 
