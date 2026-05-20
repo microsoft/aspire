@@ -364,6 +364,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         var dashboardUrls = options.DashboardUrl;
         var otlpGrpcEndpointUrl = options.OtlpGrpcEndpointUrl;
         var otlpHttpEndpointUrl = options.OtlpHttpEndpointUrl;
+        var allowUnsecureTransport = configuration.GetBool(KnownConfigNames.AllowUnsecuredTransport) ?? false;
 
         eventing.Subscribe<ResourceReadyEvent>(dashboardResource, async (@event, cancellationToken) =>
         {
@@ -403,32 +404,44 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             LoggingHelpers.WriteDashboardSummary(distributedApplicationLogger, dashboardUrl, otlpGrpcEndpointUrl, otlpHttpEndpointUrl, browserToken, isContainer: false);
         });
 
-        foreach (var d in dashboardUrls?.Split(';', StringSplitOptions.RemoveEmptyEntries) ?? [])
+        if (string.IsNullOrWhiteSpace(dashboardUrls))
         {
-            var address = BindingAddress.Parse(d);
+            var uriScheme = allowUnsecureTransport ? "http" : "https";
+            var endpointName = allowUnsecureTransport ? "http" : "https";
+            dashboardResource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, uriScheme: uriScheme, isProxied: true));
 
-            dashboardResource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, uriScheme: address.Scheme, port: address.Port, isProxied: true)
+            eventing.Subscribe<BeforeResourceStartedEvent>(dashboardResource, (@event, _) =>
             {
-                TargetHost = address.Host
+                var dcpOptions = @event.Services.GetRequiredService<IOptions<DcpOptions>>();
+                if (!dcpOptions.Value.RandomizePorts)
+                {
+                    distributedApplicationLogger.LogInformation("Generating a dynamic url for dashboard.  If you want a consistent url, configure `ASPNETCORE_URLS`");
+                }
+                return Task.CompletedTask;
             });
+
+        }
+        else
+        {
+            foreach (var d in dashboardUrls.Split(';', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var address = BindingAddress.Parse(d.Trim());
+
+                dashboardResource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, uriScheme: address.Scheme, port: address.Port, isProxied: true)
+                {
+                    TargetHost = address.Host
+                });
+            }
         }
 
-        if (otlpGrpcEndpointUrl != null)
+        if (otlpHttpEndpointUrl is not null)
         {
-            var address = BindingAddress.Parse(otlpGrpcEndpointUrl);
-            dashboardResource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, name: KnownEndpointNames.OtlpGrpcEndpointName, uriScheme: address.Scheme, port: address.Port, isProxied: true, transport: "http2")
-            {
-                TargetHost = address.Host
-            });
+            dashboardResource.Annotations.Add(CreateDashboardOtlpEndpointAnnotation(otlpHttpEndpointUrl, KnownEndpointNames.OtlpHttpEndpointName, allowUnsecureTransport));
         }
 
-        if (otlpHttpEndpointUrl != null)
+        if (otlpGrpcEndpointUrl is not null || otlpHttpEndpointUrl is null)
         {
-            var address = BindingAddress.Parse(otlpHttpEndpointUrl);
-            dashboardResource.Annotations.Add(new EndpointAnnotation(ProtocolType.Tcp, name: KnownEndpointNames.OtlpHttpEndpointName, uriScheme: address.Scheme, port: address.Port, isProxied: true)
-            {
-                TargetHost = address.Host
-            });
+            dashboardResource.Annotations.Add(CreateDashboardOtlpEndpointAnnotation(otlpGrpcEndpointUrl, KnownEndpointNames.OtlpGrpcEndpointName, allowUnsecureTransport, transport: "http2"));
         }
 
         // Determine whether any HTTPS endpoints are configured
@@ -524,11 +537,6 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
         var options = dashboardOptions.Value;
 
-        // Options should have been validated these should not be null
-
-        Debug.Assert(options.DashboardUrl is not null, "DashboardUrl should not be null");
-        Debug.Assert(options.OtlpGrpcEndpointUrl is not null || options.OtlpHttpEndpointUrl is not null, "OtlpGrpcEndpointUrl and OtlpHttpEndpointUrl should not both be null");
-
         var environment = options.AspNetCoreEnvironment;
         var browserToken = options.DashboardToken;
         var otlpApiKey = options.OtlpApiKey;
@@ -541,7 +549,8 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
         PopulateDashboardUrls(context);
 
-        if (options.OtlpHttpEndpointUrl != null)
+        var otlpHttp = ((IResourceWithEndpoints)context.Resource).GetEndpoint(KnownEndpointNames.OtlpHttpEndpointName, KnownNetworkIdentifiers.LocalhostNetwork);
+        if (otlpHttp.Exists)
         {
             // Use explicitly defined allowed origins if configured.
             var allowedOrigins = configuration.GetString(KnownConfigNames.DashboardCorsAllowedOrigins, KnownConfigNames.Legacy.DashboardCorsAllowedOrigins);
@@ -640,6 +649,21 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             context.EnvironmentVariables[DashboardConfigNames.DebugSessionTelemetryOptOutName.EnvVarName] = optOutValue;
         }
 
+    }
+
+    private static EndpointAnnotation CreateDashboardOtlpEndpointAnnotation(string? endpointUrl, string endpointName, bool allowUnsecureTransport, string? transport = null)
+    {
+        if (string.IsNullOrWhiteSpace(endpointUrl))
+        {
+            var uriScheme = allowUnsecureTransport ? "http" : "https";
+            return new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, uriScheme: uriScheme, isProxied: true, transport: transport);
+        }
+
+        var address = BindingAddress.Parse(endpointUrl);
+        return new EndpointAnnotation(ProtocolType.Tcp, name: endpointName, uriScheme: address.Scheme, port: address.Port, isProxied: true, transport: transport)
+        {
+            TargetHost = address.Host
+        };
     }
 
     private static void PopulateDashboardUrls(EnvironmentCallbackContext context)

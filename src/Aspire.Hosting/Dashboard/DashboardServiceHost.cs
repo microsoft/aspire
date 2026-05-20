@@ -138,13 +138,14 @@ internal sealed class DashboardServiceHost : IHostedService
         {
             // Inspect environment for the address to listen on.
             var uri = configuration.GetUri(ResourceServiceUrlVariableName);
+            var allowUnsecuredTransport = configuration.GetBool(KnownConfigNames.AllowUnsecuredTransport) ?? false;
 
             string? scheme;
 
             if (uri is null)
             {
                 // No URI available from the environment.
-                scheme = null;
+                scheme = allowUnsecuredTransport ? "http" : "https";
 
                 // Listen on a random port.
                 kestrelOptions.Listen(IPAddress.Loopback, port: 0, ConfigureListen);
