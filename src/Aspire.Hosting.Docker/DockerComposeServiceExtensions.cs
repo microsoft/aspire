@@ -80,7 +80,6 @@ public static class DockerComposeServiceExtensions
     /// <remarks>
     /// Use this overload with parameter builders returned by methods such as <see cref="ParameterResourceBuilderExtensions.AddParameter(IDistributedApplicationBuilder, string, bool)"/>.
     /// </remarks>
-    /// <ats-summary>Creates a Docker Compose environment variable placeholder from a parameter builder</ats-summary>
     [AspireExport]
     public static string AsEnvironmentPlaceholder(this IResourceBuilder<ParameterResource> builder, DockerComposeServiceResource dockerComposeService)
     {

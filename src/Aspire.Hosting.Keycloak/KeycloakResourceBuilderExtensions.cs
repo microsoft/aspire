@@ -48,11 +48,6 @@ public static class KeycloakResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <ats-summary>Adds a Keycloak container resource</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
-    /// <ats-param name="builder">The <ats-see cref="!:type:IDistributedApplicationBuilder" />.</ats-param>
-    /// <ats-param name="adminUsername">The parameter used as the admin for the Keycloak resource. If `null` a default value will be used.</ats-param>
-    /// <ats-param name="adminPassword">The parameter used as the admin password for the Keycloak resource. If `null` a default password will be used.</ats-param>
     [AspireExport]
     public static IResourceBuilder<KeycloakResource> AddKeycloak(
         this IDistributedApplicationBuilder builder,
@@ -161,7 +156,6 @@ public static class KeycloakResourceBuilderExtensions
     /// </example>
     /// </remarks>
     /// <ats-summary>Adds a data volume for Keycloak</ats-summary>
-    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<KeycloakResource> WithDataVolume(this IResourceBuilder<KeycloakResource> builder, string? name = null)
     {
@@ -187,7 +181,6 @@ public static class KeycloakResourceBuilderExtensions
     /// </example>
     /// </remarks>
     /// <ats-summary>Adds a data bind mount for Keycloak</ats-summary>
-    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<KeycloakResource> WithDataBindMount(this IResourceBuilder<KeycloakResource> builder, string source)
     {
@@ -267,7 +260,6 @@ public static class KeycloakResourceBuilderExtensions
     /// <param name="features">Names of features to enable for the keycloak resource</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-summary>Enables Keycloak features</ats-summary>
-    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<KeycloakResource> WithEnabledFeatures(
         this IResourceBuilder<KeycloakResource> builder,
@@ -290,7 +282,6 @@ public static class KeycloakResourceBuilderExtensions
     /// <param name="features">Names of features to disable for the keycloak resource</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-summary>Disables Keycloak features</ats-summary>
-    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<KeycloakResource> WithDisabledFeatures(
         this IResourceBuilder<KeycloakResource> builder,

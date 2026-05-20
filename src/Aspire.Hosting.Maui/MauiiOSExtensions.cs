@@ -150,7 +150,6 @@ public static class MauiiOSExtensions
     /// </code>
     /// </example>
     /// <ats-summary>Adds an iOS device resource for a .NET MAUI project.</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<MauiiOSDeviceResource> AddiOSDevice(
         this IResourceBuilder<MauiProjectResource> builder,
@@ -347,7 +346,6 @@ public static class MauiiOSExtensions
     /// </code>
     /// </example>
     /// <ats-summary>Adds an iOS simulator resource for a .NET MAUI project.</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<MauiiOSSimulatorResource> AddiOSSimulator(
         this IResourceBuilder<MauiProjectResource> builder,

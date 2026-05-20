@@ -41,9 +41,6 @@ public static class AzureKustoBuilderExtensions
     /// - <see cref="KustoDatabasePrincipalRole.User"/>
     /// </para>
     /// </remarks>
-    /// <ats-summary>Adds an Azure Data Explorer (Kusto) cluster resource</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
-    /// <ats-param name="builder">The <ats-see cref="!:type:IDistributedApplicationBuilder" />.</ats-param>
     [AspireExport]
     public static IResourceBuilder<AzureKustoClusterResource> AddAzureKustoCluster(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
@@ -106,9 +103,6 @@ public static class AzureKustoBuilderExtensions
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <param name="databaseName">The name of the database. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Adds a Kusto read-write database resource</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
-    /// <ats-param name="databaseName">The name of the database. If not provided, this defaults to the same value as `name`.</ats-param>
     [AspireExport]
     public static IResourceBuilder<AzureKustoReadWriteDatabaseResource> AddReadWriteDatabase(this IResourceBuilder<AzureKustoClusterResource> builder, [ResourceName] string name, string? databaseName = null)
     {
@@ -201,7 +195,6 @@ public static class AzureKustoBuilderExtensions
     /// <param name="builder">The resource builder to configure.</param>
     /// <param name="script">KQL script to create databases, tables, or data.</param>
     /// <returns>The resource builder.</returns>
-    /// <ats-summary>Defines the KQL script used to create the database</ats-summary>
     [AspireExport]
     public static IResourceBuilder<AzureKustoReadWriteDatabaseResource> WithCreationScript(this IResourceBuilder<AzureKustoReadWriteDatabaseResource> builder, string script)
     {
@@ -221,7 +214,6 @@ public static class AzureKustoBuilderExtensions
     /// <param name="port">Host port to use.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/> for the <see cref="AzureKustoEmulatorResource"/>.</returns>
     /// <ats-summary>Sets the host port for the Kusto emulator endpoint</ats-summary>
-    /// <ats-returns>An <ats-see cref="!:type:IResourceBuilder" /> for the <ats-see cref="!:type:AzureKustoEmulatorResource" />.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzureKustoEmulatorResource> WithHostPort(this IResourceBuilder<AzureKustoEmulatorResource> builder, int port)
     {

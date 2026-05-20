@@ -51,8 +51,6 @@ public static class AzureFrontDoorExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <ats-summary>Adds an Azure Front Door resource</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzureFrontDoorResource> AddAzureFrontDoor(
         this IDistributedApplicationBuilder builder,
@@ -178,8 +176,6 @@ public static class AzureFrontDoorExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <ats-summary>Adds an origin (backend) to the Azure Front Door resource</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzureFrontDoorResource> WithOrigin<T>(
         this IResourceBuilder<AzureFrontDoorResource> builder,

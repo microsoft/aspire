@@ -78,8 +78,6 @@ public static class KubernetesEnvironmentExtensions
     /// <param name="name">The name of the Kubernetes environment resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesEnvironmentResource}"/>.</returns>
     /// <ats-summary>Adds a Kubernetes publishing environment</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
-    /// <ats-param name="builder">The <ats-see cref="!:type:IDistributedApplicationBuilder" />.</ats-param>
     [AspireExport]
     public static IResourceBuilder<KubernetesEnvironmentResource> AddKubernetesEnvironment(
         this IDistributedApplicationBuilder builder,
@@ -134,7 +132,6 @@ public static class KubernetesEnvironmentExtensions
     /// </code>
     /// </example>
     /// <ats-summary>Configures Helm chart deployment settings</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
     [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<KubernetesEnvironmentResource> WithHelm(
         this IResourceBuilder<KubernetesEnvironmentResource> builder,
@@ -161,8 +158,6 @@ public static class KubernetesEnvironmentExtensions
     /// <param name="configure">A method that can be used for customizing the <see cref="KubernetesEnvironmentResource"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-summary>Configures properties of a Kubernetes environment</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
-    /// <ats-param name="configure">A method that can be used for customizing the <ats-see cref="!:type:KubernetesEnvironmentResource" />.</ats-param>
     [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<KubernetesEnvironmentResource> WithProperties(this IResourceBuilder<KubernetesEnvironmentResource> builder, Action<KubernetesEnvironmentResource> configure)
     {
@@ -186,7 +181,6 @@ public static class KubernetesEnvironmentExtensions
     /// configured to send telemetry data to the dashboard.
     /// </remarks>
     /// <ats-summary>Enables or disables the Aspire dashboard for the Kubernetes environment</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<KubernetesEnvironmentResource> WithDashboard(this IResourceBuilder<KubernetesEnvironmentResource> builder, bool enabled = true)
     {
@@ -207,8 +201,6 @@ public static class KubernetesEnvironmentExtensions
     /// Use this overload to customize the dashboard container, for example to set a specific host port
     /// or enable forwarded headers for ingress access.
     /// </remarks>
-    /// <ats-summary>Configures the Aspire dashboard resource for the Kubernetes environment</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
     [AspireExport("configureDashboard", MethodName = "configureDashboard", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<KubernetesEnvironmentResource> WithDashboard(this IResourceBuilder<KubernetesEnvironmentResource> builder, Action<IResourceBuilder<KubernetesAspireDashboardResource>> configure)
     {
@@ -244,8 +236,6 @@ public static class KubernetesEnvironmentExtensions
     ///     .WithNodePool(gpuPool);
     /// </code>
     /// </example>
-    /// <ats-summary>Adds a named node pool to a Kubernetes environment</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for the new node pool.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<KubernetesNodePoolResource> AddNodePool(
         this IResourceBuilder<KubernetesEnvironmentResource> builder,
@@ -285,7 +275,6 @@ public static class KubernetesEnvironmentExtensions
     /// </code>
     /// </example>
     /// <ats-summary>Schedules a workload on a specific Kubernetes node pool</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
     [AspireExport("withKubernetesNodePool", MethodName = "withNodePool")]
     public static IResourceBuilder<T> WithNodePool<T>(
         this IResourceBuilder<T> builder,

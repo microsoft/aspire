@@ -14,8 +14,6 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <remarks>
 /// This event allows for cleanup or unregistration logic when a resource is stopped by an orchestrator.
 /// </remarks>
-/// <ats-param name="services">The <ats-see cref="!:type:IServiceProvider" /> for the app host.</ats-param>
-/// <ats-param name="resourceEvent">The <ats-see cref="!:type:ResourceEvent" /> containing the current state information.</ats-param>
 [AspireExport(ExposeProperties = true)]
 public class ResourceStoppedEvent(IResource resource, IServiceProvider services, ResourceEvent resourceEvent) : IDistributedApplicationResourceEvent
 {

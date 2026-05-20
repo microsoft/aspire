@@ -81,7 +81,6 @@ public class PipelineStep
     /// Adds a dependency on another step.
     /// </summary>
     /// <param name="stepName">The name of the step to depend on.</param>
-    /// <ats-summary>Adds a dependency on another step by name</ats-summary>
     [AspireExport]
     public void DependsOn(string stepName)
     {
@@ -113,7 +112,6 @@ public class PipelineStep
     /// Adds a tag to the step.
     /// </summary>
     /// <param name="tag">The tag to add.</param>
-    /// <ats-summary>Adds a tag to the step</ats-summary>
     [AspireExport]
     internal void AddTag(string tag)
     {

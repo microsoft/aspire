@@ -29,9 +29,6 @@ public static class AzureAppConfigurationExtensions
     ///
     /// These can be replaced by calling <see cref="WithRoleAssignments{T}(IResourceBuilder{T}, IResourceBuilder{AzureAppConfigurationResource}, AppConfigurationBuiltInRole[])"/>.
     /// </remarks>
-    /// <ats-summary>Adds an Azure App Configuration resource</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
-    /// <ats-param name="builder">The <ats-see cref="!:type:IDistributedApplicationBuilder" />.</ats-param>
     [AspireExport]
     public static IResourceBuilder<AzureAppConfigurationResource> AddAzureAppConfiguration(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
@@ -97,7 +94,6 @@ public static class AzureAppConfigurationExtensions
     /// <param name="configureEmulator">Callback that exposes underlying container used for emulation to allow for customization.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-summary>Configures Azure App Configuration to run with the local emulator</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
     [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureAppConfigurationResource> RunAsEmulator(this IResourceBuilder<AzureAppConfigurationResource> builder, Action<IResourceBuilder<AzureAppConfigurationEmulatorResource>>? configureEmulator = null)
     {
@@ -133,8 +129,6 @@ public static class AzureAppConfigurationExtensions
     /// <param name="path">Relative path to the AppHost where emulator storage is persisted between runs. Defaults to the path '.aace'</param>
     /// <returns>A builder for the <see cref="AzureAppConfigurationEmulatorResource"/>.</returns>
     /// <ats-summary>Adds a data bind mount for the App Configuration emulator</ats-summary>
-    /// <ats-returns>A builder for the <ats-see cref="!:type:AzureAppConfigurationEmulatorResource" />.</ats-returns>
-    /// <ats-param name="builder">The builder for the <ats-see cref="!:type:AzureAppConfigurationEmulatorResource" />.</ats-param>
     [AspireExport]
     public static IResourceBuilder<AzureAppConfigurationEmulatorResource> WithDataBindMount(this IResourceBuilder<AzureAppConfigurationEmulatorResource> builder, string? path = null)
     {
@@ -150,8 +144,6 @@ public static class AzureAppConfigurationExtensions
     /// <param name="name">The name of the volume. Defaults to an auto-generated name based on the application and resource names.</param>
     /// <returns>A builder for the <see cref="AzureAppConfigurationEmulatorResource"/>.</returns>
     /// <ats-summary>Adds a data volume for the App Configuration emulator</ats-summary>
-    /// <ats-returns>A builder for the <ats-see cref="!:type:AzureAppConfigurationEmulatorResource" />.</ats-returns>
-    /// <ats-param name="builder">The builder for the <ats-see cref="!:type:AzureAppConfigurationEmulatorResource" />.</ats-param>
     [AspireExport]
     public static IResourceBuilder<AzureAppConfigurationEmulatorResource> WithDataVolume(this IResourceBuilder<AzureAppConfigurationEmulatorResource> builder, string? name = null)
     {
@@ -167,8 +159,6 @@ public static class AzureAppConfigurationExtensions
     /// <param name="port">The port to bind on the host. If <see langword="null"/> is used, a random port will be assigned.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-summary>Sets the host port for the App Configuration emulator</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
-    /// <ats-param name="port">The port to bind on the host. If `null` is used, a random port will be assigned.</ats-param>
     [AspireExport]
     public static IResourceBuilder<AzureAppConfigurationEmulatorResource> WithHostPort(this IResourceBuilder<AzureAppConfigurationEmulatorResource> builder, int? port)
     {
@@ -223,7 +213,6 @@ public static class AzureAppConfigurationExtensions
     /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
     /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="AzureAppConfigurationRole"/> value.</exception>
     /// <ats-summary>Assigns App Configuration roles to a resource</ats-summary>
-    /// <ats-returns>The updated <ats-see cref="!:type:IResourceBuilder" /> with the applied role assignments.</ats-returns>
     [AspireExport("withAppConfigurationRoleAssignments")]
     internal static IResourceBuilder<T> WithRoleAssignments<T>(
         this IResourceBuilder<T> builder,

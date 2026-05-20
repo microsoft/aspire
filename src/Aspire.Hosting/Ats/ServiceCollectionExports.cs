@@ -56,7 +56,6 @@ internal static class ServiceCollectionExports
     /// </summary>
     /// <param name="serviceProvider">The service provider.</param>
     /// <returns>The Aspire store.</returns>
-    /// <ats-summary>Gets the Aspire store from the service provider</ats-summary>
     [AspireExport]
     public static IAspireStore GetAspireStore(this IServiceProvider serviceProvider)
     {

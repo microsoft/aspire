@@ -75,7 +75,6 @@ public static class MauiMacCatalystExtensions
     /// </code>
     /// </example>
     /// <ats-summary>Adds a Mac Catalyst platform resource for a .NET MAUI project.</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<MauiMacCatalystPlatformResource> AddMacCatalystDevice(
         this IResourceBuilder<MauiProjectResource> builder,

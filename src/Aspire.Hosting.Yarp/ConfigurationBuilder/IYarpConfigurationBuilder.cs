@@ -87,7 +87,6 @@ public static class YarpConfigurationBuilderExtensions
     /// <param name="builder">The builder instance.</param>
     /// <param name="endpoint">The endpoint target for this cluster.</param>
     /// <returns>The created cluster.</returns>
-    /// <ats-summary>Adds a YARP cluster for an endpoint reference.</ats-summary>
     [AspireExport]
     internal static YarpCluster AddClusterFromEndpoint(this IYarpConfigurationBuilder builder, EndpointReference endpoint)
     {
@@ -100,7 +99,6 @@ public static class YarpConfigurationBuilderExtensions
     /// <param name="builder">The builder instance.</param>
     /// <param name="resource">The resource target for this cluster.</param>
     /// <returns>The created cluster.</returns>
-    /// <ats-summary>Adds a YARP cluster for a resource that supports service discovery.</ats-summary>
     [AspireExport]
     internal static YarpCluster AddClusterFromResource(this IYarpConfigurationBuilder builder, IResourceBuilder<IResourceWithServiceDiscovery> resource)
     {
@@ -113,7 +111,6 @@ public static class YarpConfigurationBuilderExtensions
     /// <param name="builder">The builder instance.</param>
     /// <param name="externalService">The external service used by this cluster.</param>
     /// <returns>The created cluster.</returns>
-    /// <ats-summary>Adds a YARP cluster for an external service resource.</ats-summary>
     [AspireExport]
     internal static YarpCluster AddClusterFromExternalService(this IYarpConfigurationBuilder builder, IResourceBuilder<ExternalServiceResource> externalService)
     {
@@ -127,7 +124,6 @@ public static class YarpConfigurationBuilderExtensions
     /// <param name="clusterName">The name of the cluster.</param>
     /// <param name="destinations">The destinations used by this cluster.</param>
     /// <returns>The created cluster.</returns>
-    /// <ats-summary>Adds a YARP cluster with multiple destinations.</ats-summary>
     [AspireExport]
     internal static YarpCluster AddClusterWithDestinations(this IYarpConfigurationBuilder builder, string clusterName, object[] destinations)
     {
@@ -141,7 +137,6 @@ public static class YarpConfigurationBuilderExtensions
     /// <param name="clusterName">The name of the cluster.</param>
     /// <param name="destination">The destination used by this cluster.</param>
     /// <returns>The created cluster.</returns>
-    /// <ats-summary>Adds a YARP cluster with a single destination.</ats-summary>
     [AspireExport]
     internal static YarpCluster AddClusterWithDestination(this IYarpConfigurationBuilder builder, string clusterName, object destination)
     {
@@ -166,7 +161,6 @@ public static class YarpConfigurationBuilderExtensions
     /// <param name="builder">The builder instance.</param>
     /// <param name="target">The target cluster, endpoint, resource, or string destination for this route.</param>
     /// <returns>The created route.</returns>
-    /// <ats-summary>Adds a YARP catch-all route for a cluster, endpoint, resource, or string destination target.</ats-summary>
     [AspireExport]
     internal static YarpRoute AddCatchAllRoute(
         this IYarpConfigurationBuilder builder,
@@ -248,7 +242,6 @@ public static class YarpConfigurationBuilderExtensions
     /// <param name="path">The path to match for this route.</param>
     /// <param name="target">The target cluster, endpoint, resource, or string destination for this route.</param>
     /// <returns>The created route.</returns>
-    /// <ats-summary>Adds a YARP route for a cluster, endpoint, resource, or string destination target.</ats-summary>
     [AspireExport]
     internal static YarpRoute AddRoute(
         this IYarpConfigurationBuilder builder,

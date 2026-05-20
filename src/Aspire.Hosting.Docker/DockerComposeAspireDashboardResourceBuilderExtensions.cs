@@ -53,8 +53,6 @@ public static class DockerComposeAspireDashboardResourceBuilderExtensions
     /// The <see cref="IResourceBuilder{DockerComposeAspireDashboardResource}"/> instance for chaining.
     /// </returns>
     /// <ats-summary>Sets the host port for the Aspire dashboard</ats-summary>
-    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" /> instance for chaining.</ats-returns>
-    /// <ats-param name="builder">The <ats-see cref="!:type:IResourceBuilder" /> instance to configure.</ats-param>
     [AspireExport]
     public static IResourceBuilder<DockerComposeAspireDashboardResource> WithHostPort(
         this IResourceBuilder<DockerComposeAspireDashboardResource> builder,
@@ -79,8 +77,6 @@ public static class DockerComposeAspireDashboardResourceBuilderExtensions
     /// headers which is required when the dashboard is accessed through a reverse proxy or load balancer.
     /// </remarks>
     /// <ats-summary>Enables or disables forwarded headers support for the Aspire dashboard</ats-summary>
-    /// <ats-returns>The same <ats-see cref="!:type:IResourceBuilder" /> to allow chaining.</ats-returns>
-    /// <ats-param name="builder">The <ats-see cref="!:type:IResourceBuilder" /> instance.</ats-param>
     [AspireExport]
     public static IResourceBuilder<DockerComposeAspireDashboardResource> WithForwardedHeaders(
         this IResourceBuilder<DockerComposeAspireDashboardResource> builder,

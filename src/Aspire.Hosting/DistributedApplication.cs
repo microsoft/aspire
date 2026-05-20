@@ -513,7 +513,6 @@ public class DistributedApplication : IHost, IAsyncDisposable
     /// </para>
     /// </remarks>
     /// <ats-summary>Runs the distributed application</ats-summary>
-    /// <ats-returns>A promise that represents the asynchronous operation.</ats-returns>
     [AspireExport("run")]
     public virtual async Task RunAsync(CancellationToken cancellationToken = default)
     {

@@ -31,8 +31,6 @@ public static class ExistingAzureResourceExtensions
     /// </summary>
     /// <param name="resource">The Azure resource to check.</param>
     /// <returns><see langword="true"/> if the resource is marked as existing; otherwise, <see langword="false"/>.</returns>
-    /// <ats-summary>Determines whether a resource is marked as existing</ats-summary>
-    /// <ats-returns>`true` if the resource is marked as existing; otherwise, `false`.</ats-returns>
     [AspireExport("isExisting")]
     internal static bool IsExistingForPolyglot(this IAzureResource resource)
     {
@@ -176,7 +174,6 @@ public static class ExistingAzureResourceExtensions
     /// <param name="name">The name of the existing resource as a string or parameter resource.</param>
     /// <param name="resourceGroup">The name of the existing resource group as a string or parameter resource.</param>
     /// <returns>The resource builder with the existing resource annotation added.</returns>
-    /// <ats-summary>Marks an Azure resource as existing in both run and publish modes</ats-summary>
     [AspireExport("asExisting")]
     internal static IResourceBuilder<T> AsExistingForPolyglot<T>(
         this IResourceBuilder<T> builder,

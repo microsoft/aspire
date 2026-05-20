@@ -42,8 +42,6 @@ public static class MauiProjectExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
-    /// <ats-summary>Adds a .NET MAUI project to the application model.</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<MauiProjectResource> AddMauiProject(
         this IDistributedApplicationBuilder builder,

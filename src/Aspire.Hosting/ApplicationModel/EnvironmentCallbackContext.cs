@@ -12,7 +12,6 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <param name="executionContext">The execution context for this invocation of the AppHost.</param>
 /// <param name="environmentVariables">The environment variables associated with this execution.</param>
 /// <param name="cancellationToken">A <see cref="CancellationToken"/>.</param>
-/// <ats-param name="cancellationToken">A <ats-see cref="!:type:CancellationToken" />.</ats-param>
 [AspireExport]
 public class EnvironmentCallbackContext(DistributedApplicationExecutionContext executionContext, Dictionary<string, object>? environmentVariables = null, CancellationToken cancellationToken = default)
 {

@@ -17,7 +17,6 @@ internal static class LoggingExports
     /// </summary>
     /// <param name="serviceProvider">The service provider handle.</param>
     /// <returns>A logger factory handle.</returns>
-    /// <ats-summary>Gets the logger factory from the service provider</ats-summary>
     [AspireExport]
     public static ILoggerFactory GetLoggerFactory(this IServiceProvider serviceProvider)
     {
@@ -29,7 +28,6 @@ internal static class LoggingExports
     /// <summary>
     /// Logs an information message.
     /// </summary>
-    /// <ats-summary>Logs an information message</ats-summary>
     [AspireExport]
     public static void LogInformation(this ILogger logger, string message)
     {
@@ -39,7 +37,6 @@ internal static class LoggingExports
     /// <summary>
     /// Logs a warning message.
     /// </summary>
-    /// <ats-summary>Logs a warning message</ats-summary>
     [AspireExport]
     public static void LogWarning(this ILogger logger, string message)
     {
@@ -49,7 +46,6 @@ internal static class LoggingExports
     /// <summary>
     /// Logs an error message.
     /// </summary>
-    /// <ats-summary>Logs an error message</ats-summary>
     [AspireExport]
     public static void LogError(this ILogger logger, string message)
     {
@@ -59,7 +55,6 @@ internal static class LoggingExports
     /// <summary>
     /// Logs a debug message.
     /// </summary>
-    /// <ats-summary>Logs a debug message</ats-summary>
     [AspireExport]
     public static void LogDebug(this ILogger logger, string message)
     {
@@ -69,7 +64,6 @@ internal static class LoggingExports
     /// <summary>
     /// Logs a message with a specified log level.
     /// </summary>
-    /// <ats-summary>Logs a message with specified level</ats-summary>
     [AspireExport]
     public static void Log(this ILogger logger, string level, string message)
     {
@@ -97,7 +91,6 @@ internal static class LoggingExports
     /// </summary>
     /// <param name="serviceProvider">The service provider handle.</param>
     /// <returns>A resource logger service handle.</returns>
-    /// <ats-summary>Gets the resource logger service from the service provider</ats-summary>
     [AspireExport]
     public static ResourceLoggerService GetResourceLoggerService(this IServiceProvider serviceProvider)
     {
@@ -109,7 +102,6 @@ internal static class LoggingExports
     /// <summary>
     /// Completes the log stream for a resource.
     /// </summary>
-    /// <ats-summary>Completes the log stream for a resource</ats-summary>
     [AspireExport]
     public static void CompleteLog(this ResourceLoggerService loggerService, IResourceBuilder<IResource> resource)
     {
@@ -119,7 +111,6 @@ internal static class LoggingExports
     /// <summary>
     /// Completes the log stream by resource name.
     /// </summary>
-    /// <ats-summary>Completes the log stream by resource name</ats-summary>
     [AspireExport]
     public static void CompleteLogByName(this ResourceLoggerService loggerService, string resourceName)
     {

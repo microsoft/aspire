@@ -45,8 +45,6 @@ public static class AzurePrivateEndpointExtensions
     /// peSubnet.AddPrivateEndpoint(blobs);
     /// </code>
     /// </example>
-    /// <ats-summary>Adds an Azure Private Endpoint resource to an Azure subnet resource.</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzurePrivateEndpointResource> AddPrivateEndpoint(
         this IResourceBuilder<AzureSubnetResource> subnet,

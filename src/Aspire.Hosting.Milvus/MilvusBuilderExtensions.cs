@@ -38,9 +38,6 @@ public static class MilvusBuilderExtensions
     /// <param name="apiKey">The parameter used to provide the auth key/token user for the Milvus resource.</param>
     /// <param name="grpcPort">The host port of gRPC endpoint of Milvus database.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{MilvusServerResource}"/>.</returns>
-    /// <ats-summary>Adds a Milvus server resource to the distributed application model.</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
-    /// <ats-param name="builder">The <ats-see cref="!:type:IDistributedApplicationBuilder" />.</ats-param>
     [AspireExport]
     public static IResourceBuilder<MilvusServerResource> AddMilvus(this IDistributedApplicationBuilder builder,
         string name,
@@ -97,8 +94,6 @@ public static class MilvusBuilderExtensions
     /// <param name="databaseName">The name of the database. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-summary>Adds a Milvus database resource to a Milvus server resource.</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
-    /// <ats-param name="databaseName">The name of the database. If not provided, this defaults to the same value as `name`.</ats-param>
     [AspireExport]
     public static IResourceBuilder<MilvusDatabaseResource> AddDatabase(this IResourceBuilder<MilvusServerResource> builder, [ResourceName] string name, string? databaseName = null)
     {
@@ -137,7 +132,6 @@ public static class MilvusBuilderExtensions
     /// <param name="containerName">The name of the container (Optional).</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-summary>Adds the Attu administration tool for Milvus.</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
     [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<T> WithAttu<T>(this IResourceBuilder<T> builder, Action<IResourceBuilder<AttuResource>>? configureContainer = null, string? containerName = null) where T : MilvusServerResource
     {
@@ -166,7 +160,6 @@ public static class MilvusBuilderExtensions
     /// <param name="isReadOnly">A flag that indicates if this is a read-only volume.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-summary>Adds a persistent data volume to the Milvus server resource.</ats-summary>
-    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<MilvusServerResource> WithDataVolume(this IResourceBuilder<MilvusServerResource> builder, string? name = null, bool isReadOnly = false)
     {
@@ -183,7 +176,6 @@ public static class MilvusBuilderExtensions
     /// <param name="isReadOnly">A flag that indicates if this is a read-only mount.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-summary>Mounts a host directory as the Milvus data directory.</ats-summary>
-    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<MilvusServerResource> WithDataBindMount(this IResourceBuilder<MilvusServerResource> builder, string source, bool isReadOnly = false)
     {
@@ -214,8 +206,6 @@ public static class MilvusBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="configurationFilePath">The configuration file on the host to copy into the container.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Copies a Milvus configuration file into the container.</ats-summary>
-    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<MilvusServerResource> WithConfigurationFile(this IResourceBuilder<MilvusServerResource> builder, string configurationFilePath)
     {

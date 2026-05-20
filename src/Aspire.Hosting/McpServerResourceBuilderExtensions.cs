@@ -38,7 +38,6 @@ public static class McpServerResourceBuilderExtensions
     /// </code>
     /// </example>
     /// <ats-summary>Configures an MCP server endpoint on the resource</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining additional configuration.</ats-returns>
     [Experimental("ASPIREMCP001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport]
     public static IResourceBuilder<T> WithMcpServer<T>(

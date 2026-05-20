@@ -59,9 +59,6 @@ public static class KubernetesAspireDashboardResourceBuilderExtensions
     /// configure the environment's <see cref="KubernetesEnvironmentResource.DefaultServiceType"/>
     /// to <c>NodePort</c> or <c>LoadBalancer</c>.
     /// </remarks>
-    /// <ats-summary>Sets the Kubernetes Service port for the Aspire dashboard</ats-summary>
-    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" /> instance for chaining.</ats-returns>
-    /// <ats-param name="builder">The <ats-see cref="!:type:IResourceBuilder" /> instance to configure.</ats-param>
     [AspireExport]
     public static IResourceBuilder<KubernetesAspireDashboardResource> WithServicePort(
         this IResourceBuilder<KubernetesAspireDashboardResource> builder,
@@ -91,9 +88,6 @@ public static class KubernetesAspireDashboardResourceBuilderExtensions
     /// in the cluster send telemetry to these Service ports. Use standard OTLP ports (4317 for gRPC,
     /// 4318 for HTTP) if your services are configured with those defaults.
     /// </remarks>
-    /// <ats-summary>Sets the Kubernetes Service ports for the OTLP endpoints</ats-summary>
-    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" /> instance for chaining.</ats-returns>
-    /// <ats-param name="builder">The <ats-see cref="!:type:IResourceBuilder" /> instance to configure.</ats-param>
     [AspireExport]
     public static IResourceBuilder<KubernetesAspireDashboardResource> WithOtlpServicePort(
         this IResourceBuilder<KubernetesAspireDashboardResource> builder,
@@ -127,8 +121,6 @@ public static class KubernetesAspireDashboardResourceBuilderExtensions
     /// headers which is required when the dashboard is accessed through a reverse proxy or ingress controller.
     /// </remarks>
     /// <ats-summary>Enables or disables forwarded headers support for the Aspire dashboard</ats-summary>
-    /// <ats-returns>The same <ats-see cref="!:type:IResourceBuilder" /> to allow chaining.</ats-returns>
-    /// <ats-param name="builder">The <ats-see cref="!:type:IResourceBuilder" /> instance.</ats-param>
     [AspireExport]
     public static IResourceBuilder<KubernetesAspireDashboardResource> WithForwardedHeaders(
         this IResourceBuilder<KubernetesAspireDashboardResource> builder,

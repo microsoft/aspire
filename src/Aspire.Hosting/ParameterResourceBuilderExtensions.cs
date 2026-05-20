@@ -255,7 +255,6 @@ public static class ParameterResourceBuilderExtensions
     /// <param name="builder">Resource builder for the parameter.</param>
     /// <param name="options">Options used to customize the input for the parameter.</param>
     /// <returns>Resource builder for the parameter.</returns>
-    /// <ats-summary>Sets a custom input for the parameter</ats-summary>
     [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport("withCustomInput")]
     internal static IResourceBuilder<ParameterResource> WithCustomInputForPolyglot(this IResourceBuilder<ParameterResource> builder, Ats.ParameterCustomInputOptions options)
@@ -361,7 +360,6 @@ public static class ParameterResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <returns>The configured <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-summary>Publishes the resource as a connection string</ats-summary>
-    /// <ats-returns>The configured <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<T> PublishAsConnectionString<T>(this IResourceBuilder<T> builder)
         where T : ContainerResource, IResourceWithConnectionString

@@ -43,8 +43,6 @@ public static class AzureManagedRedisExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <ats-summary>Adds an Azure Managed Redis resource</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzureManagedRedisResource> AddAzureManagedRedis(
         this IDistributedApplicationBuilder builder,
@@ -83,8 +81,6 @@ public static class AzureManagedRedisExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <ats-summary>Configures Azure Managed Redis to run in a local container</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> builder.</ats-returns>
     [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureManagedRedisResource> RunAsContainer(
         this IResourceBuilder<AzureManagedRedisResource> builder,

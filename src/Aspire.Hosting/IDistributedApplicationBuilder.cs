@@ -272,7 +272,6 @@ public interface IDistributedApplicationBuilder
     /// </para>
     /// </remarks>
     /// <ats-summary>Builds the distributed application</ats-summary>
-    /// <ats-returns>A new <ats-see cref="!:type:DistributedApplication" /> instance.</ats-returns>
     [AspireExport]
     DistributedApplication Build();
 }

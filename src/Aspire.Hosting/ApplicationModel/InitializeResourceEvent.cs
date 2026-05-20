@@ -18,10 +18,6 @@ namespace Aspire.Hosting.ApplicationModel;
 /// Custom resources can subscribe to this event to perform initialization tasks, including starting background tasks
 /// that manage the resource's lifecycle.
 /// </remarks>
-/// <ats-param name="distributedApplicationEventing">The <ats-see cref="!:type:IDistributedApplicationEventing" /> service for the app host.</ats-param>
-/// <ats-param name="resourceLoggerService">The <ats-see cref="!:type:ResourceLoggerService" /> for the app host.</ats-param>
-/// <ats-param name="resourceNotificationService">The <ats-see cref="!:type:ResourceNotificationService" /> for the app host.</ats-param>
-/// <ats-param name="services">The <ats-see cref="!:type:IServiceProvider" /> for the app host.</ats-param>
 [AspireExport(ExposeProperties = true)]
 public class InitializeResourceEvent(
     IResource resource,

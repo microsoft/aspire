@@ -98,7 +98,6 @@ public static class AzureContainerAppExtensions
     /// <param name="name">The name of the resource.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
     /// <ats-summary>Adds an Azure Container App Environment resource</ats-summary>
-    /// <ats-returns><ats-see cref="!:type:IResourceBuilder" /></ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzureContainerAppEnvironmentResource> AddAzureContainerAppEnvironment(this IDistributedApplicationBuilder builder, string name)
     {
@@ -454,7 +453,6 @@ public static class AzureContainerAppExtensions
     /// azd without calling <see cref="AddAzureContainerAppEnvironment"/>
     /// </remarks>
     /// <ats-summary>Configures resources to use azd naming conventions</ats-summary>
-    /// <ats-returns><ats-see cref="!:type:IResourceBuilder" /></ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzureContainerAppEnvironmentResource> WithAzdResourceNaming(this IResourceBuilder<AzureContainerAppEnvironmentResource> builder)
     {
@@ -486,8 +484,6 @@ public static class AzureContainerAppExtensions
     /// </para>
     /// </remarks>
     /// <ats-summary>Configures resources to use compact naming for length-constrained Azure resources</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
-    /// <ats-param name="builder">The <ats-see cref="!:type:AzureContainerAppEnvironmentResource" /> to configure.</ats-param>
     [AspireExport]
     [Experimental("ASPIREACANAMING001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzureContainerAppEnvironmentResource> WithCompactResourceNaming(this IResourceBuilder<AzureContainerAppEnvironmentResource> builder)
@@ -502,8 +498,6 @@ public static class AzureContainerAppExtensions
     /// <param name="builder">The AzureContainerAppEnvironmentResource to configure.</param>
     /// <param name="enable">Whether to include the Aspire dashboard. Default is true.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
-    /// <ats-summary>Configures whether the Aspire dashboard is included in the container app environment</ats-summary>
-    /// <ats-returns><ats-see cref="!:type:IResourceBuilder" /></ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzureContainerAppEnvironmentResource> WithDashboard(this IResourceBuilder<AzureContainerAppEnvironmentResource> builder, bool enable = true)
     {
@@ -524,7 +518,6 @@ public static class AzureContainerAppExtensions
     /// to standard ports (80/443) as required by Azure Container Apps.
     /// </remarks>
     /// <ats-summary>Configures whether HTTP endpoints are upgraded to HTTPS</ats-summary>
-    /// <ats-returns><ats-see cref="!:type:IResourceBuilder" /></ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzureContainerAppEnvironmentResource> WithHttpsUpgrade(this IResourceBuilder<AzureContainerAppEnvironmentResource> builder, bool upgrade = true)
     {
@@ -539,9 +532,6 @@ public static class AzureContainerAppExtensions
     /// <param name="workspaceBuilder">The resource builder for the <see cref="AzureLogAnalyticsWorkspaceResource"/> to use.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="workspaceBuilder"/> is null.</exception>
-    /// <ats-summary>Configures the container app environment to use a specific Log Analytics Workspace</ats-summary>
-    /// <ats-returns><ats-see cref="!:type:IResourceBuilder" /></ats-returns>
-    /// <ats-param name="workspaceBuilder">The resource builder for the <ats-see cref="!:type:AzureLogAnalyticsWorkspaceResource" /> to use.</ats-param>
     [AspireExport]
     public static IResourceBuilder<AzureContainerAppEnvironmentResource> WithAzureLogAnalyticsWorkspace(this IResourceBuilder<AzureContainerAppEnvironmentResource> builder, IResourceBuilder<AzureLogAnalyticsWorkspaceResource> workspaceBuilder)
     {

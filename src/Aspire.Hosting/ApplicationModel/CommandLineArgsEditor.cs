@@ -15,7 +15,6 @@ internal sealed class CommandLineArgsEditor(IList<object> args)
     /// Adds a command-line argument.
     /// </summary>
     /// <param name="value">The argument to add.</param>
-    /// <ats-summary>Adds a command-line argument</ats-summary>
     [AspireExport]
     public void Add(
         [AspireUnion(

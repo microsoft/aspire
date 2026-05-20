@@ -13,7 +13,6 @@ public static class RequestHeadersTransformExtensions
     /// <summary>
     /// Adds the transform which will enable or suppress copying request headers to the proxy request.
     /// </summary>
-    /// <ats-summary>Adds the transform which will enable or suppress copying request headers to the proxy request.</ats-summary>
     [AspireExport]
     public static YarpRoute WithTransformCopyRequestHeaders(this YarpRoute route, bool copy = true)
     {
@@ -24,7 +23,6 @@ public static class RequestHeadersTransformExtensions
     /// <summary>
     /// Adds the transform which will copy the incoming request Host header to the proxy request.
     /// </summary>
-    /// <ats-summary>Adds the transform which will copy the incoming request Host header to the proxy request.</ats-summary>
     [AspireExport]
     public static YarpRoute WithTransformUseOriginalHostHeader(this YarpRoute route, bool useOriginal = true)
     {
@@ -35,7 +33,6 @@ public static class RequestHeadersTransformExtensions
     /// <summary>
     /// Adds the transform which will append or set the request header.
     /// </summary>
-    /// <ats-summary>Adds the transform which will append or set the request header.</ats-summary>
     [AspireExport]
     public static YarpRoute WithTransformRequestHeader(this YarpRoute route, string headerName, string value, bool append = true)
     {
@@ -46,7 +43,6 @@ public static class RequestHeadersTransformExtensions
     /// <summary>
     /// Adds the transform which will append or set the request header from a route value.
     /// </summary>
-    /// <ats-summary>Adds the transform which will append or set the request header from a route value.</ats-summary>
     [AspireExport]
     public static YarpRoute WithTransformRequestHeaderRouteValue(this YarpRoute route, string headerName, string routeValueKey, bool append = true)
     {
@@ -57,7 +53,6 @@ public static class RequestHeadersTransformExtensions
     /// <summary>
     /// Adds the transform which will remove the request header.
     /// </summary>
-    /// <ats-summary>Adds the transform which will remove the request header.</ats-summary>
     [AspireExport]
     public static YarpRoute WithTransformRequestHeaderRemove(this YarpRoute route, string headerName)
     {
@@ -69,7 +64,6 @@ public static class RequestHeadersTransformExtensions
     /// Adds the transform which will only copy the allowed request headers. Other transforms
     /// that modify or append to existing headers may be affected if not included in the allow list.
     /// </summary>
-    /// <ats-summary>Adds the transform which will only copy the allowed request headers. Other transforms</ats-summary>
     [AspireExport]
     public static YarpRoute WithTransformRequestHeadersAllowed(this YarpRoute route, params string[] allowedHeaders)
     {

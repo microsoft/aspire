@@ -17,7 +17,6 @@ internal static class AzureKustoReadWriteDatabaseResourceExtensions
     /// </remarks>
     /// <returns></returns>
     /// <ats-summary>Gets the KQL script used to create the database.</ats-summary>
-    /// <ats-param name="databaseResource">The <ats-see cref="!:type:AzureKustoReadWriteDatabaseResource" /> resource to inspect for annotations.</ats-param>
     [AspireExport]
     public static string GetDatabaseCreationScript(this AzureKustoReadWriteDatabaseResource databaseResource)
     {

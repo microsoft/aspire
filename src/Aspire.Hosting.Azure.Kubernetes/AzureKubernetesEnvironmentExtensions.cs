@@ -46,8 +46,6 @@ public static class AzureKubernetesEnvironmentExtensions
     /// </code>
     /// </example>
     /// <ats-summary>Adds an Azure Kubernetes Service environment resource</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
-    /// <ats-param name="builder">The <ats-see cref="!:type:IDistributedApplicationBuilder" />.</ats-param>
     [AspireExport]
     public static IResourceBuilder<AzureKubernetesEnvironmentResource> AddAzureKubernetesEnvironment(
         this IDistributedApplicationBuilder builder,
@@ -160,8 +158,6 @@ public static class AzureKubernetesEnvironmentExtensions
     /// var gpuPool = aks.AddNodePool("gpu", "Standard_NC6s_v3", 0, 5);
     /// </code>
     /// </example>
-    /// <ats-summary>Adds a node pool to the AKS cluster</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for the new node pool.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<AksNodePoolResource> AddNodePool(
         this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
@@ -215,8 +211,6 @@ public static class AzureKubernetesEnvironmentExtensions
     ///     .WithSystemNodePool("Standard_B2s", minCount: 2, maxCount: 5);
     /// </code>
     /// </example>
-    /// <ats-summary>Replaces the default system node pool with a customized configuration</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzureKubernetesEnvironmentResource> WithSystemNodePool(
         this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
@@ -253,8 +247,6 @@ public static class AzureKubernetesEnvironmentExtensions
     ///     .WithSubnet(subnet);
     /// </code>
     /// </example>
-    /// <ats-summary>Configures the AKS cluster to use a VNet subnet</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzureKubernetesEnvironmentResource> WithSubnet(
         this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
@@ -289,7 +281,6 @@ public static class AzureKubernetesEnvironmentExtensions
     /// </code>
     /// </example>
     /// <ats-summary>Configures an AKS node pool to use a specific VNet subnet</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
     [AspireExport("withNodePoolSubnet", MethodName = "withSubnet")]
     public static IResourceBuilder<AksNodePoolResource> WithSubnet(
         this IResourceBuilder<AksNodePoolResource> builder,
@@ -321,7 +312,6 @@ public static class AzureKubernetesEnvironmentExtensions
     /// Helm deployments can push and pull images.
     /// </remarks>
     /// <ats-summary>Configures the AKS environment to use a specific container registry</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzureKubernetesEnvironmentResource> WithContainerRegistry(
         this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
@@ -414,8 +404,6 @@ public static class AzureKubernetesEnvironmentExtensions
     /// </code>
     /// </example>
     /// <ats-summary>Adds an Azure Application Gateway for Containers ApplicationLoadBalancer to the AKS environment</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
-    /// <ats-param name="subnet">A subnet that will be associated with the AGC ALB. The subnet is automatically delegated to <c>Microsoft.ServiceNetworking/trafficControllers</c>; this is required by AGC and is idempotent across multiple <ats-see cref="!:type:AddLoadBalancer" /> calls against the same subnet.</ats-param>
     [AspireExport]
     public static IResourceBuilder<AzureKubernetesLoadBalancerResource> AddLoadBalancer(
         this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
@@ -507,7 +495,6 @@ public static class AzureKubernetesEnvironmentExtensions
     /// which is added by <c>WithAzureUserAssignedIdentity</c> or auto-created by <c>AzureResourcePreparer</c>.
     /// </remarks>
     /// <ats-summary>Enables workload identity on the AKS cluster</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzureKubernetesEnvironmentResource> WithWorkloadIdentity(
         this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,

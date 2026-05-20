@@ -26,11 +26,6 @@ public static class RabbitMQBuilderExtensions
     /// <param name="password">The parameter used to provide the password for the RabbitMQ resource. If <see langword="null"/> a random password will be generated.</param>
     /// <param name="port">The host port that the underlying container is bound to when running locally.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Adds a RabbitMQ container resource</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
-    /// <ats-param name="builder">The <ats-see cref="!:type:IDistributedApplicationBuilder" />.</ats-param>
-    /// <ats-param name="userName">The parameter used to provide the user name for the RabbitMQ resource. If `null` a default value will be used.</ats-param>
-    /// <ats-param name="password">The parameter used to provide the password for the RabbitMQ resource. If `null` a random password will be generated.</ats-param>
     [AspireExport]
     public static IResourceBuilder<RabbitMQServerResource> AddRabbitMQ(this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -99,7 +94,6 @@ public static class RabbitMQBuilderExtensions
     /// <param name="isReadOnly">A flag that indicates if this is a read-only volume.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-summary>Adds a data volume to the RabbitMQ container</ats-summary>
-    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<RabbitMQServerResource> WithDataVolume(this IResourceBuilder<RabbitMQServerResource> builder, string? name = null, bool isReadOnly = false)
     {
@@ -117,7 +111,6 @@ public static class RabbitMQBuilderExtensions
     /// <param name="isReadOnly">A flag that indicates if this is a read-only mount.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-summary>Adds a data bind mount to the RabbitMQ container</ats-summary>
-    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<RabbitMQServerResource> WithDataBindMount(this IResourceBuilder<RabbitMQServerResource> builder, string source, bool isReadOnly = false)
     {

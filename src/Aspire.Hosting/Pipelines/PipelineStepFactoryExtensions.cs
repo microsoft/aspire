@@ -100,7 +100,6 @@ public static class PipelineStepFactoryExtensions
     /// <param name="tags">Optional tags that categorize this step.</param>
     /// <param name="description">An optional human-readable description of the step.</param>
     /// <returns>The resource builder for chaining.</returns>
-    /// <ats-summary>Adds a pipeline step to the resource</ats-summary>
     [AspireExport]
     public static IResourceBuilder<T> WithPipelineStepFactory<T>(
         this IResourceBuilder<T> builder,

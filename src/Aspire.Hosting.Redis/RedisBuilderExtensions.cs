@@ -58,10 +58,6 @@ public static class RedisBuilderExtensions
     /// </para>
     /// This version of the package defaults to the <inheritdoc cref="RedisContainerImageTags.Tag"/> tag of the <inheritdoc cref="RedisContainerImageTags.Image"/> container image.
     /// </remarks>
-    /// <ats-summary>Adds a Redis container resource</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
-    /// <ats-param name="builder">The <ats-see cref="!:type:IDistributedApplicationBuilder" />.</ats-param>
-    /// <ats-param name="password">The parameter used to provide the password for the Redis resource. If `null` a random password will be generated.</ats-param>
     [AspireExport]
     public static IResourceBuilder<RedisResource> AddRedis(
         this IDistributedApplicationBuilder builder,
@@ -214,7 +210,6 @@ public static class RedisBuilderExtensions
     /// <param name="containerName">Override the container name used for Redis Commander.</param>
     /// <returns></returns>
     /// <ats-summary>Adds Redis Commander management UI</ats-summary>
-    /// <ats-param name="builder">The <ats-see cref="!:type:IResourceBuilder" /> for the <ats-see cref="!:type:RedisResource" />.</ats-param>
     [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<RedisResource> WithRedisCommander(this IResourceBuilder<RedisResource> builder, Action<IResourceBuilder<RedisCommanderResource>>? configureContainer = null, string? containerName = null)
     {
@@ -294,7 +289,6 @@ public static class RedisBuilderExtensions
     /// <param name="containerName">Override the container name used for Redis Insight.</param>
     /// <returns></returns>
     /// <ats-summary>Adds Redis Insight management UI</ats-summary>
-    /// <ats-param name="builder">The <ats-see cref="!:type:IResourceBuilder" /> for the <ats-see cref="!:type:RedisResource" />.</ats-param>
     [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<RedisResource> WithRedisInsight(this IResourceBuilder<RedisResource> builder, Action<IResourceBuilder<RedisInsightResource>>? configureContainer = null, string? containerName = null)
     {
@@ -397,7 +391,6 @@ public static class RedisBuilderExtensions
     /// <param name="port">The port to bind on the host. If <see langword="null"/> is used random port will be assigned.</param>
     /// <returns>The resource builder for RedisCommander.</returns>
     /// <ats-summary>Sets the host port for Redis Commander</ats-summary>
-    /// <ats-param name="port">The port to bind on the host. If `null` is used random port will be assigned.</ats-param>
     [AspireExport("withRedisCommanderHostPort", MethodName = "withHostPort")]
     public static IResourceBuilder<RedisCommanderResource> WithHostPort(this IResourceBuilder<RedisCommanderResource> builder, int? port)
     {
@@ -416,7 +409,6 @@ public static class RedisBuilderExtensions
     /// <param name="port">The port to bind on the host. If <see langword="null"/> is used random port will be assigned.</param>
     /// <returns>The resource builder for RedisInsight.</returns>
     /// <ats-summary>Sets the host port for Redis Insight</ats-summary>
-    /// <ats-param name="port">The port to bind on the host. If `null` is used random port will be assigned.</ats-param>
     [AspireExport("withRedisInsightHostPort", MethodName = "withHostPort")]
     public static IResourceBuilder<RedisInsightResource> WithHostPort(this IResourceBuilder<RedisInsightResource> builder, int? port)
     {
@@ -447,7 +439,6 @@ public static class RedisBuilderExtensions
     /// </param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-summary>Adds a data volume with persistence</ats-summary>
-    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<RedisResource> WithDataVolume(this IResourceBuilder<RedisResource> builder, string? name = null, bool isReadOnly = false)
     {
@@ -480,7 +471,6 @@ public static class RedisBuilderExtensions
     /// </param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-summary>Adds a data bind mount with persistence</ats-summary>
-    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<RedisResource> WithDataBindMount(this IResourceBuilder<RedisResource> builder, string source, bool isReadOnly = false)
     {
@@ -511,8 +501,6 @@ public static class RedisBuilderExtensions
     /// <param name="interval">The interval between snapshot exports. Defaults to 60 seconds.</param>
     /// <param name="keysChangedThreshold">The number of key change operations required to trigger a snapshot at the interval. Defaults to 1.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Configures Redis persistence</ats-summary>
-    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<RedisResource> WithPersistence(this IResourceBuilder<RedisResource> builder, TimeSpan? interval = null, long keysChangedThreshold = 1)
     {
@@ -535,7 +523,6 @@ public static class RedisBuilderExtensions
     /// <param name="name">The name of the volume. Defaults to an auto-generated name based on the application and resource names.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-summary>Adds a data volume for Redis Insight</ats-summary>
-    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("ApiDesign", "RS0026:Do not add multiple public overloads with optional parameters", Justification = "Each overload targets a different resource builder type, allowing for tailored functionality. Optional volume names enhance usability, enabling users to easily provide custom names while maintaining clear and distinct method signatures.")]
     [AspireExport("withRedisInsightDataVolume", MethodName = "withDataVolume")]
     public static IResourceBuilder<RedisInsightResource> WithDataVolume(this IResourceBuilder<RedisInsightResource> builder, string? name = null)
@@ -552,7 +539,6 @@ public static class RedisBuilderExtensions
     /// <param name="source">The source directory on the host to mount into the container.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-summary>Adds a data bind mount for Redis Insight</ats-summary>
-    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
     [AspireExport("withRedisInsightDataBindMount", MethodName = "withDataBindMount")]
     public static IResourceBuilder<RedisInsightResource> WithDataBindMount(this IResourceBuilder<RedisInsightResource> builder, string source)
     {
@@ -568,9 +554,6 @@ public static class RedisBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="password">The parameter used to provide the password for the Redis resource. If <see langword="null"/>, no password will be configured.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Configures the password for Redis</ats-summary>
-    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
-    /// <ats-param name="password">The parameter used to provide the password for the Redis resource. If `null`, no password will be configured.</ats-param>
     [AspireExport]
     public static IResourceBuilder<RedisResource> WithPassword(this IResourceBuilder<RedisResource> builder, IResourceBuilder<ParameterResource>? password)
     {
@@ -587,8 +570,6 @@ public static class RedisBuilderExtensions
     /// <param name="port">The port to bind on the host. If <see langword="null"/> is used random port will be assigned.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-summary>Sets the host port for Redis</ats-summary>
-    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
-    /// <ats-param name="port">The port to bind on the host. If `null` is used random port will be assigned.</ats-param>
     [AspireExport]
     public static IResourceBuilder<RedisResource> WithHostPort(this IResourceBuilder<RedisResource> builder, int? port)
     {

@@ -29,8 +29,6 @@ public static class AzureNetworkSecurityPerimeterExtensions
     /// storage.WithNetworkSecurityPerimeter(nsp);
     /// </code>
     /// </example>
-    /// <ats-summary>Adds an Azure Network Security Perimeter resource to the application model.</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzureNetworkSecurityPerimeterResource> AddNetworkSecurityPerimeter(
         this IDistributedApplicationBuilder builder,
@@ -75,8 +73,6 @@ public static class AzureNetworkSecurityPerimeterExtensions
     ///     });
     /// </code>
     /// </example>
-    /// <ats-summary>Adds an access rule to an Azure Network Security Perimeter resource.</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzureNetworkSecurityPerimeterResource> WithAccessRule(
         this IResourceBuilder<AzureNetworkSecurityPerimeterResource> builder,
@@ -133,8 +129,6 @@ public static class AzureNetworkSecurityPerimeterExtensions
     /// keyVault.WithNetworkSecurityPerimeter(nsp, NetworkSecurityPerimeterAssociationAccessMode.Learning);
     /// </code>
     /// </example>
-    /// <ats-summary>Associates an Azure PaaS resource with a Network Security Perimeter.</ats-summary>
-    /// <ats-param name="accessMode">The access mode for the association. Defaults to <ats-see cref="!:field:NetworkSecurityPerimeterAssociationAccessMode.Enforced" />. Use <ats-see cref="!:field:NetworkSecurityPerimeterAssociationAccessMode.Learning" /> to log violations without blocking traffic.</ats-param>
     [AspireExport("associateWithNetworkSecurityPerimeter", MethodName = "withNetworkSecurityPerimeter")]
     public static IResourceBuilder<T> WithNetworkSecurityPerimeter<T>(
         this IResourceBuilder<T> target,

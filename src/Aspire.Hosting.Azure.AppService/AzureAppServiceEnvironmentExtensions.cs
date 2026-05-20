@@ -81,8 +81,6 @@ public static partial class AzureAppServiceEnvironmentExtensions
     /// <param name="builder">The distributed application builder.</param>
     /// <param name="name">The name of the resource.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
-    /// <ats-summary>Adds an Azure App Service environment resource</ats-summary>
-    /// <ats-returns><ats-see cref="!:type:IResourceBuilder" /></ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> AddAzureAppServiceEnvironment(this IDistributedApplicationBuilder builder, string name)
     {
@@ -289,8 +287,6 @@ public static partial class AzureAppServiceEnvironmentExtensions
     /// </code>
     /// </example>
     /// <ats-summary>Configures whether HTTP endpoints are automatically upgraded to HTTPS in Azure App Service</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining additional configuration.</ats-returns>
-    /// <ats-param name="builder">The <ats-see cref="!:type:IResourceBuilder" /> to configure.</ats-param>
     [AspireExport]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithHttpsUpgrade(this IResourceBuilder<AzureAppServiceEnvironmentResource> builder, bool upgrade = true)
     {
@@ -304,9 +300,6 @@ public static partial class AzureAppServiceEnvironmentExtensions
     /// <param name="builder">The <see cref="IResourceBuilder{AzureAppServiceEnvironmentResource}"/> to configure.</param>
     /// <param name="enable">Whether to include the Aspire dashboard. Default is true.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining additional configuration.</returns>
-    /// <ats-summary>Configures whether the Aspire dashboard is included in the Azure App Service environment</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining additional configuration.</ats-returns>
-    /// <ats-param name="builder">The <ats-see cref="!:type:IResourceBuilder" /> to configure.</ats-param>
     [AspireExport]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithDashboard(this IResourceBuilder<AzureAppServiceEnvironmentResource> builder, bool enable = true)
     {

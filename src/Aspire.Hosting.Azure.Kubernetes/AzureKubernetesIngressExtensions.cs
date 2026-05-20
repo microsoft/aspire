@@ -39,7 +39,6 @@ public static class AzureKubernetesIngressExtensions
     /// </code>
     /// </example>
     /// <ats-summary>Adds a Kubernetes Ingress resource to an AKS environment</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<KubernetesIngressResource> AddIngress(
         this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
@@ -70,7 +69,6 @@ public static class AzureKubernetesIngressExtensions
     /// </code>
     /// </example>
     /// <ats-summary>Adds a Kubernetes Gateway API Gateway to an AKS environment</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<KubernetesGatewayResource> AddGateway(
         this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
@@ -158,7 +156,6 @@ public static class AzureKubernetesIngressExtensions
     /// </code>
     /// </example>
     /// <ats-summary>Routes a Kubernetes Gateway through an AGC ApplicationLoadBalancer</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<KubernetesGatewayResource> WithLoadBalancer(
         this IResourceBuilder<KubernetesGatewayResource> builder,
@@ -196,7 +193,6 @@ public static class AzureKubernetesIngressExtensions
     /// <c>WithIngressClass(...)</c>.
     /// </remarks>
     /// <ats-summary>Routes a Kubernetes Ingress through an AGC ApplicationLoadBalancer</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
     [AspireExport("withLoadBalancerOnIngress", MethodName = "withLoadBalancer")]
     public static IResourceBuilder<KubernetesIngressResource> WithLoadBalancer(
         this IResourceBuilder<KubernetesIngressResource> builder,

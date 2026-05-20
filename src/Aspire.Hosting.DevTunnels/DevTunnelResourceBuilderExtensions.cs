@@ -427,7 +427,6 @@ public static partial class DevTunnelsResourceBuilderExtensions
     /// <param name="targetEndpointReference">The target endpoint reference.</param>
     /// <returns>An <see cref="EndpointReference"/> representing the public tunnel endpoint.</returns>
     /// <ats-summary>Gets the public endpoint exposed by the dev tunnel.</ats-summary>
-    /// <ats-returns>An <ats-see cref="!:type:EndpointReference" /> representing the public tunnel endpoint.</ats-returns>
     [AspireExport("getEndpointByEndpointReference", MethodName = "getTunnelEndpoint")]
     public static EndpointReference GetEndpoint(this IResourceBuilder<DevTunnelResource> tunnelBuilder, EndpointReference targetEndpointReference)
     {

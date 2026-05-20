@@ -13,7 +13,6 @@ public static class ResponseTransformExtensions
     /// <summary>
     /// Adds the transform which will enable or suppress copying response headers to the client response.
     /// </summary>
-    /// <ats-summary>Adds the transform which will enable or suppress copying response headers to the client response.</ats-summary>
     [AspireExport]
     public static YarpRoute WithTransformCopyResponseHeaders(this YarpRoute route, bool copy = true)
     {
@@ -24,7 +23,6 @@ public static class ResponseTransformExtensions
     /// <summary>
     /// Adds the transform which will enable or suppress copying response trailers to the client response.
     /// </summary>
-    /// <ats-summary>Adds the transform which will enable or suppress copying response trailers to the client response.</ats-summary>
     [AspireExport]
     public static YarpRoute WithTransformCopyResponseTrailers(this YarpRoute route, bool copy = true)
     {
@@ -35,7 +33,6 @@ public static class ResponseTransformExtensions
     /// <summary>
     /// Adds the transform which will append or set the response header.
     /// </summary>
-    /// <ats-summary>Adds the transform which will append or set the response header.</ats-summary>
     [AspireExport]
     public static YarpRoute WithTransformResponseHeader(this YarpRoute route, string headerName, string value, bool append = true, ResponseCondition condition = ResponseCondition.Success)
     {
@@ -46,7 +43,6 @@ public static class ResponseTransformExtensions
     /// <summary>
     /// Adds the transform which will remove the response header.
     /// </summary>
-    /// <ats-summary>Adds the transform which will remove the response header.</ats-summary>
     [AspireExport]
     public static YarpRoute WithTransformResponseHeaderRemove(this YarpRoute route, string headerName, ResponseCondition condition = ResponseCondition.Success)
     {
@@ -58,7 +54,6 @@ public static class ResponseTransformExtensions
     /// Adds the transform which will only copy the allowed response headers. Other transforms
     /// that modify or append to existing headers may be affected if not included in the allow list.
     /// </summary>
-    /// <ats-summary>Adds the transform which will only copy the allowed response headers. Other transforms</ats-summary>
     [AspireExport]
     public static YarpRoute WithTransformResponseHeadersAllowed(this YarpRoute route, params string[] allowedHeaders)
     {
@@ -69,7 +64,6 @@ public static class ResponseTransformExtensions
     /// <summary>
     /// Adds the transform which will append or set the response trailer.
     /// </summary>
-    /// <ats-summary>Adds the transform which will append or set the response trailer.</ats-summary>
     [AspireExport]
     public static YarpRoute WithTransformResponseTrailer(this YarpRoute route, string headerName, string value, bool append = true, ResponseCondition condition = ResponseCondition.Success)
     {
@@ -80,7 +74,6 @@ public static class ResponseTransformExtensions
     /// <summary>
     /// Adds the transform which will remove the response trailer.
     /// </summary>
-    /// <ats-summary>Adds the transform which will remove the response trailer.</ats-summary>
     [AspireExport]
     public static YarpRoute WithTransformResponseTrailerRemove(this YarpRoute route, string headerName, ResponseCondition condition = ResponseCondition.Success)
     {
@@ -92,7 +85,6 @@ public static class ResponseTransformExtensions
     /// Adds the transform which will only copy the allowed response trailers. Other transforms
     /// that modify or append to existing trailers may be affected if not included in the allow list.
     /// </summary>
-    /// <ats-summary>Adds the transform which will only copy the allowed response trailers. Other transforms</ats-summary>
     [AspireExport]
     public static YarpRoute WithTransformResponseTrailersAllowed(this YarpRoute route, params string[] allowedHeaders)
     {

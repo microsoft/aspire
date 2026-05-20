@@ -14,7 +14,6 @@ public static class QueryTransformExtensions
     /// <summary>
     /// Adds the transform that will append or set the query parameter from the given value.
     /// </summary>
-    /// <ats-summary>Adds the transform that will append or set the query parameter from the given value.</ats-summary>
     [AspireExport]
     public static YarpRoute WithTransformQueryValue(this YarpRoute route, string queryKey, string value, bool append = true)
     {
@@ -25,7 +24,6 @@ public static class QueryTransformExtensions
     /// <summary>
     /// Adds the transform that will append or set the query parameter from a route value.
     /// </summary>
-    /// <ats-summary>Adds the transform that will append or set the query parameter from a route value.</ats-summary>
     [AspireExport]
     public static YarpRoute WithTransformQueryRouteValue(this YarpRoute route, string queryKey, string routeValueKey, bool append = true)
     {
@@ -36,7 +34,6 @@ public static class QueryTransformExtensions
     /// <summary>
     /// Adds the transform that will remove the given query key.
     /// </summary>
-    /// <ats-summary>Adds the transform that will remove the given query key.</ats-summary>
     [AspireExport]
     public static YarpRoute WithTransformQueryRemoveKey(this YarpRoute route, string queryKey)
     {

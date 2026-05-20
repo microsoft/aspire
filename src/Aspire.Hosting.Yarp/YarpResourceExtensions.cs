@@ -26,9 +26,6 @@ public static class YarpResourceExtensions
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Adds a YARP container to the application model.</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
-    /// <ats-param name="builder">The <ats-see cref="!:type:IDistributedApplicationBuilder" />.</ats-param>
     [AspireExport]
     public static IResourceBuilder<YarpResource> AddYarp(
         this IDistributedApplicationBuilder builder,
@@ -106,7 +103,6 @@ public static class YarpResourceExtensions
     /// </summary>
     /// <param name="builder">The YARP resource to configure.</param>
     /// <param name="configurationBuilder">The delegate to configure YARP.</param>
-    /// <ats-summary>Configure the YARP resource.</ats-summary>
     [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<YarpResource> WithConfiguration(this IResourceBuilder<YarpResource> builder, Action<IYarpConfigurationBuilder> configurationBuilder)
     {
@@ -120,8 +116,6 @@ public static class YarpResourceExtensions
     /// </summary>
     /// <param name="builder">The resource builder for YARP.</param>
     /// <param name="port">The port to bind on the host. If <see langword="null"/> is used random port will be assigned.</param>
-    /// <ats-summary>Configures the host port that the YARP resource is exposed on instead of using randomly assigned port.</ats-summary>
-    /// <ats-param name="port">The port to bind on the host. If `null` is used random port will be assigned.</ats-param>
     [AspireExport]
     public static IResourceBuilder<YarpResource> WithHostPort(this IResourceBuilder<YarpResource> builder, int? port)
     {
@@ -140,8 +134,6 @@ public static class YarpResourceExtensions
     /// <param name="builder">The resource builder for YARP.</param>
     /// <param name="port">The port to bind on the host. If <see langword="null"/> is used random port will be assigned.</param>
     /// <returns>The updated resource builder.</returns>
-    /// <ats-summary>Configures the host HTTPS port that the YARP resource is exposed on instead of using randomly assigned port.</ats-summary>
-    /// <ats-param name="port">The port to bind on the host. If `null` is used random port will be assigned.</ats-param>
     [AspireExport]
     public static IResourceBuilder<YarpResource> WithHostHttpsPort(this IResourceBuilder<YarpResource> builder, int? port)
     {
@@ -227,7 +219,6 @@ public static class YarpResourceExtensions
     /// <param name="builder">The resource builder for YARP.</param>
     /// <param name="resourceWithFiles">The resource with container files.</param>
     /// <returns>The updated resource builder.</returns>
-    /// <ats-summary>In publish mode, generates a Dockerfile that copies static files from the specified resource into /app/wwwroot.</ats-summary>
     [AspireExport]
     public static IResourceBuilder<YarpResource> PublishWithStaticFiles(this IResourceBuilder<YarpResource> builder, IResourceBuilder<IResourceWithContainerFiles> resourceWithFiles)
     {

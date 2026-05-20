@@ -75,8 +75,6 @@ public static class CertManagerExtensions
     /// <see cref="CertManagerResource.HelmChart"/>.
     /// </para>
     /// </remarks>
-    /// <ats-summary>Installs cert-manager into a Kubernetes environment</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<CertManagerResource> AddCertManager(
         this IResourceBuilder<KubernetesEnvironmentResource> builder,
@@ -149,8 +147,6 @@ public static class CertManagerExtensions
     /// <param name="name">The Aspire resource name. Also used as the <c>metadata.name</c>
     /// of the generated <c>ClusterIssuer</c>, so it must be a valid DNS-1123 label.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{CertManagerIssuerResource}"/> for chaining.</returns>
-    /// <ats-summary>Adds a cert-manager ClusterIssuer</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<CertManagerIssuerResource> AddIssuer(
         this IResourceBuilder<CertManagerResource> builder,
@@ -183,8 +179,6 @@ public static class CertManagerExtensions
     /// prefer <see cref="WithLetsEncryptStaging(IResourceBuilder{CertManagerIssuerResource}, string)"/>
     /// which uses untrusted staging certificates with much higher rate limits.
     /// </remarks>
-    /// <ats-summary>Configures the issuer for Let's Encrypt production</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<CertManagerIssuerResource> WithLetsEncryptProduction(
         this IResourceBuilder<CertManagerIssuerResource> builder,
@@ -199,7 +193,6 @@ public static class CertManagerExtensions
     /// <param name="email">A parameter resource builder whose value is the contact email registered with the ACME account.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{CertManagerIssuerResource}"/> for chaining.</returns>
     /// <ats-summary>Configures the issuer for Let's Encrypt production with a parameterized email</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
     [AspireExport("withLetsEncryptProductionParam")]
     public static IResourceBuilder<CertManagerIssuerResource> WithLetsEncryptProduction(
         this IResourceBuilder<CertManagerIssuerResource> builder,
@@ -215,7 +208,6 @@ public static class CertManagerExtensions
     /// <param name="email">The contact email registered with the ACME account.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{CertManagerIssuerResource}"/> for chaining.</returns>
     /// <ats-summary>Configures the issuer for Let's Encrypt staging</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<CertManagerIssuerResource> WithLetsEncryptStaging(
         this IResourceBuilder<CertManagerIssuerResource> builder,
@@ -230,7 +222,6 @@ public static class CertManagerExtensions
     /// <param name="email">A parameter resource builder whose value is the contact email registered with the ACME account.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{CertManagerIssuerResource}"/> for chaining.</returns>
     /// <ats-summary>Configures the issuer for Let's Encrypt staging with a parameterized email</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
     [AspireExport("withLetsEncryptStagingParam")]
     public static IResourceBuilder<CertManagerIssuerResource> WithLetsEncryptStaging(
         this IResourceBuilder<CertManagerIssuerResource> builder,
@@ -245,8 +236,6 @@ public static class CertManagerExtensions
     /// <param name="serverUrl">The ACME directory URL (e.g., <c>https://acme.example.com/directory</c>).</param>
     /// <param name="email">The contact email registered with the ACME account.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{CertManagerIssuerResource}"/> for chaining.</returns>
-    /// <ats-summary>Configures the issuer to use a custom ACME directory</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<CertManagerIssuerResource> WithAcmeServer(
         this IResourceBuilder<CertManagerIssuerResource> builder,
@@ -271,8 +260,6 @@ public static class CertManagerExtensions
     /// <param name="serverUrl">The ACME directory URL (e.g., <c>https://acme.example.com/directory</c>).</param>
     /// <param name="email">A parameter resource builder whose value is the contact email registered with the ACME account.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{CertManagerIssuerResource}"/> for chaining.</returns>
-    /// <ats-summary>Configures the issuer to use a custom ACME directory with a parameterized email</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
     [AspireExport("withAcmeServerParam")]
     public static IResourceBuilder<CertManagerIssuerResource> WithAcmeServer(
         this IResourceBuilder<CertManagerIssuerResource> builder,
@@ -303,8 +290,6 @@ public static class CertManagerExtensions
     /// Containers (AGC) or any ingress controller that publishes a publicly addressable
     /// hostname. Wildcard certificates require a DNS-01 solver, which is not yet supported.
     /// </remarks>
-    /// <ats-summary>Adds an HTTP-01 ACME challenge solver to the issuer</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<CertManagerIssuerResource> WithHttp01Solver(
         this IResourceBuilder<CertManagerIssuerResource> builder)
@@ -333,7 +318,6 @@ public static class CertManagerExtensions
     /// TLS configuration.
     /// </remarks>
     /// <ats-summary>Configures TLS on a Kubernetes Gateway using a cert-manager ClusterIssuer</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
     [AspireExport("withGatewayTlsIssuer")]
     public static IResourceBuilder<KubernetesGatewayResource> WithTls(
         this IResourceBuilder<KubernetesGatewayResource> builder,

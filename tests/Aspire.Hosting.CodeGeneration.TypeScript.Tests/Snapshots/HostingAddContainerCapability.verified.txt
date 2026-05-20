@@ -3,9 +3,13 @@
   MethodName: addContainer,
   QualifiedMethodName: addContainer,
   Documentation: {
-    Summary: Adds a container resource,
-    Returns: The {@ats-ref type:IResourceBuilder} for chaining.,
+    Summary: Adds a container resource to the application.,
+    Returns: The `IResourceBuilder`1` for chaining.,
     Parameters: [
+      {
+        Name: builder,
+        Description: The `IDistributedApplicationBuilder`.
+      },
       {
         Name: name,
         Description: The name of the resource.
@@ -13,10 +17,6 @@
       {
         Name: image,
         Description: The image name or image options for the container.
-      },
-      {
-        Name: builder,
-        Description: The {@ats-ref type:IDistributedApplicationBuilder}.
       }
     ]
   },

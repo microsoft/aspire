@@ -65,7 +65,6 @@ public static class DistributedApplicationHostingTestingExtensions
     /// <param name="resourceName">The resource name.</param>
     /// <returns>The connection string for the specified resource.</returns>
     /// <exception cref="ArgumentException">The resource was not found or does not expose a connection string.</exception>
-    /// <ats-summary>Gets the connection string for the specified resource.</ats-summary>
     [AspireExport("getConnectionString")]
     internal static Task<string?> GetConnectionStringAsyncExport(this DistributedApplication app, string resourceName)
     {
@@ -81,7 +80,6 @@ public static class DistributedApplicationHostingTestingExtensions
     /// <returns>A URI representation of the endpoint.</returns>
     /// <exception cref="ArgumentException">The resource was not found, no matching endpoint was found, or multiple endpoints were found.</exception>
     /// <exception cref="InvalidOperationException">The resource has no endpoints.</exception>
-    /// <ats-summary>Gets the endpoint for the specified resource.</ats-summary>
     [AspireExport]
     public static Uri GetEndpoint(this DistributedApplication app, string resourceName, string? endpointName = default)
     {
@@ -121,7 +119,6 @@ public static class DistributedApplicationHostingTestingExtensions
     /// <returns>A URI representation of the endpoint.</returns>
     /// <exception cref="ArgumentException">The resource was not found, no matching endpoint was found, or multiple endpoints were found.</exception>
     /// <exception cref="InvalidOperationException">The resource has no endpoints.</exception>
-    /// <ats-summary>Gets the endpoint for the specified resource in the specified network context.</ats-summary>
     [AspireExport]
     internal static Uri GetEndpointForNetworkExport(this DistributedApplication app, string resourceName, string? networkIdentifier = default, string? endpointName = default)
     {

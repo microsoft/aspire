@@ -24,7 +24,6 @@ internal static class DockerComposeResourceExtensions
     /// <param name="external">A value indicating whether the network is managed outside the generated Compose file.</param>
     /// <param name="configure">An optional callback for further network customization.</param>
     /// <returns>The updated Docker Compose file.</returns>
-    /// <ats-summary>Adds a top-level network definition to the Docker Compose file</ats-summary>
     [AspireExport("addComposeFileNetwork", MethodName = "addNetwork", RunSyncOnBackgroundThread = true)]
     internal static ComposeFile AddNetwork(
         this ComposeFile composeFile,
@@ -56,7 +55,6 @@ internal static class DockerComposeResourceExtensions
     /// <param name="image">The container image to use for the service.</param>
     /// <param name="configure">An optional callback for further service customization.</param>
     /// <returns>The updated Docker Compose file.</returns>
-    /// <ats-summary>Adds a service definition to the Docker Compose file</ats-summary>
     [AspireExport("addComposeFileService", MethodName = "addService", RunSyncOnBackgroundThread = true)]
     internal static ComposeFile AddService(
         this ComposeFile composeFile,
@@ -87,7 +85,6 @@ internal static class DockerComposeResourceExtensions
     /// <param name="external">A value indicating whether the volume is managed outside the generated Compose file.</param>
     /// <param name="configure">An optional callback for further volume customization.</param>
     /// <returns>The updated Docker Compose file.</returns>
-    /// <ats-summary>Adds a top-level volume definition to the Docker Compose file</ats-summary>
     [AspireExport("addComposeFileVolume", MethodName = "addVolume", RunSyncOnBackgroundThread = true)]
     internal static ComposeFile AddVolume(
         this ComposeFile composeFile,
@@ -121,7 +118,6 @@ internal static class DockerComposeResourceExtensions
     /// <param name="external">A value indicating whether the config is managed outside the generated Compose file.</param>
     /// <param name="configure">An optional callback for further config customization.</param>
     /// <returns>The updated Docker Compose file.</returns>
-    /// <ats-summary>Adds a top-level config definition to the Docker Compose file</ats-summary>
     [AspireExport("addComposeFileConfig", MethodName = "addConfig", RunSyncOnBackgroundThread = true)]
     internal static ComposeFile AddConfig(
         this ComposeFile composeFile,
@@ -156,7 +152,6 @@ internal static class DockerComposeResourceExtensions
     /// <param name="external">A value indicating whether the secret is managed outside the generated Compose file.</param>
     /// <param name="configure">An optional callback for further secret customization.</param>
     /// <returns>The updated Docker Compose file.</returns>
-    /// <ats-summary>Adds a top-level secret definition to the Docker Compose file</ats-summary>
     [AspireExport("addComposeFileSecret", MethodName = "addSecret", RunSyncOnBackgroundThread = true)]
     internal static ComposeFile AddSecret(
         this ComposeFile composeFile,
@@ -191,7 +186,6 @@ internal static class DockerComposeResourceExtensions
     /// <param name="isReadOnly">A value indicating whether the volume is mounted as read-only.</param>
     /// <param name="configure">An optional callback for further volume customization.</param>
     /// <returns>The updated Docker Compose service.</returns>
-    /// <ats-summary>Adds a volume mount to a Docker Compose service</ats-summary>
     [AspireExport("addComposeServiceVolume", MethodName = "addVolume", RunSyncOnBackgroundThread = true)]
     internal static ComposeService AddVolume(
         this ComposeService service,

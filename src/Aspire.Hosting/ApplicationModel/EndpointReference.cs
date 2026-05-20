@@ -94,7 +94,6 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
     /// </summary>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The URL of the endpoint.</returns>
-    /// <ats-summary>Gets the URL of the endpoint asynchronously</ats-summary>
     [AspireExport]
     public ValueTask<string?> GetValueAsync(CancellationToken cancellationToken = default) => Property(EndpointProperty.Url).GetValueAsync(cancellationToken);
 
@@ -139,9 +138,6 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
     /// </summary>
     /// <param name="property">The <see cref="EndpointProperty"/> enum value to use in the reference.</param>
     /// <returns>An <see cref="EndpointReferenceExpression"/> representing the specified <see cref="EndpointProperty"/>.</returns>
-    /// <ats-summary>Gets the specified property expression of the endpoint</ats-summary>
-    /// <ats-returns>An <ats-see cref="!:type:EndpointReferenceExpression" /> representing the specified <ats-see cref="!:type:EndpointProperty" />.</ats-returns>
-    /// <ats-param name="property">The <ats-see cref="!:type:EndpointProperty" /> enum value to use in the reference.</ats-param>
     [AspireExport]
     public EndpointReferenceExpression Property(EndpointProperty property)
     {
@@ -162,8 +158,6 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
     /// <param name="enabledValue">The expression to evaluate when TLS is enabled (e.g., <c>",ssl=true"</c>).</param>
     /// <param name="disabledValue">The expression to evaluate when TLS is not enabled.</param>
     /// <returns>A conditional <see cref="ReferenceExpression"/> whose value tracks the TLS state of this endpoint.</returns>
-    /// <ats-summary>Gets a conditional expression that resolves to the enabledValue when TLS is enabled on the endpoint, or to the disabledValue otherwise.</ats-summary>
-    /// <ats-returns>A conditional <ats-see cref="!:type:ReferenceExpression" /> whose value tracks the TLS state of this endpoint.</ats-returns>
     [AspireExport]
     public ReferenceExpression GetTlsValue(ReferenceExpression enabledValue, ReferenceExpression disabledValue)
     {

@@ -96,7 +96,6 @@ public static class EFMigrationResourceBuilderExtensions
     /// the <c>efmigrations</c> folder. The script is included as a deployment artifact, but it is not executed
     /// automatically during deployment.
     /// </remarks>
-    /// <ats-param name="idempotent">If `true` (the default), generates an idempotent script with <c>IF NOT EXISTS</c> checks so it can be safely re-run against a database that has already had some or all of the migrations applied.</ats-param>
     [AspireExport]
     public static IResourceBuilder<EFMigrationResource> PublishAsMigrationScript(
         this IResourceBuilder<EFMigrationResource> builder, bool idempotent = true, bool noTransactions = false)
@@ -148,10 +147,6 @@ public static class EFMigrationResourceBuilderExtensions
     /// resource <c>.WaitFor</c>s).
     /// </para>
     /// </remarks>
-    /// <ats-param name="targetRuntime">The target runtime identifier for the bundle (e.g., <c>linux-x64</c>, <c>win-x64</c>). If `null` and `publishContainer` is `true`, defaults to <c>linux-x64</c> so the bundle can run inside a Linux container image. When `publishContainer` is `false` the current runtime is used.</ats-param>
-    /// <ats-param name="selfContained">If `true`, creates a self-contained bundle that includes the .NET runtime. Never defaulted by `publishContainer` — user-specified value is always respected.</ats-param>
-    /// <ats-param name="publishContainer">If `true`, the bundle is published as a container image that applies migrations at deploy time. The resource becomes a compute resource; each target environment deploys it the same way it deploys any other container (supplying connection strings from referenced <ats-see cref="!:type:IResourceWithConnectionString" /> dependencies via the standard <c>WithReference</c> mechanism).</ats-param>
-    /// <ats-param name="baseImage">Overrides the base container image for the generated <c>Dockerfile</c>. When `null` (the default), the image is derived from the project's target framework — for example, <c>mcr.microsoft.com/dotnet/runtime:10.0</c> for a <c>net10.0</c> framework-dependent bundle. Set this when the default is not suitable, e.g. for preview SDKs or custom base images. Only meaningful when `publishContainer` is `true`.</ats-param>
     [AspireExport]
     public static IResourceBuilder<EFMigrationResource> PublishAsMigrationBundle(
         this IResourceBuilder<EFMigrationResource> builder, string? targetRuntime = null, bool selfContained = false, bool publishContainer = false, string? baseImage = null)
@@ -271,7 +266,6 @@ public static class EFMigrationResourceBuilderExtensions
     /// <summary>
     /// Configures a separate project containing migrations for polyglot app hosts.
     /// </summary>
-    /// <ats-summary>Configures a separate project containing the migrations</ats-summary>
     [AspireExport("withMigrationsProject")]
     internal static IResourceBuilder<EFMigrationResource> WithMigrationsProjectForPolyglot(
         this IResourceBuilder<EFMigrationResource> builder,

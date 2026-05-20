@@ -54,7 +54,6 @@ public static class ContainerAppExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <ats-summary>Configures the custom domain for the container app</ats-summary>
     [AspireExport]
     [Experimental("ASPIREACADOMAINS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static void ConfigureCustomDomain(this ContainerApp app, IResourceBuilder<ParameterResource> customDomain, IResourceBuilder<ParameterResource> certificateName)

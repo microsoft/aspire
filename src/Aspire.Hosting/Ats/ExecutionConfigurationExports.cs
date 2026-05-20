@@ -20,7 +20,6 @@ internal static class ExecutionConfigurationExports
     /// </summary>
     /// <param name="resource">The resource to build the execution configuration for.</param>
     /// <returns>The execution configuration builder.</returns>
-    /// <ats-summary>Creates an execution configuration builder</ats-summary>
     [AspireExport]
     public static IExecutionConfigurationBuilder CreateExecutionConfiguration(this IResource resource)
     {
@@ -37,7 +36,6 @@ internal static class ExecutionConfigurationExports
     /// <param name="resourceLogger">The logger used while resolving values.</param>
     /// <param name="cancellationToken">A cancellation token.</param>
     /// <returns>The resolved execution configuration.</returns>
-    /// <ats-summary>Builds the execution configuration</ats-summary>
     [AspireExport("buildExecutionConfiguration", MethodName = "build")]
     public static Task<IExecutionConfigurationResult> Build(
         this IExecutionConfigurationBuilder builder,
@@ -57,7 +55,6 @@ internal static class ExecutionConfigurationExports
     /// <param name="builder">The execution configuration builder.</param>
     /// <param name="configContextFactory">The factory that creates the HTTPS certificate configuration context.</param>
     /// <returns>The execution configuration builder.</returns>
-    /// <ats-summary>Adds an HTTPS certificate configuration gatherer</ats-summary>
     [AspireExport("withHttpsCertificateConfigExport", MethodName = "withHttpsCertificateConfig")]
     public static IExecutionConfigurationBuilder WithHttpsCertificateConfig(
         this IExecutionConfigurationBuilder builder,
@@ -76,7 +73,6 @@ internal static class ExecutionConfigurationExports
     /// </summary>
     /// <param name="configuration">The execution configuration result.</param>
     /// <returns>The certificate trust data. When no additional data is present, an empty DTO is returned.</returns>
-    /// <ats-summary>Gets certificate trust execution-configuration data</ats-summary>
     [AspireExport]
     public static CertificateTrustExecutionConfigurationExportData GetCertificateTrustData(this IExecutionConfigurationResult configuration)
     {
@@ -105,7 +101,6 @@ internal static class ExecutionConfigurationExports
     /// </summary>
     /// <param name="configuration">The execution configuration result.</param>
     /// <returns>The HTTPS certificate data. When no additional data is present, an empty DTO is returned.</returns>
-    /// <ats-summary>Gets HTTPS certificate execution-configuration data</ats-summary>
     [AspireExport]
     public static HttpsCertificateExecutionConfigurationExportData GetHttpsCertificateData(this IExecutionConfigurationResult configuration)
     {

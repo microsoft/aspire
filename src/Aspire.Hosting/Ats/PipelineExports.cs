@@ -74,7 +74,6 @@ internal static class PipelineExports
     /// <summary>
     /// Creates a reporting task with plain-text status text.
     /// </summary>
-    /// <ats-summary>Creates a reporting task with plain-text status text</ats-summary>
     [AspireExport]
     public static Task<IReportingTask> CreateTask(this IReportingStep reportingStep, string statusText, CancellationToken cancellationToken = default)
     {
@@ -87,7 +86,6 @@ internal static class PipelineExports
     /// <summary>
     /// Creates a reporting task with Markdown-formatted status text.
     /// </summary>
-    /// <ats-summary>Creates a reporting task with Markdown-formatted status text</ats-summary>
     [AspireExport]
     public static Task<IReportingTask> CreateMarkdownTask(this IReportingStep reportingStep, string markdownString, CancellationToken cancellationToken = default)
     {
@@ -100,7 +98,6 @@ internal static class PipelineExports
     /// <summary>
     /// Logs a plain-text message for the reporting step.
     /// </summary>
-    /// <ats-summary>Logs a plain-text message for the reporting step</ats-summary>
     [AspireExport]
     public static void LogStep(this IReportingStep reportingStep, string level, string message)
     {
@@ -114,7 +111,6 @@ internal static class PipelineExports
     /// <summary>
     /// Logs a Markdown-formatted message for the reporting step.
     /// </summary>
-    /// <ats-summary>Logs a Markdown-formatted message for the reporting step</ats-summary>
     [AspireExport]
     public static void LogStepMarkdown(this IReportingStep reportingStep, string level, string markdownString)
     {
@@ -128,7 +124,6 @@ internal static class PipelineExports
     /// <summary>
     /// Completes the reporting step with plain-text completion text.
     /// </summary>
-    /// <ats-summary>Completes the reporting step with plain-text completion text</ats-summary>
     [AspireExport]
     public static Task CompleteStep(this IReportingStep reportingStep, string completionText, string completionState = "completed", CancellationToken cancellationToken = default)
     {
@@ -141,7 +136,6 @@ internal static class PipelineExports
     /// <summary>
     /// Completes the reporting step with Markdown-formatted completion text.
     /// </summary>
-    /// <ats-summary>Completes the reporting step with Markdown-formatted completion text</ats-summary>
     [AspireExport]
     public static Task CompleteStepMarkdown(this IReportingStep reportingStep, string markdownString, string completionState = "completed", CancellationToken cancellationToken = default)
     {
@@ -154,7 +148,6 @@ internal static class PipelineExports
     /// <summary>
     /// Updates the reporting task with plain-text status text.
     /// </summary>
-    /// <ats-summary>Updates the reporting task with plain-text status text</ats-summary>
     [AspireExport]
     public static Task UpdateTask(this IReportingTask reportingTask, string statusText, CancellationToken cancellationToken = default)
     {
@@ -167,7 +160,6 @@ internal static class PipelineExports
     /// <summary>
     /// Updates the reporting task with Markdown-formatted status text.
     /// </summary>
-    /// <ats-summary>Updates the reporting task with Markdown-formatted status text</ats-summary>
     [AspireExport]
     public static Task UpdateTaskMarkdown(this IReportingTask reportingTask, string markdownString, CancellationToken cancellationToken = default)
     {
@@ -180,7 +172,6 @@ internal static class PipelineExports
     /// <summary>
     /// Completes the reporting task with plain-text completion text.
     /// </summary>
-    /// <ats-summary>Completes the reporting task with plain-text completion text</ats-summary>
     [AspireExport]
     public static Task CompleteTask(this IReportingTask reportingTask, string? completionMessage = null, string completionState = "completed", CancellationToken cancellationToken = default)
     {
@@ -192,7 +183,6 @@ internal static class PipelineExports
     /// <summary>
     /// Completes the reporting task with Markdown-formatted completion text.
     /// </summary>
-    /// <ats-summary>Completes the reporting task with Markdown-formatted completion text</ats-summary>
     [AspireExport]
     public static Task CompleteTaskMarkdown(this IReportingTask reportingTask, string markdownString, string completionState = "completed", CancellationToken cancellationToken = default)
     {

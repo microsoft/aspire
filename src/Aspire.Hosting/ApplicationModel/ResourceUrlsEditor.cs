@@ -18,7 +18,6 @@ internal sealed class ResourceUrlsEditor(DistributedApplicationExecutionContext 
     /// </summary>
     /// <param name="url">The URL to add, specified as a string or reference expression.</param>
     /// <param name="displayText">The optional display text to show for the URL.</param>
-    /// <ats-summary>Adds a displayed URL</ats-summary>
     [AspireExport("ResourceUrlsEditor.add", MethodName = "add")]
     public async Task Add([AspireUnion(typeof(string), typeof(ReferenceExpression))] object url, string? displayText = null)
     {
@@ -50,7 +49,6 @@ internal sealed class ResourceUrlsEditor(DistributedApplicationExecutionContext 
     /// <param name="endpoint">The endpoint the URL is associated with.</param>
     /// <param name="url">The URL to add, specified as a string or reference expression.</param>
     /// <param name="displayText">The optional display text to show for the URL.</param>
-    /// <ats-summary>Adds a displayed URL for a specific endpoint</ats-summary>
     [AspireExport("ResourceUrlsEditor.addForEndpoint", MethodName = "addForEndpoint")]
     public async Task AddForEndpoint(EndpointReference endpoint, [AspireUnion(typeof(string), typeof(ReferenceExpression))] object url, string? displayText = null)
     {
@@ -79,7 +77,6 @@ internal sealed class ResourceUrlsEditor(DistributedApplicationExecutionContext 
     /// <summary>
     /// Gets the execution context associated with this editor.
     /// </summary>
-    /// <ats-summary>Gets the execution context for this URL editor</ats-summary>
     [AspireExport]
     public DistributedApplicationExecutionContext ExecutionContext => _executionContext;
 

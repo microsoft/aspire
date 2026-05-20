@@ -51,7 +51,6 @@ public class PipelineConfigurationContext
     /// <summary>
     /// Gets the pipeline editor used by polyglot callbacks.
     /// </summary>
-    /// <ats-summary>Gets the pipeline editor</ats-summary>
     [AspireExport]
     internal PipelineEditor Pipeline => new(Steps);
 
@@ -67,7 +66,6 @@ public class PipelineConfigurationContext
     /// </summary>
     /// <param name="tag">The tag to search for.</param>
     /// <returns>A collection of steps that have the specified tag.</returns>
-    /// <ats-summary>Gets pipeline steps with the specified tag</ats-summary>
     [AspireExport]
     public IEnumerable<PipelineStep> GetSteps(string tag)
     {

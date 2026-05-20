@@ -132,7 +132,6 @@ public static partial class KubernetesHelmChartExtensions
     /// <param name="key">The value key using dot notation (e.g., <c>config.enableGatewayAPI</c>).</param>
     /// <param name="value">The value to set.</param>
     /// <returns>The resource builder for chaining.</returns>
-    /// <ats-summary>Sets a Helm value for chart installation</ats-summary>
     [AspireExport]
     public static IResourceBuilder<KubernetesHelmChartResource> WithHelmValue(
         this IResourceBuilder<KubernetesHelmChartResource> builder,

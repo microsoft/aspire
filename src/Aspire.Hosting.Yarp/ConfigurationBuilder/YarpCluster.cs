@@ -190,7 +190,6 @@ public static class YarpClusterExtensions
     /// <summary>
     /// Set the forwarder request configuration for the cluster.
     /// </summary>
-    /// <ats-summary>Sets the forwarder request configuration for the cluster.</ats-summary>
     [AspireExport]
     internal static YarpCluster WithForwarderRequestConfig(this YarpCluster cluster, YarpForwarderRequestConfig config)
     {
@@ -214,7 +213,6 @@ public static class YarpClusterExtensions
     /// <summary>
     /// Set the HTTP client configuration for the cluster.
     /// </summary>
-    /// <ats-summary>Sets the HTTP client configuration for the cluster.</ats-summary>
     [AspireExport]
     internal static YarpCluster WithHttpClientConfig(this YarpCluster cluster, YarpHttpClientConfig config)
     {
@@ -238,7 +236,6 @@ public static class YarpClusterExtensions
     /// <summary>
     /// Set the session affinity configuration for the cluster.
     /// </summary>
-    /// <ats-summary>Sets the session affinity configuration for the cluster.</ats-summary>
     [AspireExport]
     internal static YarpCluster WithSessionAffinityConfig(this YarpCluster cluster, YarpSessionAffinityConfig config)
     {
@@ -262,7 +259,6 @@ public static class YarpClusterExtensions
     /// <summary>
     /// Set the health check configuration for the cluster.
     /// </summary>
-    /// <ats-summary>Sets the health check configuration for the cluster.</ats-summary>
     [AspireExport]
     internal static YarpCluster WithHealthCheckConfig(this YarpCluster cluster, YarpHealthCheckConfig config)
     {
@@ -275,7 +271,6 @@ public static class YarpClusterExtensions
     /// <summary>
     /// Set the LoadBalancingPolicy for the cluster.
     /// </summary>
-    /// <ats-summary>Sets the load balancing policy for the cluster.</ats-summary>
     [AspireExport]
     public static YarpCluster WithLoadBalancingPolicy(this YarpCluster cluster, string policy)
     {
@@ -286,7 +281,6 @@ public static class YarpClusterExtensions
     /// <summary>
     /// Set the Metadata for the cluster.
     /// </summary>
-    /// <ats-summary>Sets metadata for the cluster.</ats-summary>
     [AspireExport("withClusterMetadata", MethodName = "withMetadata")]
     public static YarpCluster WithMetadata(this YarpCluster cluster, IReadOnlyDictionary<string, string> metadata)
     {

@@ -31,9 +31,6 @@ public static class AzureWebPubSubExtensions
     ///
     /// These can be replaced by calling <see cref="WithRoleAssignments{T}(IResourceBuilder{T}, IResourceBuilder{AzureWebPubSubResource}, WebPubSubBuiltInRole[])"/>.
     /// </remarks>
-    /// <ats-summary>Adds an Azure Web PubSub resource to the distributed application model.</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
-    /// <ats-param name="builder">The <ats-see cref="!:type:IDistributedApplicationBuilder" />.</ats-param>
     [AspireExport]
     public static IResourceBuilder<AzureWebPubSubResource> AddAzureWebPubSub(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
@@ -175,8 +172,6 @@ public static class AzureWebPubSubExtensions
     /// <param name="hubName">The name of the Azure WebPubSub Hub. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-summary>Adds a hub to the Azure Web PubSub resource.</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
-    /// <ats-param name="hubName">The name of the Azure WebPubSub Hub. If not provided, this defaults to the same value as `name`.</ats-param>
     [AspireExport]
     public static IResourceBuilder<AzureWebPubSubHubResource> AddHub(this IResourceBuilder<AzureWebPubSubResource> builder, [ResourceName] string name, string? hubName = null)
     {
@@ -261,8 +256,6 @@ public static class AzureWebPubSubExtensions
     /// <param name="userEventPattern">The user event pattern for the event handler.</param>
     /// <param name="systemEvents">The system events for the event handler.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureWebPubSubHubResource}"/>.</returns>
-    /// <ats-summary>Adds an event handler to an Azure Web PubSub hub.</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
     [AspireExport("addEventHandlerWithoutAuth", MethodName = "addEventHandler")]
     internal static IResourceBuilder<AzureWebPubSubHubResource> AddEventHandlerForPolyglot(
         this IResourceBuilder<AzureWebPubSubHubResource> builder,
@@ -338,7 +331,6 @@ public static class AzureWebPubSubExtensions
     /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
     /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="AzureWebPubSubRole"/> value.</exception>
     /// <ats-summary>Assigns Azure Web PubSub roles to a resource</ats-summary>
-    /// <ats-returns>The updated <ats-see cref="!:type:IResourceBuilder" /> with the applied role assignments.</ats-returns>
     [AspireExport("withWebPubSubRoleAssignments")]
     internal static IResourceBuilder<T> WithRoleAssignments<T>(
         this IResourceBuilder<T> builder,

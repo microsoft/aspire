@@ -13,7 +13,6 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <param name="resource">The resource.</param>
 /// <param name="urls">The URLs for the resource.</param>
 /// <param name="cancellationToken">A <see cref="CancellationToken"/>.</param>
-/// <ats-param name="cancellationToken">A <ats-see cref="!:type:CancellationToken" />.</ats-param>
 [AspireExport]
 public class ResourceUrlsCallbackContext(DistributedApplicationExecutionContext executionContext, IResource resource, List<ResourceUrlAnnotation>? urls = null, CancellationToken cancellationToken = default)
 {

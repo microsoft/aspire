@@ -16,7 +16,6 @@ internal static class NotificationExports
     /// </summary>
     /// <param name="serviceProvider">The service provider handle.</param>
     /// <returns>A resource notification service handle.</returns>
-    /// <ats-summary>Gets the resource notification service from the service provider</ats-summary>
     [AspireExport]
     public static ResourceNotificationService GetResourceNotificationService(this IServiceProvider serviceProvider)
     {
@@ -28,7 +27,6 @@ internal static class NotificationExports
     /// <summary>
     /// Waits for a resource to reach a specified state.
     /// </summary>
-    /// <ats-summary>Waits for a resource to reach a specified state</ats-summary>
     [AspireExport]
     public static Task WaitForResourceState(
         this ResourceNotificationService notificationService,
@@ -41,7 +39,6 @@ internal static class NotificationExports
     /// <summary>
     /// Waits for a resource to reach one of the specified states.
     /// </summary>
-    /// <ats-summary>Waits for a resource to reach one of the specified states</ats-summary>
     [AspireExport]
     public static Task<string> WaitForResourceStates(
         this ResourceNotificationService notificationService,
@@ -54,7 +51,6 @@ internal static class NotificationExports
     /// <summary>
     /// Waits for a resource to become healthy.
     /// </summary>
-    /// <ats-summary>Waits for a resource to become healthy</ats-summary>
     [AspireExport]
     public static async Task<ResourceEventDto> WaitForResourceHealthy(
         this ResourceNotificationService notificationService,
@@ -67,7 +63,6 @@ internal static class NotificationExports
     /// <summary>
     /// Waits for all dependencies of a resource to be ready.
     /// </summary>
-    /// <ats-summary>Waits for all dependencies of a resource to be ready</ats-summary>
     [AspireExport]
     public static Task WaitForDependencies(
         this ResourceNotificationService notificationService,
@@ -79,7 +74,6 @@ internal static class NotificationExports
     /// <summary>
     /// Tries to get the current state of a resource.
     /// </summary>
-    /// <ats-summary>Tries to get the current state of a resource</ats-summary>
     [AspireExport]
     public static ResourceEventDto? TryGetResourceState(
         this ResourceNotificationService notificationService,
@@ -95,7 +89,6 @@ internal static class NotificationExports
     /// <summary>
     /// Publishes an update for a resource's state.
     /// </summary>
-    /// <ats-summary>Publishes an update for a resource's state</ats-summary>
     [AspireExport]
     public static Task PublishResourceUpdate(
         this ResourceNotificationService notificationService,

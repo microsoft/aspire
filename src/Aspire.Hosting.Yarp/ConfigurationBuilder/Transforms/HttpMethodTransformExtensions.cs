@@ -14,7 +14,6 @@ public static class HttpMethodTransformExtensions
     /// <summary>
     /// Adds the transform that will replace the HTTP method if it matches.
     /// </summary>
-    /// <ats-summary>Adds the transform that will replace the HTTP method if it matches.</ats-summary>
     [AspireExport]
     public static YarpRoute WithTransformHttpMethodChange(this YarpRoute route, string fromHttpMethod, string toHttpMethod)
     {

@@ -273,7 +273,6 @@ public static class ExternalServiceBuilderExtensions
     /// <summary>
     /// Adds an HTTP health check to the external service for polyglot app hosts.
     /// </summary>
-    /// <ats-summary>Adds an HTTP health check to the external service</ats-summary>
     [AspireExport("withExternalServiceHttpHealthCheck", MethodName = "withHttpHealthCheck")]
     internal static IResourceBuilder<ExternalServiceResource> WithHttpHealthCheckExport(this IResourceBuilder<ExternalServiceResource> builder, string? path = null, int? statusCode = null, string? endpointName = null)
     {

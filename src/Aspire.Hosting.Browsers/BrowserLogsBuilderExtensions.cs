@@ -111,9 +111,6 @@ public static class BrowserLogsBuilderExtensions
     /// </code>
     /// </example>
     /// <ats-summary>Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.</ats-summary>
-    /// <ats-returns>A reference to the original <ats-see cref="!:type:IResourceBuilder" /> for further chaining.</ats-returns>
-    /// <ats-param name="profile">Optional Chromium profile name or directory name to use. Only valid when the effective user data mode is <ats-see cref="!:field:BrowserUserDataMode.Shared" />. When not specified, the tracked browser uses the configured value from <c>Aspire:Hosting:BrowserLogs</c> if present.</ats-param>
-    /// <ats-param name="userDataMode">Optional <ats-see cref="!:type:BrowserUserDataMode" /> that selects whether the tracked browser launches against a persistent Aspire-managed user data directory shared across all AppHosts on the machine (<ats-see cref="!:field:BrowserUserDataMode.Shared" />, the default) or a per-AppHost persistent user data directory (<ats-see cref="!:field:BrowserUserDataMode.Isolated" />). Both modes use Aspire-managed paths under <c>%LocalAppData%\Aspire\BrowserData</c> on Windows (or platform equivalents); the user's normal browser profile is never used. When not specified, the tracked browser uses the configured value from <c>Aspire:Hosting:BrowserLogs</c> and otherwise defaults to <ats-see cref="!:field:BrowserUserDataMode.Shared" />.</ats-param>
     [Experimental("ASPIREBROWSERLOGS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport]
     public static IResourceBuilder<T> WithBrowserLogs<T>(

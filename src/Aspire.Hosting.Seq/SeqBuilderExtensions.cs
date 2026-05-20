@@ -43,7 +43,6 @@ public static class SeqBuilderExtensions
     /// <param name="adminPassword">The admin password for Seq. If not provided, authentication will be disabled.</param>
     /// <param name="port">The host port for the Seq server.</param>
     /// <ats-summary>Adds a Seq server container resource</ats-summary>
-    /// <ats-param name="builder">The <ats-see cref="!:type:IDistributedApplicationBuilder" />.</ats-param>
     [AspireExport]
     public static IResourceBuilder<SeqResource> AddSeq(
         this IDistributedApplicationBuilder builder,
@@ -82,7 +81,6 @@ public static class SeqBuilderExtensions
     /// <param name="isReadOnly">A flag that indicates if this is a read-only volume.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-summary>Adds a data volume for Seq</ats-summary>
-    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<SeqResource> WithDataVolume(this IResourceBuilder<SeqResource> builder, string? name = null, bool isReadOnly = false)
     {
@@ -99,7 +97,6 @@ public static class SeqBuilderExtensions
     /// <param name="isReadOnly">A flag that indicates if this is a read-only mount.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-summary>Adds a data bind mount for Seq</ats-summary>
-    /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<SeqResource> WithDataBindMount(this IResourceBuilder<SeqResource> builder, string source, bool isReadOnly = false)
     {

@@ -117,8 +117,6 @@ public static class JavaScriptHostingExtensions
     /// </code>
     /// </example>
     /// <ats-summary>Adds a Node.js application resource</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
-    /// <ats-param name="builder">The <ats-see cref="!:type:IDistributedApplicationBuilder" /> to add the resource to.</ats-param>
     [AspireExport]
     public static IResourceBuilder<NodeAppResource> AddNodeApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string appDirectory, string scriptPath)
     {
@@ -333,7 +331,6 @@ public static class JavaScriptHostingExtensions
     /// automatically when publishing. The method configures the resource with Node.js defaults and sets up npm
     /// integration.
     /// </remarks>
-    /// <ats-summary>Adds a JavaScript application resource</ats-summary>
     [AspireExport]
     public static IResourceBuilder<JavaScriptAppResource> AddJavaScriptApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string appDirectory, string runScriptName = DefaultJavaScriptRunScriptName)
     {
@@ -551,7 +548,6 @@ public static class JavaScriptHostingExtensions
     /// the built output directory is copied into the runtime container, not the full application source.
     /// </para>
     /// </remarks>
-    /// <ats-summary>Publishes the JavaScript application as a standalone Node.js server that runs a built artifact directly.</ats-summary>
     [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport]
     public static IResourceBuilder<TResource> PublishAsNodeServer<TResource>(this IResourceBuilder<TResource> builder, string entryPoint, string outputPath = ".")
@@ -616,7 +612,6 @@ public static class JavaScriptHostingExtensions
     /// use <see cref="PublishAsNodeServer{TResource}"/> instead for a smaller runtime image.
     /// </para>
     /// </remarks>
-    /// <ats-summary>Publishes the JavaScript application as a Node.js server that uses a package manager script at runtime.</ats-summary>
     [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport]
     public static IResourceBuilder<TResource> PublishAsNpmScript<TResource>(this IResourceBuilder<TResource> builder, string startScriptName = "start", string? runScriptArguments = null)
@@ -988,8 +983,6 @@ public static class JavaScriptHostingExtensions
     /// </example>
     /// </remarks>
     /// <ats-summary>Adds a Vite application resource</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
-    /// <ats-param name="builder">The <ats-see cref="!:type:IDistributedApplicationBuilder" /> to add the resource to.</ats-param>
     [AspireExport]
     public static IResourceBuilder<ViteAppResource> AddViteApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string appDirectory, string runScriptName = "dev")
     {
@@ -1167,8 +1160,6 @@ public static class JavaScriptHostingExtensions
     /// </example>
     /// </remarks>
     /// <ats-summary>Adds a Next.js application resource</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
-    /// <ats-param name="builder">The <ats-see cref="!:type:IDistributedApplicationBuilder" /> to add the resource to.</ats-param>
     [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport]
     public static IResourceBuilder<NextJsAppResource> AddNextJsApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string appDirectory, string runScriptName = "dev")
@@ -1256,7 +1247,6 @@ public static class JavaScriptHostingExtensions
     /// to suppress those checks when the configuration is set dynamically or via an external
     /// mechanism that cannot be detected by static file inspection.
     /// </remarks>
-    /// <ats-summary>Disables deploy-time build validation checks for the Next.js application.</ats-summary>
     [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport]
     public static IResourceBuilder<NextJsAppResource> DisableBuildValidation(this IResourceBuilder<NextJsAppResource> builder)
@@ -1302,7 +1292,6 @@ public static class JavaScriptHostingExtensions
     /// <param name="installArgs">The command-line arguments passed to npm to install dependencies.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-summary>Configures npm as the package manager</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<TResource> WithNpm<TResource>(this IResourceBuilder<TResource> resource, bool install = true, string? installCommand = null, string[]? installArgs = null) where TResource : JavaScriptAppResource
     {
@@ -1351,7 +1340,6 @@ public static class JavaScriptHostingExtensions
     /// </code>
     /// </example>
     /// <ats-summary>Configures Bun as the package manager</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<TResource> WithBun<TResource>(this IResourceBuilder<TResource> resource, bool install = true, string[]? installArgs = null) where TResource : JavaScriptAppResource
     {
@@ -1420,7 +1408,6 @@ public static class JavaScriptHostingExtensions
     /// <param name="installArgs">The command-line arguments passed to "yarn install".</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-summary>Configures yarn as the package manager</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<TResource> WithYarn<TResource>(this IResourceBuilder<TResource> resource, bool install = true, string[]? installArgs = null) where TResource : JavaScriptAppResource
     {
@@ -1500,7 +1487,6 @@ public static class JavaScriptHostingExtensions
     /// <param name="installArgs">The command-line arguments passed to "pnpm install".</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-summary>Configures pnpm as the package manager</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<TResource> WithPnpm<TResource>(this IResourceBuilder<TResource> resource, bool install = true, string[]? installArgs = null) where TResource : JavaScriptAppResource
     {
@@ -1670,8 +1656,6 @@ public static class JavaScriptHostingExtensions
     ///     .WithBrowserDebugger();
     /// </code>
     /// </example>
-    /// <ats-summary>Configures a browser debugger for the JavaScript application</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining additional configuration.</ats-returns>
     [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport]
     public static IResourceBuilder<T> WithBrowserDebugger<T>(

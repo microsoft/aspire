@@ -21,8 +21,6 @@ public static class AzureProvisioningResourceExtensions
     /// <param name="name">The name of the resource being added.</param>
     /// <param name="configureInfrastructure">A callback used to configure the infrastructure resource.</param>
     /// <returns>A resource builder for the <see cref="AzureProvisioningResource"/> that can be used for further configuration.</returns>
-    /// <ats-summary>Adds an Azure provisioning resource to the application model</ats-summary>
-    /// <ats-returns>A resource builder for the <ats-see cref="!:type:AzureProvisioningResource" /> that can be used for further configuration.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzureProvisioningResource> AddAzureInfrastructure(this IDistributedApplicationBuilder builder, [ResourceName] string name, Action<AzureResourceInfrastructure> configureInfrastructure)
     {
@@ -39,7 +37,6 @@ public static class AzureProvisioningResourceExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="configure">The configuration callback.</param>
     /// <returns>The resource builder.</returns>
-    /// <ats-summary>Configures the Azure provisioning infrastructure callback</ats-summary>
     [AspireExport]
     public static IResourceBuilder<T> ConfigureInfrastructure<T>(this IResourceBuilder<T> builder, Action<AzureResourceInfrastructure> configure)
         where T : AzureProvisioningResource

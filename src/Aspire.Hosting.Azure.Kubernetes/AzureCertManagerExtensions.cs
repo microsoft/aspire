@@ -28,7 +28,6 @@ public static class AzureCertManagerExtensions
     /// mirroring the pattern used by <see cref="AzureKubernetesIngressExtensions.AddHelmChart"/>.
     /// </remarks>
     /// <ats-summary>Installs cert-manager into an AKS environment</ats-summary>
-    /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<CertManagerResource> AddCertManager(
         this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
