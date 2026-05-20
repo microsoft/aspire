@@ -342,18 +342,15 @@ steps:
       Write-Host "WinGet PR #$pullRequestNumber is draft: $pullRequestUrl"
       Write-Host "Successfully submitted WinGet manifest for $packageId $version"
     displayName: '🟣Submit to WinGet'
-    # Guard: only submit to WinGet from production branches (main / release/* / internal/release/*).
+    # Guard: only submit to WinGet from production branches.
     # 1ES PT branch validation surfaces this as a non-blocking warning, which is too easy to miss;
     # a hard condition stops accidental submissions from feature, fork or dogfood branches.
+    # _IsProductionBranch is defined in eng/pipelines/common-variables.yml.
     condition: |
       and(
         succeeded(),
         eq('${{ parameters.dryRun }}', 'false'),
-        or(
-          eq(variables['Build.SourceBranch'], 'refs/heads/main'),
-          startsWith(variables['Build.SourceBranch'], 'refs/heads/release/'),
-          startsWith(variables['Build.SourceBranch'], 'refs/heads/internal/release/')
-        )
+        eq(variables['_IsProductionBranch'], 'true')
       )
     env:
       WINGET_CREATE_GITHUB_TOKEN: $(aspire-winget-bot-pat)
