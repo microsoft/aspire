@@ -598,13 +598,23 @@ internal class DotNetTemplateFactory(
 
     private async Task<string?> GetOutputPathAsync(TemplateInputs inputs, Func<CliExecutionContext, string, string> pathDeriver, string projectName, ParseResult parseResult, CancellationToken cancellationToken)
     {
+        var isExtensionHost = ExtensionHelper.IsExtensionHost(interactionService, out _, out _);
+        var createProjectNameSubdirectory = await OutputPathHelper.ShouldCreateProjectNameSubdirectoryAsync(
+            interactionService,
+            isExtensionHost,
+            inputs.Output is not null,
+            projectName,
+            cancellationToken);
+
         var outputPath = await OutputPathHelper.ResolveOutputPathAsync(
             inputs.Output,
             executionContext.WorkingDirectory.FullName,
             async () =>
             {
                 var defaultPath = pathDeriver(executionContext, projectName);
-                var validator = OutputPathHelper.CreateOutputPathValidator(executionContext.WorkingDirectory.FullName);
+                var validator = createProjectNameSubdirectory
+                    ? OutputPathHelper.CreateExtensionOutputPathValidator(executionContext.WorkingDirectory.FullName, projectName)
+                    : OutputPathHelper.CreateOutputPathValidator(executionContext.WorkingDirectory.FullName);
                 return await prompter.PromptForOutputPath(defaultPath, parseResult, validator, cancellationToken);
             },
             interactionService);
@@ -614,32 +624,16 @@ internal class DotNetTemplateFactory(
             return null;
         }
 
-        // When running in extension mode (VS Code), the folder picker returns the parent
-        // directory the user selected. Append the project name as a subdirectory so the
-        // project gets its own clean folder, matching the git-clone convention.
-        if (ExtensionHelper.IsExtensionHost(interactionService, out _, out _)
-            && !projectName.Equals(".", StringComparison.Ordinal)
-            && !projectName.Equals("..", StringComparison.Ordinal))
+        if (createProjectNameSubdirectory)
         {
-            var normalizedOutputPath = Path.TrimEndingDirectorySeparator(outputPath);
-
-            if (!string.Equals(Path.GetFileName(normalizedOutputPath), projectName, StringComparison.OrdinalIgnoreCase))
+            var extensionOutputPath = OutputPathHelper.ResolveExtensionOutputPath(outputPath, projectName, executionContext.WorkingDirectory.FullName, inputs.Output is not null);
+            if (extensionOutputPath.ErrorMessage is not null)
             {
-                outputPath = Path.Combine(normalizedOutputPath, projectName);
-            }
-            else
-            {
-                outputPath = normalizedOutputPath;
-            }
-
-            // Re-validate the adjusted path for non-empty directory since appending the
-            // project name may target a different directory than the one already validated.
-            var validationError = OutputPathHelper.ValidateOutputPath(outputPath, executionContext.WorkingDirectory.FullName, isExplicitOutput: inputs.Output is not null);
-            if (validationError is not null)
-            {
-                interactionService.DisplayError(validationError);
+                interactionService.DisplayError(extensionOutputPath.ErrorMessage);
                 return null;
             }
+
+            outputPath = extensionOutputPath.OutputPath;
         }
 
         return outputPath;

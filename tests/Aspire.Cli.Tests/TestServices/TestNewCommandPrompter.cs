@@ -17,6 +17,7 @@ internal sealed class TestNewCommandPrompter(IInteractionService interactionServ
     public Func<ITemplate[], ITemplate>? PromptForTemplateCallback { get; set; }
     public Func<string, string>? PromptForProjectNameCallback { get; set; }
     public Func<string, string>? PromptForOutputPathCallback { get; set; }
+    public Func<string, Func<string, ValidationResult>?, string>? PromptForOutputPathWithValidatorCallback { get; set; }
 
     public override Task<ITemplate> PromptForTemplateAsync(ITemplate[] validTemplates, CancellationToken cancellationToken)
     {
@@ -38,10 +39,14 @@ internal sealed class TestNewCommandPrompter(IInteractionService interactionServ
 
     public override Task<string> PromptForOutputPath(string path, ParseResult parseResult, Func<string, ValidationResult>? validator = null, CancellationToken cancellationToken = default)
     {
-        return PromptForOutputPathCallback switch
+        return PromptForOutputPathWithValidatorCallback switch
         {
-            { } callback => Task.FromResult(callback(path)),
-            _ => Task.FromResult(path) // If no callback is provided just accept the default.
+            { } callback => Task.FromResult(callback(path, validator)),
+            _ => PromptForOutputPathCallback switch
+            {
+                { } callback => Task.FromResult(callback(path)),
+                _ => Task.FromResult(path) // If no callback is provided just accept the default.
+            }
         };
     }
 

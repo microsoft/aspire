@@ -433,14 +433,22 @@ export class InteractionService implements IInteractionService {
     async openEditor(path: string) {
         extensionLogOutputChannel.info(`Opening path: ${path}`);
 
-        // check if is folder
         if (await isDirectory(path)) {
             if (isFolderOpenInWorkspace(path)) {
                 return;
             }
 
             const uri = vscode.Uri.file(path);
-            vscode.commands.executeCommand('vscode.openFolder', uri, { forceNewWindow: false });
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (workspaceFolders && workspaceFolders.length > 0) {
+                if (!vscode.workspace.updateWorkspaceFolders(workspaceFolders.length, 0, { uri })) {
+                    extensionLogOutputChannel.warn(`Unable to add folder to workspace: ${path}`);
+                }
+
+                return;
+            }
+
+            await vscode.commands.executeCommand('vscode.openFolder', uri, { forceNewWindow: false });
         }
         else {
             const fileUri = vscode.Uri.file(path);

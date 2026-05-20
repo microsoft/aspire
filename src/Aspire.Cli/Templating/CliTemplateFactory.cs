@@ -229,16 +229,45 @@ internal sealed partial class CliTemplateFactory : ITemplateFactory
 
     private async Task<string?> ResolveOutputPathAsync(TemplateInputs inputs, Func<CliExecutionContext, string, string> pathDeriver, string projectName, System.CommandLine.ParseResult parseResult, CancellationToken cancellationToken)
     {
-        return await OutputPathHelper.ResolveOutputPathAsync(
+        var isExtensionHost = ExtensionHelper.IsExtensionHost(_interactionService, out _, out _);
+        var createProjectNameSubdirectory = await OutputPathHelper.ShouldCreateProjectNameSubdirectoryAsync(
+            _interactionService,
+            isExtensionHost,
+            inputs.Output is not null,
+            projectName,
+            cancellationToken);
+
+        var outputPath = await OutputPathHelper.ResolveOutputPathAsync(
             inputs.Output,
             _executionContext.WorkingDirectory.FullName,
             async () =>
             {
                 var defaultOutputPath = pathDeriver(_executionContext, projectName);
-                var outputPathValidator = OutputPathHelper.CreateOutputPathValidator(_executionContext.WorkingDirectory.FullName);
+                var outputPathValidator = createProjectNameSubdirectory
+                    ? OutputPathHelper.CreateExtensionOutputPathValidator(_executionContext.WorkingDirectory.FullName, projectName)
+                    : OutputPathHelper.CreateOutputPathValidator(_executionContext.WorkingDirectory.FullName);
                 return await _prompter.PromptForOutputPath(defaultOutputPath, parseResult, outputPathValidator, cancellationToken);
             },
             _interactionService);
+
+        if (outputPath is null)
+        {
+            return null;
+        }
+
+        if (createProjectNameSubdirectory)
+        {
+            var extensionOutputPath = OutputPathHelper.ResolveExtensionOutputPath(outputPath, projectName, _executionContext.WorkingDirectory.FullName, inputs.Output is not null);
+            if (extensionOutputPath.ErrorMessage is not null)
+            {
+                _interactionService.DisplayError(extensionOutputPath.ErrorMessage);
+                return null;
+            }
+
+            outputPath = extensionOutputPath.OutputPath;
+        }
+
+        return outputPath;
     }
 
     private static string ApplyTokens(string content, string projectName, string projectNameLower, string aspireVersion, AppHostProfilePorts ports, string hostName = "localhost")
