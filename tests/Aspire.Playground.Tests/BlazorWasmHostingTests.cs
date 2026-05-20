@@ -49,7 +49,7 @@ public class BlazorWasmHostingTests(ITestOutputHelper testOutput)
     [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task HostedBlazorWasm_BrowserRendersWeatherAndSendsTelemetry()
     {
-        await using var app = await CreateAppAsync(typeof(Projects.BlazorHosted_AppHost));
+        await using var app = await CreateAppAsync(typeof(Projects.BlazorHosted_AppHost), enableDashboard: true);
 
         var baseUrl = app.GetEndpoint("blazorapp").ToString().TrimEnd('/');
 
@@ -57,13 +57,14 @@ public class BlazorWasmHostingTests(ITestOutputHelper testOutput)
         await using var browser = await PlaywrightProvider.CreateBrowserAsync();
         await using var context = await browser.NewContextAsync(new BrowserNewContextOptions { IgnoreHTTPSErrors = true });
 
-        // Track OTLP requests from the WASM client
-        var otlpRequests = new ConcurrentBag<string>();
+        // Track OTLP requests and their response status codes
+        var otlpRequests = new ConcurrentBag<(string Url, int StatusCode)>();
         await context.RouteAsync("**/_otlp/v1/**", async route =>
         {
-            otlpRequests.Add(route.Request.Url);
-            testOutput.WriteLine($"[otlp-intercept] {route.Request.Method} {route.Request.Url}");
-            await route.ContinueAsync();
+            var response = await route.FetchAsync();
+            otlpRequests.Add((route.Request.Url, response.Status));
+            testOutput.WriteLine($"[otlp-intercept] {route.Request.Method} {route.Request.Url} -> {response.Status}");
+            await route.FulfillAsync(new RouteFulfillOptions { Response = response });
         });
 
         var page = await context.NewPageAsync();
@@ -84,9 +85,13 @@ public class BlazorWasmHostingTests(ITestOutputHelper testOutput)
         // Wait up to 60s for all three OTLP signal types to arrive (metrics may take longest)
         await WaitForOtlpSignalsAsync(page, otlpRequests);
 
-        Assert.Contains(otlpRequests, url => url.Contains("/_otlp/v1/traces"));
-        Assert.Contains(otlpRequests, url => url.Contains("/_otlp/v1/logs"));
-        Assert.Contains(otlpRequests, url => url.Contains("/_otlp/v1/metrics"));
+        Assert.Contains(otlpRequests, r => r.Url.Contains("/_otlp/v1/traces"));
+        Assert.Contains(otlpRequests, r => r.Url.Contains("/_otlp/v1/logs"));
+        Assert.Contains(otlpRequests, r => r.Url.Contains("/_otlp/v1/metrics"));
+
+        // Verify the OTLP proxy returned successful responses (not 503/401)
+        Assert.All(otlpRequests, r => Assert.True(r.StatusCode >= 200 && r.StatusCode < 300,
+            $"OTLP request to {r.Url} returned {r.StatusCode}"));
 
         await page.CloseAsync();
         await app.StopAsync();
@@ -125,7 +130,7 @@ public class BlazorWasmHostingTests(ITestOutputHelper testOutput)
     [OuterloopTest("Resource-intensive Playwright browser test")]
     public async Task StandaloneBlazorWasm_BrowserRendersWeatherAndSendsTelemetry()
     {
-        await using var app = await CreateAppAsync(typeof(Projects.BlazorStandalone_AppHost));
+        await using var app = await CreateAppAsync(typeof(Projects.BlazorStandalone_AppHost), enableDashboard: true);
 
         var baseUrl = app.GetEndpoint("gateway").ToString().TrimEnd('/');
 
@@ -133,12 +138,13 @@ public class BlazorWasmHostingTests(ITestOutputHelper testOutput)
         await using var browser = await PlaywrightProvider.CreateBrowserAsync();
         await using var context = await browser.NewContextAsync(new BrowserNewContextOptions { IgnoreHTTPSErrors = true });
 
-        var otlpRequests = new ConcurrentBag<string>();
+        var otlpRequests = new ConcurrentBag<(string Url, int StatusCode)>();
         await context.RouteAsync("**/_otlp/v1/**", async route =>
         {
-            otlpRequests.Add(route.Request.Url);
-            testOutput.WriteLine($"[otlp-intercept] {route.Request.Method} {route.Request.Url}");
-            await route.ContinueAsync();
+            var response = await route.FetchAsync();
+            otlpRequests.Add((route.Request.Url, response.Status));
+            testOutput.WriteLine($"[otlp-intercept] {route.Request.Method} {route.Request.Url} -> {response.Status}");
+            await route.FulfillAsync(new RouteFulfillOptions { Response = response });
         });
 
         var page = await context.NewPageAsync();
@@ -158,22 +164,26 @@ public class BlazorWasmHostingTests(ITestOutputHelper testOutput)
         // Wait up to 60s for all three OTLP signal types to arrive (metrics may take longest)
         await WaitForOtlpSignalsAsync(page, otlpRequests);
 
-        Assert.Contains(otlpRequests, url => url.Contains("/_otlp/v1/traces"));
-        Assert.Contains(otlpRequests, url => url.Contains("/_otlp/v1/logs"));
-        Assert.Contains(otlpRequests, url => url.Contains("/_otlp/v1/metrics"));
+        Assert.Contains(otlpRequests, r => r.Url.Contains("/_otlp/v1/traces"));
+        Assert.Contains(otlpRequests, r => r.Url.Contains("/_otlp/v1/logs"));
+        Assert.Contains(otlpRequests, r => r.Url.Contains("/_otlp/v1/metrics"));
+
+        // Verify the OTLP proxy returned successful responses (not 503/401)
+        Assert.All(otlpRequests, r => Assert.True(r.StatusCode >= 200 && r.StatusCode < 300,
+            $"OTLP request to {r.Url} returned {r.StatusCode}"));
 
         await page.CloseAsync();
         await app.StopAsync();
     }
 
-    private static async Task WaitForOtlpSignalsAsync(IPage page, ConcurrentBag<string> otlpRequests)
+    private static async Task WaitForOtlpSignalsAsync(IPage page, ConcurrentBag<(string Url, int StatusCode)> otlpRequests)
     {
         var deadline = DateTime.UtcNow.AddSeconds(60);
         while (DateTime.UtcNow < deadline)
         {
-            var hasTraces = otlpRequests.Any(url => url.Contains("/_otlp/v1/traces"));
-            var hasLogs = otlpRequests.Any(url => url.Contains("/_otlp/v1/logs"));
-            var hasMetrics = otlpRequests.Any(url => url.Contains("/_otlp/v1/metrics"));
+            var hasTraces = otlpRequests.Any(r => r.Url.Contains("/_otlp/v1/traces"));
+            var hasLogs = otlpRequests.Any(r => r.Url.Contains("/_otlp/v1/logs"));
+            var hasMetrics = otlpRequests.Any(r => r.Url.Contains("/_otlp/v1/metrics"));
             if (hasTraces && hasLogs && hasMetrics)
             {
                 return;
@@ -183,9 +193,16 @@ public class BlazorWasmHostingTests(ITestOutputHelper testOutput)
         }
     }
 
-    private async Task<Aspire.Hosting.DistributedApplication> CreateAppAsync(Type appHostType)
+    private async Task<Aspire.Hosting.DistributedApplication> CreateAppAsync(Type appHostType, bool enableDashboard = false)
     {
-        var builder = await DistributedApplicationTestingBuilder.CreateAsync(appHostType);
+        var builder = await DistributedApplicationTestingBuilder.CreateAsync(appHostType, [], (options, _) =>
+        {
+            if (enableDashboard)
+            {
+                options.DisableDashboard = false;
+                options.AllowUnsecuredTransport = true;
+            }
+        });
         builder.WithRandomParameterValues();
         builder.Services.AddLogging(logging =>
         {
