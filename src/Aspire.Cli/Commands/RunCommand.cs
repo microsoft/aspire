@@ -720,6 +720,7 @@ internal sealed class RunCommand : BaseCommand
             await Task.Yield();
 
             var logEntries = backchannel.GetAppHostLogEntriesAsync(cancellationToken);
+            var displayedContainerRuntimeWarning = false;
 
             await foreach (var entry in logEntries.WithCancellation(cancellationToken))
             {
@@ -730,6 +731,12 @@ internal sealed class RunCommand : BaseCommand
                         // Send only information+ level logs to the extension host.
                         extensionInteractionService.WriteDebugSessionMessage(entry.Message, entry.LogLevel is not LogLevel.Error and not LogLevel.Critical, "\x1b[2m");
                     }
+                }
+
+                if (!displayedContainerRuntimeWarning && IsContainerRuntimeAvailabilityWarning(entry))
+                {
+                    interactionService.DisplayMessage(KnownEmojis.Warning, entry.Message);
+                    displayedContainerRuntimeWarning = true;
                 }
 
                 // Write to the unified log file via FileLoggerProvider
@@ -747,6 +754,23 @@ internal sealed class RunCommand : BaseCommand
             // Just swallow this exception because this is an orderly shutdown of the backchannel.
             return;
         }
+    }
+
+    private static bool IsContainerRuntimeAvailabilityWarning(BackchannelLogEntry entry)
+    {
+        if (entry.LogLevel is not (LogLevel.Warning or LogLevel.Error or LogLevel.Critical))
+        {
+            return false;
+        }
+
+        if (!entry.CategoryName.StartsWith("Aspire.Hosting.Dcp.", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return entry.Message.Contains("Container runtime", StringComparison.OrdinalIgnoreCase) &&
+            (entry.Message.Contains("appears to be unhealthy", StringComparison.OrdinalIgnoreCase) ||
+             entry.Message.Contains("could not be found", StringComparison.OrdinalIgnoreCase));
     }
 
     private readonly Dictionary<string, RpcResourceState> _resourceStates = new();

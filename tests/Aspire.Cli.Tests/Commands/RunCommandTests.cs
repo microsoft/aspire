@@ -1947,6 +1947,57 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
             line => Assert.Equal("[2026-03-16 12:00:00.000] [INFO] [AppHost/Lifetime] Application started", line),
             line => Assert.Equal("[2026-03-16 12:00:01.000] [WARN] [AppHost/Kestrel] Slow response", line),
             line => Assert.Equal("[2026-03-16 12:00:02.000] [FAIL] [AppHost/SimpleCategory] Connection refused", line));
+        Assert.Empty(interactionService.DisplayedMessages);
+
+        async IAsyncEnumerable<BackchannelLogEntry> YieldEntries([EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            foreach (var entry in entries)
+            {
+                yield return entry;
+            }
+            await Task.CompletedTask;
+        }
+    }
+
+    [Fact]
+    public async Task CaptureAppHostLogsAsync_DisplaysContainerRuntimeWarning()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var logFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "test.log");
+        var errorWriter = new TestStartupErrorWriter();
+        using var fileLoggerProvider = new FileLoggerProvider(logFilePath, errorWriter);
+
+        var entries = new BackchannelLogEntry[]
+        {
+            new()
+            {
+                Timestamp = new DateTimeOffset(2026, 3, 16, 12, 0, 0, TimeSpan.Zero),
+                LogLevel = LogLevel.Warning,
+                Message = "Container runtime 'docker' was found but appears to be unhealthy. Ensure that Docker is running.",
+                EventId = new EventId(),
+                CategoryName = "Aspire.Hosting.Dcp.DcpHost"
+            },
+            new()
+            {
+                Timestamp = new DateTimeOffset(2026, 3, 16, 12, 0, 1, TimeSpan.Zero),
+                LogLevel = LogLevel.Warning,
+                Message = "Container runtime 'docker' was found but appears to be unhealthy. Ensure that Docker is running.",
+                EventId = new EventId(),
+                CategoryName = "Aspire.Hosting.Dcp.DcpHost"
+            },
+        };
+
+        var backchannel = new TestAppHostBackchannel
+        {
+            GetAppHostLogEntriesAsyncCallback = YieldEntries
+        };
+        var interactionService = new TestInteractionService();
+
+        await RunCommand.CaptureAppHostLogsAsync(fileLoggerProvider, backchannel, interactionService, CancellationToken.None);
+
+        var displayedMessage = Assert.Single(interactionService.DisplayedMessages);
+        Assert.Equal(KnownEmojis.Warning, displayedMessage.Emoji);
+        Assert.Contains("Container runtime 'docker'", displayedMessage.Message);
 
         async IAsyncEnumerable<BackchannelLogEntry> YieldEntries([EnumeratorCancellation] CancellationToken cancellationToken)
         {
