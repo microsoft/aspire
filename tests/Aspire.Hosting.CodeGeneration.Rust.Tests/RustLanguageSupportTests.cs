@@ -20,11 +20,12 @@ public class RustLanguageSupportTests
             ProjectName = "RustApp"
         });
 
-        Assert.Contains("src/main.rs", files.Keys);
-        Assert.Contains("Cargo.toml", files.Keys);
-        Assert.Contains("apphost.rs", files.Keys);
-        Assert.Contains("apphost.run.json", files.Keys);
-        Assert.DoesNotContain("apphost.ts", files.Keys);
+        Assert.Collection(
+            files.Keys.Order(StringComparer.Ordinal),
+            key => Assert.Equal("Cargo.toml", key),
+            key => Assert.Equal("apphost.rs", key),
+            key => Assert.Equal("apphost.run.json", key),
+            key => Assert.Equal("src/main.rs", key));
     }
 
     [Fact]
