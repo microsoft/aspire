@@ -86,7 +86,6 @@ jobs:
     name: Build CLI E2E Docker image
     uses: ./.github/workflows/build-cli-e2e-image.yml
     needs: setup_for_tests
-    if: ${{ fromJson(needs.setup_for_tests.outputs.tests_matrix_requires_cli_archive).include[0] != null }}
 
   tests_no_nugets:
     name: ${{ matrix.shortname }}

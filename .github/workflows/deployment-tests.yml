@@ -245,11 +245,7 @@ jobs:
           echo "✅ Azure authentication successful"
 
       - name: Verify Docker is running
-        run: |
-          echo "Verifying Docker daemon..."
-          docker version
-          docker info | head -20
-          echo "✅ Docker is available"
+        uses: ./.github/actions/verify-docker
 
       # Pin helm to a version that supports `helm install --server-side`/--force-conflicts
       # (added in helm v3.18.0; helm v4 keeps both but `--server-side` is now a string flag
