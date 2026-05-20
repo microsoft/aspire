@@ -40,7 +40,7 @@ public static class BlazorGatewayExtensions
         this IDistributedApplicationBuilder builder,
         string name)
     {
-        var gatewayPath = GetGatewayScriptPath();
+        var gatewayPath = GetScriptPath("Gateway.cs");
         var gateway = builder.AddCSharpApp(name, gatewayPath)
             .WithHttpEndpoint()
             .WithHttpsEndpoint();
@@ -205,6 +205,10 @@ public static class BlazorGatewayExtensions
         // Get or create the annotation on the gateway resource
         var annotation = GetOrAddGatewayAppsAnnotation(gateway.Resource);
 
+        var gatewayOutputRoot = Path.Combine(
+            gateway.ApplicationBuilder.AppHostDirectory,
+            "obj", "Aspire.Hosting.Blazor", "gateways", gateway.Resource.Name);
+
         if (!annotation.IsInitialized)
         {
             annotation.IsInitialized = true;
@@ -224,17 +228,13 @@ public static class BlazorGatewayExtensions
                     return;
                 }
 
-                var gatewayOutputRoot = Path.Combine(
-                    gateway.ApplicationBuilder.AppHostDirectory,
-                    "obj", "Aspire.Hosting.Blazor", "gateways", gateway.Resource.Name);
-
-                // Clean up stale output from previous runs.
-                if (Directory.Exists(gatewayOutputRoot))
+                // Clean up stale output from previous runs (but preserve the scripts subdir).
+                var outputDir = Path.Combine(gatewayOutputRoot, "output");
+                if (Directory.Exists(outputDir))
                 {
-                    Directory.Delete(gatewayOutputRoot, recursive: true);
+                    Directory.Delete(outputDir, recursive: true);
                 }
 
-                var outputDir = Path.Combine(gatewayOutputRoot, "output");
                 Directory.CreateDirectory(outputDir);
 
                 var manifests = await BuildAndDiscoverManifestsAsync(registeredApps, context.Logger, context.CancellationToken).ConfigureAwait(false);
@@ -272,11 +272,6 @@ public static class BlazorGatewayExtensions
         }
 
         return gateway;
-    }
-
-    private static string GetGatewayScriptPath()
-    {
-        return GetScriptPath("Gateway.cs");
     }
 
     private static ProjectInfo GetProjectInfo(string projectPath, string appHostDirectory)
