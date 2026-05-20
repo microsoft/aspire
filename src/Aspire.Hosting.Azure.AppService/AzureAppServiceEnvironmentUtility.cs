@@ -66,6 +66,8 @@ internal static class AzureAppServiceEnvironmentUtility
                 Http20ProxyFlag = 1,
                 // Setting instance count to 1 to ensure dashboard runs on 1 instance
                 NumberOfWorkers = 1,
+                FunctionAppScaleLimit = 1,
+                ElasticWebAppScaleLimit = 1,
                 // IsAlwaysOn set to true ensures the app is always running
                 IsAlwaysOn = true,
                 AppSettings = []
