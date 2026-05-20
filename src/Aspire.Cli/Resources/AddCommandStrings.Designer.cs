@@ -197,6 +197,14 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string SourceOptionNotSupportedForFileBasedAppHost
+        {
+            get
+            {
+                return ResourceManager.GetString("SourceOptionNotSupportedForFileBasedAppHost", resourceCulture);
+            }
+        }
+
         public static string PackageAddedSuccessfully
         {
             get

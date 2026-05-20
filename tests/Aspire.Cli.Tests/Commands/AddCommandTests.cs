@@ -2941,4 +2941,54 @@ public class AddCommandFuzzySearchTests(ITestOutputHelper outputHelper)
         // Verify that Azure AppContainers package was found and added through fuzzy matching
         Assert.Equal("Aspire.Hosting.Azure.AppContainers", addedPackage);
     }
+
+    [Fact]
+    public async Task AddCommandWithSourceFailsFastForFileBasedAppHost()
+    {
+        var searchedPackages = false;
+        var addedPackage = false;
+        var testInteractionService = new TestInteractionService();
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs"));
+        await File.WriteAllTextAsync(appHostFile.FullName, """
+            #:sdk Aspire.AppHost.Sdk@13.4.0
+            """);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => testInteractionService;
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner();
+                runner.SearchPackagesAsyncCallback = (_, _, _, _, _, _, _, _, _, _) =>
+                {
+                    searchedPackages = true;
+                    throw new InvalidOperationException("Should not search packages when --source is rejected for a file-based AppHost.");
+                };
+                runner.AddPackageAsyncCallback = (_, _, _, _, _, _, _) =>
+                {
+                    addedPackage = true;
+                    throw new InvalidOperationException("Should not add a package when --source is rejected for a file-based AppHost.");
+                };
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<AddCommand>();
+        var result = command.Parse($"add redis --apphost \"{appHostFile.FullName}\" --source https://api.nuget.org/v3/index.json --version 13.4.0");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToAddPackage, exitCode);
+        Assert.False(searchedPackages);
+        Assert.False(addedPackage);
+        Assert.DoesNotContain(AddCommandStrings.SearchingForAspirePackages, testInteractionService.ShownStatuses);
+        Assert.Contains(testInteractionService.DisplayedErrors, error =>
+            error.Contains("'--source'", StringComparison.Ordinal) &&
+            error.Contains("file-based AppHost", StringComparison.Ordinal) &&
+            error.Contains(appHostFile.FullName, StringComparison.Ordinal) &&
+            error.Contains("nuget.config", StringComparison.Ordinal));
+    }
 }

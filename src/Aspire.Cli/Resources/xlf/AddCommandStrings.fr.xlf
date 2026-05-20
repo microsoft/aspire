@@ -142,6 +142,11 @@
         <target state="needs-review-translation">Source NuGet à utiliser pour l’intégration.</target>
         <note />
       </trans-unit>
+      <trans-unit id="SourceOptionNotSupportedForFileBasedAppHost">
+        <source>The option '--source' cannot be used when adding an integration to file-based AppHost '{0}'. Register the feed in nuget.config for the AppHost directory, then run 'aspire add' without '--source'.</source>
+        <target state="new">The option '--source' cannot be used when adding an integration to file-based AppHost '{0}'. Register the feed in nuget.config for the AppHost directory, then run 'aspire add' without '--source'.</target>
+        <note>{0} is the path to the file-based AppHost.</note>
+      </trans-unit>
       <trans-unit id="SpecifiedVersionNotFoundForPackage">
         <source>The requested version '{1}' was not found for package '{0}'.</source>
         <target state="new">The requested version '{1}' was not found for package '{0}'.</target>

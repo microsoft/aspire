@@ -173,6 +173,10 @@
     <value>The package installation failed with exit code {0}.</value>
     <comment>{0} is a number</comment>
   </data>
+  <data name="SourceOptionNotSupportedForFileBasedAppHost" xml:space="preserve">
+    <value>The option '--source' cannot be used when adding an integration to file-based AppHost '{0}'. Register the feed in nuget.config for the AppHost directory, then run 'aspire add' without '--source'.</value>
+    <comment>{0} is the path to the file-based AppHost.</comment>
+  </data>
   <data name="PackageAddedSuccessfully" xml:space="preserve">
     <value>The package {0}::{1} was added successfully.</value>
     <comment>{0} is the package name, {1} is the version.</comment>

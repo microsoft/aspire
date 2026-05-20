@@ -83,6 +83,13 @@ internal sealed class AddCommand : BaseCommand
             // Get the appropriate project handler
             var project = _projectFactory.GetProject(effectiveAppHostProjectFile);
 
+            if (!string.IsNullOrEmpty(source) && IsFileBasedCSharpAppHost(effectiveAppHostProjectFile, project))
+            {
+                return CommandResult.Failure(
+                    CliExitCodes.FailedToAddPackage,
+                    string.Format(CultureInfo.CurrentCulture, AddCommandStrings.SourceOptionNotSupportedForFileBasedAppHost, effectiveAppHostProjectFile.FullName));
+            }
+
             // Check if the .NET SDK is available (only needed for .NET projects)
             if (project.LanguageId == KnownLanguageId.CSharp)
             {
@@ -341,6 +348,12 @@ internal sealed class AddCommand : BaseCommand
         }
 
         return await GetPackageByInteractiveFlow(workingDirectory, possiblePackages, preferredVersion, cancellationToken);
+    }
+
+    private static bool IsFileBasedCSharpAppHost(FileInfo appHostFile, IAppHostProject project)
+    {
+        return project.LanguageId == KnownLanguageId.CSharp
+            && appHostFile.Name.Equals("apphost.cs", StringComparison.OrdinalIgnoreCase);
     }
 
 }
