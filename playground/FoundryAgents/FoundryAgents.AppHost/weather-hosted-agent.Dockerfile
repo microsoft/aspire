@@ -1,4 +1,4 @@
-FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS builder
+FROM ghcr.io/astral-sh/uv:python3.11-bookworm-slim AS builder
 
 # Enable bytecode compilation and copy mode for the virtual environment
 ENV UV_COMPILE_BYTECODE=1
@@ -6,17 +6,20 @@ ENV UV_LINK_MODE=copy
 
 WORKDIR /app
 
-# Install dependencies first for better layer caching
-# Uses BuildKit cache mounts to speed up repeated builds
-RUN --mount=type=cache,target=/root/.cache/uv --mount=type=bind,source=uv.lock,target=uv.lock --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --locked --no-install-project --no-dev
+# Copy pyproject.toml to install dependencies
+COPY pyproject.toml /app/
+
+# Install dependencies and generate lock file
+# Uses BuildKit cache mount to speed up repeated builds
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --no-install-project --no-dev
 
 # Copy the rest of the application source and install the project
 COPY . /app
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --locked --no-dev
+    uv sync --no-dev
 
-FROM python:3.13-slim-bookworm AS app
+FROM python:3.11-slim-bookworm AS app
 
 # ------------------------------
 # 🚀 Runtime stage
@@ -40,4 +43,4 @@ USER appuser
 WORKDIR /app
 
 # Run the application
-ENTRYPOINT ["python","-m","uvicorn"]
+ENTRYPOINT ["python","main.py"]
