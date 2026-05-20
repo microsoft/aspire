@@ -521,7 +521,47 @@ if ($Archive) {
   if ($bundleRid -like 'win-*') {
     $archivePath = "$Output.zip"
     Write-Log "Creating archive: $archivePath"
-    Compress-Archive -Path (Join-Path $Output '*') -DestinationPath $archivePath -Force
+
+    # Use System.IO.Compression.ZipFile::CreateFromDirectory rather than
+    # Compress-Archive. Compress-Archive enumerates inputs via the PowerShell
+    # provider, which on non-Windows hosts treats files whose name starts with
+    # '.' as hidden and excludes them from `<dir>/*` wildcard expansion. The
+    # portable layout includes bin/.aspire-install.json — the localhive route
+    # sidecar that `aspire doctor` and route-aware Aspire-home selection rely
+    # on (see docs/specs/install-routes.md) — and silently dropping it from
+    # win-* zips built on Linux/macOS would produce sidecar-less installs on
+    # the target machine. ZipFile walks the filesystem directly and includes
+    # dotfiles unconditionally.
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    if (Test-Path -LiteralPath $archivePath) {
+      Remove-Item -LiteralPath $archivePath -Force
+    }
+    [System.IO.Compression.ZipFile]::CreateFromDirectory(
+      $Output,
+      $archivePath,
+      [System.IO.Compression.CompressionLevel]::Optimal,
+      $false)
+
+    # Belt-and-suspenders: if the portable layout has a sidecar on disk, the
+    # archive MUST also have it. Catches future regressions of the dotfile
+    # issue (e.g. a switch back to Compress-Archive or a wildcard-based copy).
+    $sidecarOnDisk = Join-Path $Output (Join-Path 'bin' '.aspire-install.json')
+    if (Test-Path -LiteralPath $sidecarOnDisk) {
+      $sidecarEntryName = 'bin/.aspire-install.json'
+      $zip = [System.IO.Compression.ZipFile]::OpenRead($archivePath)
+      try {
+        $hasSidecar = $false
+        foreach ($entry in $zip.Entries) {
+          if ($entry.FullName -eq $sidecarEntryName) { $hasSidecar = $true; break }
+        }
+      }
+      finally {
+        $zip.Dispose()
+      }
+      if (-not $hasSidecar) {
+        throw "Archive '$archivePath' is missing the install-route sidecar entry '$sidecarEntryName'. The zip creation path is dropping hidden files."
+      }
+    }
   } else {
     $archivePath = "$Output.tar.gz"
     Write-Log "Creating archive: $archivePath"

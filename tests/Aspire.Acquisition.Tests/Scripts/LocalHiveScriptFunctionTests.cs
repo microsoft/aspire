@@ -72,6 +72,29 @@ public class LocalHiveScriptFunctionTests
         Assert.DoesNotContain("aspire config set", source, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void PowerShellSource_WindowsArchivePathDoesNotUseCompressArchive()
+    {
+        // Compress-Archive enumerates inputs via the PowerShell provider, which on
+        // non-Windows hosts hides dotfiles from `<dir>/*` wildcard expansion. The
+        // portable layout includes bin/.aspire-install.json — the localhive route
+        // sidecar — and silently dropping it from a win-* zip built on Linux/macOS
+        // would produce sidecar-less installs on the target. Use
+        // [System.IO.Compression.ZipFile]::CreateFromDirectory instead.
+        var source = File.ReadAllText(GetRepoPath(ScriptPaths.LocalHivePowerShell));
+
+        // Strip PowerShell line comments so the contract check matches actual
+        // cmdlet invocations, not mentions of the cmdlet in explanatory comments.
+        var sourceWithoutComments = string.Join('\n', source.Split('\n').Select(line =>
+        {
+            var hashIdx = line.IndexOf('#');
+            return hashIdx >= 0 ? line[..hashIdx] : line;
+        }));
+
+        Assert.DoesNotContain("Compress-Archive", sourceWithoutComments, StringComparison.Ordinal);
+        Assert.Contains("[System.IO.Compression.ZipFile]::CreateFromDirectory", source, StringComparison.Ordinal);
+    }
+
     private static string GetScriptPath(string scriptPathName) => scriptPathName switch
     {
         nameof(ScriptPaths.LocalHiveShell) => ScriptPaths.LocalHiveShell,
