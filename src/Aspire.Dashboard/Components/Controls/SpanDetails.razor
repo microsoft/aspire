@@ -8,11 +8,11 @@
     {
         <FluentToolbar Orientation="Orientation.Horizontal">
             <div>
-                @((MarkupString)string.Format(ControlsStrings.SpanDetailsResource, ViewModel.Span.Source.Resource.ResourceName))
+                @Loc[nameof(ControlsStrings.SpanDetailsResourceLabel)] <strong>@ViewModel.Span.Source.Resource.ResourceName</strong>
             </div>
             <FluentDivider Role="DividerRole.Presentation" Orientation="Orientation.Vertical" />
             <div>
-                @((MarkupString)string.Format(ControlsStrings.SpanDetailsDuration, DurationFormatter.FormatDuration(ViewModel.Span.Duration, CultureInfo.CurrentCulture)))
+                @Loc[nameof(ControlsStrings.SpanDetailsDurationLabel)] <strong>@DurationFormatter.FormatDuration(ViewModel.Span.Duration, CultureInfo.CurrentCulture)</strong>
             </div>
             <FluentDivider Role="DividerRole.Presentation" Orientation="Orientation.Vertical" />
             <div>
@@ -21,7 +21,7 @@
                     var startTime = ViewModel.Span.StartTime - ViewModel.Span.Trace.FirstSpan.StartTime;
                     var formattedStartTime = startTime > TimeSpan.Zero ? DurationFormatter.FormatDuration(startTime, CultureInfo.CurrentCulture) : $"0{DurationFormatter.GetUnit(ViewModel.Span.Duration)}";
                 }
-                @((MarkupString)string.Format(ControlsStrings.SpanDetailsStartTime, formattedStartTime))
+                @Loc[nameof(ControlsStrings.SpanDetailsStartTimeLabel)] <strong>@formattedStartTime</strong>
             </div>
             <FluentSearch Placeholder="@Loc[nameof(ControlsStrings.FilterPlaceholder)]"
                           Immediate="true"

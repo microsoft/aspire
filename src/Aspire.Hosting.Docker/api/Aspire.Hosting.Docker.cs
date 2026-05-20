@@ -332,6 +332,9 @@ namespace Aspire.Hosting.Docker.Resources.ComposeNodes
         [YamlDotNet.Serialization.YamlMember(Alias = "ports", DefaultValuesHandling = YamlDotNet.Serialization.DefaultValuesHandling.OmitEmptyCollections)]
         public System.Collections.Generic.List<string> Ports { get { throw null; } set { } }
 
+        [YamlDotNet.Serialization.YamlMember(Alias = "privileged")]
+        public bool? Privileged { get { throw null; } set { } }
+
         [YamlDotNet.Serialization.YamlMember(Alias = "profiles", DefaultValuesHandling = YamlDotNet.Serialization.DefaultValuesHandling.OmitEmptyCollections)]
         public System.Collections.Generic.List<string> Profiles { get { throw null; } set { } }
 
