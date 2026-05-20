@@ -12,6 +12,21 @@
         <target state="translated">Duración</target>
         <note />
       </trans-unit>
+      <trans-unit id="TraceDetailMinimumDurationLabel">
+        <source>Minimum duration (ms)</source>
+        <target state="new">Minimum duration (ms)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TraceDetailMinimumDurationPlaceholder">
+        <source>Min ms</source>
+        <target state="new">Min ms</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TraceDetailMinimumDurationTitle">
+        <source>Minimum span duration in milliseconds</source>
+        <target state="new">Minimum span duration in milliseconds</target>
+        <note />
+      </trans-unit>
       <trans-unit id="TraceDetailMobileToolbarButtonText">
         <source>Trace details</source>
         <target state="translated">Detalles de seguimiento</target>

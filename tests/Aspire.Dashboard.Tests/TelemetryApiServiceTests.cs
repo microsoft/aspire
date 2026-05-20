@@ -28,7 +28,7 @@ public class TelemetryApiServiceTests
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
 
         var receivedItems = new List<string>();
-        await foreach (var item in service.FollowSpansAsync(null, null, null, null, cts.Token))
+        await foreach (var item in service.FollowSpansAsync(null, null, null, null, cancellationToken: cts.Token))
         {
             receivedItems.Add(item);
             if (receivedItems.Count >= 5)
@@ -111,7 +111,7 @@ public class TelemetryApiServiceTests
         var receivedItems = new List<string>();
         try
         {
-            await foreach (var item in service.FollowSpansAsync(["nonexistent-service"], null, null, null, cts.Token))
+            await foreach (var item in service.FollowSpansAsync(["nonexistent-service"], null, null, null, cancellationToken: cts.Token))
             {
                 receivedItems.Add(item);
             }
@@ -176,6 +176,89 @@ public class TelemetryApiServiceTests
         }
     }
 
+    [Theory]
+    [InlineData("747261636531", 1)]
+    [InlineData("7472616", 1)]
+    [InlineData("747261", 0)]
+    public void GetSpans_WithTraceIdFilter_MatchesShortenedIds(string traceIdFilter, int expectedCount)
+    {
+        var repository = CreateRepository();
+        var traceId = Encoding.UTF8.GetString(Convert.FromHexString("747261636531"));
+
+        AddSpansToRepository(repository, [
+            CreateSpan(traceId: traceId, spanId: "matching-span", startTime: s_testTime, endTime: s_testTime.AddMinutes(1)),
+            CreateSpan(traceId: "other-trace", spanId: "other-span", startTime: s_testTime.AddMinutes(2), endTime: s_testTime.AddMinutes(3))
+        ]);
+
+        var service = CreateService(repository);
+
+        var result = service.GetSpans(resourceNames: null, traceId: traceIdFilter, hasError: null, limit: null);
+
+        Assert.NotNull(result);
+        Assert.Equal(expectedCount, result.ReturnedCount);
+
+        var json = System.Text.Json.JsonSerializer.Serialize(result.Data);
+        if (expectedCount > 0)
+        {
+            Assert.Contains("matching-span", json);
+        }
+        else
+        {
+            Assert.DoesNotContain("matching-span", json);
+        }
+        Assert.DoesNotContain("other-span", json);
+    }
+
+    [Fact]
+    public async Task FollowSpansAsync_WithTraceIdFilter_MatchesShortenedIds()
+    {
+        var repository = CreateRepository();
+        var traceId = Encoding.UTF8.GetString(Convert.FromHexString("747261636531"));
+
+        AddSpansToRepository(repository, [
+            CreateSpan(traceId: traceId, spanId: "matching-span", startTime: s_testTime, endTime: s_testTime.AddMinutes(1)),
+            CreateSpan(traceId: "other-trace", spanId: "other-span", startTime: s_testTime.AddMinutes(2), endTime: s_testTime.AddMinutes(3))
+        ]);
+
+        var service = CreateService(repository);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        var receivedItems = new List<string>();
+        await foreach (var streamedItem in service.FollowSpansAsync(null, "7472616", null, null, cancellationToken: cts.Token))
+        {
+            receivedItems.Add(streamedItem);
+            break;
+        }
+
+        var receivedItem = Assert.Single(receivedItems);
+        Assert.Contains("matching-span", receivedItem);
+        Assert.DoesNotContain("other-span", receivedItem);
+    }
+
+    [Fact]
+    public void GetTrace_WithMinimumDurationMs_FiltersShortSpans()
+    {
+        var repository = CreateRepository();
+        var traceId = Encoding.UTF8.GetString(Convert.FromHexString("747261636531"));
+
+        AddSpansToRepository(repository, [
+            CreateSpan(traceId: traceId, spanId: "short-span", startTime: s_testTime, endTime: s_testTime.AddMilliseconds(49)),
+            CreateSpan(traceId: traceId, spanId: "long-span", startTime: s_testTime.AddSeconds(1), endTime: s_testTime.AddSeconds(1).AddMilliseconds(50))
+        ]);
+
+        var service = CreateService(repository);
+
+        var result = service.GetTrace("747261636531", minDurationMs: 50);
+
+        Assert.NotNull(result);
+        Assert.Equal(1, result.TotalCount);
+        Assert.Equal(1, result.ReturnedCount);
+
+        var json = System.Text.Json.JsonSerializer.Serialize(result.Data);
+        Assert.DoesNotContain("short-span", json);
+        Assert.Contains("long-span", json);
+    }
+
     [Fact]
     public void GetSpans_WithLimit_ReturnsMostRecentSpans()
     {
@@ -201,6 +284,30 @@ public class TelemetryApiServiceTests
     }
 
     [Fact]
+    public void GetSpans_WithMinimumDurationMs_FiltersShortSpans()
+    {
+        var repository = CreateRepository();
+        AddSpansToRepository(repository, [
+            CreateSpan(traceId: "trace1", spanId: "short-span", startTime: s_testTime, endTime: s_testTime.AddMilliseconds(49)),
+            CreateSpan(traceId: "trace2", spanId: "threshold-span", startTime: s_testTime.AddSeconds(1), endTime: s_testTime.AddSeconds(1).AddMilliseconds(50)),
+            CreateSpan(traceId: "trace3", spanId: "long-span", startTime: s_testTime.AddSeconds(2), endTime: s_testTime.AddSeconds(2).AddMilliseconds(75))
+        ]);
+
+        var service = CreateService(repository);
+
+        var result = service.GetSpans(resourceNames: null, traceId: null, hasError: null, limit: null, minDurationMs: 50);
+
+        Assert.NotNull(result);
+        Assert.Equal(2, result.TotalCount);
+        Assert.Equal(2, result.ReturnedCount);
+
+        var json = System.Text.Json.JsonSerializer.Serialize(result.Data);
+        Assert.DoesNotContain("short-span", json);
+        Assert.Contains("threshold-span", json);
+        Assert.Contains("long-span", json);
+    }
+
+    [Fact]
     public void GetTraces_WithLimit_ReturnsMostRecentTraces()
     {
         var repository = CreateRepository();
@@ -218,6 +325,64 @@ public class TelemetryApiServiceTests
         Assert.DoesNotContain("span1", json);
         Assert.Contains("span2", json);
         Assert.Contains("span3", json);
+    }
+
+    [Fact]
+    public void GetTraces_WithMinimumDurationMs_FiltersShortSpans()
+    {
+        var repository = CreateRepository();
+        AddSpansToRepository(repository, [
+            CreateSpan(traceId: "short-trace", spanId: "short-trace-span", startTime: s_testTime, endTime: s_testTime.AddMilliseconds(49))
+        ]);
+        AddSpansToRepository(repository, [
+            CreateSpan(traceId: "mixed-trace", spanId: "mixed-short-span", startTime: s_testTime.AddSeconds(1), endTime: s_testTime.AddSeconds(1).AddMilliseconds(49)),
+            CreateSpan(traceId: "mixed-trace", spanId: "mixed-long-span", startTime: s_testTime.AddSeconds(2), endTime: s_testTime.AddSeconds(2).AddMilliseconds(50))
+        ]);
+
+        var service = CreateService(repository);
+
+        var result = service.GetTraces(resourceNames: null, hasError: null, limit: null, minDurationMs: 50);
+
+        Assert.NotNull(result);
+        Assert.Equal(1, result.TotalCount);
+        Assert.Equal(1, result.ReturnedCount);
+
+        var json = System.Text.Json.JsonSerializer.Serialize(result.Data);
+        Assert.DoesNotContain("short-trace-span", json);
+        Assert.DoesNotContain("mixed-short-span", json);
+        Assert.Contains("mixed-long-span", json);
+    }
+
+    [Fact]
+    public void GetTraces_WithHasErrorAndMinimumDurationMs_FiltersDisplayedSpansAfterTraceSelection()
+    {
+        var repository = CreateRepository();
+        AddSpansToRepository(repository, [
+            CreateSpan(
+                traceId: "mixed-trace",
+                spanId: "short-error-span",
+                startTime: s_testTime,
+                endTime: s_testTime.AddMilliseconds(49),
+                status: new Status { Code = Status.Types.StatusCode.Error }),
+            CreateSpan(
+                traceId: "mixed-trace",
+                spanId: "long-ok-span",
+                startTime: s_testTime.AddSeconds(1),
+                endTime: s_testTime.AddSeconds(1).AddMilliseconds(50),
+                status: new Status { Code = Status.Types.StatusCode.Ok })
+        ]);
+
+        var service = CreateService(repository);
+
+        var result = service.GetTraces(resourceNames: null, hasError: true, limit: null, minDurationMs: 50);
+
+        Assert.NotNull(result);
+        Assert.Equal(1, result.TotalCount);
+        Assert.Equal(1, result.ReturnedCount);
+
+        var json = System.Text.Json.JsonSerializer.Serialize(result.Data);
+        Assert.DoesNotContain("short-error-span", json);
+        Assert.Contains("long-ok-span", json);
     }
 
     [Fact]

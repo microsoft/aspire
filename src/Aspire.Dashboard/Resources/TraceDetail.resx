@@ -143,6 +143,15 @@
   <data name="TraceDetailMobileToolbarButtonText" xml:space="preserve">
     <value>Trace details</value>
   </data>
+  <data name="TraceDetailMinimumDurationLabel" xml:space="preserve">
+    <value>Minimum duration (ms)</value>
+  </data>
+  <data name="TraceDetailMinimumDurationPlaceholder" xml:space="preserve">
+    <value>Min ms</value>
+  </data>
+  <data name="TraceDetailMinimumDurationTitle" xml:space="preserve">
+    <value>Minimum span duration in milliseconds</value>
+  </data>
   <data name="TraceDetailNameHeader" xml:space="preserve">
     <value>Name</value>
   </data>

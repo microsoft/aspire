@@ -121,6 +121,7 @@ internal static class FluentUISetupHelpers
     {
         var textboxModule = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/TextField/FluentTextField.razor.js"));
         textboxModule.SetupVoid("setControlAttribute", _ => true);
+        textboxModule.SetupVoid("ensureCurrentValueMatch", _ => true);
     }
 
     public static void AddCommonDashboardServices(

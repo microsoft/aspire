@@ -88,6 +88,33 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Minimum duration (ms).
+        /// </summary>
+        public static string TraceDetailMinimumDurationLabel {
+            get {
+                return ResourceManager.GetString("TraceDetailMinimumDurationLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Min ms.
+        /// </summary>
+        public static string TraceDetailMinimumDurationPlaceholder {
+            get {
+                return ResourceManager.GetString("TraceDetailMinimumDurationPlaceholder", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Minimum span duration in milliseconds.
+        /// </summary>
+        public static string TraceDetailMinimumDurationTitle {
+            get {
+                return ResourceManager.GetString("TraceDetailMinimumDurationTitle", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Name.
         /// </summary>
         public static string TraceDetailNameHeader {

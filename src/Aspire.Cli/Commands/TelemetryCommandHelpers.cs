@@ -103,6 +103,14 @@ internal static class TelemetryCommandHelpers
     };
 
     /// <summary>
+    /// Minimum span duration option for spans and traces commands.
+    /// </summary>
+    internal static Option<double?> CreateMinimumDurationOption() => new("--min-duration", "--min-duration-ms")
+    {
+        Description = TelemetryCommandStrings.MinimumDurationOptionDescription
+    };
+
+    /// <summary>
     /// Dashboard URL option for connecting directly to a standalone dashboard.
     /// </summary>
     internal static Option<string?> CreateDashboardUrlOption() => new("--dashboard-url")

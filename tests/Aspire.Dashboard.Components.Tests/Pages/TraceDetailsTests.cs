@@ -385,6 +385,81 @@ public partial class TraceDetailsTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task Render_MinimumSpanDuration_FiltersShortSpans()
+    {
+        SetupTraceDetailsServices();
+
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
+        telemetryRepository.AddTraces(new AddContext(),
+            new RepeatedField<ResourceSpans>
+            {
+                new ResourceSpans
+                {
+                    Resource = CreateResource(),
+                    ScopeSpans =
+                    {
+                        new ScopeSpans
+                        {
+                            Scope = CreateScope(),
+                            Spans =
+                            {
+                                CreateSpan(traceId: "1", spanId: "1-1",
+                                    startTime: s_testTime,
+                                    endTime: s_testTime.AddMilliseconds(20)),
+                                CreateSpan(traceId: "1", spanId: "1-2",
+                                    startTime: s_testTime.AddMilliseconds(1),
+                                    endTime: s_testTime.AddMilliseconds(1),
+                                    parentSpanId: "1-1"),
+                                CreateSpan(traceId: "1", spanId: "1-3",
+                                    startTime: s_testTime.AddMilliseconds(2),
+                                    endTime: s_testTime.AddMilliseconds(7),
+                                    parentSpanId: "1-2"),
+                                CreateSpan(traceId: "1", spanId: "1-4",
+                                    startTime: s_testTime.AddMilliseconds(8),
+                                    endTime: s_testTime.AddMilliseconds(9),
+                                    parentSpanId: "1-1"),
+                                CreateSpan(traceId: "1", spanId: "1-5",
+                                    startTime: s_testTime.AddMilliseconds(10),
+                                    endTime: s_testTime.AddMilliseconds(14),
+                                    parentSpanId: "1-1")
+                            }
+                        }
+                    }
+                }
+            });
+
+        var traceId = Convert.ToHexString(Encoding.UTF8.GetBytes("1"));
+        var cut = RenderComponent<TraceDetail>(builder =>
+        {
+            builder.Add(p => p.TraceId, traceId);
+            builder.AddCascadingValue(viewport);
+        });
+
+        cut.Instance.MinimumSpanDurationMilliseconds = 2;
+        var filteredData = await cut.Instance.GetData(new GridItemsProviderRequest<SpanWaterfallViewModel>());
+
+        cut.Instance.MinimumSpanDurationMilliseconds = null;
+        var unfilteredData = await cut.Instance.GetData(new GridItemsProviderRequest<SpanWaterfallViewModel>());
+
+        Assert.Collection(filteredData.Items,
+            item => Assert.Equal("Test span. Id: 1-1", item.Span.Name),
+            item => Assert.Equal("Test span. Id: 1-3", item.Span.Name),
+            item => Assert.Equal("Test span. Id: 1-5", item.Span.Name));
+
+        Assert.Collection(unfilteredData.Items,
+            item => Assert.Equal("Test span. Id: 1-1", item.Span.Name),
+            item => Assert.Equal("Test span. Id: 1-2", item.Span.Name),
+            item => Assert.Equal("Test span. Id: 1-3", item.Span.Name),
+            item => Assert.Equal("Test span. Id: 1-4", item.Span.Name),
+            item => Assert.Equal("Test span. Id: 1-5", item.Span.Name));
+    }
+
+    [Fact]
     public void ToggleCollapse_SpanStateChanges()
     {
         // Arrange
@@ -632,6 +707,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentList(this);
 
         FluentUISetupHelpers.SetupFluentSearch(this);
+        FluentUISetupHelpers.SetupFluentTextField(this);
         FluentUISetupHelpers.SetupFluentKeyCode(this);
         FluentUISetupHelpers.SetupFluentToolbar(this);
         FluentUISetupHelpers.SetupFluentMenu(this);

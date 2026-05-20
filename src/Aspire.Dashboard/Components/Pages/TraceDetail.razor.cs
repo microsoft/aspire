@@ -51,6 +51,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     private AspirePageContentLayout? _layout;
     private List<SelectViewModel<SpanType>> _spanTypes = default!;
     private SelectViewModel<SpanType> _selectedSpanType = default!;
+    private readonly string _minimumDurationFilterId = $"minimum-duration-{Guid.NewGuid():N}";
 
     [Parameter]
     public required string TraceId { get; set; }
@@ -103,6 +104,8 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
+
+    internal double? MinimumSpanDurationMilliseconds { get; set; }
 
     protected override void OnInitialized()
     {
@@ -207,7 +210,15 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
             }
         }
 
-        return _spanWaterfallViewModels.Where(visibleViewModels.Contains);
+        var minimumDuration = GetMinimumSpanDuration();
+        if (minimumDuration is not { } threshold)
+        {
+            return _spanWaterfallViewModels.Where(visibleViewModels.Contains);
+        }
+
+        // Apply duration last so it always removes short spans, even when a matched
+        // parent makes descendants visible for context in the text/type filters.
+        return _spanWaterfallViewModels.Where(vm => visibleViewModels.Contains(vm) && vm.Span.Duration >= threshold);
     }
 
     private string? GetPageTitle()
@@ -337,6 +348,34 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         await InvokeAsync(StateHasChanged);
 
         await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
+    }
+
+    private async Task HandleMinimumSpanDurationChangedAsync()
+    {
+        SelectedData = null;
+        await InvokeAsync(StateHasChanged);
+
+        await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
+    }
+
+    private TimeSpan? GetMinimumSpanDuration()
+    {
+        if (MinimumSpanDurationMilliseconds is not > 0)
+        {
+            return null;
+        }
+
+        var minimumDurationMilliseconds = MinimumSpanDurationMilliseconds.Value;
+        if (!double.IsFinite(minimumDurationMilliseconds))
+        {
+            return null;
+        }
+        if (minimumDurationMilliseconds >= TimeSpan.MaxValue.TotalMilliseconds)
+        {
+            return TimeSpan.MaxValue;
+        }
+
+        return TimeSpan.FromTicks((long)Math.Ceiling(minimumDurationMilliseconds * TimeSpan.TicksPerMillisecond));
     }
 
     private void UpdateSubscription()
