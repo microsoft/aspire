@@ -145,6 +145,11 @@ public class DistributedApplicationEventing : IDistributedApplicationEventing
         return subscription;
     }
 
+    internal bool HasSubscriptions<T>() where T : IDistributedApplicationEvent
+    {
+        return _eventSubscriptionListLookup.TryGetValue(typeof(T), out var subscriptions) && subscriptions.Count > 0;
+    }
+
     /// <inheritdoc cref="IDistributedApplicationEventing.Subscribe{T}(Func{T, CancellationToken, Task})" />
     public DistributedApplicationEventSubscription Subscribe<T>(IResource resource, Func<T, CancellationToken, Task> callback) where T : IDistributedApplicationResourceEvent
     {

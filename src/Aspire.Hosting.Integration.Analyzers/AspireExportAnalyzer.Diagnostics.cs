@@ -6,7 +6,7 @@ using Microsoft.CodeAnalysis;
 
 namespace Aspire.Hosting.Analyzers;
 
-public partial class AspireExportAnalyzer
+internal partial class AspireExportAnalyzer
 {
     internal static class Diagnostics
     {

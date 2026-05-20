@@ -40,7 +40,7 @@ func main() {
 	}
 	pgContainer.RunAsContainer(&aspire.RunAsContainerOptions{
 		ConfigureContainer: func(container aspire.PostgresServerResource) {
-			container.WithLifetime(aspire.ContainerLifetimePersistent)
+			container.WithPersistentLifetime()
 		},
 	})
 	if pgContainer.Err() != nil {

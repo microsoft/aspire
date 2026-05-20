@@ -1,0 +1,1 @@
+BREAK capability-return-type-changed Aspire.Hosting Aspire.Hosting/withEndpointProxySupport -- https://github.com/microsoft/aspire/pull/17112 -- Generalized endpoint proxy support from containers to all endpoint-capable resources while preserving source-level TypeScript compatibility.

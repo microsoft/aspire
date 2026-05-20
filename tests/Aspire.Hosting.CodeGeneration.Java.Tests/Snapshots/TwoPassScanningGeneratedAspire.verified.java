@@ -1706,6 +1706,44 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Configures a resource to use a session lifetime. */
+    public CSharpAppResource withSessionLifetime() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withSessionLifetime", reqArgs);
+        return this;
+    }
+
+    /** Configures a resource to use a persistent lifetime. */
+    public CSharpAppResource withPersistentLifetime() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withPersistentLifetime", reqArgs);
+        return this;
+    }
+
+    /** Configures a resource to match the lifetime of another resource. */
+    public CSharpAppResource withLifetimeOf(IResource sourceBuilder) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("sourceBuilder", AspireClient.serializeValue(sourceBuilder));
+        getClient().invokeCapability("Aspire.Hosting/withLifetimeOf", reqArgs);
+        return this;
+    }
+
+    public CSharpAppResource withLifetimeOf(ResourceBuilderBase sourceBuilder) {
+        return withLifetimeOf(new IResource(sourceBuilder.getHandle(), sourceBuilder.getClient()));
+    }
+
+    /** Configures a resource to use a persistent lifetime that ends when a parent process exits. */
+    public CSharpAppResource withParentProcessLifetime(double parentProcessId) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("parentProcessId", AspireClient.serializeValue(parentProcessId));
+        getClient().invokeCapability("Aspire.Hosting/withParentProcessLifetime", reqArgs);
+        return this;
+    }
+
     public CSharpAppResource withEnvironment(String name, String value) {
         return withEnvironment(name, AspireUnion.of(value));
     }
@@ -1992,6 +2030,15 @@ public class CSharpAppResource extends ProjectResource {
             reqArgs.put("protocol", AspireClient.serializeValue(protocol));
         }
         getClient().invokeCapability("Aspire.Hosting/withEndpoint", reqArgs);
+        return this;
+    }
+
+    /** Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less. */
+    public CSharpAppResource withEndpointProxySupport(boolean proxyEnabled) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("proxyEnabled", AspireClient.serializeValue(proxyEnabled));
+        getClient().invokeCapability("Aspire.Hosting/withEndpointProxySupport", reqArgs);
         return this;
     }
 
@@ -3885,6 +3932,44 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a resource to use a session lifetime. */
+    public ContainerRegistryResource withSessionLifetime() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withSessionLifetime", reqArgs);
+        return this;
+    }
+
+    /** Configures a resource to use a persistent lifetime. */
+    public ContainerRegistryResource withPersistentLifetime() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withPersistentLifetime", reqArgs);
+        return this;
+    }
+
+    /** Configures a resource to match the lifetime of another resource. */
+    public ContainerRegistryResource withLifetimeOf(IResource sourceBuilder) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("sourceBuilder", AspireClient.serializeValue(sourceBuilder));
+        getClient().invokeCapability("Aspire.Hosting/withLifetimeOf", reqArgs);
+        return this;
+    }
+
+    public ContainerRegistryResource withLifetimeOf(ResourceBuilderBase sourceBuilder) {
+        return withLifetimeOf(new IResource(sourceBuilder.getHandle(), sourceBuilder.getClient()));
+    }
+
+    /** Configures a resource to use a persistent lifetime that ends when a parent process exits. */
+    public ContainerRegistryResource withParentProcessLifetime(double parentProcessId) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("parentProcessId", AspireClient.serializeValue(parentProcessId));
+        getClient().invokeCapability("Aspire.Hosting/withParentProcessLifetime", reqArgs);
+        return this;
+    }
+
     /** Registers a callback to customize the URLs displayed for the resource. */
     public ContainerRegistryResource withUrls(AspireAction1<ResourceUrlsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -4755,15 +4840,6 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
-    /** Set whether a container resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the container. If set to `false`, endpoints belonging to the container resource will ignore the configured proxy settings and run proxy-less. */
-    public ContainerResource withEndpointProxySupport(boolean proxyEnabled) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("proxyEnabled", AspireClient.serializeValue(proxyEnabled));
-        getClient().invokeCapability("Aspire.Hosting/withEndpointProxySupport", reqArgs);
-        return this;
-    }
-
     public ContainerResource withDockerfileBuilder(String contextPath, AspireAction1<DockerfileBuilderCallbackContext> callback) {
         return withDockerfileBuilder(contextPath, callback, null);
     }
@@ -4883,6 +4959,44 @@ public class ContainerResource extends ResourceBuilderBase {
             reqArgs.put("helpLink", AspireClient.serializeValue(helpLink));
         }
         getClient().invokeCapability("Aspire.Hosting/withRequiredCommand", reqArgs);
+        return this;
+    }
+
+    /** Configures a resource to use a session lifetime. */
+    public ContainerResource withSessionLifetime() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withSessionLifetime", reqArgs);
+        return this;
+    }
+
+    /** Configures a resource to use a persistent lifetime. */
+    public ContainerResource withPersistentLifetime() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withPersistentLifetime", reqArgs);
+        return this;
+    }
+
+    /** Configures a resource to match the lifetime of another resource. */
+    public ContainerResource withLifetimeOf(IResource sourceBuilder) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("sourceBuilder", AspireClient.serializeValue(sourceBuilder));
+        getClient().invokeCapability("Aspire.Hosting/withLifetimeOf", reqArgs);
+        return this;
+    }
+
+    public ContainerResource withLifetimeOf(ResourceBuilderBase sourceBuilder) {
+        return withLifetimeOf(new IResource(sourceBuilder.getHandle(), sourceBuilder.getClient()));
+    }
+
+    /** Configures a resource to use a persistent lifetime that ends when a parent process exits. */
+    public ContainerResource withParentProcessLifetime(double parentProcessId) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("parentProcessId", AspireClient.serializeValue(parentProcessId));
+        getClient().invokeCapability("Aspire.Hosting/withParentProcessLifetime", reqArgs);
         return this;
     }
 
@@ -5172,6 +5286,15 @@ public class ContainerResource extends ResourceBuilderBase {
             reqArgs.put("protocol", AspireClient.serializeValue(protocol));
         }
         getClient().invokeCapability("Aspire.Hosting/withEndpoint", reqArgs);
+        return this;
+    }
+
+    /** Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less. */
+    public ContainerResource withEndpointProxySupport(boolean proxyEnabled) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("proxyEnabled", AspireClient.serializeValue(proxyEnabled));
+        getClient().invokeCapability("Aspire.Hosting/withEndpointProxySupport", reqArgs);
         return this;
     }
 
@@ -6996,6 +7119,44 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Configures a resource to use a session lifetime. */
+    public DotnetToolResource withSessionLifetime() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withSessionLifetime", reqArgs);
+        return this;
+    }
+
+    /** Configures a resource to use a persistent lifetime. */
+    public DotnetToolResource withPersistentLifetime() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withPersistentLifetime", reqArgs);
+        return this;
+    }
+
+    /** Configures a resource to match the lifetime of another resource. */
+    public DotnetToolResource withLifetimeOf(IResource sourceBuilder) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("sourceBuilder", AspireClient.serializeValue(sourceBuilder));
+        getClient().invokeCapability("Aspire.Hosting/withLifetimeOf", reqArgs);
+        return this;
+    }
+
+    public DotnetToolResource withLifetimeOf(ResourceBuilderBase sourceBuilder) {
+        return withLifetimeOf(new IResource(sourceBuilder.getHandle(), sourceBuilder.getClient()));
+    }
+
+    /** Configures a resource to use a persistent lifetime that ends when a parent process exits. */
+    public DotnetToolResource withParentProcessLifetime(double parentProcessId) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("parentProcessId", AspireClient.serializeValue(parentProcessId));
+        getClient().invokeCapability("Aspire.Hosting/withParentProcessLifetime", reqArgs);
+        return this;
+    }
+
     public DotnetToolResource withEnvironment(String name, String value) {
         return withEnvironment(name, AspireUnion.of(value));
     }
@@ -7282,6 +7443,15 @@ public class DotnetToolResource extends ExecutableResource {
             reqArgs.put("protocol", AspireClient.serializeValue(protocol));
         }
         getClient().invokeCapability("Aspire.Hosting/withEndpoint", reqArgs);
+        return this;
+    }
+
+    /** Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less. */
+    public DotnetToolResource withEndpointProxySupport(boolean proxyEnabled) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("proxyEnabled", AspireClient.serializeValue(proxyEnabled));
+        getClient().invokeCapability("Aspire.Hosting/withEndpointProxySupport", reqArgs);
         return this;
     }
 
@@ -9053,6 +9223,44 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a resource to use a session lifetime. */
+    public ExecutableResource withSessionLifetime() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withSessionLifetime", reqArgs);
+        return this;
+    }
+
+    /** Configures a resource to use a persistent lifetime. */
+    public ExecutableResource withPersistentLifetime() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withPersistentLifetime", reqArgs);
+        return this;
+    }
+
+    /** Configures a resource to match the lifetime of another resource. */
+    public ExecutableResource withLifetimeOf(IResource sourceBuilder) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("sourceBuilder", AspireClient.serializeValue(sourceBuilder));
+        getClient().invokeCapability("Aspire.Hosting/withLifetimeOf", reqArgs);
+        return this;
+    }
+
+    public ExecutableResource withLifetimeOf(ResourceBuilderBase sourceBuilder) {
+        return withLifetimeOf(new IResource(sourceBuilder.getHandle(), sourceBuilder.getClient()));
+    }
+
+    /** Configures a resource to use a persistent lifetime that ends when a parent process exits. */
+    public ExecutableResource withParentProcessLifetime(double parentProcessId) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("parentProcessId", AspireClient.serializeValue(parentProcessId));
+        getClient().invokeCapability("Aspire.Hosting/withParentProcessLifetime", reqArgs);
+        return this;
+    }
+
     public ExecutableResource withEnvironment(String name, String value) {
         return withEnvironment(name, AspireUnion.of(value));
     }
@@ -9339,6 +9547,15 @@ public class ExecutableResource extends ResourceBuilderBase {
             reqArgs.put("protocol", AspireClient.serializeValue(protocol));
         }
         getClient().invokeCapability("Aspire.Hosting/withEndpoint", reqArgs);
+        return this;
+    }
+
+    /** Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less. */
+    public ExecutableResource withEndpointProxySupport(boolean proxyEnabled) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("proxyEnabled", AspireClient.serializeValue(proxyEnabled));
+        getClient().invokeCapability("Aspire.Hosting/withEndpointProxySupport", reqArgs);
         return this;
     }
 
@@ -10563,6 +10780,44 @@ public class ExternalServiceResource extends ResourceBuilderBase {
             reqArgs.put("helpLink", AspireClient.serializeValue(helpLink));
         }
         getClient().invokeCapability("Aspire.Hosting/withRequiredCommand", reqArgs);
+        return this;
+    }
+
+    /** Configures a resource to use a session lifetime. */
+    public ExternalServiceResource withSessionLifetime() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withSessionLifetime", reqArgs);
+        return this;
+    }
+
+    /** Configures a resource to use a persistent lifetime. */
+    public ExternalServiceResource withPersistentLifetime() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withPersistentLifetime", reqArgs);
+        return this;
+    }
+
+    /** Configures a resource to match the lifetime of another resource. */
+    public ExternalServiceResource withLifetimeOf(IResource sourceBuilder) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("sourceBuilder", AspireClient.serializeValue(sourceBuilder));
+        getClient().invokeCapability("Aspire.Hosting/withLifetimeOf", reqArgs);
+        return this;
+    }
+
+    public ExternalServiceResource withLifetimeOf(ResourceBuilderBase sourceBuilder) {
+        return withLifetimeOf(new IResource(sourceBuilder.getHandle(), sourceBuilder.getClient()));
+    }
+
+    /** Configures a resource to use a persistent lifetime that ends when a parent process exits. */
+    public ExternalServiceResource withParentProcessLifetime(double parentProcessId) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("parentProcessId", AspireClient.serializeValue(parentProcessId));
+        getClient().invokeCapability("Aspire.Hosting/withParentProcessLifetime", reqArgs);
         return this;
     }
 
@@ -13625,6 +13880,44 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a resource to use a session lifetime. */
+    public ParameterResource withSessionLifetime() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withSessionLifetime", reqArgs);
+        return this;
+    }
+
+    /** Configures a resource to use a persistent lifetime. */
+    public ParameterResource withPersistentLifetime() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withPersistentLifetime", reqArgs);
+        return this;
+    }
+
+    /** Configures a resource to match the lifetime of another resource. */
+    public ParameterResource withLifetimeOf(IResource sourceBuilder) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("sourceBuilder", AspireClient.serializeValue(sourceBuilder));
+        getClient().invokeCapability("Aspire.Hosting/withLifetimeOf", reqArgs);
+        return this;
+    }
+
+    public ParameterResource withLifetimeOf(ResourceBuilderBase sourceBuilder) {
+        return withLifetimeOf(new IResource(sourceBuilder.getHandle(), sourceBuilder.getClient()));
+    }
+
+    /** Configures a resource to use a persistent lifetime that ends when a parent process exits. */
+    public ParameterResource withParentProcessLifetime(double parentProcessId) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("parentProcessId", AspireClient.serializeValue(parentProcessId));
+        getClient().invokeCapability("Aspire.Hosting/withParentProcessLifetime", reqArgs);
+        return this;
+    }
+
     /** Registers a callback to customize the URLs displayed for the resource. */
     public ParameterResource withUrls(AspireAction1<ResourceUrlsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -14943,6 +15236,44 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a resource to use a session lifetime. */
+    public ProjectResource withSessionLifetime() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withSessionLifetime", reqArgs);
+        return this;
+    }
+
+    /** Configures a resource to use a persistent lifetime. */
+    public ProjectResource withPersistentLifetime() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withPersistentLifetime", reqArgs);
+        return this;
+    }
+
+    /** Configures a resource to match the lifetime of another resource. */
+    public ProjectResource withLifetimeOf(IResource sourceBuilder) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("sourceBuilder", AspireClient.serializeValue(sourceBuilder));
+        getClient().invokeCapability("Aspire.Hosting/withLifetimeOf", reqArgs);
+        return this;
+    }
+
+    public ProjectResource withLifetimeOf(ResourceBuilderBase sourceBuilder) {
+        return withLifetimeOf(new IResource(sourceBuilder.getHandle(), sourceBuilder.getClient()));
+    }
+
+    /** Configures a resource to use a persistent lifetime that ends when a parent process exits. */
+    public ProjectResource withParentProcessLifetime(double parentProcessId) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("parentProcessId", AspireClient.serializeValue(parentProcessId));
+        getClient().invokeCapability("Aspire.Hosting/withParentProcessLifetime", reqArgs);
+        return this;
+    }
+
     public ProjectResource withEnvironment(String name, String value) {
         return withEnvironment(name, AspireUnion.of(value));
     }
@@ -15229,6 +15560,15 @@ public class ProjectResource extends ResourceBuilderBase {
             reqArgs.put("protocol", AspireClient.serializeValue(protocol));
         }
         getClient().invokeCapability("Aspire.Hosting/withEndpoint", reqArgs);
+        return this;
+    }
+
+    /** Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less. */
+    public ProjectResource withEndpointProxySupport(boolean proxyEnabled) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("proxyEnabled", AspireClient.serializeValue(proxyEnabled));
+        getClient().invokeCapability("Aspire.Hosting/withEndpointProxySupport", reqArgs);
         return this;
     }
 
@@ -17535,15 +17875,6 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
-    /** Set whether a container resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the container. If set to `false`, endpoints belonging to the container resource will ignore the configured proxy settings and run proxy-less. */
-    public TestDatabaseResource withEndpointProxySupport(boolean proxyEnabled) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("proxyEnabled", AspireClient.serializeValue(proxyEnabled));
-        getClient().invokeCapability("Aspire.Hosting/withEndpointProxySupport", reqArgs);
-        return this;
-    }
-
     public TestDatabaseResource withDockerfileBuilder(String contextPath, AspireAction1<DockerfileBuilderCallbackContext> callback) {
         return withDockerfileBuilder(contextPath, callback, null);
     }
@@ -17663,6 +17994,44 @@ public class TestDatabaseResource extends ContainerResource {
             reqArgs.put("helpLink", AspireClient.serializeValue(helpLink));
         }
         getClient().invokeCapability("Aspire.Hosting/withRequiredCommand", reqArgs);
+        return this;
+    }
+
+    /** Configures a resource to use a session lifetime. */
+    public TestDatabaseResource withSessionLifetime() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withSessionLifetime", reqArgs);
+        return this;
+    }
+
+    /** Configures a resource to use a persistent lifetime. */
+    public TestDatabaseResource withPersistentLifetime() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withPersistentLifetime", reqArgs);
+        return this;
+    }
+
+    /** Configures a resource to match the lifetime of another resource. */
+    public TestDatabaseResource withLifetimeOf(IResource sourceBuilder) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("sourceBuilder", AspireClient.serializeValue(sourceBuilder));
+        getClient().invokeCapability("Aspire.Hosting/withLifetimeOf", reqArgs);
+        return this;
+    }
+
+    public TestDatabaseResource withLifetimeOf(ResourceBuilderBase sourceBuilder) {
+        return withLifetimeOf(new IResource(sourceBuilder.getHandle(), sourceBuilder.getClient()));
+    }
+
+    /** Configures a resource to use a persistent lifetime that ends when a parent process exits. */
+    public TestDatabaseResource withParentProcessLifetime(double parentProcessId) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("parentProcessId", AspireClient.serializeValue(parentProcessId));
+        getClient().invokeCapability("Aspire.Hosting/withParentProcessLifetime", reqArgs);
         return this;
     }
 
@@ -17952,6 +18321,15 @@ public class TestDatabaseResource extends ContainerResource {
             reqArgs.put("protocol", AspireClient.serializeValue(protocol));
         }
         getClient().invokeCapability("Aspire.Hosting/withEndpoint", reqArgs);
+        return this;
+    }
+
+    /** Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less. */
+    public TestDatabaseResource withEndpointProxySupport(boolean proxyEnabled) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("proxyEnabled", AspireClient.serializeValue(proxyEnabled));
+        getClient().invokeCapability("Aspire.Hosting/withEndpointProxySupport", reqArgs);
         return this;
     }
 
@@ -19443,15 +19821,6 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
-    /** Set whether a container resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the container. If set to `false`, endpoints belonging to the container resource will ignore the configured proxy settings and run proxy-less. */
-    public TestRedisResource withEndpointProxySupport(boolean proxyEnabled) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("proxyEnabled", AspireClient.serializeValue(proxyEnabled));
-        getClient().invokeCapability("Aspire.Hosting/withEndpointProxySupport", reqArgs);
-        return this;
-    }
-
     public TestRedisResource withDockerfileBuilder(String contextPath, AspireAction1<DockerfileBuilderCallbackContext> callback) {
         return withDockerfileBuilder(contextPath, callback, null);
     }
@@ -19571,6 +19940,44 @@ public class TestRedisResource extends ContainerResource {
             reqArgs.put("helpLink", AspireClient.serializeValue(helpLink));
         }
         getClient().invokeCapability("Aspire.Hosting/withRequiredCommand", reqArgs);
+        return this;
+    }
+
+    /** Configures a resource to use a session lifetime. */
+    public TestRedisResource withSessionLifetime() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withSessionLifetime", reqArgs);
+        return this;
+    }
+
+    /** Configures a resource to use a persistent lifetime. */
+    public TestRedisResource withPersistentLifetime() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withPersistentLifetime", reqArgs);
+        return this;
+    }
+
+    /** Configures a resource to match the lifetime of another resource. */
+    public TestRedisResource withLifetimeOf(IResource sourceBuilder) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("sourceBuilder", AspireClient.serializeValue(sourceBuilder));
+        getClient().invokeCapability("Aspire.Hosting/withLifetimeOf", reqArgs);
+        return this;
+    }
+
+    public TestRedisResource withLifetimeOf(ResourceBuilderBase sourceBuilder) {
+        return withLifetimeOf(new IResource(sourceBuilder.getHandle(), sourceBuilder.getClient()));
+    }
+
+    /** Configures a resource to use a persistent lifetime that ends when a parent process exits. */
+    public TestRedisResource withParentProcessLifetime(double parentProcessId) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("parentProcessId", AspireClient.serializeValue(parentProcessId));
+        getClient().invokeCapability("Aspire.Hosting/withParentProcessLifetime", reqArgs);
         return this;
     }
 
@@ -19886,6 +20293,15 @@ public class TestRedisResource extends ContainerResource {
             reqArgs.put("protocol", AspireClient.serializeValue(protocol));
         }
         getClient().invokeCapability("Aspire.Hosting/withEndpoint", reqArgs);
+        return this;
+    }
+
+    /** Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less. */
+    public TestRedisResource withEndpointProxySupport(boolean proxyEnabled) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("proxyEnabled", AspireClient.serializeValue(proxyEnabled));
+        getClient().invokeCapability("Aspire.Hosting/withEndpointProxySupport", reqArgs);
         return this;
     }
 
@@ -21444,15 +21860,6 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
-    /** Set whether a container resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the container. If set to `false`, endpoints belonging to the container resource will ignore the configured proxy settings and run proxy-less. */
-    public TestVaultResource withEndpointProxySupport(boolean proxyEnabled) {
-        Map<String, Object> reqArgs = new HashMap<>();
-        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
-        reqArgs.put("proxyEnabled", AspireClient.serializeValue(proxyEnabled));
-        getClient().invokeCapability("Aspire.Hosting/withEndpointProxySupport", reqArgs);
-        return this;
-    }
-
     public TestVaultResource withDockerfileBuilder(String contextPath, AspireAction1<DockerfileBuilderCallbackContext> callback) {
         return withDockerfileBuilder(contextPath, callback, null);
     }
@@ -21572,6 +21979,44 @@ public class TestVaultResource extends ContainerResource {
             reqArgs.put("helpLink", AspireClient.serializeValue(helpLink));
         }
         getClient().invokeCapability("Aspire.Hosting/withRequiredCommand", reqArgs);
+        return this;
+    }
+
+    /** Configures a resource to use a session lifetime. */
+    public TestVaultResource withSessionLifetime() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withSessionLifetime", reqArgs);
+        return this;
+    }
+
+    /** Configures a resource to use a persistent lifetime. */
+    public TestVaultResource withPersistentLifetime() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        getClient().invokeCapability("Aspire.Hosting/withPersistentLifetime", reqArgs);
+        return this;
+    }
+
+    /** Configures a resource to match the lifetime of another resource. */
+    public TestVaultResource withLifetimeOf(IResource sourceBuilder) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("sourceBuilder", AspireClient.serializeValue(sourceBuilder));
+        getClient().invokeCapability("Aspire.Hosting/withLifetimeOf", reqArgs);
+        return this;
+    }
+
+    public TestVaultResource withLifetimeOf(ResourceBuilderBase sourceBuilder) {
+        return withLifetimeOf(new IResource(sourceBuilder.getHandle(), sourceBuilder.getClient()));
+    }
+
+    /** Configures a resource to use a persistent lifetime that ends when a parent process exits. */
+    public TestVaultResource withParentProcessLifetime(double parentProcessId) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("parentProcessId", AspireClient.serializeValue(parentProcessId));
+        getClient().invokeCapability("Aspire.Hosting/withParentProcessLifetime", reqArgs);
         return this;
     }
 
@@ -21861,6 +22306,15 @@ public class TestVaultResource extends ContainerResource {
             reqArgs.put("protocol", AspireClient.serializeValue(protocol));
         }
         getClient().invokeCapability("Aspire.Hosting/withEndpoint", reqArgs);
+        return this;
+    }
+
+    /** Set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less. */
+    public TestVaultResource withEndpointProxySupport(boolean proxyEnabled) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("proxyEnabled", AspireClient.serializeValue(proxyEnabled));
+        getClient().invokeCapability("Aspire.Hosting/withEndpointProxySupport", reqArgs);
         return this;
     }
 

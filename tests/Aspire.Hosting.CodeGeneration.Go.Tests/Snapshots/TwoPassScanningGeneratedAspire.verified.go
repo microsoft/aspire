@@ -1106,6 +1106,7 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	WithImageSHA256(sha256 string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithImageTag(tag string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithLifetime(lifetime ContainerLifetime) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithLifetimeOf(sourceBuilder Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithMcpServer(options ...*WithMcpServerOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithMergeEndpoint(endpointName string, port float64) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithMergeEndpointScheme(endpointName string, port float64, scheme string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
@@ -1120,7 +1121,9 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	WithOptionalCallback(options ...*WithOptionalCallbackOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithOptionalString(options ...*WithOptionalStringOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithOtlpExporter(options ...*WithOtlpExporterOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithParentProcessLifetime(parentProcessId float64) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithParentRelationship(parent Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithPersistentLifetime() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
@@ -1131,6 +1134,7 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	WithRemoteImageName(remoteImageName string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithRemoteImageTag(remoteImageTag string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithSessionLifetime() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithStatus(status TestResourceStatus) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithUnionDependency(dependency any) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithUrl(url any, options ...*WithUrlOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
@@ -1855,7 +1859,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEndpointCa
 	return s
 }
 
-// WithEndpointProxySupport set whether a container resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the container. If set to `false`, endpoints belonging to the container resource will ignore the configured proxy settings and run proxy-less.
+// WithEndpointProxySupport set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEndpointProxySupport(proxyEnabled bool) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -2256,6 +2260,19 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithLifetime(l
 	return s
 }
 
+// WithLifetimeOf configures a resource to match the lifetime of another resource.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithLifetimeOf(sourceBuilder Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	if sourceBuilder != nil { if err := sourceBuilder.Err(); err != nil { s.setErr(err); return s } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["sourceBuilder"] = serializeValue(sourceBuilder)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLifetimeOf", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithMcpServer marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMcpServer(options ...*WithMcpServerOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
@@ -2482,6 +2499,18 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithOtlpExport
 	return s
 }
 
+// WithParentProcessLifetime configures a resource to use a persistent lifetime that ends when a parent process exits.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithParentProcessLifetime(parentProcessId float64) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["parentProcessId"] = serializeValue(parentProcessId)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withParentProcessLifetime", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithParentRelationship sets the parent relationship
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithParentRelationship(parent Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
@@ -2492,6 +2521,17 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithParentRela
 	}
 	reqArgs["parent"] = serializeValue(parent)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withBuilderParentRelationship", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithPersistentLifetime configures a resource to use a persistent lifetime.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithPersistentLifetime() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withPersistentLifetime", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -2674,6 +2714,17 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithRequiredCo
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommand", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithSessionLifetime configures a resource to use a session lifetime.
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithSessionLifetime() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withSessionLifetime", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -3040,6 +3091,7 @@ type CSharpAppResource interface {
 	WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) CSharpAppResource
 	WithEndpoint(options ...*WithEndpointOptions) CSharpAppResource
 	WithEndpointCallback(endpointName string, callback func(obj EndpointUpdateContext), options ...*WithEndpointCallbackOptions) CSharpAppResource
+	WithEndpointProxySupport(proxyEnabled bool) CSharpAppResource
 	WithEndpoints(endpoints []string) CSharpAppResource
 	WithEnvironment(name string, value any) CSharpAppResource
 	WithEnvironmentCallback(callback func(arg EnvironmentCallbackContext)) CSharpAppResource
@@ -3057,6 +3109,7 @@ type CSharpAppResource interface {
 	WithHttpsEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpsEndpointCallbackOptions) CSharpAppResource
 	WithIconName(iconName string, options ...*WithIconNameOptions) CSharpAppResource
 	WithImagePushOptions(callback func(arg ContainerImagePushOptionsCallbackContext)) CSharpAppResource
+	WithLifetimeOf(sourceBuilder Resource) CSharpAppResource
 	WithMcpServer(options ...*WithMcpServerOptions) CSharpAppResource
 	WithMergeEndpoint(endpointName string, port float64) CSharpAppResource
 	WithMergeEndpointScheme(endpointName string, port float64, scheme string) CSharpAppResource
@@ -3071,7 +3124,9 @@ type CSharpAppResource interface {
 	WithOptionalCallback(options ...*WithOptionalCallbackOptions) CSharpAppResource
 	WithOptionalString(options ...*WithOptionalStringOptions) CSharpAppResource
 	WithOtlpExporter(options ...*WithOtlpExporterOptions) CSharpAppResource
+	WithParentProcessLifetime(parentProcessId float64) CSharpAppResource
 	WithParentRelationship(parent Resource) CSharpAppResource
+	WithPersistentLifetime() CSharpAppResource
 	WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) CSharpAppResource
 	WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) CSharpAppResource
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) CSharpAppResource
@@ -3083,6 +3138,7 @@ type CSharpAppResource interface {
 	WithRemoteImageTag(remoteImageTag string) CSharpAppResource
 	WithReplicas(replicas float64) CSharpAppResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) CSharpAppResource
+	WithSessionLifetime() CSharpAppResource
 	WithStatus(status TestResourceStatus) CSharpAppResource
 	WithUnionDependency(dependency any) CSharpAppResource
 	WithUrl(url any, options ...*WithUrlOptions) CSharpAppResource
@@ -3680,6 +3736,18 @@ func (s *cSharpAppResource) WithEndpointCallback(endpointName string, callback f
 	return s
 }
 
+// WithEndpointProxySupport set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
+func (s *cSharpAppResource) WithEndpointProxySupport(proxyEnabled bool) CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["proxyEnabled"] = serializeValue(proxyEnabled)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEndpointProxySupport", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithEndpoints sets the endpoints
 func (s *cSharpAppResource) WithEndpoints(endpoints []string) CSharpAppResource {
 	if s.err != nil { return s }
@@ -3978,6 +4046,19 @@ func (s *cSharpAppResource) WithImagePushOptions(callback func(arg ContainerImag
 	return s
 }
 
+// WithLifetimeOf configures a resource to match the lifetime of another resource.
+func (s *cSharpAppResource) WithLifetimeOf(sourceBuilder Resource) CSharpAppResource {
+	if s.err != nil { return s }
+	if sourceBuilder != nil { if err := sourceBuilder.Err(); err != nil { s.setErr(err); return s } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["sourceBuilder"] = serializeValue(sourceBuilder)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLifetimeOf", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithMcpServer marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
 func (s *cSharpAppResource) WithMcpServer(options ...*WithMcpServerOptions) CSharpAppResource {
 	if s.err != nil { return s }
@@ -4204,6 +4285,18 @@ func (s *cSharpAppResource) WithOtlpExporter(options ...*WithOtlpExporterOptions
 	return s
 }
 
+// WithParentProcessLifetime configures a resource to use a persistent lifetime that ends when a parent process exits.
+func (s *cSharpAppResource) WithParentProcessLifetime(parentProcessId float64) CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["parentProcessId"] = serializeValue(parentProcessId)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withParentProcessLifetime", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithParentRelationship sets the parent relationship
 func (s *cSharpAppResource) WithParentRelationship(parent Resource) CSharpAppResource {
 	if s.err != nil { return s }
@@ -4214,6 +4307,17 @@ func (s *cSharpAppResource) WithParentRelationship(parent Resource) CSharpAppRes
 	}
 	reqArgs["parent"] = serializeValue(parent)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withBuilderParentRelationship", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithPersistentLifetime configures a resource to use a persistent lifetime.
+func (s *cSharpAppResource) WithPersistentLifetime() CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withPersistentLifetime", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -4408,6 +4512,17 @@ func (s *cSharpAppResource) WithRequiredCommand(command string, options ...*With
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommand", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithSessionLifetime configures a resource to use a session lifetime.
+func (s *cSharpAppResource) WithSessionLifetime() CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withSessionLifetime", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -5253,6 +5368,7 @@ type ContainerRegistryResource interface {
 	WithExplicitStart() ContainerRegistryResource
 	WithHealthCheck(key string) ContainerRegistryResource
 	WithIconName(iconName string, options ...*WithIconNameOptions) ContainerRegistryResource
+	WithLifetimeOf(sourceBuilder Resource) ContainerRegistryResource
 	WithMergeEndpoint(endpointName string, port float64) ContainerRegistryResource
 	WithMergeEndpointScheme(endpointName string, port float64, scheme string) ContainerRegistryResource
 	WithMergeLabel(label string) ContainerRegistryResource
@@ -5265,13 +5381,16 @@ type ContainerRegistryResource interface {
 	WithNestedConfig(config *TestNestedDto) ContainerRegistryResource
 	WithOptionalCallback(options ...*WithOptionalCallbackOptions) ContainerRegistryResource
 	WithOptionalString(options ...*WithOptionalStringOptions) ContainerRegistryResource
+	WithParentProcessLifetime(parentProcessId float64) ContainerRegistryResource
 	WithParentRelationship(parent Resource) ContainerRegistryResource
+	WithPersistentLifetime() ContainerRegistryResource
 	WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) ContainerRegistryResource
 	WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) ContainerRegistryResource
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ContainerRegistryResource
 	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) ContainerRegistryResource
 	WithRelationship(resourceBuilder Resource, type_ string) ContainerRegistryResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ContainerRegistryResource
+	WithSessionLifetime() ContainerRegistryResource
 	WithStatus(status TestResourceStatus) ContainerRegistryResource
 	WithUnionDependency(dependency any) ContainerRegistryResource
 	WithUrl(url any, options ...*WithUrlOptions) ContainerRegistryResource
@@ -5629,6 +5748,19 @@ func (s *containerRegistryResource) WithIconName(iconName string, options ...*Wi
 	return s
 }
 
+// WithLifetimeOf configures a resource to match the lifetime of another resource.
+func (s *containerRegistryResource) WithLifetimeOf(sourceBuilder Resource) ContainerRegistryResource {
+	if s.err != nil { return s }
+	if sourceBuilder != nil { if err := sourceBuilder.Err(); err != nil { s.setErr(err); return s } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["sourceBuilder"] = serializeValue(sourceBuilder)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLifetimeOf", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithMergeEndpoint configures a named endpoint
 func (s *containerRegistryResource) WithMergeEndpoint(endpointName string, port float64) ContainerRegistryResource {
 	if s.err != nil { return s }
@@ -5819,6 +5951,18 @@ func (s *containerRegistryResource) WithOptionalString(options ...*WithOptionalS
 	return s
 }
 
+// WithParentProcessLifetime configures a resource to use a persistent lifetime that ends when a parent process exits.
+func (s *containerRegistryResource) WithParentProcessLifetime(parentProcessId float64) ContainerRegistryResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["parentProcessId"] = serializeValue(parentProcessId)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withParentProcessLifetime", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithParentRelationship sets the parent relationship
 func (s *containerRegistryResource) WithParentRelationship(parent Resource) ContainerRegistryResource {
 	if s.err != nil { return s }
@@ -5829,6 +5973,17 @@ func (s *containerRegistryResource) WithParentRelationship(parent Resource) Cont
 	}
 	reqArgs["parent"] = serializeValue(parent)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withBuilderParentRelationship", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithPersistentLifetime configures a resource to use a persistent lifetime.
+func (s *containerRegistryResource) WithPersistentLifetime() ContainerRegistryResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withPersistentLifetime", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -5949,6 +6104,17 @@ func (s *containerRegistryResource) WithRequiredCommand(command string, options 
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommand", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithSessionLifetime configures a resource to use a session lifetime.
+func (s *containerRegistryResource) WithSessionLifetime() ContainerRegistryResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withSessionLifetime", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -6140,6 +6306,7 @@ type ContainerResource interface {
 	WithImageSHA256(sha256 string) ContainerResource
 	WithImageTag(tag string) ContainerResource
 	WithLifetime(lifetime ContainerLifetime) ContainerResource
+	WithLifetimeOf(sourceBuilder Resource) ContainerResource
 	WithMcpServer(options ...*WithMcpServerOptions) ContainerResource
 	WithMergeEndpoint(endpointName string, port float64) ContainerResource
 	WithMergeEndpointScheme(endpointName string, port float64, scheme string) ContainerResource
@@ -6154,7 +6321,9 @@ type ContainerResource interface {
 	WithOptionalCallback(options ...*WithOptionalCallbackOptions) ContainerResource
 	WithOptionalString(options ...*WithOptionalStringOptions) ContainerResource
 	WithOtlpExporter(options ...*WithOtlpExporterOptions) ContainerResource
+	WithParentProcessLifetime(parentProcessId float64) ContainerResource
 	WithParentRelationship(parent Resource) ContainerResource
+	WithPersistentLifetime() ContainerResource
 	WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) ContainerResource
 	WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) ContainerResource
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ContainerResource
@@ -6165,6 +6334,7 @@ type ContainerResource interface {
 	WithRemoteImageName(remoteImageName string) ContainerResource
 	WithRemoteImageTag(remoteImageTag string) ContainerResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ContainerResource
+	WithSessionLifetime() ContainerResource
 	WithStatus(status TestResourceStatus) ContainerResource
 	WithUnionDependency(dependency any) ContainerResource
 	WithUrl(url any, options ...*WithUrlOptions) ContainerResource
@@ -6888,7 +7058,7 @@ func (s *containerResource) WithEndpointCallback(endpointName string, callback f
 	return s
 }
 
-// WithEndpointProxySupport set whether a container resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the container. If set to `false`, endpoints belonging to the container resource will ignore the configured proxy settings and run proxy-less.
+// WithEndpointProxySupport set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
 func (s *containerResource) WithEndpointProxySupport(proxyEnabled bool) ContainerResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -7289,6 +7459,19 @@ func (s *containerResource) WithLifetime(lifetime ContainerLifetime) ContainerRe
 	return s
 }
 
+// WithLifetimeOf configures a resource to match the lifetime of another resource.
+func (s *containerResource) WithLifetimeOf(sourceBuilder Resource) ContainerResource {
+	if s.err != nil { return s }
+	if sourceBuilder != nil { if err := sourceBuilder.Err(); err != nil { s.setErr(err); return s } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["sourceBuilder"] = serializeValue(sourceBuilder)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLifetimeOf", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithMcpServer marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
 func (s *containerResource) WithMcpServer(options ...*WithMcpServerOptions) ContainerResource {
 	if s.err != nil { return s }
@@ -7515,6 +7698,18 @@ func (s *containerResource) WithOtlpExporter(options ...*WithOtlpExporterOptions
 	return s
 }
 
+// WithParentProcessLifetime configures a resource to use a persistent lifetime that ends when a parent process exits.
+func (s *containerResource) WithParentProcessLifetime(parentProcessId float64) ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["parentProcessId"] = serializeValue(parentProcessId)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withParentProcessLifetime", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithParentRelationship sets the parent relationship
 func (s *containerResource) WithParentRelationship(parent Resource) ContainerResource {
 	if s.err != nil { return s }
@@ -7525,6 +7720,17 @@ func (s *containerResource) WithParentRelationship(parent Resource) ContainerRes
 	}
 	reqArgs["parent"] = serializeValue(parent)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withBuilderParentRelationship", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithPersistentLifetime configures a resource to use a persistent lifetime.
+func (s *containerResource) WithPersistentLifetime() ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withPersistentLifetime", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -7707,6 +7913,17 @@ func (s *containerResource) WithRequiredCommand(command string, options ...*With
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommand", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithSessionLifetime configures a resource to use a session lifetime.
+func (s *containerResource) WithSessionLifetime() ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withSessionLifetime", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -9389,6 +9606,7 @@ type DotnetToolResource interface {
 	WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) DotnetToolResource
 	WithEndpoint(options ...*WithEndpointOptions) DotnetToolResource
 	WithEndpointCallback(endpointName string, callback func(obj EndpointUpdateContext), options ...*WithEndpointCallbackOptions) DotnetToolResource
+	WithEndpointProxySupport(proxyEnabled bool) DotnetToolResource
 	WithEndpoints(endpoints []string) DotnetToolResource
 	WithEnvironment(name string, value any) DotnetToolResource
 	WithEnvironmentCallback(callback func(arg EnvironmentCallbackContext)) DotnetToolResource
@@ -9407,6 +9625,7 @@ type DotnetToolResource interface {
 	WithHttpsEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpsEndpointCallbackOptions) DotnetToolResource
 	WithIconName(iconName string, options ...*WithIconNameOptions) DotnetToolResource
 	WithImagePushOptions(callback func(arg ContainerImagePushOptionsCallbackContext)) DotnetToolResource
+	WithLifetimeOf(sourceBuilder Resource) DotnetToolResource
 	WithMcpServer(options ...*WithMcpServerOptions) DotnetToolResource
 	WithMergeEndpoint(endpointName string, port float64) DotnetToolResource
 	WithMergeEndpointScheme(endpointName string, port float64, scheme string) DotnetToolResource
@@ -9421,7 +9640,9 @@ type DotnetToolResource interface {
 	WithOptionalCallback(options ...*WithOptionalCallbackOptions) DotnetToolResource
 	WithOptionalString(options ...*WithOptionalStringOptions) DotnetToolResource
 	WithOtlpExporter(options ...*WithOtlpExporterOptions) DotnetToolResource
+	WithParentProcessLifetime(parentProcessId float64) DotnetToolResource
 	WithParentRelationship(parent Resource) DotnetToolResource
+	WithPersistentLifetime() DotnetToolResource
 	WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) DotnetToolResource
 	WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) DotnetToolResource
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) DotnetToolResource
@@ -9432,6 +9653,7 @@ type DotnetToolResource interface {
 	WithRemoteImageName(remoteImageName string) DotnetToolResource
 	WithRemoteImageTag(remoteImageTag string) DotnetToolResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) DotnetToolResource
+	WithSessionLifetime() DotnetToolResource
 	WithStatus(status TestResourceStatus) DotnetToolResource
 	WithToolIgnoreExistingFeeds() DotnetToolResource
 	WithToolIgnoreFailedSources() DotnetToolResource
@@ -10004,6 +10226,18 @@ func (s *dotnetToolResource) WithEndpointCallback(endpointName string, callback 
 	return s
 }
 
+// WithEndpointProxySupport set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
+func (s *dotnetToolResource) WithEndpointProxySupport(proxyEnabled bool) DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["proxyEnabled"] = serializeValue(proxyEnabled)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEndpointProxySupport", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithEndpoints sets the endpoints
 func (s *dotnetToolResource) WithEndpoints(endpoints []string) DotnetToolResource {
 	if s.err != nil { return s }
@@ -10314,6 +10548,19 @@ func (s *dotnetToolResource) WithImagePushOptions(callback func(arg ContainerIma
 	return s
 }
 
+// WithLifetimeOf configures a resource to match the lifetime of another resource.
+func (s *dotnetToolResource) WithLifetimeOf(sourceBuilder Resource) DotnetToolResource {
+	if s.err != nil { return s }
+	if sourceBuilder != nil { if err := sourceBuilder.Err(); err != nil { s.setErr(err); return s } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["sourceBuilder"] = serializeValue(sourceBuilder)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLifetimeOf", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithMcpServer marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
 func (s *dotnetToolResource) WithMcpServer(options ...*WithMcpServerOptions) DotnetToolResource {
 	if s.err != nil { return s }
@@ -10540,6 +10787,18 @@ func (s *dotnetToolResource) WithOtlpExporter(options ...*WithOtlpExporterOption
 	return s
 }
 
+// WithParentProcessLifetime configures a resource to use a persistent lifetime that ends when a parent process exits.
+func (s *dotnetToolResource) WithParentProcessLifetime(parentProcessId float64) DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["parentProcessId"] = serializeValue(parentProcessId)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withParentProcessLifetime", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithParentRelationship sets the parent relationship
 func (s *dotnetToolResource) WithParentRelationship(parent Resource) DotnetToolResource {
 	if s.err != nil { return s }
@@ -10550,6 +10809,17 @@ func (s *dotnetToolResource) WithParentRelationship(parent Resource) DotnetToolR
 	}
 	reqArgs["parent"] = serializeValue(parent)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withBuilderParentRelationship", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithPersistentLifetime configures a resource to use a persistent lifetime.
+func (s *dotnetToolResource) WithPersistentLifetime() DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withPersistentLifetime", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -10732,6 +11002,17 @@ func (s *dotnetToolResource) WithRequiredCommand(command string, options ...*Wit
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommand", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithSessionLifetime configures a resource to use a session lifetime.
+func (s *dotnetToolResource) WithSessionLifetime() DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withSessionLifetime", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -11995,6 +12276,7 @@ type ExecutableResource interface {
 	WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) ExecutableResource
 	WithEndpoint(options ...*WithEndpointOptions) ExecutableResource
 	WithEndpointCallback(endpointName string, callback func(obj EndpointUpdateContext), options ...*WithEndpointCallbackOptions) ExecutableResource
+	WithEndpointProxySupport(proxyEnabled bool) ExecutableResource
 	WithEndpoints(endpoints []string) ExecutableResource
 	WithEnvironment(name string, value any) ExecutableResource
 	WithEnvironmentCallback(callback func(arg EnvironmentCallbackContext)) ExecutableResource
@@ -12013,6 +12295,7 @@ type ExecutableResource interface {
 	WithHttpsEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpsEndpointCallbackOptions) ExecutableResource
 	WithIconName(iconName string, options ...*WithIconNameOptions) ExecutableResource
 	WithImagePushOptions(callback func(arg ContainerImagePushOptionsCallbackContext)) ExecutableResource
+	WithLifetimeOf(sourceBuilder Resource) ExecutableResource
 	WithMcpServer(options ...*WithMcpServerOptions) ExecutableResource
 	WithMergeEndpoint(endpointName string, port float64) ExecutableResource
 	WithMergeEndpointScheme(endpointName string, port float64, scheme string) ExecutableResource
@@ -12027,7 +12310,9 @@ type ExecutableResource interface {
 	WithOptionalCallback(options ...*WithOptionalCallbackOptions) ExecutableResource
 	WithOptionalString(options ...*WithOptionalStringOptions) ExecutableResource
 	WithOtlpExporter(options ...*WithOtlpExporterOptions) ExecutableResource
+	WithParentProcessLifetime(parentProcessId float64) ExecutableResource
 	WithParentRelationship(parent Resource) ExecutableResource
+	WithPersistentLifetime() ExecutableResource
 	WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) ExecutableResource
 	WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) ExecutableResource
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ExecutableResource
@@ -12038,6 +12323,7 @@ type ExecutableResource interface {
 	WithRemoteImageName(remoteImageName string) ExecutableResource
 	WithRemoteImageTag(remoteImageTag string) ExecutableResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ExecutableResource
+	WithSessionLifetime() ExecutableResource
 	WithStatus(status TestResourceStatus) ExecutableResource
 	WithUnionDependency(dependency any) ExecutableResource
 	WithUrl(url any, options ...*WithUrlOptions) ExecutableResource
@@ -12604,6 +12890,18 @@ func (s *executableResource) WithEndpointCallback(endpointName string, callback 
 	return s
 }
 
+// WithEndpointProxySupport set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
+func (s *executableResource) WithEndpointProxySupport(proxyEnabled bool) ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["proxyEnabled"] = serializeValue(proxyEnabled)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEndpointProxySupport", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithEndpoints sets the endpoints
 func (s *executableResource) WithEndpoints(endpoints []string) ExecutableResource {
 	if s.err != nil { return s }
@@ -12914,6 +13212,19 @@ func (s *executableResource) WithImagePushOptions(callback func(arg ContainerIma
 	return s
 }
 
+// WithLifetimeOf configures a resource to match the lifetime of another resource.
+func (s *executableResource) WithLifetimeOf(sourceBuilder Resource) ExecutableResource {
+	if s.err != nil { return s }
+	if sourceBuilder != nil { if err := sourceBuilder.Err(); err != nil { s.setErr(err); return s } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["sourceBuilder"] = serializeValue(sourceBuilder)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLifetimeOf", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithMcpServer marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
 func (s *executableResource) WithMcpServer(options ...*WithMcpServerOptions) ExecutableResource {
 	if s.err != nil { return s }
@@ -13140,6 +13451,18 @@ func (s *executableResource) WithOtlpExporter(options ...*WithOtlpExporterOption
 	return s
 }
 
+// WithParentProcessLifetime configures a resource to use a persistent lifetime that ends when a parent process exits.
+func (s *executableResource) WithParentProcessLifetime(parentProcessId float64) ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["parentProcessId"] = serializeValue(parentProcessId)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withParentProcessLifetime", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithParentRelationship sets the parent relationship
 func (s *executableResource) WithParentRelationship(parent Resource) ExecutableResource {
 	if s.err != nil { return s }
@@ -13150,6 +13473,17 @@ func (s *executableResource) WithParentRelationship(parent Resource) ExecutableR
 	}
 	reqArgs["parent"] = serializeValue(parent)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withBuilderParentRelationship", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithPersistentLifetime configures a resource to use a persistent lifetime.
+func (s *executableResource) WithPersistentLifetime() ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withPersistentLifetime", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -13332,6 +13666,17 @@ func (s *executableResource) WithRequiredCommand(command string, options ...*Wit
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommand", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithSessionLifetime configures a resource to use a session lifetime.
+func (s *executableResource) WithSessionLifetime() ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withSessionLifetime", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -13770,6 +14115,7 @@ type ExternalServiceResource interface {
 	WithHealthCheck(key string) ExternalServiceResource
 	WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) ExternalServiceResource
 	WithIconName(iconName string, options ...*WithIconNameOptions) ExternalServiceResource
+	WithLifetimeOf(sourceBuilder Resource) ExternalServiceResource
 	WithMergeEndpoint(endpointName string, port float64) ExternalServiceResource
 	WithMergeEndpointScheme(endpointName string, port float64, scheme string) ExternalServiceResource
 	WithMergeLabel(label string) ExternalServiceResource
@@ -13782,13 +14128,16 @@ type ExternalServiceResource interface {
 	WithNestedConfig(config *TestNestedDto) ExternalServiceResource
 	WithOptionalCallback(options ...*WithOptionalCallbackOptions) ExternalServiceResource
 	WithOptionalString(options ...*WithOptionalStringOptions) ExternalServiceResource
+	WithParentProcessLifetime(parentProcessId float64) ExternalServiceResource
 	WithParentRelationship(parent Resource) ExternalServiceResource
+	WithPersistentLifetime() ExternalServiceResource
 	WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) ExternalServiceResource
 	WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) ExternalServiceResource
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ExternalServiceResource
 	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) ExternalServiceResource
 	WithRelationship(resourceBuilder Resource, type_ string) ExternalServiceResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ExternalServiceResource
+	WithSessionLifetime() ExternalServiceResource
 	WithStatus(status TestResourceStatus) ExternalServiceResource
 	WithUnionDependency(dependency any) ExternalServiceResource
 	WithUrl(url any, options ...*WithUrlOptions) ExternalServiceResource
@@ -14164,6 +14513,19 @@ func (s *externalServiceResource) WithIconName(iconName string, options ...*With
 	return s
 }
 
+// WithLifetimeOf configures a resource to match the lifetime of another resource.
+func (s *externalServiceResource) WithLifetimeOf(sourceBuilder Resource) ExternalServiceResource {
+	if s.err != nil { return s }
+	if sourceBuilder != nil { if err := sourceBuilder.Err(); err != nil { s.setErr(err); return s } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["sourceBuilder"] = serializeValue(sourceBuilder)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLifetimeOf", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithMergeEndpoint configures a named endpoint
 func (s *externalServiceResource) WithMergeEndpoint(endpointName string, port float64) ExternalServiceResource {
 	if s.err != nil { return s }
@@ -14354,6 +14716,18 @@ func (s *externalServiceResource) WithOptionalString(options ...*WithOptionalStr
 	return s
 }
 
+// WithParentProcessLifetime configures a resource to use a persistent lifetime that ends when a parent process exits.
+func (s *externalServiceResource) WithParentProcessLifetime(parentProcessId float64) ExternalServiceResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["parentProcessId"] = serializeValue(parentProcessId)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withParentProcessLifetime", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithParentRelationship sets the parent relationship
 func (s *externalServiceResource) WithParentRelationship(parent Resource) ExternalServiceResource {
 	if s.err != nil { return s }
@@ -14364,6 +14738,17 @@ func (s *externalServiceResource) WithParentRelationship(parent Resource) Extern
 	}
 	reqArgs["parent"] = serializeValue(parent)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withBuilderParentRelationship", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithPersistentLifetime configures a resource to use a persistent lifetime.
+func (s *externalServiceResource) WithPersistentLifetime() ExternalServiceResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withPersistentLifetime", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -14484,6 +14869,17 @@ func (s *externalServiceResource) WithRequiredCommand(command string, options ..
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommand", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithSessionLifetime configures a resource to use a session lifetime.
+func (s *externalServiceResource) WithSessionLifetime() ExternalServiceResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withSessionLifetime", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -15230,6 +15626,7 @@ type ParameterResource interface {
 	WithExplicitStart() ParameterResource
 	WithHealthCheck(key string) ParameterResource
 	WithIconName(iconName string, options ...*WithIconNameOptions) ParameterResource
+	WithLifetimeOf(sourceBuilder Resource) ParameterResource
 	WithMergeEndpoint(endpointName string, port float64) ParameterResource
 	WithMergeEndpointScheme(endpointName string, port float64, scheme string) ParameterResource
 	WithMergeLabel(label string) ParameterResource
@@ -15242,13 +15639,16 @@ type ParameterResource interface {
 	WithNestedConfig(config *TestNestedDto) ParameterResource
 	WithOptionalCallback(options ...*WithOptionalCallbackOptions) ParameterResource
 	WithOptionalString(options ...*WithOptionalStringOptions) ParameterResource
+	WithParentProcessLifetime(parentProcessId float64) ParameterResource
 	WithParentRelationship(parent Resource) ParameterResource
+	WithPersistentLifetime() ParameterResource
 	WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) ParameterResource
 	WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) ParameterResource
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ParameterResource
 	WithProcessCommandFactory(commandName string, displayName string, createProcessSpec func(arg ExecuteCommandContext) *ProcessCommandSpecExportData, options ...*WithProcessCommandFactoryOptions) ParameterResource
 	WithRelationship(resourceBuilder Resource, type_ string) ParameterResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ParameterResource
+	WithSessionLifetime() ParameterResource
 	WithStatus(status TestResourceStatus) ParameterResource
 	WithUnionDependency(dependency any) ParameterResource
 	WithUrl(url any, options ...*WithUrlOptions) ParameterResource
@@ -15637,6 +16037,19 @@ func (s *parameterResource) WithIconName(iconName string, options ...*WithIconNa
 	return s
 }
 
+// WithLifetimeOf configures a resource to match the lifetime of another resource.
+func (s *parameterResource) WithLifetimeOf(sourceBuilder Resource) ParameterResource {
+	if s.err != nil { return s }
+	if sourceBuilder != nil { if err := sourceBuilder.Err(); err != nil { s.setErr(err); return s } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["sourceBuilder"] = serializeValue(sourceBuilder)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLifetimeOf", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithMergeEndpoint configures a named endpoint
 func (s *parameterResource) WithMergeEndpoint(endpointName string, port float64) ParameterResource {
 	if s.err != nil { return s }
@@ -15827,6 +16240,18 @@ func (s *parameterResource) WithOptionalString(options ...*WithOptionalStringOpt
 	return s
 }
 
+// WithParentProcessLifetime configures a resource to use a persistent lifetime that ends when a parent process exits.
+func (s *parameterResource) WithParentProcessLifetime(parentProcessId float64) ParameterResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["parentProcessId"] = serializeValue(parentProcessId)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withParentProcessLifetime", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithParentRelationship sets the parent relationship
 func (s *parameterResource) WithParentRelationship(parent Resource) ParameterResource {
 	if s.err != nil { return s }
@@ -15837,6 +16262,17 @@ func (s *parameterResource) WithParentRelationship(parent Resource) ParameterRes
 	}
 	reqArgs["parent"] = serializeValue(parent)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withBuilderParentRelationship", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithPersistentLifetime configures a resource to use a persistent lifetime.
+func (s *parameterResource) WithPersistentLifetime() ParameterResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withPersistentLifetime", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -15957,6 +16393,17 @@ func (s *parameterResource) WithRequiredCommand(command string, options ...*With
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommand", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithSessionLifetime configures a resource to use a session lifetime.
+func (s *parameterResource) WithSessionLifetime() ParameterResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withSessionLifetime", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -16781,6 +17228,7 @@ type ProjectResource interface {
 	WithDockerfileBaseImage(options ...*WithDockerfileBaseImageOptions) ProjectResource
 	WithEndpoint(options ...*WithEndpointOptions) ProjectResource
 	WithEndpointCallback(endpointName string, callback func(obj EndpointUpdateContext), options ...*WithEndpointCallbackOptions) ProjectResource
+	WithEndpointProxySupport(proxyEnabled bool) ProjectResource
 	WithEndpoints(endpoints []string) ProjectResource
 	WithEnvironment(name string, value any) ProjectResource
 	WithEnvironmentCallback(callback func(arg EnvironmentCallbackContext)) ProjectResource
@@ -16798,6 +17246,7 @@ type ProjectResource interface {
 	WithHttpsEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpsEndpointCallbackOptions) ProjectResource
 	WithIconName(iconName string, options ...*WithIconNameOptions) ProjectResource
 	WithImagePushOptions(callback func(arg ContainerImagePushOptionsCallbackContext)) ProjectResource
+	WithLifetimeOf(sourceBuilder Resource) ProjectResource
 	WithMcpServer(options ...*WithMcpServerOptions) ProjectResource
 	WithMergeEndpoint(endpointName string, port float64) ProjectResource
 	WithMergeEndpointScheme(endpointName string, port float64, scheme string) ProjectResource
@@ -16812,7 +17261,9 @@ type ProjectResource interface {
 	WithOptionalCallback(options ...*WithOptionalCallbackOptions) ProjectResource
 	WithOptionalString(options ...*WithOptionalStringOptions) ProjectResource
 	WithOtlpExporter(options ...*WithOtlpExporterOptions) ProjectResource
+	WithParentProcessLifetime(parentProcessId float64) ProjectResource
 	WithParentRelationship(parent Resource) ProjectResource
+	WithPersistentLifetime() ProjectResource
 	WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) ProjectResource
 	WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) ProjectResource
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) ProjectResource
@@ -16824,6 +17275,7 @@ type ProjectResource interface {
 	WithRemoteImageTag(remoteImageTag string) ProjectResource
 	WithReplicas(replicas float64) ProjectResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) ProjectResource
+	WithSessionLifetime() ProjectResource
 	WithStatus(status TestResourceStatus) ProjectResource
 	WithUnionDependency(dependency any) ProjectResource
 	WithUrl(url any, options ...*WithUrlOptions) ProjectResource
@@ -17421,6 +17873,18 @@ func (s *projectResource) WithEndpointCallback(endpointName string, callback fun
 	return s
 }
 
+// WithEndpointProxySupport set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
+func (s *projectResource) WithEndpointProxySupport(proxyEnabled bool) ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["proxyEnabled"] = serializeValue(proxyEnabled)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withEndpointProxySupport", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithEndpoints sets the endpoints
 func (s *projectResource) WithEndpoints(endpoints []string) ProjectResource {
 	if s.err != nil { return s }
@@ -17719,6 +18183,19 @@ func (s *projectResource) WithImagePushOptions(callback func(arg ContainerImageP
 	return s
 }
 
+// WithLifetimeOf configures a resource to match the lifetime of another resource.
+func (s *projectResource) WithLifetimeOf(sourceBuilder Resource) ProjectResource {
+	if s.err != nil { return s }
+	if sourceBuilder != nil { if err := sourceBuilder.Err(); err != nil { s.setErr(err); return s } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["sourceBuilder"] = serializeValue(sourceBuilder)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLifetimeOf", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithMcpServer marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
 func (s *projectResource) WithMcpServer(options ...*WithMcpServerOptions) ProjectResource {
 	if s.err != nil { return s }
@@ -17945,6 +18422,18 @@ func (s *projectResource) WithOtlpExporter(options ...*WithOtlpExporterOptions) 
 	return s
 }
 
+// WithParentProcessLifetime configures a resource to use a persistent lifetime that ends when a parent process exits.
+func (s *projectResource) WithParentProcessLifetime(parentProcessId float64) ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["parentProcessId"] = serializeValue(parentProcessId)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withParentProcessLifetime", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithParentRelationship sets the parent relationship
 func (s *projectResource) WithParentRelationship(parent Resource) ProjectResource {
 	if s.err != nil { return s }
@@ -17955,6 +18444,17 @@ func (s *projectResource) WithParentRelationship(parent Resource) ProjectResourc
 	}
 	reqArgs["parent"] = serializeValue(parent)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withBuilderParentRelationship", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithPersistentLifetime configures a resource to use a persistent lifetime.
+func (s *projectResource) WithPersistentLifetime() ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withPersistentLifetime", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -18149,6 +18649,17 @@ func (s *projectResource) WithRequiredCommand(command string, options ...*WithRe
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommand", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithSessionLifetime configures a resource to use a session lifetime.
+func (s *projectResource) WithSessionLifetime() ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withSessionLifetime", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -19723,6 +20234,7 @@ type TestDatabaseResource interface {
 	WithImageSHA256(sha256 string) TestDatabaseResource
 	WithImageTag(tag string) TestDatabaseResource
 	WithLifetime(lifetime ContainerLifetime) TestDatabaseResource
+	WithLifetimeOf(sourceBuilder Resource) TestDatabaseResource
 	WithMcpServer(options ...*WithMcpServerOptions) TestDatabaseResource
 	WithMergeEndpoint(endpointName string, port float64) TestDatabaseResource
 	WithMergeEndpointScheme(endpointName string, port float64, scheme string) TestDatabaseResource
@@ -19737,7 +20249,9 @@ type TestDatabaseResource interface {
 	WithOptionalCallback(options ...*WithOptionalCallbackOptions) TestDatabaseResource
 	WithOptionalString(options ...*WithOptionalStringOptions) TestDatabaseResource
 	WithOtlpExporter(options ...*WithOtlpExporterOptions) TestDatabaseResource
+	WithParentProcessLifetime(parentProcessId float64) TestDatabaseResource
 	WithParentRelationship(parent Resource) TestDatabaseResource
+	WithPersistentLifetime() TestDatabaseResource
 	WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) TestDatabaseResource
 	WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) TestDatabaseResource
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) TestDatabaseResource
@@ -19748,6 +20262,7 @@ type TestDatabaseResource interface {
 	WithRemoteImageName(remoteImageName string) TestDatabaseResource
 	WithRemoteImageTag(remoteImageTag string) TestDatabaseResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) TestDatabaseResource
+	WithSessionLifetime() TestDatabaseResource
 	WithStatus(status TestResourceStatus) TestDatabaseResource
 	WithUnionDependency(dependency any) TestDatabaseResource
 	WithUrl(url any, options ...*WithUrlOptions) TestDatabaseResource
@@ -20471,7 +20986,7 @@ func (s *testDatabaseResource) WithEndpointCallback(endpointName string, callbac
 	return s
 }
 
-// WithEndpointProxySupport set whether a container resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the container. If set to `false`, endpoints belonging to the container resource will ignore the configured proxy settings and run proxy-less.
+// WithEndpointProxySupport set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
 func (s *testDatabaseResource) WithEndpointProxySupport(proxyEnabled bool) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -20872,6 +21387,19 @@ func (s *testDatabaseResource) WithLifetime(lifetime ContainerLifetime) TestData
 	return s
 }
 
+// WithLifetimeOf configures a resource to match the lifetime of another resource.
+func (s *testDatabaseResource) WithLifetimeOf(sourceBuilder Resource) TestDatabaseResource {
+	if s.err != nil { return s }
+	if sourceBuilder != nil { if err := sourceBuilder.Err(); err != nil { s.setErr(err); return s } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["sourceBuilder"] = serializeValue(sourceBuilder)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLifetimeOf", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithMcpServer marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
 func (s *testDatabaseResource) WithMcpServer(options ...*WithMcpServerOptions) TestDatabaseResource {
 	if s.err != nil { return s }
@@ -21098,6 +21626,18 @@ func (s *testDatabaseResource) WithOtlpExporter(options ...*WithOtlpExporterOpti
 	return s
 }
 
+// WithParentProcessLifetime configures a resource to use a persistent lifetime that ends when a parent process exits.
+func (s *testDatabaseResource) WithParentProcessLifetime(parentProcessId float64) TestDatabaseResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["parentProcessId"] = serializeValue(parentProcessId)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withParentProcessLifetime", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithParentRelationship sets the parent relationship
 func (s *testDatabaseResource) WithParentRelationship(parent Resource) TestDatabaseResource {
 	if s.err != nil { return s }
@@ -21108,6 +21648,17 @@ func (s *testDatabaseResource) WithParentRelationship(parent Resource) TestDatab
 	}
 	reqArgs["parent"] = serializeValue(parent)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withBuilderParentRelationship", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithPersistentLifetime configures a resource to use a persistent lifetime.
+func (s *testDatabaseResource) WithPersistentLifetime() TestDatabaseResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withPersistentLifetime", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -21290,6 +21841,17 @@ func (s *testDatabaseResource) WithRequiredCommand(command string, options ...*W
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommand", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithSessionLifetime configures a resource to use a session lifetime.
+func (s *testDatabaseResource) WithSessionLifetime() TestDatabaseResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withSessionLifetime", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -21686,6 +22248,7 @@ type TestRedisResource interface {
 	WithImageSHA256(sha256 string) TestRedisResource
 	WithImageTag(tag string) TestRedisResource
 	WithLifetime(lifetime ContainerLifetime) TestRedisResource
+	WithLifetimeOf(sourceBuilder Resource) TestRedisResource
 	WithMcpServer(options ...*WithMcpServerOptions) TestRedisResource
 	WithMergeEndpoint(endpointName string, port float64) TestRedisResource
 	WithMergeEndpointScheme(endpointName string, port float64, scheme string) TestRedisResource
@@ -21701,8 +22264,10 @@ type TestRedisResource interface {
 	WithOptionalCallback(options ...*WithOptionalCallbackOptions) TestRedisResource
 	WithOptionalString(options ...*WithOptionalStringOptions) TestRedisResource
 	WithOtlpExporter(options ...*WithOtlpExporterOptions) TestRedisResource
+	WithParentProcessLifetime(parentProcessId float64) TestRedisResource
 	WithParentRelationship(parent Resource) TestRedisResource
 	WithPersistence(options ...*WithPersistenceOptions) TestRedisResource
+	WithPersistentLifetime() TestRedisResource
 	WithPipelineConfiguration(callback func(obj PipelineConfigurationContext)) TestRedisResource
 	WithPipelineStepFactory(stepName string, callback func(arg PipelineStepContext), options ...*WithPipelineStepFactoryOptions) TestRedisResource
 	WithProcessCommand(commandName string, displayName string, options *ProcessCommandExportOptions) TestRedisResource
@@ -21714,6 +22279,7 @@ type TestRedisResource interface {
 	WithRemoteImageName(remoteImageName string) TestRedisResource
 	WithRemoteImageTag(remoteImageTag string) TestRedisResource
 	WithRequiredCommand(command string, options ...*WithRequiredCommandOptions) TestRedisResource
+	WithSessionLifetime() TestRedisResource
 	WithStatus(status TestResourceStatus) TestRedisResource
 	WithUnionDependency(dependency any) TestRedisResource
 	WithUrl(url any, options ...*WithUrlOptions) TestRedisResource
@@ -22656,7 +23222,7 @@ func (s *testRedisResource) WithEndpointCallback(endpointName string, callback f
 	return s
 }
 
-// WithEndpointProxySupport set whether a container resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the container. If set to `false`, endpoints belonging to the container resource will ignore the configured proxy settings and run proxy-less.
+// WithEndpointProxySupport set whether a resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource. If set to `false`, endpoints belonging to the resource will ignore the configured proxy settings and run proxy-less.
 func (s *testRedisResource) WithEndpointProxySupport(proxyEnabled bool) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -23057,6 +23623,19 @@ func (s *testRedisResource) WithLifetime(lifetime ContainerLifetime) TestRedisRe
 	return s
 }
 
+// WithLifetimeOf configures a resource to match the lifetime of another resource.
+func (s *testRedisResource) WithLifetimeOf(sourceBuilder Resource) TestRedisResource {
+	if s.err != nil { return s }
+	if sourceBuilder != nil { if err := sourceBuilder.Err(); err != nil { s.setErr(err); return s } }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["sourceBuilder"] = serializeValue(sourceBuilder)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withLifetimeOf", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithMcpServer marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
 func (s *testRedisResource) WithMcpServer(options ...*WithMcpServerOptions) TestRedisResource {
 	if s.err != nil { return s }
@@ -23302,6 +23881,18 @@ func (s *testRedisResource) WithOtlpExporter(options ...*WithOtlpExporterOptions
 	return s
 }
 
+// WithParentProcessLifetime configures a resource to use a persistent lifetime that ends when a parent process exits.
+func (s *testRedisResource) WithParentProcessLifetime(parentProcessId float64) TestRedisResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	reqArgs["parentProcessId"] = serializeValue(parentProcessId)
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withParentProcessLifetime", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
 // WithParentRelationship sets the parent relationship
 func (s *testRedisResource) WithParentRelationship(parent Resource) TestRedisResource {
 	if s.err != nil { return s }
@@ -23330,6 +23921,17 @@ func (s *testRedisResource) WithPersistence(options ...*WithPersistenceOptions) 
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting.CodeGeneration.Go.Tests/withPersistence", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithPersistentLifetime configures a resource to use a persistent lifetime.
+func (s *testRedisResource) WithPersistentLifetime() TestRedisResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withPersistentLifetime", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -23524,6 +24126,17 @@ func (s *testRedisResource) WithRequiredCommand(command string, options ...*With
 		for k, v := range merged.ToMap() { reqArgs[k] = v }
 	}
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withRequiredCommand", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithSessionLifetime configures a resource to use a session lifetime.
+func (s *testRedisResource) WithSessionLifetime() TestRedisResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withSessionLifetime", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
