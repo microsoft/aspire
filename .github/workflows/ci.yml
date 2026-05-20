@@ -134,8 +134,8 @@ jobs:
         # update-notification logic. These are the code paths most likely to behave
         # differently when the CLI's own assembly version label is stable.
         run: |
-          ./dotnet.sh test tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj \
-            --no-build --no-launch-profile \
+          ./dotnet.sh test --project tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj \
+            --no-launch-profile \
             -p:StabilizePackageVersion=true \
             -- \
             --filter-class "*.AssemblyMetadataChannelTests" \
