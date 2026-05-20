@@ -1,6 +1,6 @@
 ﻿services:
   service:
-    image: "${SERVICE_IMAGE}"
+    image: "service:IMAGE_TAG"
     environment:
       PORT: "8000"
     expose:

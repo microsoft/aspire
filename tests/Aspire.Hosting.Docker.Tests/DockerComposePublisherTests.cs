@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIREPIPELINES003
 
+using System.Text.RegularExpressions;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Docker.Resources.ComposeNodes;
 using Aspire.Hosting.Publishing;
@@ -341,7 +342,65 @@ public class DockerComposePublisherTests(ITestOutputHelper outputHelper)
 
         var composeFile = File.ReadAllText(composePath);
 
-        await Verify(composeFile);
+        await Verify(composeFile)
+            .ScrubLinesWithReplace(line => Regex.Replace(line, @":[a-f0-9]{40}", ":IMAGE_TAG"));
+    }
+
+    [Fact]
+    public void DockerComposeUsesAnnotationImageForDockerfileResource()
+    {
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+
+        builder.AddDockerComposeEnvironment("docker-compose")
+            .WithDashboard(false);
+
+        // Add a container with a Dockerfile and explicit image name
+        builder.AddContainer("mycontainer", "nginx")
+            .WithDockerfile(".")
+            .WithImage("custom-image", "v1.0");
+
+        var app = builder.Build();
+        app.Run();
+
+        var composePath = Path.Combine(tempDir.Path, "docker-compose.yaml");
+        Assert.True(File.Exists(composePath));
+
+        var composeFile = File.ReadAllText(composePath);
+
+        // Verify the compose file uses the annotation image name directly,
+        // not a placeholder like ${MYCONTAINER_IMAGE}
+        Assert.Contains("image: \"custom-image:v1.0\"", composeFile);
+        Assert.DoesNotContain("${MYCONTAINER_IMAGE}", composeFile);
+    }
+
+    [Fact]
+    public void DockerComposeUsesPlaceholderForProjectResource()
+    {
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
+
+        builder.AddDockerComposeEnvironment("docker-compose")
+            .WithDashboard(false);
+
+        // Project resources have no ContainerImageAnnotation,
+        // so they should still use the ContainerImageReference placeholder
+        builder.AddProject<Projects.ServiceA>("myproject");
+
+        var app = builder.Build();
+        app.Run();
+
+        var composePath = Path.Combine(tempDir.Path, "docker-compose.yaml");
+        Assert.True(File.Exists(composePath));
+
+        var composeFile = File.ReadAllText(composePath);
+
+        // Project resources should use placeholder since they have no annotation
+        Assert.Contains("${MYPROJECT_IMAGE}", composeFile);
     }
 
     [Fact]
