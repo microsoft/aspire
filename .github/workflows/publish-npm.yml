@@ -1,0 +1,521 @@
+# Publish Aspire CLI npm packages
+#
+# This workflow publishes the Aspire CLI npm packages (@microsoft/aspire-cli and
+# platform-specific packages) from staged tarballs produced by the native archive build.
+#
+# Prerequisites:
+# - @microsoft scope reservation on npm registry
+# - npm Trusted Publisher configured for microsoft/aspire repository
+# - Artifacts from build-cli-native-archives.yml must exist in the specified run_id
+#
+# The workflow:
+# 1. Downloads existing GitHub Actions artifacts containing npm tarballs
+# 2. Publishes RID-specific packages in parallel
+# 3. Waits for RID packages to appear on npm (avoiding race conditions)
+# 4. Publishes the meta package that references all RID packages
+#
+# For full documentation, see: docs/specs/npm-cli-package.md
+
+name: Publish npm packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Release version (SemVer including prerelease, e.g., 9.2.0 or 9.3.0-preview.1)'
+        required: true
+        type: string
+      run_id:
+        description: 'GitHub Actions run ID containing built-nugets-for-<rid> artifacts'
+        required: true
+        type: string
+      dist_tag:
+        description: 'npm dist-tag to use for publish'
+        required: true
+        type: choice
+        options:
+          - next
+          - daily
+          - latest
+          - pr
+        default: next
+      pr_number:
+        description: 'PR number (required when dist_tag is "pr", becomes tag pr-<N>)'
+        required: false
+        type: string
+      only_rid:
+        description: 'Publish only specific RID (for recovery), or "all" for all platforms'
+        required: false
+        type: choice
+        options:
+          - all
+          - win-x64
+          - win-arm64
+          - linux-x64
+          - linux-arm64
+          - linux-musl-x64
+          - osx-x64
+          - osx-arm64
+        default: all
+      skip_meta:
+        description: 'Skip meta package publish (for recovery after RID packages published)'
+        required: false
+        type: boolean
+        default: false
+      dry_run:
+        description: 'Dry run mode - validate packages without publishing to npm'
+        required: false
+        type: boolean
+        default: true
+      propagation_timeout_seconds:
+        description: 'Maximum seconds to wait for RID packages to appear on npm (default: 900 = 15 minutes)'
+        required: false
+        type: number
+        default: 900
+
+# Limit to one npm publish at a time
+concurrency:
+  group: publish-npm
+  cancel-in-progress: false
+
+permissions:
+  id-token: write   # Required for npm provenance via Trusted Publisher
+  contents: read    # Required for actions/checkout and artifact download
+  actions: read     # Required for gh run download
+
+jobs:
+  authorize:
+    name: Authorize
+    runs-on: ubuntu-latest
+    # Only require authorization for real publishes, not dry runs
+    if: ${{ inputs.dry_run != true }}
+    steps:
+      - name: Check if user is authorized
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "Checking if ${{ github.actor }} is authorized to publish npm packages..."
+          
+          # Get the user's permission level for this repo
+          PERMISSION=$(gh api repos/${{ github.repository }}/collaborators/${{ github.actor }}/permission --jq '.permission')
+          
+          echo "User permission level: $PERMISSION"
+          
+          # Only allow admin or maintain permission levels
+          if [[ "$PERMISSION" != "admin" && "$PERMISSION" != "maintain" ]]; then
+            echo "❌ ERROR: User ${{ github.actor }} does not have sufficient permissions."
+            echo "Required: 'admin' or 'maintain' permission level for non-dry-run publishes."
+            echo "Current: '$PERMISSION'"
+            exit 1
+          fi
+          
+          echo "✓ User ${{ github.actor }} is authorized (permission: $PERMISSION)"
+
+  validate:
+    name: Validate Inputs
+    runs-on: ubuntu-latest
+    needs: [authorize]
+    if: ${{ always() && (needs.authorize.result == 'success' || needs.authorize.result == 'skipped') }}
+    outputs:
+      effective_tag: ${{ steps.compute.outputs.effective_tag }}
+      selected_rids: ${{ steps.compute.outputs.selected_rids }}
+    steps:
+      - name: Print Parameters
+        run: |
+          echo "=== npm Publish Workflow Parameters ==="
+          echo "Release Version: ${{ inputs.release_version }}"
+          echo "Run ID: ${{ inputs.run_id }}"
+          echo "Dist Tag: ${{ inputs.dist_tag }}"
+          echo "PR Number: ${{ inputs.pr_number }}"
+          echo "Only RID: ${{ inputs.only_rid }}"
+          echo "Skip Meta: ${{ inputs.skip_meta }}"
+          echo "Dry Run: ${{ inputs.dry_run }}"
+          echo "Propagation Timeout: ${{ inputs.propagation_timeout_seconds }} seconds"
+          echo "========================================="
+          
+          if [ "${{ inputs.dry_run }}" == "true" ]; then
+            echo ""
+            echo "⚠️  DRY RUN MODE ENABLED"
+            echo "   Packages will be validated but NOT published to npm."
+            echo ""
+          fi
+
+      - name: Validate version format
+        run: |
+          VERSION="${{ inputs.release_version }}"
+          # SemVer regex: major.minor.patch with optional prerelease and metadata
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9\.\-]+)?(\+[a-zA-Z0-9\.\-]+)?$ ]]; then
+            echo "❌ Invalid version format: $VERSION"
+            echo "Expected SemVer format: major.minor.patch[-prerelease][+metadata]"
+            echo "Examples: 9.2.0, 9.3.0-preview.1, 9.3.0-rc.2+build.123"
+            exit 1
+          fi
+          echo "✓ Version format is valid: $VERSION"
+
+      - name: Validate run_id format
+        run: |
+          RUN_ID="${{ inputs.run_id }}"
+          if [[ ! "$RUN_ID" =~ ^[0-9]+$ ]]; then
+            echo "❌ Invalid run_id format: $RUN_ID"
+            echo "Expected a numeric GitHub Actions run ID"
+            exit 1
+          fi
+          echo "✓ Run ID format is valid: $RUN_ID"
+
+      - name: Validate pr_number when dist_tag is pr
+        if: ${{ inputs.dist_tag == 'pr' }}
+        run: |
+          PR_NUMBER="${{ inputs.pr_number }}"
+          if [[ -z "$PR_NUMBER" || ! "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            echo "❌ PR number is required and must be numeric when dist_tag is 'pr'"
+            echo "Provided PR number: '$PR_NUMBER'"
+            exit 1
+          fi
+          echo "✓ PR number is valid: $PR_NUMBER"
+
+      - name: Validate propagation_timeout_seconds
+        run: |
+          TIMEOUT="${{ inputs.propagation_timeout_seconds }}"
+          # Check if it's a positive integer
+          if [[ ! "$TIMEOUT" =~ ^[0-9]+$ ]] || [ "$TIMEOUT" -le 0 ]; then
+            echo "❌ Invalid propagation_timeout_seconds: $TIMEOUT"
+            echo "Expected a positive integer (seconds)"
+            exit 1
+          fi
+          echo "✓ Propagation timeout is valid: $TIMEOUT seconds"
+
+      - name: Compute effective tag and selected RIDs
+        id: compute
+        run: |
+          # Compute effective npm tag
+          DIST_TAG="${{ inputs.dist_tag }}"
+          if [ "$DIST_TAG" == "pr" ]; then
+            EFFECTIVE_TAG="pr-${{ inputs.pr_number }}"
+          else
+            EFFECTIVE_TAG="$DIST_TAG"
+          fi
+          echo "effective_tag=$EFFECTIVE_TAG" >> $GITHUB_OUTPUT
+          echo "Effective npm tag: $EFFECTIVE_TAG"
+          
+          # Compute selected RIDs
+          ONLY_RID="${{ inputs.only_rid }}"
+          if [ "$ONLY_RID" == "all" ]; then
+            SELECTED_RIDS='["win-x64","win-arm64","linux-x64","linux-arm64","linux-musl-x64","osx-x64","osx-arm64"]'
+          else
+            SELECTED_RIDS='["'"$ONLY_RID"'"]'
+          fi
+          echo "selected_rids=$SELECTED_RIDS" >> $GITHUB_OUTPUT
+          echo "Selected RIDs: $SELECTED_RIDS"
+
+  download:
+    name: Download Artifacts
+    runs-on: ubuntu-latest
+    needs: [validate]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Download artifacts from run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          echo "Downloading artifacts from run ${{ inputs.run_id }}..."
+          mkdir -p npm-staging
+          
+          # Download all built-nugets-for-<rid> artifacts
+          SELECTED_RIDS='${{ needs.validate.outputs.selected_rids }}'
+          
+          # Parse JSON array of RIDs
+          echo "$SELECTED_RIDS" | jq -r '.[]' | while read -r RID; do
+            ARTIFACT_NAME="built-nugets-for-$RID"
+            echo "Downloading artifact: $ARTIFACT_NAME"
+            
+            gh run download ${{ inputs.run_id }} \
+              --repo ${{ github.repository }} \
+              --name "$ARTIFACT_NAME" \
+              --dir "npm-staging/$RID"
+          done
+          
+          echo "✓ Artifact download complete"
+
+      - name: Verify required tarballs exist
+        run: |
+          echo "Verifying all required npm tarballs are present..."
+          SELECTED_RIDS='${{ needs.validate.outputs.selected_rids }}'
+          VERSION="${{ inputs.release_version }}"
+          MISSING_PACKAGES=0
+          
+          # Check for each RID package
+          while read -r RID; do
+            # Look for exact version tarball: microsoft-aspire-cli-<rid>-<version>.tgz
+            # Artifact structure: npm-staging/<rid>/artifacts/packages/.../Shipping/microsoft-aspire-cli-<rid>-<version>.tgz
+            RID_TARBALL=$(find "npm-staging/$RID" -name "microsoft-aspire-cli-$RID-$VERSION.tgz" -type f | head -1)
+            
+            if [ -z "$RID_TARBALL" ]; then
+              echo "❌ Missing expected RID package tarball: microsoft-aspire-cli-$RID-$VERSION.tgz"
+              MISSING_PACKAGES=$((MISSING_PACKAGES + 1))
+            else
+              echo "✓ Found RID package: $(basename "$RID_TARBALL")"
+            fi
+          done < <(echo "$SELECTED_RIDS" | jq -r '.[]')
+          
+          # Check for meta package (should be in any RID artifact, we use win-x64 as canonical)
+          if [[ "${{ inputs.skip_meta }}" != "true" ]]; then
+            # Look for exact version tarball: microsoft-aspire-cli-<version>.tgz (no RID suffix)
+            META_TARBALL=$(find npm-staging -name "microsoft-aspire-cli-$VERSION.tgz" -type f | head -1)
+            
+            if [ -z "$META_TARBALL" ]; then
+              echo "❌ Missing expected meta package tarball: microsoft-aspire-cli-$VERSION.tgz"
+              MISSING_PACKAGES=$((MISSING_PACKAGES + 1))
+            else
+              echo "✓ Found meta package: $(basename "$META_TARBALL")"
+            fi
+          fi
+          
+          if [ $MISSING_PACKAGES -gt 0 ]; then
+            echo ""
+            echo "❌ ERROR: $MISSING_PACKAGES required package(s) missing from run ${{ inputs.run_id }}"
+            exit 1
+          fi
+          
+          echo ""
+          echo "✓ All required npm tarballs verified"
+
+      - name: Upload staging directory
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: npm-publish-staging
+          path: npm-staging/
+          retention-days: 7
+          if-no-files-found: error
+
+  publish-rid-packages:
+    name: Publish RID Package (${{ matrix.rid }})
+    runs-on: ubuntu-latest
+    needs: [validate, download]
+    strategy:
+      fail-fast: false
+      matrix:
+        rid: ${{ fromJson(needs.validate.outputs.selected_rids) }}
+    steps:
+      - name: Download staging artifacts
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v7.0.1
+        with:
+          name: npm-publish-staging
+          path: npm-staging
+
+      - name: Setup Node.js
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v5.3.0
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      # TODO: Remove this fallback after npm Trusted Publisher OIDC is configured.
+      # Trusted Publisher should be the primary auth method going forward.
+      # The NODE_AUTH_TOKEN will be used if present, otherwise npm falls back to OIDC.
+      - name: Publish RID package
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN || '' }}
+        run: |
+          RID="${{ matrix.rid }}"
+          VERSION="${{ inputs.release_version }}"
+          EFFECTIVE_TAG="${{ needs.validate.outputs.effective_tag }}"
+          DRY_RUN="${{ inputs.dry_run }}"
+          
+          # Find the exact version tarball: microsoft-aspire-cli-<rid>-<version>.tgz
+          RID_TARBALL=$(find npm-staging -name "microsoft-aspire-cli-$RID-$VERSION.tgz" -type f | head -1)
+          
+          if [ -z "$RID_TARBALL" ]; then
+            echo "❌ ERROR: Expected RID package tarball not found: microsoft-aspire-cli-$RID-$VERSION.tgz"
+            exit 1
+          fi
+          
+          echo "Publishing: $(basename "$RID_TARBALL")"
+          echo "Tag: $EFFECTIVE_TAG"
+          echo "Dry run: $DRY_RUN"
+          
+          if [ "$DRY_RUN" == "true" ]; then
+            # Dry run: validate package structure without publishing
+            npm publish "$RID_TARBALL" --dry-run --access public --tag "$EFFECTIVE_TAG"
+            echo "✓ Dry run successful for $RID"
+          else
+            # Real publish with provenance
+            npm publish "$RID_TARBALL" --provenance --access public --tag "$EFFECTIVE_TAG"
+            echo "✓ Published @microsoft/aspire-cli-$RID@$VERSION with tag $EFFECTIVE_TAG"
+          fi
+
+  wait-for-packages:
+    name: Wait for RID Packages on npm
+    runs-on: ubuntu-latest
+    needs: [validate, publish-rid-packages]
+    if: ${{ inputs.dry_run != true && inputs.skip_meta != true }}
+    steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v5.3.0
+        with:
+          node-version: '20'
+
+      - name: Wait for all RID packages to appear on npm
+        run: |
+          SELECTED_RIDS='${{ needs.validate.outputs.selected_rids }}'
+          VERSION="${{ inputs.release_version }}"
+          TIMEOUT_SECONDS="${{ inputs.propagation_timeout_seconds }}"
+          SLEEP_SECONDS=10
+          
+          # Compute max attempts from timeout, rounding up to honor at least the requested duration
+          MAX_ATTEMPTS=$(( (TIMEOUT_SECONDS + SLEEP_SECONDS - 1) / SLEEP_SECONDS ))
+          
+          echo "Waiting for RID packages to appear on npm registry..."
+          echo "Version: $VERSION"
+          echo "Timeout: $TIMEOUT_SECONDS seconds"
+          echo "Max attempts: $MAX_ATTEMPTS (checking every $SLEEP_SECONDS seconds)"
+          echo ""
+          
+          # Parse JSON array of RIDs into bash array
+          readarray -t RID_ARRAY < <(echo "$SELECTED_RIDS" | jq -r '.[]')
+          
+          ALL_VISIBLE=false
+          ATTEMPT=1
+          
+          while [ $ATTEMPT -le $MAX_ATTEMPTS ] && [ "$ALL_VISIBLE" != "true" ]; do
+            echo "Attempt $ATTEMPT/$MAX_ATTEMPTS:"
+            PENDING_COUNT=0
+            
+            for RID in "${RID_ARRAY[@]}"; do
+              PACKAGE_NAME="@microsoft/aspire-cli-$RID"
+              
+              # Try to fetch the specific version from npm
+              if npm view "$PACKAGE_NAME@$VERSION" version > /dev/null 2>&1; then
+                echo "  ✓ $PACKAGE_NAME@$VERSION is visible"
+              else
+                echo "  ⏳ $PACKAGE_NAME@$VERSION not yet visible"
+                PENDING_COUNT=$((PENDING_COUNT + 1))
+              fi
+            done
+            
+            if [ $PENDING_COUNT -eq 0 ]; then
+              ALL_VISIBLE=true
+              echo ""
+              echo "✓ All RID packages are visible on npm"
+              break
+            fi
+            
+            if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
+              echo "  Waiting $SLEEP_SECONDS seconds before retry..."
+              sleep $SLEEP_SECONDS
+            fi
+            
+            ATTEMPT=$((ATTEMPT + 1))
+          done
+          
+          if [ "$ALL_VISIBLE" != "true" ]; then
+            echo ""
+            echo "❌ ERROR: Timeout waiting for RID packages to appear on npm after $TIMEOUT_SECONDS seconds"
+            echo "Some packages may still be propagating. Check npm registry manually before publishing meta package."
+            exit 1
+          fi
+
+  publish-meta-package:
+    name: Publish Meta Package
+    runs-on: ubuntu-latest
+    needs: [validate, publish-rid-packages, wait-for-packages]
+    if: ${{ always() && inputs.skip_meta != true && needs.publish-rid-packages.result == 'success' && (needs.wait-for-packages.result == 'success' || needs.wait-for-packages.result == 'skipped') }}
+    steps:
+      - name: Download staging artifacts
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v7.0.1
+        with:
+          name: npm-publish-staging
+          path: npm-staging
+
+      - name: Setup Node.js
+        uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v5.3.0
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      # TODO: Remove this fallback after npm Trusted Publisher OIDC is configured.
+      # Trusted Publisher should be the primary auth method going forward.
+      # The NODE_AUTH_TOKEN will be used if present, otherwise npm falls back to OIDC.
+      - name: Publish meta package
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN || '' }}
+        run: |
+          VERSION="${{ inputs.release_version }}"
+          EFFECTIVE_TAG="${{ needs.validate.outputs.effective_tag }}"
+          DRY_RUN="${{ inputs.dry_run }}"
+          
+          # Find the exact version tarball: microsoft-aspire-cli-<version>.tgz (no RID suffix)
+          META_TARBALL=$(find npm-staging -name "microsoft-aspire-cli-$VERSION.tgz" -type f | head -1)
+          
+          if [ -z "$META_TARBALL" ]; then
+            echo "❌ ERROR: Expected meta package tarball not found: microsoft-aspire-cli-$VERSION.tgz"
+            exit 1
+          fi
+          
+          echo "Publishing: $(basename "$META_TARBALL")"
+          echo "Tag: $EFFECTIVE_TAG"
+          echo "Dry run: $DRY_RUN"
+          
+          if [ "$DRY_RUN" == "true" ]; then
+            # Dry run: validate package structure without publishing
+            npm publish "$META_TARBALL" --dry-run --access public --tag "$EFFECTIVE_TAG"
+            echo "✓ Dry run successful for meta package"
+          else
+            # Real publish with provenance
+            npm publish "$META_TARBALL" --provenance --access public --tag "$EFFECTIVE_TAG"
+            echo "✓ Published @microsoft/aspire-cli@$VERSION with tag $EFFECTIVE_TAG"
+          fi
+
+  summary:
+    name: Publish Summary
+    runs-on: ubuntu-latest
+    needs: [validate, authorize, download, publish-rid-packages, wait-for-packages, publish-meta-package]
+    if: ${{ always() }}
+    steps:
+      - name: Generate summary
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          # npm Publish Workflow Summary
+          
+          ## Configuration
+          - **Version**: ${{ inputs.release_version }}
+          - **Effective Tag**: ${{ needs.validate.outputs.effective_tag }}
+          - **Run ID**: ${{ inputs.run_id }}
+          - **Selected RIDs**: ${{ needs.validate.outputs.selected_rids }}
+          - **Skip Meta**: ${{ inputs.skip_meta }}
+          - **Dry Run**: ${{ inputs.dry_run }}
+          - **Propagation Timeout**: ${{ inputs.propagation_timeout_seconds }} seconds
+          
+          ## Job Status
+          - **Authorization**: ${{ needs.authorize.result }}
+          - **Validation**: ${{ needs.validate.result }}
+          - **Download**: ${{ needs.download.result }}
+          - **RID Package Publish**: ${{ needs.publish-rid-packages.result }}
+          - **Wait for Packages**: ${{ needs.wait-for-packages.result }}
+          - **Meta Package Publish**: ${{ needs.publish-meta-package.result }}
+          
+          ## Next Steps
+          EOF
+          
+          if [ "${{ inputs.dry_run }}" == "true" ]; then
+            cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          
+          ✓ Dry run completed successfully. To publish for real:
+          1. Re-run this workflow with `dry_run: false`
+          2. Ensure npm Trusted Publisher is configured for provenance
+          EOF
+          elif [ "${{ needs.publish-meta-package.result }}" == "success" ]; then
+            cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          
+          ✓ Publish completed successfully!
+          
+          Verify packages on npm:
+          - Meta package: https://www.npmjs.com/package/@microsoft/aspire-cli
+          - RID packages: https://www.npmjs.com/search?q=%40microsoft%2Faspire-cli-
+          EOF
+          else
+            cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          
+          ⚠️ Workflow completed with errors. Check job logs for details.
+          EOF
+          fi

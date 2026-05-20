@@ -28,8 +28,6 @@ The Aspire-specific adaptation is the writable cache. Unlike most native npm CLI
 
 ## Non-goals
 
-- Publishing packages to npm or configuring registry authentication.
-- Defining final public package ownership, scope, provenance, or release policy.
 - Implementing `aspire update --self` for npm installs.
 - Replacing the dotnet tool package flow.
 
@@ -164,10 +162,47 @@ The native archive workflows verify npm tarballs after the existing nupkg verifi
 
 GitHub Actions uploads `microsoft-aspire-cli*.tgz` with the RID-specific package artifacts. Azure Pipelines installs Node.js before native package build because `npm pack` runs during packaging, verifies the npm packages, downloads `microsoft-aspire-cli*.tgz` in the staging job, and stages them with the native CLI packages.
 
+## Publishing
+
+The npm packages are published using the manual GitHub Actions workflow `.github/workflows/publish-npm.yml`.
+
+### Prerequisites
+
+Before publishing npm packages, the following external setup must be complete:
+
+1. **@microsoft scope reservation**: The `@microsoft` scope must be reserved and managed by Microsoft on the npm registry.
+2. **npm Trusted Publisher configuration**: The microsoft/aspire repository must be configured as a Trusted Publisher on npm to enable provenance via OIDC. This eliminates the need for long-lived NPM_TOKEN secrets.
+3. **Microsoft/1ES-managed publishing**: npm publishing should be managed through Microsoft's 1ES-approved processes and infrastructure.
+
+The workflow includes a temporary fallback to `secrets.NPM_TOKEN` authentication, but Trusted Publisher OIDC is the recommended approach. The fallback will be removed once Trusted Publisher setup is complete.
+
+### Publishing workflow
+
+The publish workflow downloads staged npm tarballs from a completed native archive build and publishes them to npm with provenance:
+
+```bash
+# Example: Publish packages from a build run
+gh workflow run publish-npm.yml \
+  --ref main \
+  --field release_version="9.2.0" \
+  --field run_id="12345678" \
+  --field dist_tag="latest" \
+  --field dry_run="false"
+```
+
+Key features:
+
+- **Dry run by default**: The workflow defaults to `dry_run: true` to validate packages before real publish.
+- **Platform-first ordering**: RID-specific packages are published before the meta package to avoid `optionalDependencies` validation races.
+- **Propagation wait**: The workflow polls npm until all RID packages for the target version are visible before publishing the meta package.
+- **Recovery options**: The `only_rid` and `skip_meta` inputs support publishing specific RID packages or skipping the meta package if recovery is needed.
+- **Provenance**: All publishes use `npm publish --provenance` when not in dry-run mode.
+- **Authorization**: Non-dry-run publishes require admin or maintain repository permissions.
+
+For full workflow documentation, see the workflow file header and inline comments.
+
 ## Open follow-ups
 
-- Decide the final npm scope and package names.
-- Add npm publishing, provenance, and registry authentication.
 - Decide whether the launcher should use stronger cache freshness than file-size comparison.
 - Implement CLI-side npm install detection and self-update guidance.
 - Add end-to-end installation tests against a real npm install layout.
