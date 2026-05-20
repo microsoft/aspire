@@ -191,6 +191,95 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task EnsureExtractedAndAcquireLayoutAsync_ReturnsVersionRootedLayoutAndSkipsLeasedCleanup()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var layoutRoot = workspace.WorkspaceRoot.FullName;
+        var layoutDiscovery = new TestLayoutDiscovery(layoutRoot);
+
+        var v1BinaryPath = CreateFakeCliBinary(Path.Combine(layoutRoot, ".fake-bins"), "aspire-v1", "cli-v1");
+        var v2BinaryPath = CreateFakeCliBinary(Path.Combine(layoutRoot, ".fake-bins"), "aspire-v2", "cli-v2-longer");
+        File.SetLastWriteTimeUtc(v2BinaryPath, File.GetLastWriteTimeUtc(v1BinaryPath).AddHours(1));
+
+        var v1Service = CreateService(new TestBundlePayloadProvider(CreateFakeBundlePayload("v1")), layoutDiscovery, v1BinaryPath);
+        var result1 = await v1Service.ExtractAsync(layoutRoot, force: true);
+        Assert.Equal(BundleExtractResult.Extracted, result1);
+
+        var versionsDir = Path.Combine(layoutRoot, BundleService.VersionsDirectoryName);
+        var v1VersionDir = Assert.Single(Directory.GetDirectories(versionsDir));
+
+        try
+        {
+            using var layoutLease = await v1Service.EnsureExtractedAndAcquireLayoutAsync("test", "reader");
+            Assert.NotNull(layoutLease);
+            Assert.True(layoutLease.HasLease);
+
+            var managedPath = layoutLease.Layout.GetManagedPath();
+            Assert.NotNull(managedPath);
+
+            var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+            Assert.StartsWith(
+                Path.GetFullPath(v1VersionDir),
+                Path.GetFullPath(managedPath!),
+                comparison);
+
+            var v2Service = CreateService(new TestBundlePayloadProvider(CreateFakeBundlePayload("v2")), layoutDiscovery, v2BinaryPath);
+            var result2 = await v2Service.ExtractAsync(layoutRoot, force: true);
+            Assert.Equal(BundleExtractResult.Extracted, result2);
+
+            Assert.True(Directory.Exists(v1VersionDir), "Leased stale version should not be deleted during upgrade cleanup.");
+            Assert.Equal(2, Directory.GetDirectories(versionsDir).Length);
+        }
+        finally
+        {
+            CleanupReparsePoints(layoutRoot);
+        }
+    }
+
+    [Fact]
+    public void TryCleanupStaleVersions_SkipsVersionWithActiveLease()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var versionsDir = Path.Combine(workspace.WorkspaceRoot.FullName, BundleService.VersionsDirectoryName);
+        var staleVersionDir = Path.Combine(versionsDir, "stale-version");
+        Directory.CreateDirectory(staleVersionDir);
+
+        using var lease = BundleVersionLease.Acquire(staleVersionDir, "test", "cleanup");
+
+        BundleService.TryCleanupStaleVersions(versionsDir, activeVersionId: "active-version");
+
+        Assert.True(Directory.Exists(staleVersionDir));
+    }
+
+    [Fact]
+    public void TryCleanupStaleVersions_RemovesOrphanLeaseFilesBeforeDeletingVersion()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var versionsDir = Path.Combine(workspace.WorkspaceRoot.FullName, BundleService.VersionsDirectoryName);
+        var staleVersionDir = Path.Combine(versionsDir, "stale-version");
+        var leasesDir = Path.Combine(staleVersionDir, BundleVersionLease.LeasesDirectoryName);
+        Directory.CreateDirectory(leasesDir);
+        File.WriteAllText(Path.Combine(leasesDir, "orphan.lease"), "{}");
+
+        BundleService.TryCleanupStaleVersions(versionsDir, activeVersionId: "active-version");
+
+        Assert.False(Directory.Exists(staleVersionDir));
+    }
+
+    [Fact]
+    public void BundleVersionLease_AllowsConcurrentReadersForSameVersion()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var versionDir = workspace.CreateDirectory("version").FullName;
+
+        using var lease1 = BundleVersionLease.Acquire(versionDir, "test", "reader1");
+        using var lease2 = BundleVersionLease.Acquire(versionDir, "test", "reader2");
+
+        Assert.NotEqual(lease1.LeasePath, lease2.LeasePath);
+        Assert.True(BundleVersionLease.HasActiveLease(versionDir));
+    }
+
+    [Fact]
     public async Task EnsureExtractedAsync_DotnetToolStorePath_ExtractsToTargetFrameworkDirectory()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
