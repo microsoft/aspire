@@ -174,6 +174,16 @@ steps:
       Invoke-WebRequest -Uri "https://aka.ms/wingetcreate/latest" -OutFile "$(Build.StagingDirectory)/wingetcreate.exe"
       Write-Host "wingetcreate downloaded successfully"
     displayName: '🟣Install wingetcreate'
+    # Skip when no Submit step will run. wingetcreate is only used to submit to
+    # the upstream winget-pkgs repo, so dry-run and non-production-branch builds
+    # gain nothing from downloading it and instead pick up an aka.ms-redirect
+    # failure surface for free.
+    condition: |
+      and(
+        succeeded(),
+        eq('${{ parameters.dryRun }}', 'false'),
+        eq(variables['_IsProductionBranch'], 'true')
+      )
 
   - powershell: |
       $ErrorActionPreference = 'Stop'
@@ -342,6 +352,18 @@ steps:
       Write-Host "WinGet PR #$pullRequestNumber is draft: $pullRequestUrl"
       Write-Host "Successfully submitted WinGet manifest for $packageId $version"
     displayName: '🟣Submit to WinGet'
-    condition: and(succeeded(), eq('${{ parameters.dryRun }}', 'false'))
+    # Guard: only submit to WinGet from production branches (main / release/* / internal/release/*).
+    # 1ES PT branch validation surfaces this as a non-blocking warning, which is too easy to miss;
+    # a hard condition stops accidental submissions from feature, fork or dogfood branches.
+    condition: |
+      and(
+        succeeded(),
+        eq('${{ parameters.dryRun }}', 'false'),
+        or(
+          eq(variables['Build.SourceBranch'], 'refs/heads/main'),
+          startsWith(variables['Build.SourceBranch'], 'refs/heads/release/'),
+          startsWith(variables['Build.SourceBranch'], 'refs/heads/internal/release/')
+        )
+      )
     env:
       WINGET_CREATE_GITHUB_TOKEN: $(aspire-winget-bot-pat)
