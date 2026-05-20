@@ -292,7 +292,14 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     {
         _resourceChanged = true;
 
-        await ClearSelectedLogEntryAsync();
+        // Only clear the selected log entry if a log level filter is being applied.
+        // If the log level is set to "All" (null), the filter is being removed and the
+        // selected entry is necessarily still in the results.
+        if (PageViewModel.SelectedLogLevel.Id is not null)
+        {
+            await ClearSelectedLogEntryAsync();
+        }
+
         await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: true);
     }
 
