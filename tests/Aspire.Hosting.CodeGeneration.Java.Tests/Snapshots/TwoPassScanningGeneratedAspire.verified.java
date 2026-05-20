@@ -1,4 +1,4 @@
-﻿// ===== AddContainerOptions.java =====
+// ===== AddContainerOptions.java =====
 // AddContainerOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
@@ -3127,7 +3127,7 @@ public class CertificateTrustExecutionConfigurationContext implements JsonSerial
     private ReferenceExpression certificateBundlePath;
     private ReferenceExpression certificateDirectoriesPath;
     private String rootCertificatesPath;
-    private boolean isContainer;
+    private Boolean isContainer;
 
     public ReferenceExpression getCertificateBundlePath() { return certificateBundlePath; }
     public void setCertificateBundlePath(ReferenceExpression value) { this.certificateBundlePath = value; }
@@ -3135,8 +3135,8 @@ public class CertificateTrustExecutionConfigurationContext implements JsonSerial
     public void setCertificateDirectoriesPath(ReferenceExpression value) { this.certificateDirectoriesPath = value; }
     public String getRootCertificatesPath() { return rootCertificatesPath; }
     public void setRootCertificatesPath(String value) { this.rootCertificatesPath = value; }
-    public boolean getIsContainer() { return isContainer; }
-    public void setIsContainer(boolean value) { this.isContainer = value; }
+    public Boolean getIsContainer() { return isContainer; }
+    public void setIsContainer(Boolean value) { this.isContainer = value; }
 
     public Map<String, Object> toMap() {
         Map<String, Object> map = new HashMap<>();
@@ -3379,14 +3379,14 @@ import java.util.function.*;
 public class CommandResultData implements JsonSerializable {
     private String value;
     private CommandResultFormat format;
-    private boolean displayImmediately;
+    private Boolean displayImmediately;
 
     public String getValue() { return value; }
     public void setValue(String value) { this.value = value; }
     public CommandResultFormat getFormat() { return format; }
     public void setFormat(CommandResultFormat value) { this.format = value; }
-    public boolean getDisplayImmediately() { return displayImmediately; }
-    public void setDisplayImmediately(boolean value) { this.displayImmediately = value; }
+    public Boolean getDisplayImmediately() { return displayImmediately; }
+    public void setDisplayImmediately(Boolean value) { this.displayImmediately = value; }
 
     public Map<String, Object> toMap() {
         Map<String, Object> map = new HashMap<>();
@@ -10442,15 +10442,15 @@ import java.util.function.*;
 /** ExecuteCommandResult DTO. */
 public class ExecuteCommandResult implements JsonSerializable {
     private boolean success;
-    private boolean canceled;
+    private Boolean canceled;
     private String errorMessage;
     private String message;
     private CommandResultData data;
 
     public boolean getSuccess() { return success; }
     public void setSuccess(boolean value) { this.success = value; }
-    public boolean getCanceled() { return canceled; }
-    public void setCanceled(boolean value) { this.canceled = value; }
+    public Boolean getCanceled() { return canceled; }
+    public void setCanceled(Boolean value) { this.canceled = value; }
     public String getErrorMessage() { return errorMessage; }
     public void setErrorMessage(String value) { this.errorMessage = value; }
     public String getMessage() { return message; }
@@ -13299,14 +13299,14 @@ public class InteractionInput implements JsonSerializable {
     private String name;
     private String label;
     private String description;
-    private boolean enableDescriptionMarkdown;
+    private Boolean enableDescriptionMarkdown;
     private InputType inputType;
-    private boolean required;
+    private Boolean required;
     private Object[] options;
     private Object dynamicLoading;
     private String value;
     private String placeholder;
-    private boolean allowCustomChoice;
+    private Boolean allowCustomChoice;
     private boolean disabled;
     private Double maxLength;
 
@@ -13316,12 +13316,12 @@ public class InteractionInput implements JsonSerializable {
     public void setLabel(String value) { this.label = value; }
     public String getDescription() { return description; }
     public void setDescription(String value) { this.description = value; }
-    public boolean getEnableDescriptionMarkdown() { return enableDescriptionMarkdown; }
-    public void setEnableDescriptionMarkdown(boolean value) { this.enableDescriptionMarkdown = value; }
+    public Boolean getEnableDescriptionMarkdown() { return enableDescriptionMarkdown; }
+    public void setEnableDescriptionMarkdown(Boolean value) { this.enableDescriptionMarkdown = value; }
     public InputType getInputType() { return inputType; }
     public void setInputType(InputType value) { this.inputType = value; }
-    public boolean getRequired() { return required; }
-    public void setRequired(boolean value) { this.required = value; }
+    public Boolean getRequired() { return required; }
+    public void setRequired(Boolean value) { this.required = value; }
     public Object[] getOptions() { return options; }
     public void setOptions(Object[] value) { this.options = value; }
     public Object getDynamicLoading() { return dynamicLoading; }
@@ -13330,8 +13330,8 @@ public class InteractionInput implements JsonSerializable {
     public void setValue(String value) { this.value = value; }
     public String getPlaceholder() { return placeholder; }
     public void setPlaceholder(String value) { this.placeholder = value; }
-    public boolean getAllowCustomChoice() { return allowCustomChoice; }
-    public void setAllowCustomChoice(boolean value) { this.allowCustomChoice = value; }
+    public Boolean getAllowCustomChoice() { return allowCustomChoice; }
+    public void setAllowCustomChoice(Boolean value) { this.allowCustomChoice = value; }
     public boolean getDisabled() { return disabled; }
     public void setDisabled(boolean value) { this.disabled = value; }
     public Double getMaxLength() { return maxLength; }
@@ -19002,13 +19002,13 @@ import java.util.function.*;
 
 /** TestDeeplyNestedDto DTO. */
 public class TestDeeplyNestedDto implements JsonSerializable {
-    private AspireDict<String, AspireList<TestConfigDto>> nestedData;
-    private AspireDict<String, String>[] metadataArray;
+    private Map<String, List<TestConfigDto>> nestedData;
+    private Map<String, String>[] metadataArray;
 
-    public AspireDict<String, AspireList<TestConfigDto>> getNestedData() { return nestedData; }
-    public void setNestedData(AspireDict<String, AspireList<TestConfigDto>> value) { this.nestedData = value; }
-    public AspireDict<String, String>[] getMetadataArray() { return metadataArray; }
-    public void setMetadataArray(AspireDict<String, String>[] value) { this.metadataArray = value; }
+    public Map<String, List<TestConfigDto>> getNestedData() { return nestedData; }
+    public void setNestedData(Map<String, List<TestConfigDto>> value) { this.nestedData = value; }
+    public Map<String, String>[] getMetadataArray() { return metadataArray; }
+    public void setMetadataArray(Map<String, String>[] value) { this.metadataArray = value; }
 
     public Map<String, Object> toMap() {
         Map<String, Object> map = new HashMap<>();
@@ -19141,17 +19141,17 @@ import java.util.function.*;
 public class TestNestedDto implements JsonSerializable {
     private String id;
     private TestConfigDto config;
-    private AspireList<String> tags;
-    private AspireDict<String, Double> counts;
+    private List<String> tags;
+    private Map<String, Double> counts;
 
     public String getId() { return id; }
     public void setId(String value) { this.id = value; }
     public TestConfigDto getConfig() { return config; }
     public void setConfig(TestConfigDto value) { this.config = value; }
-    public AspireList<String> getTags() { return tags; }
-    public void setTags(AspireList<String> value) { this.tags = value; }
-    public AspireDict<String, Double> getCounts() { return counts; }
-    public void setCounts(AspireDict<String, Double> value) { this.counts = value; }
+    public List<String> getTags() { return tags; }
+    public void setTags(List<String> value) { this.tags = value; }
+    public Map<String, Double> getCounts() { return counts; }
+    public void setCounts(Map<String, Double> value) { this.counts = value; }
 
     public Map<String, Object> toMap() {
         Map<String, Object> map = new HashMap<>();

@@ -29,54 +29,54 @@ public sealed class AzureNspAccessRule
     public required NetworkSecurityPerimeterAccessRuleDirection Direction { get; set; }
 
     /// <summary>
-    /// Gets the list of inbound address prefixes (CIDR ranges) allowed by this rule.
+    /// Gets or initializes the list of inbound address prefixes (CIDR ranges) allowed by this rule.
     /// </summary>
     /// <remarks>
     /// Only applicable for <see cref="NetworkSecurityPerimeterAccessRuleDirection.Inbound"/> rules.
     /// </remarks>
-    public List<string> AddressPrefixes { get; } = [];
+    public List<string> AddressPrefixes { get; init; } = [];
 
     /// <summary>
-    /// Gets the list of inbound address prefixes (CIDR ranges) <see cref="ReferenceExpression"/> values allowed by this rule.
+    /// Gets or initializes the list of inbound address prefixes (CIDR ranges) <see cref="ReferenceExpression"/> values allowed by this rule.
     /// </summary>
     /// <remarks>
     /// Only applicable for <see cref="NetworkSecurityPerimeterAccessRuleDirection.Inbound"/> rules.
     /// Values are resolved at deploy time and combined with <see cref="AddressPrefixes"/>.
     /// </remarks>
-    public List<ReferenceExpression> AddressPrefixReferences { get; } = [];
+    public List<ReferenceExpression> AddressPrefixReferences { get; init; } = [];
 
     /// <summary>
-    /// Gets the list of subscription IDs allowed by this rule.
+    /// Gets or initializes the list of subscription IDs allowed by this rule.
     /// </summary>
     /// <remarks>
     /// Only applicable for <see cref="NetworkSecurityPerimeterAccessRuleDirection.Inbound"/> rules.
     /// Subscription IDs should be in the format of a resource ID: <c>/subscriptions/{subscriptionId}</c>.
     /// </remarks>
-    public List<string> Subscriptions { get; } = [];
+    public List<string> Subscriptions { get; init; } = [];
 
     /// <summary>
-    /// Gets the subscription resource ID <see cref="ReferenceExpression"/> values allowed by this rule.
+    /// Gets or initializes the subscription resource ID <see cref="ReferenceExpression"/> values allowed by this rule.
     /// </summary>
     /// <remarks>
     /// Only applicable for <see cref="NetworkSecurityPerimeterAccessRuleDirection.Inbound"/> rules.
     /// Values are resolved at deploy time and combined with <see cref="Subscriptions"/>.
     /// </remarks>
-    public List<ReferenceExpression> SubscriptionReferences { get; } = [];
+    public List<ReferenceExpression> SubscriptionReferences { get; init; } = [];
 
     /// <summary>
-    /// Gets the list of fully qualified domain names (FQDNs) allowed by this rule.
+    /// Gets or initializes the list of fully qualified domain names (FQDNs) allowed by this rule.
     /// </summary>
     /// <remarks>
     /// Only applicable for <see cref="NetworkSecurityPerimeterAccessRuleDirection.Outbound"/> rules.
     /// </remarks>
-    public List<string> FullyQualifiedDomainNames { get; } = [];
+    public List<string> FullyQualifiedDomainNames { get; init; } = [];
 
     /// <summary>
-    /// Gets the fully qualified domain name <see cref="ReferenceExpression"/> values allowed by this rule.
+    /// Gets or initializes the fully qualified domain name <see cref="ReferenceExpression"/> values allowed by this rule.
     /// </summary>
     /// <remarks>
     /// Only applicable for <see cref="NetworkSecurityPerimeterAccessRuleDirection.Outbound"/> rules.
     /// Values are resolved at deploy time and combined with <see cref="FullyQualifiedDomainNames"/>.
     /// </remarks>
-    public List<ReferenceExpression> FullyQualifiedDomainNameReferences { get; } = [];
+    public List<ReferenceExpression> FullyQualifiedDomainNameReferences { get; init; } = [];
 }

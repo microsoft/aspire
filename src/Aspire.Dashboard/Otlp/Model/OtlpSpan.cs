@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model.Otlp;
 using Grpc.Core;
@@ -240,6 +241,31 @@ public class OtlpSpan
             KnownTraceFields.NameField => span.Name,
             _ => span.Attributes.GetValue(field)
         };
+    }
+
+    public static Dictionary<string, int> GetFieldValuesFromTraces(IEnumerable<OtlpTrace> traces, string attributeName)
+    {
+        var attributeValues = new Dictionary<string, int>(StringComparers.OtlpAttribute);
+
+        foreach (var trace in traces)
+        {
+            foreach (var span in trace.Spans)
+            {
+                var values = GetFieldValue(span, attributeName);
+                if (values.Value1 is not null)
+                {
+                    ref var count = ref CollectionsMarshal.GetValueRefOrAddDefault(attributeValues, values.Value1, out _);
+                    count++;
+                }
+                if (values.Value2 is not null)
+                {
+                    ref var count = ref CollectionsMarshal.GetValueRefOrAddDefault(attributeValues, values.Value2, out _);
+                    count++;
+                }
+            }
+        }
+
+        return attributeValues;
     }
 
     public record struct FieldValues(string? Value1, string? Value2 = null)

@@ -1296,4 +1296,58 @@ public sealed class TelemetryExportServiceTests
         Assert.Single(deserialized.Environment);
         Assert.Equal(japaneseEnvValue, deserialized.Environment["JAPANESE_VAR"]);
     }
+
+    [Fact]
+    public void ConvertResourceToJson_NumberAndBoolProperties_ArePreserved()
+    {
+        // Arrange
+        var resource = ModelTestHelpers.CreateResource(
+            resourceName: "test-container",
+            displayName: "Test Container",
+            resourceType: "Container",
+            state: KnownResourceState.Running,
+            properties: new Dictionary<string, ResourcePropertyViewModel>
+            {
+                ["container.ports"] = new(
+                    "container.ports",
+                    Value.ForList(Value.ForNumber(6379), Value.ForNumber(6380)),
+                    isValueSensitive: false,
+                    knownProperty: null,
+                    priority: 0),
+                ["resource.exitCode"] = new(
+                    "resource.exitCode",
+                    Value.ForNumber(0),
+                    isValueSensitive: false,
+                    knownProperty: null,
+                    priority: 0),
+                ["resource.enabled"] = new(
+                    "resource.enabled",
+                    Value.ForBool(true),
+                    isValueSensitive: false,
+                    knownProperty: null,
+                    priority: 0)
+            });
+
+        // Act
+        var json = TelemetryExportService.ConvertResourceToJson(resource, [resource]);
+
+        // Assert
+        var deserialized = JsonSerializer.Deserialize(json, ResourceJsonSerializerContext.Default.ResourceJson);
+        Assert.NotNull(deserialized);
+        Assert.NotNull(deserialized.Properties);
+
+        // Number values in a list should be preserved
+        var portsArray = Assert.IsType<JsonArray>(deserialized.Properties["container.ports"]);
+        Assert.Equal(2, portsArray.Count);
+        Assert.Equal(6379, portsArray[0]!.GetValue<double>());
+        Assert.Equal(6380, portsArray[1]!.GetValue<double>());
+
+        // Scalar number value should be preserved
+        var exitCode = deserialized.Properties["resource.exitCode"]!.GetValue<double>();
+        Assert.Equal(0, exitCode);
+
+        // Bool value should be preserved
+        var enabled = deserialized.Properties["resource.enabled"]!.GetValue<bool>();
+        Assert.True(enabled);
+    }
 }

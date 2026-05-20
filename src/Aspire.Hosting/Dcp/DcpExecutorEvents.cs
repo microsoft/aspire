@@ -12,7 +12,7 @@ internal record OnResourceStartingContext(CancellationToken CancellationToken, s
 internal record OnConnectionStringAvailableContext(CancellationToken CancellationToken, IResource Resource);
 internal record OnResourcesPreparedContext(CancellationToken CancellationToken);
 internal record OnResourceChangedContext(CancellationToken CancellationToken, string ResourceType, IResource Resource, string DcpResourceName, ResourceStatus Status, Func<CustomResourceSnapshot, CustomResourceSnapshot> UpdateSnapshot);
-internal record OnResourceFailedToStartContext(CancellationToken CancellationToken, string ResourceType, IResource Resource, string? DcpResourceName);
+internal record OnResourceFailedToStartContext(CancellationToken CancellationToken, string ResourceType, IResource Resource, string? DcpResourceName, string? ErrorMessage = null);
 
 internal sealed class DcpExecutorEvents
 {

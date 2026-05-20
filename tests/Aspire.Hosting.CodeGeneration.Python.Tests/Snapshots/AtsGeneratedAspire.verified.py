@@ -1546,14 +1546,14 @@ class TestConfigDto(typing.TypedDict, total=False):
     OptionalField: str | None
 
 class TestDeeplyNestedDto(typing.TypedDict, total=False):
-    NestedData: AspireDict[str, AspireList[TestConfigDto]]
-    MetadataArray: typing.Iterable[AspireDict[str, str]]
+    NestedData: typing.Mapping[str, typing.Iterable[TestConfigDto]]
+    MetadataArray: typing.Iterable[typing.Mapping[str, str]]
 
 class TestNestedDto(typing.TypedDict, total=False):
     Id: str
     Config: TestConfigDto
-    Tags: AspireList[str]
-    Counts: AspireDict[str, int]
+    Tags: typing.Iterable[str]
+    Counts: typing.Mapping[str, int]
 
 
 # ============================================================================
