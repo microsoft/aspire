@@ -180,11 +180,8 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             .OrderBy(metadata => metadata.PackageId, StringComparers.NuGetPackageId)
             .Select(metadata => new NuGetPackage { Id = metadata.PackageId, Version = PinnedVersion ?? metadata.Version.ToString(), Source = source })
             .ToArray();
-    }
 
-    private bool IsAllowedByQuality(PackageFileMetadata metadata)
-    {
-        return new { metadata.Version, Quality } switch
+        bool IsAllowedByQuality(PackageFileMetadata metadata) => new { metadata.Version, Quality } switch
         {
             { Quality: PackageChannelQuality.Both } => true,
             { Quality: PackageChannelQuality.Stable, Version: { IsPrerelease: false } } => true,
