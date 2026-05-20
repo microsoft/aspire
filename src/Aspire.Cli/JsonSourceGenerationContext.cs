@@ -5,6 +5,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Nodes;
+using Aspire.Cli.Acquisition;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
@@ -49,6 +50,7 @@ namespace Aspire.Cli;
 [JsonSerializable(typeof(IntegrationSearchResult[]))]
 [JsonSerializable(typeof(string[]))]
 [JsonSerializable(typeof(List<CandidateAppHostDisplayInfo>))]
+[JsonSerializable(typeof(InstallationInfo))]
 internal partial class JsonSourceGenerationContext : JsonSerializerContext
 {
     private static JsonSourceGenerationContext? s_relaxedEscaping;

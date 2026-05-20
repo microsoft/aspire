@@ -4,6 +4,7 @@
 using System.Reflection;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
@@ -16,7 +17,7 @@ namespace Aspire.Cli.Tests;
 /// <see cref="IIdentityChannelReader"/>, registered in DI by
 /// <see cref="Aspire.Cli.Program.BuildApplicationAsync"/>.
 /// </summary>
-public class CliBootstrapTests
+public class CliBootstrapTests(ITestOutputHelper outputHelper)
 {
     private static readonly string[] s_fixedChannels = ["stable", "staging", "daily", "local"];
 
@@ -103,5 +104,54 @@ public class CliBootstrapTests
 
         Assert.Equal(bakedChannel, context.IdentityChannel);
     }
-}
 
+    [Fact]
+    public void ParseLoggingOptions_PrInstall_UsesInstallPrefixForDefaultLogsDirectory()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var installPrefix = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire-pr-test");
+        var binaryPath = WriteBinaryWithSidecar(Path.Combine(installPrefix, "dogfood", "pr-17159", "bin"), InstallSourceExtensions.PrWire);
+
+        var loggingOptions = Program.ParseLoggingOptions([], binaryPath);
+
+        Assert.Equal(Path.Combine(installPrefix, "logs"), loggingOptions.LogsDirectory);
+        Assert.Equal(loggingOptions.LogsDirectory, Path.GetDirectoryName(loggingOptions.LogFilePath));
+    }
+
+    [Fact]
+    public void BuildCliExecutionContext_PrInstall_UsesInstallPrefixForStateDirectoriesAndKeepsIdentityChannel()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var installPrefix = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire-pr-test");
+        var binaryPath = WriteBinaryWithSidecar(Path.Combine(installPrefix, "dogfood", "pr-17159", "bin"), InstallSourceExtensions.PrWire);
+        var logsDirectory = Path.Combine(installPrefix, "logs");
+        var logFilePath = Path.Combine(logsDirectory, "aspire.log");
+
+        var context = Program.BuildCliExecutionContext(
+            debugMode: true,
+            logsDirectory: logsDirectory,
+            logFilePath: logFilePath,
+            channel: "pr-17159",
+            processPath: binaryPath);
+
+        Assert.Equal(Path.Combine(installPrefix, "hives"), context.HivesDirectory.FullName);
+        Assert.Equal(Path.Combine(installPrefix, "cache"), context.CacheDirectory.FullName);
+        Assert.Equal(Path.Combine(installPrefix, "sdks"), context.SdksDirectory.FullName);
+        Assert.Equal(Path.Combine(installPrefix, "packages"), context.PackagesDirectory?.FullName);
+        Assert.Equal(installPrefix, context.AspireHomeDirectory.FullName);
+        Assert.Equal(logsDirectory, context.LogsDirectory.FullName);
+        Assert.Equal(logFilePath, context.LogFilePath);
+        Assert.True(context.DebugMode);
+        Assert.Equal("pr-17159", context.IdentityChannel);
+    }
+
+    private static string WriteBinaryWithSidecar(string binaryDir, string source)
+    {
+        Directory.CreateDirectory(binaryDir);
+        var binaryPath = Path.Combine(binaryDir, OperatingSystem.IsWindows() ? "aspire.exe" : "aspire");
+        File.WriteAllText(binaryPath, string.Empty);
+        File.WriteAllText(Path.Combine(binaryDir, InstallSidecarReader.SidecarFileName), $$"""{"source":"{{source}}"}""");
+
+        return binaryPath;
+    }
+}
