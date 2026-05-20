@@ -897,6 +897,46 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         Assert.Equal(InstallationPathStatus.Active, row.PathStatus);
     }
 
+    [Fact]
+    public async Task DiscoverAllAsync_UsesPreResolvedCanonicalHint_WithoutReResolving()
+    {
+        // Pins the contract that DiscoverAllAsync uses InstallationDiscoveryCandidate.CanonicalPath
+        // verbatim instead of re-resolving via CliPathHelper. We construct a candidate whose
+        // CanonicalPath is a deliberately-different non-existent path (no real symlink involved):
+        // if DiscoverAllAsync were re-resolving, ResolveSymlinkToFullPath would return the real
+        // BinaryPath (or an empty string for a fake path) and the resulting row's CanonicalPath
+        // would not match the hint. This is the strongest way to pin "we used the hint" because
+        // there's no filesystem trick that could produce this canonical from the binary on disk.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var binDir = Path.Combine(workspace.WorkspaceRoot.FullName, "hint-bin");
+        Directory.CreateDirectory(binDir);
+        var binary = WriteFakeBinary(binDir);
+        var fakeCanonical = Path.Combine(workspace.WorkspaceRoot.FullName, "deliberately-different-canonical-path", "aspire");
+
+        var probe = new FakePeerInstallProbe();
+        var hintSource = new FixedCandidateSource(new InstallationDiscoveryCandidate(binary, "test-hint", fakeCanonical));
+        var discovery = new InstallationDiscovery(
+            channelReader: new FakeIdentityChannelReader("local"),
+            sidecarReader: new InstallSidecarReader(),
+            peerProbe: probe,
+            executionContext: CreateExecutionContext(workspace),
+            logger: NullLogger<InstallationDiscovery>.Instance,
+            candidateSources: [hintSource]);
+
+        var results = await discovery.DiscoverAllAsync(TestContext.Current.CancellationToken);
+
+        // The candidate row carries CanonicalPath = fakeCanonical, proving DiscoverAllAsync
+        // did NOT re-resolve via ResolveSymlinkToFullPath (which would have returned `binary`
+        // or empty). The Path field carries the original BinaryPath unchanged.
+        var hintRow = Assert.Single(results, r => string.Equals(r.Path, binary, StringComparison.Ordinal));
+        Assert.Equal(fakeCanonical, hintRow.CanonicalPath);
+    }
+
+    private sealed class FixedCandidateSource(params InstallationDiscoveryCandidate[] candidates) : IInstallationCandidateSource
+    {
+        public IEnumerable<InstallationDiscoveryCandidate> GetCandidates(InstallationCandidateContext context) => candidates;
+    }
+
     private static string ResolveCanonicalProcessPath()
     {
         var path = Environment.ProcessPath!;

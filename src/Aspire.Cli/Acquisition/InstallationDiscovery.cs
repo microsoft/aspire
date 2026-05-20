@@ -163,7 +163,17 @@ internal sealed partial class InstallationDiscovery : IInstallationDiscovery
                 "Discovery: considering candidate #{Index} '{Path}' (origin: {Origin}).",
                 candidateCount, candidate.BinaryPath, candidate.Origin);
 
-            var canonical = CliPathHelper.ResolveSymlinkToFullPath(candidate.BinaryPath, _logger);
+            // Prefer the candidate's pre-resolved canonical hint when present:
+            // $PATH hits already had their canonical resolved by FindAllAspireOnPath,
+            // so re-resolving here would (a) double the syscalls and (b) open a
+            // TOCTOU window where a symlink swap between the two resolves could
+            // produce a different canonical and break dedup. Other sources (release
+            // prefix, dogfood, dotnet-tool store) leave the hint null and still
+            // resolve here. Empty-string -> skip-candidate semantics are preserved
+            // for both paths.
+            var canonical = !string.IsNullOrEmpty(candidate.CanonicalPath)
+                ? candidate.CanonicalPath
+                : CliPathHelper.ResolveSymlinkToFullPath(candidate.BinaryPath, _logger);
             if (string.IsNullOrEmpty(canonical))
             {
                 _logger.LogDebug(

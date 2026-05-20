@@ -26,7 +26,15 @@ internal sealed record InstallationCandidateContext(
 
 internal sealed record InstallationPathHit(string OriginalPath, string CanonicalPath);
 
-internal sealed record InstallationDiscoveryCandidate(string BinaryPath, string Origin);
+// CanonicalPath is an optional pre-resolved hint from a candidate source that
+// already had to resolve the symlink chain itself (currently only $PATH hits;
+// FindAllAspireOnPath calls CliPathHelper.ResolveSymlinkToFullPath while
+// enumerating). When provided, DiscoverAllAsync uses it directly instead of
+// re-resolving, which avoids a redundant syscall and closes a small TOCTOU
+// window between the two resolves where a symlink swap could produce
+// divergent dedup keys. Other sources (release prefix, dogfood, dotnet-tool
+// store) leave it null and rely on DiscoverAllAsync to resolve.
+internal sealed record InstallationDiscoveryCandidate(string BinaryPath, string Origin, string? CanonicalPath = null);
 
 internal static class InstallationDiscoveryLayout
 {
@@ -39,7 +47,7 @@ internal sealed class PathInstallationCandidateSource : IInstallationCandidateSo
     {
         foreach (var pathHit in context.PathHits)
         {
-            yield return new InstallationDiscoveryCandidate(pathHit.OriginalPath, "$PATH");
+            yield return new InstallationDiscoveryCandidate(pathHit.OriginalPath, "$PATH", pathHit.CanonicalPath);
         }
     }
 }
