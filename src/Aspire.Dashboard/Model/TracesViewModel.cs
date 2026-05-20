@@ -11,6 +11,7 @@ public class TracesViewModel
 {
     private readonly TelemetryRepository _telemetryRepository;
     private readonly List<FieldTelemetryFilter> _filters = new();
+    private readonly List<TelemetryFilter> _columnFilters = new();
 
     private PagedResult<OtlpTrace>? _traces;
     private ResourceKey? _resourceKey;
@@ -32,6 +33,15 @@ public class TracesViewModel
     public int Count { get => _count; set => SetValue(ref _count, value); }
     public TimeSpan MaxDuration { get; private set; }
     public IReadOnlyList<FieldTelemetryFilter> Filters => _filters;
+
+    /// <summary>
+    /// Adds a persistent column-level filter (e.g., checkbox-based value filter).
+    /// Column filters are always included in queries and are not cleared by <see cref="ClearFilters"/>.
+    /// </summary>
+    public void AddColumnFilter(TelemetryFilter filter)
+    {
+        _columnFilters.Add(filter);
+    }
 
     public void ClearFilters()
     {
@@ -129,6 +139,7 @@ public class TracesViewModel
     private List<TelemetryFilter> GetFilters()
     {
         var filters = Filters.Cast<TelemetryFilter>().ToList();
+        filters.AddRange(_columnFilters);
         if (SpanType?.Filter is { } typeFilter)
         {
             filters.Add(typeFilter);

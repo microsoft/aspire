@@ -13,6 +13,7 @@ public class StructuredLogsViewModel
 {
     private readonly TelemetryRepository _telemetryRepository;
     private readonly List<FieldTelemetryFilter> _filters = new();
+    private readonly List<TelemetryFilter> _columnFilters = new();
     // Cache span lookups for GenAI attributes to avoid repeated lookups.
     private readonly ConcurrentDictionary<SpanKey, bool> _spanGenAICache = new();
 
@@ -95,6 +96,15 @@ public class StructuredLogsViewModel
     public int Count { get => _logsCount; set => SetValue(ref _logsCount, value); }
     public LogLevel? LogLevel { get => _logLevel; set => SetValue(ref _logLevel, value); }
 
+    /// <summary>
+    /// Adds a persistent column-level filter (e.g., checkbox-based value filter).
+    /// Column filters are always included in queries and are not cleared by <see cref="ClearFilters"/>.
+    /// </summary>
+    public void AddColumnFilter(TelemetryFilter filter)
+    {
+        _columnFilters.Add(filter);
+    }
+
     private void SetValue<T>(ref T field, T value)
     {
         if (EqualityComparer<T>.Default.Equals(field, value))
@@ -130,6 +140,7 @@ public class StructuredLogsViewModel
     public List<TelemetryFilter> GetFilters()
     {
         var filters = Filters.Cast<TelemetryFilter>().ToList();
+        filters.AddRange(_columnFilters);
         if (!string.IsNullOrWhiteSpace(FilterText))
         {
             // Search across all user-visible columns: message, resource name, trace ID, severity, and category.
