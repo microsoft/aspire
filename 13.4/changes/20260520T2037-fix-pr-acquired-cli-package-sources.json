@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "PR-acquired CLI instances now automatically use matching PR packages when running `aspire new`, preventing type load errors caused by mixed package versions from mismatched sources.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-05-20T20:37:41Z",
+  "lastMergedAt": "2026-05-20T20:37:41Z",
+  "name": "Fix PR-acquired CLI using mismatched packages for `aspire new`",
+  "owner": "radical",
+  "prs": [
+    17280
+  ]
+}

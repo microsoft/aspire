@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Improvement: CLI bundle version leases prevent race conditions during bundle upgrades",
+  "mergedAt": "2026-05-20T20:43:54Z",
+  "number": 17282,
+  "runDate": "2026-05-20T20:47:18Z",
+  "status": "included",
+  "title": "Protect CLI bundle versions with leases"
+}

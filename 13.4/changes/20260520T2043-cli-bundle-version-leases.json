@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The CLI now acquires per-version leases on bundle directories, preventing race conditions where upgrading the CLI could delete or invalidate bundle files still in use by a running AppHost, dashboard, or NuGet helper process.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔐",
+  "firstMergedAt": "2026-05-20T20:43:54Z",
+  "lastMergedAt": "2026-05-20T20:43:54Z",
+  "name": "CLI bundle version protection with leases",
+  "owner": "danegsta",
+  "prs": [
+    17282
+  ]
+}

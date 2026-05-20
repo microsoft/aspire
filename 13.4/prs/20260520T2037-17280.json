@@ -1,0 +1,9 @@
+{
+  "author": "radical",
+  "comment": "Bug fix: PR-acquired CLI now uses matching PR packages for aspire new, preventing type load errors from mixed package sources",
+  "mergedAt": "2026-05-20T20:37:41Z",
+  "number": 17280,
+  "runDate": "2026-05-20T20:47:18Z",
+  "status": "included",
+  "title": "fix(cli): use matching PR packages for PR-acquired aspire new"
+}
