@@ -975,53 +975,6 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
 }
 
 /// <summary>
-/// In-memory logger that records every log call so tests can assert
-/// on the structured rejection messages emitted by InstallationDiscovery.
-/// </summary>
-internal sealed class CapturingLogger<T> : ILogger<T>
-{
-    public List<(LogLevel Level, string Message)> Entries { get; } = new();
-
-    public IDisposable BeginScope<TState>(TState state) where TState : notnull => NullScope.Instance;
-    public bool IsEnabled(LogLevel logLevel) => true;
-    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-    {
-        Entries.Add((logLevel, formatter(state, exception)));
-    }
-
-    private sealed class NullScope : IDisposable
-    {
-        public static readonly NullScope Instance = new();
-        public void Dispose() { }
-    }
-}
-
-/// <summary>
-/// Restores an environment variable to its prior value on dispose. Used
-/// in DiscoverAll tests to point the discovery walk at a controlled
-/// <c>HOME</c> / <c>USERPROFILE</c> / <c>PATH</c> sandbox.
-/// </summary>
-internal sealed class EnvVarOverride : IDisposable
-{
-    private readonly string _name;
-    private readonly string? _previous;
-
-    public EnvVarOverride(string name, string? value)
-    {
-        _name = name;
-        _previous = Environment.GetEnvironmentVariable(name);
-        Environment.SetEnvironmentVariable(name, value);
-    }
-
-    public void Dispose()
-    {
-        Environment.SetEnvironmentVariable(_name, _previous);
-    }
-}
-
-internal sealed record UnknownPeerProbeResult : PeerProbeResult;
-
-/// <summary>
 /// Collection definition that disables parallel execution for tests which
 /// mutate process-wide environment variables (PATH, PATHEXT, HOME) and
 /// would otherwise race with other tests in the assembly.
