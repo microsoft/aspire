@@ -19,13 +19,13 @@ public static class BlazorHostedExtensions
     /// YARP routes and clusters are emitted as environment variables.
     /// A <c>/_blazor/_configuration</c> response is built so the WASM client gets the proxy URL.
     /// This is an explicit opt-in — <c>WithReference</c> makes the service available to the server,
-    /// while <c>ProxyService</c> additionally makes it available to the WASM client.
+    /// while <c>ProxyBlazorService</c> additionally makes it available to the WASM client.
     /// </summary>
     /// <param name="host">The host resource builder.</param>
     /// <param name="service">The service to proxy.</param>
     /// <param name="apiPrefix">The URL path prefix for API proxy routes. Defaults to <c>"_api"</c>.</param>
     [AspireExportIgnore(Reason = "Blazor hosted APIs are not yet stable for ATS export.")]
-    public static IResourceBuilder<ProjectResource> ProxyService(
+    public static IResourceBuilder<ProjectResource> ProxyBlazorService(
         this IResourceBuilder<ProjectResource> host,
         IResourceBuilder<IResourceWithServiceDiscovery> service,
         string apiPrefix = GatewayConfigurationBuilder.DefaultApiPrefix)
@@ -54,12 +54,12 @@ public static class BlazorHostedExtensions
     /// <param name="host">The host resource builder.</param>
     /// <param name="otlpPrefix">The URL path prefix for OTLP proxy routes. Defaults to <c>"_otlp"</c>.</param>
     [AspireExportIgnore(Reason = "Blazor hosted APIs are not yet stable for ATS export.")]
-    public static IResourceBuilder<ProjectResource> ProxyTelemetry(
+    public static IResourceBuilder<ProjectResource> ProxyBlazorTelemetry(
         this IResourceBuilder<ProjectResource> host,
         string otlpPrefix = GatewayConfigurationBuilder.DefaultOtlpPrefix)
     {
         var annotation = GetOrAddHostedClientAnnotation(host.Resource);
-        annotation.ProxyTelemetry = true;
+        annotation.ProxyBlazorTelemetry = true;
         annotation.OtlpPrefix = otlpPrefix;
 
         EnsureEnvironmentCallback(host, annotation);
@@ -95,7 +95,7 @@ public static class BlazorHostedExtensions
                 httpHostEndpoint,
                 $"{host.Resource.Name} (client)",
                 annotation.Services,
-                annotation.ProxyTelemetry,
+                annotation.ProxyBlazorTelemetry,
                 httpOtlpEndpointUrl,
                 context.Logger,
                 annotation.OtlpPrefix);
@@ -120,7 +120,7 @@ public static class BlazorHostedExtensions
         foreach (var annotation in resource.Annotations)
         {
             // Only consider Reference relationships, not WaitFor or Parent,
-            // so that .WaitFor(svc).ProxyService(svc) still adds WithReference.
+            // so that .WaitFor(svc).ProxyBlazorService(svc) still adds WithReference.
             if (annotation is ResourceRelationshipAnnotation { Type: "Reference" } rel)
             {
                 names.Add(rel.Resource.Name);
@@ -142,7 +142,7 @@ public static class BlazorHostedExtensions
 internal sealed class HostedClientAnnotation : IResourceAnnotation
 {
     public List<HostedClientService> Services { get; } = new();
-    public bool ProxyTelemetry { get; set; }
+    public bool ProxyBlazorTelemetry { get; set; }
     public bool IsInitialized { get; set; }
     public string OtlpPrefix { get; set; } = GatewayConfigurationBuilder.DefaultOtlpPrefix;
 }

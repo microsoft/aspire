@@ -130,7 +130,7 @@ public static class BlazorGatewayExtensions
     /// <param name="otlpPrefix">The URL path prefix for OTLP proxy routes. Defaults to <c>"_otlp"</c>.</param>
     /// <param name="proxyTelemetry"><see langword="true"/> to expose the OTLP proxy for the client app; otherwise, <see langword="false"/>.</param>
     [AspireExportIgnore(Reason = "Blazor gateway APIs are not yet stable for ATS export.")]
-    public static IResourceBuilder<ProjectResource> WithClient(
+    public static IResourceBuilder<ProjectResource> WithBlazorClientApp(
         this IResourceBuilder<ProjectResource> gateway,
         IResourceBuilder<BlazorWasmAppResource> wasmApp,
         string apiPrefix = GatewayConfigurationBuilder.DefaultApiPrefix,
@@ -469,7 +469,7 @@ public static class BlazorGatewayExtensions
         foreach (var annotation in resource.Annotations)
         {
             // Only consider Reference relationships, not WaitFor or Parent,
-            // so that .WaitFor(svc).WithClient(svc) still adds WithReference.
+            // so that .WaitFor(svc).WithBlazorClientApp(svc) still adds WithReference.
             if (annotation is ResourceRelationshipAnnotation { Type: "Reference" } rel)
             {
                 names.Add(rel.Resource.Name);

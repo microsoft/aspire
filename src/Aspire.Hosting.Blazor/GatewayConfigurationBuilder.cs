@@ -50,16 +50,16 @@ internal static class GatewayConfigurationBuilder
                 prefix,
                 reg.Resource.Name,
                 services,
-                reg.ProxyTelemetry,
+                reg.ProxyBlazorTelemetry,
                 httpOtlpEndpoint,
                 resourceLoggerService?.GetLogger(reg.Resource) ?? NullLogger.Instance,
                 reg.OtlpPrefix);
 
-            EmitYarpRoutes(env, prefix, reg.Resource.Name, services, reg.ProxyTelemetry, addedClusters,
+            EmitYarpRoutes(env, prefix, reg.Resource.Name, services, reg.ProxyBlazorTelemetry, addedClusters,
                 reg.OtlpPrefix, httpOtlpEndpoint);
         }
 
-        if (apps.Any(app => app.ProxyTelemetry))
+        if (apps.Any(app => app.ProxyBlazorTelemetry))
         {
             EmitOtlpCluster(env, httpOtlpEndpoint);
         }
@@ -75,7 +75,7 @@ internal static class GatewayConfigurationBuilder
         EndpointReference? httpHostEndpoint,
         string resourceName,
         IReadOnlyList<HostedClientService> services,
-        bool proxyTelemetry,
+        bool ProxyBlazorTelemetry,
         object? httpOtlpEndpoint,
         ILogger? logger = null,
         string otlpPrefix = DefaultOtlpPrefix)
@@ -90,16 +90,16 @@ internal static class GatewayConfigurationBuilder
             prefix: null,
             resourceName,
             services,
-            proxyTelemetry,
+            ProxyBlazorTelemetry,
             httpOtlpEndpoint,
             logger ?? NullLogger.Instance,
             otlpPrefix);
         env["Client__ConfigEndpointPath"] = "/_blazor/_configuration";
 
-        EmitYarpRoutes(env, prefix: null, resourceName, services, proxyTelemetry, addedClusters: null,
+        EmitYarpRoutes(env, prefix: null, resourceName, services, ProxyBlazorTelemetry, addedClusters: null,
             otlpPrefix, httpOtlpEndpoint);
 
-        if (proxyTelemetry)
+        if (ProxyBlazorTelemetry)
         {
             EmitOtlpCluster(env, httpOtlpEndpoint);
         }
@@ -120,7 +120,7 @@ internal static class GatewayConfigurationBuilder
         string? prefix,
         string resourceName,
         IReadOnlyList<HostedClientService> services,
-        bool proxyTelemetry,
+        bool ProxyBlazorTelemetry,
         HashSet<string>? addedClusters,
         string otlpPrefix = DefaultOtlpPrefix,
         object? httpOtlpEndpoint = null)
@@ -142,7 +142,7 @@ internal static class GatewayConfigurationBuilder
             }
         }
 
-        if (proxyTelemetry && httpOtlpEndpoint is not null)
+        if (ProxyBlazorTelemetry && httpOtlpEndpoint is not null)
         {
             var otlpRouteId = prefix != null ? $"route-otlp-{resourceName}" : "route-otlp";
             env[$"ReverseProxy__Routes__{otlpRouteId}__ClusterId"] = "cluster-otlp-dashboard";
@@ -195,7 +195,7 @@ internal static class GatewayConfigurationBuilder
         string? prefix,
         string resourceName,
         IReadOnlyList<HostedClientService> services,
-        bool proxyTelemetry,
+        bool ProxyBlazorTelemetry,
         object? httpOtlpEndpoint,
         ILogger logger,
         string otlpPrefix = DefaultOtlpPrefix) : IValueProvider, IManifestExpressionProvider
@@ -226,7 +226,7 @@ internal static class GatewayConfigurationBuilder
 
         private void LogOtlpWarningIfNeeded()
         {
-            if (proxyTelemetry && httpOtlpEndpoint is null)
+            if (ProxyBlazorTelemetry && httpOtlpEndpoint is null)
             {
                 logger.LogWarning(
                     "OTLP telemetry proxying was requested but no dashboard HTTP endpoint could be resolved. " +
@@ -282,7 +282,7 @@ internal static class GatewayConfigurationBuilder
                 }
             }
 
-            if (proxyTelemetry && httpOtlpEndpoint is not null)
+            if (ProxyBlazorTelemetry && httpOtlpEndpoint is not null)
             {
                 environment["OTEL_SERVICE_NAME"] = resourceName;
 

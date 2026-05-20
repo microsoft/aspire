@@ -17,7 +17,7 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
 
         builder.AddProject<TestProjectMetadata>("blazorapp")
             .WithHttpsEndpoint()
-            .ProxyService(weatherApi);
+            .ProxyBlazorService(weatherApi);
 
         var blazorApp = builder.Resources.Single(r => r.Name == "blazorapp");
         var env = await GetEnvironmentVariables(blazorApp, builder);
@@ -38,7 +38,7 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         builder.AddProject<TestProjectMetadata>("blazorapp")
             .WithHttpEndpoint()
             .WithHttpsEndpoint()
-            .ProxyService(weatherApi);
+            .ProxyBlazorService(weatherApi);
 
         var blazorApp = builder.Resources.Single(r => r.Name == "blazorapp");
         var env = await GetEnvironmentVariables(blazorApp, builder);
@@ -55,10 +55,11 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
     public async Task ProxyTelemetry_EmitsOtlpRoutes()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        builder.Configuration["ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"] = "http://localhost:4318";
 
         builder.AddProject<TestProjectMetadata>("blazorapp")
             .WithHttpsEndpoint()
-            .ProxyTelemetry();
+            .ProxyBlazorTelemetry();
 
         var blazorApp = builder.Resources.Single(r => r.Name == "blazorapp");
         var env = await GetEnvironmentVariables(blazorApp, builder);
@@ -72,10 +73,11 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
     public async Task ProxyTelemetry_EmitsOtelServiceNameInConfig()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        builder.Configuration["ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"] = "http://localhost:4318";
 
         builder.AddProject<TestProjectMetadata>("blazorapp")
             .WithHttpsEndpoint()
-            .ProxyTelemetry();
+            .ProxyBlazorTelemetry();
 
         var blazorApp = builder.Resources.Single(r => r.Name == "blazorapp");
         var env = await GetEnvironmentVariables(blazorApp, builder);
@@ -91,13 +93,14 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
     public async Task ProxyService_And_ProxyTelemetry_Combined()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        builder.Configuration["ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"] = "http://localhost:4318";
 
         var weatherApi = builder.AddProject<TestProjectMetadata>("weatherapi");
 
         builder.AddProject<TestProjectMetadata>("blazorapp")
             .WithHttpsEndpoint()
-            .ProxyService(weatherApi)
-            .ProxyTelemetry();
+            .ProxyBlazorService(weatherApi)
+            .ProxyBlazorTelemetry();
 
         var blazorApp = builder.Resources.Single(r => r.Name == "blazorapp");
         var env = await GetEnvironmentVariables(blazorApp, builder);
@@ -125,8 +128,8 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
 
         builder.AddProject<TestProjectMetadata>("blazorapp")
             .WithHttpsEndpoint()
-            .ProxyService(weatherApi)
-            .ProxyService(catalogApi);
+            .ProxyBlazorService(weatherApi)
+            .ProxyBlazorService(catalogApi);
 
         var blazorApp = builder.Resources.Single(r => r.Name == "blazorapp");
         var env = await GetEnvironmentVariables(blazorApp, builder);
@@ -150,7 +153,7 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
 
         builder.AddProject<TestProjectMetadata>("blazorapp")
             .WithHttpsEndpoint()
-            .ProxyService(weatherApi);
+            .ProxyBlazorService(weatherApi);
 
         var blazorApp = builder.Resources.Single(r => r.Name == "blazorapp");
         var env = await GetEnvironmentVariables(blazorApp, builder);
@@ -170,12 +173,12 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
 
         builder.AddProject<TestProjectMetadata>("blazorapp")
             .WithHttpsEndpoint()
-            .ProxyService(weatherApi);
+            .ProxyBlazorService(weatherApi);
 
         var blazorApp = builder.Resources.Single(r => r.Name == "blazorapp");
         var env = await GetEnvironmentVariables(blazorApp, builder);
 
-        // Without ProxyTelemetry, no OTLP routes or config
+        // Without ProxyBlazorTelemetry, no OTLP routes or config
         Assert.False(env.ContainsKey("ReverseProxy__Routes__route-otlp__ClusterId"));
 
         var configJson = ResolveManifestExpression(env["Client__ConfigResponse"]);
@@ -191,11 +194,11 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
             .WithHttpEndpoint();
 
         // Host already has WaitFor(weatherApi) but not WithReference(weatherApi).
-        // ProxyService should still add the reference so YARP gets service discovery env vars.
+        // ProxyBlazorService should still add the reference so YARP gets service discovery env vars.
         var host = builder.AddProject<TestProjectMetadata>("blazorapp")
             .WithHttpsEndpoint()
             .WaitFor(weatherApi)
-            .ProxyService(weatherApi);
+            .ProxyBlazorService(weatherApi);
 
         var refs = host.Resource.Annotations
             .OfType<ResourceRelationshipAnnotation>()
@@ -215,8 +218,8 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
 
         builder.AddProject<TestProjectMetadata>("blazorapp")
             .WithHttpsEndpoint()
-            .ProxyService(weatherApi, apiPrefix: "weather")
-            .ProxyService(catalogApi, apiPrefix: "catalog");
+            .ProxyBlazorService(weatherApi, apiPrefix: "weather")
+            .ProxyBlazorService(catalogApi, apiPrefix: "catalog");
 
         var blazorApp = builder.Resources.Single(r => r.Name == "blazorapp");
         var env = await GetEnvironmentVariables(blazorApp, builder);
