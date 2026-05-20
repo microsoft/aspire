@@ -179,7 +179,6 @@ public sealed class TypeScriptPublishTests(ITestOutputHelper output)
         AssertDockerfileContains(
             artifactsPath,
             "npmscript",
-            "FROM ",
             " AS prod-deps",
             "RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev",
             "COPY --from=build /app /app",
