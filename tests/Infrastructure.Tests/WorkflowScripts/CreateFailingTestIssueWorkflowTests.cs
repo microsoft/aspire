@@ -41,6 +41,9 @@ public sealed class CreateFailingTestIssueWorkflowTests : IDisposable
 
         Assert.True(result.Success);
         Assert.Equal("Tests.Namespace.Type.Method(input: 1)", result.TestQuery);
+        Assert.NotNull(result.TestQueries);
+        Assert.Single(result.TestQueries!);
+        Assert.Equal("Tests.Namespace.Type.Method(input: 1)", result.TestQueries![0]);
         Assert.Equal("https://github.com/microsoft/aspire/actions/runs/123", result.SourceUrl);
         Assert.Equal(".github/workflows/custom.yml", result.Workflow);
         Assert.True(result.ForceNew);
@@ -60,6 +63,9 @@ public sealed class CreateFailingTestIssueWorkflowTests : IDisposable
 
         Assert.True(result.Success);
         Assert.Equal("Tests.Namespace.Type.Method", result.TestQuery);
+        Assert.NotNull(result.TestQueries);
+        Assert.Single(result.TestQueries!);
+        Assert.Equal("Tests.Namespace.Type.Method", result.TestQueries![0]);
         Assert.Equal("https://github.com/microsoft/aspire/pull/999", result.SourceUrl);
         Assert.Equal("ci", result.Workflow);
     }
@@ -77,6 +83,9 @@ public sealed class CreateFailingTestIssueWorkflowTests : IDisposable
 
         Assert.True(result.Success);
         Assert.Equal("Tests.Namespace.Type.Method(input: 1)", result.TestQuery);
+        Assert.NotNull(result.TestQueries);
+        Assert.Single(result.TestQueries!);
+        Assert.Equal("Tests.Namespace.Type.Method(input: 1)", result.TestQueries![0]);
         Assert.Equal("https://github.com/microsoft/aspire/actions/runs/123/job/456", result.SourceUrl);
     }
 
@@ -94,6 +103,9 @@ public sealed class CreateFailingTestIssueWorkflowTests : IDisposable
 
         Assert.True(result.Success);
         Assert.Equal("Tests.Namespace.Type.Method", result.TestQuery);
+        Assert.NotNull(result.TestQueries);
+        Assert.Single(result.TestQueries!);
+        Assert.Equal("Tests.Namespace.Type.Method", result.TestQueries![0]);
         Assert.Equal("https://github.com/microsoft/aspire/pull/999", result.SourceUrl);
         Assert.True(result.ForceNew);
         Assert.False(result.ListOnly);
@@ -101,17 +113,86 @@ public sealed class CreateFailingTestIssueWorkflowTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
-    public async Task ParseCommandRejectsAmbiguousPositionalSyntax()
+    public async Task ParseCommandSupportsMultiplePositionalTestNames()
     {
         var result = await InvokeHarnessAsync<ParseCommandResult>(
             "parseCommand",
             new
             {
-                body = "/create-issue Tests Namespace Type Method"
+                body = "/create-issue Tests.Class.MethodA Tests.Class.MethodB Tests.Class.MethodC"
             });
 
-        Assert.False(result.Success);
-        Assert.Contains("ambiguous", result.ErrorMessage);
+        Assert.True(result.Success);
+        Assert.Equal("Tests.Class.MethodA", result.TestQuery);
+        Assert.NotNull(result.TestQueries);
+        Assert.Equal(3, result.TestQueries!.Length);
+        Assert.Equal("Tests.Class.MethodA", result.TestQueries[0]);
+        Assert.Equal("Tests.Class.MethodB", result.TestQueries[1]);
+        Assert.Equal("Tests.Class.MethodC", result.TestQueries[2]);
+        Assert.False(result.ListOnly);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ParseCommandSupportsMultipleTestFlags()
+    {
+        var result = await InvokeHarnessAsync<ParseCommandResult>(
+            "parseCommand",
+            new
+            {
+                body = "/create-issue --test Tests.Class.MethodA --test Tests.Class.MethodB --test Tests.Class.MethodC --force-new",
+                defaultSourceUrl = "https://github.com/microsoft/aspire/pull/999"
+            });
+
+        Assert.True(result.Success);
+        Assert.Equal("Tests.Class.MethodA", result.TestQuery);
+        Assert.NotNull(result.TestQueries);
+        Assert.Equal(3, result.TestQueries!.Length);
+        Assert.Equal("Tests.Class.MethodA", result.TestQueries[0]);
+        Assert.Equal("Tests.Class.MethodB", result.TestQueries[1]);
+        Assert.Equal("Tests.Class.MethodC", result.TestQueries[2]);
+        Assert.True(result.ForceNew);
+        Assert.False(result.ListOnly);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ParseCommandSupportsMultiplePositionalTestNamesWithTrailingUrl()
+    {
+        var result = await InvokeHarnessAsync<ParseCommandResult>(
+            "parseCommand",
+            new
+            {
+                body = "/create-issue Tests.Class.MethodA Tests.Class.MethodB https://github.com/microsoft/aspire/pull/123"
+            });
+
+        Assert.True(result.Success);
+        Assert.Equal("Tests.Class.MethodA", result.TestQuery);
+        Assert.NotNull(result.TestQueries);
+        Assert.Equal(2, result.TestQueries!.Length);
+        Assert.Equal("Tests.Class.MethodA", result.TestQueries[0]);
+        Assert.Equal("Tests.Class.MethodB", result.TestQueries[1]);
+        Assert.Equal("https://github.com/microsoft/aspire/pull/123", result.SourceUrl);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task ParseCommandSupportsMultiplePositionalTestNamesWithFlags()
+    {
+        var result = await InvokeHarnessAsync<ParseCommandResult>(
+            "parseCommand",
+            new
+            {
+                body = "/create-issue Tests.Class.MethodA Tests.Class.MethodB --force-new",
+                defaultSourceUrl = "https://github.com/microsoft/aspire/pull/999"
+            });
+
+        Assert.True(result.Success);
+        Assert.NotNull(result.TestQueries);
+        Assert.Equal(2, result.TestQueries!.Length);
+        Assert.Equal("Tests.Class.MethodA", result.TestQueries[0]);
+        Assert.Equal("Tests.Class.MethodB", result.TestQueries[1]);
+        Assert.True(result.ForceNew);
     }
 
     [Fact]
@@ -144,6 +225,8 @@ public sealed class CreateFailingTestIssueWorkflowTests : IDisposable
         Assert.True(result.Success);
         Assert.True(result.ListOnly);
         Assert.Equal(string.Empty, result.TestQuery);
+        Assert.NotNull(result.TestQueries);
+        Assert.Empty(result.TestQueries!);
         Assert.Equal("https://github.com/microsoft/aspire/pull/999", result.SourceUrl);
     }
 
@@ -161,6 +244,8 @@ public sealed class CreateFailingTestIssueWorkflowTests : IDisposable
         Assert.True(result.Success);
         Assert.True(result.ListOnly);
         Assert.Equal(string.Empty, result.TestQuery);
+        Assert.NotNull(result.TestQueries);
+        Assert.Empty(result.TestQueries!);
         Assert.Equal("https://github.com/microsoft/aspire/actions/runs/123", result.SourceUrl);
         Assert.Equal("custom.yml", result.Workflow);
     }
@@ -300,7 +385,7 @@ public sealed class CreateFailingTestIssueWorkflowTests : IDisposable
 
     private sealed record HarnessResponse<T>(T Result);
 
-    private sealed record ParseCommandResult(bool Success, string TestQuery, string? SourceUrl, string Workflow, bool ForceNew, bool ListOnly, string? ErrorMessage);
+    private sealed record ParseCommandResult(bool Success, string TestQuery, string[]? TestQueries, string? SourceUrl, string Workflow, bool ForceNew, bool ListOnly, string? ErrorMessage);
 
     private sealed record FormatListResponseResult(bool Error, string Message, string[]? Tests);
 }
