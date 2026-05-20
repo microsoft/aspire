@@ -8,7 +8,7 @@ namespace Aspire.Acquisition.Tests.Scripts;
 
 /// <summary>
 /// End-to-end coverage for <see cref="ScriptPaths.VerifyCliArchivePowerShell"/> against a synthetic
-/// CLI archive that includes the bundle-backed managed server and TypeScript starter outputs.
+/// CLI archive that simulates embedded bundle extraction and TypeScript starter outputs.
 /// This keeps the shipped-archive validation contract under test without depending on real signed artifacts.
 /// </summary>
 [RequiresTools(["pwsh"])]
@@ -30,7 +30,7 @@ public class VerifyCliArchivePowerShellTests(ITestOutputHelper testOutput)
         var result = await cmd.ExecuteAsync("-ArchivePath", archive.ArchivePath);
 
         result.EnsureSuccessful();
-        Assert.Contains("bundle-backed AppHost server assets", result.Output);
+        Assert.Contains("Extracted bundle layout contains AppHost server assets", result.Output);
         Assert.Contains("aspire new aspire-ts-starter", result.Output);
         Assert.Contains("restore/codegen artifacts", result.Output);
     }

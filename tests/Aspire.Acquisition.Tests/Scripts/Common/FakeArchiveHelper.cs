@@ -76,8 +76,9 @@ public static class FakeArchiveHelper
     }
 
     /// <summary>
-    /// Creates a bundle-shaped CLI archive so verify-cli-archive.ps1 can test the shipped archive
-    /// contract without depending on signed build artifacts or running the real Aspire CLI.
+    /// Creates a CLI archive whose fake executable simulates embedded bundle extraction so
+    /// verify-cli-archive.ps1 can test the shipped archive contract without depending on
+    /// signed build artifacts or running the real Aspire CLI.
     /// </summary>
     public static async Task<FakeArchive> CreateFakeBundleArchiveAsync(string outputDir, string platform = "linux-x64")
     {
@@ -94,24 +95,13 @@ public static class FakeArchiveHelper
         try
         {
             var cliBinaryName = isWindows ? "aspire.exe" : "aspire";
-            var managedBinaryName = isWindows ? "aspire-managed.exe" : "aspire-managed";
-            var dcpBinaryName = isWindows ? "dcp.exe" : "dcp";
-
             var cliBinaryPath = Path.Combine(contentDir, cliBinaryName);
-            var managedDir = Directory.CreateDirectory(Path.Combine(contentDir, "managed"));
-            var dcpDir = Directory.CreateDirectory(Path.Combine(contentDir, "dcp"));
-            var wwwRootDir = Directory.CreateDirectory(Path.Combine(managedDir.FullName, "wwwroot"));
 
             await File.WriteAllTextAsync(cliBinaryPath, CreateFakeCliScript(isWindows));
-            await File.WriteAllTextAsync(Path.Combine(managedDir.FullName, managedBinaryName), CreateFakeManagedScript(isWindows));
-            await File.WriteAllTextAsync(Path.Combine(dcpDir.FullName, dcpBinaryName), CreateFakeDcpScript(isWindows));
-            await File.WriteAllTextAsync(Path.Combine(wwwRootDir.FullName, "index.html"), "<html><body>dashboard</body></html>");
 
             if (!isWindows)
             {
                 FileHelper.MakeExecutable(cliBinaryPath);
-                FileHelper.MakeExecutable(Path.Combine(managedDir.FullName, managedBinaryName));
-                FileHelper.MakeExecutable(Path.Combine(dcpDir.FullName, dcpBinaryName));
             }
 
             if (isWindows)
@@ -181,6 +171,7 @@ public static class FakeArchiveHelper
                     exit /b 0
                 )
                 if "%template%"=="aspire-ts-starter" (
+                    call :extract_bundle
                     mkdir "%output%\.modules" >nul 2>&1
                     mkdir "%output%\frontend\src" >nul 2>&1
                     mkdir "%output%\api\src" >nul 2>&1
@@ -198,6 +189,17 @@ public static class FakeArchiveHelper
                 )
                 echo Unsupported template: %template% 1>&2
                 exit /b 1
+
+                :extract_bundle
+                set "bundleRoot=%USERPROFILE%\.aspire\bundle"
+                mkdir "%bundleRoot%\managed\wwwroot" >nul 2>&1
+                mkdir "%bundleRoot%\dcp" >nul 2>&1
+                > "%bundleRoot%\managed\aspire-managed.exe" echo @echo off
+                >> "%bundleRoot%\managed\aspire-managed.exe" echo echo aspire-managed mock
+                > "%bundleRoot%\managed\wwwroot\index.html" echo ^<html^>dashboard^</html^>
+                > "%bundleRoot%\dcp\dcp.exe" echo @echo off
+                >> "%bundleRoot%\dcp\dcp.exe" echo echo dcp mock
+                exit /b 0
                 """
             : """
                 #!/usr/bin/env bash
@@ -237,6 +239,12 @@ public static class FakeArchiveHelper
                             mkdir -p "$output/$name.AppHost"
                             ;;
                         aspire-ts-starter)
+                            bundle_root="${HOME}/.aspire/bundle"
+                            mkdir -p "$bundle_root/managed/wwwroot" "$bundle_root/dcp"
+                            printf '#!/usr/bin/env bash\nset -euo pipefail\necho "aspire-managed mock"\n' > "$bundle_root/managed/aspire-managed"
+                            printf '<html>dashboard</html>\n' > "$bundle_root/managed/wwwroot/index.html"
+                            printf '#!/usr/bin/env bash\nset -euo pipefail\necho "dcp mock"\n' > "$bundle_root/dcp/dcp"
+                            chmod +x "$bundle_root/managed/aspire-managed" "$bundle_root/dcp/dcp"
                             mkdir -p "$output/.modules" "$output/frontend/src" "$output/api/src"
                             printf '// apphost\n' > "$output/apphost.ts"
                             printf '// generated sdk\n' > "$output/.modules/aspire.ts"
@@ -260,36 +268,6 @@ public static class FakeArchiveHelper
 
                 echo "Unsupported command: $*" >&2
                 exit 1
-                """;
-    }
-
-    private static string CreateFakeManagedScript(bool isWindows)
-    {
-        return isWindows
-            ? """
-                @echo off
-                echo aspire-managed mock
-                exit /b 0
-                """
-            : """
-                #!/usr/bin/env bash
-                set -euo pipefail
-                echo "aspire-managed mock"
-                """;
-    }
-
-    private static string CreateFakeDcpScript(bool isWindows)
-    {
-        return isWindows
-            ? """
-                @echo off
-                echo dcp mock
-                exit /b 0
-                """
-            : """
-                #!/usr/bin/env bash
-                set -euo pipefail
-                echo "dcp mock"
                 """;
     }
 

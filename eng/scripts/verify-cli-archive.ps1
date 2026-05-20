@@ -6,11 +6,12 @@
     This script:
     1. Cleans ~/.aspire to ensure no stale state
     2. Extracts the CLI archive to a temp location
-    3. Verifies the extracted bundle layout contains aspire-managed, dashboard assets, and DCP
+    3. Verifies the archive shape contains the native CLI payload and no install-route sidecar
     4. Runs 'aspire --version' to validate the binary executes
     5. Runs 'aspire new aspire-starter' to test C# starter creation
     6. Runs 'aspire new aspire-ts-starter' to test TypeScript starter restore/codegen against the shipped layout
-    7. Cleans up temp directories
+    7. Verifies the TypeScript starter path extracted the embedded bundle layout
+    8. Cleans up temp directories
 
 .PARAMETER ArchivePath
     Path to the CLI archive (.zip or .tar.gz)
@@ -118,23 +119,18 @@ function Test-ArchiveSidecar {
     Write-Step "$ridFamily-* archive correctly omits the install-route sidecar."
 }
 
-function Test-BundleLayout {
+function Test-ExtractedBundleLayout {
     param(
-        [Parameter(Mandatory = $true)][string]$ArchiveRoot,
-        [Parameter(Mandatory = $true)][string]$ArchiveFileName
+        [Parameter(Mandatory = $true)][string]$LayoutRoot
     )
 
-    $ridFamily = Get-ArchiveRidFamily $ArchiveFileName
-    if ($null -eq $ridFamily) {
-        throw "Archive RID family not recognized in filename '$ArchiveFileName'. Expected the filename to contain 'win-', 'osx-', or 'linux-'."
-    }
-
-    $managedExecutablePath = Join-Path $ArchiveRoot (Join-Path "managed" (Get-ExecutableFileName "aspire-managed"))
+    $bundleRoot = Join-Path $LayoutRoot "bundle"
+    $managedExecutablePath = Join-Path $bundleRoot (Join-Path "managed" (Get-ExecutableFileName "aspire-managed"))
     if (-not (Test-Path $managedExecutablePath)) {
-        throw "Expected bundle-managed server binary at '$managedExecutablePath', but it was not found."
+        throw "Expected extracted bundle-managed server binary at '$managedExecutablePath', but it was not found."
     }
 
-    $wwwRootPath = Join-Path $ArchiveRoot (Join-Path "managed" "wwwroot")
+    $wwwRootPath = Join-Path $bundleRoot (Join-Path "managed" "wwwroot")
     if (-not (Test-Path $wwwRootPath)) {
         throw "Expected dashboard web assets at '$wwwRootPath', but they were not found."
     }
@@ -144,12 +140,12 @@ function Test-BundleLayout {
         throw "Dashboard asset directory '$wwwRootPath' is empty."
     }
 
-    $dcpExecutablePath = Join-Path $ArchiveRoot (Join-Path "dcp" (Get-ExecutableFileName "dcp"))
+    $dcpExecutablePath = Join-Path $bundleRoot (Join-Path "dcp" (Get-ExecutableFileName "dcp"))
     if (-not (Test-Path $dcpExecutablePath)) {
         throw "Expected DCP binary at '$dcpExecutablePath', but it was not found."
     }
 
-    Write-Step "$ridFamily-* archive contains bundle-backed AppHost server assets."
+    Write-Step "Extracted bundle layout contains AppHost server assets."
 
     Write-Step "Running '$managedExecutablePath --help'..."
     $managedOutput = & $managedExecutablePath --help 2>&1
@@ -157,7 +153,7 @@ function Test-BundleLayout {
         throw "aspire-managed failed with exit code $LASTEXITCODE. Output: $managedOutput"
     }
 
-    Write-Ok "Bundled AppHost server is executable"
+    Write-Ok "Extracted bundled AppHost server is executable"
 }
 
 function Test-CSharpStarterProject {
@@ -304,7 +300,6 @@ try {
     # extracted shape. After Copy-Item moves the binary out, the archive layout is
     # no longer observable.
     Test-ArchiveSidecar -ExtractDir $archiveRoot -ArchiveFileName ([System.IO.Path]::GetFileName($ArchivePath))
-    Test-BundleLayout -ArchiveRoot $archiveRoot -ArchiveFileName ([System.IO.Path]::GetFileName($ArchivePath))
 
     # Install to ~/.aspire/bin so self-extraction works correctly
     Write-Step "Installing CLI to ~/.aspire/bin..."
@@ -338,6 +333,7 @@ try {
     $typeScriptProjectDir = Join-Path $verifyTmpDir "VerifyTsApp"
     New-Item -ItemType Directory -Path $typeScriptProjectDir -Force | Out-Null
     Test-TypeScriptStarterProject -AspireBin $aspireBin -ProjectRoot $typeScriptProjectDir
+    Test-ExtractedBundleLayout -LayoutRoot $aspireDir
 
     Write-Host ""
     Write-Host "=========================================="
