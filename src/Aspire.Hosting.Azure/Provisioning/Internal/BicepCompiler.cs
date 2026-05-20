@@ -14,6 +14,7 @@ namespace Aspire.Hosting.Azure.Provisioning.Internal;
 internal sealed class BicepCliCompiler : IBicepCompiler
 {
     private readonly ILogger<BicepCliCompiler> _logger;
+    private readonly SemaphoreSlim _compileLock = new(1, 1);
 
     public BicepCliCompiler(ILogger<BicepCliCompiler> logger)
     {
@@ -22,56 +23,84 @@ internal sealed class BicepCliCompiler : IBicepCompiler
 
     public async Task<string> CompileBicepToArmAsync(string bicepFilePath, CancellationToken cancellationToken = default)
     {
-        // Try bicep command first for better performance
-        var bicepPath = PathLookupHelper.FindFullPathFromPath("bicep");
-        string commandPath;
-        string arguments;
+        await _compileLock.WaitAsync(cancellationToken).ConfigureAwait(false);
 
-        if (bicepPath is not null)
+        try
         {
-            commandPath = bicepPath;
-            arguments = $"build \"{bicepFilePath}\" --stdout";
-        }
-        else
-        {
-            // Fall back to az bicep if bicep command is not available
-            var azPath = PathLookupHelper.FindFullPathFromPath("az");
-            if (azPath is null)
+            // Try bicep command first for better performance
+            var bicepPath = PathLookupHelper.FindFullPathFromPath("bicep");
+            string commandPath;
+            string arguments;
+
+            if (bicepPath is not null)
             {
-                throw new AzureCliNotOnPathException();
+                commandPath = bicepPath;
+                arguments = $"build \"{bicepFilePath}\" --stdout";
             }
-            commandPath = azPath;
-            arguments = $"bicep build --file \"{bicepFilePath}\" --stdout";
-        }
-
-        var armTemplateContents = new StringBuilder();
-        var templateSpec = new ProcessSpec(commandPath)
-        {
-            Arguments = arguments,
-            OnOutputData = data =>
+            else
             {
-                _logger.LogDebug("{CommandPath} (stdout): {Output}", commandPath, data);
-                armTemplateContents.AppendLine(data);
-            },
-            OnErrorData = data =>
+                // Fall back to az bicep if bicep command is not available
+                var azPath = PathLookupHelper.FindFullPathFromPath("az");
+                if (azPath is null)
+                {
+                    throw new AzureCliNotOnPathException();
+                }
+                commandPath = azPath;
+                arguments = $"bicep build --file \"{bicepFilePath}\" --stdout";
+            }
+
+            var armTemplateContents = new StringBuilder();
+            var errorContents = new StringBuilder();
+            var templateSpec = new ProcessSpec(commandPath)
             {
-                _logger.LogDebug("{CommandPath} (stderr): {Error}", commandPath, data);
-            },
-        };
+                Arguments = arguments,
+                OnOutputData = data =>
+                {
+                    _logger.LogDebug("{CommandPath} (stdout): {Output}", commandPath, data);
+                    armTemplateContents.AppendLine(data);
+                },
+                OnErrorData = data =>
+                {
+                    _logger.LogDebug("{CommandPath} (stderr): {Error}", commandPath, data);
+                    errorContents.AppendLine(data);
+                },
+            };
 
-        _logger.LogDebug("Running {CommandPath} with arguments: {Arguments}", commandPath, arguments);
+            _logger.LogDebug("Running {CommandPath} with arguments: {Arguments}", commandPath, arguments);
 
-        var exitCode = await ExecuteCommand(templateSpec).ConfigureAwait(false);
+            int exitCode;
+            try
+            {
+                exitCode = await ExecuteCommand(templateSpec).ConfigureAwait(false);
+            }
+            catch (InvalidOperationException ex)
+            {
+                var errorMessage = errorContents.ToString().Trim();
+                throw new InvalidOperationException(
+                    string.IsNullOrEmpty(errorMessage)
+                        ? $"Failed to compile bicep file: {bicepFilePath}"
+                        : $"Failed to compile bicep file: {bicepFilePath}{Environment.NewLine}{errorMessage}",
+                    ex);
+            }
 
-        if (exitCode != 0)
-        {
-            _logger.LogError("Bicep compilation for {BicepFilePath} failed with exit code {ExitCode}.", bicepFilePath, exitCode);
-            throw new InvalidOperationException($"Failed to compile bicep file: {bicepFilePath}");
+            if (exitCode != 0)
+            {
+                _logger.LogError("Bicep compilation for {BicepFilePath} failed with exit code {ExitCode}.", bicepFilePath, exitCode);
+                var errorMessage = errorContents.ToString().Trim();
+                throw new InvalidOperationException(
+                    string.IsNullOrEmpty(errorMessage)
+                        ? $"Failed to compile bicep file: {bicepFilePath}"
+                        : $"Failed to compile bicep file: {bicepFilePath}{Environment.NewLine}{errorMessage}");
+            }
+
+            _logger.LogDebug("Bicep compilation for {BicepFilePath} succeeded.", bicepFilePath);
+
+            return armTemplateContents.ToString();
         }
-
-        _logger.LogDebug("Bicep compilation for {BicepFilePath} succeeded.", bicepFilePath);
-
-        return armTemplateContents.ToString();
+        finally
+        {
+            _compileLock.Release();
+        }
     }
 
     private static async Task<int> ExecuteCommand(ProcessSpec processSpec)

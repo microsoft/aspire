@@ -36,11 +36,21 @@ internal abstract partial class BaseProvisioningContextProvider(
 
     protected readonly IInteractionService _interactionService = interactionService;
     protected readonly AzureProvisionerOptions _options = options.Value;
+    protected readonly AzureProvisionerOptions _configuredOptions = new()
+    {
+        ResourceGroupPrefix = options.Value.ResourceGroupPrefix,
+        AllowResourceGroupCreation = options.Value.AllowResourceGroupCreation,
+        Location = options.Value.Location,
+        SubscriptionId = options.Value.SubscriptionId,
+        ResourceGroup = options.Value.ResourceGroup,
+        TenantId = options.Value.TenantId
+    };
     protected readonly IHostEnvironment _environment = environment;
     protected readonly ILogger _logger = logger;
     protected readonly IArmClientProvider _armClientProvider = armClientProvider;
     protected readonly IUserPrincipalProvider _userPrincipalProvider = userPrincipalProvider;
     protected readonly ITokenCredentialProvider _tokenCredentialProvider = tokenCredentialProvider;
+    protected readonly IDeploymentStateManager _deploymentStateManager = deploymentStateManager;
     protected readonly DistributedApplicationExecutionContext _distributedApplicationExecutionContext = distributedApplicationExecutionContext;
 
     [GeneratedRegex(@"^[a-zA-Z0-9_\-\.\(\)]+$")]
@@ -99,7 +109,7 @@ internal abstract partial class BaseProvisioningContextProvider(
         }
 
         // Acquire Azure state section for reading/writing configuration
-        var azureStateSection = await deploymentStateManager.AcquireSectionAsync("Azure", cancellationToken).ConfigureAwait(false);
+        var azureStateSection = await _deploymentStateManager.AcquireSectionAsync("Azure", cancellationToken).ConfigureAwait(false);
 
         string resourceGroupName;
         bool createIfAbsent;
@@ -169,21 +179,7 @@ internal abstract partial class BaseProvisioningContextProvider(
 
         var principal = await _userPrincipalProvider.GetUserPrincipalAsync(cancellationToken).ConfigureAwait(false);
 
-        // Persist the provisioning options to deployment state so they can be reused in the future
-        var azureSection = azureStateSection.Data;
-        azureSection["Location"] = _options.Location;
-        azureSection["SubscriptionId"] = _options.SubscriptionId;
-        azureSection["ResourceGroup"] = resourceGroupName;
-        if (!string.IsNullOrEmpty(_options.TenantId))
-        {
-            azureSection["TenantId"] = _options.TenantId;
-        }
-        if (_options.AllowResourceGroupCreation.HasValue)
-        {
-            azureSection["AllowResourceGroupCreation"] = _options.AllowResourceGroupCreation.Value;
-        }
-
-        await deploymentStateManager.SaveSectionAsync(azureStateSection, cancellationToken).ConfigureAwait(false);
+        await SaveProvisioningOptionsAsync(resourceGroupName, azureStateSection, cancellationToken).ConfigureAwait(false);
 
         return new ProvisioningContext(
                     credential,
@@ -197,6 +193,32 @@ internal abstract partial class BaseProvisioningContextProvider(
     }
 
     protected abstract string GetDefaultResourceGroupName();
+
+    protected async Task SaveProvisioningOptionsAsync(string resourceGroupName, CancellationToken cancellationToken = default)
+    {
+        var azureStateSection = await _deploymentStateManager.AcquireSectionAsync("Azure", cancellationToken).ConfigureAwait(false);
+        await SaveProvisioningOptionsAsync(resourceGroupName, azureStateSection, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task SaveProvisioningOptionsAsync(string resourceGroupName, DeploymentStateSection azureStateSection, CancellationToken cancellationToken)
+    {
+        var azureSection = azureStateSection.Data;
+        azureSection["Location"] = _options.Location;
+        azureSection["SubscriptionId"] = _options.SubscriptionId;
+        azureSection["ResourceGroup"] = resourceGroupName;
+
+        if (!string.IsNullOrEmpty(_options.TenantId))
+        {
+            azureSection["TenantId"] = _options.TenantId;
+        }
+
+        if (_options.AllowResourceGroupCreation.HasValue)
+        {
+            azureSection["AllowResourceGroupCreation"] = _options.AllowResourceGroupCreation.Value;
+        }
+
+        await _deploymentStateManager.SaveSectionAsync(azureStateSection, cancellationToken).ConfigureAwait(false);
+    }
 
     protected async Task<(List<KeyValuePair<string, string>>? tenantOptions, bool fetchSucceeded)> TryGetTenantsAsync(CancellationToken cancellationToken)
     {

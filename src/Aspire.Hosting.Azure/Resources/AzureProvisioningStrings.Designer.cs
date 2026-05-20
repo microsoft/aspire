@@ -295,5 +295,266 @@ namespace Aspire.Hosting.Azure.Resources {
                 return ResourceManager.GetString("ResourceGroupSelectionMessage", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to This updates the Azure context for this AppHost and reprovisions all Azure resources using the values you enter next..
+        /// </summary>
+        internal static string ChangeAzureContextCommandConfirmation {
+            get {
+                return ResourceManager.GetString("ChangeAzureContextCommandConfirmation", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Updates the Azure tenant, subscription, resource group, or location for this AppHost and reprovisions all Azure resources..
+        /// </summary>
+        internal static string ChangeAzureContextCommandDescription {
+            get {
+                return ResourceManager.GetString("ChangeAzureContextCommandDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Change Azure context.
+        /// </summary>
+        internal static string ChangeAzureContextCommandName {
+            get {
+                return ResourceManager.GetString("ChangeAzureContextCommandName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure context updated and resources reprovisioned..
+        /// </summary>
+        internal static string ChangeAzureContextCommandSuccess {
+            get {
+                return ResourceManager.GetString("ChangeAzureContextCommandSuccess", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to This deletes the current Azure resource group and every Azure resource inside it for this AppHost, then clears the cached deployment state. Do you want to continue?.
+        /// </summary>
+        internal static string DeleteAzureResourcesCommandConfirmation {
+            get {
+                return ResourceManager.GetString("DeleteAzureResourcesCommandConfirmation", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Deletes the current Azure resource group for this AppHost, clears cached deployment state, and leaves the Azure context intact for reprovisioning..
+        /// </summary>
+        internal static string DeleteAzureResourcesCommandDescription {
+            get {
+                return ResourceManager.GetString("DeleteAzureResourcesCommandDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Delete Azure resources.
+        /// </summary>
+        internal static string DeleteAzureResourcesCommandName {
+            get {
+                return ResourceManager.GetString("DeleteAzureResourcesCommandName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure resources deleted and provisioning state reset..
+        /// </summary>
+        internal static string DeleteAzureResourcesCommandSuccess {
+            get {
+                return ResourceManager.GetString("DeleteAzureResourcesCommandSuccess", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to This clears the cached Azure deployment state for this resource and resets its provisioning snapshot..
+        /// </summary>
+        internal static string ForgetStateCommandConfirmation {
+            get {
+                return ResourceManager.GetString("ForgetStateCommandConfirmation", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Clears the cached Azure deployment state for this resource so it can be provisioned again using the current Azure context..
+        /// </summary>
+        internal static string ForgetStateCommandDescription {
+            get {
+                return ResourceManager.GetString("ForgetStateCommandDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Forget state.
+        /// </summary>
+        internal static string ForgetStateCommandName {
+            get {
+                return ResourceManager.GetString("ForgetStateCommandName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure resource provisioning state reset..
+        /// </summary>
+        internal static string ForgetStateCommandSuccess {
+            get {
+                return ResourceManager.GetString("ForgetStateCommandSuccess", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Overrides the Azure location for this resource and reprovisions it using that location..
+        /// </summary>
+        internal static string ChangeResourceLocationCommandDescription {
+            get {
+                return ResourceManager.GetString("ChangeResourceLocationCommandDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Change location.
+        /// </summary>
+        internal static string ChangeResourceLocationCommandName {
+            get {
+                return ResourceManager.GetString("ChangeResourceLocationCommandName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure resource location updated and reprovisioning completed..
+        /// </summary>
+        internal static string ChangeResourceLocationCommandSuccess {
+            get {
+                return ResourceManager.GetString("ChangeResourceLocationCommandSuccess", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Select or enter a new Azure location for '{0}'. The resource will then be reprovisioned using that location..
+        /// </summary>
+        internal static string ChangeResourceLocationPromptMessage {
+            get {
+                return ResourceManager.GetString("ChangeResourceLocationPromptMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Change Azure resource location.
+        /// </summary>
+        internal static string ChangeResourceLocationPromptTitle {
+            get {
+                return ResourceManager.GetString("ChangeResourceLocationPromptTitle", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to This only clears the cached Azure tenant, subscription, resource group, location, and deployment state stored for this AppHost. Live Azure resources are not deleted and may be left orphaned. Do you want to continue?.
+        /// </summary>
+        internal static string ResetProvisioningStateCommandConfirmation {
+            get {
+                return ResourceManager.GetString("ResetProvisioningStateCommandConfirmation", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Clears the cached Azure context and deployment state for this AppHost. This does not delete live Azure resources and may leave them orphaned..
+        /// </summary>
+        internal static string ResetProvisioningStateCommandDescription {
+            get {
+                return ResourceManager.GetString("ResetProvisioningStateCommandDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Reset provisioning state.
+        /// </summary>
+        internal static string ResetProvisioningStateCommandName {
+            get {
+                return ResourceManager.GetString("ResetProvisioningStateCommandName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure provisioning state reset..
+        /// </summary>
+        internal static string ResetProvisioningStateCommandSuccess {
+            get {
+                return ResourceManager.GetString("ResetProvisioningStateCommandSuccess", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to This clears the cached Azure deployment state for this AppHost and reprovisions all Azure resources again using the current Azure tenant, subscription, resource group, and location..
+        /// </summary>
+        internal static string ReprovisionAllCommandConfirmation {
+            get {
+                return ResourceManager.GetString("ReprovisionAllCommandConfirmation", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Clears the cached Azure deployment state for this AppHost and provisions all Azure resources again using the current Azure context..
+        /// </summary>
+        internal static string ReprovisionAllCommandDescription {
+            get {
+                return ResourceManager.GetString("ReprovisionAllCommandDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Reprovision all.
+        /// </summary>
+        internal static string ReprovisionAllCommandName {
+            get {
+                return ResourceManager.GetString("ReprovisionAllCommandName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure reprovisioning completed..
+        /// </summary>
+        internal static string ReprovisionAllCommandSuccess {
+            get {
+                return ResourceManager.GetString("ReprovisionAllCommandSuccess", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to This clears the cached Azure deployment state for this resource and reprovisions it again using the current Azure tenant, subscription, resource group, and location..
+        /// </summary>
+        internal static string ReprovisionResourceCommandConfirmation {
+            get {
+                return ResourceManager.GetString("ReprovisionResourceCommandConfirmation", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Clears the cached Azure deployment state for this resource and provisions it again using the current Azure context..
+        /// </summary>
+        internal static string ReprovisionResourceCommandDescription {
+            get {
+                return ResourceManager.GetString("ReprovisionResourceCommandDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Reprovision.
+        /// </summary>
+        internal static string ReprovisionResourceCommandName {
+            get {
+                return ResourceManager.GetString("ReprovisionResourceCommandName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Azure resource reprovisioning completed..
+        /// </summary>
+        internal static string ReprovisionResourceCommandSuccess {
+            get {
+                return ResourceManager.GetString("ReprovisionResourceCommandSuccess", resourceCulture);
+            }
+        }
     }
 }
