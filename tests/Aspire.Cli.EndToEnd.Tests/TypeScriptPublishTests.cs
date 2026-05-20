@@ -413,24 +413,9 @@ public sealed class TypeScriptPublishTests(ITestOutputHelper output)
     {
         foreach (var fixtureName in new[] { "api", "staticsite", "nodeserver", "npmscript", "nextjs" })
         {
-            CopyDirectory(
+            Microsoft.VisualBasic.FileIO.FileSystem.CopyDirectory(
                 Path.Combine(s_jsPublishFixturesDir, fixtureName),
                 Path.Combine(workspace.WorkspaceRoot.FullName, fixtureName));
-        }
-    }
-
-    private static void CopyDirectory(string source, string destination)
-    {
-        Directory.CreateDirectory(destination);
-
-        foreach (var file in Directory.GetFiles(source))
-        {
-            File.Copy(file, Path.Combine(destination, Path.GetFileName(file)));
-        }
-
-        foreach (var dir in Directory.GetDirectories(source))
-        {
-            CopyDirectory(dir, Path.Combine(destination, Path.GetFileName(dir)));
         }
     }
 
