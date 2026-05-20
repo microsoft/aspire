@@ -96,6 +96,8 @@ if (!File.Exists(OutputPath) || File.ReadAllText(OutputPath) != content)
   <ItemGroup>
     <Content Include="$(_ScriptsOutputDir)Gateway.cs"
              CopyToOutputDirectory="PreserveNewest"
+             Pack="true"
+             PackagePath="buildTransitive\$(DefaultTargetFramework)\Scripts"
              Link="Scripts\Gateway.cs" />
   </ItemGroup>
 
