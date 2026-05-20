@@ -282,15 +282,6 @@
     <EmbeddedResource Include="Templating\Templates\go-starter\**\*" LogicalName="go-starter.%(RecursiveDir)%(Filename)%(Extension)">
       <WithCulture>false</WithCulture>
     </EmbeddedResource>
-    <EmbeddedResource Include="..\..\.agents\skills\aspire\**\*" LogicalName="skills.aspire/%(RecursiveDir)%(Filename)%(Extension)">
-      <WithCulture>false</WithCulture>
-    </EmbeddedResource>
-    <EmbeddedResource Include="..\..\.agents\skills\aspire-deployment\**\*" LogicalName="skills.aspire-deployment/%(RecursiveDir)%(Filename)%(Extension)">
-      <WithCulture>false</WithCulture>
-    </EmbeddedResource>
-    <EmbeddedResource Include="..\..\.agents\skills\aspireify\**\*" LogicalName="skills.aspireify/%(RecursiveDir)%(Filename)%(Extension)">
-      <WithCulture>false</WithCulture>
-    </EmbeddedResource>
   </ItemGroup>
 
   <ItemGroup Condition="'$(Configuration)' == 'Debug'">
