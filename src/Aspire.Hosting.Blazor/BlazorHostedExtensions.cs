@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 
 #pragma warning disable ASPIREATS001 // AspireExportIgnore is experimental
@@ -116,17 +117,14 @@ public static class BlazorHostedExtensions
 
     private static HashSet<string> GetReferencedResourceNames(IResource resource)
     {
-        var names = new HashSet<string>(StringComparers.ResourceName);
-        foreach (var annotation in resource.Annotations)
-        {
-            // Only consider Reference relationships, not WaitFor or Parent,
-            // so that .WaitFor(svc).ProxyBlazorService(svc) still adds WithReference.
-            if (annotation is ResourceRelationshipAnnotation { Type: "Reference" } rel)
-            {
-                names.Add(rel.Resource.Name);
-            }
-        }
-        return names;
+        // TODO: ResourceRelationshipAnnotation is public but reading it directly couples us
+        // to the annotation model. Consider whether a higher-level API (e.g. a method on
+        // IResource or an extension) should expose referenced resources instead.
+        return resource.Annotations
+            .OfType<ResourceRelationshipAnnotation>()
+            .Where(rel => rel.Type == KnownRelationshipTypes.Reference)
+            .Select(rel => rel.Resource.Name)
+            .ToHashSet(StringComparers.ResourceName);
     }
 
     private static EndpointReference? GetEndpointIfDefined(IResourceWithEndpoints resource, string endpointName)

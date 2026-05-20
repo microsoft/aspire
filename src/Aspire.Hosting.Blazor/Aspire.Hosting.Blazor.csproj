@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <Compile Include="$(SharedDir)StringComparers.cs" Link="Utils\StringComparers.cs" />
+    <Compile Include="$(SharedDir)Model\KnownRelationshipTypes.cs" Link="Utils\KnownRelationshipTypes.cs" />
   </ItemGroup>
 
   <ItemGroup>
