@@ -2,10 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text;
-using Aspire.TestUtilities;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Aspire.TestUtilities;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -17,6 +17,7 @@ namespace Aspire.Hosting.RabbitMQ.Tests;
 public class RabbitMQFunctionalTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
+    [OuterloopTest]
     [RequiresFeature(TestFeature.Docker)]
     public async Task VerifyWaitForOnRabbitMQBlocksDependentResources()
     {
@@ -54,6 +55,7 @@ public class RabbitMQFunctionalTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    [OuterloopTest]
     [RequiresFeature(TestFeature.Docker)]
     public async Task VerifyRabbitMQResource()
     {
@@ -92,6 +94,7 @@ public class RabbitMQFunctionalTests(ITestOutputHelper testOutputHelper)
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
+    [OuterloopTest]
     [RequiresFeature(TestFeature.Docker)]
     public async Task WithDataShouldPersistStateBetweenUsages(bool useVolume)
     {
