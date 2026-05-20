@@ -630,6 +630,14 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             context.BuildCompletionSource?.TrySetResult(false);
             return CliExitCodes.Cancelled;
         }
+        catch (AppHostCodeGenerationException ex)
+        {
+            // We already rendered an actionable, tiered diagnostic in GenerateCodeViaRpcAsync.
+            // Avoid double-printing here — just log and return the standard failure exit code.
+            context.BuildCompletionSource?.TrySetResult(false);
+            _logger.LogError(ex, "Code generation failed for {Language} AppHost", DisplayName);
+            return CliExitCodes.FailedToDotnetRunAppHost;
+        }
         catch (Exception ex)
         {
             // Signal that build/preparation failed so RunCommand doesn't hang waiting
@@ -970,8 +978,13 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
                     await EnsureRuntimeCreatedAsync(directory, rpcClient, cancellationToken);
                 }
-                catch
+                catch (Exception ex)
                 {
+                    // The backchannel connection task was started before code generation
+                    // (see StartBackchannelConnectionAsync above); fault it eagerly so the
+                    // caller doesn't wait out the connection timeout when generateCode fails.
+                    context.BackchannelCompletionSource?.TrySetException(ex);
+
                     // Once Start() succeeds we own the server process, so dispose it here when
                     // post-start work fails - the `await using` below isn't in scope yet.
                     await serverSession.DisposeAsync();
@@ -1401,10 +1414,21 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         // The code generator is registered by its Language property, not the runtime ID
         var codeGenerator = _resolvedLanguage.CodeGenerator;
 
+        WarnIfCliSdkVersionSkew(appPath);
+
         _logger.LogDebug("Generating {CodeGenerator} code via RPC for {Count} packages", codeGenerator, integrationsList.Count);
 
         // Use the typed RPC method
-        var files = await rpcClient.GenerateCodeAsync(codeGenerator, cancellationToken);
+        Dictionary<string, string> files;
+        try
+        {
+            files = await rpcClient.GenerateCodeAsync(codeGenerator, cancellationToken);
+        }
+        catch (AppHostCodeGenerationException ex)
+        {
+            RenderCodeGenerationFailure(ex);
+            throw;
+        }
 
         // Write generated files to the output directory
         var outputPath = Path.Combine(appPath, LanguageInfo.GeneratedFolderName);
@@ -1426,6 +1450,138 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
         _logger.LogInformation("Generated {Count} {CodeGenerator} files in {Path}",
             files.Count, codeGenerator, outputPath);
+    }
+
+    /// <summary>
+    /// Emits a single pre-flight warning when the installed CLI version doesn't match the SDK
+    /// version pinned in <c>aspire.config.json</c>. This is a best-effort heuristic — we keep it
+    /// purely informational and let code-generation try first so that benign skew (e.g. a
+    /// daily-build CLI against a stable SDK) doesn't block valid scenarios.
+    /// </summary>
+    private void WarnIfCliSdkVersionSkew(string appPath)
+    {
+        try
+        {
+            var configDir = ConfigurationHelper.GetConfigRootDirectory(new DirectoryInfo(appPath));
+            var config = AspireConfigFile.Load(configDir.FullName);
+            var configuredSdkVersion = config?.SdkVersion;
+            if (string.IsNullOrWhiteSpace(configuredSdkVersion))
+            {
+                return;
+            }
+
+            var cliVersion = VersionHelper.GetDefaultSdkVersion();
+            if (!IsKnownIncompatibleSkew(cliVersion, configuredSdkVersion))
+            {
+                return;
+            }
+
+            var message = string.Format(
+                System.Globalization.CultureInfo.CurrentCulture,
+                ErrorStrings.CodegenVersionSkewWarning,
+                cliVersion,
+                configuredSdkVersion);
+            _interactionService.DisplayMessage(KnownEmojis.Warning, $"[yellow]{Markup.Escape(message)}[/]", allowMarkup: true);
+            _logger.LogDebug("Aspire CLI/SDK version skew detected (CLI={CliVersion}, SDK={SdkVersion})", cliVersion, configuredSdkVersion);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to evaluate CLI/SDK version skew prior to code generation.");
+        }
+    }
+
+    /// <summary>
+    /// Returns <see langword="true"/> when the supplied CLI and SDK versions look mismatched in a
+    /// way that is worth warning about. We deliberately tolerate metadata-only differences
+    /// (build suffixes, +commit hashes) and only flag a skew when the parsed major/minor/patch
+    /// numbers disagree.
+    /// </summary>
+    /// <summary>
+    /// Returns <see langword="true"/> when the supplied CLI and SDK versions differ in a way that
+    /// is known to produce ABI incompatibilities — specifically when they differ in
+    /// <see cref="SemVersion.Major"/>, <see cref="SemVersion.Minor"/>, <see cref="SemVersion.Patch"/>,
+    /// or in their prerelease identifiers (e.g. <c>13.4.0-preview.1.26218.1</c> vs
+    /// <c>13.4.0-preview.1.26227.1</c>, which was the exact reproduction case in
+    /// <see href="https://github.com/microsoft/aspire/issues/16709"/>). Build metadata
+    /// (everything after <c>+</c>) is ignored per the SemVer spec.
+    /// </summary>
+    internal static bool IsKnownIncompatibleSkew(string cliVersion, string sdkVersion)
+    {
+        if (!SemVersion.TryParse(NormalizeVersion(cliVersion), SemVersionStyles.Any, out var cli) ||
+            !SemVersion.TryParse(NormalizeVersion(sdkVersion), SemVersionStyles.Any, out var sdk))
+        {
+            return !string.Equals(cliVersion, sdkVersion, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Compare full precedence, which covers Major/Minor/Patch *and* prerelease identifiers
+        // but (per the SemVer spec) ignores build metadata. NormalizeVersion already strips '+'
+        // suffixes defensively for parsers that include them in precedence.
+        return SemVersion.ComparePrecedence(cli, sdk) != 0;
+    }
+
+    internal static string NormalizeVersion(string version)
+    {
+        var plusIndex = version.IndexOf('+');
+        return plusIndex > 0 ? version[..plusIndex] : version;
+    }
+
+    /// <summary>
+    /// Renders a <see cref="AppHostCodeGenerationException"/> to the user with .NET-specific
+    /// details tiered behind <c>--debug</c> so that polyglot AppHost authors aren't confronted
+    /// with C#/CLR jargon by default. The full structured payload is always written to the debug
+    /// log file via the logger's <c>LogDebug</c> call regardless of mode.
+    /// </summary>
+    private void RenderCodeGenerationFailure(AppHostCodeGenerationException exception)
+    {
+        var summary = string.Format(
+            System.Globalization.CultureInfo.CurrentCulture,
+            ErrorStrings.CodegenIncompatibleSdkSummary,
+            DisplayName);
+        _interactionService.DisplayError(summary);
+
+        var hint = exception.Diagnostic.RemediationHint;
+        if (!string.IsNullOrWhiteSpace(hint))
+        {
+            _interactionService.DisplayMessage(KnownEmojis.Information, $"[grey]{Markup.Escape(hint!)}[/]", allowMarkup: true);
+        }
+
+        _logger.LogDebug(
+            "Code generation failed. OriginalExceptionType={OriginalExceptionType}, TypeName={TypeName}, MemberName={MemberName}, RuntimeAspireHostingVersion={RuntimeVersion}, LoadedAssemblies={LoadedCount}",
+            exception.Diagnostic.OriginalExceptionType,
+            exception.Diagnostic.TypeName ?? "<none>",
+            exception.Diagnostic.MemberName ?? "<none>",
+            exception.Diagnostic.RuntimeAspireHostingVersion ?? "<none>",
+            exception.Diagnostic.LoadedAssemblies.Count);
+
+        if (!_executionContext.DebugMode)
+        {
+            _interactionService.DisplayMessage(KnownEmojis.Information, $"[grey]{Markup.Escape(ErrorStrings.CodegenDebugHint)}[/]", allowMarkup: true);
+            return;
+        }
+
+        _interactionService.DisplayMessage(KnownEmojis.Microscope, $"[grey]{Markup.Escape(ErrorStrings.CodegenDebugHeader)}[/]", allowMarkup: true);
+        var diagnostic = exception.Diagnostic;
+        if (!string.IsNullOrWhiteSpace(diagnostic.OriginalExceptionType))
+        {
+            _interactionService.DisplayPlainText($"   Exception: {diagnostic.OriginalExceptionType}");
+        }
+        if (!string.IsNullOrWhiteSpace(diagnostic.TypeName))
+        {
+            _interactionService.DisplayPlainText($"   Type: {diagnostic.TypeName}");
+        }
+        if (!string.IsNullOrWhiteSpace(diagnostic.MemberName))
+        {
+            _interactionService.DisplayPlainText($"   Member: {diagnostic.MemberName}");
+        }
+        if (!string.IsNullOrWhiteSpace(diagnostic.RuntimeAspireHostingVersion))
+        {
+            _interactionService.DisplayPlainText($"   Runtime Aspire.Hosting: {diagnostic.RuntimeAspireHostingVersion}");
+        }
+        foreach (var assembly in diagnostic.LoadedAssemblies)
+        {
+            var version = assembly.InformationalVersion ?? "<unknown>";
+            _interactionService.DisplayPlainText($"   • {assembly.Name} {version}");
+        }
     }
 
     /// <summary>

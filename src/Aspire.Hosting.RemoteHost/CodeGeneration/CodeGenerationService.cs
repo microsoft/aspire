@@ -19,6 +19,7 @@ internal sealed class CodeGenerationService
     private readonly JsonRpcAuthenticationState _authenticationState;
     private readonly AtsContextFactory _atsContextFactory;
     private readonly CodeGeneratorResolver _resolver;
+    private readonly AssemblyLoader _assemblyLoader;
     private readonly ILogger<CodeGenerationService> _logger;
     private readonly RemoteHostProfilingTelemetry _profilingTelemetry;
 
@@ -26,12 +27,14 @@ internal sealed class CodeGenerationService
         JsonRpcAuthenticationState authenticationState,
         AtsContextFactory atsContextFactory,
         CodeGeneratorResolver resolver,
+        AssemblyLoader assemblyLoader,
         ILogger<CodeGenerationService> logger,
         RemoteHostProfilingTelemetry profilingTelemetry)
     {
         _authenticationState = authenticationState;
         _atsContextFactory = atsContextFactory;
         _resolver = resolver;
+        _assemblyLoader = assemblyLoader;
         _logger = logger;
         _profilingTelemetry = profilingTelemetry;
     }
@@ -85,6 +88,11 @@ internal sealed class CodeGenerationService
         {
             activity.SetError(ex);
             _logger.LogError(ex, "<< getCapabilities() failed");
+            var wrapped = CodeGenerationDiagnosticBuilder.TryCreateRpcException(ex, _assemblyLoader, _logger);
+            if (wrapped is not null)
+            {
+                throw wrapped;
+            }
             throw;
         }
     }
@@ -251,6 +259,11 @@ internal sealed class CodeGenerationService
         {
             activity.SetError(ex);
             _logger.LogError(ex, "<< generateCode({Language}) failed", language);
+            var wrapped = CodeGenerationDiagnosticBuilder.TryCreateRpcException(ex, _assemblyLoader, _logger);
+            if (wrapped is not null)
+            {
+                throw wrapped;
+            }
             throw;
         }
     }
