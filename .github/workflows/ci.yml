@@ -75,7 +75,7 @@ jobs:
       versionOverrideArg: ${{ needs.prepare_for_ci.outputs.VERSION_SUFFIX_OVERRIDE }}
       extensionVersionOverride: ${{ needs.prepare_for_ci.outputs.EXTENSION_VERSION_OVERRIDE }}
 
-  # Stabilization gate (#15335 / PR #15681).
+  # Stabilization gate.
   #
   # PR CI runs unstable (DotNetFinalVersionKind=prerelease above) so that dogfood artifacts
   # have unique versions and dynamic Helix versions line up cleanly. To compensate for the
@@ -119,8 +119,7 @@ jobs:
         if: ${{ github.event_name == 'pull_request' }}
         # SkipNativeBuild=true keeps this job fast (~5min): pack-time NU5104 detection
         # doesn't need NativeAOT CLI binaries, and the moderate smoke below invokes the
-        # CLI via `dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj`. See #15335 for
-        # the follow-up tracking a NativeAOT-publish variant of this job.
+        # CLI via `dotnet run --project src/Aspire.Cli/Aspire.Cli.csproj`.
         run: |
           ./build.sh -restore -build -ci -pack \
             -p:StabilizePackageVersion=true \

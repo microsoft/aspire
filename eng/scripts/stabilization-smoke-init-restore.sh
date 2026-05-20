@@ -8,8 +8,8 @@
 # the PR's CI is running on prerelease versions (which it is — see ci.yml). It catches:
 #
 #   * Restore-time failures for stable AppHosts referencing packages whose csproj sets
-#     SuppressFinalPackageVersion=true (the bucket of issues that historically forced 13.1
-#     / 13.2 / 13.3 stabilization PRs to hand-skip whole test classes — see #15335).
+#     SuppressFinalPackageVersion=true (the bucket of issues that historically forced past
+#     stabilization PRs to hand-skip whole test classes).
 #   * Template version-pinning regressions where `aspire init` emits an SDK or package
 #     reference that doesn't resolve against the stable feed.
 #
