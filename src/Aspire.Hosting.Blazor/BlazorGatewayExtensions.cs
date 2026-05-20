@@ -21,6 +21,13 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class BlazorGatewayExtensions
 {
+    // Derive the .NET image tag from the runtime version of the app host process.
+    // The Gateway is a file-based app compiled with the same SDK, so the major.minor
+    // version of the running host matches the required SDK/ASP.NET base images.
+    // Pre-release runtimes (preview/RC) use suffixed tags like "10.0-preview" or "11.0-rc".
+    private static readonly string s_dotNetImageTag = GetDotNetImageTag();
+    private const string DotNetSdkImageRepo = "mcr.microsoft.com/dotnet/sdk";
+    private const string DotNetAspNetImageRepo = "mcr.microsoft.com/dotnet/aspnet";
     /// <summary>
     /// Registers the built-in Blazor Gateway as a file-based C# app.
     /// The gateway is shipped as Gateway.cs alongside this library and launched
@@ -47,7 +54,7 @@ public static class BlazorGatewayExtensions
                     var logger = ctx.Services.GetService<ILogger<BlazorWasmAppResource>>();
 
                     ctx.Builder
-                        .From("mcr.microsoft.com/dotnet/sdk:10.0", "build")
+                        .From($"{DotNetSdkImageRepo}:{s_dotNetImageTag}", "build")
                         .WorkDir("/src")
                         .Copy("Gateway.cs", ".")
                         .Run("dotnet publish Gateway.cs -c Release -o /app/publish");
@@ -55,7 +62,7 @@ public static class BlazorGatewayExtensions
                     ctx.Builder.AddContainerFilesStages(ctx.Resource, logger);
 
                     ctx.Builder
-                        .From("mcr.microsoft.com/dotnet/aspnet:10.0")
+                        .From($"{DotNetAspNetImageRepo}:{s_dotNetImageTag}")
                         .WorkDir("/app")
                         .CopyFrom("build", "/app/publish", ".")
                         .AddContainerFiles(ctx.Resource, "/app", logger)
@@ -161,9 +168,9 @@ public static class BlazorGatewayExtensions
             }
         }
 
-        // Make the WASM app appear as a child of the gateway in the dashboard,
-        // similar to how database instances appear under their server resource.
-        wasmApp.WithParentRelationship(gateway.Resource);
+        // Make the WASM app a child of the gateway so the orchestrator mirrors lifecycle
+        // state (Running, Stopped, etc.) from the gateway to this resource automatically.
+        wasmApp.Resource.Parent = gateway.Resource;
 
         return gateway.WithBlazorApp(wasmApp, pathPrefix, serviceNames, apiPrefix, otlpPrefix, proxyTelemetry);
     }
@@ -302,6 +309,22 @@ public static class BlazorGatewayExtensions
                 }).ConfigureAwait(false);
             }
         });
+
+        gateway.ApplicationBuilder.Eventing.Subscribe<ResourceStoppedEvent>(gateway.Resource, async (e, ct) =>
+        {
+            var notificationService = e.Services.GetRequiredService<ResourceNotificationService>();
+            var registeredApps = GetRegisteredApps(gateway.Resource);
+            var now = DateTime.UtcNow;
+
+            foreach (var reg in registeredApps)
+            {
+                await notificationService.PublishUpdateAsync(reg.AppBuilder.Resource, snapshot => snapshot with
+                {
+                    State = KnownResourceStates.Finished,
+                    StopTimeStamp = now
+                }).ConfigureAwait(false);
+            }
+        });
     }
 
     private static void ConfigurePublishEnvironment(
@@ -407,7 +430,7 @@ public static class BlazorGatewayExtensions
         companion.WithDockerfileFactory(project.SolutionRoot, ctx =>
         {
             return $$"""
-                FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+                FROM {{DotNetSdkImageRepo}}:{{s_dotNetImageTag}} AS build
                 WORKDIR /src
                 COPY . .
                 RUN dotnet publish "{{relativeProjectPath}}" -c Release -o /app/publish
@@ -568,5 +591,36 @@ public static class BlazorGatewayExtensions
         public string AssemblyName { get; } = assemblyName;
         public string SolutionRoot { get; } = solutionRoot;
         public string RelativeProjectPath { get; } = relativeProjectPath;
+    }
+
+    /// <summary>
+    /// Resolves the Docker image tag for the .NET SDK/ASP.NET base images.
+    /// Returns "Major.Minor" for stable releases (e.g. "10.0", "11.0"),
+    /// and appends "-preview" or "-rc" for pre-release runtimes to match the
+    /// MCR tag naming convention (e.g. "10.0-preview", "11.0-rc").
+    /// </summary>
+    private static string GetDotNetImageTag()
+    {
+        var tag = $"{Environment.Version.Major}.{Environment.Version.Minor}";
+
+        // The runtime's informational version contains the full pre-release label,
+        // e.g. "10.0.0-preview.7.25352.1+..." or "11.0.0-rc.1.25400.3+...".
+        // Stable/servicing builds use "10.0.6-servicing..." which we ignore.
+        var informationalVersion = (System.Reflection.AssemblyInformationalVersionAttribute?)
+            Attribute.GetCustomAttribute(typeof(object).Assembly, typeof(System.Reflection.AssemblyInformationalVersionAttribute));
+
+        if (informationalVersion is not null)
+        {
+            if (informationalVersion.InformationalVersion.Contains("-preview", StringComparison.OrdinalIgnoreCase))
+            {
+                tag += "-preview";
+            }
+            else if (informationalVersion.InformationalVersion.Contains("-rc", StringComparison.OrdinalIgnoreCase))
+            {
+                tag += "-rc";
+            }
+        }
+
+        return tag;
     }
 }
