@@ -5,6 +5,8 @@
 #
 name: Daily CLI Smoke Tests
 
+run-name: Daily CLI Smoke Tests (${{ inputs.quality || 'dev' }})${{ inputs.dispatch_id && format(' - {0}', inputs.dispatch_id) || '' }}
+
 on:
   workflow_dispatch:
     inputs:
@@ -17,6 +19,15 @@ on:
           - dev
           - staging
           - release
+      create_issue_on_failure:
+        description: 'Create an issue if the smoke tests fail'
+        required: false
+        default: false
+        type: boolean
+      dispatch_id:
+        description: 'Optional dispatch correlation ID'
+        required: false
+        type: string
 
   schedule:
     # Run daily at 6 AM UTC
@@ -247,7 +258,7 @@ jobs:
     name: Create Issue on Failure
     needs: [smoke-test]
     runs-on: ubuntu-latest
-    if: ${{ failure() && github.event_name == 'schedule' }}
+    if: ${{ failure() && (github.event_name == 'schedule' || inputs.create_issue_on_failure) }}
     permissions:
       actions: read
       issues: write
@@ -279,7 +290,7 @@ jobs:
               `The daily CLI smoke tests failed on ${date}.`,
               '',
               `**Workflow Run:** ${runUrl}`,
-              `**Quality:** ${quality} (daily build)`,
+              `**Install quality:** ${quality}`,
               '',
               cliVersionSummary,
               '',

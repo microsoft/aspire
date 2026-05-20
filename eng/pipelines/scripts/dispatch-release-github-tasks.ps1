@@ -1,10 +1,10 @@
-# Dispatches the release-github-tasks.yml workflow on microsoft/aspire as the
-# aspire-repo-bot GitHub App, then polls the resulting run until it completes.
-# Exits 0 only if the dispatched run concludes with 'success'.
+# Dispatches a GitHub Actions workflow on microsoft/aspire as the aspire-repo-bot
+# GitHub App, optionally polling the resulting run until it completes. When
+# -NoWait is specified, exits 0 once the run is resolved.
 #
-# This script is invoked from the AzDO release-publish-nuget pipeline as the
-# final stage of a release. It centralizes the workflow dispatch, run-id
-# resolution, and run polling so the pipeline YAML stays declarative.
+# This script is invoked from AzDO pipelines that need to dispatch GitHub
+# Actions workflows. It centralizes workflow dispatch, run-id resolution, and
+# optional run polling so the pipeline YAML stays declarative.
 #
 # Authentication (mint a GitHub App installation access token) is delegated to
 # Get-AspireBotInstallationToken.ps1 so the same flow can be reused by other
@@ -15,7 +15,7 @@
 #   1. POST /repos/{owner}/{repo}/actions/workflows/{file}/dispatches with the installation token.
 #   2. Poll GET /repos/.../actions/runs filtered by workflow + branch to find the run we just queued
 #      (workflow_dispatch does not return a run id directly — this is the documented workaround).
-#   3. Poll the run until status=completed; succeed only if conclusion=success.
+#   3. Unless -NoWait is specified, poll the run until status=completed; succeed only if conclusion=success.
 
 [CmdletBinding()]
 param(
@@ -26,6 +26,8 @@ param(
     [Parameter(Mandatory = $true)][string]$WorkflowFile,
     [Parameter(Mandatory = $true)][string]$Ref,
     [Parameter(Mandatory = $true)][hashtable]$Inputs,
+    [Parameter()][string]$ExpectedRunDisplayTitle,
+    [Parameter()][switch]$NoWait,
     [Parameter()][int]$PollIntervalSeconds = 30,
     [Parameter()][int]$PollTimeoutMinutes = 60
 )
@@ -61,7 +63,7 @@ function Invoke-GitHubApi {
     return Invoke-RestMethod @params
 }
 
-Write-Host "=== Dispatch Release GitHub Tasks ==="
+Write-Host "=== Dispatch GitHub Actions Workflow ==="
 Write-Host "Target: $Owner/$Repo workflow=$WorkflowFile ref=$Ref"
 Write-Host "Inputs:"
 foreach ($key in $Inputs.Keys) {
@@ -115,13 +117,22 @@ while ([DateTime]::UtcNow -lt $resolveDeadline -and -not $runId) {
     }
 
     if ($runs.workflow_runs -and $runs.workflow_runs.Count -gt 0) {
+        $candidates = $runs.workflow_runs
+        if (-not [string]::IsNullOrWhiteSpace($ExpectedRunDisplayTitle)) {
+            $candidates = $candidates | Where-Object { $_.display_title -eq $ExpectedRunDisplayTitle }
+        }
+
+        if (-not $candidates) {
+            Write-Host "  Waiting for dispatched run to appear..."
+            continue
+        }
+
         # The list endpoint returns runs newest first. We pick the newest run
-        # that satisfies the created>=dispatchedAt-30s filter — the dispatch we
-        # just issued is by definition the most recent qualifying run on this
-        # branch+workflow. Picking the oldest qualifying run would attach us
-        # to an earlier dispatch within the clock-skew window (e.g. a quick
-        # re-run of this AzDO stage).
-        $candidate = $runs.workflow_runs | Sort-Object -Property created_at -Descending | Select-Object -First 1
+        # that satisfies the created>=dispatchedAt-30s filter and, when
+        # provided, the expected display title. The title is important for
+        # fire-and-forget dispatches where multiple builds can dispatch the same
+        # workflow on the same ref close together.
+        $candidate = $candidates | Sort-Object -Property created_at -Descending | Select-Object -First 1
         $runId = $candidate.id
         $runHtmlUrl = $candidate.html_url
         Write-Host "✓ Resolved dispatched run: $runHtmlUrl (id=$runId)"
@@ -139,6 +150,11 @@ if (-not $runId) {
 # Surface the run URL in the AzDO job summary regardless of outcome.
 Write-Host "##vso[task.setvariable variable=DispatchedRunUrl]$runHtmlUrl"
 Write-Host "##[section]Dispatched run: $runHtmlUrl"
+
+if ($NoWait) {
+    Write-Host "NoWait specified; not polling dispatched workflow completion."
+    exit 0
+}
 
 # Poll the run until it reaches a terminal state.
 $pollDeadline = [DateTime]::UtcNow.AddMinutes($PollTimeoutMinutes)

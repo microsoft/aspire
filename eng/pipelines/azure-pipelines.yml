@@ -52,7 +52,8 @@ variables:
   - template: /eng/common/templates-official/variables/pool-providers.yml@self
 
   # Variable group containing VscePublishToken for VS Code Marketplace publishing
-  - ${{ if eq(parameters.publishVSCodeExtension, true) }}:
+  # and aspire-repo-bot credentials for post-asset GitHub workflow dispatch.
+  - ${{ if or(eq(parameters.publishVSCodeExtension, true), eq(variables['_PackagesPublished'], 'true')) }}:
     - group: Aspire-Release-Secrets
 
   - name: _BuildConfig
@@ -94,12 +95,6 @@ variables:
       value: /p:DotNetSignType=$(_SignType) /p:TeamName=$(_TeamName) /p:Sign=$(_Sign) /p:DotNetPublishUsingPipelines=true
     - name: _Sign
       value: true
-
-  # Packages are published only on internal, non-PR builds on publishing branches
-  # (main, release/*, internal/release/*). Feature branches and PR builds don't
-  # have Maestro default channels so archive URLs won't be valid.
-  - name: _PackagesPublished
-    value: ${{ and(ne(variables['_RunAsPublic'], 'true'), ne(variables['Build.Reason'], 'PullRequest'), or(eq(variables['Build.SourceBranch'], 'refs/heads/main'), startsWith(variables['Build.SourceBranch'], 'refs/heads/release/'), startsWith(variables['Build.SourceBranch'], 'refs/heads/internal/release/'))) }}
 
 resources:
   repositories:
@@ -430,6 +425,65 @@ extends:
       #       GitHubOrg: microsoft
       #       MirrorRepo: aspire
       #       MirrorBranch: main
+
+      - ${{ if eq(variables['_PackagesPublished'], 'true') }}:
+        - job: DispatchDailySmokeTests
+          displayName: Dispatch Daily CLI Smoke Tests
+          dependsOn: Asset_Registry_Publish
+          timeoutInMinutes: 15
+          pool:
+            name: NetCore1ESPool-Internal
+            image: windows.vs2026preview.scout.amd64
+            os: windows
+          steps:
+            - checkout: self
+              displayName: Checkout repo (for dispatch script)
+              fetchDepth: 1
+
+            # pwsh (not powershell): Get-AspireBotInstallationToken.ps1 uses
+            # RSA.ImportFromPem, which is only available in .NET Core 3.0+ / .NET 5+.
+            # The legacy `powershell:` shorthand runs Windows PowerShell 5.1 on
+            # .NET Framework, which doesn't have that API and would fail at runtime.
+            - pwsh: |
+                $sourceBranch = "$(Build.SourceBranch)"
+                $quality = if ($sourceBranch.StartsWith('refs/heads/release/', [System.StringComparison]::OrdinalIgnoreCase) -or $sourceBranch.StartsWith('refs/heads/internal/release/', [System.StringComparison]::OrdinalIgnoreCase)) { "staging" } else { "dev" }
+                $dispatchId = "azdo-$(Build.BuildId)-$(System.JobAttempt)"
+                $expectedRunDisplayTitle = "Daily CLI Smoke Tests ($quality) - $dispatchId"
+
+                Write-Host "Source branch: $sourceBranch -> smoke quality: $quality"
+                Write-Host "Dispatch ID: $dispatchId"
+
+                $inputs = @{
+                  quality                 = $quality
+                  create_issue_on_failure = "true"
+                  dispatch_id             = $dispatchId
+                }
+
+                & "$(Build.SourcesDirectory)/eng/pipelines/scripts/dispatch-release-github-tasks.ps1" `
+                  -AppId         "$env:ASPIRE_BOT_APP_ID" `
+                  -PrivateKeyPem "$env:ASPIRE_BOT_PRIVATE_KEY" `
+                  -Owner         'microsoft' `
+                  -Repo          'aspire' `
+                  -WorkflowFile  'tests-daily-smoke.yml' `
+                  -Ref           'main' `
+                  -Inputs        $inputs `
+                  -ExpectedRunDisplayTitle $expectedRunDisplayTitle `
+                  -NoWait
+              displayName: Dispatch tests-daily-smoke
+              env:
+                # Secrets must be mapped explicitly into env so PowerShell can
+                # read them; AzDO doesn't expose secret variables to scripts
+                # by default.
+                ASPIRE_BOT_APP_ID: $(aspire-bot-app-id)
+                ASPIRE_BOT_PRIVATE_KEY: $(aspire-bot-private-key)
+
+            - powershell: |
+                Write-Host ""
+                Write-Host "Dispatched run: $env:DISPATCHED_RUN_URL"
+              displayName: Print dispatched run URL
+              condition: always()
+              env:
+                DISPATCHED_RUN_URL: $(DispatchedRunUrl)
 
     # ----------------------------------------------------------------
     # Generate and test installer packages (WinGet + Homebrew).
