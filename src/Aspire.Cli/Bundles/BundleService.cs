@@ -132,11 +132,11 @@ internal sealed class BundleService(
         // Use a file lock for cross-process synchronization
         var lockPath = Path.Combine(destinationPath, ".aspire-bundle-lock");
         logger.LogDebug("Acquiring bundle extraction lock at {LockPath}...", lockPath);
-        using var fileLock = await FileLock.AcquireAsync(lockPath, cancellationToken).ConfigureAwait(false);
-        logger.LogDebug("Bundle extraction lock acquired.");
 
         try
         {
+            using var fileLock = await FileLock.AcquireAsync(lockPath, cancellationToken).ConfigureAwait(false);
+            logger.LogDebug("Bundle extraction lock acquired.");
             // Re-check after acquiring lock — another process may have already extracted
             if (!force && layoutDiscovery.DiscoverLayout() is not null)
             {
@@ -152,6 +152,14 @@ internal sealed class BundleService(
             }
 
             return await ExtractCoreAsync(destinationPath, cancellationToken);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            logger.LogError(
+                ex,
+                "Failed to extract bundle to {Path}: Insufficient permissions. Run the command with elevated permissions (e.g., sudo on Linux/macOS), or reinstall the Aspire CLI to a user-writable location.",
+                destinationPath);
+            return BundleExtractResult.ExtractionFailed;
         }
         catch (Exception ex)
         {

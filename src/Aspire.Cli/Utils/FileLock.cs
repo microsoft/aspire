@@ -62,6 +62,10 @@ internal sealed class FileLock : IDisposable
         {
             Directory.CreateDirectory(directory);
         }
+        else
+        {
+            directory = Environment.CurrentDirectory;
+        }
 
         while (true)
         {
@@ -77,7 +81,7 @@ internal sealed class FileLock : IDisposable
                 // FileStream constructor throws immediately; on Unix it may also throw
                 // if the file is exclusively locked. Wait and retry.
             }
-            catch (UnauthorizedAccessException)
+            catch (UnauthorizedAccessException) when (IsDirectoryWritable(directory))
             {
                 // Can occur transiently when the lock file is being deleted
                 // (DeleteOnClose) by the process that just released the lock,
@@ -91,6 +95,14 @@ internal sealed class FileLock : IDisposable
 
             await Task.Delay(s_defaultRetryDelay, cancellationToken).ConfigureAwait(false);
         }
+    }
+
+    private static bool IsDirectoryWritable(string directory)
+    {
+        var probe = Path.Combine(directory, $".aspire-write-probe.{Guid.NewGuid():N}");
+        try { using var _ = new FileStream(probe, FileMode.CreateNew, FileAccess.Write, FileShare.None, bufferSize: 1, FileOptions.DeleteOnClose); return true; }
+        catch (UnauthorizedAccessException) { return false; }
+        catch (IOException) { return true; }
     }
 
     /// <summary>

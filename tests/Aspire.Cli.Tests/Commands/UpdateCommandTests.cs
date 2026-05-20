@@ -72,6 +72,41 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task UpdateCommand_WhenBundleDirectoryNotWritable_DisplaysError()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => new TestProjectLocator()
+            {
+                UseOrFindAppHostProjectFileAsyncCallback = (projectFile, _, _) =>
+                    Task.FromResult<FileInfo?>(new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj")))
+            };
+
+            options.InteractionServiceFactory = _ => interactionService;
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner();
+            options.PackagingServiceFactory = _ => new TestPackagingService();
+
+            options.ProjectUpdaterFactory = _ => new TestProjectUpdater()
+            {
+                UpdateProjectAsyncCallback = (_, _) =>
+                    throw new UnauthorizedAccessException("Cannot write to bundle extraction directory '/usr/local'.")
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --yes");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(ExitCodeConstants.FailedToUpgradeProject, exitCode);
+        Assert.Single(interactionService.DisplayedErrors);
+    }
+
+    [Fact]
     public async Task UpdateCommand_WhenProjectOptionSpecified_PassesProjectFileToProjectLocator()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
