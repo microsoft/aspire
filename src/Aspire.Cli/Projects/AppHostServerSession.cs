@@ -209,9 +209,21 @@ internal sealed class AppHostServerSessionFactory : IAppHostServerSessionFactory
         var appHostServerProject = await _projectFactory.CreateAsync(appHostPath, cancellationToken);
 
         // Prepare the server (create files + build for dev mode, restore packages for prebuilt mode)
-        var prepareResult = await appHostServerProject.PrepareAsync(sdkVersion, integrations, cancellationToken);
+        AppHostServerPrepareResult prepareResult;
+        try
+        {
+            prepareResult = await appHostServerProject.PrepareAsync(sdkVersion, integrations, cancellationToken);
+        }
+        catch
+        {
+            (appHostServerProject as IDisposable)?.Dispose();
+            throw;
+        }
+
         if (!prepareResult.Success)
         {
+            (appHostServerProject as IDisposable)?.Dispose();
+
             return new AppHostServerSessionResult(
                 Success: false,
                 Session: null,

@@ -3,6 +3,7 @@
 
 using Aspire.Cli.Bundles;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.Layout;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Utils;
@@ -56,6 +57,23 @@ internal sealed class AppHostServerProjectFactory(
         // Priority 3: Check if we have a bundle layout with a pre-built AppHost server
         if (layout is not null && layout.GetManagedPath() is string serverPath && File.Exists(serverPath))
         {
+            return CreatePrebuiltAppHostServer(appPath, socketPath, layout, layoutLease);
+        }
+
+        layoutLease?.Dispose();
+        throw new InvalidOperationException(
+            "No Aspire AppHost server is available. Ensure the Aspire CLI is installed " +
+            "with a valid bundle layout, or reinstall using 'aspire setup --force'.");
+    }
+
+    internal PrebuiltAppHostServer CreatePrebuiltAppHostServer(
+        string appPath,
+        string socketPath,
+        LayoutConfiguration layout,
+        BundleLayoutLease? layoutLease)
+    {
+        try
+        {
             return new PrebuiltAppHostServer(
                 appPath,
                 socketPath,
@@ -68,10 +86,10 @@ internal sealed class AppHostServerProjectFactory(
                 loggerFactory.CreateLogger<PrebuiltAppHostServer>(),
                 layoutLease);
         }
-
-        layoutLease?.Dispose();
-        throw new InvalidOperationException(
-            "No Aspire AppHost server is available. Ensure the Aspire CLI is installed " +
-            "with a valid bundle layout, or reinstall using 'aspire setup --force'.");
+        catch
+        {
+            layoutLease?.Dispose();
+            throw;
+        }
     }
 }
