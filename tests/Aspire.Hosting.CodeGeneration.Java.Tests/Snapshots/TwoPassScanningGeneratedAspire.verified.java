@@ -153,14 +153,14 @@ public class AfterPublishEvent extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the Services property */
+    /** The `IServiceProvider` for the app host. */
     public IServiceProvider services() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (IServiceProvider) getClient().invokeCapability("Aspire.Hosting.Publishing/AfterPublishEvent.services", reqArgs);
     }
 
-    /** Gets the Model property */
+    /** The `DistributedApplicationModel` instance. */
     public DistributedApplicationModel model() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -183,14 +183,14 @@ public class AfterResourcesCreatedEvent extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the Services property */
+    /** The `IServiceProvider` instance. */
     public IServiceProvider services() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (IServiceProvider) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/AfterResourcesCreatedEvent.services", reqArgs);
     }
 
-    /** Gets the Model property */
+    /** The `DistributedApplicationModel` instance. */
     public DistributedApplicationModel model() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -1361,9 +1361,9 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting.CodeGeneration.Java.Tests/Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes.ITestVaultResource", (h, c) -> new ITestVaultResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IContainerFilesDestinationResource", (h, c) -> new IContainerFilesDestinationResource(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IComputeResource", (h, c) -> new IComputeResource(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/List<string>", (h, c) -> new AspireList(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Dict<string,any>", (h, c) -> new AspireDict(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/List<any>", (h, c) -> new AspireList(h, c));
-        AspireClient.registerHandleWrapper("Aspire.Hosting/List<string>", (h, c) -> new AspireList(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Dict<string,string>", (h, c) -> new AspireDict(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Dict<string,number>", (h, c) -> new AspireDict(h, c));
     }
@@ -1458,14 +1458,14 @@ public class BeforePublishEvent extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the Services property */
+    /** The `IServiceProvider` for the app host. */
     public IServiceProvider services() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (IServiceProvider) getClient().invokeCapability("Aspire.Hosting.Publishing/BeforePublishEvent.services", reqArgs);
     }
 
-    /** Gets the Model property */
+    /** The `DistributedApplicationModel` instance. */
     public DistributedApplicationModel model() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -1518,14 +1518,14 @@ public class BeforeStartEvent extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the Services property */
+    /** The `IServiceProvider` instance. */
     public IServiceProvider services() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (IServiceProvider) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/BeforeStartEvent.services", reqArgs);
     }
 
-    /** Gets the Model property */
+    /** The `DistributedApplicationModel` instance. */
     public DistributedApplicationModel model() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -1575,6 +1575,7 @@ public class CSharpAppResource extends ProjectResource {
         super(handle, client);
     }
 
+    /** Configures the resource to use the specified container registry for container image operations. */
     public CSharpAppResource withContainerRegistry(IResource registry) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1587,6 +1588,7 @@ public class CSharpAppResource extends ProjectResource {
         return withContainerRegistry(new IResource(registry.getHandle(), registry.getClient()));
     }
 
+    /** Configures custom base images for generated Dockerfiles. */
     public CSharpAppResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
         var buildImage = options == null ? null : options.getBuildImage();
         var runtimeImage = options == null ? null : options.getRuntimeImage();
@@ -1597,6 +1599,7 @@ public class CSharpAppResource extends ProjectResource {
         return withDockerfileBaseImage(null);
     }
 
+    /** Configures custom base images for generated Dockerfiles. */
     private CSharpAppResource withDockerfileBaseImageImpl(String buildImage, String runtimeImage) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1610,6 +1613,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
     public CSharpAppResource withMcpServer(WithMcpServerOptions options) {
         var path = options == null ? null : options.getPath();
         var endpointName = options == null ? null : options.getEndpointName();
@@ -1620,6 +1624,7 @@ public class CSharpAppResource extends ProjectResource {
         return withMcpServer(null);
     }
 
+    /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
     private CSharpAppResource withMcpServerImpl(String path, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1637,6 +1642,7 @@ public class CSharpAppResource extends ProjectResource {
         return withOtlpExporter(null);
     }
 
+    /** Configures OTLP telemetry export */
     public CSharpAppResource withOtlpExporter(OtlpProtocol protocol) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1647,6 +1653,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Configures how many replicas of the project should be created for the project. */
     public CSharpAppResource withReplicas(double replicas) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1655,6 +1662,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Configures the project to disable forwarded headers when being published. */
     public CSharpAppResource disableForwardedHeaders() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1666,6 +1674,7 @@ public class CSharpAppResource extends ProjectResource {
         return publishAsDockerFile(null);
     }
 
+    /** Publishes a project as a Docker file with optional container configuration */
     public CSharpAppResource publishAsDockerFile(AspireAction1<ContainerResource> configure) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1685,6 +1694,7 @@ public class CSharpAppResource extends ProjectResource {
         return withRequiredCommand(command, null);
     }
 
+    /** Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start. */
     public CSharpAppResource withRequiredCommand(String command, String helpLink) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1728,6 +1738,7 @@ public class CSharpAppResource extends ProjectResource {
         return withEnvironment(name, new IExpressionValue(value.getHandle(), value.getClient()));
     }
 
+    /** Sets an environment variable */
     public CSharpAppResource withEnvironment(String name, AspireUnion value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1737,6 +1748,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Allows for the population of environment variables on a resource. */
     public CSharpAppResource withEnvironmentCallback(AspireAction1<EnvironmentCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1752,6 +1764,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Adds arguments to be passed to a resource that supports arguments when it is launched. */
     public CSharpAppResource withArgs(String[] args) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1760,6 +1773,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Adds a callback to be executed with a list of command-line arguments when a resource is started. */
     public CSharpAppResource withArgsCallback(AspireAction1<CommandLineArgsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1775,6 +1789,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Configures how information is injected into environment variables when the resource references other resources. */
     public CSharpAppResource withReferenceEnvironment(ReferenceEnvironmentInjectionOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1811,6 +1826,7 @@ public class CSharpAppResource extends ProjectResource {
         return withReference(AspireUnion.of(source));
     }
 
+    /** Adds a reference to another resource */
     public CSharpAppResource withReference(AspireUnion source, WithReferenceOptions options) {
         var connectionName = options == null ? null : options.getConnectionName();
         var optional = options == null ? null : options.getOptional();
@@ -1822,6 +1838,7 @@ public class CSharpAppResource extends ProjectResource {
         return withReference(source, null);
     }
 
+    /** Adds a reference to another resource */
     private CSharpAppResource withReferenceImpl(AspireUnion source, String connectionName, Boolean optional, String name) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1843,6 +1860,7 @@ public class CSharpAppResource extends ProjectResource {
         return withEndpointCallback(endpointName, callback, null);
     }
 
+    /** Updates a named endpoint via callback */
     public CSharpAppResource withEndpointCallback(String endpointName, AspireAction1<EndpointUpdateContext> callback, Boolean createIfNotExists) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1862,6 +1880,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Updates an HTTP endpoint via callback */
     public CSharpAppResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions options) {
         var name = options == null ? null : options.getName();
         var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
@@ -1872,6 +1891,7 @@ public class CSharpAppResource extends ProjectResource {
         return withHttpEndpointCallback(callback, null);
     }
 
+    /** Updates an HTTP endpoint via callback */
     private CSharpAppResource withHttpEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1893,6 +1913,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Updates an HTTPS endpoint via callback */
     public CSharpAppResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
         var name = options == null ? null : options.getName();
         var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
@@ -1903,6 +1924,7 @@ public class CSharpAppResource extends ProjectResource {
         return withHttpsEndpointCallback(callback, null);
     }
 
+    /** Updates an HTTPS endpoint via callback */
     private CSharpAppResource withHttpsEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1924,6 +1946,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Adds a network endpoint */
     public CSharpAppResource withEndpoint(WithEndpointOptions options) {
         var port = options == null ? null : options.getPort();
         var targetPort = options == null ? null : options.getTargetPort();
@@ -1940,6 +1963,7 @@ public class CSharpAppResource extends ProjectResource {
         return withEndpoint(null);
     }
 
+    /** Adds a network endpoint */
     private CSharpAppResource withEndpointImpl(Double port, Double targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1971,6 +1995,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Adds an HTTP endpoint */
     public CSharpAppResource withHttpEndpoint(WithHttpEndpointOptions options) {
         var port = options == null ? null : options.getPort();
         var targetPort = options == null ? null : options.getTargetPort();
@@ -1984,6 +2009,7 @@ public class CSharpAppResource extends ProjectResource {
         return withHttpEndpoint(null);
     }
 
+    /** Adds an HTTP endpoint */
     private CSharpAppResource withHttpEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2006,6 +2032,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Adds an HTTPS endpoint */
     public CSharpAppResource withHttpsEndpoint(WithHttpsEndpointOptions options) {
         var port = options == null ? null : options.getPort();
         var targetPort = options == null ? null : options.getTargetPort();
@@ -2019,6 +2046,7 @@ public class CSharpAppResource extends ProjectResource {
         return withHttpsEndpoint(null);
     }
 
+    /** Adds an HTTPS endpoint */
     private CSharpAppResource withHttpsEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2041,6 +2069,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Marks existing http or https endpoints on a resource as external. */
     public CSharpAppResource withExternalHttpEndpoints() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2048,6 +2077,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Gets an endpoint reference */
     public EndpointReference getEndpoint(String name) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2055,6 +2085,7 @@ public class CSharpAppResource extends ProjectResource {
         return (EndpointReference) getClient().invokeCapability("Aspire.Hosting/getEndpoint", reqArgs);
     }
 
+    /** Configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge. */
     public CSharpAppResource asHttp2Service() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2062,6 +2093,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Registers a callback to customize the URLs displayed for the resource. */
     public CSharpAppResource withUrls(AspireAction1<ResourceUrlsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2089,6 +2121,7 @@ public class CSharpAppResource extends ProjectResource {
         return withUrl(url, null);
     }
 
+    /** Adds or modifies displayed URLs */
     public CSharpAppResource withUrl(AspireUnion url, String displayText) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2100,6 +2133,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Registers a callback to update the URL displayed for the endpoint with the specified name. */
     public CSharpAppResource withUrlForEndpoint(String endpointName, AspireAction1<ResourceUrlAnnotation> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2116,6 +2150,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Configures the resource to copy container files from the specified source resource during publishing. */
     public CSharpAppResource publishWithContainerFiles(IResourceWithContainerFiles source, String destinationPath) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2129,6 +2164,7 @@ public class CSharpAppResource extends ProjectResource {
         return publishWithContainerFiles(new IResourceWithContainerFiles(source.getHandle(), source.getClient()), destinationPath);
     }
 
+    /** Excludes a resource from being published to the manifest. */
     public CSharpAppResource excludeFromManifest() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2144,6 +2180,7 @@ public class CSharpAppResource extends ProjectResource {
         return waitFor(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Waits for another resource to be ready */
     public CSharpAppResource waitFor(IResource dependency, WaitBehavior waitBehavior) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2167,6 +2204,7 @@ public class CSharpAppResource extends ProjectResource {
         return waitForStart(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Waits for another resource to start */
     public CSharpAppResource waitForStart(IResource dependency, WaitBehavior waitBehavior) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2182,6 +2220,7 @@ public class CSharpAppResource extends ProjectResource {
         return waitForStart(new IResource(dependency.getHandle(), dependency.getClient()), waitBehavior);
     }
 
+    /** Prevents resource from starting automatically */
     public CSharpAppResource withExplicitStart() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2197,6 +2236,7 @@ public class CSharpAppResource extends ProjectResource {
         return waitForCompletion(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Waits for the dependency resource to enter the Exited or Finished state before starting the resource. */
     public CSharpAppResource waitForCompletion(IResource dependency, Double exitCode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2212,6 +2252,7 @@ public class CSharpAppResource extends ProjectResource {
         return waitForCompletion(new IResource(dependency.getHandle(), dependency.getClient()), exitCode);
     }
 
+    /** Adds a health check by key */
     public CSharpAppResource withHealthCheck(String key) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2220,6 +2261,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Adds a health check to the resource which is mapped to a specific endpoint. */
     public CSharpAppResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
         var path = options == null ? null : options.getPath();
         var statusCode = options == null ? null : options.getStatusCode();
@@ -2231,6 +2273,7 @@ public class CSharpAppResource extends ProjectResource {
         return withHttpHealthCheck(null);
     }
 
+    /** Adds a health check to the resource which is mapped to a specific endpoint. */
     private CSharpAppResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2251,6 +2294,7 @@ public class CSharpAppResource extends ProjectResource {
         return withCommand(name, displayName, executeCommand, null);
     }
 
+    /** Adds a resource command */
     public CSharpAppResource withCommand(String name, String displayName, AspireFunc1<ExecuteCommandContext, ExecuteCommandResult> executeCommand, CommandOptions commandOptions) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2270,6 +2314,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Adds a command to the resource that starts a local process when invoked. */
     public CSharpAppResource withProcessCommand(String commandName, String displayName, ProcessCommandExportOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2284,6 +2329,7 @@ public class CSharpAppResource extends ProjectResource {
         return withProcessCommandFactory(commandName, displayName, createProcessSpec, null);
     }
 
+    /** Adds a command to the resource that starts a local process created by a callback when invoked. */
     public CSharpAppResource withProcessCommandFactory(String commandName, String displayName, AspireFunc1<ExecuteCommandContext, ProcessCommandSpecExportData> createProcessSpec, ProcessCommandResultExportOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2307,6 +2353,7 @@ public class CSharpAppResource extends ProjectResource {
         return withHttpCommand(path, displayName, null);
     }
 
+    /** Adds an HTTP resource command */
     public CSharpAppResource withHttpCommand(String path, String displayName, HttpCommandExportOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2319,6 +2366,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Indicates whether developer certificates should be treated as trusted certificate authorities for the resource at run time. Currently this indicates trust for the ASP.NET Core developer certificate. The developer certificate will only be trusted when running in local development scenarios; in publish mode resources will use their default certificate trust. */
     public CSharpAppResource withDeveloperCertificateTrust(boolean trust) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2327,6 +2375,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Sets the certificate trust scope */
     public CSharpAppResource withCertificateTrustScope(CertificateTrustScope scope) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2339,6 +2388,7 @@ public class CSharpAppResource extends ProjectResource {
         return withHttpsDeveloperCertificate(null);
     }
 
+    /** Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration. */
     public CSharpAppResource withHttpsDeveloperCertificate(ParameterResource password) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2349,6 +2399,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Disable HTTPS/TLS server certificate configuration for the resource. No HTTPS/TLS termination configuration will be applied. */
     public CSharpAppResource withoutHttpsCertificate() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2356,6 +2407,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Adds a relationship to another resource using its builder. */
     public CSharpAppResource withRelationship(IResource resourceBuilder, String type) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2369,6 +2421,7 @@ public class CSharpAppResource extends ProjectResource {
         return withRelationship(new IResource(resourceBuilder.getHandle(), resourceBuilder.getClient()), type);
     }
 
+    /** Sets the parent relationship */
     public CSharpAppResource withParentRelationship(IResource parent) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2381,6 +2434,7 @@ public class CSharpAppResource extends ProjectResource {
         return withParentRelationship(new IResource(parent.getHandle(), parent.getClient()));
     }
 
+    /** Sets a child relationship */
     public CSharpAppResource withChildRelationship(IResource child) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2397,6 +2451,7 @@ public class CSharpAppResource extends ProjectResource {
         return withIconName(iconName, null);
     }
 
+    /** Specifies the icon to use when displaying the resource in the dashboard. */
     public CSharpAppResource withIconName(String iconName, IconVariant iconVariant) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2408,6 +2463,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Configures the compute environment for the compute resource. */
     public CSharpAppResource withComputeEnvironment(IComputeEnvironmentResource computeEnvironmentResource) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2420,6 +2476,7 @@ public class CSharpAppResource extends ProjectResource {
         return withComputeEnvironment(new IComputeEnvironmentResource(computeEnvironmentResource.getHandle(), computeEnvironmentResource.getClient()));
     }
 
+    /** Adds an HTTP health probe to the resource */
     public CSharpAppResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions options) {
         var path = options == null ? null : options.getPath();
         var initialDelaySeconds = options == null ? null : options.getInitialDelaySeconds();
@@ -2435,6 +2492,7 @@ public class CSharpAppResource extends ProjectResource {
         return withHttpProbe(probeType, null);
     }
 
+    /** Adds an HTTP health probe to the resource */
     private CSharpAppResource withHttpProbeImpl(ProbeType probeType, String path, Double initialDelaySeconds, Double periodSeconds, Double timeoutSeconds, Double failureThreshold, Double successThreshold, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2464,6 +2522,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry. */
     public CSharpAppResource excludeFromMcp() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2471,6 +2530,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Adds an asynchronous callback to configure container image push options for the resource. */
     public CSharpAppResource withImagePushOptions(AspireAction1<ContainerImagePushOptionsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2486,6 +2546,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Sets the remote image name (without registry endpoint or tag) for container push operations. */
     public CSharpAppResource withRemoteImageName(String remoteImageName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2494,6 +2555,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Sets the remote image tag for container push operations. */
     public CSharpAppResource withRemoteImageTag(String remoteImageTag) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2502,6 +2564,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Adds a pipeline step to the resource that will be executed during deployment. */
     public CSharpAppResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
         var dependsOn = options == null ? null : options.getDependsOn();
         var requiredBy = options == null ? null : options.getRequiredBy();
@@ -2514,6 +2577,7 @@ public class CSharpAppResource extends ProjectResource {
         return withPipelineStepFactory(stepName, callback, null);
     }
 
+    /** Adds a pipeline step to the resource that will be executed during deployment. */
     private CSharpAppResource withPipelineStepFactoryImpl(String stepName, AspireAction1<PipelineStepContext> callback, String[] dependsOn, String[] requiredBy, String[] tags, String description) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2542,6 +2606,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships. */
     public CSharpAppResource withPipelineConfiguration(AspireAction1<PipelineConfigurationContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2557,12 +2622,14 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Gets the name of the resource from a builder. */
     public String getResourceName() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
         return (String) getClient().invokeCapability("Aspire.Hosting/getResourceName", reqArgs);
     }
 
+    /** Subscribes to the BeforeResourceStarted event. */
     public CSharpAppResource onBeforeResourceStarted(AspireAction1<BeforeResourceStartedEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2578,6 +2645,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Subscribes to the ResourceStopped event. */
     public CSharpAppResource onResourceStopped(AspireAction1<ResourceStoppedEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2593,6 +2661,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Subscribes to the InitializeResource event. */
     public CSharpAppResource onInitializeResource(AspireAction1<InitializeResourceEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2608,6 +2677,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Subscribes to the ResourceEndpointsAllocated event. */
     public CSharpAppResource onResourceEndpointsAllocated(AspireAction1<ResourceEndpointsAllocatedEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2623,6 +2693,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Subscribes to the ResourceReady event. */
     public CSharpAppResource onResourceReady(AspireAction1<ResourceReadyEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2638,12 +2709,14 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Creates an execution configuration builder for the specified resource. */
     public IExecutionConfigurationBuilder createExecutionConfiguration() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
         return (IExecutionConfigurationBuilder) getClient().invokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs);
     }
 
+    /** Adds an optional string parameter */
     public CSharpAppResource withOptionalString(WithOptionalStringOptions options) {
         var value = options == null ? null : options.getValue();
         var enabled = options == null ? null : options.getEnabled();
@@ -2654,6 +2727,7 @@ public class CSharpAppResource extends ProjectResource {
         return withOptionalString(null);
     }
 
+    /** Adds an optional string parameter */
     private CSharpAppResource withOptionalStringImpl(String value, Boolean enabled) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2667,6 +2741,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Configures the resource with a DTO */
     public CSharpAppResource withConfig(TestConfigDto config) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2675,6 +2750,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Configures environment with callback (test version) */
     public CSharpAppResource testWithEnvironmentCallback(AspireAction1<TestEnvironmentContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2690,6 +2766,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Sets the created timestamp */
     public CSharpAppResource withCreatedAt(String createdAt) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2698,6 +2775,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Sets the modified timestamp */
     public CSharpAppResource withModifiedAt(String modifiedAt) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2706,6 +2784,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Sets the correlation ID */
     public CSharpAppResource withCorrelationId(String correlationId) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2718,6 +2797,7 @@ public class CSharpAppResource extends ProjectResource {
         return withOptionalCallback(null);
     }
 
+    /** Configures with optional callback */
     public CSharpAppResource withOptionalCallback(AspireAction1<TestCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2733,6 +2813,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Sets the resource status */
     public CSharpAppResource withStatus(TestResourceStatus status) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2741,6 +2822,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Configures with nested DTO */
     public CSharpAppResource withNestedConfig(TestNestedDto config) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2749,6 +2831,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Adds validation callback */
     public CSharpAppResource withValidator(AspireFunc1<TestResourceContext, Boolean> validator) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2763,6 +2846,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Waits for another resource (test version) */
     public CSharpAppResource testWaitFor(IResource dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2775,6 +2859,7 @@ public class CSharpAppResource extends ProjectResource {
         return testWaitFor(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Adds a dependency on another resource */
     public CSharpAppResource withDependency(IResourceWithConnectionString dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2799,6 +2884,7 @@ public class CSharpAppResource extends ProjectResource {
         return withUnionDependency(new IResourceWithConnectionString(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Adds a dependency from a string or another resource */
     public CSharpAppResource withUnionDependency(AspireUnion dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2807,6 +2893,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Sets the endpoints */
     public CSharpAppResource withEndpoints(String[] endpoints) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2815,6 +2902,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Sets environment variables */
     public CSharpAppResource withEnvironmentVariables(Map<String, String> variables) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2823,6 +2911,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Performs a cancellable operation */
     public CSharpAppResource withCancellableOperation(AspireAction1<CancellationToken> operation) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2838,6 +2927,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Adds a label to the resource */
     public CSharpAppResource withMergeLabel(String label) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2846,6 +2936,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Adds a categorized label to the resource */
     public CSharpAppResource withMergeLabelCategorized(String label, String category) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2855,6 +2946,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Configures a named endpoint */
     public CSharpAppResource withMergeEndpoint(String endpointName, double port) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2864,6 +2956,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Configures a named endpoint with scheme */
     public CSharpAppResource withMergeEndpointScheme(String endpointName, double port, String scheme) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2874,6 +2967,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Configures resource logging */
     public CSharpAppResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
         var enableConsole = options == null ? null : options.getEnableConsole();
         var maxFiles = options == null ? null : options.getMaxFiles();
@@ -2884,6 +2978,7 @@ public class CSharpAppResource extends ProjectResource {
         return withMergeLogging(logLevel, null);
     }
 
+    /** Configures resource logging */
     private CSharpAppResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2898,6 +2993,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Configures resource logging with file path */
     public CSharpAppResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
         var enableConsole = options == null ? null : options.getEnableConsole();
         var maxFiles = options == null ? null : options.getMaxFiles();
@@ -2908,6 +3004,7 @@ public class CSharpAppResource extends ProjectResource {
         return withMergeLoggingPath(logLevel, logPath, null);
     }
 
+    /** Configures resource logging with file path */
     private CSharpAppResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2923,6 +3020,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Configures a route */
     public CSharpAppResource withMergeRoute(String path, String method, String handler, double priority) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2934,6 +3032,7 @@ public class CSharpAppResource extends ProjectResource {
         return this;
     }
 
+    /** Configures a route with middleware */
     public CSharpAppResource withMergeRouteMiddleware(String path, String method, String handler, double priority, String middleware) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -3124,28 +3223,28 @@ public class CommandLineArgsCallbackContext extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the ArgsEditor property */
+    /** Gets the editor used to manipulate command-line arguments in polyglot callbacks. */
     public CommandLineArgsEditor args() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (CommandLineArgsEditor) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.args", reqArgs);
     }
 
-    /** Gets the Log property */
+    /** Gets the logger facade used by polyglot callbacks. */
     public LogFacade log() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (LogFacade) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.log", reqArgs);
     }
 
-    /** Gets the Resource property */
+    /** The resource associated with this callback context. */
     public IResource resource() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (IResource) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/CommandLineArgsCallbackContext.resource", reqArgs);
     }
 
-    /** Gets the ExportedExecutionContext property */
+    /** Gets the execution context associated with this callback. */
     public DistributedApplicationExecutionContext executionContext() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -3200,7 +3299,7 @@ public class CommandLineArgsEditor extends HandleWrapperBase {
         add(new IExpressionValue(value.getHandle(), value.getClient()));
     }
 
-    /** Invokes the Add method */
+    /** Adds a command-line argument. */
     public void add(AspireUnion value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -3487,7 +3586,7 @@ public class ContainerImagePushOptions extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the RemoteImageName property */
+    /** Gets or sets the remote image name (repository path without registry endpoint or tag). */
     public String remoteImageName() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -3502,7 +3601,7 @@ public class ContainerImagePushOptions extends HandleWrapperBase {
         return (ContainerImagePushOptions) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptions.setRemoteImageName", reqArgs);
     }
 
-    /** Gets the RemoteImageTag property */
+    /** Gets or sets the remote image tag. */
     public String remoteImageTag() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -3533,21 +3632,21 @@ public class ContainerImagePushOptionsCallbackContext extends HandleWrapperBase 
         super(handle, client);
     }
 
-    /** Gets the Resource property */
+    /** Gets the resource being configured for container image push operations. */
     public IResource resource() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (IResource) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.resource", reqArgs);
     }
 
-    /** Gets the CancellationToken property */
+    /** Gets the cancellation token to observe while configuring image push options. */
     public CancellationToken cancellationToken() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (CancellationToken) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerImagePushOptionsCallbackContext.cancellationToken", reqArgs);
     }
 
-    /** Gets the Options property */
+    /** Gets the container image push options that can be modified by the callback. */
     public ContainerImagePushOptions options() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -3570,7 +3669,7 @@ public class ContainerImageReference extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the Resource property */
+    /** Gets the resource that this container image is associated with. */
     public IResource resource() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -3629,28 +3728,28 @@ public class ContainerMountAnnotation extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the Source property */
+    /** Gets the source of the bind mount or name if a volume. Can be `null` if the mount is an anonymous volume. */
     public String source() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (String) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerMountAnnotation.source", reqArgs);
     }
 
-    /** Gets the Target property */
+    /** Gets the target of the mount. */
     public String target() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (String) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerMountAnnotation.target", reqArgs);
     }
 
-    /** Gets the Type property */
+    /** Gets the type of the mount. */
     public ContainerMountType type() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (ContainerMountType) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ContainerMountAnnotation.type", reqArgs);
     }
 
-    /** Gets the IsReadOnly property */
+    /** Gets a value indicating whether the volume mount is read-only. */
     public boolean isReadOnly() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -3702,7 +3801,7 @@ public class ContainerPortReference extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the Resource property */
+    /** Gets the resource that this container port is associated with. */
     public IResource resource() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -3732,6 +3831,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         super(handle, client);
     }
 
+    /** Configures the resource to use the specified container registry for container image operations. */
     public ContainerRegistryResource withContainerRegistry(IResource registry) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -3744,6 +3844,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return withContainerRegistry(new IResource(registry.getHandle(), registry.getClient()));
     }
 
+    /** Configures custom base images for generated Dockerfiles. */
     public ContainerRegistryResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
         var buildImage = options == null ? null : options.getBuildImage();
         var runtimeImage = options == null ? null : options.getRuntimeImage();
@@ -3754,6 +3855,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return withDockerfileBaseImage(null);
     }
 
+    /** Configures custom base images for generated Dockerfiles. */
     private ContainerRegistryResource withDockerfileBaseImageImpl(String buildImage, String runtimeImage) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -3771,6 +3873,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return withRequiredCommand(command, null);
     }
 
+    /** Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start. */
     public ContainerRegistryResource withRequiredCommand(String command, String helpLink) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -3782,6 +3885,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Registers a callback to customize the URLs displayed for the resource. */
     public ContainerRegistryResource withUrls(AspireAction1<ResourceUrlsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -3809,6 +3913,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return withUrl(url, null);
     }
 
+    /** Adds or modifies displayed URLs */
     public ContainerRegistryResource withUrl(AspireUnion url, String displayText) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -3820,6 +3925,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Registers a callback to update the URL displayed for the endpoint with the specified name. */
     public ContainerRegistryResource withUrlForEndpoint(String endpointName, AspireAction1<ResourceUrlAnnotation> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -3836,6 +3942,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Excludes a resource from being published to the manifest. */
     public ContainerRegistryResource excludeFromManifest() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -3843,6 +3950,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Prevents resource from starting automatically */
     public ContainerRegistryResource withExplicitStart() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -3850,6 +3958,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a health check by key */
     public ContainerRegistryResource withHealthCheck(String key) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -3862,6 +3971,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return withCommand(name, displayName, executeCommand, null);
     }
 
+    /** Adds a resource command */
     public ContainerRegistryResource withCommand(String name, String displayName, AspireFunc1<ExecuteCommandContext, ExecuteCommandResult> executeCommand, CommandOptions commandOptions) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -3881,6 +3991,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a command to the resource that starts a local process when invoked. */
     public ContainerRegistryResource withProcessCommand(String commandName, String displayName, ProcessCommandExportOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -3895,6 +4006,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return withProcessCommandFactory(commandName, displayName, createProcessSpec, null);
     }
 
+    /** Adds a command to the resource that starts a local process created by a callback when invoked. */
     public ContainerRegistryResource withProcessCommandFactory(String commandName, String displayName, AspireFunc1<ExecuteCommandContext, ProcessCommandSpecExportData> createProcessSpec, ProcessCommandResultExportOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -3914,6 +4026,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a relationship to another resource using its builder. */
     public ContainerRegistryResource withRelationship(IResource resourceBuilder, String type) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -3927,6 +4040,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return withRelationship(new IResource(resourceBuilder.getHandle(), resourceBuilder.getClient()), type);
     }
 
+    /** Sets the parent relationship */
     public ContainerRegistryResource withParentRelationship(IResource parent) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -3939,6 +4053,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return withParentRelationship(new IResource(parent.getHandle(), parent.getClient()));
     }
 
+    /** Sets a child relationship */
     public ContainerRegistryResource withChildRelationship(IResource child) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -3955,6 +4070,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return withIconName(iconName, null);
     }
 
+    /** Specifies the icon to use when displaying the resource in the dashboard. */
     public ContainerRegistryResource withIconName(String iconName, IconVariant iconVariant) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -3966,6 +4082,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry. */
     public ContainerRegistryResource excludeFromMcp() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -3973,6 +4090,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a pipeline step to the resource that will be executed during deployment. */
     public ContainerRegistryResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
         var dependsOn = options == null ? null : options.getDependsOn();
         var requiredBy = options == null ? null : options.getRequiredBy();
@@ -3985,6 +4103,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return withPipelineStepFactory(stepName, callback, null);
     }
 
+    /** Adds a pipeline step to the resource that will be executed during deployment. */
     private ContainerRegistryResource withPipelineStepFactoryImpl(String stepName, AspireAction1<PipelineStepContext> callback, String[] dependsOn, String[] requiredBy, String[] tags, String description) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4013,6 +4132,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships. */
     public ContainerRegistryResource withPipelineConfiguration(AspireAction1<PipelineConfigurationContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4028,12 +4148,14 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Gets the name of the resource from a builder. */
     public String getResourceName() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
         return (String) getClient().invokeCapability("Aspire.Hosting/getResourceName", reqArgs);
     }
 
+    /** Subscribes to the BeforeResourceStarted event. */
     public ContainerRegistryResource onBeforeResourceStarted(AspireAction1<BeforeResourceStartedEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4049,6 +4171,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Subscribes to the ResourceStopped event. */
     public ContainerRegistryResource onResourceStopped(AspireAction1<ResourceStoppedEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4064,6 +4187,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Subscribes to the InitializeResource event. */
     public ContainerRegistryResource onInitializeResource(AspireAction1<InitializeResourceEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4079,6 +4203,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Subscribes to the ResourceReady event. */
     public ContainerRegistryResource onResourceReady(AspireAction1<ResourceReadyEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4094,12 +4219,14 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Creates an execution configuration builder for the specified resource. */
     public IExecutionConfigurationBuilder createExecutionConfiguration() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
         return (IExecutionConfigurationBuilder) getClient().invokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs);
     }
 
+    /** Adds an optional string parameter */
     public ContainerRegistryResource withOptionalString(WithOptionalStringOptions options) {
         var value = options == null ? null : options.getValue();
         var enabled = options == null ? null : options.getEnabled();
@@ -4110,6 +4237,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return withOptionalString(null);
     }
 
+    /** Adds an optional string parameter */
     private ContainerRegistryResource withOptionalStringImpl(String value, Boolean enabled) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4123,6 +4251,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures the resource with a DTO */
     public ContainerRegistryResource withConfig(TestConfigDto config) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4131,6 +4260,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the created timestamp */
     public ContainerRegistryResource withCreatedAt(String createdAt) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4139,6 +4269,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the modified timestamp */
     public ContainerRegistryResource withModifiedAt(String modifiedAt) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4147,6 +4278,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the correlation ID */
     public ContainerRegistryResource withCorrelationId(String correlationId) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4159,6 +4291,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return withOptionalCallback(null);
     }
 
+    /** Configures with optional callback */
     public ContainerRegistryResource withOptionalCallback(AspireAction1<TestCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4174,6 +4307,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the resource status */
     public ContainerRegistryResource withStatus(TestResourceStatus status) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4182,6 +4316,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures with nested DTO */
     public ContainerRegistryResource withNestedConfig(TestNestedDto config) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4190,6 +4325,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds validation callback */
     public ContainerRegistryResource withValidator(AspireFunc1<TestResourceContext, Boolean> validator) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4204,6 +4340,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Waits for another resource (test version) */
     public ContainerRegistryResource testWaitFor(IResource dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4216,6 +4353,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return testWaitFor(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Adds a dependency on another resource */
     public ContainerRegistryResource withDependency(IResourceWithConnectionString dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4240,6 +4378,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return withUnionDependency(new IResourceWithConnectionString(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Adds a dependency from a string or another resource */
     public ContainerRegistryResource withUnionDependency(AspireUnion dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4248,6 +4387,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the endpoints */
     public ContainerRegistryResource withEndpoints(String[] endpoints) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4256,6 +4396,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Performs a cancellable operation */
     public ContainerRegistryResource withCancellableOperation(AspireAction1<CancellationToken> operation) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4271,6 +4412,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a label to the resource */
     public ContainerRegistryResource withMergeLabel(String label) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4279,6 +4421,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a categorized label to the resource */
     public ContainerRegistryResource withMergeLabelCategorized(String label, String category) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4288,6 +4431,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a named endpoint */
     public ContainerRegistryResource withMergeEndpoint(String endpointName, double port) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4297,6 +4441,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a named endpoint with scheme */
     public ContainerRegistryResource withMergeEndpointScheme(String endpointName, double port, String scheme) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4307,6 +4452,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures resource logging */
     public ContainerRegistryResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
         var enableConsole = options == null ? null : options.getEnableConsole();
         var maxFiles = options == null ? null : options.getMaxFiles();
@@ -4317,6 +4463,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return withMergeLogging(logLevel, null);
     }
 
+    /** Configures resource logging */
     private ContainerRegistryResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4331,6 +4478,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures resource logging with file path */
     public ContainerRegistryResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
         var enableConsole = options == null ? null : options.getEnableConsole();
         var maxFiles = options == null ? null : options.getMaxFiles();
@@ -4341,6 +4489,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return withMergeLoggingPath(logLevel, logPath, null);
     }
 
+    /** Configures resource logging with file path */
     private ContainerRegistryResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4356,6 +4505,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a route */
     public ContainerRegistryResource withMergeRoute(String path, String method, String handler, double priority) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4367,6 +4517,7 @@ public class ContainerRegistryResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a route with middleware */
     public ContainerRegistryResource withMergeRouteMiddleware(String path, String method, String handler, double priority, String middleware) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4395,6 +4546,7 @@ public class ContainerResource extends ResourceBuilderBase {
         super(handle, client);
     }
 
+    /** Configures the resource to use the specified container registry for container image operations. */
     public ContainerResource withContainerRegistry(IResource registry) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4411,6 +4563,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withBindMount(source, target, null);
     }
 
+    /** Adds a bind mount to a container resource. */
     public ContainerResource withBindMount(String source, String target, Boolean isReadOnly) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4423,6 +4576,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the Entrypoint for the container. */
     public ContainerResource withEntrypoint(String entrypoint) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4431,6 +4585,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Allows overriding the image tag on a container. */
     public ContainerResource withImageTag(String tag) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4439,6 +4594,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Allows overriding the image registry on a container. */
     public ContainerResource withImageRegistry(String registry) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4451,6 +4607,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withImage(image, null);
     }
 
+    /** Allows overriding the image on a container. */
     public ContainerResource withImage(String image, String tag) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4462,6 +4619,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Allows setting the image to a specific sha256 on a container. */
     public ContainerResource withImageSHA256(String sha256) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4470,6 +4628,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a callback to be executed with a list of arguments to add to the container runtime run command when a container resource is started. */
     public ContainerResource withContainerRuntimeArgs(String[] args) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4478,6 +4637,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the lifetime behavior of the container resource. */
     public ContainerResource withLifetime(ContainerLifetime lifetime) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4486,6 +4646,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the pull policy for the container resource. */
     public ContainerResource withImagePullPolicy(ImagePullPolicy pullPolicy) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4494,6 +4655,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Changes the resource to be published as a container in the manifest. */
     public ContainerResource publishAsContainer() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4501,6 +4663,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Causes Aspire to build the specified container image from a Dockerfile. */
     public ContainerResource withDockerfile(String contextPath, WithDockerfileOptions options) {
         var dockerfilePath = options == null ? null : options.getDockerfilePath();
         var stage = options == null ? null : options.getStage();
@@ -4511,6 +4674,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withDockerfile(contextPath, null);
     }
 
+    /** Causes Aspire to build the specified container image from a Dockerfile. */
     private ContainerResource withDockerfileImpl(String contextPath, String dockerfilePath, String stage) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4525,6 +4689,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Overrides the default container name for this resource. By default Aspire generates a unique container name based on the resource name and a random postfix (or a postfix based on a hash of the AppHost project path for persistent container resources). This method allows you to override that behavior with a custom name, but could lead to naming conflicts if the specified name is not unique. */
     public ContainerResource withContainerName(String name) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4541,6 +4706,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withBuildArg(name, AspireUnion.of(value));
     }
 
+    /** Adds a build argument when the container is built from a Dockerfile. */
     public ContainerResource withBuildArg(String name, AspireUnion value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4550,6 +4716,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a secret build argument when the container is built from a Dockerfile. */
     public ContainerResource withBuildSecret(String name, ParameterResource value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4559,6 +4726,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds container certificate path overrides used for certificate trust at run time. */
     public ContainerResource withContainerCertificatePaths(WithContainerCertificatePathsOptions options) {
         var customCertificatesDestination = options == null ? null : options.getCustomCertificatesDestination();
         var defaultCertificateBundlePaths = options == null ? null : options.getDefaultCertificateBundlePaths();
@@ -4570,6 +4738,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withContainerCertificatePaths(null);
     }
 
+    /** Adds container certificate path overrides used for certificate trust at run time. */
     private ContainerResource withContainerCertificatePathsImpl(String customCertificatesDestination, String[] defaultCertificateBundlePaths, String[] defaultCertificateDirectoryPaths) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4586,6 +4755,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Set whether a container resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the container. If set to `false`, endpoints belonging to the container resource will ignore the configured proxy settings and run proxy-less. */
     public ContainerResource withEndpointProxySupport(boolean proxyEnabled) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4598,6 +4768,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withDockerfileBuilder(contextPath, callback, null);
     }
 
+    /** Configures the resource to use a programmatically generated Dockerfile */
     public ContainerResource withDockerfileBuilder(String contextPath, AspireAction1<DockerfileBuilderCallbackContext> callback, String stage) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4617,6 +4788,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures custom base images for generated Dockerfiles. */
     public ContainerResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
         var buildImage = options == null ? null : options.getBuildImage();
         var runtimeImage = options == null ? null : options.getRuntimeImage();
@@ -4627,6 +4799,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withDockerfileBaseImage(null);
     }
 
+    /** Configures custom base images for generated Dockerfiles. */
     private ContainerResource withDockerfileBaseImageImpl(String buildImage, String runtimeImage) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4640,6 +4813,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a network alias to container resource. */
     public ContainerResource withContainerNetworkAlias(String alias) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4648,6 +4822,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
     public ContainerResource withMcpServer(WithMcpServerOptions options) {
         var path = options == null ? null : options.getPath();
         var endpointName = options == null ? null : options.getEndpointName();
@@ -4658,6 +4833,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withMcpServer(null);
     }
 
+    /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
     private ContainerResource withMcpServerImpl(String path, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4675,6 +4851,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withOtlpExporter(null);
     }
 
+    /** Configures OTLP telemetry export */
     public ContainerResource withOtlpExporter(OtlpProtocol protocol) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4685,6 +4862,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Changes the resource to be published as a connection string reference in the manifest. */
     public ContainerResource publishAsConnectionString() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4696,6 +4874,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withRequiredCommand(command, null);
     }
 
+    /** Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start. */
     public ContainerResource withRequiredCommand(String command, String helpLink) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4739,6 +4918,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withEnvironment(name, new IExpressionValue(value.getHandle(), value.getClient()));
     }
 
+    /** Sets an environment variable */
     public ContainerResource withEnvironment(String name, AspireUnion value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4748,6 +4928,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Allows for the population of environment variables on a resource. */
     public ContainerResource withEnvironmentCallback(AspireAction1<EnvironmentCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4763,6 +4944,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds arguments to be passed to a resource that supports arguments when it is launched. */
     public ContainerResource withArgs(String[] args) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4771,6 +4953,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a callback to be executed with a list of command-line arguments when a resource is started. */
     public ContainerResource withArgsCallback(AspireAction1<CommandLineArgsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4786,6 +4969,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures how information is injected into environment variables when the resource references other resources. */
     public ContainerResource withReferenceEnvironment(ReferenceEnvironmentInjectionOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4822,6 +5006,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withReference(AspireUnion.of(source));
     }
 
+    /** Adds a reference to another resource */
     public ContainerResource withReference(AspireUnion source, WithReferenceOptions options) {
         var connectionName = options == null ? null : options.getConnectionName();
         var optional = options == null ? null : options.getOptional();
@@ -4833,6 +5018,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withReference(source, null);
     }
 
+    /** Adds a reference to another resource */
     private ContainerResource withReferenceImpl(AspireUnion source, String connectionName, Boolean optional, String name) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4854,6 +5040,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withEndpointCallback(endpointName, callback, null);
     }
 
+    /** Updates a named endpoint via callback */
     public ContainerResource withEndpointCallback(String endpointName, AspireAction1<EndpointUpdateContext> callback, Boolean createIfNotExists) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4873,6 +5060,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Updates an HTTP endpoint via callback */
     public ContainerResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions options) {
         var name = options == null ? null : options.getName();
         var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
@@ -4883,6 +5071,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withHttpEndpointCallback(callback, null);
     }
 
+    /** Updates an HTTP endpoint via callback */
     private ContainerResource withHttpEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4904,6 +5093,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Updates an HTTPS endpoint via callback */
     public ContainerResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
         var name = options == null ? null : options.getName();
         var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
@@ -4914,6 +5104,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withHttpsEndpointCallback(callback, null);
     }
 
+    /** Updates an HTTPS endpoint via callback */
     private ContainerResource withHttpsEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4935,6 +5126,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a network endpoint */
     public ContainerResource withEndpoint(WithEndpointOptions options) {
         var port = options == null ? null : options.getPort();
         var targetPort = options == null ? null : options.getTargetPort();
@@ -4951,6 +5143,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withEndpoint(null);
     }
 
+    /** Adds a network endpoint */
     private ContainerResource withEndpointImpl(Double port, Double targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -4982,6 +5175,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds an HTTP endpoint */
     public ContainerResource withHttpEndpoint(WithHttpEndpointOptions options) {
         var port = options == null ? null : options.getPort();
         var targetPort = options == null ? null : options.getTargetPort();
@@ -4995,6 +5189,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withHttpEndpoint(null);
     }
 
+    /** Adds an HTTP endpoint */
     private ContainerResource withHttpEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5017,6 +5212,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds an HTTPS endpoint */
     public ContainerResource withHttpsEndpoint(WithHttpsEndpointOptions options) {
         var port = options == null ? null : options.getPort();
         var targetPort = options == null ? null : options.getTargetPort();
@@ -5030,6 +5226,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withHttpsEndpoint(null);
     }
 
+    /** Adds an HTTPS endpoint */
     private ContainerResource withHttpsEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5052,6 +5249,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Marks existing http or https endpoints on a resource as external. */
     public ContainerResource withExternalHttpEndpoints() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5059,6 +5257,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Gets an endpoint reference */
     public EndpointReference getEndpoint(String name) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5066,6 +5265,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return (EndpointReference) getClient().invokeCapability("Aspire.Hosting/getEndpoint", reqArgs);
     }
 
+    /** Configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge. */
     public ContainerResource asHttp2Service() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5073,6 +5273,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Registers a callback to customize the URLs displayed for the resource. */
     public ContainerResource withUrls(AspireAction1<ResourceUrlsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5100,6 +5301,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withUrl(url, null);
     }
 
+    /** Adds or modifies displayed URLs */
     public ContainerResource withUrl(AspireUnion url, String displayText) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5111,6 +5313,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Registers a callback to update the URL displayed for the endpoint with the specified name. */
     public ContainerResource withUrlForEndpoint(String endpointName, AspireAction1<ResourceUrlAnnotation> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5127,6 +5330,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Excludes a resource from being published to the manifest. */
     public ContainerResource excludeFromManifest() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5142,6 +5346,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return waitFor(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Waits for another resource to be ready */
     public ContainerResource waitFor(IResource dependency, WaitBehavior waitBehavior) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5165,6 +5370,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return waitForStart(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Waits for another resource to start */
     public ContainerResource waitForStart(IResource dependency, WaitBehavior waitBehavior) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5180,6 +5386,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return waitForStart(new IResource(dependency.getHandle(), dependency.getClient()), waitBehavior);
     }
 
+    /** Prevents resource from starting automatically */
     public ContainerResource withExplicitStart() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5195,6 +5402,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return waitForCompletion(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Waits for the dependency resource to enter the Exited or Finished state before starting the resource. */
     public ContainerResource waitForCompletion(IResource dependency, Double exitCode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5210,6 +5418,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return waitForCompletion(new IResource(dependency.getHandle(), dependency.getClient()), exitCode);
     }
 
+    /** Adds a health check by key */
     public ContainerResource withHealthCheck(String key) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5218,6 +5427,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a health check to the resource which is mapped to a specific endpoint. */
     public ContainerResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
         var path = options == null ? null : options.getPath();
         var statusCode = options == null ? null : options.getStatusCode();
@@ -5229,6 +5439,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withHttpHealthCheck(null);
     }
 
+    /** Adds a health check to the resource which is mapped to a specific endpoint. */
     private ContainerResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5249,6 +5460,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withCommand(name, displayName, executeCommand, null);
     }
 
+    /** Adds a resource command */
     public ContainerResource withCommand(String name, String displayName, AspireFunc1<ExecuteCommandContext, ExecuteCommandResult> executeCommand, CommandOptions commandOptions) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5268,6 +5480,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a command to the resource that starts a local process when invoked. */
     public ContainerResource withProcessCommand(String commandName, String displayName, ProcessCommandExportOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5282,6 +5495,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withProcessCommandFactory(commandName, displayName, createProcessSpec, null);
     }
 
+    /** Adds a command to the resource that starts a local process created by a callback when invoked. */
     public ContainerResource withProcessCommandFactory(String commandName, String displayName, AspireFunc1<ExecuteCommandContext, ProcessCommandSpecExportData> createProcessSpec, ProcessCommandResultExportOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5305,6 +5519,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withHttpCommand(path, displayName, null);
     }
 
+    /** Adds an HTTP resource command */
     public ContainerResource withHttpCommand(String path, String displayName, HttpCommandExportOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5317,6 +5532,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Indicates whether developer certificates should be treated as trusted certificate authorities for the resource at run time. Currently this indicates trust for the ASP.NET Core developer certificate. The developer certificate will only be trusted when running in local development scenarios; in publish mode resources will use their default certificate trust. */
     public ContainerResource withDeveloperCertificateTrust(boolean trust) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5325,6 +5541,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the certificate trust scope */
     public ContainerResource withCertificateTrustScope(CertificateTrustScope scope) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5337,6 +5554,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withHttpsDeveloperCertificate(null);
     }
 
+    /** Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration. */
     public ContainerResource withHttpsDeveloperCertificate(ParameterResource password) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5347,6 +5565,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Disable HTTPS/TLS server certificate configuration for the resource. No HTTPS/TLS termination configuration will be applied. */
     public ContainerResource withoutHttpsCertificate() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5354,6 +5573,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a relationship to another resource using its builder. */
     public ContainerResource withRelationship(IResource resourceBuilder, String type) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5367,6 +5587,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withRelationship(new IResource(resourceBuilder.getHandle(), resourceBuilder.getClient()), type);
     }
 
+    /** Sets the parent relationship */
     public ContainerResource withParentRelationship(IResource parent) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5379,6 +5600,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withParentRelationship(new IResource(parent.getHandle(), parent.getClient()));
     }
 
+    /** Sets a child relationship */
     public ContainerResource withChildRelationship(IResource child) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5395,6 +5617,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withIconName(iconName, null);
     }
 
+    /** Specifies the icon to use when displaying the resource in the dashboard. */
     public ContainerResource withIconName(String iconName, IconVariant iconVariant) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5406,6 +5629,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures the compute environment for the compute resource. */
     public ContainerResource withComputeEnvironment(IComputeEnvironmentResource computeEnvironmentResource) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5418,6 +5642,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withComputeEnvironment(new IComputeEnvironmentResource(computeEnvironmentResource.getHandle(), computeEnvironmentResource.getClient()));
     }
 
+    /** Adds an HTTP health probe to the resource */
     public ContainerResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions options) {
         var path = options == null ? null : options.getPath();
         var initialDelaySeconds = options == null ? null : options.getInitialDelaySeconds();
@@ -5433,6 +5658,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withHttpProbe(probeType, null);
     }
 
+    /** Adds an HTTP health probe to the resource */
     private ContainerResource withHttpProbeImpl(ProbeType probeType, String path, Double initialDelaySeconds, Double periodSeconds, Double timeoutSeconds, Double failureThreshold, Double successThreshold, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5462,6 +5688,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry. */
     public ContainerResource excludeFromMcp() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5469,6 +5696,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds an asynchronous callback to configure container image push options for the resource. */
     public ContainerResource withImagePushOptions(AspireAction1<ContainerImagePushOptionsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5484,6 +5712,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the remote image name (without registry endpoint or tag) for container push operations. */
     public ContainerResource withRemoteImageName(String remoteImageName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5492,6 +5721,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the remote image tag for container push operations. */
     public ContainerResource withRemoteImageTag(String remoteImageTag) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5500,6 +5730,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a pipeline step to the resource that will be executed during deployment. */
     public ContainerResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
         var dependsOn = options == null ? null : options.getDependsOn();
         var requiredBy = options == null ? null : options.getRequiredBy();
@@ -5512,6 +5743,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withPipelineStepFactory(stepName, callback, null);
     }
 
+    /** Adds a pipeline step to the resource that will be executed during deployment. */
     private ContainerResource withPipelineStepFactoryImpl(String stepName, AspireAction1<PipelineStepContext> callback, String[] dependsOn, String[] requiredBy, String[] tags, String description) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5540,6 +5772,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships. */
     public ContainerResource withPipelineConfiguration(AspireAction1<PipelineConfigurationContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5555,6 +5788,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a volume to a container resource. */
     public ContainerResource withVolume(String target, WithVolumeOptions options) {
         var name = options == null ? null : options.getName();
         var isReadOnly = options == null ? null : options.isReadOnly();
@@ -5565,6 +5799,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withVolume(target, null);
     }
 
+    /** Adds a volume to a container resource. */
     private ContainerResource withVolumeImpl(String target, String name, Boolean isReadOnly) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
@@ -5579,12 +5814,14 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Gets the name of the resource from a builder. */
     public String getResourceName() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
         return (String) getClient().invokeCapability("Aspire.Hosting/getResourceName", reqArgs);
     }
 
+    /** Subscribes to the BeforeResourceStarted event. */
     public ContainerResource onBeforeResourceStarted(AspireAction1<BeforeResourceStartedEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5600,6 +5837,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Subscribes to the ResourceStopped event. */
     public ContainerResource onResourceStopped(AspireAction1<ResourceStoppedEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5615,6 +5853,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Subscribes to the InitializeResource event. */
     public ContainerResource onInitializeResource(AspireAction1<InitializeResourceEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5630,6 +5869,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Subscribes to the ResourceEndpointsAllocated event. */
     public ContainerResource onResourceEndpointsAllocated(AspireAction1<ResourceEndpointsAllocatedEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5645,6 +5885,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Subscribes to the ResourceReady event. */
     public ContainerResource onResourceReady(AspireAction1<ResourceReadyEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5660,12 +5901,14 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Creates an execution configuration builder for the specified resource. */
     public IExecutionConfigurationBuilder createExecutionConfiguration() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
         return (IExecutionConfigurationBuilder) getClient().invokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs);
     }
 
+    /** Adds an optional string parameter */
     public ContainerResource withOptionalString(WithOptionalStringOptions options) {
         var value = options == null ? null : options.getValue();
         var enabled = options == null ? null : options.getEnabled();
@@ -5676,6 +5919,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withOptionalString(null);
     }
 
+    /** Adds an optional string parameter */
     private ContainerResource withOptionalStringImpl(String value, Boolean enabled) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5689,6 +5933,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures the resource with a DTO */
     public ContainerResource withConfig(TestConfigDto config) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5697,6 +5942,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures environment with callback (test version) */
     public ContainerResource testWithEnvironmentCallback(AspireAction1<TestEnvironmentContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5712,6 +5958,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the created timestamp */
     public ContainerResource withCreatedAt(String createdAt) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5720,6 +5967,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the modified timestamp */
     public ContainerResource withModifiedAt(String modifiedAt) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5728,6 +5976,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the correlation ID */
     public ContainerResource withCorrelationId(String correlationId) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5740,6 +5989,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withOptionalCallback(null);
     }
 
+    /** Configures with optional callback */
     public ContainerResource withOptionalCallback(AspireAction1<TestCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5755,6 +6005,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the resource status */
     public ContainerResource withStatus(TestResourceStatus status) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5763,6 +6014,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures with nested DTO */
     public ContainerResource withNestedConfig(TestNestedDto config) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5771,6 +6023,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds validation callback */
     public ContainerResource withValidator(AspireFunc1<TestResourceContext, Boolean> validator) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5785,6 +6038,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Waits for another resource (test version) */
     public ContainerResource testWaitFor(IResource dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5797,6 +6051,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return testWaitFor(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Adds a dependency on another resource */
     public ContainerResource withDependency(IResourceWithConnectionString dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5821,6 +6076,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withUnionDependency(new IResourceWithConnectionString(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Adds a dependency from a string or another resource */
     public ContainerResource withUnionDependency(AspireUnion dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5829,6 +6085,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the endpoints */
     public ContainerResource withEndpoints(String[] endpoints) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5837,6 +6094,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets environment variables */
     public ContainerResource withEnvironmentVariables(Map<String, String> variables) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5845,6 +6103,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Performs a cancellable operation */
     public ContainerResource withCancellableOperation(AspireAction1<CancellationToken> operation) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5860,6 +6119,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a label to the resource */
     public ContainerResource withMergeLabel(String label) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5868,6 +6128,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a categorized label to the resource */
     public ContainerResource withMergeLabelCategorized(String label, String category) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5877,6 +6138,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a named endpoint */
     public ContainerResource withMergeEndpoint(String endpointName, double port) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5886,6 +6148,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a named endpoint with scheme */
     public ContainerResource withMergeEndpointScheme(String endpointName, double port, String scheme) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5896,6 +6159,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures resource logging */
     public ContainerResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
         var enableConsole = options == null ? null : options.getEnableConsole();
         var maxFiles = options == null ? null : options.getMaxFiles();
@@ -5906,6 +6170,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withMergeLogging(logLevel, null);
     }
 
+    /** Configures resource logging */
     private ContainerResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5920,6 +6185,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures resource logging with file path */
     public ContainerResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
         var enableConsole = options == null ? null : options.getEnableConsole();
         var maxFiles = options == null ? null : options.getMaxFiles();
@@ -5930,6 +6196,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return withMergeLoggingPath(logLevel, logPath, null);
     }
 
+    /** Configures resource logging with file path */
     private ContainerResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5945,6 +6212,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a route */
     public ContainerResource withMergeRoute(String path, String method, String handler, double priority) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -5956,6 +6224,7 @@ public class ContainerResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a route with middleware */
     public ContainerResource withMergeRouteMiddleware(String path, String method, String handler, double priority, String middleware) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -6038,7 +6307,7 @@ public class DistributedApplication extends HandleWrapperBase {
         run(null);
     }
 
-    /** Invokes the RunAsync method */
+    /** Runs the distributed application */
     public void run(CancellationToken cancellationToken) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -6099,7 +6368,7 @@ public class DistributedApplicationExecutionContext extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the PublisherName property */
+    /** The name of the publisher that is being used if `Operation` is set to `Publish`. */
     public String publisherName() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -6114,28 +6383,28 @@ public class DistributedApplicationExecutionContext extends HandleWrapperBase {
         return (DistributedApplicationExecutionContext) getClient().invokeCapability("Aspire.Hosting/DistributedApplicationExecutionContext.setPublisherName", reqArgs);
     }
 
-    /** Gets the Operation property */
+    /** The operation currently being performed by the AppHost. */
     public DistributedApplicationOperation operation() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (DistributedApplicationOperation) getClient().invokeCapability("Aspire.Hosting/DistributedApplicationExecutionContext.operation", reqArgs);
     }
 
-    /** Gets the ServiceProvider property */
+    /** The `IServiceProvider` for the AppHost. */
     public IServiceProvider serviceProvider() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (IServiceProvider) getClient().invokeCapability("Aspire.Hosting/DistributedApplicationExecutionContext.serviceProvider", reqArgs);
     }
 
-    /** Gets the IsPublishMode property */
+    /** Returns true if the current operation is publishing. */
     public boolean isPublishMode() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (boolean) getClient().invokeCapability("Aspire.Hosting/DistributedApplicationExecutionContext.isPublishMode", reqArgs);
     }
 
-    /** Gets the IsRunMode property */
+    /** Returns true if the current operation is running. */
     public boolean isRunMode() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -6174,12 +6443,14 @@ public class DistributedApplicationModel extends HandleWrapperBase {
         super(handle, client);
     }
 
+    /** Gets all resources in the distributed application model. */
     public IResource[] getResources() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("model", AspireClient.serializeValue(getHandle()));
         return (IResource[]) getClient().invokeCapability("Aspire.Hosting/getResources", reqArgs);
     }
 
+    /** Finds a resource by name. */
     public IResource findResourceByName(String name) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("model", AspireClient.serializeValue(getHandle()));
@@ -6252,6 +6523,7 @@ public class DockerfileBuilder extends HandleWrapperBase {
         return arg(name, null);
     }
 
+    /** Adds a global ARG statement to the Dockerfile */
     public DockerfileBuilder arg(String name, String defaultValue) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -6266,6 +6538,7 @@ public class DockerfileBuilder extends HandleWrapperBase {
         return from(image, null);
     }
 
+    /** Adds a FROM statement to start a Dockerfile stage */
     public DockerfileStage from(String image, String stageName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -6284,6 +6557,7 @@ public class DockerfileBuilder extends HandleWrapperBase {
         return addContainerFilesStages(new IResource(resource.getHandle(), resource.getClient()));
     }
 
+    /** Adds Dockerfile stages for published container files */
     public DockerfileBuilder addContainerFilesStages(IResource resource, ILogger logger) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -6322,28 +6596,28 @@ public class DockerfileBuilderCallbackContext extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the Resource property */
+    /** Gets the resource being built. */
     public IResource resource() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (IResource) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.resource", reqArgs);
     }
 
-    /** Gets the Builder property */
+    /** Gets the Dockerfile builder instance. */
     public DockerfileBuilder builder() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (DockerfileBuilder) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.builder", reqArgs);
     }
 
-    /** Gets the Services property */
+    /** Gets the service provider for dependency injection. */
     public IServiceProvider services() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (IServiceProvider) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/DockerfileBuilderCallbackContext.services", reqArgs);
     }
 
-    /** Gets the CancellationToken property */
+    /** Gets the cancellation token to observe while waiting for the task to complete. */
     public CancellationToken cancellationToken() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -6370,6 +6644,7 @@ public class DockerfileStage extends HandleWrapperBase {
         return arg(name, null);
     }
 
+    /** Adds an ARG statement to a Dockerfile stage */
     public DockerfileStage arg(String name, String defaultValue) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
@@ -6380,6 +6655,7 @@ public class DockerfileStage extends HandleWrapperBase {
         return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/dockerfileStageArg", reqArgs);
     }
 
+    /** Adds a WORKDIR statement to a Dockerfile stage */
     public DockerfileStage workDir(String path) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
@@ -6387,6 +6663,7 @@ public class DockerfileStage extends HandleWrapperBase {
         return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/workDir", reqArgs);
     }
 
+    /** Adds a RUN statement to a Dockerfile stage */
     public DockerfileStage run(String command) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
@@ -6398,6 +6675,7 @@ public class DockerfileStage extends HandleWrapperBase {
         return copy(source, destination, null);
     }
 
+    /** Adds a COPY statement to a Dockerfile stage */
     public DockerfileStage copy(String source, String destination, String chown) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
@@ -6413,6 +6691,7 @@ public class DockerfileStage extends HandleWrapperBase {
         return copyFrom(from, source, destination, null);
     }
 
+    /** Adds a COPY --from statement to a Dockerfile stage */
     public DockerfileStage copyFrom(String from, String source, String destination, String chown) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
@@ -6425,6 +6704,7 @@ public class DockerfileStage extends HandleWrapperBase {
         return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/dockerfileStageCopyFrom", reqArgs);
     }
 
+    /** Adds an ENV statement to a Dockerfile stage */
     public DockerfileStage env(String name, String value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
@@ -6433,6 +6713,7 @@ public class DockerfileStage extends HandleWrapperBase {
         return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/env", reqArgs);
     }
 
+    /** Adds an EXPOSE statement to a Dockerfile stage */
     public DockerfileStage expose(double port) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
@@ -6440,6 +6721,7 @@ public class DockerfileStage extends HandleWrapperBase {
         return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/expose", reqArgs);
     }
 
+    /** Adds a CMD statement to a Dockerfile stage */
     public DockerfileStage cmd(String[] command) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
@@ -6447,6 +6729,7 @@ public class DockerfileStage extends HandleWrapperBase {
         return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/cmd", reqArgs);
     }
 
+    /** Adds an ENTRYPOINT statement to a Dockerfile stage */
     public DockerfileStage entrypoint(String[] command) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
@@ -6454,6 +6737,7 @@ public class DockerfileStage extends HandleWrapperBase {
         return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/entrypoint", reqArgs);
     }
 
+    /** Adds a RUN statement with mounts to a Dockerfile stage */
     public DockerfileStage runWithMounts(String command, String[] mounts) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
@@ -6462,6 +6746,7 @@ public class DockerfileStage extends HandleWrapperBase {
         return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/runWithMounts", reqArgs);
     }
 
+    /** Adds a USER statement to a Dockerfile stage */
     public DockerfileStage user(String user) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
@@ -6469,12 +6754,14 @@ public class DockerfileStage extends HandleWrapperBase {
         return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/user", reqArgs);
     }
 
+    /** Adds an empty line to a Dockerfile stage */
     public DockerfileStage emptyLine() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
         return (DockerfileStage) getClient().invokeCapability("Aspire.Hosting/emptyLine", reqArgs);
     }
 
+    /** Adds a comment to a Dockerfile stage */
     public DockerfileStage comment(String comment) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
@@ -6490,6 +6777,7 @@ public class DockerfileStage extends HandleWrapperBase {
         return addContainerFiles(new IResource(resource.getHandle(), resource.getClient()), rootDestinationPath);
     }
 
+    /** Adds COPY --from statements for published container files */
     public DockerfileStage addContainerFiles(IResource resource, String rootDestinationPath, ILogger logger) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("stage", AspireClient.serializeValue(getHandle()));
@@ -6529,6 +6817,7 @@ public class DotnetToolResource extends ExecutableResource {
         super(handle, client);
     }
 
+    /** Configures the resource to use the specified container registry for container image operations. */
     public DotnetToolResource withContainerRegistry(IResource registry) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -6541,6 +6830,7 @@ public class DotnetToolResource extends ExecutableResource {
         return withContainerRegistry(new IResource(registry.getHandle(), registry.getClient()));
     }
 
+    /** Configures custom base images for generated Dockerfiles. */
     public DotnetToolResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
         var buildImage = options == null ? null : options.getBuildImage();
         var runtimeImage = options == null ? null : options.getRuntimeImage();
@@ -6551,6 +6841,7 @@ public class DotnetToolResource extends ExecutableResource {
         return withDockerfileBaseImage(null);
     }
 
+    /** Configures custom base images for generated Dockerfiles. */
     private DotnetToolResource withDockerfileBaseImageImpl(String buildImage, String runtimeImage) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -6564,6 +6855,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Sets the package identifier for the tool configuration associated with the resource builder. */
     public DotnetToolResource withToolPackage(String packageId) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -6572,6 +6864,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Sets the package version for a tool to use. */
     public DotnetToolResource withToolVersion(String version) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -6580,6 +6873,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Allows prerelease versions of the tool to be used */
     public DotnetToolResource withToolPrerelease() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -6587,6 +6881,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Adds a NuGet package source for tool acquisition. */
     public DotnetToolResource withToolSource(String source) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -6595,6 +6890,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Configures the tool to use only the specified package sources, ignoring existing NuGet configuration. */
     public DotnetToolResource withToolIgnoreExistingFeeds() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -6602,6 +6898,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Configures the resource to treat package source failures as warnings. */
     public DotnetToolResource withToolIgnoreFailedSources() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -6609,6 +6906,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Publishes an executable as a Docker file */
     public DotnetToolResource publishAsDockerFile(AspireAction1<ContainerResource> configure) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -6624,6 +6922,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Sets the command for the executable resource. */
     public DotnetToolResource withExecutableCommand(String command) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -6632,6 +6931,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Sets the working directory for the executable resource. */
     public DotnetToolResource withWorkingDirectory(String workingDirectory) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -6640,6 +6940,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
     public DotnetToolResource withMcpServer(WithMcpServerOptions options) {
         var path = options == null ? null : options.getPath();
         var endpointName = options == null ? null : options.getEndpointName();
@@ -6650,6 +6951,7 @@ public class DotnetToolResource extends ExecutableResource {
         return withMcpServer(null);
     }
 
+    /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
     private DotnetToolResource withMcpServerImpl(String path, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -6667,6 +6969,7 @@ public class DotnetToolResource extends ExecutableResource {
         return withOtlpExporter(null);
     }
 
+    /** Configures OTLP telemetry export */
     public DotnetToolResource withOtlpExporter(OtlpProtocol protocol) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -6681,6 +6984,7 @@ public class DotnetToolResource extends ExecutableResource {
         return withRequiredCommand(command, null);
     }
 
+    /** Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start. */
     public DotnetToolResource withRequiredCommand(String command, String helpLink) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -6724,6 +7028,7 @@ public class DotnetToolResource extends ExecutableResource {
         return withEnvironment(name, new IExpressionValue(value.getHandle(), value.getClient()));
     }
 
+    /** Sets an environment variable */
     public DotnetToolResource withEnvironment(String name, AspireUnion value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -6733,6 +7038,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Allows for the population of environment variables on a resource. */
     public DotnetToolResource withEnvironmentCallback(AspireAction1<EnvironmentCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -6748,6 +7054,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Adds arguments to be passed to a resource that supports arguments when it is launched. */
     public DotnetToolResource withArgs(String[] args) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -6756,6 +7063,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Adds a callback to be executed with a list of command-line arguments when a resource is started. */
     public DotnetToolResource withArgsCallback(AspireAction1<CommandLineArgsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -6771,6 +7079,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Configures how information is injected into environment variables when the resource references other resources. */
     public DotnetToolResource withReferenceEnvironment(ReferenceEnvironmentInjectionOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -6807,6 +7116,7 @@ public class DotnetToolResource extends ExecutableResource {
         return withReference(AspireUnion.of(source));
     }
 
+    /** Adds a reference to another resource */
     public DotnetToolResource withReference(AspireUnion source, WithReferenceOptions options) {
         var connectionName = options == null ? null : options.getConnectionName();
         var optional = options == null ? null : options.getOptional();
@@ -6818,6 +7128,7 @@ public class DotnetToolResource extends ExecutableResource {
         return withReference(source, null);
     }
 
+    /** Adds a reference to another resource */
     private DotnetToolResource withReferenceImpl(AspireUnion source, String connectionName, Boolean optional, String name) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -6839,6 +7150,7 @@ public class DotnetToolResource extends ExecutableResource {
         return withEndpointCallback(endpointName, callback, null);
     }
 
+    /** Updates a named endpoint via callback */
     public DotnetToolResource withEndpointCallback(String endpointName, AspireAction1<EndpointUpdateContext> callback, Boolean createIfNotExists) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -6858,6 +7170,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Updates an HTTP endpoint via callback */
     public DotnetToolResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions options) {
         var name = options == null ? null : options.getName();
         var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
@@ -6868,6 +7181,7 @@ public class DotnetToolResource extends ExecutableResource {
         return withHttpEndpointCallback(callback, null);
     }
 
+    /** Updates an HTTP endpoint via callback */
     private DotnetToolResource withHttpEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -6889,6 +7203,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Updates an HTTPS endpoint via callback */
     public DotnetToolResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
         var name = options == null ? null : options.getName();
         var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
@@ -6899,6 +7214,7 @@ public class DotnetToolResource extends ExecutableResource {
         return withHttpsEndpointCallback(callback, null);
     }
 
+    /** Updates an HTTPS endpoint via callback */
     private DotnetToolResource withHttpsEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -6920,6 +7236,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Adds a network endpoint */
     public DotnetToolResource withEndpoint(WithEndpointOptions options) {
         var port = options == null ? null : options.getPort();
         var targetPort = options == null ? null : options.getTargetPort();
@@ -6936,6 +7253,7 @@ public class DotnetToolResource extends ExecutableResource {
         return withEndpoint(null);
     }
 
+    /** Adds a network endpoint */
     private DotnetToolResource withEndpointImpl(Double port, Double targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -6967,6 +7285,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Adds an HTTP endpoint */
     public DotnetToolResource withHttpEndpoint(WithHttpEndpointOptions options) {
         var port = options == null ? null : options.getPort();
         var targetPort = options == null ? null : options.getTargetPort();
@@ -6980,6 +7299,7 @@ public class DotnetToolResource extends ExecutableResource {
         return withHttpEndpoint(null);
     }
 
+    /** Adds an HTTP endpoint */
     private DotnetToolResource withHttpEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7002,6 +7322,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Adds an HTTPS endpoint */
     public DotnetToolResource withHttpsEndpoint(WithHttpsEndpointOptions options) {
         var port = options == null ? null : options.getPort();
         var targetPort = options == null ? null : options.getTargetPort();
@@ -7015,6 +7336,7 @@ public class DotnetToolResource extends ExecutableResource {
         return withHttpsEndpoint(null);
     }
 
+    /** Adds an HTTPS endpoint */
     private DotnetToolResource withHttpsEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7037,6 +7359,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Marks existing http or https endpoints on a resource as external. */
     public DotnetToolResource withExternalHttpEndpoints() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7044,6 +7367,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Gets an endpoint reference */
     public EndpointReference getEndpoint(String name) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7051,6 +7375,7 @@ public class DotnetToolResource extends ExecutableResource {
         return (EndpointReference) getClient().invokeCapability("Aspire.Hosting/getEndpoint", reqArgs);
     }
 
+    /** Configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge. */
     public DotnetToolResource asHttp2Service() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7058,6 +7383,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Registers a callback to customize the URLs displayed for the resource. */
     public DotnetToolResource withUrls(AspireAction1<ResourceUrlsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7085,6 +7411,7 @@ public class DotnetToolResource extends ExecutableResource {
         return withUrl(url, null);
     }
 
+    /** Adds or modifies displayed URLs */
     public DotnetToolResource withUrl(AspireUnion url, String displayText) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7096,6 +7423,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Registers a callback to update the URL displayed for the endpoint with the specified name. */
     public DotnetToolResource withUrlForEndpoint(String endpointName, AspireAction1<ResourceUrlAnnotation> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7112,6 +7440,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Excludes a resource from being published to the manifest. */
     public DotnetToolResource excludeFromManifest() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7127,6 +7456,7 @@ public class DotnetToolResource extends ExecutableResource {
         return waitFor(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Waits for another resource to be ready */
     public DotnetToolResource waitFor(IResource dependency, WaitBehavior waitBehavior) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7150,6 +7480,7 @@ public class DotnetToolResource extends ExecutableResource {
         return waitForStart(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Waits for another resource to start */
     public DotnetToolResource waitForStart(IResource dependency, WaitBehavior waitBehavior) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7165,6 +7496,7 @@ public class DotnetToolResource extends ExecutableResource {
         return waitForStart(new IResource(dependency.getHandle(), dependency.getClient()), waitBehavior);
     }
 
+    /** Prevents resource from starting automatically */
     public DotnetToolResource withExplicitStart() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7180,6 +7512,7 @@ public class DotnetToolResource extends ExecutableResource {
         return waitForCompletion(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Waits for the dependency resource to enter the Exited or Finished state before starting the resource. */
     public DotnetToolResource waitForCompletion(IResource dependency, Double exitCode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7195,6 +7528,7 @@ public class DotnetToolResource extends ExecutableResource {
         return waitForCompletion(new IResource(dependency.getHandle(), dependency.getClient()), exitCode);
     }
 
+    /** Adds a health check by key */
     public DotnetToolResource withHealthCheck(String key) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7203,6 +7537,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Adds a health check to the resource which is mapped to a specific endpoint. */
     public DotnetToolResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
         var path = options == null ? null : options.getPath();
         var statusCode = options == null ? null : options.getStatusCode();
@@ -7214,6 +7549,7 @@ public class DotnetToolResource extends ExecutableResource {
         return withHttpHealthCheck(null);
     }
 
+    /** Adds a health check to the resource which is mapped to a specific endpoint. */
     private DotnetToolResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7234,6 +7570,7 @@ public class DotnetToolResource extends ExecutableResource {
         return withCommand(name, displayName, executeCommand, null);
     }
 
+    /** Adds a resource command */
     public DotnetToolResource withCommand(String name, String displayName, AspireFunc1<ExecuteCommandContext, ExecuteCommandResult> executeCommand, CommandOptions commandOptions) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7253,6 +7590,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Adds a command to the resource that starts a local process when invoked. */
     public DotnetToolResource withProcessCommand(String commandName, String displayName, ProcessCommandExportOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7267,6 +7605,7 @@ public class DotnetToolResource extends ExecutableResource {
         return withProcessCommandFactory(commandName, displayName, createProcessSpec, null);
     }
 
+    /** Adds a command to the resource that starts a local process created by a callback when invoked. */
     public DotnetToolResource withProcessCommandFactory(String commandName, String displayName, AspireFunc1<ExecuteCommandContext, ProcessCommandSpecExportData> createProcessSpec, ProcessCommandResultExportOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7290,6 +7629,7 @@ public class DotnetToolResource extends ExecutableResource {
         return withHttpCommand(path, displayName, null);
     }
 
+    /** Adds an HTTP resource command */
     public DotnetToolResource withHttpCommand(String path, String displayName, HttpCommandExportOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7302,6 +7642,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Indicates whether developer certificates should be treated as trusted certificate authorities for the resource at run time. Currently this indicates trust for the ASP.NET Core developer certificate. The developer certificate will only be trusted when running in local development scenarios; in publish mode resources will use their default certificate trust. */
     public DotnetToolResource withDeveloperCertificateTrust(boolean trust) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7310,6 +7651,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Sets the certificate trust scope */
     public DotnetToolResource withCertificateTrustScope(CertificateTrustScope scope) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7322,6 +7664,7 @@ public class DotnetToolResource extends ExecutableResource {
         return withHttpsDeveloperCertificate(null);
     }
 
+    /** Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration. */
     public DotnetToolResource withHttpsDeveloperCertificate(ParameterResource password) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7332,6 +7675,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Disable HTTPS/TLS server certificate configuration for the resource. No HTTPS/TLS termination configuration will be applied. */
     public DotnetToolResource withoutHttpsCertificate() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7339,6 +7683,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Adds a relationship to another resource using its builder. */
     public DotnetToolResource withRelationship(IResource resourceBuilder, String type) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7352,6 +7697,7 @@ public class DotnetToolResource extends ExecutableResource {
         return withRelationship(new IResource(resourceBuilder.getHandle(), resourceBuilder.getClient()), type);
     }
 
+    /** Sets the parent relationship */
     public DotnetToolResource withParentRelationship(IResource parent) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7364,6 +7710,7 @@ public class DotnetToolResource extends ExecutableResource {
         return withParentRelationship(new IResource(parent.getHandle(), parent.getClient()));
     }
 
+    /** Sets a child relationship */
     public DotnetToolResource withChildRelationship(IResource child) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7380,6 +7727,7 @@ public class DotnetToolResource extends ExecutableResource {
         return withIconName(iconName, null);
     }
 
+    /** Specifies the icon to use when displaying the resource in the dashboard. */
     public DotnetToolResource withIconName(String iconName, IconVariant iconVariant) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7391,6 +7739,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Configures the compute environment for the compute resource. */
     public DotnetToolResource withComputeEnvironment(IComputeEnvironmentResource computeEnvironmentResource) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7403,6 +7752,7 @@ public class DotnetToolResource extends ExecutableResource {
         return withComputeEnvironment(new IComputeEnvironmentResource(computeEnvironmentResource.getHandle(), computeEnvironmentResource.getClient()));
     }
 
+    /** Adds an HTTP health probe to the resource */
     public DotnetToolResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions options) {
         var path = options == null ? null : options.getPath();
         var initialDelaySeconds = options == null ? null : options.getInitialDelaySeconds();
@@ -7418,6 +7768,7 @@ public class DotnetToolResource extends ExecutableResource {
         return withHttpProbe(probeType, null);
     }
 
+    /** Adds an HTTP health probe to the resource */
     private DotnetToolResource withHttpProbeImpl(ProbeType probeType, String path, Double initialDelaySeconds, Double periodSeconds, Double timeoutSeconds, Double failureThreshold, Double successThreshold, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7447,6 +7798,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry. */
     public DotnetToolResource excludeFromMcp() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7454,6 +7806,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Adds an asynchronous callback to configure container image push options for the resource. */
     public DotnetToolResource withImagePushOptions(AspireAction1<ContainerImagePushOptionsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7469,6 +7822,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Sets the remote image name (without registry endpoint or tag) for container push operations. */
     public DotnetToolResource withRemoteImageName(String remoteImageName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7477,6 +7831,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Sets the remote image tag for container push operations. */
     public DotnetToolResource withRemoteImageTag(String remoteImageTag) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7485,6 +7840,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Adds a pipeline step to the resource that will be executed during deployment. */
     public DotnetToolResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
         var dependsOn = options == null ? null : options.getDependsOn();
         var requiredBy = options == null ? null : options.getRequiredBy();
@@ -7497,6 +7853,7 @@ public class DotnetToolResource extends ExecutableResource {
         return withPipelineStepFactory(stepName, callback, null);
     }
 
+    /** Adds a pipeline step to the resource that will be executed during deployment. */
     private DotnetToolResource withPipelineStepFactoryImpl(String stepName, AspireAction1<PipelineStepContext> callback, String[] dependsOn, String[] requiredBy, String[] tags, String description) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7525,6 +7882,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships. */
     public DotnetToolResource withPipelineConfiguration(AspireAction1<PipelineConfigurationContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7540,12 +7898,14 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Gets the name of the resource from a builder. */
     public String getResourceName() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
         return (String) getClient().invokeCapability("Aspire.Hosting/getResourceName", reqArgs);
     }
 
+    /** Subscribes to the BeforeResourceStarted event. */
     public DotnetToolResource onBeforeResourceStarted(AspireAction1<BeforeResourceStartedEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7561,6 +7921,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Subscribes to the ResourceStopped event. */
     public DotnetToolResource onResourceStopped(AspireAction1<ResourceStoppedEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7576,6 +7937,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Subscribes to the InitializeResource event. */
     public DotnetToolResource onInitializeResource(AspireAction1<InitializeResourceEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7591,6 +7953,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Subscribes to the ResourceEndpointsAllocated event. */
     public DotnetToolResource onResourceEndpointsAllocated(AspireAction1<ResourceEndpointsAllocatedEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7606,6 +7969,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Subscribes to the ResourceReady event. */
     public DotnetToolResource onResourceReady(AspireAction1<ResourceReadyEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7621,12 +7985,14 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Creates an execution configuration builder for the specified resource. */
     public IExecutionConfigurationBuilder createExecutionConfiguration() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
         return (IExecutionConfigurationBuilder) getClient().invokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs);
     }
 
+    /** Adds an optional string parameter */
     public DotnetToolResource withOptionalString(WithOptionalStringOptions options) {
         var value = options == null ? null : options.getValue();
         var enabled = options == null ? null : options.getEnabled();
@@ -7637,6 +8003,7 @@ public class DotnetToolResource extends ExecutableResource {
         return withOptionalString(null);
     }
 
+    /** Adds an optional string parameter */
     private DotnetToolResource withOptionalStringImpl(String value, Boolean enabled) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7650,6 +8017,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Configures the resource with a DTO */
     public DotnetToolResource withConfig(TestConfigDto config) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7658,6 +8026,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Configures environment with callback (test version) */
     public DotnetToolResource testWithEnvironmentCallback(AspireAction1<TestEnvironmentContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7673,6 +8042,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Sets the created timestamp */
     public DotnetToolResource withCreatedAt(String createdAt) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7681,6 +8051,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Sets the modified timestamp */
     public DotnetToolResource withModifiedAt(String modifiedAt) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7689,6 +8060,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Sets the correlation ID */
     public DotnetToolResource withCorrelationId(String correlationId) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7701,6 +8073,7 @@ public class DotnetToolResource extends ExecutableResource {
         return withOptionalCallback(null);
     }
 
+    /** Configures with optional callback */
     public DotnetToolResource withOptionalCallback(AspireAction1<TestCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7716,6 +8089,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Sets the resource status */
     public DotnetToolResource withStatus(TestResourceStatus status) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7724,6 +8098,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Configures with nested DTO */
     public DotnetToolResource withNestedConfig(TestNestedDto config) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7732,6 +8107,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Adds validation callback */
     public DotnetToolResource withValidator(AspireFunc1<TestResourceContext, Boolean> validator) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7746,6 +8122,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Waits for another resource (test version) */
     public DotnetToolResource testWaitFor(IResource dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7758,6 +8135,7 @@ public class DotnetToolResource extends ExecutableResource {
         return testWaitFor(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Adds a dependency on another resource */
     public DotnetToolResource withDependency(IResourceWithConnectionString dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7782,6 +8160,7 @@ public class DotnetToolResource extends ExecutableResource {
         return withUnionDependency(new IResourceWithConnectionString(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Adds a dependency from a string or another resource */
     public DotnetToolResource withUnionDependency(AspireUnion dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7790,6 +8169,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Sets the endpoints */
     public DotnetToolResource withEndpoints(String[] endpoints) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7798,6 +8178,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Sets environment variables */
     public DotnetToolResource withEnvironmentVariables(Map<String, String> variables) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7806,6 +8187,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Performs a cancellable operation */
     public DotnetToolResource withCancellableOperation(AspireAction1<CancellationToken> operation) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7821,6 +8203,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Adds a label to the resource */
     public DotnetToolResource withMergeLabel(String label) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7829,6 +8212,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Adds a categorized label to the resource */
     public DotnetToolResource withMergeLabelCategorized(String label, String category) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7838,6 +8222,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Configures a named endpoint */
     public DotnetToolResource withMergeEndpoint(String endpointName, double port) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7847,6 +8232,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Configures a named endpoint with scheme */
     public DotnetToolResource withMergeEndpointScheme(String endpointName, double port, String scheme) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7857,6 +8243,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Configures resource logging */
     public DotnetToolResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
         var enableConsole = options == null ? null : options.getEnableConsole();
         var maxFiles = options == null ? null : options.getMaxFiles();
@@ -7867,6 +8254,7 @@ public class DotnetToolResource extends ExecutableResource {
         return withMergeLogging(logLevel, null);
     }
 
+    /** Configures resource logging */
     private DotnetToolResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7881,6 +8269,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Configures resource logging with file path */
     public DotnetToolResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
         var enableConsole = options == null ? null : options.getEnableConsole();
         var maxFiles = options == null ? null : options.getMaxFiles();
@@ -7891,6 +8280,7 @@ public class DotnetToolResource extends ExecutableResource {
         return withMergeLoggingPath(logLevel, logPath, null);
     }
 
+    /** Configures resource logging with file path */
     private DotnetToolResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7906,6 +8296,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Configures a route */
     public DotnetToolResource withMergeRoute(String path, String method, String handler, double priority) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7917,6 +8308,7 @@ public class DotnetToolResource extends ExecutableResource {
         return this;
     }
 
+    /** Configures a route with middleware */
     public DotnetToolResource withMergeRouteMiddleware(String path, String method, String handler, double priority, String middleware) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -7980,105 +8372,105 @@ public class EndpointReference extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the Resource property */
+    /** Gets the resource owner of the endpoint reference. */
     public IResourceWithEndpoints resource() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (IResourceWithEndpoints) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.resource", reqArgs);
     }
 
-    /** Gets the EndpointName property */
+    /** Gets the name of the endpoint associated with the endpoint reference. */
     public String endpointName() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (String) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.endpointName", reqArgs);
     }
 
-    /** Gets the ErrorMessage property */
+    /** Gets or sets a custom error message to be thrown when the endpoint annotation is not found. */
     public String errorMessage() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (String) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.errorMessage", reqArgs);
     }
 
-    /** Gets the IsAllocated property */
+    /** Gets a value indicating whether the endpoint is allocated. */
     public boolean isAllocated() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (boolean) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.isAllocated", reqArgs);
     }
 
-    /** Gets the Exists property */
+    /** Gets a value indicating whether the endpoint exists. */
     public boolean exists() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (boolean) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.exists", reqArgs);
     }
 
-    /** Gets the IsHttp property */
+    /** Gets a value indicating whether the endpoint uses HTTP scheme. */
     public boolean isHttp() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (boolean) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.isHttp", reqArgs);
     }
 
-    /** Gets the IsHttps property */
+    /** Gets a value indicating whether the endpoint uses HTTPS scheme. */
     public boolean isHttps() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (boolean) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.isHttps", reqArgs);
     }
 
-    /** Gets the TlsEnabled property */
+    /** Gets a value indicating whether TLS is enabled for this endpoint. */
     public boolean tlsEnabled() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (boolean) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.tlsEnabled", reqArgs);
     }
 
-    /** Gets the IsHttpSchemeNamedEndpoint property */
+    /** Gets a value indicating whether the endpoint name is "http" or "https", ignoring case. This is a convention used to identify endpoints that will be resolved based on the scheme of the endpoint in service discovery rather than by the specific endpoint name. This is done to allow http endpoints that are dynamically updated to https to be mapped correctly despite the endpoint name no longer matching the scheme. */
     public boolean isHttpSchemeNamedEndpoint() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (boolean) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.isHttpSchemeNamedEndpoint", reqArgs);
     }
 
-    /** Gets the ExcludeReferenceEndpoint property */
+    /** Gets a value indicating whether this endpoint is excluded from the default set when referencing the resource's endpoints. */
     public boolean excludeReferenceEndpoint() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (boolean) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.excludeReferenceEndpoint", reqArgs);
     }
 
-    /** Gets the Port property */
+    /** Gets the port for this endpoint. */
     public double port() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (double) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.port", reqArgs);
     }
 
-    /** Gets the TargetPort property */
+    /** Gets the target port for this endpoint. If the port is dynamically allocated, this will return `null`. */
     public double targetPort() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (double) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.targetPort", reqArgs);
     }
 
-    /** Gets the Host property */
+    /** Gets the host for this endpoint. */
     public String host() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (String) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.host", reqArgs);
     }
 
-    /** Gets the Scheme property */
+    /** Gets the scheme for this endpoint. */
     public String scheme() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (String) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.scheme", reqArgs);
     }
 
-    /** Gets the Url property */
+    /** Gets the URL for this endpoint. */
     public String url() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -8089,7 +8481,7 @@ public class EndpointReference extends HandleWrapperBase {
         return getValueAsync(null);
     }
 
-    /** Invokes the GetValueAsync method */
+    /** Gets the URL of the endpoint asynchronously. Waits for the endpoint to be allocated if necessary. */
     public String getValueAsync(CancellationToken cancellationToken) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -8099,7 +8491,7 @@ public class EndpointReference extends HandleWrapperBase {
         return (String) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.getValueAsync", reqArgs);
     }
 
-    /** Invokes the Property method */
+    /** Gets the specified property expression of the endpoint. */
     public EndpointReferenceExpression property(EndpointProperty property) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -8107,7 +8499,7 @@ public class EndpointReference extends HandleWrapperBase {
         return (EndpointReferenceExpression) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReference.property", reqArgs);
     }
 
-    /** Invokes the GetTlsValue method */
+    /** Gets a conditional expression that resolves to the enabledValue when TLS is enabled on the endpoint, or to the disabledValue otherwise. */
     public ReferenceExpression getTlsValue(ReferenceExpression enabledValue, ReferenceExpression disabledValue) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -8132,21 +8524,21 @@ public class EndpointReferenceExpression extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the Endpoint property */
+    /** Gets the `EndpointReference`. */
     public EndpointReference endpoint() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (EndpointReference) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReferenceExpression.endpoint", reqArgs);
     }
 
-    /** Gets the Property property */
+    /** Gets the `EndpointProperty` for the property expression. */
     public EndpointProperty property() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (EndpointProperty) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointReferenceExpression.property", reqArgs);
     }
 
-    /** Gets the ValueExpression property */
+    /** Gets the expression of the property of the endpoint. */
     public String valueExpression() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -8169,14 +8561,14 @@ public class EndpointUpdateContext extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the Name property */
+    /** Gets the endpoint name. */
     public String name() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (String) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.name", reqArgs);
     }
 
-    /** Gets the Protocol property */
+    /** Gets or sets the network protocol. */
     public ProtocolType protocol() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -8191,7 +8583,7 @@ public class EndpointUpdateContext extends HandleWrapperBase {
         return (EndpointUpdateContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setProtocol", reqArgs);
     }
 
-    /** Gets the Port property */
+    /** Gets or sets the desired host port. */
     public double port() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -8206,7 +8598,7 @@ public class EndpointUpdateContext extends HandleWrapperBase {
         return (EndpointUpdateContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setPort", reqArgs);
     }
 
-    /** Gets the TargetPort property */
+    /** Gets or sets the target port. */
     public double targetPort() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -8221,7 +8613,7 @@ public class EndpointUpdateContext extends HandleWrapperBase {
         return (EndpointUpdateContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setTargetPort", reqArgs);
     }
 
-    /** Gets the UriScheme property */
+    /** Gets or sets the URI scheme. */
     public String uriScheme() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -8236,7 +8628,7 @@ public class EndpointUpdateContext extends HandleWrapperBase {
         return (EndpointUpdateContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setUriScheme", reqArgs);
     }
 
-    /** Gets the TargetHost property */
+    /** Gets or sets the target host. */
     public String targetHost() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -8251,7 +8643,7 @@ public class EndpointUpdateContext extends HandleWrapperBase {
         return (EndpointUpdateContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setTargetHost", reqArgs);
     }
 
-    /** Gets the Transport property */
+    /** Gets or sets the transport. */
     public String transport() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -8266,7 +8658,7 @@ public class EndpointUpdateContext extends HandleWrapperBase {
         return (EndpointUpdateContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setTransport", reqArgs);
     }
 
-    /** Gets the IsExternal property */
+    /** Gets or sets a value indicating whether the endpoint is external. */
     public boolean isExternal() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -8281,7 +8673,7 @@ public class EndpointUpdateContext extends HandleWrapperBase {
         return (EndpointUpdateContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setIsExternal", reqArgs);
     }
 
-    /** Gets the IsProxied property */
+    /** Gets or sets a value indicating whether the endpoint is proxied. */
     public boolean isProxied() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -8296,7 +8688,7 @@ public class EndpointUpdateContext extends HandleWrapperBase {
         return (EndpointUpdateContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setIsProxied", reqArgs);
     }
 
-    /** Gets the ExcludeReferenceEndpoint property */
+    /** Gets or sets a value indicating whether the endpoint is excluded from the default reference set. */
     public boolean excludeReferenceEndpoint() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -8311,7 +8703,7 @@ public class EndpointUpdateContext extends HandleWrapperBase {
         return (EndpointUpdateContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EndpointUpdateContext.setExcludeReferenceEndpoint", reqArgs);
     }
 
-    /** Gets the TlsEnabled property */
+    /** Gets or sets a value indicating whether TLS is enabled. */
     public boolean tlsEnabled() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -8342,28 +8734,28 @@ public class EnvironmentCallbackContext extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the Environment property */
+    /** Gets the editor used to set environment variables in polyglot callbacks. */
     public EnvironmentEditor environment() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (EnvironmentEditor) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.environment", reqArgs);
     }
 
-    /** Gets the Log property */
+    /** Gets the logger facade used by polyglot callbacks. */
     public LogFacade log() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (LogFacade) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.log", reqArgs);
     }
 
-    /** Gets the Resource property */
+    /** The resource associated with this callback context. */
     public IResource resource() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (IResource) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/EnvironmentCallbackContext.resource", reqArgs);
     }
 
-    /** Gets the ExecutionContext property */
+    /** Gets the execution context associated with this invocation of the AppHost. */
     public DistributedApplicationExecutionContext executionContext() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -8418,7 +8810,7 @@ public class EnvironmentEditor extends HandleWrapperBase {
         set(name, new IExpressionValue(value.getHandle(), value.getClient()));
     }
 
-    /** Invokes the Set method */
+    /** Sets an environment variable. */
     public void set(String name, AspireUnion value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -8443,6 +8835,7 @@ public class EventingSubscriberRegistrationContext extends HandleWrapperBase {
         super(handle, client);
     }
 
+    /** Subscribes to the BeforeStart event from an eventing subscriber registration context. */
     public DistributedApplicationEventSubscription onBeforeStart(AspireAction1<BeforeStartEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -8457,6 +8850,7 @@ public class EventingSubscriberRegistrationContext extends HandleWrapperBase {
         return (DistributedApplicationEventSubscription) getClient().invokeCapability("Aspire.Hosting/eventingSubscriberOnBeforeStart", reqArgs);
     }
 
+    /** Subscribes to the BeforePublish event from an eventing subscriber registration context. */
     public DistributedApplicationEventSubscription onBeforePublish(AspireAction1<BeforePublishEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -8471,6 +8865,7 @@ public class EventingSubscriberRegistrationContext extends HandleWrapperBase {
         return (DistributedApplicationEventSubscription) getClient().invokeCapability("Aspire.Hosting/eventingSubscriberOnBeforePublish", reqArgs);
     }
 
+    /** Subscribes to the AfterPublish event from an eventing subscriber registration context. */
     public DistributedApplicationEventSubscription onAfterPublish(AspireAction1<AfterPublishEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -8485,6 +8880,7 @@ public class EventingSubscriberRegistrationContext extends HandleWrapperBase {
         return (DistributedApplicationEventSubscription) getClient().invokeCapability("Aspire.Hosting/eventingSubscriberOnAfterPublish", reqArgs);
     }
 
+    /** Subscribes to the AfterResourcesCreated event from an eventing subscriber registration context. */
     public DistributedApplicationEventSubscription onAfterResourcesCreated(AspireAction1<AfterResourcesCreatedEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -8499,14 +8895,14 @@ public class EventingSubscriberRegistrationContext extends HandleWrapperBase {
         return (DistributedApplicationEventSubscription) getClient().invokeCapability("Aspire.Hosting/eventingSubscriberOnAfterResourcesCreated", reqArgs);
     }
 
-    /** Gets the ExecutionContext property */
+    /** The execution context for the AppHost invocation. */
     public DistributedApplicationExecutionContext executionContext() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (DistributedApplicationExecutionContext) getClient().invokeCapability("Aspire.Hosting.Ats/EventingSubscriberRegistrationContext.executionContext", reqArgs);
     }
 
-    /** Gets the CancellationToken property */
+    /** The cancellation token associated with the subscriber registration. */
     public CancellationToken cancellationToken() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -8529,6 +8925,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         super(handle, client);
     }
 
+    /** Configures the resource to use the specified container registry for container image operations. */
     public ExecutableResource withContainerRegistry(IResource registry) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -8541,6 +8938,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withContainerRegistry(new IResource(registry.getHandle(), registry.getClient()));
     }
 
+    /** Configures custom base images for generated Dockerfiles. */
     public ExecutableResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
         var buildImage = options == null ? null : options.getBuildImage();
         var runtimeImage = options == null ? null : options.getRuntimeImage();
@@ -8551,6 +8949,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withDockerfileBaseImage(null);
     }
 
+    /** Configures custom base images for generated Dockerfiles. */
     private ExecutableResource withDockerfileBaseImageImpl(String buildImage, String runtimeImage) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -8564,6 +8963,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Publishes an executable as a Docker file */
     public ExecutableResource publishAsDockerFile(AspireAction1<ContainerResource> configure) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -8579,6 +8979,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the command for the executable resource. */
     public ExecutableResource withExecutableCommand(String command) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -8587,6 +8988,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the working directory for the executable resource. */
     public ExecutableResource withWorkingDirectory(String workingDirectory) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -8595,6 +8997,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
     public ExecutableResource withMcpServer(WithMcpServerOptions options) {
         var path = options == null ? null : options.getPath();
         var endpointName = options == null ? null : options.getEndpointName();
@@ -8605,6 +9008,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withMcpServer(null);
     }
 
+    /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
     private ExecutableResource withMcpServerImpl(String path, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -8622,6 +9026,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withOtlpExporter(null);
     }
 
+    /** Configures OTLP telemetry export */
     public ExecutableResource withOtlpExporter(OtlpProtocol protocol) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -8636,6 +9041,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withRequiredCommand(command, null);
     }
 
+    /** Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start. */
     public ExecutableResource withRequiredCommand(String command, String helpLink) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -8679,6 +9085,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withEnvironment(name, new IExpressionValue(value.getHandle(), value.getClient()));
     }
 
+    /** Sets an environment variable */
     public ExecutableResource withEnvironment(String name, AspireUnion value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -8688,6 +9095,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Allows for the population of environment variables on a resource. */
     public ExecutableResource withEnvironmentCallback(AspireAction1<EnvironmentCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -8703,6 +9111,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds arguments to be passed to a resource that supports arguments when it is launched. */
     public ExecutableResource withArgs(String[] args) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -8711,6 +9120,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a callback to be executed with a list of command-line arguments when a resource is started. */
     public ExecutableResource withArgsCallback(AspireAction1<CommandLineArgsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -8726,6 +9136,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures how information is injected into environment variables when the resource references other resources. */
     public ExecutableResource withReferenceEnvironment(ReferenceEnvironmentInjectionOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -8762,6 +9173,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withReference(AspireUnion.of(source));
     }
 
+    /** Adds a reference to another resource */
     public ExecutableResource withReference(AspireUnion source, WithReferenceOptions options) {
         var connectionName = options == null ? null : options.getConnectionName();
         var optional = options == null ? null : options.getOptional();
@@ -8773,6 +9185,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withReference(source, null);
     }
 
+    /** Adds a reference to another resource */
     private ExecutableResource withReferenceImpl(AspireUnion source, String connectionName, Boolean optional, String name) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -8794,6 +9207,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withEndpointCallback(endpointName, callback, null);
     }
 
+    /** Updates a named endpoint via callback */
     public ExecutableResource withEndpointCallback(String endpointName, AspireAction1<EndpointUpdateContext> callback, Boolean createIfNotExists) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -8813,6 +9227,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Updates an HTTP endpoint via callback */
     public ExecutableResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions options) {
         var name = options == null ? null : options.getName();
         var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
@@ -8823,6 +9238,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withHttpEndpointCallback(callback, null);
     }
 
+    /** Updates an HTTP endpoint via callback */
     private ExecutableResource withHttpEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -8844,6 +9260,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Updates an HTTPS endpoint via callback */
     public ExecutableResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
         var name = options == null ? null : options.getName();
         var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
@@ -8854,6 +9271,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withHttpsEndpointCallback(callback, null);
     }
 
+    /** Updates an HTTPS endpoint via callback */
     private ExecutableResource withHttpsEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -8875,6 +9293,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a network endpoint */
     public ExecutableResource withEndpoint(WithEndpointOptions options) {
         var port = options == null ? null : options.getPort();
         var targetPort = options == null ? null : options.getTargetPort();
@@ -8891,6 +9310,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withEndpoint(null);
     }
 
+    /** Adds a network endpoint */
     private ExecutableResource withEndpointImpl(Double port, Double targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -8922,6 +9342,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds an HTTP endpoint */
     public ExecutableResource withHttpEndpoint(WithHttpEndpointOptions options) {
         var port = options == null ? null : options.getPort();
         var targetPort = options == null ? null : options.getTargetPort();
@@ -8935,6 +9356,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withHttpEndpoint(null);
     }
 
+    /** Adds an HTTP endpoint */
     private ExecutableResource withHttpEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -8957,6 +9379,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds an HTTPS endpoint */
     public ExecutableResource withHttpsEndpoint(WithHttpsEndpointOptions options) {
         var port = options == null ? null : options.getPort();
         var targetPort = options == null ? null : options.getTargetPort();
@@ -8970,6 +9393,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withHttpsEndpoint(null);
     }
 
+    /** Adds an HTTPS endpoint */
     private ExecutableResource withHttpsEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -8992,6 +9416,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Marks existing http or https endpoints on a resource as external. */
     public ExecutableResource withExternalHttpEndpoints() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -8999,6 +9424,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Gets an endpoint reference */
     public EndpointReference getEndpoint(String name) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9006,6 +9432,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return (EndpointReference) getClient().invokeCapability("Aspire.Hosting/getEndpoint", reqArgs);
     }
 
+    /** Configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge. */
     public ExecutableResource asHttp2Service() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9013,6 +9440,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Registers a callback to customize the URLs displayed for the resource. */
     public ExecutableResource withUrls(AspireAction1<ResourceUrlsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9040,6 +9468,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withUrl(url, null);
     }
 
+    /** Adds or modifies displayed URLs */
     public ExecutableResource withUrl(AspireUnion url, String displayText) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9051,6 +9480,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Registers a callback to update the URL displayed for the endpoint with the specified name. */
     public ExecutableResource withUrlForEndpoint(String endpointName, AspireAction1<ResourceUrlAnnotation> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9067,6 +9497,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Excludes a resource from being published to the manifest. */
     public ExecutableResource excludeFromManifest() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9082,6 +9513,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return waitFor(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Waits for another resource to be ready */
     public ExecutableResource waitFor(IResource dependency, WaitBehavior waitBehavior) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9105,6 +9537,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return waitForStart(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Waits for another resource to start */
     public ExecutableResource waitForStart(IResource dependency, WaitBehavior waitBehavior) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9120,6 +9553,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return waitForStart(new IResource(dependency.getHandle(), dependency.getClient()), waitBehavior);
     }
 
+    /** Prevents resource from starting automatically */
     public ExecutableResource withExplicitStart() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9135,6 +9569,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return waitForCompletion(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Waits for the dependency resource to enter the Exited or Finished state before starting the resource. */
     public ExecutableResource waitForCompletion(IResource dependency, Double exitCode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9150,6 +9585,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return waitForCompletion(new IResource(dependency.getHandle(), dependency.getClient()), exitCode);
     }
 
+    /** Adds a health check by key */
     public ExecutableResource withHealthCheck(String key) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9158,6 +9594,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a health check to the resource which is mapped to a specific endpoint. */
     public ExecutableResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
         var path = options == null ? null : options.getPath();
         var statusCode = options == null ? null : options.getStatusCode();
@@ -9169,6 +9606,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withHttpHealthCheck(null);
     }
 
+    /** Adds a health check to the resource which is mapped to a specific endpoint. */
     private ExecutableResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9189,6 +9627,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withCommand(name, displayName, executeCommand, null);
     }
 
+    /** Adds a resource command */
     public ExecutableResource withCommand(String name, String displayName, AspireFunc1<ExecuteCommandContext, ExecuteCommandResult> executeCommand, CommandOptions commandOptions) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9208,6 +9647,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a command to the resource that starts a local process when invoked. */
     public ExecutableResource withProcessCommand(String commandName, String displayName, ProcessCommandExportOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9222,6 +9662,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withProcessCommandFactory(commandName, displayName, createProcessSpec, null);
     }
 
+    /** Adds a command to the resource that starts a local process created by a callback when invoked. */
     public ExecutableResource withProcessCommandFactory(String commandName, String displayName, AspireFunc1<ExecuteCommandContext, ProcessCommandSpecExportData> createProcessSpec, ProcessCommandResultExportOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9245,6 +9686,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withHttpCommand(path, displayName, null);
     }
 
+    /** Adds an HTTP resource command */
     public ExecutableResource withHttpCommand(String path, String displayName, HttpCommandExportOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9257,6 +9699,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Indicates whether developer certificates should be treated as trusted certificate authorities for the resource at run time. Currently this indicates trust for the ASP.NET Core developer certificate. The developer certificate will only be trusted when running in local development scenarios; in publish mode resources will use their default certificate trust. */
     public ExecutableResource withDeveloperCertificateTrust(boolean trust) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9265,6 +9708,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the certificate trust scope */
     public ExecutableResource withCertificateTrustScope(CertificateTrustScope scope) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9277,6 +9721,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withHttpsDeveloperCertificate(null);
     }
 
+    /** Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration. */
     public ExecutableResource withHttpsDeveloperCertificate(ParameterResource password) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9287,6 +9732,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Disable HTTPS/TLS server certificate configuration for the resource. No HTTPS/TLS termination configuration will be applied. */
     public ExecutableResource withoutHttpsCertificate() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9294,6 +9740,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a relationship to another resource using its builder. */
     public ExecutableResource withRelationship(IResource resourceBuilder, String type) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9307,6 +9754,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withRelationship(new IResource(resourceBuilder.getHandle(), resourceBuilder.getClient()), type);
     }
 
+    /** Sets the parent relationship */
     public ExecutableResource withParentRelationship(IResource parent) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9319,6 +9767,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withParentRelationship(new IResource(parent.getHandle(), parent.getClient()));
     }
 
+    /** Sets a child relationship */
     public ExecutableResource withChildRelationship(IResource child) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9335,6 +9784,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withIconName(iconName, null);
     }
 
+    /** Specifies the icon to use when displaying the resource in the dashboard. */
     public ExecutableResource withIconName(String iconName, IconVariant iconVariant) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9346,6 +9796,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures the compute environment for the compute resource. */
     public ExecutableResource withComputeEnvironment(IComputeEnvironmentResource computeEnvironmentResource) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9358,6 +9809,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withComputeEnvironment(new IComputeEnvironmentResource(computeEnvironmentResource.getHandle(), computeEnvironmentResource.getClient()));
     }
 
+    /** Adds an HTTP health probe to the resource */
     public ExecutableResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions options) {
         var path = options == null ? null : options.getPath();
         var initialDelaySeconds = options == null ? null : options.getInitialDelaySeconds();
@@ -9373,6 +9825,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withHttpProbe(probeType, null);
     }
 
+    /** Adds an HTTP health probe to the resource */
     private ExecutableResource withHttpProbeImpl(ProbeType probeType, String path, Double initialDelaySeconds, Double periodSeconds, Double timeoutSeconds, Double failureThreshold, Double successThreshold, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9402,6 +9855,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry. */
     public ExecutableResource excludeFromMcp() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9409,6 +9863,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds an asynchronous callback to configure container image push options for the resource. */
     public ExecutableResource withImagePushOptions(AspireAction1<ContainerImagePushOptionsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9424,6 +9879,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the remote image name (without registry endpoint or tag) for container push operations. */
     public ExecutableResource withRemoteImageName(String remoteImageName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9432,6 +9888,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the remote image tag for container push operations. */
     public ExecutableResource withRemoteImageTag(String remoteImageTag) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9440,6 +9897,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a pipeline step to the resource that will be executed during deployment. */
     public ExecutableResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
         var dependsOn = options == null ? null : options.getDependsOn();
         var requiredBy = options == null ? null : options.getRequiredBy();
@@ -9452,6 +9910,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withPipelineStepFactory(stepName, callback, null);
     }
 
+    /** Adds a pipeline step to the resource that will be executed during deployment. */
     private ExecutableResource withPipelineStepFactoryImpl(String stepName, AspireAction1<PipelineStepContext> callback, String[] dependsOn, String[] requiredBy, String[] tags, String description) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9480,6 +9939,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships. */
     public ExecutableResource withPipelineConfiguration(AspireAction1<PipelineConfigurationContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9495,12 +9955,14 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Gets the name of the resource from a builder. */
     public String getResourceName() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
         return (String) getClient().invokeCapability("Aspire.Hosting/getResourceName", reqArgs);
     }
 
+    /** Subscribes to the BeforeResourceStarted event. */
     public ExecutableResource onBeforeResourceStarted(AspireAction1<BeforeResourceStartedEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9516,6 +9978,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Subscribes to the ResourceStopped event. */
     public ExecutableResource onResourceStopped(AspireAction1<ResourceStoppedEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9531,6 +9994,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Subscribes to the InitializeResource event. */
     public ExecutableResource onInitializeResource(AspireAction1<InitializeResourceEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9546,6 +10010,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Subscribes to the ResourceEndpointsAllocated event. */
     public ExecutableResource onResourceEndpointsAllocated(AspireAction1<ResourceEndpointsAllocatedEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9561,6 +10026,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Subscribes to the ResourceReady event. */
     public ExecutableResource onResourceReady(AspireAction1<ResourceReadyEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9576,12 +10042,14 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Creates an execution configuration builder for the specified resource. */
     public IExecutionConfigurationBuilder createExecutionConfiguration() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
         return (IExecutionConfigurationBuilder) getClient().invokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs);
     }
 
+    /** Adds an optional string parameter */
     public ExecutableResource withOptionalString(WithOptionalStringOptions options) {
         var value = options == null ? null : options.getValue();
         var enabled = options == null ? null : options.getEnabled();
@@ -9592,6 +10060,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withOptionalString(null);
     }
 
+    /** Adds an optional string parameter */
     private ExecutableResource withOptionalStringImpl(String value, Boolean enabled) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9605,6 +10074,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures the resource with a DTO */
     public ExecutableResource withConfig(TestConfigDto config) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9613,6 +10083,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures environment with callback (test version) */
     public ExecutableResource testWithEnvironmentCallback(AspireAction1<TestEnvironmentContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9628,6 +10099,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the created timestamp */
     public ExecutableResource withCreatedAt(String createdAt) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9636,6 +10108,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the modified timestamp */
     public ExecutableResource withModifiedAt(String modifiedAt) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9644,6 +10117,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the correlation ID */
     public ExecutableResource withCorrelationId(String correlationId) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9656,6 +10130,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withOptionalCallback(null);
     }
 
+    /** Configures with optional callback */
     public ExecutableResource withOptionalCallback(AspireAction1<TestCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9671,6 +10146,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the resource status */
     public ExecutableResource withStatus(TestResourceStatus status) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9679,6 +10155,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures with nested DTO */
     public ExecutableResource withNestedConfig(TestNestedDto config) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9687,6 +10164,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds validation callback */
     public ExecutableResource withValidator(AspireFunc1<TestResourceContext, Boolean> validator) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9701,6 +10179,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Waits for another resource (test version) */
     public ExecutableResource testWaitFor(IResource dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9713,6 +10192,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return testWaitFor(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Adds a dependency on another resource */
     public ExecutableResource withDependency(IResourceWithConnectionString dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9737,6 +10217,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withUnionDependency(new IResourceWithConnectionString(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Adds a dependency from a string or another resource */
     public ExecutableResource withUnionDependency(AspireUnion dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9745,6 +10226,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the endpoints */
     public ExecutableResource withEndpoints(String[] endpoints) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9753,6 +10235,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets environment variables */
     public ExecutableResource withEnvironmentVariables(Map<String, String> variables) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9761,6 +10244,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Performs a cancellable operation */
     public ExecutableResource withCancellableOperation(AspireAction1<CancellationToken> operation) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9776,6 +10260,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a label to the resource */
     public ExecutableResource withMergeLabel(String label) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9784,6 +10269,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a categorized label to the resource */
     public ExecutableResource withMergeLabelCategorized(String label, String category) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9793,6 +10279,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a named endpoint */
     public ExecutableResource withMergeEndpoint(String endpointName, double port) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9802,6 +10289,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a named endpoint with scheme */
     public ExecutableResource withMergeEndpointScheme(String endpointName, double port, String scheme) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9812,6 +10300,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures resource logging */
     public ExecutableResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
         var enableConsole = options == null ? null : options.getEnableConsole();
         var maxFiles = options == null ? null : options.getMaxFiles();
@@ -9822,6 +10311,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withMergeLogging(logLevel, null);
     }
 
+    /** Configures resource logging */
     private ExecutableResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9836,6 +10326,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures resource logging with file path */
     public ExecutableResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
         var enableConsole = options == null ? null : options.getEnableConsole();
         var maxFiles = options == null ? null : options.getMaxFiles();
@@ -9846,6 +10337,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return withMergeLoggingPath(logLevel, logPath, null);
     }
 
+    /** Configures resource logging with file path */
     private ExecutableResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9861,6 +10353,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a route */
     public ExecutableResource withMergeRoute(String path, String method, String handler, double priority) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9872,6 +10365,7 @@ public class ExecutableResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a route with middleware */
     public ExecutableResource withMergeRouteMiddleware(String path, String method, String handler, double priority, String middleware) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -9900,35 +10394,35 @@ public class ExecuteCommandContext extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the ServiceProvider property */
+    /** The service provider. */
     public IServiceProvider serviceProvider() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (IServiceProvider) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.serviceProvider", reqArgs);
     }
 
-    /** Gets the ResourceName property */
+    /** The resource name. */
     public String resourceName() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (String) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.resourceName", reqArgs);
     }
 
-    /** Gets the CancellationToken property */
+    /** The cancellation token. */
     public CancellationToken cancellationToken() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (CancellationToken) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.cancellationToken", reqArgs);
     }
 
-    /** Gets the Logger property */
+    /** The logger for the resource. */
     public ILogger logger() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (ILogger) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ExecuteCommandContext.logger", reqArgs);
     }
 
-    /** Gets the Arguments property */
+    /** Gets the invocation arguments supplied by the client when the command is executed. */
     public InteractionInputCollection arguments() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -9989,6 +10483,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         super(handle, client);
     }
 
+    /** Configures the resource to use the specified container registry for container image operations. */
     public ExternalServiceResource withContainerRegistry(IResource registry) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10001,6 +10496,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return withContainerRegistry(new IResource(registry.getHandle(), registry.getClient()));
     }
 
+    /** Configures custom base images for generated Dockerfiles. */
     public ExternalServiceResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
         var buildImage = options == null ? null : options.getBuildImage();
         var runtimeImage = options == null ? null : options.getRuntimeImage();
@@ -10011,6 +10507,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return withDockerfileBaseImage(null);
     }
 
+    /** Configures custom base images for generated Dockerfiles. */
     private ExternalServiceResource withDockerfileBaseImageImpl(String buildImage, String runtimeImage) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10024,6 +10521,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds an HTTP health check to the external service for polyglot app hosts. */
     public ExternalServiceResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
         var path = options == null ? null : options.getPath();
         var statusCode = options == null ? null : options.getStatusCode();
@@ -10035,6 +10533,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return withHttpHealthCheck(null);
     }
 
+    /** Adds an HTTP health check to the external service for polyglot app hosts. */
     private ExternalServiceResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10055,6 +10554,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return withRequiredCommand(command, null);
     }
 
+    /** Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start. */
     public ExternalServiceResource withRequiredCommand(String command, String helpLink) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10066,6 +10566,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Registers a callback to customize the URLs displayed for the resource. */
     public ExternalServiceResource withUrls(AspireAction1<ResourceUrlsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10093,6 +10594,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return withUrl(url, null);
     }
 
+    /** Adds or modifies displayed URLs */
     public ExternalServiceResource withUrl(AspireUnion url, String displayText) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10104,6 +10606,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Registers a callback to update the URL displayed for the endpoint with the specified name. */
     public ExternalServiceResource withUrlForEndpoint(String endpointName, AspireAction1<ResourceUrlAnnotation> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10120,6 +10623,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Excludes a resource from being published to the manifest. */
     public ExternalServiceResource excludeFromManifest() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10127,6 +10631,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Prevents resource from starting automatically */
     public ExternalServiceResource withExplicitStart() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10134,6 +10639,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a health check by key */
     public ExternalServiceResource withHealthCheck(String key) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10146,6 +10652,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return withCommand(name, displayName, executeCommand, null);
     }
 
+    /** Adds a resource command */
     public ExternalServiceResource withCommand(String name, String displayName, AspireFunc1<ExecuteCommandContext, ExecuteCommandResult> executeCommand, CommandOptions commandOptions) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10165,6 +10672,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a command to the resource that starts a local process when invoked. */
     public ExternalServiceResource withProcessCommand(String commandName, String displayName, ProcessCommandExportOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10179,6 +10687,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return withProcessCommandFactory(commandName, displayName, createProcessSpec, null);
     }
 
+    /** Adds a command to the resource that starts a local process created by a callback when invoked. */
     public ExternalServiceResource withProcessCommandFactory(String commandName, String displayName, AspireFunc1<ExecuteCommandContext, ProcessCommandSpecExportData> createProcessSpec, ProcessCommandResultExportOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10198,6 +10707,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a relationship to another resource using its builder. */
     public ExternalServiceResource withRelationship(IResource resourceBuilder, String type) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10211,6 +10721,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return withRelationship(new IResource(resourceBuilder.getHandle(), resourceBuilder.getClient()), type);
     }
 
+    /** Sets the parent relationship */
     public ExternalServiceResource withParentRelationship(IResource parent) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10223,6 +10734,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return withParentRelationship(new IResource(parent.getHandle(), parent.getClient()));
     }
 
+    /** Sets a child relationship */
     public ExternalServiceResource withChildRelationship(IResource child) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10239,6 +10751,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return withIconName(iconName, null);
     }
 
+    /** Specifies the icon to use when displaying the resource in the dashboard. */
     public ExternalServiceResource withIconName(String iconName, IconVariant iconVariant) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10250,6 +10763,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry. */
     public ExternalServiceResource excludeFromMcp() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10257,6 +10771,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a pipeline step to the resource that will be executed during deployment. */
     public ExternalServiceResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
         var dependsOn = options == null ? null : options.getDependsOn();
         var requiredBy = options == null ? null : options.getRequiredBy();
@@ -10269,6 +10784,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return withPipelineStepFactory(stepName, callback, null);
     }
 
+    /** Adds a pipeline step to the resource that will be executed during deployment. */
     private ExternalServiceResource withPipelineStepFactoryImpl(String stepName, AspireAction1<PipelineStepContext> callback, String[] dependsOn, String[] requiredBy, String[] tags, String description) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10297,6 +10813,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships. */
     public ExternalServiceResource withPipelineConfiguration(AspireAction1<PipelineConfigurationContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10312,12 +10829,14 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Gets the name of the resource from a builder. */
     public String getResourceName() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
         return (String) getClient().invokeCapability("Aspire.Hosting/getResourceName", reqArgs);
     }
 
+    /** Subscribes to the BeforeResourceStarted event. */
     public ExternalServiceResource onBeforeResourceStarted(AspireAction1<BeforeResourceStartedEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10333,6 +10852,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Subscribes to the ResourceStopped event. */
     public ExternalServiceResource onResourceStopped(AspireAction1<ResourceStoppedEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10348,6 +10868,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Subscribes to the InitializeResource event. */
     public ExternalServiceResource onInitializeResource(AspireAction1<InitializeResourceEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10363,6 +10884,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Subscribes to the ResourceReady event. */
     public ExternalServiceResource onResourceReady(AspireAction1<ResourceReadyEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10378,12 +10900,14 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Creates an execution configuration builder for the specified resource. */
     public IExecutionConfigurationBuilder createExecutionConfiguration() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
         return (IExecutionConfigurationBuilder) getClient().invokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs);
     }
 
+    /** Adds an optional string parameter */
     public ExternalServiceResource withOptionalString(WithOptionalStringOptions options) {
         var value = options == null ? null : options.getValue();
         var enabled = options == null ? null : options.getEnabled();
@@ -10394,6 +10918,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return withOptionalString(null);
     }
 
+    /** Adds an optional string parameter */
     private ExternalServiceResource withOptionalStringImpl(String value, Boolean enabled) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10407,6 +10932,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures the resource with a DTO */
     public ExternalServiceResource withConfig(TestConfigDto config) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10415,6 +10941,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the created timestamp */
     public ExternalServiceResource withCreatedAt(String createdAt) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10423,6 +10950,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the modified timestamp */
     public ExternalServiceResource withModifiedAt(String modifiedAt) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10431,6 +10959,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the correlation ID */
     public ExternalServiceResource withCorrelationId(String correlationId) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10443,6 +10972,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return withOptionalCallback(null);
     }
 
+    /** Configures with optional callback */
     public ExternalServiceResource withOptionalCallback(AspireAction1<TestCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10458,6 +10988,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the resource status */
     public ExternalServiceResource withStatus(TestResourceStatus status) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10466,6 +10997,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures with nested DTO */
     public ExternalServiceResource withNestedConfig(TestNestedDto config) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10474,6 +11006,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds validation callback */
     public ExternalServiceResource withValidator(AspireFunc1<TestResourceContext, Boolean> validator) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10488,6 +11021,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Waits for another resource (test version) */
     public ExternalServiceResource testWaitFor(IResource dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10500,6 +11034,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return testWaitFor(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Adds a dependency on another resource */
     public ExternalServiceResource withDependency(IResourceWithConnectionString dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10524,6 +11059,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return withUnionDependency(new IResourceWithConnectionString(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Adds a dependency from a string or another resource */
     public ExternalServiceResource withUnionDependency(AspireUnion dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10532,6 +11068,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the endpoints */
     public ExternalServiceResource withEndpoints(String[] endpoints) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10540,6 +11077,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Performs a cancellable operation */
     public ExternalServiceResource withCancellableOperation(AspireAction1<CancellationToken> operation) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10555,6 +11093,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a label to the resource */
     public ExternalServiceResource withMergeLabel(String label) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10563,6 +11102,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a categorized label to the resource */
     public ExternalServiceResource withMergeLabelCategorized(String label, String category) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10572,6 +11112,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a named endpoint */
     public ExternalServiceResource withMergeEndpoint(String endpointName, double port) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10581,6 +11122,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a named endpoint with scheme */
     public ExternalServiceResource withMergeEndpointScheme(String endpointName, double port, String scheme) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10591,6 +11133,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures resource logging */
     public ExternalServiceResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
         var enableConsole = options == null ? null : options.getEnableConsole();
         var maxFiles = options == null ? null : options.getMaxFiles();
@@ -10601,6 +11144,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return withMergeLogging(logLevel, null);
     }
 
+    /** Configures resource logging */
     private ExternalServiceResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10615,6 +11159,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures resource logging with file path */
     public ExternalServiceResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
         var enableConsole = options == null ? null : options.getEnableConsole();
         var maxFiles = options == null ? null : options.getMaxFiles();
@@ -10625,6 +11170,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return withMergeLoggingPath(logLevel, logPath, null);
     }
 
+    /** Configures resource logging with file path */
     private ExternalServiceResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10640,6 +11186,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a route */
     public ExternalServiceResource withMergeRoute(String path, String method, String handler, double priority) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10651,6 +11198,7 @@ public class ExternalServiceResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a route with middleware */
     public ExternalServiceResource withMergeRouteMiddleware(String path, String method, String handler, double priority, String middleware) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -10993,13 +11541,14 @@ public class IAspireStore extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the BasePath property */
+    /** Gets the base path of this store. */
     public String basePath() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (String) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/IAspireStore.basePath", reqArgs);
     }
 
+    /** Gets a deterministic file path that is a copy of the `sourceFilename`. The resulting file name will depend on the content of the file. */
     public String getFileNameWithContent(String filenameTemplate, String sourceFilename) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("aspireStore", AspireClient.serializeValue(getHandle()));
@@ -11056,6 +11605,7 @@ public class IConfiguration extends HandleWrapperBase {
         super(handle, client);
     }
 
+    /** Gets a configuration value by key. */
     public String getConfigValue(String key) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("configuration", AspireClient.serializeValue(getHandle()));
@@ -11063,6 +11613,7 @@ public class IConfiguration extends HandleWrapperBase {
         return (String) getClient().invokeCapability("Aspire.Hosting/getConfigValue", reqArgs);
     }
 
+    /** Gets a connection string by name. */
     public String getConnectionString(String name) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("configuration", AspireClient.serializeValue(getHandle()));
@@ -11070,6 +11621,7 @@ public class IConfiguration extends HandleWrapperBase {
         return (String) getClient().invokeCapability("Aspire.Hosting/getConnectionString", reqArgs);
     }
 
+    /** Gets a configuration section by key. */
     public IConfigurationSection getSection(String key) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("configuration", AspireClient.serializeValue(getHandle()));
@@ -11077,12 +11629,14 @@ public class IConfiguration extends HandleWrapperBase {
         return (IConfigurationSection) getClient().invokeCapability("Aspire.Hosting/getSection", reqArgs);
     }
 
+    /** Gets the child sections of a configuration handle. */
     public IConfigurationSection[] getChildren() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("configuration", AspireClient.serializeValue(getHandle()));
         return (IConfigurationSection[]) getClient().invokeCapability("Aspire.Hosting/getChildren", reqArgs);
     }
 
+    /** Checks whether a configuration section exists. */
     public boolean exists(String key) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("configuration", AspireClient.serializeValue(getHandle()));
@@ -11187,6 +11741,7 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return addContainerRegistry(name, endpoint, (AspireUnion) null);
     }
 
+    /** Adds a container registry resource */
     public ContainerRegistryResource addContainerRegistry(String name, AspireUnion endpoint, AspireUnion repository) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -11206,6 +11761,7 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return addContainer(name, AspireUnion.of(image));
     }
 
+    /** Adds a container resource to the application. */
     public ContainerResource addContainer(String name, AspireUnion image) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -11214,6 +11770,7 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return (ContainerResource) getClient().invokeCapability("Aspire.Hosting/addContainer", reqArgs);
     }
 
+    /** Adds a Dockerfile to the application model that can be treated like a container resource. */
     public ContainerResource addDockerfile(String name, String contextPath, AddDockerfileOptions options) {
         var dockerfilePath = options == null ? null : options.getDockerfilePath();
         var stage = options == null ? null : options.getStage();
@@ -11224,6 +11781,7 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return addDockerfile(name, contextPath, null);
     }
 
+    /** Adds a Dockerfile to the application model that can be treated like a container resource. */
     private ContainerResource addDockerfileImpl(String name, String contextPath, String dockerfilePath, String stage) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -11242,6 +11800,7 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return addDockerfileBuilder(name, contextPath, callback, null);
     }
 
+    /** Adds a container resource built from a programmatically generated Dockerfile */
     public ContainerResource addDockerfileBuilder(String name, String contextPath, AspireAction1<DockerfileBuilderCallbackContext> callback, String stage) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -11261,6 +11820,7 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return (ContainerResource) getClient().invokeCapability("Aspire.Hosting/addDockerfileBuilder", reqArgs);
     }
 
+    /** Adds a .NET tool resource to the application model. */
     public DotnetToolResource addDotnetTool(String name, String packageId) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -11269,6 +11829,7 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return (DotnetToolResource) getClient().invokeCapability("Aspire.Hosting/addDotnetTool", reqArgs);
     }
 
+    /** Adds an executable resource to the application model. */
     public ExecutableResource addExecutable(String name, String command, String workingDirectory, String[] args) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -11287,6 +11848,7 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return addExternalService(name, AspireUnion.of(url));
     }
 
+    /** Adds an external service resource */
     public ExternalServiceResource addExternalService(String name, AspireUnion url) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -11295,7 +11857,7 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return (ExternalServiceResource) getClient().invokeCapability("Aspire.Hosting/addExternalService", reqArgs);
     }
 
-    /** Gets the AppHostDirectory property */
+    /** Directory of the project where the app host is located. Defaults to the content root if there's no project. */
     public String appHostDirectory() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -11309,41 +11871,42 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return (IHostEnvironment) getClient().invokeCapability("Aspire.Hosting/IDistributedApplicationBuilder.environment", reqArgs);
     }
 
-    /** Gets the Eventing property */
+    /** Eventing infrastructure for AppHost lifecycle. */
     public IDistributedApplicationEventing eventing() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (IDistributedApplicationEventing) getClient().invokeCapability("Aspire.Hosting/IDistributedApplicationBuilder.eventing", reqArgs);
     }
 
-    /** Gets the ExecutionContext property */
+    /** Execution context for this invocation of the AppHost. */
     public DistributedApplicationExecutionContext executionContext() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (DistributedApplicationExecutionContext) getClient().invokeCapability("Aspire.Hosting/IDistributedApplicationBuilder.executionContext", reqArgs);
     }
 
-    /** Gets the Pipeline property */
+    /** Gets the deployment pipeline for this distributed application. */
     public IDistributedApplicationPipeline pipeline() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (IDistributedApplicationPipeline) getClient().invokeCapability("Aspire.Hosting/IDistributedApplicationBuilder.pipeline", reqArgs);
     }
 
-    /** Gets the UserSecretsManager property */
+    /** Gets the service for managing user secrets. */
     public IUserSecretsManager userSecretsManager() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (IUserSecretsManager) getClient().invokeCapability("Aspire.Hosting/IDistributedApplicationBuilder.userSecretsManager", reqArgs);
     }
 
-    /** Invokes the Build method */
+    /** Builds the distributed application */
     public DistributedApplication build() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (DistributedApplication) getClient().invokeCapability("Aspire.Hosting/build", reqArgs);
     }
 
+    /** Adds a parameter resource */
     public ParameterResource addParameter(String name, AddParameterOptions options) {
         var value = options == null ? null : options.getValue();
         var publishValueAsDefault = options == null ? null : options.getPublishValueAsDefault();
@@ -11355,6 +11918,7 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return addParameter(name, null);
     }
 
+    /** Adds a parameter resource */
     private ParameterResource addParameterImpl(String name, String value, Boolean publishValueAsDefault, Boolean secret) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -11375,6 +11939,7 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return addParameterFromConfiguration(name, configurationKey, null);
     }
 
+    /** Adds a parameter resource to the application, with a value coming from configuration. */
     public ParameterResource addParameterFromConfiguration(String name, String configurationKey, Boolean secret) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -11386,6 +11951,7 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return (ParameterResource) getClient().invokeCapability("Aspire.Hosting/addParameterFromConfiguration", reqArgs);
     }
 
+    /** Adds a parameter with a generated default value */
     public ParameterResource addParameterWithGeneratedValue(String name, GenerateParameterDefault value, AddParameterWithGeneratedValueOptions options) {
         var secret = options == null ? null : options.getSecret();
         var persist = options == null ? null : options.getPersist();
@@ -11396,6 +11962,7 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return addParameterWithGeneratedValue(name, value, null);
     }
 
+    /** Adds a parameter with a generated default value */
     private ParameterResource addParameterWithGeneratedValueImpl(String name, GenerateParameterDefault value, Boolean secret, Boolean persist) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -11422,6 +11989,7 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return addConnectionString(name, (AspireUnion) null);
     }
 
+    /** Adds a connection string resource */
     public IResourceWithConnectionString addConnectionString(String name, AspireUnion environmentVariableNameOrExpression) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -11444,6 +12012,7 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return addProject(name, projectPath, (AspireUnion) null);
     }
 
+    /** Adds a .NET project resource */
     public ProjectResource addProject(String name, String projectPath, AspireUnion launchProfileOrOptions) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -11459,6 +12028,7 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return addCSharpApp(name, path, null);
     }
 
+    /** Adds a C# application resource */
     public CSharpAppResource addCSharpApp(String name, String path, ProjectResourceOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -11470,12 +12040,14 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return (CSharpAppResource) getClient().invokeCapability("Aspire.Hosting/addCSharpApp", reqArgs);
     }
 
+    /** Gets the application configuration. */
     public IConfiguration getConfiguration() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         return (IConfiguration) getClient().invokeCapability("Aspire.Hosting/getConfiguration", reqArgs);
     }
 
+    /** Subscribes to the BeforeStart event, which fires before the application starts. */
     public DistributedApplicationEventSubscription subscribeBeforeStart(AspireAction1<BeforeStartEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -11490,6 +12062,7 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return (DistributedApplicationEventSubscription) getClient().invokeCapability("Aspire.Hosting/subscribeBeforeStart", reqArgs);
     }
 
+    /** Subscribes to the BeforePublish event, which fires before the application is published. */
     public DistributedApplicationEventSubscription subscribeBeforePublish(AspireAction1<BeforePublishEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -11504,6 +12077,7 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return (DistributedApplicationEventSubscription) getClient().invokeCapability("Aspire.Hosting/subscribeBeforePublish", reqArgs);
     }
 
+    /** Subscribes to the AfterPublish event, which fires after the application is published. */
     public DistributedApplicationEventSubscription subscribeAfterPublish(AspireAction1<AfterPublishEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -11518,6 +12092,7 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return (DistributedApplicationEventSubscription) getClient().invokeCapability("Aspire.Hosting/subscribeAfterPublish", reqArgs);
     }
 
+    /** Subscribes to the AfterResourcesCreated event, which fires after all resources are created. */
     public DistributedApplicationEventSubscription subscribeAfterResourcesCreated(AspireAction1<AfterResourcesCreatedEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -11532,6 +12107,7 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return (DistributedApplicationEventSubscription) getClient().invokeCapability("Aspire.Hosting/subscribeAfterResourcesCreated", reqArgs);
     }
 
+    /** Adds an ATS-friendly eventing subscriber callback to the distributed-application builder. */
     public void addEventingSubscriber(AspireAction1<EventingSubscriberRegistrationContext> subscribe) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -11546,6 +12122,7 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         getClient().invokeCapability("Aspire.Hosting/addEventingSubscriber", reqArgs);
     }
 
+    /** Attempts to add an ATS-friendly eventing subscriber callback to the distributed-application builder. */
     public void tryAddEventingSubscriber(AspireAction1<EventingSubscriberRegistrationContext> subscribe) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -11564,6 +12141,7 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return addTestRedis(name, null);
     }
 
+    /** Adds a test Redis resource from ATS documentation. */
     public TestRedisResource addTestRedis(String name, Double port) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -11574,6 +12152,7 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return (TestRedisResource) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/addTestRedis", reqArgs);
     }
 
+    /** Adds a test vault resource */
     public TestVaultResource addTestVault(String name) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -11613,7 +12192,7 @@ public class IDistributedApplicationEventing extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Invokes the Unsubscribe method */
+    /** Unsubscribe from an event. */
     public void unsubscribe(DistributedApplicationEventSubscription subscription) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -11637,12 +12216,14 @@ public class IDistributedApplicationPipeline extends HandleWrapperBase {
         super(handle, client);
     }
 
+    /** Disables the publish and deploy validation that requires build-only containers to be consumed by another resource. */
     public IDistributedApplicationPipeline disableBuildOnlyContainerValidation() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("pipeline", AspireClient.serializeValue(getHandle()));
         return (IDistributedApplicationPipeline) getClient().invokeCapability("Aspire.Hosting/disableBuildOnlyContainerValidation", reqArgs);
     }
 
+    /** Adds an application-level pipeline step in a TypeScript-friendly shape. */
     public void addStep(String stepName, AspireAction1<PipelineStepContext> callback, AddStepOptions options) {
         var dependsOn = options == null ? null : options.getDependsOn();
         var requiredBy = options == null ? null : options.getRequiredBy();
@@ -11653,6 +12234,7 @@ public class IDistributedApplicationPipeline extends HandleWrapperBase {
         addStep(stepName, callback, null);
     }
 
+    /** Adds an application-level pipeline step in a TypeScript-friendly shape. */
     private void addStepImpl(String stepName, AspireAction1<PipelineStepContext> callback, String[] dependsOn, String[] requiredBy) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("pipeline", AspireClient.serializeValue(getHandle()));
@@ -11674,6 +12256,7 @@ public class IDistributedApplicationPipeline extends HandleWrapperBase {
         getClient().invokeCapability("Aspire.Hosting/addStep", reqArgs);
     }
 
+    /** Registers a pipeline configuration callback in a TypeScript-friendly shape. */
     public void configure(AspireAction1<PipelineConfigurationContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("pipeline", AspireClient.serializeValue(getHandle()));
@@ -11720,6 +12303,7 @@ public class IExecutionConfigurationBuilder extends HandleWrapperBase {
         super(handle, client);
     }
 
+    /** Builds the execution configuration for the specified builder. */
     public IExecutionConfigurationResult build(DistributedApplicationExecutionContext executionContext, BuildOptions options) {
         var resourceLogger = options == null ? null : options.getResourceLogger();
         var cancellationToken = options == null ? null : options.getCancellationToken();
@@ -11730,6 +12314,7 @@ public class IExecutionConfigurationBuilder extends HandleWrapperBase {
         return build(executionContext, null);
     }
 
+    /** Builds the execution configuration for the specified builder. */
     private IExecutionConfigurationResult buildImpl(DistributedApplicationExecutionContext executionContext, ILogger resourceLogger, CancellationToken cancellationToken) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -11743,6 +12328,7 @@ public class IExecutionConfigurationBuilder extends HandleWrapperBase {
         return (IExecutionConfigurationResult) getClient().invokeCapability("Aspire.Hosting/buildExecutionConfiguration", reqArgs);
     }
 
+    /** Adds an HTTPS certificate configuration gatherer using certificate metadata instead of a raw X509 certificate. */
     public IExecutionConfigurationBuilder withHttpsCertificateConfig(AspireFunc1<HttpsCertificateInfo, HttpsCertificateExecutionConfigurationContext> configContextFactory) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -11756,18 +12342,21 @@ public class IExecutionConfigurationBuilder extends HandleWrapperBase {
         return (IExecutionConfigurationBuilder) getClient().invokeCapability("Aspire.Hosting/withHttpsCertificateConfigExport", reqArgs);
     }
 
+    /** Adds a command line arguments configuration gatherer to the builder. */
     public IExecutionConfigurationBuilder withArgumentsConfig() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         return (IExecutionConfigurationBuilder) getClient().invokeCapability("Aspire.Hosting/withArgumentsConfig", reqArgs);
     }
 
+    /** Adds an environment variables configuration gatherer to the builder. */
     public IExecutionConfigurationBuilder withEnvironmentVariablesConfig() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         return (IExecutionConfigurationBuilder) getClient().invokeCapability("Aspire.Hosting/withEnvironmentVariablesConfig", reqArgs);
     }
 
+    /** Adds a certificate trust configuration gatherer to the builder. */
     public IExecutionConfigurationBuilder withCertificateTrustConfig(AspireFunc1<CertificateTrustScope, CertificateTrustExecutionConfigurationContext> configContextFactory) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -11797,12 +12386,14 @@ public class IExecutionConfigurationResult extends HandleWrapperBase {
         super(handle, client);
     }
 
+    /** Gets certificate trust execution-configuration data when present. */
     public CertificateTrustExecutionConfigurationExportData getCertificateTrustData() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("configuration", AspireClient.serializeValue(getHandle()));
         return (CertificateTrustExecutionConfigurationExportData) getClient().invokeCapability("Aspire.Hosting/getCertificateTrustData", reqArgs);
     }
 
+    /** Gets HTTPS certificate execution-configuration data when present. */
     public HttpsCertificateExecutionConfigurationExportData getHttpsCertificateData() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("configuration", AspireClient.serializeValue(getHandle()));
@@ -11886,24 +12477,28 @@ public class IHostEnvironment extends HandleWrapperBase {
         return (IHostEnvironment) getClient().invokeCapability("Microsoft.Extensions.Hosting/IHostEnvironment.setContentRootPath", reqArgs);
     }
 
+    /** Checks if the environment is Development. */
     public boolean isDevelopment() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("environment", AspireClient.serializeValue(getHandle()));
         return (boolean) getClient().invokeCapability("Aspire.Hosting/isDevelopment", reqArgs);
     }
 
+    /** Checks if the environment is Production. */
     public boolean isProduction() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("environment", AspireClient.serializeValue(getHandle()));
         return (boolean) getClient().invokeCapability("Aspire.Hosting/isProduction", reqArgs);
     }
 
+    /** Checks if the environment is Staging. */
     public boolean isStaging() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("environment", AspireClient.serializeValue(getHandle()));
         return (boolean) getClient().invokeCapability("Aspire.Hosting/isStaging", reqArgs);
     }
 
+    /** Checks if the environment matches the specified name. */
     public boolean isEnvironment(String environmentName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("environment", AspireClient.serializeValue(getHandle()));
@@ -11927,6 +12522,7 @@ public class ILogger extends HandleWrapperBase {
         super(handle, client);
     }
 
+    /** Logs an information message. */
     public void logInformation(String message) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("logger", AspireClient.serializeValue(getHandle()));
@@ -11934,6 +12530,7 @@ public class ILogger extends HandleWrapperBase {
         getClient().invokeCapability("Aspire.Hosting/logInformation", reqArgs);
     }
 
+    /** Logs a warning message. */
     public void logWarning(String message) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("logger", AspireClient.serializeValue(getHandle()));
@@ -11941,6 +12538,7 @@ public class ILogger extends HandleWrapperBase {
         getClient().invokeCapability("Aspire.Hosting/logWarning", reqArgs);
     }
 
+    /** Logs an error message. */
     public void logError(String message) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("logger", AspireClient.serializeValue(getHandle()));
@@ -11948,6 +12546,7 @@ public class ILogger extends HandleWrapperBase {
         getClient().invokeCapability("Aspire.Hosting/logError", reqArgs);
     }
 
+    /** Logs a debug message. */
     public void logDebug(String message) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("logger", AspireClient.serializeValue(getHandle()));
@@ -11955,6 +12554,7 @@ public class ILogger extends HandleWrapperBase {
         getClient().invokeCapability("Aspire.Hosting/logDebug", reqArgs);
     }
 
+    /** Logs a message with a specified log level. */
     public void log(String level, String message) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("logger", AspireClient.serializeValue(getHandle()));
@@ -11979,6 +12579,7 @@ public class ILoggerFactory extends HandleWrapperBase {
         super(handle, client);
     }
 
+    /** Creates a logger for the specified category name. */
     public ILogger createLogger(String categoryName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("loggerFactory", AspireClient.serializeValue(getHandle()));
@@ -12006,6 +12607,7 @@ public class IReportingStep extends HandleWrapperBase {
         return createTask(statusText, null);
     }
 
+    /** Creates a reporting task with plain-text status text. */
     public IReportingTask createTask(String statusText, CancellationToken cancellationToken) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("reportingStep", AspireClient.serializeValue(getHandle()));
@@ -12020,6 +12622,7 @@ public class IReportingStep extends HandleWrapperBase {
         return createMarkdownTask(markdownString, null);
     }
 
+    /** Creates a reporting task with Markdown-formatted status text. */
     public IReportingTask createMarkdownTask(String markdownString, CancellationToken cancellationToken) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("reportingStep", AspireClient.serializeValue(getHandle()));
@@ -12030,6 +12633,7 @@ public class IReportingStep extends HandleWrapperBase {
         return (IReportingTask) getClient().invokeCapability("Aspire.Hosting/createMarkdownTask", reqArgs);
     }
 
+    /** Logs a plain-text message for the reporting step. */
     public void logStep(String level, String message) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("reportingStep", AspireClient.serializeValue(getHandle()));
@@ -12038,6 +12642,7 @@ public class IReportingStep extends HandleWrapperBase {
         getClient().invokeCapability("Aspire.Hosting/logStep", reqArgs);
     }
 
+    /** Logs a Markdown-formatted message for the reporting step. */
     public void logStepMarkdown(String level, String markdownString) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("reportingStep", AspireClient.serializeValue(getHandle()));
@@ -12046,6 +12651,7 @@ public class IReportingStep extends HandleWrapperBase {
         getClient().invokeCapability("Aspire.Hosting/logStepMarkdown", reqArgs);
     }
 
+    /** Completes the reporting step with plain-text completion text. */
     public void completeStep(String completionText, CompleteStepOptions options) {
         var completionState = options == null ? null : options.getCompletionState();
         var cancellationToken = options == null ? null : options.getCancellationToken();
@@ -12056,6 +12662,7 @@ public class IReportingStep extends HandleWrapperBase {
         completeStep(completionText, null);
     }
 
+    /** Completes the reporting step with plain-text completion text. */
     private void completeStepImpl(String completionText, String completionState, CancellationToken cancellationToken) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("reportingStep", AspireClient.serializeValue(getHandle()));
@@ -12069,6 +12676,7 @@ public class IReportingStep extends HandleWrapperBase {
         getClient().invokeCapability("Aspire.Hosting/completeStep", reqArgs);
     }
 
+    /** Completes the reporting step with Markdown-formatted completion text. */
     public void completeStepMarkdown(String markdownString, CompleteStepMarkdownOptions options) {
         var completionState = options == null ? null : options.getCompletionState();
         var cancellationToken = options == null ? null : options.getCancellationToken();
@@ -12079,6 +12687,7 @@ public class IReportingStep extends HandleWrapperBase {
         completeStepMarkdown(markdownString, null);
     }
 
+    /** Completes the reporting step with Markdown-formatted completion text. */
     private void completeStepMarkdownImpl(String markdownString, String completionState, CancellationToken cancellationToken) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("reportingStep", AspireClient.serializeValue(getHandle()));
@@ -12112,6 +12721,7 @@ public class IReportingTask extends HandleWrapperBase {
         updateTask(statusText, null);
     }
 
+    /** Updates the reporting task with plain-text status text. */
     public void updateTask(String statusText, CancellationToken cancellationToken) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("reportingTask", AspireClient.serializeValue(getHandle()));
@@ -12126,6 +12736,7 @@ public class IReportingTask extends HandleWrapperBase {
         updateTaskMarkdown(markdownString, null);
     }
 
+    /** Updates the reporting task with Markdown-formatted status text. */
     public void updateTaskMarkdown(String markdownString, CancellationToken cancellationToken) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("reportingTask", AspireClient.serializeValue(getHandle()));
@@ -12136,6 +12747,7 @@ public class IReportingTask extends HandleWrapperBase {
         getClient().invokeCapability("Aspire.Hosting/updateTaskMarkdown", reqArgs);
     }
 
+    /** Completes the reporting task with plain-text completion text. */
     public void completeTask(CompleteTaskOptions options) {
         var completionMessage = options == null ? null : options.getCompletionMessage();
         var completionState = options == null ? null : options.getCompletionState();
@@ -12147,6 +12759,7 @@ public class IReportingTask extends HandleWrapperBase {
         completeTask(null);
     }
 
+    /** Completes the reporting task with plain-text completion text. */
     private void completeTaskImpl(String completionMessage, String completionState, CancellationToken cancellationToken) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("reportingTask", AspireClient.serializeValue(getHandle()));
@@ -12162,6 +12775,7 @@ public class IReportingTask extends HandleWrapperBase {
         getClient().invokeCapability("Aspire.Hosting/completeTask", reqArgs);
     }
 
+    /** Completes the reporting task with Markdown-formatted completion text. */
     public void completeTaskMarkdown(String markdownString, CompleteTaskMarkdownOptions options) {
         var completionState = options == null ? null : options.getCompletionState();
         var cancellationToken = options == null ? null : options.getCancellationToken();
@@ -12172,6 +12786,7 @@ public class IReportingTask extends HandleWrapperBase {
         completeTaskMarkdown(markdownString, null);
     }
 
+    /** Completes the reporting task with Markdown-formatted completion text. */
     private void completeTaskMarkdownImpl(String markdownString, String completionState, CancellationToken cancellationToken) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("reportingTask", AspireClient.serializeValue(getHandle()));
@@ -12249,6 +12864,7 @@ public class IResourceWithContainerFiles extends ResourceBuilderBase {
         super(handle, client);
     }
 
+    /** Adds a container files source annotation to the resource being built, specifying the path to the container files source. */
     public IResourceWithContainerFiles withContainerFilesSource(String sourcePath) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -12257,6 +12873,7 @@ public class IResourceWithContainerFiles extends ResourceBuilderBase {
         return this;
     }
 
+    /** Removes any container files source annotation from the resource being built. */
     public IResourceWithContainerFiles clearContainerFilesSources() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -12344,42 +12961,49 @@ public class IServiceProvider extends HandleWrapperBase {
         super(handle, client);
     }
 
+    /** Gets the distributed application eventing service from the service provider. */
     public IDistributedApplicationEventing getEventing() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("serviceProvider", AspireClient.serializeValue(getHandle()));
         return (IDistributedApplicationEventing) getClient().invokeCapability("Aspire.Hosting/getEventing", reqArgs);
     }
 
+    /** Gets the logger factory from the service provider. */
     public ILoggerFactory getLoggerFactory() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("serviceProvider", AspireClient.serializeValue(getHandle()));
         return (ILoggerFactory) getClient().invokeCapability("Aspire.Hosting/getLoggerFactory", reqArgs);
     }
 
+    /** Gets the resource logger service from the service provider. */
     public ResourceLoggerService getResourceLoggerService() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("serviceProvider", AspireClient.serializeValue(getHandle()));
         return (ResourceLoggerService) getClient().invokeCapability("Aspire.Hosting/getResourceLoggerService", reqArgs);
     }
 
+    /** Gets the distributed application model from the service provider. */
     public DistributedApplicationModel getDistributedApplicationModel() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("serviceProvider", AspireClient.serializeValue(getHandle()));
         return (DistributedApplicationModel) getClient().invokeCapability("Aspire.Hosting/getDistributedApplicationModel", reqArgs);
     }
 
+    /** Gets the resource notification service from the service provider. */
     public ResourceNotificationService getResourceNotificationService() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("serviceProvider", AspireClient.serializeValue(getHandle()));
         return (ResourceNotificationService) getClient().invokeCapability("Aspire.Hosting/getResourceNotificationService", reqArgs);
     }
 
+    /** Gets the Aspire store from the service provider. */
     public IAspireStore getAspireStore() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("serviceProvider", AspireClient.serializeValue(getHandle()));
         return (IAspireStore) getClient().invokeCapability("Aspire.Hosting/getAspireStore", reqArgs);
     }
 
+    /** Gets the user secrets manager from the service provider. */
     public IUserSecretsManager getUserSecretsManager() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("serviceProvider", AspireClient.serializeValue(getHandle()));
@@ -12418,21 +13042,21 @@ public class IUserSecretsManager extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the IsAvailable property */
+    /** Gets a value indicating whether user secrets are available. */
     public boolean isAvailable() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (boolean) getClient().invokeCapability("Aspire.Hosting/IUserSecretsManager.isAvailable", reqArgs);
     }
 
-    /** Gets the FilePath property */
+    /** Gets the path to the user secrets file. */
     public String filePath() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (String) getClient().invokeCapability("Aspire.Hosting/IUserSecretsManager.filePath", reqArgs);
     }
 
-    /** Invokes the TrySetSecret method */
+    /** Attempts to set a user secret value synchronously. */
     public boolean trySetSecret(String name, String value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -12441,7 +13065,7 @@ public class IUserSecretsManager extends HandleWrapperBase {
         return (boolean) getClient().invokeCapability("Aspire.Hosting/IUserSecretsManager.trySetSecret", reqArgs);
     }
 
-    /** Invokes the TryDeleteSecret method */
+    /** Attempts to delete a user secret value synchronously. */
     public boolean tryDeleteSecret(String name) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -12453,6 +13077,7 @@ public class IUserSecretsManager extends HandleWrapperBase {
         saveStateJson(json, null);
     }
 
+    /** Saves state to user secrets from a JSON string. */
     public void saveStateJson(String json, CancellationToken cancellationToken) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("userSecretsManager", AspireClient.serializeValue(getHandle()));
@@ -12463,6 +13088,7 @@ public class IUserSecretsManager extends HandleWrapperBase {
         getClient().invokeCapability("Aspire.Hosting/saveStateJson", reqArgs);
     }
 
+    /** Gets a secret value if it exists in configuration, or sets it to the provided value if it does not. */
     public void getOrSetSecret(IResource resourceBuilder, String name, String value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("userSecretsManager", AspireClient.serializeValue(getHandle()));
@@ -12559,28 +13185,28 @@ public class InitializeResourceEvent extends HandleWrapperBase {
         return (IResource) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/InitializeResourceEvent.resource", reqArgs);
     }
 
-    /** Gets the Eventing property */
+    /** The `IDistributedApplicationEventing` service for the app host. */
     public IDistributedApplicationEventing eventing() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (IDistributedApplicationEventing) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/InitializeResourceEvent.eventing", reqArgs);
     }
 
-    /** Gets the Logger property */
+    /** An instance of `ILogger` that can be used to log messages for the resource. */
     public ILogger logger() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (ILogger) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/InitializeResourceEvent.logger", reqArgs);
     }
 
-    /** Gets the Notifications property */
+    /** The `ResourceNotificationService` for the app host. */
     public ResourceNotificationService notifications() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (ResourceNotificationService) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/InitializeResourceEvent.notifications", reqArgs);
     }
 
-    /** Gets the Services property */
+    /** The `IServiceProvider` for the app host. */
     public IServiceProvider services() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -12635,21 +13261,21 @@ public class InputsDialogValidationContext extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the Inputs property */
+    /** Gets the inputs that are being validated. */
     public InteractionInputCollection inputs() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (InteractionInputCollection) getClient().invokeCapability("Aspire.Hosting/InputsDialogValidationContext.inputs", reqArgs);
     }
 
-    /** Gets the CancellationToken property */
+    /** Gets the cancellation token for the validation operation. */
     public CancellationToken cancellationToken() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (CancellationToken) getClient().invokeCapability("Aspire.Hosting/InputsDialogValidationContext.cancellationToken", reqArgs);
     }
 
-    /** Invokes the AddValidationError method */
+    /** Adds a validation error for the input with the specified name. */
     public void addValidationError(String inputName, String errorMessage) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -12744,7 +13370,7 @@ public class InteractionInputCollection extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Invokes the ToArray method */
+    /** Gets all inputs in declaration order. */
     public InteractionInput[] toArray() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -12784,7 +13410,7 @@ public class LogFacade extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Invokes the Info method */
+    /** Writes an informational log message. */
     public void info(String message) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -12792,7 +13418,7 @@ public class LogFacade extends HandleWrapperBase {
         getClient().invokeCapability("Aspire.Hosting.ApplicationModel/info", reqArgs);
     }
 
-    /** Invokes the Warning method */
+    /** Writes a warning log message. */
     public void warning(String message) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -12800,7 +13426,7 @@ public class LogFacade extends HandleWrapperBase {
         getClient().invokeCapability("Aspire.Hosting.ApplicationModel/warning", reqArgs);
     }
 
-    /** Invokes the Error method */
+    /** Writes an error log message. */
     public void error(String message) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -12808,7 +13434,7 @@ public class LogFacade extends HandleWrapperBase {
         getClient().invokeCapability("Aspire.Hosting.ApplicationModel/error", reqArgs);
     }
 
-    /** Invokes the Debug method */
+    /** Writes a debug log message. */
     public void debug(String message) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -12920,6 +13546,7 @@ public class ParameterResource extends ResourceBuilderBase {
         super(handle, client);
     }
 
+    /** Configures the resource to use the specified container registry for container image operations. */
     public ParameterResource withContainerRegistry(IResource registry) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -12932,6 +13559,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return withContainerRegistry(new IResource(registry.getHandle(), registry.getClient()));
     }
 
+    /** Configures custom base images for generated Dockerfiles. */
     public ParameterResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
         var buildImage = options == null ? null : options.getBuildImage();
         var runtimeImage = options == null ? null : options.getRuntimeImage();
@@ -12942,6 +13570,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return withDockerfileBaseImage(null);
     }
 
+    /** Configures custom base images for generated Dockerfiles. */
     private ParameterResource withDockerfileBaseImageImpl(String buildImage, String runtimeImage) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -12959,6 +13588,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return withDescription(description, null);
     }
 
+    /** Sets the description of the parameter resource. */
     public ParameterResource withDescription(String description, Boolean enableMarkdown) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -12970,6 +13600,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets a custom input for the parameter resource from a polyglot app host. */
     public ParameterResource withCustomInput(ParameterCustomInputOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -12982,6 +13613,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return withRequiredCommand(command, null);
     }
 
+    /** Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start. */
     public ParameterResource withRequiredCommand(String command, String helpLink) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -12993,6 +13625,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Registers a callback to customize the URLs displayed for the resource. */
     public ParameterResource withUrls(AspireAction1<ResourceUrlsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13020,6 +13653,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return withUrl(url, null);
     }
 
+    /** Adds or modifies displayed URLs */
     public ParameterResource withUrl(AspireUnion url, String displayText) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13031,6 +13665,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Registers a callback to update the URL displayed for the endpoint with the specified name. */
     public ParameterResource withUrlForEndpoint(String endpointName, AspireAction1<ResourceUrlAnnotation> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13047,6 +13682,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Excludes a resource from being published to the manifest. */
     public ParameterResource excludeFromManifest() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13054,6 +13690,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Prevents resource from starting automatically */
     public ParameterResource withExplicitStart() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13061,6 +13698,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a health check by key */
     public ParameterResource withHealthCheck(String key) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13073,6 +13711,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return withCommand(name, displayName, executeCommand, null);
     }
 
+    /** Adds a resource command */
     public ParameterResource withCommand(String name, String displayName, AspireFunc1<ExecuteCommandContext, ExecuteCommandResult> executeCommand, CommandOptions commandOptions) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13092,6 +13731,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a command to the resource that starts a local process when invoked. */
     public ParameterResource withProcessCommand(String commandName, String displayName, ProcessCommandExportOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13106,6 +13746,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return withProcessCommandFactory(commandName, displayName, createProcessSpec, null);
     }
 
+    /** Adds a command to the resource that starts a local process created by a callback when invoked. */
     public ParameterResource withProcessCommandFactory(String commandName, String displayName, AspireFunc1<ExecuteCommandContext, ProcessCommandSpecExportData> createProcessSpec, ProcessCommandResultExportOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13125,6 +13766,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a relationship to another resource using its builder. */
     public ParameterResource withRelationship(IResource resourceBuilder, String type) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13138,6 +13780,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return withRelationship(new IResource(resourceBuilder.getHandle(), resourceBuilder.getClient()), type);
     }
 
+    /** Sets the parent relationship */
     public ParameterResource withParentRelationship(IResource parent) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13150,6 +13793,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return withParentRelationship(new IResource(parent.getHandle(), parent.getClient()));
     }
 
+    /** Sets a child relationship */
     public ParameterResource withChildRelationship(IResource child) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13166,6 +13810,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return withIconName(iconName, null);
     }
 
+    /** Specifies the icon to use when displaying the resource in the dashboard. */
     public ParameterResource withIconName(String iconName, IconVariant iconVariant) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13177,6 +13822,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry. */
     public ParameterResource excludeFromMcp() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13184,6 +13830,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a pipeline step to the resource that will be executed during deployment. */
     public ParameterResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
         var dependsOn = options == null ? null : options.getDependsOn();
         var requiredBy = options == null ? null : options.getRequiredBy();
@@ -13196,6 +13843,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return withPipelineStepFactory(stepName, callback, null);
     }
 
+    /** Adds a pipeline step to the resource that will be executed during deployment. */
     private ParameterResource withPipelineStepFactoryImpl(String stepName, AspireAction1<PipelineStepContext> callback, String[] dependsOn, String[] requiredBy, String[] tags, String description) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13224,6 +13872,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships. */
     public ParameterResource withPipelineConfiguration(AspireAction1<PipelineConfigurationContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13239,12 +13888,14 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Gets the name of the resource from a builder. */
     public String getResourceName() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
         return (String) getClient().invokeCapability("Aspire.Hosting/getResourceName", reqArgs);
     }
 
+    /** Subscribes to the BeforeResourceStarted event. */
     public ParameterResource onBeforeResourceStarted(AspireAction1<BeforeResourceStartedEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13260,6 +13911,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Subscribes to the ResourceStopped event. */
     public ParameterResource onResourceStopped(AspireAction1<ResourceStoppedEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13275,6 +13927,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Subscribes to the InitializeResource event. */
     public ParameterResource onInitializeResource(AspireAction1<InitializeResourceEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13290,6 +13943,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Subscribes to the ResourceReady event. */
     public ParameterResource onResourceReady(AspireAction1<ResourceReadyEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13305,12 +13959,14 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Creates an execution configuration builder for the specified resource. */
     public IExecutionConfigurationBuilder createExecutionConfiguration() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
         return (IExecutionConfigurationBuilder) getClient().invokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs);
     }
 
+    /** Adds an optional string parameter */
     public ParameterResource withOptionalString(WithOptionalStringOptions options) {
         var value = options == null ? null : options.getValue();
         var enabled = options == null ? null : options.getEnabled();
@@ -13321,6 +13977,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return withOptionalString(null);
     }
 
+    /** Adds an optional string parameter */
     private ParameterResource withOptionalStringImpl(String value, Boolean enabled) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13334,6 +13991,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures the resource with a DTO */
     public ParameterResource withConfig(TestConfigDto config) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13342,6 +14000,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the created timestamp */
     public ParameterResource withCreatedAt(String createdAt) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13350,6 +14009,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the modified timestamp */
     public ParameterResource withModifiedAt(String modifiedAt) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13358,6 +14018,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the correlation ID */
     public ParameterResource withCorrelationId(String correlationId) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13370,6 +14031,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return withOptionalCallback(null);
     }
 
+    /** Configures with optional callback */
     public ParameterResource withOptionalCallback(AspireAction1<TestCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13385,6 +14047,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the resource status */
     public ParameterResource withStatus(TestResourceStatus status) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13393,6 +14056,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures with nested DTO */
     public ParameterResource withNestedConfig(TestNestedDto config) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13401,6 +14065,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds validation callback */
     public ParameterResource withValidator(AspireFunc1<TestResourceContext, Boolean> validator) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13415,6 +14080,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Waits for another resource (test version) */
     public ParameterResource testWaitFor(IResource dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13427,6 +14093,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return testWaitFor(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Adds a dependency on another resource */
     public ParameterResource withDependency(IResourceWithConnectionString dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13451,6 +14118,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return withUnionDependency(new IResourceWithConnectionString(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Adds a dependency from a string or another resource */
     public ParameterResource withUnionDependency(AspireUnion dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13459,6 +14127,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the endpoints */
     public ParameterResource withEndpoints(String[] endpoints) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13467,6 +14136,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Performs a cancellable operation */
     public ParameterResource withCancellableOperation(AspireAction1<CancellationToken> operation) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13482,6 +14152,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a label to the resource */
     public ParameterResource withMergeLabel(String label) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13490,6 +14161,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a categorized label to the resource */
     public ParameterResource withMergeLabelCategorized(String label, String category) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13499,6 +14171,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a named endpoint */
     public ParameterResource withMergeEndpoint(String endpointName, double port) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13508,6 +14181,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a named endpoint with scheme */
     public ParameterResource withMergeEndpointScheme(String endpointName, double port, String scheme) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13518,6 +14192,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures resource logging */
     public ParameterResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
         var enableConsole = options == null ? null : options.getEnableConsole();
         var maxFiles = options == null ? null : options.getMaxFiles();
@@ -13528,6 +14203,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return withMergeLogging(logLevel, null);
     }
 
+    /** Configures resource logging */
     private ParameterResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13542,6 +14218,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures resource logging with file path */
     public ParameterResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
         var enableConsole = options == null ? null : options.getEnableConsole();
         var maxFiles = options == null ? null : options.getMaxFiles();
@@ -13552,6 +14229,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return withMergeLoggingPath(logLevel, logPath, null);
     }
 
+    /** Configures resource logging with file path */
     private ParameterResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13567,6 +14245,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a route */
     public ParameterResource withMergeRoute(String path, String method, String handler, double priority) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13578,6 +14257,7 @@ public class ParameterResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a route with middleware */
     public ParameterResource withMergeRouteMiddleware(String path, String method, String handler, double priority, String middleware) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -13606,21 +14286,21 @@ public class PipelineConfigurationContext extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the Pipeline property */
+    /** Gets the pipeline editor used by polyglot callbacks. */
     public PipelineEditor pipeline() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (PipelineEditor) getClient().invokeCapability("Aspire.Hosting.Pipelines/PipelineConfigurationContext.pipeline", reqArgs);
     }
 
-    /** Gets the Log property */
+    /** Gets the logger facade used by polyglot callbacks. */
     public LogFacade log() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (LogFacade) getClient().invokeCapability("Aspire.Hosting.Pipelines/PipelineConfigurationContext.log", reqArgs);
     }
 
-    /** Invokes the GetSteps method */
+    /** Gets all pipeline steps with the specified tag. */
     public PipelineStep[] getSteps(String tag) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -13644,35 +14324,35 @@ public class PipelineContext extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the Model property */
+    /** Gets the distributed application model to be deployed. */
     public DistributedApplicationModel model() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (DistributedApplicationModel) getClient().invokeCapability("Aspire.Hosting.Pipelines/PipelineContext.model", reqArgs);
     }
 
-    /** Gets the ExecutionContext property */
+    /** Gets the execution context for the distributed application. */
     public DistributedApplicationExecutionContext executionContext() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (DistributedApplicationExecutionContext) getClient().invokeCapability("Aspire.Hosting.Pipelines/PipelineContext.executionContext", reqArgs);
     }
 
-    /** Gets the Services property */
+    /** Gets the service provider for dependency resolution. */
     public IServiceProvider services() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (IServiceProvider) getClient().invokeCapability("Aspire.Hosting.Pipelines/PipelineContext.services", reqArgs);
     }
 
-    /** Gets the Logger property */
+    /** Gets the logger for pipeline operations. */
     public ILogger logger() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (ILogger) getClient().invokeCapability("Aspire.Hosting.Pipelines/PipelineContext.logger", reqArgs);
     }
 
-    /** Gets the CancellationToken property */
+    /** Gets the cancellation token for the pipeline operation. */
     public CancellationToken cancellationToken() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -13689,7 +14369,7 @@ public class PipelineContext extends HandleWrapperBase {
         return (PipelineContext) getClient().invokeCapability("Aspire.Hosting.Pipelines/PipelineContext.setCancellationToken", reqArgs);
     }
 
-    /** Gets the Summary property */
+    /** Gets the pipeline summary that steps can add information to. The summary will be displayed to users after pipeline execution completes. */
     public PipelineSummary summary() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -13712,14 +14392,14 @@ public class PipelineEditor extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Invokes the Steps method */
+    /** Gets all configured pipeline steps. */
     public PipelineStep[] steps() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (PipelineStep[]) getClient().invokeCapability("Aspire.Hosting.Pipelines/steps", reqArgs);
     }
 
-    /** Invokes the StepsByTag method */
+    /** Gets all pipeline steps that have the specified tag. */
     public PipelineStep[] stepsByTag(String tag) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -13743,21 +14423,48 @@ public class PipelineStep extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the ExportedName property */
+    /** Gets or initializes the unique name of the step. */
     public String name() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (String) getClient().invokeCapability("Aspire.Hosting.Pipelines/PipelineStep.name", reqArgs);
     }
 
-    /** Gets the ExportedDescription property */
+    /** Gets or initializes the description of the step. */
     public String description() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (String) getClient().invokeCapability("Aspire.Hosting.Pipelines/PipelineStep.description", reqArgs);
     }
 
-    /** Invokes the DependsOn method */
+    /** Gets or initializes the list of step names that this step depends on. */
+    private AspireList<String> dependsOnStepsField;
+    public AspireList<String> dependsOnSteps() {
+        if (dependsOnStepsField == null) {
+            dependsOnStepsField = new AspireList<>(getHandle(), getClient(), "Aspire.Hosting.Pipelines/PipelineStep.dependsOnSteps");
+        }
+        return dependsOnStepsField;
+    }
+
+    /** Gets or initializes the list of step names that require this step to complete before they can finish. This is used internally during pipeline construction and is converted to DependsOn relationships. */
+    private AspireList<String> requiredByStepsField;
+    public AspireList<String> requiredBySteps() {
+        if (requiredByStepsField == null) {
+            requiredByStepsField = new AspireList<>(getHandle(), getClient(), "Aspire.Hosting.Pipelines/PipelineStep.requiredBySteps");
+        }
+        return requiredByStepsField;
+    }
+
+    /** Gets or initializes the list of tags that categorize this step. */
+    private AspireList<String> tagsField;
+    public AspireList<String> tags() {
+        if (tagsField == null) {
+            tagsField = new AspireList<>(getHandle(), getClient(), "Aspire.Hosting.Pipelines/PipelineStep.tags");
+        }
+        return tagsField;
+    }
+
+    /** Adds a dependency on another step. */
     public void dependsOn(String stepName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -13765,7 +14472,7 @@ public class PipelineStep extends HandleWrapperBase {
         getClient().invokeCapability("Aspire.Hosting.Pipelines/dependsOn", reqArgs);
     }
 
-    /** Invokes the RequiredBy method */
+    /** Specifies that this step is required by another step. This creates the inverse relationship where the other step will depend on this step. */
     public void requiredBy(String stepName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -13773,7 +14480,7 @@ public class PipelineStep extends HandleWrapperBase {
         getClient().invokeCapability("Aspire.Hosting.Pipelines/requiredBy", reqArgs);
     }
 
-    /** Invokes the AddTag method */
+    /** Adds a tag to the step. */
     public void addTag(String tag) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -13797,56 +14504,56 @@ public class PipelineStepContext extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the PipelineContext property */
+    /** Gets the pipeline context shared across all steps. */
     public PipelineContext pipelineContext() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (PipelineContext) getClient().invokeCapability("Aspire.Hosting.Pipelines/PipelineStepContext.pipelineContext", reqArgs);
     }
 
-    /** Gets the ReportingStep property */
+    /** Gets the publishing step associated with this specific step execution. */
     public IReportingStep reportingStep() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (IReportingStep) getClient().invokeCapability("Aspire.Hosting.Pipelines/PipelineStepContext.reportingStep", reqArgs);
     }
 
-    /** Gets the Model property */
+    /** Gets the distributed application model to be deployed. */
     public DistributedApplicationModel model() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (DistributedApplicationModel) getClient().invokeCapability("Aspire.Hosting.Pipelines/PipelineStepContext.model", reqArgs);
     }
 
-    /** Gets the ExecutionContext property */
+    /** Gets the execution context for the distributed application. */
     public DistributedApplicationExecutionContext executionContext() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (DistributedApplicationExecutionContext) getClient().invokeCapability("Aspire.Hosting.Pipelines/PipelineStepContext.executionContext", reqArgs);
     }
 
-    /** Gets the Services property */
+    /** Gets the service provider for dependency resolution. */
     public IServiceProvider services() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (IServiceProvider) getClient().invokeCapability("Aspire.Hosting.Pipelines/PipelineStepContext.services", reqArgs);
     }
 
-    /** Gets the Logger property */
+    /** Gets the logger for pipeline operations that writes to both the pipeline logger and the step logger. */
     public ILogger logger() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (ILogger) getClient().invokeCapability("Aspire.Hosting.Pipelines/PipelineStepContext.logger", reqArgs);
     }
 
-    /** Gets the CancellationToken property */
+    /** Gets the cancellation token for the pipeline operation. */
     public CancellationToken cancellationToken() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (CancellationToken) getClient().invokeCapability("Aspire.Hosting.Pipelines/PipelineStepContext.cancellationToken", reqArgs);
     }
 
-    /** Gets the Summary property */
+    /** Gets the pipeline summary that steps can add information to. The summary will be displayed to users after pipeline execution completes. */
     public PipelineSummary summary() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -13869,14 +14576,14 @@ public class PipelineStepFactoryContext extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the PipelineContext property */
+    /** Gets the pipeline context that has the model and other properties. */
     public PipelineContext pipelineContext() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (PipelineContext) getClient().invokeCapability("Aspire.Hosting.Pipelines/PipelineStepFactoryContext.pipelineContext", reqArgs);
     }
 
-    /** Gets the Resource property */
+    /** Gets the resource that this factory is associated with. */
     public IResource resource() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -13899,7 +14606,7 @@ public class PipelineSummary extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Invokes the Add method */
+    /** Adds a key-value pair to the pipeline summary with a plain-text value. */
     public void add(String key, String value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -13908,6 +14615,7 @@ public class PipelineSummary extends HandleWrapperBase {
         getClient().invokeCapability("Aspire.Hosting.Pipelines/PipelineSummary.add", reqArgs);
     }
 
+    /** Adds a key-value pair to the pipeline summary with a Markdown-formatted value. */
     public void addMarkdown(String key, String markdownString) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("summary", AspireClient.serializeValue(getHandle()));
@@ -14104,6 +14812,7 @@ public class ProjectResource extends ResourceBuilderBase {
         super(handle, client);
     }
 
+    /** Configures the resource to use the specified container registry for container image operations. */
     public ProjectResource withContainerRegistry(IResource registry) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14116,6 +14825,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return withContainerRegistry(new IResource(registry.getHandle(), registry.getClient()));
     }
 
+    /** Configures custom base images for generated Dockerfiles. */
     public ProjectResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
         var buildImage = options == null ? null : options.getBuildImage();
         var runtimeImage = options == null ? null : options.getRuntimeImage();
@@ -14126,6 +14836,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return withDockerfileBaseImage(null);
     }
 
+    /** Configures custom base images for generated Dockerfiles. */
     private ProjectResource withDockerfileBaseImageImpl(String buildImage, String runtimeImage) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14139,6 +14850,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
     public ProjectResource withMcpServer(WithMcpServerOptions options) {
         var path = options == null ? null : options.getPath();
         var endpointName = options == null ? null : options.getEndpointName();
@@ -14149,6 +14861,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return withMcpServer(null);
     }
 
+    /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
     private ProjectResource withMcpServerImpl(String path, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14166,6 +14879,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return withOtlpExporter(null);
     }
 
+    /** Configures OTLP telemetry export */
     public ProjectResource withOtlpExporter(OtlpProtocol protocol) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14176,6 +14890,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures how many replicas of the project should be created for the project. */
     public ProjectResource withReplicas(double replicas) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14184,6 +14899,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures the project to disable forwarded headers when being published. */
     public ProjectResource disableForwardedHeaders() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14195,6 +14911,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return publishAsDockerFile(null);
     }
 
+    /** Publishes a project as a Docker file with optional container configuration */
     public ProjectResource publishAsDockerFile(AspireAction1<ContainerResource> configure) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14214,6 +14931,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return withRequiredCommand(command, null);
     }
 
+    /** Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start. */
     public ProjectResource withRequiredCommand(String command, String helpLink) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14257,6 +14975,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return withEnvironment(name, new IExpressionValue(value.getHandle(), value.getClient()));
     }
 
+    /** Sets an environment variable */
     public ProjectResource withEnvironment(String name, AspireUnion value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14266,6 +14985,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Allows for the population of environment variables on a resource. */
     public ProjectResource withEnvironmentCallback(AspireAction1<EnvironmentCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14281,6 +15001,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds arguments to be passed to a resource that supports arguments when it is launched. */
     public ProjectResource withArgs(String[] args) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14289,6 +15010,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a callback to be executed with a list of command-line arguments when a resource is started. */
     public ProjectResource withArgsCallback(AspireAction1<CommandLineArgsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14304,6 +15026,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures how information is injected into environment variables when the resource references other resources. */
     public ProjectResource withReferenceEnvironment(ReferenceEnvironmentInjectionOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14340,6 +15063,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return withReference(AspireUnion.of(source));
     }
 
+    /** Adds a reference to another resource */
     public ProjectResource withReference(AspireUnion source, WithReferenceOptions options) {
         var connectionName = options == null ? null : options.getConnectionName();
         var optional = options == null ? null : options.getOptional();
@@ -14351,6 +15075,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return withReference(source, null);
     }
 
+    /** Adds a reference to another resource */
     private ProjectResource withReferenceImpl(AspireUnion source, String connectionName, Boolean optional, String name) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14372,6 +15097,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return withEndpointCallback(endpointName, callback, null);
     }
 
+    /** Updates a named endpoint via callback */
     public ProjectResource withEndpointCallback(String endpointName, AspireAction1<EndpointUpdateContext> callback, Boolean createIfNotExists) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14391,6 +15117,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Updates an HTTP endpoint via callback */
     public ProjectResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions options) {
         var name = options == null ? null : options.getName();
         var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
@@ -14401,6 +15128,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return withHttpEndpointCallback(callback, null);
     }
 
+    /** Updates an HTTP endpoint via callback */
     private ProjectResource withHttpEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14422,6 +15150,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Updates an HTTPS endpoint via callback */
     public ProjectResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
         var name = options == null ? null : options.getName();
         var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
@@ -14432,6 +15161,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return withHttpsEndpointCallback(callback, null);
     }
 
+    /** Updates an HTTPS endpoint via callback */
     private ProjectResource withHttpsEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14453,6 +15183,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a network endpoint */
     public ProjectResource withEndpoint(WithEndpointOptions options) {
         var port = options == null ? null : options.getPort();
         var targetPort = options == null ? null : options.getTargetPort();
@@ -14469,6 +15200,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return withEndpoint(null);
     }
 
+    /** Adds a network endpoint */
     private ProjectResource withEndpointImpl(Double port, Double targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14500,6 +15232,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds an HTTP endpoint */
     public ProjectResource withHttpEndpoint(WithHttpEndpointOptions options) {
         var port = options == null ? null : options.getPort();
         var targetPort = options == null ? null : options.getTargetPort();
@@ -14513,6 +15246,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return withHttpEndpoint(null);
     }
 
+    /** Adds an HTTP endpoint */
     private ProjectResource withHttpEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14535,6 +15269,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds an HTTPS endpoint */
     public ProjectResource withHttpsEndpoint(WithHttpsEndpointOptions options) {
         var port = options == null ? null : options.getPort();
         var targetPort = options == null ? null : options.getTargetPort();
@@ -14548,6 +15283,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return withHttpsEndpoint(null);
     }
 
+    /** Adds an HTTPS endpoint */
     private ProjectResource withHttpsEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14570,6 +15306,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Marks existing http or https endpoints on a resource as external. */
     public ProjectResource withExternalHttpEndpoints() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14577,6 +15314,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Gets an endpoint reference */
     public EndpointReference getEndpoint(String name) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14584,6 +15322,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return (EndpointReference) getClient().invokeCapability("Aspire.Hosting/getEndpoint", reqArgs);
     }
 
+    /** Configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge. */
     public ProjectResource asHttp2Service() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14591,6 +15330,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Registers a callback to customize the URLs displayed for the resource. */
     public ProjectResource withUrls(AspireAction1<ResourceUrlsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14618,6 +15358,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return withUrl(url, null);
     }
 
+    /** Adds or modifies displayed URLs */
     public ProjectResource withUrl(AspireUnion url, String displayText) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14629,6 +15370,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Registers a callback to update the URL displayed for the endpoint with the specified name. */
     public ProjectResource withUrlForEndpoint(String endpointName, AspireAction1<ResourceUrlAnnotation> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14645,6 +15387,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures the resource to copy container files from the specified source resource during publishing. */
     public ProjectResource publishWithContainerFiles(IResourceWithContainerFiles source, String destinationPath) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14658,6 +15401,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return publishWithContainerFiles(new IResourceWithContainerFiles(source.getHandle(), source.getClient()), destinationPath);
     }
 
+    /** Excludes a resource from being published to the manifest. */
     public ProjectResource excludeFromManifest() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14673,6 +15417,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return waitFor(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Waits for another resource to be ready */
     public ProjectResource waitFor(IResource dependency, WaitBehavior waitBehavior) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14696,6 +15441,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return waitForStart(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Waits for another resource to start */
     public ProjectResource waitForStart(IResource dependency, WaitBehavior waitBehavior) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14711,6 +15457,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return waitForStart(new IResource(dependency.getHandle(), dependency.getClient()), waitBehavior);
     }
 
+    /** Prevents resource from starting automatically */
     public ProjectResource withExplicitStart() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14726,6 +15473,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return waitForCompletion(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Waits for the dependency resource to enter the Exited or Finished state before starting the resource. */
     public ProjectResource waitForCompletion(IResource dependency, Double exitCode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14741,6 +15489,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return waitForCompletion(new IResource(dependency.getHandle(), dependency.getClient()), exitCode);
     }
 
+    /** Adds a health check by key */
     public ProjectResource withHealthCheck(String key) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14749,6 +15498,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a health check to the resource which is mapped to a specific endpoint. */
     public ProjectResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
         var path = options == null ? null : options.getPath();
         var statusCode = options == null ? null : options.getStatusCode();
@@ -14760,6 +15510,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return withHttpHealthCheck(null);
     }
 
+    /** Adds a health check to the resource which is mapped to a specific endpoint. */
     private ProjectResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14780,6 +15531,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return withCommand(name, displayName, executeCommand, null);
     }
 
+    /** Adds a resource command */
     public ProjectResource withCommand(String name, String displayName, AspireFunc1<ExecuteCommandContext, ExecuteCommandResult> executeCommand, CommandOptions commandOptions) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14799,6 +15551,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a command to the resource that starts a local process when invoked. */
     public ProjectResource withProcessCommand(String commandName, String displayName, ProcessCommandExportOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14813,6 +15566,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return withProcessCommandFactory(commandName, displayName, createProcessSpec, null);
     }
 
+    /** Adds a command to the resource that starts a local process created by a callback when invoked. */
     public ProjectResource withProcessCommandFactory(String commandName, String displayName, AspireFunc1<ExecuteCommandContext, ProcessCommandSpecExportData> createProcessSpec, ProcessCommandResultExportOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14836,6 +15590,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return withHttpCommand(path, displayName, null);
     }
 
+    /** Adds an HTTP resource command */
     public ProjectResource withHttpCommand(String path, String displayName, HttpCommandExportOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14848,6 +15603,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Indicates whether developer certificates should be treated as trusted certificate authorities for the resource at run time. Currently this indicates trust for the ASP.NET Core developer certificate. The developer certificate will only be trusted when running in local development scenarios; in publish mode resources will use their default certificate trust. */
     public ProjectResource withDeveloperCertificateTrust(boolean trust) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14856,6 +15612,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the certificate trust scope */
     public ProjectResource withCertificateTrustScope(CertificateTrustScope scope) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14868,6 +15625,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return withHttpsDeveloperCertificate(null);
     }
 
+    /** Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration. */
     public ProjectResource withHttpsDeveloperCertificate(ParameterResource password) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14878,6 +15636,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Disable HTTPS/TLS server certificate configuration for the resource. No HTTPS/TLS termination configuration will be applied. */
     public ProjectResource withoutHttpsCertificate() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14885,6 +15644,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a relationship to another resource using its builder. */
     public ProjectResource withRelationship(IResource resourceBuilder, String type) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14898,6 +15658,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return withRelationship(new IResource(resourceBuilder.getHandle(), resourceBuilder.getClient()), type);
     }
 
+    /** Sets the parent relationship */
     public ProjectResource withParentRelationship(IResource parent) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14910,6 +15671,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return withParentRelationship(new IResource(parent.getHandle(), parent.getClient()));
     }
 
+    /** Sets a child relationship */
     public ProjectResource withChildRelationship(IResource child) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14926,6 +15688,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return withIconName(iconName, null);
     }
 
+    /** Specifies the icon to use when displaying the resource in the dashboard. */
     public ProjectResource withIconName(String iconName, IconVariant iconVariant) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14937,6 +15700,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures the compute environment for the compute resource. */
     public ProjectResource withComputeEnvironment(IComputeEnvironmentResource computeEnvironmentResource) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14949,6 +15713,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return withComputeEnvironment(new IComputeEnvironmentResource(computeEnvironmentResource.getHandle(), computeEnvironmentResource.getClient()));
     }
 
+    /** Adds an HTTP health probe to the resource */
     public ProjectResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions options) {
         var path = options == null ? null : options.getPath();
         var initialDelaySeconds = options == null ? null : options.getInitialDelaySeconds();
@@ -14964,6 +15729,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return withHttpProbe(probeType, null);
     }
 
+    /** Adds an HTTP health probe to the resource */
     private ProjectResource withHttpProbeImpl(ProbeType probeType, String path, Double initialDelaySeconds, Double periodSeconds, Double timeoutSeconds, Double failureThreshold, Double successThreshold, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -14993,6 +15759,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry. */
     public ProjectResource excludeFromMcp() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15000,6 +15767,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds an asynchronous callback to configure container image push options for the resource. */
     public ProjectResource withImagePushOptions(AspireAction1<ContainerImagePushOptionsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15015,6 +15783,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the remote image name (without registry endpoint or tag) for container push operations. */
     public ProjectResource withRemoteImageName(String remoteImageName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15023,6 +15792,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the remote image tag for container push operations. */
     public ProjectResource withRemoteImageTag(String remoteImageTag) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15031,6 +15801,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a pipeline step to the resource that will be executed during deployment. */
     public ProjectResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
         var dependsOn = options == null ? null : options.getDependsOn();
         var requiredBy = options == null ? null : options.getRequiredBy();
@@ -15043,6 +15814,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return withPipelineStepFactory(stepName, callback, null);
     }
 
+    /** Adds a pipeline step to the resource that will be executed during deployment. */
     private ProjectResource withPipelineStepFactoryImpl(String stepName, AspireAction1<PipelineStepContext> callback, String[] dependsOn, String[] requiredBy, String[] tags, String description) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15071,6 +15843,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships. */
     public ProjectResource withPipelineConfiguration(AspireAction1<PipelineConfigurationContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15086,12 +15859,14 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Gets the name of the resource from a builder. */
     public String getResourceName() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
         return (String) getClient().invokeCapability("Aspire.Hosting/getResourceName", reqArgs);
     }
 
+    /** Subscribes to the BeforeResourceStarted event. */
     public ProjectResource onBeforeResourceStarted(AspireAction1<BeforeResourceStartedEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15107,6 +15882,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Subscribes to the ResourceStopped event. */
     public ProjectResource onResourceStopped(AspireAction1<ResourceStoppedEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15122,6 +15898,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Subscribes to the InitializeResource event. */
     public ProjectResource onInitializeResource(AspireAction1<InitializeResourceEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15137,6 +15914,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Subscribes to the ResourceEndpointsAllocated event. */
     public ProjectResource onResourceEndpointsAllocated(AspireAction1<ResourceEndpointsAllocatedEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15152,6 +15930,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Subscribes to the ResourceReady event. */
     public ProjectResource onResourceReady(AspireAction1<ResourceReadyEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15167,12 +15946,14 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Creates an execution configuration builder for the specified resource. */
     public IExecutionConfigurationBuilder createExecutionConfiguration() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
         return (IExecutionConfigurationBuilder) getClient().invokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs);
     }
 
+    /** Adds an optional string parameter */
     public ProjectResource withOptionalString(WithOptionalStringOptions options) {
         var value = options == null ? null : options.getValue();
         var enabled = options == null ? null : options.getEnabled();
@@ -15183,6 +15964,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return withOptionalString(null);
     }
 
+    /** Adds an optional string parameter */
     private ProjectResource withOptionalStringImpl(String value, Boolean enabled) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15196,6 +15978,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures the resource with a DTO */
     public ProjectResource withConfig(TestConfigDto config) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15204,6 +15987,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures environment with callback (test version) */
     public ProjectResource testWithEnvironmentCallback(AspireAction1<TestEnvironmentContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15219,6 +16003,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the created timestamp */
     public ProjectResource withCreatedAt(String createdAt) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15227,6 +16012,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the modified timestamp */
     public ProjectResource withModifiedAt(String modifiedAt) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15235,6 +16021,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the correlation ID */
     public ProjectResource withCorrelationId(String correlationId) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15247,6 +16034,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return withOptionalCallback(null);
     }
 
+    /** Configures with optional callback */
     public ProjectResource withOptionalCallback(AspireAction1<TestCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15262,6 +16050,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the resource status */
     public ProjectResource withStatus(TestResourceStatus status) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15270,6 +16059,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures with nested DTO */
     public ProjectResource withNestedConfig(TestNestedDto config) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15278,6 +16068,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds validation callback */
     public ProjectResource withValidator(AspireFunc1<TestResourceContext, Boolean> validator) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15292,6 +16083,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Waits for another resource (test version) */
     public ProjectResource testWaitFor(IResource dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15304,6 +16096,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return testWaitFor(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Adds a dependency on another resource */
     public ProjectResource withDependency(IResourceWithConnectionString dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15328,6 +16121,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return withUnionDependency(new IResourceWithConnectionString(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Adds a dependency from a string or another resource */
     public ProjectResource withUnionDependency(AspireUnion dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15336,6 +16130,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the endpoints */
     public ProjectResource withEndpoints(String[] endpoints) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15344,6 +16139,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets environment variables */
     public ProjectResource withEnvironmentVariables(Map<String, String> variables) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15352,6 +16148,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Performs a cancellable operation */
     public ProjectResource withCancellableOperation(AspireAction1<CancellationToken> operation) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15367,6 +16164,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a label to the resource */
     public ProjectResource withMergeLabel(String label) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15375,6 +16173,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a categorized label to the resource */
     public ProjectResource withMergeLabelCategorized(String label, String category) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15384,6 +16183,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a named endpoint */
     public ProjectResource withMergeEndpoint(String endpointName, double port) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15393,6 +16193,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a named endpoint with scheme */
     public ProjectResource withMergeEndpointScheme(String endpointName, double port, String scheme) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15403,6 +16204,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures resource logging */
     public ProjectResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
         var enableConsole = options == null ? null : options.getEnableConsole();
         var maxFiles = options == null ? null : options.getMaxFiles();
@@ -15413,6 +16215,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return withMergeLogging(logLevel, null);
     }
 
+    /** Configures resource logging */
     private ProjectResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15427,6 +16230,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures resource logging with file path */
     public ProjectResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
         var enableConsole = options == null ? null : options.getEnableConsole();
         var maxFiles = options == null ? null : options.getMaxFiles();
@@ -15437,6 +16241,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return withMergeLoggingPath(logLevel, logPath, null);
     }
 
+    /** Configures resource logging with file path */
     private ProjectResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15452,6 +16257,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a route */
     public ProjectResource withMergeRoute(String path, String method, String handler, double priority) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15463,6 +16269,7 @@ public class ProjectResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a route with middleware */
     public ProjectResource withMergeRouteMiddleware(String path, String method, String handler, double priority, String middleware) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -15491,7 +16298,7 @@ public class ProjectResourceOptions extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the LaunchProfileName property */
+    /** The launch profile to use. If `null` then the default launch profile will be used. */
     public String launchProfileName() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -15506,7 +16313,7 @@ public class ProjectResourceOptions extends HandleWrapperBase {
         return (ProjectResourceOptions) getClient().invokeCapability("Aspire.Hosting/ProjectResourceOptions.setLaunchProfileName", reqArgs);
     }
 
-    /** Gets the ExcludeLaunchProfile property */
+    /** If set, no launch profile will be used, and LaunchProfileName will be ignored. */
     public boolean excludeLaunchProfile() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -15521,7 +16328,7 @@ public class ProjectResourceOptions extends HandleWrapperBase {
         return (ProjectResourceOptions) getClient().invokeCapability("Aspire.Hosting/ProjectResourceOptions.setExcludeLaunchProfile", reqArgs);
     }
 
-    /** Gets the ExcludeKestrelEndpoints property */
+    /** If set, ignore endpoints coming from Kestrel configuration. */
     public boolean excludeKestrelEndpoints() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -15793,14 +16600,14 @@ public class ReferenceExpressionBuilder extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the IsEmpty property */
+    /** Indicates whether the expression is empty. */
     public boolean isEmpty() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (boolean) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ReferenceExpressionBuilder.isEmpty", reqArgs);
     }
 
-    /** Invokes the AppendLiteral method */
+    /** Appends a literal value to the expression. */
     public void appendLiteral(String value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -15812,7 +16619,7 @@ public class ReferenceExpressionBuilder extends HandleWrapperBase {
         appendFormatted(value, null);
     }
 
-    /** Invokes the AppendFormatted method */
+    /** Appends a formatted value to the expression. */
     public void appendFormatted(String value, String format) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -15827,7 +16634,7 @@ public class ReferenceExpressionBuilder extends HandleWrapperBase {
         appendValueProvider(valueProvider, null);
     }
 
-    /** Invokes the AppendValueProvider method */
+    /** Appends a value provider to the reference expression */
     public void appendValueProvider(Object valueProvider, String format) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -15838,7 +16645,7 @@ public class ReferenceExpressionBuilder extends HandleWrapperBase {
         getClient().invokeCapability("Aspire.Hosting.ApplicationModel/appendValueProvider", reqArgs);
     }
 
-    /** Invokes the Build method */
+    /** Builds the reference expression */
     public ReferenceExpression build() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -16009,6 +16816,7 @@ public class ResourceLoggerService extends HandleWrapperBase {
         super(handle, client);
     }
 
+    /** Completes the log stream for a resource. */
     public void completeLog(IResource resource) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("loggerService", AspireClient.serializeValue(getHandle()));
@@ -16020,6 +16828,7 @@ public class ResourceLoggerService extends HandleWrapperBase {
         completeLog(new IResource(resource.getHandle(), resource.getClient()));
     }
 
+    /** Completes the log stream by resource name. */
     public void completeLogByName(String resourceName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("loggerService", AspireClient.serializeValue(getHandle()));
@@ -16047,6 +16856,7 @@ public class ResourceNotificationService extends HandleWrapperBase {
         waitForResourceState(resourceName, null);
     }
 
+    /** Waits for a resource to reach a specified state. */
     public void waitForResourceState(String resourceName, String targetState) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("notificationService", AspireClient.serializeValue(getHandle()));
@@ -16057,6 +16867,7 @@ public class ResourceNotificationService extends HandleWrapperBase {
         getClient().invokeCapability("Aspire.Hosting/waitForResourceState", reqArgs);
     }
 
+    /** Waits for a resource to reach one of the specified states. */
     public String waitForResourceStates(String resourceName, String[] targetStates) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("notificationService", AspireClient.serializeValue(getHandle()));
@@ -16065,6 +16876,7 @@ public class ResourceNotificationService extends HandleWrapperBase {
         return (String) getClient().invokeCapability("Aspire.Hosting/waitForResourceStates", reqArgs);
     }
 
+    /** Waits for a resource to become healthy. */
     public ResourceEventDto waitForResourceHealthy(String resourceName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("notificationService", AspireClient.serializeValue(getHandle()));
@@ -16072,6 +16884,7 @@ public class ResourceNotificationService extends HandleWrapperBase {
         return (ResourceEventDto) getClient().invokeCapability("Aspire.Hosting/waitForResourceHealthy", reqArgs);
     }
 
+    /** Waits for all dependencies of a resource to be ready. */
     public void waitForDependencies(IResource resource) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("notificationService", AspireClient.serializeValue(getHandle()));
@@ -16083,6 +16896,7 @@ public class ResourceNotificationService extends HandleWrapperBase {
         waitForDependencies(new IResource(resource.getHandle(), resource.getClient()));
     }
 
+    /** Tries to get the current state of a resource. */
     public ResourceEventDto tryGetResourceState(String resourceName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("notificationService", AspireClient.serializeValue(getHandle()));
@@ -16090,6 +16904,7 @@ public class ResourceNotificationService extends HandleWrapperBase {
         return (ResourceEventDto) getClient().invokeCapability("Aspire.Hosting/tryGetResourceState", reqArgs);
     }
 
+    /** Publishes an update for a resource's state. */
     public void publishResourceUpdate(IResource resource, PublishResourceUpdateOptions options) {
         var state = options == null ? null : options.getState();
         var stateStyle = options == null ? null : options.getStateStyle();
@@ -16108,6 +16923,7 @@ public class ResourceNotificationService extends HandleWrapperBase {
         publishResourceUpdate(new IResource(resource.getHandle(), resource.getClient()));
     }
 
+    /** Publishes an update for a resource's state. */
     private void publishResourceUpdateImpl(IResource resource, String state, String stateStyle) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("notificationService", AspireClient.serializeValue(getHandle()));
@@ -16137,7 +16953,7 @@ public class ResourceReadyEvent extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the Resource property */
+    /** The resource that is in a healthy state. */
     public IResource resource() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -16231,35 +17047,35 @@ public class ResourceUrlsCallbackContext extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the Resource property */
+    /** Gets the resource this the URLs are associated with. */
     public IResource resource() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (IResource) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.resource", reqArgs);
     }
 
-    /** Gets the UrlsEditor property */
+    /** Gets the editor used to manipulate displayed URLs in polyglot callbacks. */
     public ResourceUrlsEditor urls() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (ResourceUrlsEditor) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.urls", reqArgs);
     }
 
-    /** Gets the Log property */
+    /** Gets the logger facade used by polyglot callbacks. */
     public LogFacade log() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (LogFacade) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.log", reqArgs);
     }
 
-    /** Gets the ExecutionContext property */
+    /** Gets the execution context associated with this invocation of the AppHost. */
     public DistributedApplicationExecutionContext executionContext() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (DistributedApplicationExecutionContext) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/ResourceUrlsCallbackContext.executionContext", reqArgs);
     }
 
-    /** Invokes the GetEndpoint method */
+    /** Gets an endpoint reference from the associated resource */
     public EndpointReference getEndpoint(String name) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -16283,7 +17099,7 @@ public class ResourceUrlsEditor extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the ExecutionContext property */
+    /** Gets the execution context associated with this editor. */
     public DistributedApplicationExecutionContext executionContext() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -16302,7 +17118,7 @@ public class ResourceUrlsEditor extends HandleWrapperBase {
         add(url, null);
     }
 
-    /** Invokes the Add method */
+    /** Adds a displayed URL. */
     public void add(AspireUnion url, String displayText) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -16325,7 +17141,7 @@ public class ResourceUrlsEditor extends HandleWrapperBase {
         addForEndpoint(endpoint, url, null);
     }
 
-    /** Invokes the AddForEndpoint method */
+    /** Adds a displayed URL for a specific endpoint. */
     public void addForEndpoint(EndpointReference endpoint, AspireUnion url, String displayText) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -16383,7 +17199,7 @@ public class TestCallbackContext extends HandleWrapperBase {
         return (TestCallbackContext) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.setValue", reqArgs);
     }
 
-    /** Gets the CancellationToken property */
+    /** CancellationToken is supported by ATS. */
     public CancellationToken cancellationToken() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -16416,7 +17232,7 @@ public class TestCollectionContext extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the Items property */
+    /** List property - should generate AspireList getter like Dictionary properties. */
     private AspireList<String> itemsField;
     public AspireList<String> items() {
         if (itemsField == null) {
@@ -16425,7 +17241,7 @@ public class TestCollectionContext extends HandleWrapperBase {
         return itemsField;
     }
 
-    /** Gets the Metadata property */
+    /** Dictionary property - already works with AspireDict getter. */
     private AspireDict<String, String> metadataField;
     public AspireDict<String, String> metadata() {
         if (metadataField == null) {
@@ -16510,6 +17326,7 @@ public class TestDatabaseResource extends ContainerResource {
         super(handle, client);
     }
 
+    /** Configures the resource to use the specified container registry for container image operations. */
     public TestDatabaseResource withContainerRegistry(IResource registry) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -16526,6 +17343,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withBindMount(source, target, null);
     }
 
+    /** Adds a bind mount to a container resource. */
     public TestDatabaseResource withBindMount(String source, String target, Boolean isReadOnly) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -16538,6 +17356,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Sets the Entrypoint for the container. */
     public TestDatabaseResource withEntrypoint(String entrypoint) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -16546,6 +17365,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Allows overriding the image tag on a container. */
     public TestDatabaseResource withImageTag(String tag) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -16554,6 +17374,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Allows overriding the image registry on a container. */
     public TestDatabaseResource withImageRegistry(String registry) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -16566,6 +17387,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withImage(image, null);
     }
 
+    /** Allows overriding the image on a container. */
     public TestDatabaseResource withImage(String image, String tag) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -16577,6 +17399,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Allows setting the image to a specific sha256 on a container. */
     public TestDatabaseResource withImageSHA256(String sha256) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -16585,6 +17408,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a callback to be executed with a list of arguments to add to the container runtime run command when a container resource is started. */
     public TestDatabaseResource withContainerRuntimeArgs(String[] args) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -16593,6 +17417,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Sets the lifetime behavior of the container resource. */
     public TestDatabaseResource withLifetime(ContainerLifetime lifetime) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -16601,6 +17426,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Sets the pull policy for the container resource. */
     public TestDatabaseResource withImagePullPolicy(ImagePullPolicy pullPolicy) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -16609,6 +17435,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Changes the resource to be published as a container in the manifest. */
     public TestDatabaseResource publishAsContainer() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -16616,6 +17443,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Causes Aspire to build the specified container image from a Dockerfile. */
     public TestDatabaseResource withDockerfile(String contextPath, WithDockerfileOptions options) {
         var dockerfilePath = options == null ? null : options.getDockerfilePath();
         var stage = options == null ? null : options.getStage();
@@ -16626,6 +17454,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withDockerfile(contextPath, null);
     }
 
+    /** Causes Aspire to build the specified container image from a Dockerfile. */
     private TestDatabaseResource withDockerfileImpl(String contextPath, String dockerfilePath, String stage) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -16640,6 +17469,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Overrides the default container name for this resource. By default Aspire generates a unique container name based on the resource name and a random postfix (or a postfix based on a hash of the AppHost project path for persistent container resources). This method allows you to override that behavior with a custom name, but could lead to naming conflicts if the specified name is not unique. */
     public TestDatabaseResource withContainerName(String name) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -16656,6 +17486,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withBuildArg(name, AspireUnion.of(value));
     }
 
+    /** Adds a build argument when the container is built from a Dockerfile. */
     public TestDatabaseResource withBuildArg(String name, AspireUnion value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -16665,6 +17496,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a secret build argument when the container is built from a Dockerfile. */
     public TestDatabaseResource withBuildSecret(String name, ParameterResource value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -16674,6 +17506,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Adds container certificate path overrides used for certificate trust at run time. */
     public TestDatabaseResource withContainerCertificatePaths(WithContainerCertificatePathsOptions options) {
         var customCertificatesDestination = options == null ? null : options.getCustomCertificatesDestination();
         var defaultCertificateBundlePaths = options == null ? null : options.getDefaultCertificateBundlePaths();
@@ -16685,6 +17518,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withContainerCertificatePaths(null);
     }
 
+    /** Adds container certificate path overrides used for certificate trust at run time. */
     private TestDatabaseResource withContainerCertificatePathsImpl(String customCertificatesDestination, String[] defaultCertificateBundlePaths, String[] defaultCertificateDirectoryPaths) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -16701,6 +17535,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Set whether a container resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the container. If set to `false`, endpoints belonging to the container resource will ignore the configured proxy settings and run proxy-less. */
     public TestDatabaseResource withEndpointProxySupport(boolean proxyEnabled) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -16713,6 +17548,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withDockerfileBuilder(contextPath, callback, null);
     }
 
+    /** Configures the resource to use a programmatically generated Dockerfile */
     public TestDatabaseResource withDockerfileBuilder(String contextPath, AspireAction1<DockerfileBuilderCallbackContext> callback, String stage) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -16732,6 +17568,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Configures custom base images for generated Dockerfiles. */
     public TestDatabaseResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
         var buildImage = options == null ? null : options.getBuildImage();
         var runtimeImage = options == null ? null : options.getRuntimeImage();
@@ -16742,6 +17579,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withDockerfileBaseImage(null);
     }
 
+    /** Configures custom base images for generated Dockerfiles. */
     private TestDatabaseResource withDockerfileBaseImageImpl(String buildImage, String runtimeImage) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -16755,6 +17593,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a network alias to container resource. */
     public TestDatabaseResource withContainerNetworkAlias(String alias) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -16763,6 +17602,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
     public TestDatabaseResource withMcpServer(WithMcpServerOptions options) {
         var path = options == null ? null : options.getPath();
         var endpointName = options == null ? null : options.getEndpointName();
@@ -16773,6 +17613,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withMcpServer(null);
     }
 
+    /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
     private TestDatabaseResource withMcpServerImpl(String path, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -16790,6 +17631,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withOtlpExporter(null);
     }
 
+    /** Configures OTLP telemetry export */
     public TestDatabaseResource withOtlpExporter(OtlpProtocol protocol) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -16800,6 +17642,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Changes the resource to be published as a connection string reference in the manifest. */
     public TestDatabaseResource publishAsConnectionString() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -16811,6 +17654,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withRequiredCommand(command, null);
     }
 
+    /** Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start. */
     public TestDatabaseResource withRequiredCommand(String command, String helpLink) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -16854,6 +17698,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withEnvironment(name, new IExpressionValue(value.getHandle(), value.getClient()));
     }
 
+    /** Sets an environment variable */
     public TestDatabaseResource withEnvironment(String name, AspireUnion value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -16863,6 +17708,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Allows for the population of environment variables on a resource. */
     public TestDatabaseResource withEnvironmentCallback(AspireAction1<EnvironmentCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -16878,6 +17724,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Adds arguments to be passed to a resource that supports arguments when it is launched. */
     public TestDatabaseResource withArgs(String[] args) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -16886,6 +17733,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a callback to be executed with a list of command-line arguments when a resource is started. */
     public TestDatabaseResource withArgsCallback(AspireAction1<CommandLineArgsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -16901,6 +17749,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Configures how information is injected into environment variables when the resource references other resources. */
     public TestDatabaseResource withReferenceEnvironment(ReferenceEnvironmentInjectionOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -16937,6 +17786,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withReference(AspireUnion.of(source));
     }
 
+    /** Adds a reference to another resource */
     public TestDatabaseResource withReference(AspireUnion source, WithReferenceOptions options) {
         var connectionName = options == null ? null : options.getConnectionName();
         var optional = options == null ? null : options.getOptional();
@@ -16948,6 +17798,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withReference(source, null);
     }
 
+    /** Adds a reference to another resource */
     private TestDatabaseResource withReferenceImpl(AspireUnion source, String connectionName, Boolean optional, String name) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -16969,6 +17820,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withEndpointCallback(endpointName, callback, null);
     }
 
+    /** Updates a named endpoint via callback */
     public TestDatabaseResource withEndpointCallback(String endpointName, AspireAction1<EndpointUpdateContext> callback, Boolean createIfNotExists) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -16988,6 +17840,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Updates an HTTP endpoint via callback */
     public TestDatabaseResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions options) {
         var name = options == null ? null : options.getName();
         var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
@@ -16998,6 +17851,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withHttpEndpointCallback(callback, null);
     }
 
+    /** Updates an HTTP endpoint via callback */
     private TestDatabaseResource withHttpEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17019,6 +17873,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Updates an HTTPS endpoint via callback */
     public TestDatabaseResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
         var name = options == null ? null : options.getName();
         var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
@@ -17029,6 +17884,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withHttpsEndpointCallback(callback, null);
     }
 
+    /** Updates an HTTPS endpoint via callback */
     private TestDatabaseResource withHttpsEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17050,6 +17906,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a network endpoint */
     public TestDatabaseResource withEndpoint(WithEndpointOptions options) {
         var port = options == null ? null : options.getPort();
         var targetPort = options == null ? null : options.getTargetPort();
@@ -17066,6 +17923,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withEndpoint(null);
     }
 
+    /** Adds a network endpoint */
     private TestDatabaseResource withEndpointImpl(Double port, Double targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17097,6 +17955,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Adds an HTTP endpoint */
     public TestDatabaseResource withHttpEndpoint(WithHttpEndpointOptions options) {
         var port = options == null ? null : options.getPort();
         var targetPort = options == null ? null : options.getTargetPort();
@@ -17110,6 +17969,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withHttpEndpoint(null);
     }
 
+    /** Adds an HTTP endpoint */
     private TestDatabaseResource withHttpEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17132,6 +17992,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Adds an HTTPS endpoint */
     public TestDatabaseResource withHttpsEndpoint(WithHttpsEndpointOptions options) {
         var port = options == null ? null : options.getPort();
         var targetPort = options == null ? null : options.getTargetPort();
@@ -17145,6 +18006,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withHttpsEndpoint(null);
     }
 
+    /** Adds an HTTPS endpoint */
     private TestDatabaseResource withHttpsEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17167,6 +18029,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Marks existing http or https endpoints on a resource as external. */
     public TestDatabaseResource withExternalHttpEndpoints() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17174,6 +18037,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Gets an endpoint reference */
     public EndpointReference getEndpoint(String name) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17181,6 +18045,7 @@ public class TestDatabaseResource extends ContainerResource {
         return (EndpointReference) getClient().invokeCapability("Aspire.Hosting/getEndpoint", reqArgs);
     }
 
+    /** Configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge. */
     public TestDatabaseResource asHttp2Service() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17188,6 +18053,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Registers a callback to customize the URLs displayed for the resource. */
     public TestDatabaseResource withUrls(AspireAction1<ResourceUrlsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17215,6 +18081,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withUrl(url, null);
     }
 
+    /** Adds or modifies displayed URLs */
     public TestDatabaseResource withUrl(AspireUnion url, String displayText) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17226,6 +18093,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Registers a callback to update the URL displayed for the endpoint with the specified name. */
     public TestDatabaseResource withUrlForEndpoint(String endpointName, AspireAction1<ResourceUrlAnnotation> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17242,6 +18110,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Excludes a resource from being published to the manifest. */
     public TestDatabaseResource excludeFromManifest() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17257,6 +18126,7 @@ public class TestDatabaseResource extends ContainerResource {
         return waitFor(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Waits for another resource to be ready */
     public TestDatabaseResource waitFor(IResource dependency, WaitBehavior waitBehavior) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17280,6 +18150,7 @@ public class TestDatabaseResource extends ContainerResource {
         return waitForStart(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Waits for another resource to start */
     public TestDatabaseResource waitForStart(IResource dependency, WaitBehavior waitBehavior) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17295,6 +18166,7 @@ public class TestDatabaseResource extends ContainerResource {
         return waitForStart(new IResource(dependency.getHandle(), dependency.getClient()), waitBehavior);
     }
 
+    /** Prevents resource from starting automatically */
     public TestDatabaseResource withExplicitStart() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17310,6 +18182,7 @@ public class TestDatabaseResource extends ContainerResource {
         return waitForCompletion(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Waits for the dependency resource to enter the Exited or Finished state before starting the resource. */
     public TestDatabaseResource waitForCompletion(IResource dependency, Double exitCode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17325,6 +18198,7 @@ public class TestDatabaseResource extends ContainerResource {
         return waitForCompletion(new IResource(dependency.getHandle(), dependency.getClient()), exitCode);
     }
 
+    /** Adds a health check by key */
     public TestDatabaseResource withHealthCheck(String key) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17333,6 +18207,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a health check to the resource which is mapped to a specific endpoint. */
     public TestDatabaseResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
         var path = options == null ? null : options.getPath();
         var statusCode = options == null ? null : options.getStatusCode();
@@ -17344,6 +18219,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withHttpHealthCheck(null);
     }
 
+    /** Adds a health check to the resource which is mapped to a specific endpoint. */
     private TestDatabaseResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17364,6 +18240,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withCommand(name, displayName, executeCommand, null);
     }
 
+    /** Adds a resource command */
     public TestDatabaseResource withCommand(String name, String displayName, AspireFunc1<ExecuteCommandContext, ExecuteCommandResult> executeCommand, CommandOptions commandOptions) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17383,6 +18260,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a command to the resource that starts a local process when invoked. */
     public TestDatabaseResource withProcessCommand(String commandName, String displayName, ProcessCommandExportOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17397,6 +18275,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withProcessCommandFactory(commandName, displayName, createProcessSpec, null);
     }
 
+    /** Adds a command to the resource that starts a local process created by a callback when invoked. */
     public TestDatabaseResource withProcessCommandFactory(String commandName, String displayName, AspireFunc1<ExecuteCommandContext, ProcessCommandSpecExportData> createProcessSpec, ProcessCommandResultExportOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17420,6 +18299,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withHttpCommand(path, displayName, null);
     }
 
+    /** Adds an HTTP resource command */
     public TestDatabaseResource withHttpCommand(String path, String displayName, HttpCommandExportOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17432,6 +18312,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Indicates whether developer certificates should be treated as trusted certificate authorities for the resource at run time. Currently this indicates trust for the ASP.NET Core developer certificate. The developer certificate will only be trusted when running in local development scenarios; in publish mode resources will use their default certificate trust. */
     public TestDatabaseResource withDeveloperCertificateTrust(boolean trust) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17440,6 +18321,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Sets the certificate trust scope */
     public TestDatabaseResource withCertificateTrustScope(CertificateTrustScope scope) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17452,6 +18334,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withHttpsDeveloperCertificate(null);
     }
 
+    /** Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration. */
     public TestDatabaseResource withHttpsDeveloperCertificate(ParameterResource password) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17462,6 +18345,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Disable HTTPS/TLS server certificate configuration for the resource. No HTTPS/TLS termination configuration will be applied. */
     public TestDatabaseResource withoutHttpsCertificate() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17469,6 +18353,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a relationship to another resource using its builder. */
     public TestDatabaseResource withRelationship(IResource resourceBuilder, String type) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17482,6 +18367,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withRelationship(new IResource(resourceBuilder.getHandle(), resourceBuilder.getClient()), type);
     }
 
+    /** Sets the parent relationship */
     public TestDatabaseResource withParentRelationship(IResource parent) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17494,6 +18380,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withParentRelationship(new IResource(parent.getHandle(), parent.getClient()));
     }
 
+    /** Sets a child relationship */
     public TestDatabaseResource withChildRelationship(IResource child) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17510,6 +18397,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withIconName(iconName, null);
     }
 
+    /** Specifies the icon to use when displaying the resource in the dashboard. */
     public TestDatabaseResource withIconName(String iconName, IconVariant iconVariant) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17521,6 +18409,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Configures the compute environment for the compute resource. */
     public TestDatabaseResource withComputeEnvironment(IComputeEnvironmentResource computeEnvironmentResource) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17533,6 +18422,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withComputeEnvironment(new IComputeEnvironmentResource(computeEnvironmentResource.getHandle(), computeEnvironmentResource.getClient()));
     }
 
+    /** Adds an HTTP health probe to the resource */
     public TestDatabaseResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions options) {
         var path = options == null ? null : options.getPath();
         var initialDelaySeconds = options == null ? null : options.getInitialDelaySeconds();
@@ -17548,6 +18438,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withHttpProbe(probeType, null);
     }
 
+    /** Adds an HTTP health probe to the resource */
     private TestDatabaseResource withHttpProbeImpl(ProbeType probeType, String path, Double initialDelaySeconds, Double periodSeconds, Double timeoutSeconds, Double failureThreshold, Double successThreshold, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17577,6 +18468,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry. */
     public TestDatabaseResource excludeFromMcp() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17584,6 +18476,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Adds an asynchronous callback to configure container image push options for the resource. */
     public TestDatabaseResource withImagePushOptions(AspireAction1<ContainerImagePushOptionsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17599,6 +18492,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Sets the remote image name (without registry endpoint or tag) for container push operations. */
     public TestDatabaseResource withRemoteImageName(String remoteImageName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17607,6 +18501,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Sets the remote image tag for container push operations. */
     public TestDatabaseResource withRemoteImageTag(String remoteImageTag) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17615,6 +18510,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a pipeline step to the resource that will be executed during deployment. */
     public TestDatabaseResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
         var dependsOn = options == null ? null : options.getDependsOn();
         var requiredBy = options == null ? null : options.getRequiredBy();
@@ -17627,6 +18523,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withPipelineStepFactory(stepName, callback, null);
     }
 
+    /** Adds a pipeline step to the resource that will be executed during deployment. */
     private TestDatabaseResource withPipelineStepFactoryImpl(String stepName, AspireAction1<PipelineStepContext> callback, String[] dependsOn, String[] requiredBy, String[] tags, String description) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17655,6 +18552,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships. */
     public TestDatabaseResource withPipelineConfiguration(AspireAction1<PipelineConfigurationContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17670,6 +18568,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a volume to a container resource. */
     public TestDatabaseResource withVolume(String target, WithVolumeOptions options) {
         var name = options == null ? null : options.getName();
         var isReadOnly = options == null ? null : options.isReadOnly();
@@ -17680,6 +18579,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withVolume(target, null);
     }
 
+    /** Adds a volume to a container resource. */
     private TestDatabaseResource withVolumeImpl(String target, String name, Boolean isReadOnly) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
@@ -17694,12 +18594,14 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Gets the name of the resource from a builder. */
     public String getResourceName() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
         return (String) getClient().invokeCapability("Aspire.Hosting/getResourceName", reqArgs);
     }
 
+    /** Subscribes to the BeforeResourceStarted event. */
     public TestDatabaseResource onBeforeResourceStarted(AspireAction1<BeforeResourceStartedEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17715,6 +18617,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Subscribes to the ResourceStopped event. */
     public TestDatabaseResource onResourceStopped(AspireAction1<ResourceStoppedEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17730,6 +18633,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Subscribes to the InitializeResource event. */
     public TestDatabaseResource onInitializeResource(AspireAction1<InitializeResourceEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17745,6 +18649,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Subscribes to the ResourceEndpointsAllocated event. */
     public TestDatabaseResource onResourceEndpointsAllocated(AspireAction1<ResourceEndpointsAllocatedEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17760,6 +18665,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Subscribes to the ResourceReady event. */
     public TestDatabaseResource onResourceReady(AspireAction1<ResourceReadyEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17775,12 +18681,14 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Creates an execution configuration builder for the specified resource. */
     public IExecutionConfigurationBuilder createExecutionConfiguration() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
         return (IExecutionConfigurationBuilder) getClient().invokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs);
     }
 
+    /** Adds an optional string parameter */
     public TestDatabaseResource withOptionalString(WithOptionalStringOptions options) {
         var value = options == null ? null : options.getValue();
         var enabled = options == null ? null : options.getEnabled();
@@ -17791,6 +18699,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withOptionalString(null);
     }
 
+    /** Adds an optional string parameter */
     private TestDatabaseResource withOptionalStringImpl(String value, Boolean enabled) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17804,6 +18713,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Configures the resource with a DTO */
     public TestDatabaseResource withConfig(TestConfigDto config) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17812,6 +18722,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Configures environment with callback (test version) */
     public TestDatabaseResource testWithEnvironmentCallback(AspireAction1<TestEnvironmentContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17827,6 +18738,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Sets the created timestamp */
     public TestDatabaseResource withCreatedAt(String createdAt) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17835,6 +18747,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Sets the modified timestamp */
     public TestDatabaseResource withModifiedAt(String modifiedAt) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17843,6 +18756,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Sets the correlation ID */
     public TestDatabaseResource withCorrelationId(String correlationId) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17855,6 +18769,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withOptionalCallback(null);
     }
 
+    /** Configures with optional callback */
     public TestDatabaseResource withOptionalCallback(AspireAction1<TestCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17870,6 +18785,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Sets the resource status */
     public TestDatabaseResource withStatus(TestResourceStatus status) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17878,6 +18794,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Configures with nested DTO */
     public TestDatabaseResource withNestedConfig(TestNestedDto config) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17886,6 +18803,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Adds validation callback */
     public TestDatabaseResource withValidator(AspireFunc1<TestResourceContext, Boolean> validator) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17900,6 +18818,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Waits for another resource (test version) */
     public TestDatabaseResource testWaitFor(IResource dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17912,6 +18831,7 @@ public class TestDatabaseResource extends ContainerResource {
         return testWaitFor(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Adds a dependency on another resource */
     public TestDatabaseResource withDependency(IResourceWithConnectionString dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17936,6 +18856,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withUnionDependency(new IResourceWithConnectionString(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Adds a dependency from a string or another resource */
     public TestDatabaseResource withUnionDependency(AspireUnion dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17944,6 +18865,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Sets the endpoints */
     public TestDatabaseResource withEndpoints(String[] endpoints) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17952,6 +18874,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Sets environment variables */
     public TestDatabaseResource withEnvironmentVariables(Map<String, String> variables) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17960,6 +18883,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Performs a cancellable operation */
     public TestDatabaseResource withCancellableOperation(AspireAction1<CancellationToken> operation) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17975,6 +18899,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a label to the resource */
     public TestDatabaseResource withMergeLabel(String label) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17983,6 +18908,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a categorized label to the resource */
     public TestDatabaseResource withMergeLabelCategorized(String label, String category) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -17992,6 +18918,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Configures a named endpoint */
     public TestDatabaseResource withMergeEndpoint(String endpointName, double port) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18001,6 +18928,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Configures a named endpoint with scheme */
     public TestDatabaseResource withMergeEndpointScheme(String endpointName, double port, String scheme) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18011,6 +18939,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Configures resource logging */
     public TestDatabaseResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
         var enableConsole = options == null ? null : options.getEnableConsole();
         var maxFiles = options == null ? null : options.getMaxFiles();
@@ -18021,6 +18950,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withMergeLogging(logLevel, null);
     }
 
+    /** Configures resource logging */
     private TestDatabaseResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18035,6 +18965,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Configures resource logging with file path */
     public TestDatabaseResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
         var enableConsole = options == null ? null : options.getEnableConsole();
         var maxFiles = options == null ? null : options.getMaxFiles();
@@ -18045,6 +18976,7 @@ public class TestDatabaseResource extends ContainerResource {
         return withMergeLoggingPath(logLevel, logPath, null);
     }
 
+    /** Configures resource logging with file path */
     private TestDatabaseResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18060,6 +18992,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Configures a route */
     public TestDatabaseResource withMergeRoute(String path, String method, String handler, double priority) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18071,6 +19004,7 @@ public class TestDatabaseResource extends ContainerResource {
         return this;
     }
 
+    /** Configures a route with middleware */
     public TestDatabaseResource withMergeRouteMiddleware(String path, String method, String handler, double priority, String middleware) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18300,6 +19234,7 @@ public class TestRedisResource extends ContainerResource {
         super(handle, client);
     }
 
+    /** Configures the resource to use the specified container registry for container image operations. */
     public TestRedisResource withContainerRegistry(IResource registry) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18316,6 +19251,7 @@ public class TestRedisResource extends ContainerResource {
         return withBindMount(source, target, null);
     }
 
+    /** Adds a bind mount to a container resource. */
     public TestRedisResource withBindMount(String source, String target, Boolean isReadOnly) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18328,6 +19264,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Sets the Entrypoint for the container. */
     public TestRedisResource withEntrypoint(String entrypoint) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18336,6 +19273,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Allows overriding the image tag on a container. */
     public TestRedisResource withImageTag(String tag) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18344,6 +19282,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Allows overriding the image registry on a container. */
     public TestRedisResource withImageRegistry(String registry) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18356,6 +19295,7 @@ public class TestRedisResource extends ContainerResource {
         return withImage(image, null);
     }
 
+    /** Allows overriding the image on a container. */
     public TestRedisResource withImage(String image, String tag) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18367,6 +19307,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Allows setting the image to a specific sha256 on a container. */
     public TestRedisResource withImageSHA256(String sha256) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18375,6 +19316,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a callback to be executed with a list of arguments to add to the container runtime run command when a container resource is started. */
     public TestRedisResource withContainerRuntimeArgs(String[] args) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18383,6 +19325,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Sets the lifetime behavior of the container resource. */
     public TestRedisResource withLifetime(ContainerLifetime lifetime) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18391,6 +19334,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Sets the pull policy for the container resource. */
     public TestRedisResource withImagePullPolicy(ImagePullPolicy pullPolicy) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18399,6 +19343,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Changes the resource to be published as a container in the manifest. */
     public TestRedisResource publishAsContainer() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18406,6 +19351,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Causes Aspire to build the specified container image from a Dockerfile. */
     public TestRedisResource withDockerfile(String contextPath, WithDockerfileOptions options) {
         var dockerfilePath = options == null ? null : options.getDockerfilePath();
         var stage = options == null ? null : options.getStage();
@@ -18416,6 +19362,7 @@ public class TestRedisResource extends ContainerResource {
         return withDockerfile(contextPath, null);
     }
 
+    /** Causes Aspire to build the specified container image from a Dockerfile. */
     private TestRedisResource withDockerfileImpl(String contextPath, String dockerfilePath, String stage) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18430,6 +19377,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Overrides the default container name for this resource. By default Aspire generates a unique container name based on the resource name and a random postfix (or a postfix based on a hash of the AppHost project path for persistent container resources). This method allows you to override that behavior with a custom name, but could lead to naming conflicts if the specified name is not unique. */
     public TestRedisResource withContainerName(String name) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18446,6 +19394,7 @@ public class TestRedisResource extends ContainerResource {
         return withBuildArg(name, AspireUnion.of(value));
     }
 
+    /** Adds a build argument when the container is built from a Dockerfile. */
     public TestRedisResource withBuildArg(String name, AspireUnion value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18455,6 +19404,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a secret build argument when the container is built from a Dockerfile. */
     public TestRedisResource withBuildSecret(String name, ParameterResource value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18464,6 +19414,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Adds container certificate path overrides used for certificate trust at run time. */
     public TestRedisResource withContainerCertificatePaths(WithContainerCertificatePathsOptions options) {
         var customCertificatesDestination = options == null ? null : options.getCustomCertificatesDestination();
         var defaultCertificateBundlePaths = options == null ? null : options.getDefaultCertificateBundlePaths();
@@ -18475,6 +19426,7 @@ public class TestRedisResource extends ContainerResource {
         return withContainerCertificatePaths(null);
     }
 
+    /** Adds container certificate path overrides used for certificate trust at run time. */
     private TestRedisResource withContainerCertificatePathsImpl(String customCertificatesDestination, String[] defaultCertificateBundlePaths, String[] defaultCertificateDirectoryPaths) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18491,6 +19443,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Set whether a container resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the container. If set to `false`, endpoints belonging to the container resource will ignore the configured proxy settings and run proxy-less. */
     public TestRedisResource withEndpointProxySupport(boolean proxyEnabled) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18503,6 +19456,7 @@ public class TestRedisResource extends ContainerResource {
         return withDockerfileBuilder(contextPath, callback, null);
     }
 
+    /** Configures the resource to use a programmatically generated Dockerfile */
     public TestRedisResource withDockerfileBuilder(String contextPath, AspireAction1<DockerfileBuilderCallbackContext> callback, String stage) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18522,6 +19476,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Configures custom base images for generated Dockerfiles. */
     public TestRedisResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
         var buildImage = options == null ? null : options.getBuildImage();
         var runtimeImage = options == null ? null : options.getRuntimeImage();
@@ -18532,6 +19487,7 @@ public class TestRedisResource extends ContainerResource {
         return withDockerfileBaseImage(null);
     }
 
+    /** Configures custom base images for generated Dockerfiles. */
     private TestRedisResource withDockerfileBaseImageImpl(String buildImage, String runtimeImage) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18545,6 +19501,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a network alias to container resource. */
     public TestRedisResource withContainerNetworkAlias(String alias) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18553,6 +19510,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
     public TestRedisResource withMcpServer(WithMcpServerOptions options) {
         var path = options == null ? null : options.getPath();
         var endpointName = options == null ? null : options.getEndpointName();
@@ -18563,6 +19521,7 @@ public class TestRedisResource extends ContainerResource {
         return withMcpServer(null);
     }
 
+    /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
     private TestRedisResource withMcpServerImpl(String path, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18580,6 +19539,7 @@ public class TestRedisResource extends ContainerResource {
         return withOtlpExporter(null);
     }
 
+    /** Configures OTLP telemetry export */
     public TestRedisResource withOtlpExporter(OtlpProtocol protocol) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18590,6 +19550,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Changes the resource to be published as a connection string reference in the manifest. */
     public TestRedisResource publishAsConnectionString() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18601,6 +19562,7 @@ public class TestRedisResource extends ContainerResource {
         return withRequiredCommand(command, null);
     }
 
+    /** Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start. */
     public TestRedisResource withRequiredCommand(String command, String helpLink) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18644,6 +19606,7 @@ public class TestRedisResource extends ContainerResource {
         return withEnvironment(name, new IExpressionValue(value.getHandle(), value.getClient()));
     }
 
+    /** Sets an environment variable */
     public TestRedisResource withEnvironment(String name, AspireUnion value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18653,6 +19616,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Allows for the population of environment variables on a resource. */
     public TestRedisResource withEnvironmentCallback(AspireAction1<EnvironmentCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18676,6 +19640,7 @@ public class TestRedisResource extends ContainerResource {
         return withConnectionProperty(name, AspireUnion.of(value));
     }
 
+    /** Adds a connection property annotation to the resource being built. */
     public TestRedisResource withConnectionProperty(String name, AspireUnion value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18685,6 +19650,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Adds arguments to be passed to a resource that supports arguments when it is launched. */
     public TestRedisResource withArgs(String[] args) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18693,6 +19659,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a callback to be executed with a list of command-line arguments when a resource is started. */
     public TestRedisResource withArgsCallback(AspireAction1<CommandLineArgsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18708,6 +19675,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Configures how information is injected into environment variables when the resource references other resources. */
     public TestRedisResource withReferenceEnvironment(ReferenceEnvironmentInjectionOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18744,6 +19712,7 @@ public class TestRedisResource extends ContainerResource {
         return withReference(AspireUnion.of(source));
     }
 
+    /** Adds a reference to another resource */
     public TestRedisResource withReference(AspireUnion source, WithReferenceOptions options) {
         var connectionName = options == null ? null : options.getConnectionName();
         var optional = options == null ? null : options.getOptional();
@@ -18755,6 +19724,7 @@ public class TestRedisResource extends ContainerResource {
         return withReference(source, null);
     }
 
+    /** Adds a reference to another resource */
     private TestRedisResource withReferenceImpl(AspireUnion source, String connectionName, Boolean optional, String name) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18772,6 +19742,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Retrieves the value of a specified connection property from the resource's connection properties. */
     public ReferenceExpression getConnectionProperty(String key) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
@@ -18783,6 +19754,7 @@ public class TestRedisResource extends ContainerResource {
         return withEndpointCallback(endpointName, callback, null);
     }
 
+    /** Updates a named endpoint via callback */
     public TestRedisResource withEndpointCallback(String endpointName, AspireAction1<EndpointUpdateContext> callback, Boolean createIfNotExists) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18802,6 +19774,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Updates an HTTP endpoint via callback */
     public TestRedisResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions options) {
         var name = options == null ? null : options.getName();
         var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
@@ -18812,6 +19785,7 @@ public class TestRedisResource extends ContainerResource {
         return withHttpEndpointCallback(callback, null);
     }
 
+    /** Updates an HTTP endpoint via callback */
     private TestRedisResource withHttpEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18833,6 +19807,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Updates an HTTPS endpoint via callback */
     public TestRedisResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
         var name = options == null ? null : options.getName();
         var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
@@ -18843,6 +19818,7 @@ public class TestRedisResource extends ContainerResource {
         return withHttpsEndpointCallback(callback, null);
     }
 
+    /** Updates an HTTPS endpoint via callback */
     private TestRedisResource withHttpsEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18864,6 +19840,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a network endpoint */
     public TestRedisResource withEndpoint(WithEndpointOptions options) {
         var port = options == null ? null : options.getPort();
         var targetPort = options == null ? null : options.getTargetPort();
@@ -18880,6 +19857,7 @@ public class TestRedisResource extends ContainerResource {
         return withEndpoint(null);
     }
 
+    /** Adds a network endpoint */
     private TestRedisResource withEndpointImpl(Double port, Double targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18911,6 +19889,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Adds an HTTP endpoint */
     public TestRedisResource withHttpEndpoint(WithHttpEndpointOptions options) {
         var port = options == null ? null : options.getPort();
         var targetPort = options == null ? null : options.getTargetPort();
@@ -18924,6 +19903,7 @@ public class TestRedisResource extends ContainerResource {
         return withHttpEndpoint(null);
     }
 
+    /** Adds an HTTP endpoint */
     private TestRedisResource withHttpEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18946,6 +19926,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Adds an HTTPS endpoint */
     public TestRedisResource withHttpsEndpoint(WithHttpsEndpointOptions options) {
         var port = options == null ? null : options.getPort();
         var targetPort = options == null ? null : options.getTargetPort();
@@ -18959,6 +19940,7 @@ public class TestRedisResource extends ContainerResource {
         return withHttpsEndpoint(null);
     }
 
+    /** Adds an HTTPS endpoint */
     private TestRedisResource withHttpsEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18981,6 +19963,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Marks existing http or https endpoints on a resource as external. */
     public TestRedisResource withExternalHttpEndpoints() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18988,6 +19971,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Gets an endpoint reference */
     public EndpointReference getEndpoint(String name) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -18995,6 +19979,7 @@ public class TestRedisResource extends ContainerResource {
         return (EndpointReference) getClient().invokeCapability("Aspire.Hosting/getEndpoint", reqArgs);
     }
 
+    /** Configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge. */
     public TestRedisResource asHttp2Service() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19002,6 +19987,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Registers a callback to customize the URLs displayed for the resource. */
     public TestRedisResource withUrls(AspireAction1<ResourceUrlsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19029,6 +20015,7 @@ public class TestRedisResource extends ContainerResource {
         return withUrl(url, null);
     }
 
+    /** Adds or modifies displayed URLs */
     public TestRedisResource withUrl(AspireUnion url, String displayText) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19040,6 +20027,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Registers a callback to update the URL displayed for the endpoint with the specified name. */
     public TestRedisResource withUrlForEndpoint(String endpointName, AspireAction1<ResourceUrlAnnotation> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19056,6 +20044,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Excludes a resource from being published to the manifest. */
     public TestRedisResource excludeFromManifest() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19071,6 +20060,7 @@ public class TestRedisResource extends ContainerResource {
         return waitFor(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Waits for another resource to be ready */
     public TestRedisResource waitFor(IResource dependency, WaitBehavior waitBehavior) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19094,6 +20084,7 @@ public class TestRedisResource extends ContainerResource {
         return waitForStart(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Waits for another resource to start */
     public TestRedisResource waitForStart(IResource dependency, WaitBehavior waitBehavior) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19109,6 +20100,7 @@ public class TestRedisResource extends ContainerResource {
         return waitForStart(new IResource(dependency.getHandle(), dependency.getClient()), waitBehavior);
     }
 
+    /** Prevents resource from starting automatically */
     public TestRedisResource withExplicitStart() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19124,6 +20116,7 @@ public class TestRedisResource extends ContainerResource {
         return waitForCompletion(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Waits for the dependency resource to enter the Exited or Finished state before starting the resource. */
     public TestRedisResource waitForCompletion(IResource dependency, Double exitCode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19139,6 +20132,7 @@ public class TestRedisResource extends ContainerResource {
         return waitForCompletion(new IResource(dependency.getHandle(), dependency.getClient()), exitCode);
     }
 
+    /** Adds a health check by key */
     public TestRedisResource withHealthCheck(String key) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19147,6 +20141,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a health check to the resource which is mapped to a specific endpoint. */
     public TestRedisResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
         var path = options == null ? null : options.getPath();
         var statusCode = options == null ? null : options.getStatusCode();
@@ -19158,6 +20153,7 @@ public class TestRedisResource extends ContainerResource {
         return withHttpHealthCheck(null);
     }
 
+    /** Adds a health check to the resource which is mapped to a specific endpoint. */
     private TestRedisResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19178,6 +20174,7 @@ public class TestRedisResource extends ContainerResource {
         return withCommand(name, displayName, executeCommand, null);
     }
 
+    /** Adds a resource command */
     public TestRedisResource withCommand(String name, String displayName, AspireFunc1<ExecuteCommandContext, ExecuteCommandResult> executeCommand, CommandOptions commandOptions) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19197,6 +20194,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a command to the resource that starts a local process when invoked. */
     public TestRedisResource withProcessCommand(String commandName, String displayName, ProcessCommandExportOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19211,6 +20209,7 @@ public class TestRedisResource extends ContainerResource {
         return withProcessCommandFactory(commandName, displayName, createProcessSpec, null);
     }
 
+    /** Adds a command to the resource that starts a local process created by a callback when invoked. */
     public TestRedisResource withProcessCommandFactory(String commandName, String displayName, AspireFunc1<ExecuteCommandContext, ProcessCommandSpecExportData> createProcessSpec, ProcessCommandResultExportOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19234,6 +20233,7 @@ public class TestRedisResource extends ContainerResource {
         return withHttpCommand(path, displayName, null);
     }
 
+    /** Adds an HTTP resource command */
     public TestRedisResource withHttpCommand(String path, String displayName, HttpCommandExportOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19246,6 +20246,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Indicates whether developer certificates should be treated as trusted certificate authorities for the resource at run time. Currently this indicates trust for the ASP.NET Core developer certificate. The developer certificate will only be trusted when running in local development scenarios; in publish mode resources will use their default certificate trust. */
     public TestRedisResource withDeveloperCertificateTrust(boolean trust) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19254,6 +20255,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Sets the certificate trust scope */
     public TestRedisResource withCertificateTrustScope(CertificateTrustScope scope) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19266,6 +20268,7 @@ public class TestRedisResource extends ContainerResource {
         return withHttpsDeveloperCertificate(null);
     }
 
+    /** Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration. */
     public TestRedisResource withHttpsDeveloperCertificate(ParameterResource password) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19276,6 +20279,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Disable HTTPS/TLS server certificate configuration for the resource. No HTTPS/TLS termination configuration will be applied. */
     public TestRedisResource withoutHttpsCertificate() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19283,6 +20287,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a relationship to another resource using its builder. */
     public TestRedisResource withRelationship(IResource resourceBuilder, String type) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19296,6 +20301,7 @@ public class TestRedisResource extends ContainerResource {
         return withRelationship(new IResource(resourceBuilder.getHandle(), resourceBuilder.getClient()), type);
     }
 
+    /** Sets the parent relationship */
     public TestRedisResource withParentRelationship(IResource parent) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19308,6 +20314,7 @@ public class TestRedisResource extends ContainerResource {
         return withParentRelationship(new IResource(parent.getHandle(), parent.getClient()));
     }
 
+    /** Sets a child relationship */
     public TestRedisResource withChildRelationship(IResource child) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19324,6 +20331,7 @@ public class TestRedisResource extends ContainerResource {
         return withIconName(iconName, null);
     }
 
+    /** Specifies the icon to use when displaying the resource in the dashboard. */
     public TestRedisResource withIconName(String iconName, IconVariant iconVariant) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19335,6 +20343,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Configures the compute environment for the compute resource. */
     public TestRedisResource withComputeEnvironment(IComputeEnvironmentResource computeEnvironmentResource) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19347,6 +20356,7 @@ public class TestRedisResource extends ContainerResource {
         return withComputeEnvironment(new IComputeEnvironmentResource(computeEnvironmentResource.getHandle(), computeEnvironmentResource.getClient()));
     }
 
+    /** Adds an HTTP health probe to the resource */
     public TestRedisResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions options) {
         var path = options == null ? null : options.getPath();
         var initialDelaySeconds = options == null ? null : options.getInitialDelaySeconds();
@@ -19362,6 +20372,7 @@ public class TestRedisResource extends ContainerResource {
         return withHttpProbe(probeType, null);
     }
 
+    /** Adds an HTTP health probe to the resource */
     private TestRedisResource withHttpProbeImpl(ProbeType probeType, String path, Double initialDelaySeconds, Double periodSeconds, Double timeoutSeconds, Double failureThreshold, Double successThreshold, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19391,6 +20402,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry. */
     public TestRedisResource excludeFromMcp() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19398,6 +20410,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Adds an asynchronous callback to configure container image push options for the resource. */
     public TestRedisResource withImagePushOptions(AspireAction1<ContainerImagePushOptionsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19413,6 +20426,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Sets the remote image name (without registry endpoint or tag) for container push operations. */
     public TestRedisResource withRemoteImageName(String remoteImageName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19421,6 +20435,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Sets the remote image tag for container push operations. */
     public TestRedisResource withRemoteImageTag(String remoteImageTag) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19429,6 +20444,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a pipeline step to the resource that will be executed during deployment. */
     public TestRedisResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
         var dependsOn = options == null ? null : options.getDependsOn();
         var requiredBy = options == null ? null : options.getRequiredBy();
@@ -19441,6 +20457,7 @@ public class TestRedisResource extends ContainerResource {
         return withPipelineStepFactory(stepName, callback, null);
     }
 
+    /** Adds a pipeline step to the resource that will be executed during deployment. */
     private TestRedisResource withPipelineStepFactoryImpl(String stepName, AspireAction1<PipelineStepContext> callback, String[] dependsOn, String[] requiredBy, String[] tags, String description) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19469,6 +20486,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships. */
     public TestRedisResource withPipelineConfiguration(AspireAction1<PipelineConfigurationContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19484,6 +20502,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a volume to a container resource. */
     public TestRedisResource withVolume(String target, WithVolumeOptions options) {
         var name = options == null ? null : options.getName();
         var isReadOnly = options == null ? null : options.isReadOnly();
@@ -19494,6 +20513,7 @@ public class TestRedisResource extends ContainerResource {
         return withVolume(target, null);
     }
 
+    /** Adds a volume to a container resource. */
     private TestRedisResource withVolumeImpl(String target, String name, Boolean isReadOnly) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
@@ -19508,12 +20528,14 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Gets the name of the resource from a builder. */
     public String getResourceName() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
         return (String) getClient().invokeCapability("Aspire.Hosting/getResourceName", reqArgs);
     }
 
+    /** Subscribes to the BeforeResourceStarted event. */
     public TestRedisResource onBeforeResourceStarted(AspireAction1<BeforeResourceStartedEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19529,6 +20551,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Subscribes to the ResourceStopped event. */
     public TestRedisResource onResourceStopped(AspireAction1<ResourceStoppedEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19544,6 +20567,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Subscribes to the ConnectionStringAvailable event. */
     public TestRedisResource onConnectionStringAvailable(AspireAction1<ConnectionStringAvailableEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19559,6 +20583,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Subscribes to the InitializeResource event. */
     public TestRedisResource onInitializeResource(AspireAction1<InitializeResourceEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19574,6 +20599,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Subscribes to the ResourceEndpointsAllocated event. */
     public TestRedisResource onResourceEndpointsAllocated(AspireAction1<ResourceEndpointsAllocatedEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19589,6 +20615,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Subscribes to the ResourceReady event. */
     public TestRedisResource onResourceReady(AspireAction1<ResourceReadyEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19604,6 +20631,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Creates an execution configuration builder for the specified resource. */
     public IExecutionConfigurationBuilder createExecutionConfiguration() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
@@ -19614,6 +20642,7 @@ public class TestRedisResource extends ContainerResource {
         return addTestChildDatabase(name, null);
     }
 
+    /** Adds a child database to a test Redis resource */
     public TestDatabaseResource addTestChildDatabase(String name, String databaseName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19628,6 +20657,7 @@ public class TestRedisResource extends ContainerResource {
         return withPersistence(null);
     }
 
+    /** Configures the Redis resource with persistence */
     public TestRedisResource withPersistence(TestPersistenceMode mode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19638,6 +20668,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Adds an optional string parameter */
     public TestRedisResource withOptionalString(WithOptionalStringOptions options) {
         var value = options == null ? null : options.getValue();
         var enabled = options == null ? null : options.getEnabled();
@@ -19648,6 +20679,7 @@ public class TestRedisResource extends ContainerResource {
         return withOptionalString(null);
     }
 
+    /** Adds an optional string parameter */
     private TestRedisResource withOptionalStringImpl(String value, Boolean enabled) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19661,6 +20693,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Configures the resource with a DTO */
     public TestRedisResource withConfig(TestConfigDto config) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19669,6 +20702,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Gets the tags for the resource */
     private AspireList<String> getTagsField;
     public AspireList<String> getTags() {
         if (getTagsField == null) {
@@ -19677,6 +20711,7 @@ public class TestRedisResource extends ContainerResource {
         return getTagsField;
     }
 
+    /** Gets the metadata for the resource */
     private AspireDict<String, String> getMetadataField;
     public AspireDict<String, String> getMetadata() {
         if (getMetadataField == null) {
@@ -19685,6 +20720,7 @@ public class TestRedisResource extends ContainerResource {
         return getMetadataField;
     }
 
+    /** Sets the connection string using a reference expression */
     public TestRedisResource withConnectionString(ReferenceExpression connectionString) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19693,6 +20729,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Configures environment with callback (test version) */
     public TestRedisResource testWithEnvironmentCallback(AspireAction1<TestEnvironmentContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19708,6 +20745,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Sets the created timestamp */
     public TestRedisResource withCreatedAt(String createdAt) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19716,6 +20754,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Sets the modified timestamp */
     public TestRedisResource withModifiedAt(String modifiedAt) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19724,6 +20763,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Sets the correlation ID */
     public TestRedisResource withCorrelationId(String correlationId) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19736,6 +20776,7 @@ public class TestRedisResource extends ContainerResource {
         return withOptionalCallback(null);
     }
 
+    /** Configures with optional callback */
     public TestRedisResource withOptionalCallback(AspireAction1<TestCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19751,6 +20792,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Sets the resource status */
     public TestRedisResource withStatus(TestResourceStatus status) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19759,6 +20801,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Configures with nested DTO */
     public TestRedisResource withNestedConfig(TestNestedDto config) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19767,6 +20810,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Adds validation callback */
     public TestRedisResource withValidator(AspireFunc1<TestResourceContext, Boolean> validator) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19781,6 +20825,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Waits for another resource (test version) */
     public TestRedisResource testWaitFor(IResource dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19793,12 +20838,14 @@ public class TestRedisResource extends ContainerResource {
         return testWaitFor(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Gets the endpoints */
     public String[] getEndpoints() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         return (String[]) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/getEndpoints", reqArgs);
     }
 
+    /** Sets connection string using direct interface target */
     public TestRedisResource withConnectionStringDirect(String connectionString) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19807,6 +20854,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Redis-specific configuration */
     public TestRedisResource withRedisSpecific(String option) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19815,6 +20863,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a dependency on another resource */
     public TestRedisResource withDependency(IResourceWithConnectionString dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19839,6 +20888,7 @@ public class TestRedisResource extends ContainerResource {
         return withUnionDependency(new IResourceWithConnectionString(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Adds a dependency from a string or another resource */
     public TestRedisResource withUnionDependency(AspireUnion dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19847,6 +20897,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Sets the endpoints */
     public TestRedisResource withEndpoints(String[] endpoints) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19855,6 +20906,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Sets environment variables */
     public TestRedisResource withEnvironmentVariables(Map<String, String> variables) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19867,6 +20919,7 @@ public class TestRedisResource extends ContainerResource {
         return getStatusAsync(null);
     }
 
+    /** Gets the status of the resource asynchronously */
     public String getStatusAsync(CancellationToken cancellationToken) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19876,6 +20929,7 @@ public class TestRedisResource extends ContainerResource {
         return (String) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/getStatusAsync", reqArgs);
     }
 
+    /** Performs a cancellable operation */
     public TestRedisResource withCancellableOperation(AspireAction1<CancellationToken> operation) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19895,6 +20949,7 @@ public class TestRedisResource extends ContainerResource {
         return waitForReadyAsync(timeout, null);
     }
 
+    /** Waits for the resource to be ready */
     public boolean waitForReadyAsync(double timeout, CancellationToken cancellationToken) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19905,6 +20960,7 @@ public class TestRedisResource extends ContainerResource {
         return (boolean) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/waitForReadyAsync", reqArgs);
     }
 
+    /** Tests multi-param callback destructuring */
     public TestRedisResource withMultiParamHandleCallback(AspireAction2<TestCallbackContext, TestEnvironmentContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19921,6 +20977,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a data volume with persistence */
     public TestRedisResource withDataVolume(WithDataVolumeOptions options) {
         var name = options == null ? null : options.getName();
         var isReadOnly = options == null ? null : options.isReadOnly();
@@ -19931,6 +20988,7 @@ public class TestRedisResource extends ContainerResource {
         return withDataVolume(null);
     }
 
+    /** Adds a data volume with persistence */
     private TestRedisResource withDataVolumeImpl(String name, Boolean isReadOnly) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19944,6 +21002,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a label to the resource */
     public TestRedisResource withMergeLabel(String label) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19952,6 +21011,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a categorized label to the resource */
     public TestRedisResource withMergeLabelCategorized(String label, String category) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19961,6 +21021,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Configures a named endpoint */
     public TestRedisResource withMergeEndpoint(String endpointName, double port) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19970,6 +21031,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Configures a named endpoint with scheme */
     public TestRedisResource withMergeEndpointScheme(String endpointName, double port, String scheme) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -19980,6 +21042,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Configures resource logging */
     public TestRedisResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
         var enableConsole = options == null ? null : options.getEnableConsole();
         var maxFiles = options == null ? null : options.getMaxFiles();
@@ -19990,6 +21053,7 @@ public class TestRedisResource extends ContainerResource {
         return withMergeLogging(logLevel, null);
     }
 
+    /** Configures resource logging */
     private TestRedisResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20004,6 +21068,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Configures resource logging with file path */
     public TestRedisResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
         var enableConsole = options == null ? null : options.getEnableConsole();
         var maxFiles = options == null ? null : options.getMaxFiles();
@@ -20014,6 +21079,7 @@ public class TestRedisResource extends ContainerResource {
         return withMergeLoggingPath(logLevel, logPath, null);
     }
 
+    /** Configures resource logging with file path */
     private TestRedisResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20029,6 +21095,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Configures a route */
     public TestRedisResource withMergeRoute(String path, String method, String handler, double priority) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20040,6 +21107,7 @@ public class TestRedisResource extends ContainerResource {
         return this;
     }
 
+    /** Configures a route with middleware */
     public TestRedisResource withMergeRouteMiddleware(String path, String method, String handler, double priority, String middleware) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20098,14 +21166,14 @@ public class TestResourceContext extends HandleWrapperBase {
         return (TestResourceContext) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestResourceContext.setValue", reqArgs);
     }
 
-    /** Invokes the GetValueAsync method */
+    /** Instance method that should be exposed as async method. */
     public String getValueAsync() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (String) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestResourceContext.getValueAsync", reqArgs);
     }
 
-    /** Invokes the SetValueAsync method */
+    /** Instance method with parameter. */
     public void setValueAsync(String value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -20113,7 +21181,7 @@ public class TestResourceContext extends HandleWrapperBase {
         getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestResourceContext.setValueAsync", reqArgs);
     }
 
-    /** Invokes the ValidateAsync method */
+    /** Instance method with return type. */
     public boolean validateAsync() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -20167,6 +21235,7 @@ public class TestVaultResource extends ContainerResource {
         super(handle, client);
     }
 
+    /** Configures the resource to use the specified container registry for container image operations. */
     public TestVaultResource withContainerRegistry(IResource registry) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20183,6 +21252,7 @@ public class TestVaultResource extends ContainerResource {
         return withBindMount(source, target, null);
     }
 
+    /** Adds a bind mount to a container resource. */
     public TestVaultResource withBindMount(String source, String target, Boolean isReadOnly) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20195,6 +21265,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Sets the Entrypoint for the container. */
     public TestVaultResource withEntrypoint(String entrypoint) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20203,6 +21274,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Allows overriding the image tag on a container. */
     public TestVaultResource withImageTag(String tag) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20211,6 +21283,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Allows overriding the image registry on a container. */
     public TestVaultResource withImageRegistry(String registry) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20223,6 +21296,7 @@ public class TestVaultResource extends ContainerResource {
         return withImage(image, null);
     }
 
+    /** Allows overriding the image on a container. */
     public TestVaultResource withImage(String image, String tag) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20234,6 +21308,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Allows setting the image to a specific sha256 on a container. */
     public TestVaultResource withImageSHA256(String sha256) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20242,6 +21317,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a callback to be executed with a list of arguments to add to the container runtime run command when a container resource is started. */
     public TestVaultResource withContainerRuntimeArgs(String[] args) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20250,6 +21326,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Sets the lifetime behavior of the container resource. */
     public TestVaultResource withLifetime(ContainerLifetime lifetime) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20258,6 +21335,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Sets the pull policy for the container resource. */
     public TestVaultResource withImagePullPolicy(ImagePullPolicy pullPolicy) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20266,6 +21344,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Changes the resource to be published as a container in the manifest. */
     public TestVaultResource publishAsContainer() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20273,6 +21352,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Causes Aspire to build the specified container image from a Dockerfile. */
     public TestVaultResource withDockerfile(String contextPath, WithDockerfileOptions options) {
         var dockerfilePath = options == null ? null : options.getDockerfilePath();
         var stage = options == null ? null : options.getStage();
@@ -20283,6 +21363,7 @@ public class TestVaultResource extends ContainerResource {
         return withDockerfile(contextPath, null);
     }
 
+    /** Causes Aspire to build the specified container image from a Dockerfile. */
     private TestVaultResource withDockerfileImpl(String contextPath, String dockerfilePath, String stage) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20297,6 +21378,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Overrides the default container name for this resource. By default Aspire generates a unique container name based on the resource name and a random postfix (or a postfix based on a hash of the AppHost project path for persistent container resources). This method allows you to override that behavior with a custom name, but could lead to naming conflicts if the specified name is not unique. */
     public TestVaultResource withContainerName(String name) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20313,6 +21395,7 @@ public class TestVaultResource extends ContainerResource {
         return withBuildArg(name, AspireUnion.of(value));
     }
 
+    /** Adds a build argument when the container is built from a Dockerfile. */
     public TestVaultResource withBuildArg(String name, AspireUnion value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20322,6 +21405,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a secret build argument when the container is built from a Dockerfile. */
     public TestVaultResource withBuildSecret(String name, ParameterResource value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20331,6 +21415,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Adds container certificate path overrides used for certificate trust at run time. */
     public TestVaultResource withContainerCertificatePaths(WithContainerCertificatePathsOptions options) {
         var customCertificatesDestination = options == null ? null : options.getCustomCertificatesDestination();
         var defaultCertificateBundlePaths = options == null ? null : options.getDefaultCertificateBundlePaths();
@@ -20342,6 +21427,7 @@ public class TestVaultResource extends ContainerResource {
         return withContainerCertificatePaths(null);
     }
 
+    /** Adds container certificate path overrides used for certificate trust at run time. */
     private TestVaultResource withContainerCertificatePathsImpl(String customCertificatesDestination, String[] defaultCertificateBundlePaths, String[] defaultCertificateDirectoryPaths) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20358,6 +21444,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Set whether a container resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the container. If set to `false`, endpoints belonging to the container resource will ignore the configured proxy settings and run proxy-less. */
     public TestVaultResource withEndpointProxySupport(boolean proxyEnabled) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20370,6 +21457,7 @@ public class TestVaultResource extends ContainerResource {
         return withDockerfileBuilder(contextPath, callback, null);
     }
 
+    /** Configures the resource to use a programmatically generated Dockerfile */
     public TestVaultResource withDockerfileBuilder(String contextPath, AspireAction1<DockerfileBuilderCallbackContext> callback, String stage) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20389,6 +21477,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Configures custom base images for generated Dockerfiles. */
     public TestVaultResource withDockerfileBaseImage(WithDockerfileBaseImageOptions options) {
         var buildImage = options == null ? null : options.getBuildImage();
         var runtimeImage = options == null ? null : options.getRuntimeImage();
@@ -20399,6 +21488,7 @@ public class TestVaultResource extends ContainerResource {
         return withDockerfileBaseImage(null);
     }
 
+    /** Configures custom base images for generated Dockerfiles. */
     private TestVaultResource withDockerfileBaseImageImpl(String buildImage, String runtimeImage) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20412,6 +21502,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a network alias to container resource. */
     public TestVaultResource withContainerNetworkAlias(String alias) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20420,6 +21511,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
     public TestVaultResource withMcpServer(WithMcpServerOptions options) {
         var path = options == null ? null : options.getPath();
         var endpointName = options == null ? null : options.getEndpointName();
@@ -20430,6 +21522,7 @@ public class TestVaultResource extends ContainerResource {
         return withMcpServer(null);
     }
 
+    /** Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint. */
     private TestVaultResource withMcpServerImpl(String path, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20447,6 +21540,7 @@ public class TestVaultResource extends ContainerResource {
         return withOtlpExporter(null);
     }
 
+    /** Configures OTLP telemetry export */
     public TestVaultResource withOtlpExporter(OtlpProtocol protocol) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20457,6 +21551,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Changes the resource to be published as a connection string reference in the manifest. */
     public TestVaultResource publishAsConnectionString() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20468,6 +21563,7 @@ public class TestVaultResource extends ContainerResource {
         return withRequiredCommand(command, null);
     }
 
+    /** Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start. */
     public TestVaultResource withRequiredCommand(String command, String helpLink) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20511,6 +21607,7 @@ public class TestVaultResource extends ContainerResource {
         return withEnvironment(name, new IExpressionValue(value.getHandle(), value.getClient()));
     }
 
+    /** Sets an environment variable */
     public TestVaultResource withEnvironment(String name, AspireUnion value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20520,6 +21617,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Allows for the population of environment variables on a resource. */
     public TestVaultResource withEnvironmentCallback(AspireAction1<EnvironmentCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20535,6 +21633,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Adds arguments to be passed to a resource that supports arguments when it is launched. */
     public TestVaultResource withArgs(String[] args) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20543,6 +21642,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a callback to be executed with a list of command-line arguments when a resource is started. */
     public TestVaultResource withArgsCallback(AspireAction1<CommandLineArgsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20558,6 +21658,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Configures how information is injected into environment variables when the resource references other resources. */
     public TestVaultResource withReferenceEnvironment(ReferenceEnvironmentInjectionOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20594,6 +21695,7 @@ public class TestVaultResource extends ContainerResource {
         return withReference(AspireUnion.of(source));
     }
 
+    /** Adds a reference to another resource */
     public TestVaultResource withReference(AspireUnion source, WithReferenceOptions options) {
         var connectionName = options == null ? null : options.getConnectionName();
         var optional = options == null ? null : options.getOptional();
@@ -20605,6 +21707,7 @@ public class TestVaultResource extends ContainerResource {
         return withReference(source, null);
     }
 
+    /** Adds a reference to another resource */
     private TestVaultResource withReferenceImpl(AspireUnion source, String connectionName, Boolean optional, String name) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20626,6 +21729,7 @@ public class TestVaultResource extends ContainerResource {
         return withEndpointCallback(endpointName, callback, null);
     }
 
+    /** Updates a named endpoint via callback */
     public TestVaultResource withEndpointCallback(String endpointName, AspireAction1<EndpointUpdateContext> callback, Boolean createIfNotExists) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20645,6 +21749,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Updates an HTTP endpoint via callback */
     public TestVaultResource withHttpEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpEndpointCallbackOptions options) {
         var name = options == null ? null : options.getName();
         var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
@@ -20655,6 +21760,7 @@ public class TestVaultResource extends ContainerResource {
         return withHttpEndpointCallback(callback, null);
     }
 
+    /** Updates an HTTP endpoint via callback */
     private TestVaultResource withHttpEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20676,6 +21782,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Updates an HTTPS endpoint via callback */
     public TestVaultResource withHttpsEndpointCallback(AspireAction1<EndpointUpdateContext> callback, WithHttpsEndpointCallbackOptions options) {
         var name = options == null ? null : options.getName();
         var createIfNotExists = options == null ? null : options.getCreateIfNotExists();
@@ -20686,6 +21793,7 @@ public class TestVaultResource extends ContainerResource {
         return withHttpsEndpointCallback(callback, null);
     }
 
+    /** Updates an HTTPS endpoint via callback */
     private TestVaultResource withHttpsEndpointCallbackImpl(AspireAction1<EndpointUpdateContext> callback, String name, Boolean createIfNotExists) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20707,6 +21815,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a network endpoint */
     public TestVaultResource withEndpoint(WithEndpointOptions options) {
         var port = options == null ? null : options.getPort();
         var targetPort = options == null ? null : options.getTargetPort();
@@ -20723,6 +21832,7 @@ public class TestVaultResource extends ContainerResource {
         return withEndpoint(null);
     }
 
+    /** Adds a network endpoint */
     private TestVaultResource withEndpointImpl(Double port, Double targetPort, String scheme, String name, String env, Boolean isProxied, Boolean isExternal, ProtocolType protocol) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20754,6 +21864,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Adds an HTTP endpoint */
     public TestVaultResource withHttpEndpoint(WithHttpEndpointOptions options) {
         var port = options == null ? null : options.getPort();
         var targetPort = options == null ? null : options.getTargetPort();
@@ -20767,6 +21878,7 @@ public class TestVaultResource extends ContainerResource {
         return withHttpEndpoint(null);
     }
 
+    /** Adds an HTTP endpoint */
     private TestVaultResource withHttpEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20789,6 +21901,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Adds an HTTPS endpoint */
     public TestVaultResource withHttpsEndpoint(WithHttpsEndpointOptions options) {
         var port = options == null ? null : options.getPort();
         var targetPort = options == null ? null : options.getTargetPort();
@@ -20802,6 +21915,7 @@ public class TestVaultResource extends ContainerResource {
         return withHttpsEndpoint(null);
     }
 
+    /** Adds an HTTPS endpoint */
     private TestVaultResource withHttpsEndpointImpl(Double port, Double targetPort, String name, String env, Boolean isProxied) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20824,6 +21938,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Marks existing http or https endpoints on a resource as external. */
     public TestVaultResource withExternalHttpEndpoints() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20831,6 +21946,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Gets an endpoint reference */
     public EndpointReference getEndpoint(String name) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20838,6 +21954,7 @@ public class TestVaultResource extends ContainerResource {
         return (EndpointReference) getClient().invokeCapability("Aspire.Hosting/getEndpoint", reqArgs);
     }
 
+    /** Configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge. */
     public TestVaultResource asHttp2Service() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20845,6 +21962,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Registers a callback to customize the URLs displayed for the resource. */
     public TestVaultResource withUrls(AspireAction1<ResourceUrlsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20872,6 +21990,7 @@ public class TestVaultResource extends ContainerResource {
         return withUrl(url, null);
     }
 
+    /** Adds or modifies displayed URLs */
     public TestVaultResource withUrl(AspireUnion url, String displayText) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20883,6 +22002,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Registers a callback to update the URL displayed for the endpoint with the specified name. */
     public TestVaultResource withUrlForEndpoint(String endpointName, AspireAction1<ResourceUrlAnnotation> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20899,6 +22019,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Excludes a resource from being published to the manifest. */
     public TestVaultResource excludeFromManifest() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20914,6 +22035,7 @@ public class TestVaultResource extends ContainerResource {
         return waitFor(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Waits for another resource to be ready */
     public TestVaultResource waitFor(IResource dependency, WaitBehavior waitBehavior) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20937,6 +22059,7 @@ public class TestVaultResource extends ContainerResource {
         return waitForStart(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Waits for another resource to start */
     public TestVaultResource waitForStart(IResource dependency, WaitBehavior waitBehavior) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20952,6 +22075,7 @@ public class TestVaultResource extends ContainerResource {
         return waitForStart(new IResource(dependency.getHandle(), dependency.getClient()), waitBehavior);
     }
 
+    /** Prevents resource from starting automatically */
     public TestVaultResource withExplicitStart() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20967,6 +22091,7 @@ public class TestVaultResource extends ContainerResource {
         return waitForCompletion(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Waits for the dependency resource to enter the Exited or Finished state before starting the resource. */
     public TestVaultResource waitForCompletion(IResource dependency, Double exitCode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20982,6 +22107,7 @@ public class TestVaultResource extends ContainerResource {
         return waitForCompletion(new IResource(dependency.getHandle(), dependency.getClient()), exitCode);
     }
 
+    /** Adds a health check by key */
     public TestVaultResource withHealthCheck(String key) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -20990,6 +22116,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a health check to the resource which is mapped to a specific endpoint. */
     public TestVaultResource withHttpHealthCheck(WithHttpHealthCheckOptions options) {
         var path = options == null ? null : options.getPath();
         var statusCode = options == null ? null : options.getStatusCode();
@@ -21001,6 +22128,7 @@ public class TestVaultResource extends ContainerResource {
         return withHttpHealthCheck(null);
     }
 
+    /** Adds a health check to the resource which is mapped to a specific endpoint. */
     private TestVaultResource withHttpHealthCheckImpl(String path, Double statusCode, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21021,6 +22149,7 @@ public class TestVaultResource extends ContainerResource {
         return withCommand(name, displayName, executeCommand, null);
     }
 
+    /** Adds a resource command */
     public TestVaultResource withCommand(String name, String displayName, AspireFunc1<ExecuteCommandContext, ExecuteCommandResult> executeCommand, CommandOptions commandOptions) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21040,6 +22169,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a command to the resource that starts a local process when invoked. */
     public TestVaultResource withProcessCommand(String commandName, String displayName, ProcessCommandExportOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21054,6 +22184,7 @@ public class TestVaultResource extends ContainerResource {
         return withProcessCommandFactory(commandName, displayName, createProcessSpec, null);
     }
 
+    /** Adds a command to the resource that starts a local process created by a callback when invoked. */
     public TestVaultResource withProcessCommandFactory(String commandName, String displayName, AspireFunc1<ExecuteCommandContext, ProcessCommandSpecExportData> createProcessSpec, ProcessCommandResultExportOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21077,6 +22208,7 @@ public class TestVaultResource extends ContainerResource {
         return withHttpCommand(path, displayName, null);
     }
 
+    /** Adds an HTTP resource command */
     public TestVaultResource withHttpCommand(String path, String displayName, HttpCommandExportOptions options) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21089,6 +22221,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Indicates whether developer certificates should be treated as trusted certificate authorities for the resource at run time. Currently this indicates trust for the ASP.NET Core developer certificate. The developer certificate will only be trusted when running in local development scenarios; in publish mode resources will use their default certificate trust. */
     public TestVaultResource withDeveloperCertificateTrust(boolean trust) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21097,6 +22230,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Sets the certificate trust scope */
     public TestVaultResource withCertificateTrustScope(CertificateTrustScope scope) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21109,6 +22243,7 @@ public class TestVaultResource extends ContainerResource {
         return withHttpsDeveloperCertificate(null);
     }
 
+    /** Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration. */
     public TestVaultResource withHttpsDeveloperCertificate(ParameterResource password) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21119,6 +22254,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Disable HTTPS/TLS server certificate configuration for the resource. No HTTPS/TLS termination configuration will be applied. */
     public TestVaultResource withoutHttpsCertificate() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21126,6 +22262,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a relationship to another resource using its builder. */
     public TestVaultResource withRelationship(IResource resourceBuilder, String type) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21139,6 +22276,7 @@ public class TestVaultResource extends ContainerResource {
         return withRelationship(new IResource(resourceBuilder.getHandle(), resourceBuilder.getClient()), type);
     }
 
+    /** Sets the parent relationship */
     public TestVaultResource withParentRelationship(IResource parent) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21151,6 +22289,7 @@ public class TestVaultResource extends ContainerResource {
         return withParentRelationship(new IResource(parent.getHandle(), parent.getClient()));
     }
 
+    /** Sets a child relationship */
     public TestVaultResource withChildRelationship(IResource child) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21167,6 +22306,7 @@ public class TestVaultResource extends ContainerResource {
         return withIconName(iconName, null);
     }
 
+    /** Specifies the icon to use when displaying the resource in the dashboard. */
     public TestVaultResource withIconName(String iconName, IconVariant iconVariant) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21178,6 +22318,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Configures the compute environment for the compute resource. */
     public TestVaultResource withComputeEnvironment(IComputeEnvironmentResource computeEnvironmentResource) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21190,6 +22331,7 @@ public class TestVaultResource extends ContainerResource {
         return withComputeEnvironment(new IComputeEnvironmentResource(computeEnvironmentResource.getHandle(), computeEnvironmentResource.getClient()));
     }
 
+    /** Adds an HTTP health probe to the resource */
     public TestVaultResource withHttpProbe(ProbeType probeType, WithHttpProbeOptions options) {
         var path = options == null ? null : options.getPath();
         var initialDelaySeconds = options == null ? null : options.getInitialDelaySeconds();
@@ -21205,6 +22347,7 @@ public class TestVaultResource extends ContainerResource {
         return withHttpProbe(probeType, null);
     }
 
+    /** Adds an HTTP health probe to the resource */
     private TestVaultResource withHttpProbeImpl(ProbeType probeType, String path, Double initialDelaySeconds, Double periodSeconds, Double timeoutSeconds, Double failureThreshold, Double successThreshold, String endpointName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21234,6 +22377,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry. */
     public TestVaultResource excludeFromMcp() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21241,6 +22385,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Adds an asynchronous callback to configure container image push options for the resource. */
     public TestVaultResource withImagePushOptions(AspireAction1<ContainerImagePushOptionsCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21256,6 +22401,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Sets the remote image name (without registry endpoint or tag) for container push operations. */
     public TestVaultResource withRemoteImageName(String remoteImageName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21264,6 +22410,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Sets the remote image tag for container push operations. */
     public TestVaultResource withRemoteImageTag(String remoteImageTag) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21272,6 +22419,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a pipeline step to the resource that will be executed during deployment. */
     public TestVaultResource withPipelineStepFactory(String stepName, AspireAction1<PipelineStepContext> callback, WithPipelineStepFactoryOptions options) {
         var dependsOn = options == null ? null : options.getDependsOn();
         var requiredBy = options == null ? null : options.getRequiredBy();
@@ -21284,6 +22432,7 @@ public class TestVaultResource extends ContainerResource {
         return withPipelineStepFactory(stepName, callback, null);
     }
 
+    /** Adds a pipeline step to the resource that will be executed during deployment. */
     private TestVaultResource withPipelineStepFactoryImpl(String stepName, AspireAction1<PipelineStepContext> callback, String[] dependsOn, String[] requiredBy, String[] tags, String description) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21312,6 +22461,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships. */
     public TestVaultResource withPipelineConfiguration(AspireAction1<PipelineConfigurationContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21327,6 +22477,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a volume to a container resource. */
     public TestVaultResource withVolume(String target, WithVolumeOptions options) {
         var name = options == null ? null : options.getName();
         var isReadOnly = options == null ? null : options.isReadOnly();
@@ -21337,6 +22488,7 @@ public class TestVaultResource extends ContainerResource {
         return withVolume(target, null);
     }
 
+    /** Adds a volume to a container resource. */
     private TestVaultResource withVolumeImpl(String target, String name, Boolean isReadOnly) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
@@ -21351,12 +22503,14 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Gets the name of the resource from a builder. */
     public String getResourceName() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
         return (String) getClient().invokeCapability("Aspire.Hosting/getResourceName", reqArgs);
     }
 
+    /** Subscribes to the BeforeResourceStarted event. */
     public TestVaultResource onBeforeResourceStarted(AspireAction1<BeforeResourceStartedEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21372,6 +22526,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Subscribes to the ResourceStopped event. */
     public TestVaultResource onResourceStopped(AspireAction1<ResourceStoppedEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21387,6 +22542,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Subscribes to the InitializeResource event. */
     public TestVaultResource onInitializeResource(AspireAction1<InitializeResourceEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21402,6 +22558,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Subscribes to the ResourceEndpointsAllocated event. */
     public TestVaultResource onResourceEndpointsAllocated(AspireAction1<ResourceEndpointsAllocatedEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21417,6 +22574,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Subscribes to the ResourceReady event. */
     public TestVaultResource onResourceReady(AspireAction1<ResourceReadyEvent> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21432,12 +22590,14 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Creates an execution configuration builder for the specified resource. */
     public IExecutionConfigurationBuilder createExecutionConfiguration() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("resource", AspireClient.serializeValue(getHandle()));
         return (IExecutionConfigurationBuilder) getClient().invokeCapability("Aspire.Hosting/createExecutionConfiguration", reqArgs);
     }
 
+    /** Adds an optional string parameter */
     public TestVaultResource withOptionalString(WithOptionalStringOptions options) {
         var value = options == null ? null : options.getValue();
         var enabled = options == null ? null : options.getEnabled();
@@ -21448,6 +22608,7 @@ public class TestVaultResource extends ContainerResource {
         return withOptionalString(null);
     }
 
+    /** Adds an optional string parameter */
     private TestVaultResource withOptionalStringImpl(String value, Boolean enabled) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21461,6 +22622,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Configures the resource with a DTO */
     public TestVaultResource withConfig(TestConfigDto config) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21469,6 +22631,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Configures environment with callback (test version) */
     public TestVaultResource testWithEnvironmentCallback(AspireAction1<TestEnvironmentContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21484,6 +22647,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Sets the created timestamp */
     public TestVaultResource withCreatedAt(String createdAt) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21492,6 +22656,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Sets the modified timestamp */
     public TestVaultResource withModifiedAt(String modifiedAt) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21500,6 +22665,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Sets the correlation ID */
     public TestVaultResource withCorrelationId(String correlationId) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21512,6 +22678,7 @@ public class TestVaultResource extends ContainerResource {
         return withOptionalCallback(null);
     }
 
+    /** Configures with optional callback */
     public TestVaultResource withOptionalCallback(AspireAction1<TestCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21527,6 +22694,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Sets the resource status */
     public TestVaultResource withStatus(TestResourceStatus status) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21535,6 +22703,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Configures with nested DTO */
     public TestVaultResource withNestedConfig(TestNestedDto config) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21543,6 +22712,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Adds validation callback */
     public TestVaultResource withValidator(AspireFunc1<TestResourceContext, Boolean> validator) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21557,6 +22727,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Waits for another resource (test version) */
     public TestVaultResource testWaitFor(IResource dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21569,6 +22740,7 @@ public class TestVaultResource extends ContainerResource {
         return testWaitFor(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Adds a dependency on another resource */
     public TestVaultResource withDependency(IResourceWithConnectionString dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21593,6 +22765,7 @@ public class TestVaultResource extends ContainerResource {
         return withUnionDependency(new IResourceWithConnectionString(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Adds a dependency from a string or another resource */
     public TestVaultResource withUnionDependency(AspireUnion dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21601,6 +22774,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Sets the endpoints */
     public TestVaultResource withEndpoints(String[] endpoints) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21609,6 +22783,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Sets environment variables */
     public TestVaultResource withEnvironmentVariables(Map<String, String> variables) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21617,6 +22792,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Performs a cancellable operation */
     public TestVaultResource withCancellableOperation(AspireAction1<CancellationToken> operation) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21632,6 +22808,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Configures vault using direct interface target */
     public TestVaultResource withVaultDirect(String option) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21640,6 +22817,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a label to the resource */
     public TestVaultResource withMergeLabel(String label) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21648,6 +22826,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Adds a categorized label to the resource */
     public TestVaultResource withMergeLabelCategorized(String label, String category) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21657,6 +22836,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Configures a named endpoint */
     public TestVaultResource withMergeEndpoint(String endpointName, double port) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21666,6 +22846,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Configures a named endpoint with scheme */
     public TestVaultResource withMergeEndpointScheme(String endpointName, double port, String scheme) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21676,6 +22857,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Configures resource logging */
     public TestVaultResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
         var enableConsole = options == null ? null : options.getEnableConsole();
         var maxFiles = options == null ? null : options.getMaxFiles();
@@ -21686,6 +22868,7 @@ public class TestVaultResource extends ContainerResource {
         return withMergeLogging(logLevel, null);
     }
 
+    /** Configures resource logging */
     private TestVaultResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21700,6 +22883,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Configures resource logging with file path */
     public TestVaultResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
         var enableConsole = options == null ? null : options.getEnableConsole();
         var maxFiles = options == null ? null : options.getMaxFiles();
@@ -21710,6 +22894,7 @@ public class TestVaultResource extends ContainerResource {
         return withMergeLoggingPath(logLevel, logPath, null);
     }
 
+    /** Configures resource logging with file path */
     private TestVaultResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21725,6 +22910,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Configures a route */
     public TestVaultResource withMergeRoute(String path, String method, String handler, double priority) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21736,6 +22922,7 @@ public class TestVaultResource extends ContainerResource {
         return this;
     }
 
+    /** Configures a route with middleware */
     public TestVaultResource withMergeRouteMiddleware(String path, String method, String handler, double priority, String middleware) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -21764,7 +22951,7 @@ public class UpdateCommandStateContext extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the ServiceProvider property */
+    /** The service provider. */
     public IServiceProvider serviceProvider() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));

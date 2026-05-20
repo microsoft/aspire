@@ -3,6 +3,7 @@
 
 using Aspire.Cli.Bundles;
 using Aspire.Cli.DotNet;
+using Aspire.Cli.Layout;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Utils;
@@ -50,10 +51,28 @@ internal sealed class AppHostServerProjectFactory(
         }
 
         // Priority 2: Ensure bundle is extracted and check for layout
-        var layout = await bundleService.EnsureExtractedAndGetLayoutAsync(cancellationToken);
+        var layoutLease = await bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "apphost-server", cancellationToken);
+        var layout = layoutLease?.Layout;
 
         // Priority 3: Check if we have a bundle layout with a pre-built AppHost server
         if (layout is not null && layout.GetManagedPath() is string serverPath && File.Exists(serverPath))
+        {
+            return CreatePrebuiltAppHostServer(appPath, socketPath, layout, layoutLease);
+        }
+
+        layoutLease?.Dispose();
+        throw new InvalidOperationException(
+            "No Aspire AppHost server is available. Ensure the Aspire CLI is installed " +
+            "with a valid bundle layout, or reinstall using 'aspire setup --force'.");
+    }
+
+    internal PrebuiltAppHostServer CreatePrebuiltAppHostServer(
+        string appPath,
+        string socketPath,
+        LayoutConfiguration layout,
+        BundleLayoutLease? layoutLease)
+    {
+        try
         {
             return new PrebuiltAppHostServer(
                 appPath,
@@ -64,11 +83,13 @@ internal sealed class AppHostServerProjectFactory(
                 sdkInstaller,
                 packagingService,
                 executionContext,
-                loggerFactory.CreateLogger<PrebuiltAppHostServer>());
+                loggerFactory.CreateLogger<PrebuiltAppHostServer>(),
+                layoutLease);
         }
-
-        throw new InvalidOperationException(
-            "No Aspire AppHost server is available. Ensure the Aspire CLI is installed " +
-            "with a valid bundle layout, or reinstall using 'aspire setup --force'.");
+        catch
+        {
+            layoutLease?.Dispose();
+            throw;
+        }
     }
 }

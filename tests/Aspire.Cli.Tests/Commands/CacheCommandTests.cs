@@ -63,6 +63,28 @@ public class CacheCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task CacheClear_ClearsAppHostInfoDiskCache()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostInfoCacheDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cache", "apphost-info"));
+        appHostInfoCacheDir.Create();
+        var cacheEntry = Path.Combine(appHostInfoCacheDir.FullName, "entry.json");
+        await File.WriteAllTextAsync(cacheEntry, "{}").DefaultTimeout();
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("cache clear");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(File.Exists(cacheEntry));
+        Assert.False(appHostInfoCacheDir.Exists);
+    }
+
+    [Fact]
     public async Task CacheClear_HandlesNonExistentPackagesDirectory()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

@@ -1312,6 +1312,7 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return addTestRedis(name, null);
     }
 
+    /** Adds a test Redis resource from ATS documentation. */
     public TestRedisResource addTestRedis(String name, Double port) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1322,6 +1323,7 @@ public class IDistributedApplicationBuilder extends HandleWrapperBase {
         return (TestRedisResource) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/addTestRedis", reqArgs);
     }
 
+    /** Adds a test vault resource */
     public TestVaultResource addTestVault(String name) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1600,7 +1602,7 @@ public class TestCallbackContext extends HandleWrapperBase {
         return (TestCallbackContext) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCallbackContext.setValue", reqArgs);
     }
 
-    /** Gets the CancellationToken property */
+    /** CancellationToken is supported by ATS. */
     public CancellationToken cancellationToken() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -1633,7 +1635,7 @@ public class TestCollectionContext extends HandleWrapperBase {
         super(handle, client);
     }
 
-    /** Gets the Items property */
+    /** List property - should generate AspireList getter like Dictionary properties. */
     private AspireList<String> itemsField;
     public AspireList<String> items() {
         if (itemsField == null) {
@@ -1642,7 +1644,7 @@ public class TestCollectionContext extends HandleWrapperBase {
         return itemsField;
     }
 
-    /** Gets the Metadata property */
+    /** Dictionary property - already works with AspireDict getter. */
     private AspireDict<String, String> metadataField;
     public AspireDict<String, String> metadata() {
         if (metadataField == null) {
@@ -1727,6 +1729,7 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         super(handle, client);
     }
 
+    /** Adds an optional string parameter */
     public TestDatabaseResource withOptionalString(WithOptionalStringOptions options) {
         var value = options == null ? null : options.getValue();
         var enabled = options == null ? null : options.getEnabled();
@@ -1737,6 +1740,7 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return withOptionalString(null);
     }
 
+    /** Adds an optional string parameter */
     private TestDatabaseResource withOptionalStringImpl(String value, Boolean enabled) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1750,6 +1754,7 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures the resource with a DTO */
     public TestDatabaseResource withConfig(TestConfigDto config) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1758,6 +1763,7 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures environment with callback (test version) */
     public TestDatabaseResource testWithEnvironmentCallback(AspireAction1<TestEnvironmentContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1773,6 +1779,7 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the created timestamp */
     public TestDatabaseResource withCreatedAt(String createdAt) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1781,6 +1788,7 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the modified timestamp */
     public TestDatabaseResource withModifiedAt(String modifiedAt) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1789,6 +1797,7 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the correlation ID */
     public TestDatabaseResource withCorrelationId(String correlationId) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1801,6 +1810,7 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return withOptionalCallback(null);
     }
 
+    /** Configures with optional callback */
     public TestDatabaseResource withOptionalCallback(AspireAction1<TestCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1816,6 +1826,7 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the resource status */
     public TestDatabaseResource withStatus(TestResourceStatus status) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1824,6 +1835,7 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures with nested DTO */
     public TestDatabaseResource withNestedConfig(TestNestedDto config) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1832,6 +1844,7 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds validation callback */
     public TestDatabaseResource withValidator(AspireFunc1<TestResourceContext, Boolean> validator) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1846,6 +1859,7 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Waits for another resource (test version) */
     public TestDatabaseResource testWaitFor(IResource dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1858,6 +1872,7 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return testWaitFor(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Adds a dependency on another resource */
     public TestDatabaseResource withDependency(IResourceWithConnectionString dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1882,6 +1897,7 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return withUnionDependency(new IResourceWithConnectionString(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Adds a dependency from a string or another resource */
     public TestDatabaseResource withUnionDependency(AspireUnion dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1890,6 +1906,7 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the endpoints */
     public TestDatabaseResource withEndpoints(String[] endpoints) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1898,6 +1915,7 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets environment variables */
     public TestDatabaseResource withEnvironmentVariables(Map<String, String> variables) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1906,6 +1924,7 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Performs a cancellable operation */
     public TestDatabaseResource withCancellableOperation(AspireAction1<CancellationToken> operation) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1921,6 +1940,7 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a data volume */
     public TestDatabaseResource withDataVolume(WithDataVolumeOptions options) {
         var name = options == null ? null : options.getName();
         return withDataVolumeImpl(name);
@@ -1930,6 +1950,7 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return withDataVolume(null);
     }
 
+    /** Adds a data volume */
     private TestDatabaseResource withDataVolumeImpl(String name) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1940,6 +1961,7 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a label to the resource */
     public TestDatabaseResource withMergeLabel(String label) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1948,6 +1970,7 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a categorized label to the resource */
     public TestDatabaseResource withMergeLabelCategorized(String label, String category) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1957,6 +1980,7 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a named endpoint */
     public TestDatabaseResource withMergeEndpoint(String endpointName, double port) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1966,6 +1990,7 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a named endpoint with scheme */
     public TestDatabaseResource withMergeEndpointScheme(String endpointName, double port, String scheme) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -1976,6 +2001,7 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures resource logging */
     public TestDatabaseResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
         var enableConsole = options == null ? null : options.getEnableConsole();
         var maxFiles = options == null ? null : options.getMaxFiles();
@@ -1986,6 +2012,7 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return withMergeLogging(logLevel, null);
     }
 
+    /** Configures resource logging */
     private TestDatabaseResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2000,6 +2027,7 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures resource logging with file path */
     public TestDatabaseResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
         var enableConsole = options == null ? null : options.getEnableConsole();
         var maxFiles = options == null ? null : options.getMaxFiles();
@@ -2010,6 +2038,7 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return withMergeLoggingPath(logLevel, logPath, null);
     }
 
+    /** Configures resource logging with file path */
     private TestDatabaseResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2025,6 +2054,7 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a route */
     public TestDatabaseResource withMergeRoute(String path, String method, String handler, double priority) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2036,6 +2066,7 @@ public class TestDatabaseResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a route with middleware */
     public TestDatabaseResource withMergeRouteMiddleware(String path, String method, String handler, double priority, String middleware) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2269,6 +2300,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return addTestChildDatabase(name, null);
     }
 
+    /** Adds a child database to a test Redis resource */
     public TestDatabaseResource addTestChildDatabase(String name, String databaseName) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2283,6 +2315,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return withPersistence(null);
     }
 
+    /** Configures the Redis resource with persistence */
     public TestRedisResource withPersistence(TestPersistenceMode mode) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2293,6 +2326,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds an optional string parameter */
     public TestRedisResource withOptionalString(WithOptionalStringOptions options) {
         var value = options == null ? null : options.getValue();
         var enabled = options == null ? null : options.getEnabled();
@@ -2303,6 +2337,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return withOptionalString(null);
     }
 
+    /** Adds an optional string parameter */
     private TestRedisResource withOptionalStringImpl(String value, Boolean enabled) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2316,6 +2351,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures the resource with a DTO */
     public TestRedisResource withConfig(TestConfigDto config) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2324,6 +2360,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Gets the tags for the resource */
     private AspireList<String> getTagsField;
     public AspireList<String> getTags() {
         if (getTagsField == null) {
@@ -2332,6 +2369,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return getTagsField;
     }
 
+    /** Gets the metadata for the resource */
     private AspireDict<String, String> getMetadataField;
     public AspireDict<String, String> getMetadata() {
         if (getMetadataField == null) {
@@ -2340,6 +2378,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return getMetadataField;
     }
 
+    /** Sets the connection string using a reference expression */
     public TestRedisResource withConnectionString(ReferenceExpression connectionString) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2348,6 +2387,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures environment with callback (test version) */
     public TestRedisResource testWithEnvironmentCallback(AspireAction1<TestEnvironmentContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2363,6 +2403,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the created timestamp */
     public TestRedisResource withCreatedAt(String createdAt) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2371,6 +2412,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the modified timestamp */
     public TestRedisResource withModifiedAt(String modifiedAt) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2379,6 +2421,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the correlation ID */
     public TestRedisResource withCorrelationId(String correlationId) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2391,6 +2434,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return withOptionalCallback(null);
     }
 
+    /** Configures with optional callback */
     public TestRedisResource withOptionalCallback(AspireAction1<TestCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2406,6 +2450,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the resource status */
     public TestRedisResource withStatus(TestResourceStatus status) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2414,6 +2459,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures with nested DTO */
     public TestRedisResource withNestedConfig(TestNestedDto config) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2422,6 +2468,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds validation callback */
     public TestRedisResource withValidator(AspireFunc1<TestResourceContext, Boolean> validator) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2436,6 +2483,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Waits for another resource (test version) */
     public TestRedisResource testWaitFor(IResource dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2448,12 +2496,14 @@ public class TestRedisResource extends ResourceBuilderBase {
         return testWaitFor(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Gets the endpoints */
     public String[] getEndpoints() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
         return (String[]) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/getEndpoints", reqArgs);
     }
 
+    /** Sets connection string using direct interface target */
     public TestRedisResource withConnectionStringDirect(String connectionString) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2462,6 +2512,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Redis-specific configuration */
     public TestRedisResource withRedisSpecific(String option) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2470,6 +2521,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a dependency on another resource */
     public TestRedisResource withDependency(IResourceWithConnectionString dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2494,6 +2546,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return withUnionDependency(new IResourceWithConnectionString(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Adds a dependency from a string or another resource */
     public TestRedisResource withUnionDependency(AspireUnion dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2502,6 +2555,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the endpoints */
     public TestRedisResource withEndpoints(String[] endpoints) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2510,6 +2564,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets environment variables */
     public TestRedisResource withEnvironmentVariables(Map<String, String> variables) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2522,6 +2577,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return getStatusAsync(null);
     }
 
+    /** Gets the status of the resource asynchronously */
     public String getStatusAsync(CancellationToken cancellationToken) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2531,6 +2587,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return (String) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/getStatusAsync", reqArgs);
     }
 
+    /** Performs a cancellable operation */
     public TestRedisResource withCancellableOperation(AspireAction1<CancellationToken> operation) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2550,6 +2607,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return waitForReadyAsync(timeout, null);
     }
 
+    /** Waits for the resource to be ready */
     public boolean waitForReadyAsync(double timeout, CancellationToken cancellationToken) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2560,6 +2618,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return (boolean) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.Java.Tests/waitForReadyAsync", reqArgs);
     }
 
+    /** Tests multi-param callback destructuring */
     public TestRedisResource withMultiParamHandleCallback(AspireAction2<TestCallbackContext, TestEnvironmentContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2576,6 +2635,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a data volume with persistence */
     public TestRedisResource withDataVolume(WithDataVolumeOptions options) {
         var name = options == null ? null : options.getName();
         var isReadOnly = options == null ? null : options.isReadOnly();
@@ -2586,6 +2646,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return withDataVolume(null);
     }
 
+    /** Adds a data volume with persistence */
     private TestRedisResource withDataVolumeImpl(String name, Boolean isReadOnly) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2599,6 +2660,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a label to the resource */
     public TestRedisResource withMergeLabel(String label) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2607,6 +2669,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a categorized label to the resource */
     public TestRedisResource withMergeLabelCategorized(String label, String category) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2616,6 +2679,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a named endpoint */
     public TestRedisResource withMergeEndpoint(String endpointName, double port) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2625,6 +2689,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a named endpoint with scheme */
     public TestRedisResource withMergeEndpointScheme(String endpointName, double port, String scheme) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2635,6 +2700,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures resource logging */
     public TestRedisResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
         var enableConsole = options == null ? null : options.getEnableConsole();
         var maxFiles = options == null ? null : options.getMaxFiles();
@@ -2645,6 +2711,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return withMergeLogging(logLevel, null);
     }
 
+    /** Configures resource logging */
     private TestRedisResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2659,6 +2726,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures resource logging with file path */
     public TestRedisResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
         var enableConsole = options == null ? null : options.getEnableConsole();
         var maxFiles = options == null ? null : options.getMaxFiles();
@@ -2669,6 +2737,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return withMergeLoggingPath(logLevel, logPath, null);
     }
 
+    /** Configures resource logging with file path */
     private TestRedisResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2684,6 +2753,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a route */
     public TestRedisResource withMergeRoute(String path, String method, String handler, double priority) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2695,6 +2765,7 @@ public class TestRedisResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a route with middleware */
     public TestRedisResource withMergeRouteMiddleware(String path, String method, String handler, double priority, String middleware) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2753,14 +2824,14 @@ public class TestResourceContext extends HandleWrapperBase {
         return (TestResourceContext) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestResourceContext.setValue", reqArgs);
     }
 
-    /** Invokes the GetValueAsync method */
+    /** Instance method that should be exposed as async method. */
     public String getValueAsync() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
         return (String) getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestResourceContext.getValueAsync", reqArgs);
     }
 
-    /** Invokes the SetValueAsync method */
+    /** Instance method with parameter. */
     public void setValueAsync(String value) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -2768,7 +2839,7 @@ public class TestResourceContext extends HandleWrapperBase {
         getClient().invokeCapability("Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestResourceContext.setValueAsync", reqArgs);
     }
 
-    /** Invokes the ValidateAsync method */
+    /** Instance method with return type. */
     public boolean validateAsync() {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("context", AspireClient.serializeValue(getHandle()));
@@ -2822,6 +2893,7 @@ public class TestVaultResource extends ResourceBuilderBase {
         super(handle, client);
     }
 
+    /** Adds an optional string parameter */
     public TestVaultResource withOptionalString(WithOptionalStringOptions options) {
         var value = options == null ? null : options.getValue();
         var enabled = options == null ? null : options.getEnabled();
@@ -2832,6 +2904,7 @@ public class TestVaultResource extends ResourceBuilderBase {
         return withOptionalString(null);
     }
 
+    /** Adds an optional string parameter */
     private TestVaultResource withOptionalStringImpl(String value, Boolean enabled) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2845,6 +2918,7 @@ public class TestVaultResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures the resource with a DTO */
     public TestVaultResource withConfig(TestConfigDto config) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2853,6 +2927,7 @@ public class TestVaultResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures environment with callback (test version) */
     public TestVaultResource testWithEnvironmentCallback(AspireAction1<TestEnvironmentContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2868,6 +2943,7 @@ public class TestVaultResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the created timestamp */
     public TestVaultResource withCreatedAt(String createdAt) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2876,6 +2952,7 @@ public class TestVaultResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the modified timestamp */
     public TestVaultResource withModifiedAt(String modifiedAt) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2884,6 +2961,7 @@ public class TestVaultResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the correlation ID */
     public TestVaultResource withCorrelationId(String correlationId) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2896,6 +2974,7 @@ public class TestVaultResource extends ResourceBuilderBase {
         return withOptionalCallback(null);
     }
 
+    /** Configures with optional callback */
     public TestVaultResource withOptionalCallback(AspireAction1<TestCallbackContext> callback) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2911,6 +2990,7 @@ public class TestVaultResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the resource status */
     public TestVaultResource withStatus(TestResourceStatus status) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2919,6 +2999,7 @@ public class TestVaultResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures with nested DTO */
     public TestVaultResource withNestedConfig(TestNestedDto config) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2927,6 +3008,7 @@ public class TestVaultResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds validation callback */
     public TestVaultResource withValidator(AspireFunc1<TestResourceContext, Boolean> validator) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2941,6 +3023,7 @@ public class TestVaultResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Waits for another resource (test version) */
     public TestVaultResource testWaitFor(IResource dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2953,6 +3036,7 @@ public class TestVaultResource extends ResourceBuilderBase {
         return testWaitFor(new IResource(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Adds a dependency on another resource */
     public TestVaultResource withDependency(IResourceWithConnectionString dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2977,6 +3061,7 @@ public class TestVaultResource extends ResourceBuilderBase {
         return withUnionDependency(new IResourceWithConnectionString(dependency.getHandle(), dependency.getClient()));
     }
 
+    /** Adds a dependency from a string or another resource */
     public TestVaultResource withUnionDependency(AspireUnion dependency) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2985,6 +3070,7 @@ public class TestVaultResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets the endpoints */
     public TestVaultResource withEndpoints(String[] endpoints) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -2993,6 +3079,7 @@ public class TestVaultResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Sets environment variables */
     public TestVaultResource withEnvironmentVariables(Map<String, String> variables) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -3001,6 +3088,7 @@ public class TestVaultResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Performs a cancellable operation */
     public TestVaultResource withCancellableOperation(AspireAction1<CancellationToken> operation) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -3016,6 +3104,7 @@ public class TestVaultResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures vault using direct interface target */
     public TestVaultResource withVaultDirect(String option) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -3024,6 +3113,7 @@ public class TestVaultResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a label to the resource */
     public TestVaultResource withMergeLabel(String label) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -3032,6 +3122,7 @@ public class TestVaultResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Adds a categorized label to the resource */
     public TestVaultResource withMergeLabelCategorized(String label, String category) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -3041,6 +3132,7 @@ public class TestVaultResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a named endpoint */
     public TestVaultResource withMergeEndpoint(String endpointName, double port) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -3050,6 +3142,7 @@ public class TestVaultResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a named endpoint with scheme */
     public TestVaultResource withMergeEndpointScheme(String endpointName, double port, String scheme) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -3060,6 +3153,7 @@ public class TestVaultResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures resource logging */
     public TestVaultResource withMergeLogging(String logLevel, WithMergeLoggingOptions options) {
         var enableConsole = options == null ? null : options.getEnableConsole();
         var maxFiles = options == null ? null : options.getMaxFiles();
@@ -3070,6 +3164,7 @@ public class TestVaultResource extends ResourceBuilderBase {
         return withMergeLogging(logLevel, null);
     }
 
+    /** Configures resource logging */
     private TestVaultResource withMergeLoggingImpl(String logLevel, Boolean enableConsole, Double maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -3084,6 +3179,7 @@ public class TestVaultResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures resource logging with file path */
     public TestVaultResource withMergeLoggingPath(String logLevel, String logPath, WithMergeLoggingPathOptions options) {
         var enableConsole = options == null ? null : options.getEnableConsole();
         var maxFiles = options == null ? null : options.getMaxFiles();
@@ -3094,6 +3190,7 @@ public class TestVaultResource extends ResourceBuilderBase {
         return withMergeLoggingPath(logLevel, logPath, null);
     }
 
+    /** Configures resource logging with file path */
     private TestVaultResource withMergeLoggingPathImpl(String logLevel, String logPath, Boolean enableConsole, Double maxFiles) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -3109,6 +3206,7 @@ public class TestVaultResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a route */
     public TestVaultResource withMergeRoute(String path, String method, String handler, double priority) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));
@@ -3120,6 +3218,7 @@ public class TestVaultResource extends ResourceBuilderBase {
         return this;
     }
 
+    /** Configures a route with middleware */
     public TestVaultResource withMergeRouteMiddleware(String path, String method, String handler, double priority, String middleware) {
         Map<String, Object> reqArgs = new HashMap<>();
         reqArgs.put("builder", AspireClient.serializeValue(getHandle()));

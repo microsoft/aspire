@@ -1603,6 +1603,7 @@ class DistributedApplicationBuilder:
         app.run(timeout=timeout)
 
     def add_test_redis(self, name: str, *, port: int | None = None, **kwargs: typing.Unpack["TestRedisResourceKwargs"]) -> TestRedisResource:  # type: ignore
+        """Adds a test Redis resource from ATS documentation."""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['name'] = name
         if port is not None:
@@ -1615,6 +1616,7 @@ class DistributedApplicationBuilder:
         return typing.cast(TestRedisResource, result)
 
     def add_test_vault(self, name: str, **kwargs: typing.Unpack["TestVaultResourceKwargs"]) -> TestVaultResource:  # type: ignore
+        """Adds a test vault resource"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['name'] = name
         result = self._client.invoke_capability(
@@ -1712,7 +1714,7 @@ class TestCollectionContext:
 
     @_cached_property
     def items(self) -> AspireList[str]:
-        """Gets the Items property"""
+        """List property - should generate AspireList getter like Dictionary properties."""
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCollectionContext.items',
             {'context': self._handle}
@@ -1721,7 +1723,7 @@ class TestCollectionContext:
 
     @_cached_property
     def metadata(self) -> AspireDict[str, str]:
-        """Gets the Metadata property"""
+        """Dictionary property - already works with AspireDict getter."""
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCollectionContext.metadata',
             {'context': self._handle}
@@ -1896,7 +1898,7 @@ class TestResourceContext:
         )
 
     def get_value(self) -> str:
-        """Invokes the GetValueAsync method"""
+        """Instance method that should be exposed as async method."""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestResourceContext.getValueAsync',
@@ -1905,7 +1907,7 @@ class TestResourceContext:
         return result
 
     def set_value(self, value: str) -> None:
-        """Invokes the SetValueAsync method"""
+        """Instance method with parameter."""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
         rpc_args['value'] = value
         self._client.invoke_capability(
@@ -1914,7 +1916,7 @@ class TestResourceContext:
         )
 
     def validate(self) -> bool:
-        """Invokes the ValidateAsync method"""
+        """Instance method with return type."""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestResourceContext.validateAsync',
@@ -1932,57 +1934,75 @@ class AbstractResource(abc.ABC):
 
     @abc.abstractmethod
     def with_optional_string(self, *, value: str | None = None, enabled: bool = True) -> typing.Self:
+        """Adds an optional string parameter"""
 
     @abc.abstractmethod
     def with_config(self, config: TestConfigDto) -> typing.Self:
+        """Configures the resource with a DTO"""
 
     @abc.abstractmethod
     def with_created_at(self, created_at: datetime.datetime) -> typing.Self:
+        """Sets the created timestamp"""
 
     @abc.abstractmethod
     def with_modified_at(self, modified_at: datetime.datetime) -> typing.Self:
+        """Sets the modified timestamp"""
 
     @abc.abstractmethod
     def with_correlation_id(self, correlation_id: str) -> typing.Self:
+        """Sets the correlation ID"""
 
     @abc.abstractmethod
     def with_optional_callback(self, *, callback: typing.Callable[[TestCallbackContext], None] | None = None) -> typing.Self:
+        """Configures with optional callback"""
 
     @abc.abstractmethod
     def with_status(self, status: TestResourceStatus) -> typing.Self:
+        """Sets the resource status"""
 
     @abc.abstractmethod
     def with_nested_config(self, config: TestNestedDto) -> typing.Self:
+        """Configures with nested DTO"""
 
     @abc.abstractmethod
     def with_validator(self, validator: typing.Callable[[TestResourceContext], bool]) -> typing.Self:
+        """Adds validation callback"""
 
     @abc.abstractmethod
     def test_wait_for(self, dependency: AbstractResource) -> typing.Self:
+        """Waits for another resource (test version)"""
 
     @abc.abstractmethod
     def with_dependency(self, dependency: AbstractResourceWithConnectionString) -> typing.Self:
+        """Adds a dependency on another resource"""
 
     @abc.abstractmethod
     def with_union_dependency(self, dependency: str | AbstractResourceWithConnectionString) -> typing.Self:
+        """Adds a dependency from a string or another resource"""
 
     @abc.abstractmethod
     def with_endpoints(self, endpoints: typing.Iterable[str]) -> typing.Self:
+        """Sets the endpoints"""
 
     @abc.abstractmethod
     def with_cancellable_operation(self, operation: typing.Callable[[CancellationToken], None]) -> typing.Self:
+        """Performs a cancellable operation"""
 
     @abc.abstractmethod
     def with_merge_label(self, label: str, *, category: str | None = None) -> typing.Self:
+        """Adds a label to the resource"""
 
     @abc.abstractmethod
     def with_merge_endpoint(self, endpoint_name: str, port: int, *, scheme: str | None = None) -> typing.Self:
+        """Configures a named endpoint"""
 
     @abc.abstractmethod
     def with_merge_logging(self, log_level: str, *, log_path: str | None = None, enable_console: bool = True, max_files: int | None = None) -> typing.Self:
+        """Configures resource logging"""
 
     @abc.abstractmethod
     def with_merge_route(self, path: str, method: str, handler: str, priority: int, *, middleware: str | None = None) -> typing.Self:
+        """Configures a route"""
 
 
 class AbstractComputeResource(AbstractResource):
@@ -1998,9 +2018,11 @@ class AbstractResourceWithConnectionString(AbstractResource, AbstractExpressionV
 
     @abc.abstractmethod
     def with_connection_string(self, connection_string: ReferenceExpression) -> typing.Self:
+        """Sets the connection string using a reference expression"""
 
     @abc.abstractmethod
     def with_connection_string_direct(self, connection_string: str) -> typing.Self:
+        """Sets connection string using direct interface target"""
 
 
 class AbstractResourceWithEndpoints(AbstractResource):
@@ -2012,9 +2034,11 @@ class AbstractResourceWithEnvironment(AbstractResource):
 
     @abc.abstractmethod
     def test_with_env_callback(self, callback: typing.Callable[[TestEnvironmentContext], None]) -> typing.Self:
+        """Configures environment with callback (test version)"""
 
     @abc.abstractmethod
     def with_env_vars(self, vars: typing.Mapping[str, str]) -> typing.Self:
+        """Sets environment variables"""
 
 
 class AbstractResourceWithProbes(AbstractResource):
@@ -2030,6 +2054,7 @@ class AbstractTestVaultResource(AbstractResource):
 
     @abc.abstractmethod
     def with_vault_direct(self, option: str) -> typing.Self:
+        """Configures vault using direct interface target"""
 
 
 # ============================================================================
@@ -2072,6 +2097,7 @@ class _BaseResource(AbstractResource):
         return self._handle
 
     def with_optional_string(self, *, value: str | None = None, enabled: bool = True) -> typing.Self:
+        """Adds an optional string parameter"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if value is not None:
             rpc_args['value'] = value
@@ -2085,6 +2111,7 @@ class _BaseResource(AbstractResource):
         return self
 
     def with_config(self, config: TestConfigDto) -> typing.Self:
+        """Configures the resource with a DTO"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['config'] = config
         result = self._client.invoke_capability(
@@ -2095,6 +2122,7 @@ class _BaseResource(AbstractResource):
         return self
 
     def with_created_at(self, created_at: datetime.datetime) -> typing.Self:
+        """Sets the created timestamp"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['createdAt'] = created_at
         result = self._client.invoke_capability(
@@ -2105,6 +2133,7 @@ class _BaseResource(AbstractResource):
         return self
 
     def with_modified_at(self, modified_at: datetime.datetime) -> typing.Self:
+        """Sets the modified timestamp"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['modifiedAt'] = modified_at
         result = self._client.invoke_capability(
@@ -2115,6 +2144,7 @@ class _BaseResource(AbstractResource):
         return self
 
     def with_correlation_id(self, correlation_id: str) -> typing.Self:
+        """Sets the correlation ID"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['correlationId'] = correlation_id
         result = self._client.invoke_capability(
@@ -2125,6 +2155,7 @@ class _BaseResource(AbstractResource):
         return self
 
     def with_optional_callback(self, *, callback: typing.Callable[[TestCallbackContext], None] | None = None) -> typing.Self:
+        """Configures with optional callback"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if callback is not None:
             rpc_args['callback'] = self._client.register_callback(callback)
@@ -2136,6 +2167,7 @@ class _BaseResource(AbstractResource):
         return self
 
     def with_status(self, status: TestResourceStatus) -> typing.Self:
+        """Sets the resource status"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['status'] = status
         result = self._client.invoke_capability(
@@ -2146,6 +2178,7 @@ class _BaseResource(AbstractResource):
         return self
 
     def with_nested_config(self, config: TestNestedDto) -> typing.Self:
+        """Configures with nested DTO"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['config'] = config
         result = self._client.invoke_capability(
@@ -2156,6 +2189,7 @@ class _BaseResource(AbstractResource):
         return self
 
     def with_validator(self, validator: typing.Callable[[TestResourceContext], bool]) -> typing.Self:
+        """Adds validation callback"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['validator'] = self._client.register_callback(validator)
         result = self._client.invoke_capability(
@@ -2166,6 +2200,7 @@ class _BaseResource(AbstractResource):
         return self
 
     def test_wait_for(self, dependency: AbstractResource) -> typing.Self:
+        """Waits for another resource (test version)"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['dependency'] = dependency
         result = self._client.invoke_capability(
@@ -2176,6 +2211,7 @@ class _BaseResource(AbstractResource):
         return self
 
     def with_dependency(self, dependency: AbstractResourceWithConnectionString) -> typing.Self:
+        """Adds a dependency on another resource"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['dependency'] = dependency
         result = self._client.invoke_capability(
@@ -2186,6 +2222,7 @@ class _BaseResource(AbstractResource):
         return self
 
     def with_union_dependency(self, dependency: str | AbstractResourceWithConnectionString) -> typing.Self:
+        """Adds a dependency from a string or another resource"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['dependency'] = dependency
         result = self._client.invoke_capability(
@@ -2196,6 +2233,7 @@ class _BaseResource(AbstractResource):
         return self
 
     def with_endpoints(self, endpoints: typing.Iterable[str]) -> typing.Self:
+        """Sets the endpoints"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['endpoints'] = endpoints
         result = self._client.invoke_capability(
@@ -2206,6 +2244,7 @@ class _BaseResource(AbstractResource):
         return self
 
     def with_cancellable_operation(self, operation: typing.Callable[[CancellationToken], None]) -> typing.Self:
+        """Performs a cancellable operation"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['operation'] = self._client.register_callback(operation)
         result = self._client.invoke_capability(
@@ -2216,6 +2255,7 @@ class _BaseResource(AbstractResource):
         return self
 
     def with_merge_label(self, label: str, *, category: str | None = None) -> typing.Self:
+        """Adds a label to the resource"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['label'] = label
         if category is not None:
@@ -2229,6 +2269,7 @@ class _BaseResource(AbstractResource):
         return self
 
     def with_merge_endpoint(self, endpoint_name: str, port: int, *, scheme: str | None = None) -> typing.Self:
+        """Configures a named endpoint"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['endpointName'] = endpoint_name
         rpc_args['port'] = port
@@ -2243,6 +2284,7 @@ class _BaseResource(AbstractResource):
         return self
 
     def with_merge_logging(self, log_level: str, *, log_path: str | None = None, enable_console: bool = True, max_files: int | None = None) -> typing.Self:
+        """Configures resource logging"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['logLevel'] = log_level
         if log_path is not None:
@@ -2260,6 +2302,7 @@ class _BaseResource(AbstractResource):
         return self
 
     def with_merge_route(self, path: str, method: str, handler: str, priority: int, *, middleware: str | None = None) -> typing.Self:
+        """Configures a route"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['path'] = path
         rpc_args['method'] = method
@@ -2454,6 +2497,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         return "ContainerResource(handle={self._handle.handle_id})"
 
     def test_with_env_callback(self, callback: typing.Callable[[TestEnvironmentContext], None]) -> typing.Self:
+        """Configures environment with callback (test version)"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['callback'] = self._client.register_callback(callback)
         result = self._client.invoke_capability(
@@ -2464,6 +2508,7 @@ class ContainerResource(_BaseResource, AbstractResourceWithEnvironment, Abstract
         return self
 
     def with_env_vars(self, vars: typing.Mapping[str, str]) -> typing.Self:
+        """Sets environment variables"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['variables'] = vars
         result = self._client.invoke_capability(
@@ -2503,6 +2548,7 @@ class TestDatabaseResource(ContainerResource):
         return "TestDatabaseResource(handle={self._handle.handle_id})"
 
     def with_data_volume(self, *, name: str | None = None) -> typing.Self:
+        """Adds a data volume"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if name is not None:
             rpc_args['name'] = name
@@ -2544,6 +2590,7 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
         return "TestRedisResource(handle={self._handle.handle_id})"
 
     def add_test_child_database(self, name: str, *, database_name: str | None = None, **kwargs: typing.Unpack[TestDatabaseResourceKwargs]) -> TestDatabaseResource:  # type: ignore
+        """Adds a child database to a test Redis resource"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['name'] = name
         if database_name is not None:
@@ -2556,6 +2603,7 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
         return typing.cast(TestDatabaseResource, result)
 
     def with_persistence(self, *, mode: TestPersistenceMode = "Volume") -> typing.Self:
+        """Configures the Redis resource with persistence"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if mode is not None:
             rpc_args['mode'] = mode
@@ -2567,6 +2615,7 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
         return self
 
     def get_tags(self) -> AspireList[str]:
+        """Gets the tags for the resource"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.Python.Tests/getTags',
@@ -2575,6 +2624,7 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
         return typing.cast(AspireList[str], result)
 
     def get_metadata(self) -> AspireDict[str, str]:
+        """Gets the metadata for the resource"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.Python.Tests/getMetadata',
@@ -2583,6 +2633,7 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
         return typing.cast(AspireDict[str, str], result)
 
     def with_connection_string(self, connection_string: ReferenceExpression) -> typing.Self:
+        """Sets the connection string using a reference expression"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['connectionString'] = connection_string
         result = self._client.invoke_capability(
@@ -2593,6 +2644,7 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
         return self
 
     def get_endpoints(self) -> typing.Iterable[str]:
+        """Gets the endpoints"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         result = self._client.invoke_capability(
             'Aspire.Hosting.CodeGeneration.Python.Tests/getEndpoints',
@@ -2601,6 +2653,7 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
         return typing.cast(typing.Iterable[str], result)
 
     def with_connection_string_direct(self, connection_string: str) -> typing.Self:
+        """Sets connection string using direct interface target"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['connectionString'] = connection_string
         result = self._client.invoke_capability(
@@ -2611,6 +2664,7 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
         return self
 
     def with_redis_specific(self, option: str) -> typing.Self:
+        """Redis-specific configuration"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['option'] = option
         result = self._client.invoke_capability(
@@ -2621,6 +2675,7 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
         return self
 
     def get_status(self, *, timeout: int | None = None) -> str:
+        """Gets the status of the resource asynchronously"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if timeout is not None:
             rpc_args['cancellationToken'] = self._client.register_cancellation_token(timeout)
@@ -2631,6 +2686,7 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
         return typing.cast(str, result)
 
     def wait_for_ready(self, timeout: float) -> bool:
+        """Waits for the resource to be ready"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['timeout'] = timeout
         result = self._client.invoke_capability(
@@ -2640,6 +2696,7 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
         return typing.cast(bool, result)
 
     def with_multi_param_handle_callback(self, callback: typing.Callable[[TestCallbackContext, TestEnvironmentContext], None]) -> typing.Self:
+        """Tests multi-param callback destructuring"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['callback'] = self._client.register_callback(callback)
         result = self._client.invoke_capability(
@@ -2650,6 +2707,7 @@ class TestRedisResource(ContainerResource, AbstractResourceWithConnectionString)
         return self
 
     def with_data_volume(self, *, name: str | None = None, is_read_only: bool = False) -> typing.Self:
+        """Adds a data volume with persistence"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         if name is not None:
             rpc_args['name'] = name
@@ -2727,6 +2785,7 @@ class TestVaultResource(ContainerResource, AbstractTestVaultResource):
         return "TestVaultResource(handle={self._handle.handle_id})"
 
     def with_vault_direct(self, option: str) -> typing.Self:
+        """Configures vault using direct interface target"""
         rpc_args: dict[str, typing.Any] = {'builder': self._handle}
         rpc_args['option'] = option
         result = self._client.invoke_capability(

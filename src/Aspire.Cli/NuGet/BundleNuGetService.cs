@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using Aspire.Cli.Bundles;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Utils;
@@ -47,19 +48,22 @@ internal sealed class BundleNuGetService : INuGetService
     private readonly IFeatures _features;
     private readonly CliExecutionContext _executionContext;
     private readonly ILogger<BundleNuGetService> _logger;
+    private readonly IBundleService? _bundleService;
 
     public BundleNuGetService(
         ILayoutDiscovery layoutDiscovery,
         LayoutProcessRunner layoutProcessRunner,
         IFeatures features,
         CliExecutionContext executionContext,
-        ILogger<BundleNuGetService> logger)
+        ILogger<BundleNuGetService> logger,
+        IBundleService? bundleService = null)
     {
         _layoutDiscovery = layoutDiscovery;
         _layoutProcessRunner = layoutProcessRunner;
         _features = features;
         _executionContext = executionContext;
         _logger = logger;
+        _bundleService = bundleService;
     }
 
     public async Task<string> RestorePackagesAsync(
@@ -73,7 +77,10 @@ internal sealed class BundleNuGetService : INuGetService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workingDirectory);
 
-        var layout = _layoutDiscovery.DiscoverLayout();
+        using var layoutLease = _bundleService is null
+            ? null
+            : await _bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "nuget-restore", ct).ConfigureAwait(false);
+        var layout = layoutLease?.Layout ?? _layoutDiscovery.DiscoverLayout();
         if (layout is null)
         {
             throw new InvalidOperationException("Bundle layout not found. Cannot perform NuGet restore in bundle mode.");
@@ -175,6 +182,7 @@ internal sealed class BundleNuGetService : INuGetService
 
         var environmentVariables = new Dictionary<string, string>();
         NuGetSignatureVerificationEnabler.Apply(environmentVariables, _features, _executionContext);
+        layoutLease?.AddEnvironment(environmentVariables);
 
         var (exitCode, output, error) = await _layoutProcessRunner.RunAsync(
             managedPath,

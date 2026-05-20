@@ -17,24 +17,9 @@ public sealed class InputViewModel
 
     public void SetInput(InteractionInput input)
     {
-        string value;
-        if (Input == null)
-        {
-            value = input.Value;
-        }
-        else
-        {
-            // Only overwrite the local value if the input was loading and is no longer loading (update could have come from server)
-            // This avoids changes in local values being overwritten by a dynamic server update.
-            if (Input.Loading && !input.Loading)
-            {
-                value = input.Value;
-            }
-            else
-            {
-                value = Input.Value;
-            }
-        }
+        var value = Input is null || ShouldUseIncomingValue(Input, input)
+            ? input.Value
+            : Input.Value;
         input.Value = value;
 
         Input = input;
@@ -136,5 +121,12 @@ public sealed class InputViewModel
         }
 
         return true;
+    }
+
+    private static bool ShouldUseIncomingValue(InteractionInput current, InteractionInput incoming)
+    {
+        // Preserve local edits during ordinary updates, but accept server-provided values when
+        // dynamic loading completes or when the input is disabled and therefore server-owned.
+        return (current.Loading && !incoming.Loading) || incoming.Disabled;
     }
 }

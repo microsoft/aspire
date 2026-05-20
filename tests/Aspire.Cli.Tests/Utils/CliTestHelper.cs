@@ -128,6 +128,8 @@ internal static class CliTestHelper
         services.AddSingleton(options.PackagingServiceFactory);
         services.AddSingleton(options.CliExecutionContextFactory);
         services.AddSingleton(options.DiskCacheFactory);
+        services.AddSingleton<IAppHostInfoDiskCache, NullAppHostInfoDiskCache>();
+        services.AddSingleton<IAppHostInfoResolver, AppHostInfoResolver>();
         services.AddSingleton(options.CliHostEnvironmentFactory);
         services.AddSingleton(options.CliDownloaderFactory);
         services.AddSingleton(options.FirstTimeUseNoticeSentinelFactory);
@@ -670,8 +672,8 @@ internal sealed class NullBundleService : IBundleService
     public Task<BundleExtractResult> ExtractAsync(string destinationPath, bool force = false, CancellationToken cancellationToken = default)
         => Task.FromResult(BundleExtractResult.NoPayload);
 
-    public Task<Layout.LayoutConfiguration?> EnsureExtractedAndGetLayoutAsync(CancellationToken cancellationToken = default)
-        => Task.FromResult<Layout.LayoutConfiguration?>(null);
+    public Task<BundleLayoutLease?> EnsureExtractedAndAcquireLayoutAsync(string holderKind, string? commandName = null, CancellationToken cancellationToken = default)
+        => Task.FromResult<BundleLayoutLease?>(null);
 
     public string? GetDefaultExtractDir(string processPath) => null;
 }
@@ -700,8 +702,8 @@ internal sealed class TestBundleService(bool isBundle) : IBundleService
     public Task<BundleExtractResult> ExtractAsync(string destinationPath, bool force = false, CancellationToken cancellationToken = default)
         => Task.FromResult(isBundle ? BundleExtractResult.AlreadyUpToDate : BundleExtractResult.NoPayload);
 
-    public Task<Layout.LayoutConfiguration?> EnsureExtractedAndGetLayoutAsync(CancellationToken cancellationToken = default)
-        => Task.FromResult(Layout);
+    public Task<BundleLayoutLease?> EnsureExtractedAndAcquireLayoutAsync(string holderKind, string? commandName = null, CancellationToken cancellationToken = default)
+        => Task.FromResult(Layout is null ? null : new BundleLayoutLease(Layout, lease: null));
 
     public string? GetDefaultExtractDir(string processPath) => null;
 }

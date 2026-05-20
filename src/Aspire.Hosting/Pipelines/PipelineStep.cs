@@ -14,22 +14,13 @@ namespace Aspire.Hosting.Pipelines;
 /// </summary>
 [Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 [DebuggerDisplay("{DebuggerToString(),nq}")]
-[AspireExport]
+[AspireExport(ExposeProperties = true)]
 public class PipelineStep
 {
     /// <summary>
     /// Gets or initializes the unique name of the step.
     /// </summary>
     public required string Name { get; init; }
-
-    /// <summary>
-    /// Gets the exported name projection for polyglot SDKs.
-    /// </summary>
-    /// <remarks>
-    /// This projection avoids exporting an ATS setter for the public init-only <see cref="Name"/> property.
-    /// </remarks>
-    [AspireExport(MethodName = "name")]
-    internal string ExportedName => Name;
 
     /// <summary>
     /// Gets or initializes the description of the step.
@@ -39,15 +30,6 @@ public class PipelineStep
     /// helping users and tools understand the purpose of the step.
     /// </remarks>
     public string? Description { get; init; }
-
-    /// <summary>
-    /// Gets the exported description projection for polyglot SDKs.
-    /// </summary>
-    /// <remarks>
-    /// This projection avoids exporting an ATS setter for the public init-only <see cref="Description"/> property.
-    /// </remarks>
-    [AspireExport(MethodName = "description")]
-    internal string? ExportedDescription => Description;
 
     /// <summary>
     /// Gets or initializes the action to execute for this step.
@@ -73,6 +55,7 @@ public class PipelineStep
     /// <summary>
     /// Gets or initializes the resource that this step is associated with, if any.
     /// </summary>
+    [AspireExportIgnore(Reason = "The associated resource is an internal runtime link and may be null for steps that are not tied to a resource.")]
     public IResource? Resource { get; set; }
 
     /// <summary>

@@ -2,6 +2,7 @@
   CapabilityId: Aspire.Hosting/addContainer,
   MethodName: addContainer,
   QualifiedMethodName: addContainer,
+  Description: Adds a container resource to the application.,
   Documentation: {
     Summary: Adds a container resource to the application.,
     Returns: The resource builder.,

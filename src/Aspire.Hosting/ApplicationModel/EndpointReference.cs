@@ -21,7 +21,25 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
     /// <summary>
     /// Gets the endpoint annotation associated with the endpoint reference.
     /// </summary>
-    public EndpointAnnotation EndpointAnnotation => GetEndpointAnnotation() ?? throw new InvalidOperationException(ErrorMessage ?? $"The endpoint `{EndpointName}` is not defined for the resource `{Resource.Name}`.");
+    public EndpointAnnotation EndpointAnnotation => GetEndpointAnnotation() ?? throw new InvalidOperationException(ErrorMessage ?? BuildMissingEndpointMessage());
+
+    private string BuildMissingEndpointMessage()
+    {
+        var availableNames = Resource.Annotations
+            .OfType<EndpointAnnotation>()
+            .Select(a => a.Name)
+            .Where(n => !string.IsNullOrEmpty(n))
+            .Distinct(StringComparers.EndpointAnnotationName)
+            .ToArray();
+
+        if (availableNames.Length == 0)
+        {
+            return $"The endpoint `{EndpointName}` is not defined for the resource `{Resource.Name}`. The resource has no endpoints defined.";
+        }
+
+        var formattedNames = string.Join(", ", availableNames.Select(static n => $"`{n}`"));
+        return $"The endpoint `{EndpointName}` is not defined for the resource `{Resource.Name}`. Available endpoints: {formattedNames}.";
+    }
 
     /// <summary>
     /// Gets the resource owner of the endpoint reference.

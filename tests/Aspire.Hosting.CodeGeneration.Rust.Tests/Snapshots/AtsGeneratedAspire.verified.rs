@@ -194,6 +194,8 @@ impl IDistributedApplicationBuilder {
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
     }
+
+    /// Adds a test Redis resource from ATS documentation.
     pub fn add_test_redis(&self, name: &str, port: Option<f64>) -> Result<TestRedisResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -205,6 +207,8 @@ impl IDistributedApplicationBuilder {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(TestRedisResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a test vault resource
     pub fn add_test_vault(&self, name: &str) -> Result<TestVaultResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -380,7 +384,7 @@ impl TestCallbackContext {
         Ok(TestCallbackContext::new(handle, self.client.clone()))
     }
 
-    /// Gets the CancellationToken property
+    /// CancellationToken is supported by ATS.
     pub fn cancellation_token(&self) -> Result<CancellationToken, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -428,12 +432,12 @@ impl TestCollectionContext {
         &self.client
     }
 
-    /// Gets the Items property
+    /// List property - should generate AspireList getter like Dictionary properties.
     pub fn items(&self) -> AspireList<String> {
         AspireList::with_getter(self.handle.clone(), self.client.clone(), "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCollectionContext.items")
     }
 
-    /// Gets the Metadata property
+    /// Dictionary property - already works with AspireDict getter.
     pub fn metadata(&self) -> AspireDict<String, String> {
         AspireDict::with_getter(self.handle.clone(), self.client.clone(), "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCollectionContext.metadata")
     }
@@ -463,6 +467,8 @@ impl TestDatabaseResource {
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
     }
+
+    /// Adds an optional string parameter
     pub fn with_optional_string(&self, value: Option<&str>, enabled: Option<bool>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -476,6 +482,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures the resource with a DTO
     pub fn with_config(&self, config: TestConfigDto) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -484,6 +492,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures environment with callback (test version)
     pub fn test_with_environment_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -493,6 +503,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Sets the created timestamp
     pub fn with_created_at(&self, created_at: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -501,6 +513,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the modified timestamp
     pub fn with_modified_at(&self, modified_at: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -509,6 +523,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the correlation ID
     pub fn with_correlation_id(&self, correlation_id: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -517,6 +533,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures with optional callback
     pub fn with_optional_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -526,6 +544,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the resource status
     pub fn with_status(&self, status: TestResourceStatus) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -534,6 +554,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures with nested DTO
     pub fn with_nested_config(&self, config: TestNestedDto) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -542,6 +564,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds validation callback
     pub fn with_validator(&self, validator: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -551,6 +575,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Waits for another resource (test version)
     pub fn test_wait_for(&self, dependency: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -559,6 +585,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a dependency on another resource
     pub fn with_dependency(&self, dependency: &IResourceWithConnectionString) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -567,6 +595,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a dependency from a string or another resource
     pub fn with_union_dependency(&self, dependency: Value) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -575,6 +605,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the endpoints
     pub fn with_endpoints(&self, endpoints: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -583,6 +615,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets environment variables
     pub fn with_environment_variables(&self, variables: HashMap<String, String>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -591,6 +625,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Performs a cancellable operation
     pub fn with_cancellable_operation(&self, operation: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -600,6 +636,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a data volume
     pub fn with_data_volume(&self, name: Option<&str>) -> Result<TestDatabaseResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -610,6 +648,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(TestDatabaseResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a label to the resource
     pub fn with_merge_label(&self, label: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -618,6 +658,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a categorized label to the resource
     pub fn with_merge_label_categorized(&self, label: &str, category: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -627,6 +669,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a named endpoint
     pub fn with_merge_endpoint(&self, endpoint_name: &str, port: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -636,6 +680,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a named endpoint with scheme
     pub fn with_merge_endpoint_scheme(&self, endpoint_name: &str, port: f64, scheme: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -646,6 +692,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures resource logging
     pub fn with_merge_logging(&self, log_level: &str, enable_console: Option<bool>, max_files: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -660,6 +708,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures resource logging with file path
     pub fn with_merge_logging_path(&self, log_level: &str, log_path: &str, enable_console: Option<bool>, max_files: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -675,6 +725,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a route
     pub fn with_merge_route(&self, path: &str, method: &str, handler: &str, priority: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -686,6 +738,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a route with middleware
     pub fn with_merge_route_middleware(&self, path: &str, method: &str, handler: &str, priority: f64, middleware: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -860,6 +914,8 @@ impl TestRedisResource {
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
     }
+
+    /// Adds a child database to a test Redis resource
     pub fn add_test_child_database(&self, name: &str, database_name: Option<&str>) -> Result<TestDatabaseResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -871,6 +927,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(TestDatabaseResource::new(handle, self.client.clone()))
     }
+
+    /// Configures the Redis resource with persistence
     pub fn with_persistence(&self, mode: Option<TestPersistenceMode>) -> Result<TestRedisResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -881,6 +939,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(TestRedisResource::new(handle, self.client.clone()))
     }
+
+    /// Adds an optional string parameter
     pub fn with_optional_string(&self, value: Option<&str>, enabled: Option<bool>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -894,6 +954,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures the resource with a DTO
     pub fn with_config(&self, config: TestConfigDto) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -902,12 +964,18 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Gets the tags for the resource
     pub fn get_tags(&self) -> AspireList<String> {
         AspireList::with_getter(self.handle.clone(), self.client.clone(), "Aspire.Hosting.CodeGeneration.Rust.Tests/getTags")
     }
+
+    /// Gets the metadata for the resource
     pub fn get_metadata(&self) -> AspireDict<String, String> {
         AspireDict::with_getter(self.handle.clone(), self.client.clone(), "Aspire.Hosting.CodeGeneration.Rust.Tests/getMetadata")
     }
+
+    /// Sets the connection string using a reference expression
     pub fn with_connection_string(&self, connection_string: ReferenceExpression) -> Result<IResourceWithConnectionString, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -916,6 +984,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithConnectionString::new(handle, self.client.clone()))
     }
+
+    /// Configures environment with callback (test version)
     pub fn test_with_environment_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -925,6 +995,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Sets the created timestamp
     pub fn with_created_at(&self, created_at: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -933,6 +1005,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the modified timestamp
     pub fn with_modified_at(&self, modified_at: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -941,6 +1015,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the correlation ID
     pub fn with_correlation_id(&self, correlation_id: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -949,6 +1025,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures with optional callback
     pub fn with_optional_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -958,6 +1036,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the resource status
     pub fn with_status(&self, status: TestResourceStatus) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -966,6 +1046,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures with nested DTO
     pub fn with_nested_config(&self, config: TestNestedDto) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -974,6 +1056,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds validation callback
     pub fn with_validator(&self, validator: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -983,6 +1067,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Waits for another resource (test version)
     pub fn test_wait_for(&self, dependency: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -991,12 +1077,16 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Gets the endpoints
     pub fn get_endpoints(&self) -> Result<Vec<String>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/getEndpoints", args)?;
         Ok(serde_json::from_value(result)?)
     }
+
+    /// Sets connection string using direct interface target
     pub fn with_connection_string_direct(&self, connection_string: &str) -> Result<IResourceWithConnectionString, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1005,6 +1095,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithConnectionString::new(handle, self.client.clone()))
     }
+
+    /// Redis-specific configuration
     pub fn with_redis_specific(&self, option: &str) -> Result<TestRedisResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1013,6 +1105,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(TestRedisResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a dependency on another resource
     pub fn with_dependency(&self, dependency: &IResourceWithConnectionString) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1021,6 +1115,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a dependency from a string or another resource
     pub fn with_union_dependency(&self, dependency: Value) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1029,6 +1125,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the endpoints
     pub fn with_endpoints(&self, endpoints: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1037,6 +1135,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets environment variables
     pub fn with_environment_variables(&self, variables: HashMap<String, String>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1045,6 +1145,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Gets the status of the resource asynchronously
     pub fn get_status_async(&self, cancellation_token: Option<&CancellationToken>) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1055,6 +1157,8 @@ impl TestRedisResource {
         let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/getStatusAsync", args)?;
         Ok(serde_json::from_value(result)?)
     }
+
+    /// Performs a cancellable operation
     pub fn with_cancellable_operation(&self, operation: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1064,6 +1168,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Waits for the resource to be ready
     pub fn wait_for_ready_async(&self, timeout: f64, cancellation_token: Option<&CancellationToken>) -> Result<bool, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1075,6 +1181,8 @@ impl TestRedisResource {
         let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/waitForReadyAsync", args)?;
         Ok(serde_json::from_value(result)?)
     }
+
+    /// Tests multi-param callback destructuring
     pub fn with_multi_param_handle_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<TestRedisResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1084,6 +1192,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(TestRedisResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a data volume with persistence
     pub fn with_data_volume(&self, name: Option<&str>, is_read_only: Option<bool>) -> Result<TestRedisResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1097,6 +1207,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(TestRedisResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a label to the resource
     pub fn with_merge_label(&self, label: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1105,6 +1217,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a categorized label to the resource
     pub fn with_merge_label_categorized(&self, label: &str, category: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1114,6 +1228,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a named endpoint
     pub fn with_merge_endpoint(&self, endpoint_name: &str, port: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1123,6 +1239,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a named endpoint with scheme
     pub fn with_merge_endpoint_scheme(&self, endpoint_name: &str, port: f64, scheme: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1133,6 +1251,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures resource logging
     pub fn with_merge_logging(&self, log_level: &str, enable_console: Option<bool>, max_files: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1147,6 +1267,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures resource logging with file path
     pub fn with_merge_logging_path(&self, log_level: &str, log_path: &str, enable_console: Option<bool>, max_files: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1162,6 +1284,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a route
     pub fn with_merge_route(&self, path: &str, method: &str, handler: &str, priority: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1173,6 +1297,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a route with middleware
     pub fn with_merge_route_middleware(&self, path: &str, method: &str, handler: &str, priority: f64, middleware: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1248,7 +1374,7 @@ impl TestResourceContext {
         Ok(TestResourceContext::new(handle, self.client.clone()))
     }
 
-    /// Invokes the GetValueAsync method
+    /// Instance method that should be exposed as async method.
     pub fn get_value_async(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -1256,7 +1382,7 @@ impl TestResourceContext {
         Ok(serde_json::from_value(result)?)
     }
 
-    /// Invokes the SetValueAsync method
+    /// Instance method with parameter.
     pub fn set_value_async(&self, value: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -1265,7 +1391,7 @@ impl TestResourceContext {
         Ok(())
     }
 
-    /// Invokes the ValidateAsync method
+    /// Instance method with return type.
     pub fn validate_async(&self) -> Result<bool, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -1298,6 +1424,8 @@ impl TestVaultResource {
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
     }
+
+    /// Adds an optional string parameter
     pub fn with_optional_string(&self, value: Option<&str>, enabled: Option<bool>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1311,6 +1439,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures the resource with a DTO
     pub fn with_config(&self, config: TestConfigDto) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1319,6 +1449,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures environment with callback (test version)
     pub fn test_with_environment_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1328,6 +1460,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Sets the created timestamp
     pub fn with_created_at(&self, created_at: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1336,6 +1470,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the modified timestamp
     pub fn with_modified_at(&self, modified_at: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1344,6 +1480,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the correlation ID
     pub fn with_correlation_id(&self, correlation_id: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1352,6 +1490,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures with optional callback
     pub fn with_optional_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1361,6 +1501,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the resource status
     pub fn with_status(&self, status: TestResourceStatus) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1369,6 +1511,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures with nested DTO
     pub fn with_nested_config(&self, config: TestNestedDto) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1377,6 +1521,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds validation callback
     pub fn with_validator(&self, validator: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1386,6 +1532,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Waits for another resource (test version)
     pub fn test_wait_for(&self, dependency: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1394,6 +1542,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a dependency on another resource
     pub fn with_dependency(&self, dependency: &IResourceWithConnectionString) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1402,6 +1552,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a dependency from a string or another resource
     pub fn with_union_dependency(&self, dependency: Value) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1410,6 +1562,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the endpoints
     pub fn with_endpoints(&self, endpoints: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1418,6 +1572,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets environment variables
     pub fn with_environment_variables(&self, variables: HashMap<String, String>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1426,6 +1582,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Performs a cancellable operation
     pub fn with_cancellable_operation(&self, operation: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1435,6 +1593,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures vault using direct interface target
     pub fn with_vault_direct(&self, option: &str) -> Result<ITestVaultResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1443,6 +1603,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ITestVaultResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a label to the resource
     pub fn with_merge_label(&self, label: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1451,6 +1613,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a categorized label to the resource
     pub fn with_merge_label_categorized(&self, label: &str, category: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1460,6 +1624,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a named endpoint
     pub fn with_merge_endpoint(&self, endpoint_name: &str, port: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1469,6 +1635,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a named endpoint with scheme
     pub fn with_merge_endpoint_scheme(&self, endpoint_name: &str, port: f64, scheme: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1479,6 +1647,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures resource logging
     pub fn with_merge_logging(&self, log_level: &str, enable_console: Option<bool>, max_files: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1493,6 +1663,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures resource logging with file path
     pub fn with_merge_logging_path(&self, log_level: &str, log_path: &str, enable_console: Option<bool>, max_files: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1508,6 +1680,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a route
     pub fn with_merge_route(&self, path: &str, method: &str, handler: &str, priority: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1519,6 +1693,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a route with middleware
     pub fn with_merge_route_middleware(&self, path: &str, method: &str, handler: &str, priority: f64, middleware: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());

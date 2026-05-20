@@ -1445,7 +1445,7 @@ impl AfterPublishEvent {
         &self.client
     }
 
-    /// Gets the Services property
+    /// The `IServiceProvider` for the app host.
     pub fn services(&self) -> Result<IServiceProvider, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -1454,7 +1454,7 @@ impl AfterPublishEvent {
         Ok(IServiceProvider::new(handle, self.client.clone()))
     }
 
-    /// Gets the Model property
+    /// The `DistributedApplicationModel` instance.
     pub fn model(&self) -> Result<DistributedApplicationModel, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -1489,7 +1489,7 @@ impl AfterResourcesCreatedEvent {
         &self.client
     }
 
-    /// Gets the Services property
+    /// The `IServiceProvider` instance.
     pub fn services(&self) -> Result<IServiceProvider, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -1498,7 +1498,7 @@ impl AfterResourcesCreatedEvent {
         Ok(IServiceProvider::new(handle, self.client.clone()))
     }
 
-    /// Gets the Model property
+    /// The `DistributedApplicationModel` instance.
     pub fn model(&self) -> Result<DistributedApplicationModel, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -1533,7 +1533,7 @@ impl BeforePublishEvent {
         &self.client
     }
 
-    /// Gets the Services property
+    /// The `IServiceProvider` for the app host.
     pub fn services(&self) -> Result<IServiceProvider, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -1542,7 +1542,7 @@ impl BeforePublishEvent {
         Ok(IServiceProvider::new(handle, self.client.clone()))
     }
 
-    /// Gets the Model property
+    /// The `DistributedApplicationModel` instance.
     pub fn model(&self) -> Result<DistributedApplicationModel, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -1621,7 +1621,7 @@ impl BeforeStartEvent {
         &self.client
     }
 
-    /// Gets the Services property
+    /// The `IServiceProvider` instance.
     pub fn services(&self) -> Result<IServiceProvider, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -1630,7 +1630,7 @@ impl BeforeStartEvent {
         Ok(IServiceProvider::new(handle, self.client.clone()))
     }
 
-    /// Gets the Model property
+    /// The `DistributedApplicationModel` instance.
     pub fn model(&self) -> Result<DistributedApplicationModel, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -1664,6 +1664,8 @@ impl CSharpAppResource {
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
     }
+
+    /// Configures the resource to use the specified container registry for container image operations.
     pub fn with_container_registry(&self, registry: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1672,6 +1674,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures custom base images for generated Dockerfiles.
     pub fn with_dockerfile_base_image(&self, build_image: Option<&str>, runtime_image: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1685,6 +1689,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
     pub fn with_mcp_server(&self, path: Option<&str>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1698,6 +1704,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Configures OTLP telemetry export
     pub fn with_otlp_exporter(&self, protocol: Option<OtlpProtocol>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1708,6 +1716,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Configures how many replicas of the project should be created for the project.
     pub fn with_replicas(&self, replicas: f64) -> Result<ProjectResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1716,6 +1726,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ProjectResource::new(handle, self.client.clone()))
     }
+
+    /// Configures the project to disable forwarded headers when being published.
     pub fn disable_forwarded_headers(&self) -> Result<ProjectResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1723,6 +1735,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ProjectResource::new(handle, self.client.clone()))
     }
+
+    /// Publishes a project as a Docker file with optional container configuration
     pub fn publish_as_docker_file(&self, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<ProjectResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1732,6 +1746,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ProjectResource::new(handle, self.client.clone()))
     }
+
+    /// Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
     pub fn with_required_command(&self, command: &str, help_link: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1743,6 +1759,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets an environment variable
     pub fn with_environment(&self, name: &str, value: Value) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1752,6 +1770,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Allows for the population of environment variables on a resource.
     pub fn with_environment_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1761,6 +1781,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Adds arguments to be passed to a resource that supports arguments when it is launched.
     pub fn with_args(&self, args: Vec<String>) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1769,6 +1791,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
+
+    /// Adds a callback to be executed with a list of command-line arguments when a resource is started.
     pub fn with_args_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1778,6 +1802,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
+
+    /// Configures how information is injected into environment variables when the resource references other resources.
     pub fn with_reference_environment(&self, options: ReferenceEnvironmentInjectionOptions) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1786,6 +1812,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Adds a reference to another resource
     pub fn with_reference(&self, source: Value, connection_name: Option<&str>, optional: Option<bool>, name: Option<&str>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1803,6 +1831,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Updates a named endpoint via callback
     pub fn with_endpoint_callback(&self, endpoint_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1816,6 +1846,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Updates an HTTP endpoint via callback
     pub fn with_http_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1831,6 +1863,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Updates an HTTPS endpoint via callback
     pub fn with_https_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1846,6 +1880,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Adds a network endpoint
     pub fn with_endpoint(&self, port: Option<f64>, target_port: Option<f64>, scheme: Option<&str>, name: Option<&str>, env: Option<&str>, is_proxied: Option<bool>, is_external: Option<bool>, protocol: Option<ProtocolType>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1877,6 +1913,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Adds an HTTP endpoint
     pub fn with_http_endpoint(&self, port: Option<f64>, target_port: Option<f64>, name: Option<&str>, env: Option<&str>, is_proxied: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1899,6 +1937,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Adds an HTTPS endpoint
     pub fn with_https_endpoint(&self, port: Option<f64>, target_port: Option<f64>, name: Option<&str>, env: Option<&str>, is_proxied: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1921,6 +1961,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Marks existing http or https endpoints on a resource as external.
     pub fn with_external_http_endpoints(&self) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1928,6 +1970,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Gets an endpoint reference
     pub fn get_endpoint(&self, name: &str) -> Result<EndpointReference, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1936,6 +1980,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(EndpointReference::new(handle, self.client.clone()))
     }
+
+    /// Configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
     pub fn as_http2_service(&self) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1943,6 +1989,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Registers a callback to customize the URLs displayed for the resource.
     pub fn with_urls(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1952,6 +2000,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds or modifies displayed URLs
     pub fn with_url(&self, url: Value, display_text: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1963,6 +2013,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Registers a callback to update the URL displayed for the endpoint with the specified name.
     pub fn with_url_for_endpoint(&self, endpoint_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1973,6 +2025,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures the resource to copy container files from the specified source resource during publishing.
     pub fn publish_with_container_files(&self, source: &IResourceWithContainerFiles, destination_path: &str) -> Result<IContainerFilesDestinationResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1982,6 +2036,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IContainerFilesDestinationResource::new(handle, self.client.clone()))
     }
+
+    /// Excludes a resource from being published to the manifest.
     pub fn exclude_from_manifest(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -1989,6 +2045,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Waits for another resource to be ready
     pub fn wait_for(&self, dependency: &IResource, wait_behavior: Option<WaitBehavior>) -> Result<IResourceWithWaitSupport, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2000,6 +2058,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithWaitSupport::new(handle, self.client.clone()))
     }
+
+    /// Waits for another resource to start
     pub fn wait_for_start(&self, dependency: &IResource, wait_behavior: Option<WaitBehavior>) -> Result<IResourceWithWaitSupport, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2011,6 +2071,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithWaitSupport::new(handle, self.client.clone()))
     }
+
+    /// Prevents resource from starting automatically
     pub fn with_explicit_start(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2018,6 +2080,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Waits for the dependency resource to enter the Exited or Finished state before starting the resource.
     pub fn wait_for_completion(&self, dependency: &IResource, exit_code: Option<f64>) -> Result<IResourceWithWaitSupport, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2029,6 +2093,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithWaitSupport::new(handle, self.client.clone()))
     }
+
+    /// Adds a health check by key
     pub fn with_health_check(&self, key: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2037,6 +2103,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a health check to the resource which is mapped to a specific endpoint.
     pub fn with_http_health_check(&self, path: Option<&str>, status_code: Option<f64>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2053,6 +2121,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Adds a resource command
     pub fn with_command(&self, name: &str, display_name: &str, execute_command: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, command_options: Option<CommandOptions>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2067,6 +2137,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a command to the resource that starts a local process when invoked.
     pub fn with_process_command(&self, command_name: &str, display_name: &str, options: ProcessCommandExportOptions) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2077,6 +2149,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a command to the resource that starts a local process created by a callback when invoked.
     pub fn with_process_command_factory(&self, command_name: &str, display_name: &str, create_process_spec: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, options: Option<ProcessCommandResultExportOptions>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2091,6 +2165,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds an HTTP resource command
     pub fn with_http_command(&self, path: &str, display_name: &str, options: Option<HttpCommandExportOptions>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2103,6 +2179,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Indicates whether developer certificates should be treated as trusted certificate authorities for the resource at run time. Currently this indicates trust for the ASP.NET Core developer certificate. The developer certificate will only be trusted when running in local development scenarios; in publish mode resources will use their default certificate trust.
     pub fn with_developer_certificate_trust(&self, trust: bool) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2111,6 +2189,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Sets the certificate trust scope
     pub fn with_certificate_trust_scope(&self, scope: CertificateTrustScope) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2119,6 +2199,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
     pub fn with_https_developer_certificate(&self, password: Option<&ParameterResource>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2129,6 +2211,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Disable HTTPS/TLS server certificate configuration for the resource. No HTTPS/TLS termination configuration will be applied.
     pub fn without_https_certificate(&self) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2136,6 +2220,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Adds a relationship to another resource using its builder.
     pub fn with_relationship(&self, resource_builder: &IResource, r#type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2145,6 +2231,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the parent relationship
     pub fn with_parent_relationship(&self, parent: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2153,6 +2241,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets a child relationship
     pub fn with_child_relationship(&self, child: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2161,6 +2251,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Specifies the icon to use when displaying the resource in the dashboard.
     pub fn with_icon_name(&self, icon_name: &str, icon_variant: Option<IconVariant>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2172,6 +2264,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures the compute environment for the compute resource.
     pub fn with_compute_environment(&self, compute_environment_resource: &IComputeEnvironmentResource) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2180,6 +2274,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
+
+    /// Adds an HTTP health probe to the resource
     pub fn with_http_probe(&self, probe_type: ProbeType, path: Option<&str>, initial_delay_seconds: Option<f64>, period_seconds: Option<f64>, timeout_seconds: Option<f64>, failure_threshold: Option<f64>, success_threshold: Option<f64>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2209,6 +2305,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry.
     pub fn exclude_from_mcp(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2216,6 +2314,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds an asynchronous callback to configure container image push options for the resource.
     pub fn with_image_push_options(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2225,6 +2325,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the remote image name (without registry endpoint or tag) for container push operations.
     pub fn with_remote_image_name(&self, remote_image_name: &str) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2233,6 +2335,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the remote image tag for container push operations.
     pub fn with_remote_image_tag(&self, remote_image_tag: &str) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2241,6 +2345,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a pipeline step to the resource that will be executed during deployment.
     pub fn with_pipeline_step_factory(&self, step_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, depends_on: Option<Vec<String>>, required_by: Option<Vec<String>>, tags: Option<Vec<String>>, description: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2263,6 +2369,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
     pub fn with_pipeline_configuration(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2272,12 +2380,16 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Gets the name of the resource from a builder.
     pub fn get_resource_name(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/getResourceName", args)?;
         Ok(serde_json::from_value(result)?)
     }
+
+    /// Subscribes to the BeforeResourceStarted event.
     pub fn on_before_resource_started(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2287,6 +2399,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the ResourceStopped event.
     pub fn on_resource_stopped(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2296,6 +2410,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the InitializeResource event.
     pub fn on_initialize_resource(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2305,6 +2421,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the ResourceEndpointsAllocated event.
     pub fn on_resource_endpoints_allocated(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2314,6 +2432,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the ResourceReady event.
     pub fn on_resource_ready(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2323,6 +2443,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Creates an execution configuration builder for the specified resource.
     pub fn create_execution_configuration(&self) -> Result<IExecutionConfigurationBuilder, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -2330,6 +2452,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IExecutionConfigurationBuilder::new(handle, self.client.clone()))
     }
+
+    /// Adds an optional string parameter
     pub fn with_optional_string(&self, value: Option<&str>, enabled: Option<bool>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2343,6 +2467,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures the resource with a DTO
     pub fn with_config(&self, config: TestConfigDto) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2351,6 +2477,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures environment with callback (test version)
     pub fn test_with_environment_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2360,6 +2488,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Sets the created timestamp
     pub fn with_created_at(&self, created_at: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2368,6 +2498,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the modified timestamp
     pub fn with_modified_at(&self, modified_at: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2376,6 +2508,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the correlation ID
     pub fn with_correlation_id(&self, correlation_id: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2384,6 +2518,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures with optional callback
     pub fn with_optional_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2393,6 +2529,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the resource status
     pub fn with_status(&self, status: TestResourceStatus) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2401,6 +2539,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures with nested DTO
     pub fn with_nested_config(&self, config: TestNestedDto) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2409,6 +2549,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds validation callback
     pub fn with_validator(&self, validator: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2418,6 +2560,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Waits for another resource (test version)
     pub fn test_wait_for(&self, dependency: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2426,6 +2570,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a dependency on another resource
     pub fn with_dependency(&self, dependency: &IResourceWithConnectionString) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2434,6 +2580,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a dependency from a string or another resource
     pub fn with_union_dependency(&self, dependency: Value) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2442,6 +2590,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the endpoints
     pub fn with_endpoints(&self, endpoints: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2450,6 +2600,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets environment variables
     pub fn with_environment_variables(&self, variables: HashMap<String, String>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2458,6 +2610,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Performs a cancellable operation
     pub fn with_cancellable_operation(&self, operation: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2467,6 +2621,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a label to the resource
     pub fn with_merge_label(&self, label: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2475,6 +2631,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a categorized label to the resource
     pub fn with_merge_label_categorized(&self, label: &str, category: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2484,6 +2642,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a named endpoint
     pub fn with_merge_endpoint(&self, endpoint_name: &str, port: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2493,6 +2653,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a named endpoint with scheme
     pub fn with_merge_endpoint_scheme(&self, endpoint_name: &str, port: f64, scheme: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2503,6 +2665,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures resource logging
     pub fn with_merge_logging(&self, log_level: &str, enable_console: Option<bool>, max_files: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2517,6 +2681,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures resource logging with file path
     pub fn with_merge_logging_path(&self, log_level: &str, log_path: &str, enable_console: Option<bool>, max_files: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2532,6 +2698,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a route
     pub fn with_merge_route(&self, path: &str, method: &str, handler: &str, priority: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2543,6 +2711,8 @@ impl CSharpAppResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a route with middleware
     pub fn with_merge_route_middleware(&self, path: &str, method: &str, handler: &str, priority: f64, middleware: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2582,7 +2752,7 @@ impl CommandLineArgsCallbackContext {
         &self.client
     }
 
-    /// Gets the ArgsEditor property
+    /// Gets the editor used to manipulate command-line arguments in polyglot callbacks.
     pub fn args(&self) -> Result<CommandLineArgsEditor, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -2591,7 +2761,7 @@ impl CommandLineArgsCallbackContext {
         Ok(CommandLineArgsEditor::new(handle, self.client.clone()))
     }
 
-    /// Gets the Log property
+    /// Gets the logger facade used by polyglot callbacks.
     pub fn log(&self) -> Result<LogFacade, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -2600,7 +2770,7 @@ impl CommandLineArgsCallbackContext {
         Ok(LogFacade::new(handle, self.client.clone()))
     }
 
-    /// Gets the Resource property
+    /// The resource associated with this callback context.
     pub fn resource(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -2609,7 +2779,7 @@ impl CommandLineArgsCallbackContext {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Gets the ExportedExecutionContext property
+    /// Gets the execution context associated with this callback.
     pub fn execution_context(&self) -> Result<DistributedApplicationExecutionContext, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -2644,7 +2814,7 @@ impl CommandLineArgsEditor {
         &self.client
     }
 
-    /// Invokes the Add method
+    /// Adds a command-line argument.
     pub fn add(&self, value: Value) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -2723,7 +2893,7 @@ impl ContainerImagePushOptions {
         &self.client
     }
 
-    /// Gets the RemoteImageName property
+    /// Gets or sets the remote image name (repository path without registry endpoint or tag).
     pub fn remote_image_name(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -2741,7 +2911,7 @@ impl ContainerImagePushOptions {
         Ok(ContainerImagePushOptions::new(handle, self.client.clone()))
     }
 
-    /// Gets the RemoteImageTag property
+    /// Gets or sets the remote image tag.
     pub fn remote_image_tag(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -2785,7 +2955,7 @@ impl ContainerImagePushOptionsCallbackContext {
         &self.client
     }
 
-    /// Gets the Resource property
+    /// Gets the resource being configured for container image push operations.
     pub fn resource(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -2794,7 +2964,7 @@ impl ContainerImagePushOptionsCallbackContext {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Gets the CancellationToken property
+    /// Gets the cancellation token to observe while configuring image push options.
     pub fn cancellation_token(&self) -> Result<CancellationToken, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -2803,7 +2973,7 @@ impl ContainerImagePushOptionsCallbackContext {
         Ok(CancellationToken::new(handle, self.client.clone()))
     }
 
-    /// Gets the Options property
+    /// Gets the container image push options that can be modified by the callback.
     pub fn options(&self) -> Result<ContainerImagePushOptions, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -2838,7 +3008,7 @@ impl ContainerImageReference {
         &self.client
     }
 
-    /// Gets the Resource property
+    /// Gets the resource that this container image is associated with.
     pub fn resource(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -2881,7 +3051,7 @@ impl ContainerMountAnnotation {
         &self.client
     }
 
-    /// Gets the Source property
+    /// Gets the source of the bind mount or name if a volume. Can be `null` if the mount is an anonymous volume.
     pub fn source(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -2889,7 +3059,7 @@ impl ContainerMountAnnotation {
         Ok(serde_json::from_value(result)?)
     }
 
-    /// Gets the Target property
+    /// Gets the target of the mount.
     pub fn target(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -2897,7 +3067,7 @@ impl ContainerMountAnnotation {
         Ok(serde_json::from_value(result)?)
     }
 
-    /// Gets the Type property
+    /// Gets the type of the mount.
     pub fn r#type(&self) -> Result<ContainerMountType, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -2905,7 +3075,7 @@ impl ContainerMountAnnotation {
         Ok(serde_json::from_value(result)?)
     }
 
-    /// Gets the IsReadOnly property
+    /// Gets a value indicating whether the volume mount is read-only.
     pub fn is_read_only(&self) -> Result<bool, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -2939,7 +3109,7 @@ impl ContainerPortReference {
         &self.client
     }
 
-    /// Gets the Resource property
+    /// Gets the resource that this container port is associated with.
     pub fn resource(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -2981,6 +3151,8 @@ impl ContainerRegistryResource {
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
     }
+
+    /// Configures the resource to use the specified container registry for container image operations.
     pub fn with_container_registry(&self, registry: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -2989,6 +3161,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures custom base images for generated Dockerfiles.
     pub fn with_dockerfile_base_image(&self, build_image: Option<&str>, runtime_image: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3002,6 +3176,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
     pub fn with_required_command(&self, command: &str, help_link: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3013,6 +3189,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Registers a callback to customize the URLs displayed for the resource.
     pub fn with_urls(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3022,6 +3200,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds or modifies displayed URLs
     pub fn with_url(&self, url: Value, display_text: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3033,6 +3213,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Registers a callback to update the URL displayed for the endpoint with the specified name.
     pub fn with_url_for_endpoint(&self, endpoint_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3043,6 +3225,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Excludes a resource from being published to the manifest.
     pub fn exclude_from_manifest(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3050,6 +3234,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Prevents resource from starting automatically
     pub fn with_explicit_start(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3057,6 +3243,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a health check by key
     pub fn with_health_check(&self, key: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3065,6 +3253,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a resource command
     pub fn with_command(&self, name: &str, display_name: &str, execute_command: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, command_options: Option<CommandOptions>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3079,6 +3269,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a command to the resource that starts a local process when invoked.
     pub fn with_process_command(&self, command_name: &str, display_name: &str, options: ProcessCommandExportOptions) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3089,6 +3281,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a command to the resource that starts a local process created by a callback when invoked.
     pub fn with_process_command_factory(&self, command_name: &str, display_name: &str, create_process_spec: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, options: Option<ProcessCommandResultExportOptions>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3103,6 +3297,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a relationship to another resource using its builder.
     pub fn with_relationship(&self, resource_builder: &IResource, r#type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3112,6 +3308,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the parent relationship
     pub fn with_parent_relationship(&self, parent: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3120,6 +3318,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets a child relationship
     pub fn with_child_relationship(&self, child: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3128,6 +3328,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Specifies the icon to use when displaying the resource in the dashboard.
     pub fn with_icon_name(&self, icon_name: &str, icon_variant: Option<IconVariant>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3139,6 +3341,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry.
     pub fn exclude_from_mcp(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3146,6 +3350,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a pipeline step to the resource that will be executed during deployment.
     pub fn with_pipeline_step_factory(&self, step_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, depends_on: Option<Vec<String>>, required_by: Option<Vec<String>>, tags: Option<Vec<String>>, description: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3168,6 +3374,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
     pub fn with_pipeline_configuration(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3177,12 +3385,16 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Gets the name of the resource from a builder.
     pub fn get_resource_name(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/getResourceName", args)?;
         Ok(serde_json::from_value(result)?)
     }
+
+    /// Subscribes to the BeforeResourceStarted event.
     pub fn on_before_resource_started(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3192,6 +3404,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the ResourceStopped event.
     pub fn on_resource_stopped(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3201,6 +3415,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the InitializeResource event.
     pub fn on_initialize_resource(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3210,6 +3426,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the ResourceReady event.
     pub fn on_resource_ready(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3219,6 +3437,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Creates an execution configuration builder for the specified resource.
     pub fn create_execution_configuration(&self) -> Result<IExecutionConfigurationBuilder, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -3226,6 +3446,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IExecutionConfigurationBuilder::new(handle, self.client.clone()))
     }
+
+    /// Adds an optional string parameter
     pub fn with_optional_string(&self, value: Option<&str>, enabled: Option<bool>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3239,6 +3461,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures the resource with a DTO
     pub fn with_config(&self, config: TestConfigDto) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3247,6 +3471,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the created timestamp
     pub fn with_created_at(&self, created_at: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3255,6 +3481,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the modified timestamp
     pub fn with_modified_at(&self, modified_at: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3263,6 +3491,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the correlation ID
     pub fn with_correlation_id(&self, correlation_id: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3271,6 +3501,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures with optional callback
     pub fn with_optional_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3280,6 +3512,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the resource status
     pub fn with_status(&self, status: TestResourceStatus) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3288,6 +3522,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures with nested DTO
     pub fn with_nested_config(&self, config: TestNestedDto) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3296,6 +3532,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds validation callback
     pub fn with_validator(&self, validator: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3305,6 +3543,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Waits for another resource (test version)
     pub fn test_wait_for(&self, dependency: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3313,6 +3553,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a dependency on another resource
     pub fn with_dependency(&self, dependency: &IResourceWithConnectionString) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3321,6 +3563,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a dependency from a string or another resource
     pub fn with_union_dependency(&self, dependency: Value) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3329,6 +3573,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the endpoints
     pub fn with_endpoints(&self, endpoints: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3337,6 +3583,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Performs a cancellable operation
     pub fn with_cancellable_operation(&self, operation: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3346,6 +3594,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a label to the resource
     pub fn with_merge_label(&self, label: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3354,6 +3604,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a categorized label to the resource
     pub fn with_merge_label_categorized(&self, label: &str, category: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3363,6 +3615,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a named endpoint
     pub fn with_merge_endpoint(&self, endpoint_name: &str, port: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3372,6 +3626,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a named endpoint with scheme
     pub fn with_merge_endpoint_scheme(&self, endpoint_name: &str, port: f64, scheme: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3382,6 +3638,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures resource logging
     pub fn with_merge_logging(&self, log_level: &str, enable_console: Option<bool>, max_files: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3396,6 +3654,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures resource logging with file path
     pub fn with_merge_logging_path(&self, log_level: &str, log_path: &str, enable_console: Option<bool>, max_files: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3411,6 +3671,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a route
     pub fn with_merge_route(&self, path: &str, method: &str, handler: &str, priority: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3422,6 +3684,8 @@ impl ContainerRegistryResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a route with middleware
     pub fn with_merge_route_middleware(&self, path: &str, method: &str, handler: &str, priority: f64, middleware: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3460,6 +3724,8 @@ impl ContainerResource {
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
     }
+
+    /// Configures the resource to use the specified container registry for container image operations.
     pub fn with_container_registry(&self, registry: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3468,6 +3734,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a bind mount to a container resource.
     pub fn with_bind_mount(&self, source: &str, target: &str, is_read_only: Option<bool>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3480,6 +3748,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the Entrypoint for the container.
     pub fn with_entrypoint(&self, entrypoint: &str) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3488,6 +3758,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Allows overriding the image tag on a container.
     pub fn with_image_tag(&self, tag: &str) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3496,6 +3768,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Allows overriding the image registry on a container.
     pub fn with_image_registry(&self, registry: &str) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3504,6 +3778,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Allows overriding the image on a container.
     pub fn with_image(&self, image: &str, tag: Option<&str>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3515,6 +3791,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Allows setting the image to a specific sha256 on a container.
     pub fn with_image_sha256(&self, sha256: &str) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3523,6 +3801,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a callback to be executed with a list of arguments to add to the container runtime run command when a container resource is started.
     pub fn with_container_runtime_args(&self, args: Vec<String>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3531,6 +3811,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the lifetime behavior of the container resource.
     pub fn with_lifetime(&self, lifetime: ContainerLifetime) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3539,6 +3821,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the pull policy for the container resource.
     pub fn with_image_pull_policy(&self, pull_policy: ImagePullPolicy) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3547,6 +3831,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Changes the resource to be published as a container in the manifest.
     pub fn publish_as_container(&self) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3554,6 +3840,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Causes Aspire to build the specified container image from a Dockerfile.
     pub fn with_dockerfile(&self, context_path: &str, dockerfile_path: Option<&str>, stage: Option<&str>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3568,6 +3856,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Overrides the default container name for this resource. By default Aspire generates a unique container name based on the resource name and a random postfix (or a postfix based on a hash of the AppHost project path for persistent container resources). This method allows you to override that behavior with a custom name, but could lead to naming conflicts if the specified name is not unique.
     pub fn with_container_name(&self, name: &str) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3576,6 +3866,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a build argument when the container is built from a Dockerfile.
     pub fn with_build_arg(&self, name: &str, value: Value) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3585,6 +3877,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a secret build argument when the container is built from a Dockerfile.
     pub fn with_build_secret(&self, name: &str, value: &ParameterResource) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3594,6 +3888,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Adds container certificate path overrides used for certificate trust at run time.
     pub fn with_container_certificate_paths(&self, custom_certificates_destination: Option<&str>, default_certificate_bundle_paths: Option<Vec<String>>, default_certificate_directory_paths: Option<Vec<String>>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3610,6 +3906,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Set whether a container resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the container. If set to `false`, endpoints belonging to the container resource will ignore the configured proxy settings and run proxy-less.
     pub fn with_endpoint_proxy_support(&self, proxy_enabled: bool) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3618,6 +3916,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Configures the resource to use a programmatically generated Dockerfile
     pub fn with_dockerfile_builder(&self, context_path: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, stage: Option<&str>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3631,6 +3931,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Configures custom base images for generated Dockerfiles.
     pub fn with_dockerfile_base_image(&self, build_image: Option<&str>, runtime_image: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3644,6 +3946,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a network alias to container resource.
     pub fn with_container_network_alias(&self, alias: &str) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3652,6 +3956,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
     pub fn with_mcp_server(&self, path: Option<&str>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3665,6 +3971,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Configures OTLP telemetry export
     pub fn with_otlp_exporter(&self, protocol: Option<OtlpProtocol>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3675,6 +3983,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Changes the resource to be published as a connection string reference in the manifest.
     pub fn publish_as_connection_string(&self) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3682,6 +3992,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
     pub fn with_required_command(&self, command: &str, help_link: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3693,6 +4005,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets an environment variable
     pub fn with_environment(&self, name: &str, value: Value) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3702,6 +4016,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Allows for the population of environment variables on a resource.
     pub fn with_environment_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3711,6 +4027,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Adds arguments to be passed to a resource that supports arguments when it is launched.
     pub fn with_args(&self, args: Vec<String>) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3719,6 +4037,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
+
+    /// Adds a callback to be executed with a list of command-line arguments when a resource is started.
     pub fn with_args_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3728,6 +4048,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
+
+    /// Configures how information is injected into environment variables when the resource references other resources.
     pub fn with_reference_environment(&self, options: ReferenceEnvironmentInjectionOptions) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3736,6 +4058,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Adds a reference to another resource
     pub fn with_reference(&self, source: Value, connection_name: Option<&str>, optional: Option<bool>, name: Option<&str>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3753,6 +4077,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Updates a named endpoint via callback
     pub fn with_endpoint_callback(&self, endpoint_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3766,6 +4092,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Updates an HTTP endpoint via callback
     pub fn with_http_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3781,6 +4109,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Updates an HTTPS endpoint via callback
     pub fn with_https_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3796,6 +4126,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Adds a network endpoint
     pub fn with_endpoint(&self, port: Option<f64>, target_port: Option<f64>, scheme: Option<&str>, name: Option<&str>, env: Option<&str>, is_proxied: Option<bool>, is_external: Option<bool>, protocol: Option<ProtocolType>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3827,6 +4159,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Adds an HTTP endpoint
     pub fn with_http_endpoint(&self, port: Option<f64>, target_port: Option<f64>, name: Option<&str>, env: Option<&str>, is_proxied: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3849,6 +4183,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Adds an HTTPS endpoint
     pub fn with_https_endpoint(&self, port: Option<f64>, target_port: Option<f64>, name: Option<&str>, env: Option<&str>, is_proxied: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3871,6 +4207,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Marks existing http or https endpoints on a resource as external.
     pub fn with_external_http_endpoints(&self) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3878,6 +4216,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Gets an endpoint reference
     pub fn get_endpoint(&self, name: &str) -> Result<EndpointReference, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3886,6 +4226,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(EndpointReference::new(handle, self.client.clone()))
     }
+
+    /// Configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
     pub fn as_http2_service(&self) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3893,6 +4235,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Registers a callback to customize the URLs displayed for the resource.
     pub fn with_urls(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3902,6 +4246,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds or modifies displayed URLs
     pub fn with_url(&self, url: Value, display_text: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3913,6 +4259,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Registers a callback to update the URL displayed for the endpoint with the specified name.
     pub fn with_url_for_endpoint(&self, endpoint_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3923,6 +4271,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Excludes a resource from being published to the manifest.
     pub fn exclude_from_manifest(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3930,6 +4280,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Waits for another resource to be ready
     pub fn wait_for(&self, dependency: &IResource, wait_behavior: Option<WaitBehavior>) -> Result<IResourceWithWaitSupport, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3941,6 +4293,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithWaitSupport::new(handle, self.client.clone()))
     }
+
+    /// Waits for another resource to start
     pub fn wait_for_start(&self, dependency: &IResource, wait_behavior: Option<WaitBehavior>) -> Result<IResourceWithWaitSupport, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3952,6 +4306,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithWaitSupport::new(handle, self.client.clone()))
     }
+
+    /// Prevents resource from starting automatically
     pub fn with_explicit_start(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3959,6 +4315,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Waits for the dependency resource to enter the Exited or Finished state before starting the resource.
     pub fn wait_for_completion(&self, dependency: &IResource, exit_code: Option<f64>) -> Result<IResourceWithWaitSupport, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3970,6 +4328,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithWaitSupport::new(handle, self.client.clone()))
     }
+
+    /// Adds a health check by key
     pub fn with_health_check(&self, key: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3978,6 +4338,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a health check to the resource which is mapped to a specific endpoint.
     pub fn with_http_health_check(&self, path: Option<&str>, status_code: Option<f64>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -3994,6 +4356,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Adds a resource command
     pub fn with_command(&self, name: &str, display_name: &str, execute_command: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, command_options: Option<CommandOptions>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4008,6 +4372,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a command to the resource that starts a local process when invoked.
     pub fn with_process_command(&self, command_name: &str, display_name: &str, options: ProcessCommandExportOptions) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4018,6 +4384,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a command to the resource that starts a local process created by a callback when invoked.
     pub fn with_process_command_factory(&self, command_name: &str, display_name: &str, create_process_spec: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, options: Option<ProcessCommandResultExportOptions>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4032,6 +4400,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds an HTTP resource command
     pub fn with_http_command(&self, path: &str, display_name: &str, options: Option<HttpCommandExportOptions>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4044,6 +4414,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Indicates whether developer certificates should be treated as trusted certificate authorities for the resource at run time. Currently this indicates trust for the ASP.NET Core developer certificate. The developer certificate will only be trusted when running in local development scenarios; in publish mode resources will use their default certificate trust.
     pub fn with_developer_certificate_trust(&self, trust: bool) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4052,6 +4424,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Sets the certificate trust scope
     pub fn with_certificate_trust_scope(&self, scope: CertificateTrustScope) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4060,6 +4434,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
     pub fn with_https_developer_certificate(&self, password: Option<&ParameterResource>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4070,6 +4446,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Disable HTTPS/TLS server certificate configuration for the resource. No HTTPS/TLS termination configuration will be applied.
     pub fn without_https_certificate(&self) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4077,6 +4455,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Adds a relationship to another resource using its builder.
     pub fn with_relationship(&self, resource_builder: &IResource, r#type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4086,6 +4466,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the parent relationship
     pub fn with_parent_relationship(&self, parent: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4094,6 +4476,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets a child relationship
     pub fn with_child_relationship(&self, child: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4102,6 +4486,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Specifies the icon to use when displaying the resource in the dashboard.
     pub fn with_icon_name(&self, icon_name: &str, icon_variant: Option<IconVariant>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4113,6 +4499,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures the compute environment for the compute resource.
     pub fn with_compute_environment(&self, compute_environment_resource: &IComputeEnvironmentResource) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4121,6 +4509,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
+
+    /// Adds an HTTP health probe to the resource
     pub fn with_http_probe(&self, probe_type: ProbeType, path: Option<&str>, initial_delay_seconds: Option<f64>, period_seconds: Option<f64>, timeout_seconds: Option<f64>, failure_threshold: Option<f64>, success_threshold: Option<f64>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4150,6 +4540,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry.
     pub fn exclude_from_mcp(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4157,6 +4549,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds an asynchronous callback to configure container image push options for the resource.
     pub fn with_image_push_options(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4166,6 +4560,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the remote image name (without registry endpoint or tag) for container push operations.
     pub fn with_remote_image_name(&self, remote_image_name: &str) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4174,6 +4570,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the remote image tag for container push operations.
     pub fn with_remote_image_tag(&self, remote_image_tag: &str) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4182,6 +4580,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a pipeline step to the resource that will be executed during deployment.
     pub fn with_pipeline_step_factory(&self, step_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, depends_on: Option<Vec<String>>, required_by: Option<Vec<String>>, tags: Option<Vec<String>>, description: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4204,6 +4604,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
     pub fn with_pipeline_configuration(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4213,6 +4615,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a volume to a container resource.
     pub fn with_volume(&self, target: &str, name: Option<&str>, is_read_only: Option<bool>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -4227,12 +4631,16 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Gets the name of the resource from a builder.
     pub fn get_resource_name(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/getResourceName", args)?;
         Ok(serde_json::from_value(result)?)
     }
+
+    /// Subscribes to the BeforeResourceStarted event.
     pub fn on_before_resource_started(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4242,6 +4650,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the ResourceStopped event.
     pub fn on_resource_stopped(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4251,6 +4661,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the InitializeResource event.
     pub fn on_initialize_resource(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4260,6 +4672,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the ResourceEndpointsAllocated event.
     pub fn on_resource_endpoints_allocated(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4269,6 +4683,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the ResourceReady event.
     pub fn on_resource_ready(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4278,6 +4694,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Creates an execution configuration builder for the specified resource.
     pub fn create_execution_configuration(&self) -> Result<IExecutionConfigurationBuilder, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -4285,6 +4703,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IExecutionConfigurationBuilder::new(handle, self.client.clone()))
     }
+
+    /// Adds an optional string parameter
     pub fn with_optional_string(&self, value: Option<&str>, enabled: Option<bool>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4298,6 +4718,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures the resource with a DTO
     pub fn with_config(&self, config: TestConfigDto) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4306,6 +4728,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures environment with callback (test version)
     pub fn test_with_environment_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4315,6 +4739,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Sets the created timestamp
     pub fn with_created_at(&self, created_at: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4323,6 +4749,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the modified timestamp
     pub fn with_modified_at(&self, modified_at: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4331,6 +4759,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the correlation ID
     pub fn with_correlation_id(&self, correlation_id: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4339,6 +4769,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures with optional callback
     pub fn with_optional_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4348,6 +4780,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the resource status
     pub fn with_status(&self, status: TestResourceStatus) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4356,6 +4790,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures with nested DTO
     pub fn with_nested_config(&self, config: TestNestedDto) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4364,6 +4800,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds validation callback
     pub fn with_validator(&self, validator: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4373,6 +4811,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Waits for another resource (test version)
     pub fn test_wait_for(&self, dependency: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4381,6 +4821,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a dependency on another resource
     pub fn with_dependency(&self, dependency: &IResourceWithConnectionString) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4389,6 +4831,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a dependency from a string or another resource
     pub fn with_union_dependency(&self, dependency: Value) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4397,6 +4841,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the endpoints
     pub fn with_endpoints(&self, endpoints: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4405,6 +4851,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets environment variables
     pub fn with_environment_variables(&self, variables: HashMap<String, String>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4413,6 +4861,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Performs a cancellable operation
     pub fn with_cancellable_operation(&self, operation: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4422,6 +4872,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a label to the resource
     pub fn with_merge_label(&self, label: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4430,6 +4882,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a categorized label to the resource
     pub fn with_merge_label_categorized(&self, label: &str, category: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4439,6 +4893,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a named endpoint
     pub fn with_merge_endpoint(&self, endpoint_name: &str, port: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4448,6 +4904,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a named endpoint with scheme
     pub fn with_merge_endpoint_scheme(&self, endpoint_name: &str, port: f64, scheme: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4458,6 +4916,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures resource logging
     pub fn with_merge_logging(&self, log_level: &str, enable_console: Option<bool>, max_files: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4472,6 +4932,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures resource logging with file path
     pub fn with_merge_logging_path(&self, log_level: &str, log_path: &str, enable_console: Option<bool>, max_files: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4487,6 +4949,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a route
     pub fn with_merge_route(&self, path: &str, method: &str, handler: &str, priority: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4498,6 +4962,8 @@ impl ContainerResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a route with middleware
     pub fn with_merge_route_middleware(&self, path: &str, method: &str, handler: &str, priority: f64, middleware: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4537,7 +5003,7 @@ impl DistributedApplication {
         &self.client
     }
 
-    /// Invokes the RunAsync method
+    /// Runs the distributed application
     pub fn run(&self, cancellation_token: Option<&CancellationToken>) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -4601,7 +5067,7 @@ impl DistributedApplicationExecutionContext {
         &self.client
     }
 
-    /// Gets the PublisherName property
+    /// The name of the publisher that is being used if `Operation` is set to `Publish`.
     pub fn publisher_name(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -4619,7 +5085,7 @@ impl DistributedApplicationExecutionContext {
         Ok(DistributedApplicationExecutionContext::new(handle, self.client.clone()))
     }
 
-    /// Gets the Operation property
+    /// The operation currently being performed by the AppHost.
     pub fn operation(&self) -> Result<DistributedApplicationOperation, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -4627,7 +5093,7 @@ impl DistributedApplicationExecutionContext {
         Ok(serde_json::from_value(result)?)
     }
 
-    /// Gets the ServiceProvider property
+    /// The `IServiceProvider` for the AppHost.
     pub fn service_provider(&self) -> Result<IServiceProvider, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -4636,7 +5102,7 @@ impl DistributedApplicationExecutionContext {
         Ok(IServiceProvider::new(handle, self.client.clone()))
     }
 
-    /// Gets the IsPublishMode property
+    /// Returns true if the current operation is publishing.
     pub fn is_publish_mode(&self) -> Result<bool, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -4644,7 +5110,7 @@ impl DistributedApplicationExecutionContext {
         Ok(serde_json::from_value(result)?)
     }
 
-    /// Gets the IsRunMode property
+    /// Returns true if the current operation is running.
     pub fn is_run_mode(&self) -> Result<bool, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -4703,6 +5169,8 @@ impl DistributedApplicationModel {
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
     }
+
+    /// Gets all resources in the distributed application model.
     pub fn get_resources(&self) -> Result<Vec<IResource>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("model".to_string(), self.handle.to_json());
@@ -4710,6 +5178,8 @@ impl DistributedApplicationModel {
         let handles: Vec<Handle> = serde_json::from_value(result)?;
         Ok(handles.into_iter().map(|h| IResource::new(h, self.client.clone())).collect())
     }
+
+    /// Finds a resource by name.
     pub fn find_resource_by_name(&self, name: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("model".to_string(), self.handle.to_json());
@@ -4770,6 +5240,8 @@ impl DockerfileBuilder {
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
     }
+
+    /// Adds a global ARG statement to the Dockerfile
     pub fn arg(&self, name: &str, default_value: Option<&str>) -> Result<DockerfileBuilder, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4781,6 +5253,8 @@ impl DockerfileBuilder {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DockerfileBuilder::new(handle, self.client.clone()))
     }
+
+    /// Adds a FROM statement to start a Dockerfile stage
     pub fn from(&self, image: &str, stage_name: Option<&str>) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4792,6 +5266,8 @@ impl DockerfileBuilder {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DockerfileStage::new(handle, self.client.clone()))
     }
+
+    /// Adds Dockerfile stages for published container files
     pub fn add_container_files_stages(&self, resource: &IResource, logger: Option<&ILogger>) -> Result<DockerfileBuilder, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -4830,7 +5306,7 @@ impl DockerfileBuilderCallbackContext {
         &self.client
     }
 
-    /// Gets the Resource property
+    /// Gets the resource being built.
     pub fn resource(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -4839,7 +5315,7 @@ impl DockerfileBuilderCallbackContext {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Gets the Builder property
+    /// Gets the Dockerfile builder instance.
     pub fn builder(&self) -> Result<DockerfileBuilder, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -4848,7 +5324,7 @@ impl DockerfileBuilderCallbackContext {
         Ok(DockerfileBuilder::new(handle, self.client.clone()))
     }
 
-    /// Gets the Services property
+    /// Gets the service provider for dependency injection.
     pub fn services(&self) -> Result<IServiceProvider, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -4857,7 +5333,7 @@ impl DockerfileBuilderCallbackContext {
         Ok(IServiceProvider::new(handle, self.client.clone()))
     }
 
-    /// Gets the CancellationToken property
+    /// Gets the cancellation token to observe while waiting for the task to complete.
     pub fn cancellation_token(&self) -> Result<CancellationToken, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -4891,6 +5367,8 @@ impl DockerfileStage {
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
     }
+
+    /// Adds an ARG statement to a Dockerfile stage
     pub fn arg(&self, name: &str, default_value: Option<&str>) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("stage".to_string(), self.handle.to_json());
@@ -4902,6 +5380,8 @@ impl DockerfileStage {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DockerfileStage::new(handle, self.client.clone()))
     }
+
+    /// Adds a WORKDIR statement to a Dockerfile stage
     pub fn work_dir(&self, path: &str) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("stage".to_string(), self.handle.to_json());
@@ -4910,6 +5390,8 @@ impl DockerfileStage {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DockerfileStage::new(handle, self.client.clone()))
     }
+
+    /// Adds a RUN statement to a Dockerfile stage
     pub fn run(&self, command: &str) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("stage".to_string(), self.handle.to_json());
@@ -4918,6 +5400,8 @@ impl DockerfileStage {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DockerfileStage::new(handle, self.client.clone()))
     }
+
+    /// Adds a COPY statement to a Dockerfile stage
     pub fn copy(&self, source: &str, destination: &str, chown: Option<&str>) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("stage".to_string(), self.handle.to_json());
@@ -4930,6 +5414,8 @@ impl DockerfileStage {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DockerfileStage::new(handle, self.client.clone()))
     }
+
+    /// Adds a COPY --from statement to a Dockerfile stage
     pub fn copy_from(&self, from: &str, source: &str, destination: &str, chown: Option<&str>) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("stage".to_string(), self.handle.to_json());
@@ -4943,6 +5429,8 @@ impl DockerfileStage {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DockerfileStage::new(handle, self.client.clone()))
     }
+
+    /// Adds an ENV statement to a Dockerfile stage
     pub fn env(&self, name: &str, value: &str) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("stage".to_string(), self.handle.to_json());
@@ -4952,6 +5440,8 @@ impl DockerfileStage {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DockerfileStage::new(handle, self.client.clone()))
     }
+
+    /// Adds an EXPOSE statement to a Dockerfile stage
     pub fn expose(&self, port: f64) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("stage".to_string(), self.handle.to_json());
@@ -4960,6 +5450,8 @@ impl DockerfileStage {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DockerfileStage::new(handle, self.client.clone()))
     }
+
+    /// Adds a CMD statement to a Dockerfile stage
     pub fn cmd(&self, command: Vec<String>) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("stage".to_string(), self.handle.to_json());
@@ -4968,6 +5460,8 @@ impl DockerfileStage {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DockerfileStage::new(handle, self.client.clone()))
     }
+
+    /// Adds an ENTRYPOINT statement to a Dockerfile stage
     pub fn entrypoint(&self, command: Vec<String>) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("stage".to_string(), self.handle.to_json());
@@ -4976,6 +5470,8 @@ impl DockerfileStage {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DockerfileStage::new(handle, self.client.clone()))
     }
+
+    /// Adds a RUN statement with mounts to a Dockerfile stage
     pub fn run_with_mounts(&self, command: &str, mounts: Vec<String>) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("stage".to_string(), self.handle.to_json());
@@ -4985,6 +5481,8 @@ impl DockerfileStage {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DockerfileStage::new(handle, self.client.clone()))
     }
+
+    /// Adds a USER statement to a Dockerfile stage
     pub fn user(&self, user: &str) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("stage".to_string(), self.handle.to_json());
@@ -4993,6 +5491,8 @@ impl DockerfileStage {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DockerfileStage::new(handle, self.client.clone()))
     }
+
+    /// Adds an empty line to a Dockerfile stage
     pub fn empty_line(&self) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("stage".to_string(), self.handle.to_json());
@@ -5000,6 +5500,8 @@ impl DockerfileStage {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DockerfileStage::new(handle, self.client.clone()))
     }
+
+    /// Adds a comment to a Dockerfile stage
     pub fn comment(&self, comment: &str) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("stage".to_string(), self.handle.to_json());
@@ -5008,6 +5510,8 @@ impl DockerfileStage {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DockerfileStage::new(handle, self.client.clone()))
     }
+
+    /// Adds COPY --from statements for published container files
     pub fn add_container_files(&self, resource: &IResource, root_destination_path: &str, logger: Option<&ILogger>) -> Result<DockerfileStage, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("stage".to_string(), self.handle.to_json());
@@ -5046,6 +5550,8 @@ impl DotnetToolResource {
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
     }
+
+    /// Configures the resource to use the specified container registry for container image operations.
     pub fn with_container_registry(&self, registry: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5054,6 +5560,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures custom base images for generated Dockerfiles.
     pub fn with_dockerfile_base_image(&self, build_image: Option<&str>, runtime_image: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5067,6 +5575,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the package identifier for the tool configuration associated with the resource builder.
     pub fn with_tool_package(&self, package_id: &str) -> Result<DotnetToolResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5075,6 +5585,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DotnetToolResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the package version for a tool to use.
     pub fn with_tool_version(&self, version: &str) -> Result<DotnetToolResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5083,6 +5595,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DotnetToolResource::new(handle, self.client.clone()))
     }
+
+    /// Allows prerelease versions of the tool to be used
     pub fn with_tool_prerelease(&self) -> Result<DotnetToolResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5090,6 +5604,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DotnetToolResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a NuGet package source for tool acquisition.
     pub fn with_tool_source(&self, source: &str) -> Result<DotnetToolResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5098,6 +5614,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DotnetToolResource::new(handle, self.client.clone()))
     }
+
+    /// Configures the tool to use only the specified package sources, ignoring existing NuGet configuration.
     pub fn with_tool_ignore_existing_feeds(&self) -> Result<DotnetToolResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5105,6 +5623,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DotnetToolResource::new(handle, self.client.clone()))
     }
+
+    /// Configures the resource to treat package source failures as warnings.
     pub fn with_tool_ignore_failed_sources(&self) -> Result<DotnetToolResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5112,6 +5632,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DotnetToolResource::new(handle, self.client.clone()))
     }
+
+    /// Publishes an executable as a Docker file
     pub fn publish_as_docker_file(&self, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<ExecutableResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5121,6 +5643,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ExecutableResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the command for the executable resource.
     pub fn with_executable_command(&self, command: &str) -> Result<ExecutableResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5129,6 +5653,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ExecutableResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the working directory for the executable resource.
     pub fn with_working_directory(&self, working_directory: &str) -> Result<ExecutableResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5137,6 +5663,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ExecutableResource::new(handle, self.client.clone()))
     }
+
+    /// Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
     pub fn with_mcp_server(&self, path: Option<&str>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5150,6 +5678,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Configures OTLP telemetry export
     pub fn with_otlp_exporter(&self, protocol: Option<OtlpProtocol>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5160,6 +5690,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
     pub fn with_required_command(&self, command: &str, help_link: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5171,6 +5703,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets an environment variable
     pub fn with_environment(&self, name: &str, value: Value) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5180,6 +5714,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Allows for the population of environment variables on a resource.
     pub fn with_environment_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5189,6 +5725,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Adds arguments to be passed to a resource that supports arguments when it is launched.
     pub fn with_args(&self, args: Vec<String>) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5197,6 +5735,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
+
+    /// Adds a callback to be executed with a list of command-line arguments when a resource is started.
     pub fn with_args_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5206,6 +5746,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
+
+    /// Configures how information is injected into environment variables when the resource references other resources.
     pub fn with_reference_environment(&self, options: ReferenceEnvironmentInjectionOptions) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5214,6 +5756,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Adds a reference to another resource
     pub fn with_reference(&self, source: Value, connection_name: Option<&str>, optional: Option<bool>, name: Option<&str>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5231,6 +5775,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Updates a named endpoint via callback
     pub fn with_endpoint_callback(&self, endpoint_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5244,6 +5790,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Updates an HTTP endpoint via callback
     pub fn with_http_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5259,6 +5807,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Updates an HTTPS endpoint via callback
     pub fn with_https_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5274,6 +5824,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Adds a network endpoint
     pub fn with_endpoint(&self, port: Option<f64>, target_port: Option<f64>, scheme: Option<&str>, name: Option<&str>, env: Option<&str>, is_proxied: Option<bool>, is_external: Option<bool>, protocol: Option<ProtocolType>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5305,6 +5857,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Adds an HTTP endpoint
     pub fn with_http_endpoint(&self, port: Option<f64>, target_port: Option<f64>, name: Option<&str>, env: Option<&str>, is_proxied: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5327,6 +5881,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Adds an HTTPS endpoint
     pub fn with_https_endpoint(&self, port: Option<f64>, target_port: Option<f64>, name: Option<&str>, env: Option<&str>, is_proxied: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5349,6 +5905,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Marks existing http or https endpoints on a resource as external.
     pub fn with_external_http_endpoints(&self) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5356,6 +5914,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Gets an endpoint reference
     pub fn get_endpoint(&self, name: &str) -> Result<EndpointReference, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5364,6 +5924,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(EndpointReference::new(handle, self.client.clone()))
     }
+
+    /// Configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
     pub fn as_http2_service(&self) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5371,6 +5933,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Registers a callback to customize the URLs displayed for the resource.
     pub fn with_urls(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5380,6 +5944,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds or modifies displayed URLs
     pub fn with_url(&self, url: Value, display_text: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5391,6 +5957,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Registers a callback to update the URL displayed for the endpoint with the specified name.
     pub fn with_url_for_endpoint(&self, endpoint_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5401,6 +5969,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Excludes a resource from being published to the manifest.
     pub fn exclude_from_manifest(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5408,6 +5978,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Waits for another resource to be ready
     pub fn wait_for(&self, dependency: &IResource, wait_behavior: Option<WaitBehavior>) -> Result<IResourceWithWaitSupport, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5419,6 +5991,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithWaitSupport::new(handle, self.client.clone()))
     }
+
+    /// Waits for another resource to start
     pub fn wait_for_start(&self, dependency: &IResource, wait_behavior: Option<WaitBehavior>) -> Result<IResourceWithWaitSupport, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5430,6 +6004,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithWaitSupport::new(handle, self.client.clone()))
     }
+
+    /// Prevents resource from starting automatically
     pub fn with_explicit_start(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5437,6 +6013,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Waits for the dependency resource to enter the Exited or Finished state before starting the resource.
     pub fn wait_for_completion(&self, dependency: &IResource, exit_code: Option<f64>) -> Result<IResourceWithWaitSupport, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5448,6 +6026,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithWaitSupport::new(handle, self.client.clone()))
     }
+
+    /// Adds a health check by key
     pub fn with_health_check(&self, key: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5456,6 +6036,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a health check to the resource which is mapped to a specific endpoint.
     pub fn with_http_health_check(&self, path: Option<&str>, status_code: Option<f64>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5472,6 +6054,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Adds a resource command
     pub fn with_command(&self, name: &str, display_name: &str, execute_command: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, command_options: Option<CommandOptions>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5486,6 +6070,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a command to the resource that starts a local process when invoked.
     pub fn with_process_command(&self, command_name: &str, display_name: &str, options: ProcessCommandExportOptions) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5496,6 +6082,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a command to the resource that starts a local process created by a callback when invoked.
     pub fn with_process_command_factory(&self, command_name: &str, display_name: &str, create_process_spec: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, options: Option<ProcessCommandResultExportOptions>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5510,6 +6098,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds an HTTP resource command
     pub fn with_http_command(&self, path: &str, display_name: &str, options: Option<HttpCommandExportOptions>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5522,6 +6112,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Indicates whether developer certificates should be treated as trusted certificate authorities for the resource at run time. Currently this indicates trust for the ASP.NET Core developer certificate. The developer certificate will only be trusted when running in local development scenarios; in publish mode resources will use their default certificate trust.
     pub fn with_developer_certificate_trust(&self, trust: bool) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5530,6 +6122,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Sets the certificate trust scope
     pub fn with_certificate_trust_scope(&self, scope: CertificateTrustScope) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5538,6 +6132,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
     pub fn with_https_developer_certificate(&self, password: Option<&ParameterResource>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5548,6 +6144,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Disable HTTPS/TLS server certificate configuration for the resource. No HTTPS/TLS termination configuration will be applied.
     pub fn without_https_certificate(&self) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5555,6 +6153,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Adds a relationship to another resource using its builder.
     pub fn with_relationship(&self, resource_builder: &IResource, r#type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5564,6 +6164,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the parent relationship
     pub fn with_parent_relationship(&self, parent: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5572,6 +6174,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets a child relationship
     pub fn with_child_relationship(&self, child: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5580,6 +6184,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Specifies the icon to use when displaying the resource in the dashboard.
     pub fn with_icon_name(&self, icon_name: &str, icon_variant: Option<IconVariant>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5591,6 +6197,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures the compute environment for the compute resource.
     pub fn with_compute_environment(&self, compute_environment_resource: &IComputeEnvironmentResource) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5599,6 +6207,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
+
+    /// Adds an HTTP health probe to the resource
     pub fn with_http_probe(&self, probe_type: ProbeType, path: Option<&str>, initial_delay_seconds: Option<f64>, period_seconds: Option<f64>, timeout_seconds: Option<f64>, failure_threshold: Option<f64>, success_threshold: Option<f64>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5628,6 +6238,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry.
     pub fn exclude_from_mcp(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5635,6 +6247,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds an asynchronous callback to configure container image push options for the resource.
     pub fn with_image_push_options(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5644,6 +6258,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the remote image name (without registry endpoint or tag) for container push operations.
     pub fn with_remote_image_name(&self, remote_image_name: &str) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5652,6 +6268,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the remote image tag for container push operations.
     pub fn with_remote_image_tag(&self, remote_image_tag: &str) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5660,6 +6278,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a pipeline step to the resource that will be executed during deployment.
     pub fn with_pipeline_step_factory(&self, step_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, depends_on: Option<Vec<String>>, required_by: Option<Vec<String>>, tags: Option<Vec<String>>, description: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5682,6 +6302,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
     pub fn with_pipeline_configuration(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5691,12 +6313,16 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Gets the name of the resource from a builder.
     pub fn get_resource_name(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/getResourceName", args)?;
         Ok(serde_json::from_value(result)?)
     }
+
+    /// Subscribes to the BeforeResourceStarted event.
     pub fn on_before_resource_started(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5706,6 +6332,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the ResourceStopped event.
     pub fn on_resource_stopped(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5715,6 +6343,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the InitializeResource event.
     pub fn on_initialize_resource(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5724,6 +6354,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the ResourceEndpointsAllocated event.
     pub fn on_resource_endpoints_allocated(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5733,6 +6365,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the ResourceReady event.
     pub fn on_resource_ready(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5742,6 +6376,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Creates an execution configuration builder for the specified resource.
     pub fn create_execution_configuration(&self) -> Result<IExecutionConfigurationBuilder, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -5749,6 +6385,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IExecutionConfigurationBuilder::new(handle, self.client.clone()))
     }
+
+    /// Adds an optional string parameter
     pub fn with_optional_string(&self, value: Option<&str>, enabled: Option<bool>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5762,6 +6400,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures the resource with a DTO
     pub fn with_config(&self, config: TestConfigDto) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5770,6 +6410,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures environment with callback (test version)
     pub fn test_with_environment_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5779,6 +6421,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Sets the created timestamp
     pub fn with_created_at(&self, created_at: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5787,6 +6431,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the modified timestamp
     pub fn with_modified_at(&self, modified_at: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5795,6 +6441,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the correlation ID
     pub fn with_correlation_id(&self, correlation_id: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5803,6 +6451,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures with optional callback
     pub fn with_optional_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5812,6 +6462,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the resource status
     pub fn with_status(&self, status: TestResourceStatus) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5820,6 +6472,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures with nested DTO
     pub fn with_nested_config(&self, config: TestNestedDto) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5828,6 +6482,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds validation callback
     pub fn with_validator(&self, validator: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5837,6 +6493,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Waits for another resource (test version)
     pub fn test_wait_for(&self, dependency: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5845,6 +6503,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a dependency on another resource
     pub fn with_dependency(&self, dependency: &IResourceWithConnectionString) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5853,6 +6513,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a dependency from a string or another resource
     pub fn with_union_dependency(&self, dependency: Value) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5861,6 +6523,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the endpoints
     pub fn with_endpoints(&self, endpoints: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5869,6 +6533,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets environment variables
     pub fn with_environment_variables(&self, variables: HashMap<String, String>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5877,6 +6543,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Performs a cancellable operation
     pub fn with_cancellable_operation(&self, operation: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5886,6 +6554,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a label to the resource
     pub fn with_merge_label(&self, label: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5894,6 +6564,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a categorized label to the resource
     pub fn with_merge_label_categorized(&self, label: &str, category: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5903,6 +6575,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a named endpoint
     pub fn with_merge_endpoint(&self, endpoint_name: &str, port: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5912,6 +6586,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a named endpoint with scheme
     pub fn with_merge_endpoint_scheme(&self, endpoint_name: &str, port: f64, scheme: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5922,6 +6598,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures resource logging
     pub fn with_merge_logging(&self, log_level: &str, enable_console: Option<bool>, max_files: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5936,6 +6614,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures resource logging with file path
     pub fn with_merge_logging_path(&self, log_level: &str, log_path: &str, enable_console: Option<bool>, max_files: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5951,6 +6631,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a route
     pub fn with_merge_route(&self, path: &str, method: &str, handler: &str, priority: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -5962,6 +6644,8 @@ impl DotnetToolResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a route with middleware
     pub fn with_merge_route_middleware(&self, path: &str, method: &str, handler: &str, priority: f64, middleware: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -6001,7 +6685,7 @@ impl EndpointReference {
         &self.client
     }
 
-    /// Gets the Resource property
+    /// Gets the resource owner of the endpoint reference.
     pub fn resource(&self) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6010,7 +6694,7 @@ impl EndpointReference {
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
 
-    /// Gets the EndpointName property
+    /// Gets the name of the endpoint associated with the endpoint reference.
     pub fn endpoint_name(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6018,7 +6702,7 @@ impl EndpointReference {
         Ok(serde_json::from_value(result)?)
     }
 
-    /// Gets the ErrorMessage property
+    /// Gets or sets a custom error message to be thrown when the endpoint annotation is not found.
     pub fn error_message(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6026,7 +6710,7 @@ impl EndpointReference {
         Ok(serde_json::from_value(result)?)
     }
 
-    /// Gets the IsAllocated property
+    /// Gets a value indicating whether the endpoint is allocated.
     pub fn is_allocated(&self) -> Result<bool, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6034,7 +6718,7 @@ impl EndpointReference {
         Ok(serde_json::from_value(result)?)
     }
 
-    /// Gets the Exists property
+    /// Gets a value indicating whether the endpoint exists.
     pub fn exists(&self) -> Result<bool, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6042,7 +6726,7 @@ impl EndpointReference {
         Ok(serde_json::from_value(result)?)
     }
 
-    /// Gets the IsHttp property
+    /// Gets a value indicating whether the endpoint uses HTTP scheme.
     pub fn is_http(&self) -> Result<bool, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6050,7 +6734,7 @@ impl EndpointReference {
         Ok(serde_json::from_value(result)?)
     }
 
-    /// Gets the IsHttps property
+    /// Gets a value indicating whether the endpoint uses HTTPS scheme.
     pub fn is_https(&self) -> Result<bool, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6058,7 +6742,7 @@ impl EndpointReference {
         Ok(serde_json::from_value(result)?)
     }
 
-    /// Gets the TlsEnabled property
+    /// Gets a value indicating whether TLS is enabled for this endpoint.
     pub fn tls_enabled(&self) -> Result<bool, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6066,7 +6750,7 @@ impl EndpointReference {
         Ok(serde_json::from_value(result)?)
     }
 
-    /// Gets the IsHttpSchemeNamedEndpoint property
+    /// Gets a value indicating whether the endpoint name is "http" or "https", ignoring case. This is a convention used to identify endpoints that will be resolved based on the scheme of the endpoint in service discovery rather than by the specific endpoint name. This is done to allow http endpoints that are dynamically updated to https to be mapped correctly despite the endpoint name no longer matching the scheme.
     pub fn is_http_scheme_named_endpoint(&self) -> Result<bool, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6074,7 +6758,7 @@ impl EndpointReference {
         Ok(serde_json::from_value(result)?)
     }
 
-    /// Gets the ExcludeReferenceEndpoint property
+    /// Gets a value indicating whether this endpoint is excluded from the default set when referencing the resource's endpoints.
     pub fn exclude_reference_endpoint(&self) -> Result<bool, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6082,7 +6766,7 @@ impl EndpointReference {
         Ok(serde_json::from_value(result)?)
     }
 
-    /// Gets the Port property
+    /// Gets the port for this endpoint.
     pub fn port(&self) -> Result<f64, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6090,7 +6774,7 @@ impl EndpointReference {
         Ok(serde_json::from_value(result)?)
     }
 
-    /// Gets the TargetPort property
+    /// Gets the target port for this endpoint. If the port is dynamically allocated, this will return `null`.
     pub fn target_port(&self) -> Result<f64, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6098,7 +6782,7 @@ impl EndpointReference {
         Ok(serde_json::from_value(result)?)
     }
 
-    /// Gets the Host property
+    /// Gets the host for this endpoint.
     pub fn host(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6106,7 +6790,7 @@ impl EndpointReference {
         Ok(serde_json::from_value(result)?)
     }
 
-    /// Gets the Scheme property
+    /// Gets the scheme for this endpoint.
     pub fn scheme(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6114,7 +6798,7 @@ impl EndpointReference {
         Ok(serde_json::from_value(result)?)
     }
 
-    /// Gets the Url property
+    /// Gets the URL for this endpoint.
     pub fn url(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6122,7 +6806,7 @@ impl EndpointReference {
         Ok(serde_json::from_value(result)?)
     }
 
-    /// Invokes the GetValueAsync method
+    /// Gets the URL of the endpoint asynchronously. Waits for the endpoint to be allocated if necessary.
     pub fn get_value_async(&self, cancellation_token: Option<&CancellationToken>) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6134,7 +6818,7 @@ impl EndpointReference {
         Ok(serde_json::from_value(result)?)
     }
 
-    /// Invokes the Property method
+    /// Gets the specified property expression of the endpoint.
     pub fn property(&self, property: EndpointProperty) -> Result<EndpointReferenceExpression, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6144,7 +6828,7 @@ impl EndpointReference {
         Ok(EndpointReferenceExpression::new(handle, self.client.clone()))
     }
 
-    /// Invokes the GetTlsValue method
+    /// Gets a conditional expression that resolves to the enabledValue when TLS is enabled on the endpoint, or to the disabledValue otherwise.
     pub fn get_tls_value(&self, enabled_value: ReferenceExpression, disabled_value: ReferenceExpression) -> Result<ReferenceExpression, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6180,7 +6864,7 @@ impl EndpointReferenceExpression {
         &self.client
     }
 
-    /// Gets the Endpoint property
+    /// Gets the `EndpointReference`.
     pub fn endpoint(&self) -> Result<EndpointReference, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6189,7 +6873,7 @@ impl EndpointReferenceExpression {
         Ok(EndpointReference::new(handle, self.client.clone()))
     }
 
-    /// Gets the Property property
+    /// Gets the `EndpointProperty` for the property expression.
     pub fn property(&self) -> Result<EndpointProperty, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6197,7 +6881,7 @@ impl EndpointReferenceExpression {
         Ok(serde_json::from_value(result)?)
     }
 
-    /// Gets the ValueExpression property
+    /// Gets the expression of the property of the endpoint.
     pub fn value_expression(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6231,7 +6915,7 @@ impl EndpointUpdateContext {
         &self.client
     }
 
-    /// Gets the Name property
+    /// Gets the endpoint name.
     pub fn name(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6239,7 +6923,7 @@ impl EndpointUpdateContext {
         Ok(serde_json::from_value(result)?)
     }
 
-    /// Gets the Protocol property
+    /// Gets or sets the network protocol.
     pub fn protocol(&self) -> Result<ProtocolType, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6257,7 +6941,7 @@ impl EndpointUpdateContext {
         Ok(EndpointUpdateContext::new(handle, self.client.clone()))
     }
 
-    /// Gets the Port property
+    /// Gets or sets the desired host port.
     pub fn port(&self) -> Result<f64, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6275,7 +6959,7 @@ impl EndpointUpdateContext {
         Ok(EndpointUpdateContext::new(handle, self.client.clone()))
     }
 
-    /// Gets the TargetPort property
+    /// Gets or sets the target port.
     pub fn target_port(&self) -> Result<f64, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6293,7 +6977,7 @@ impl EndpointUpdateContext {
         Ok(EndpointUpdateContext::new(handle, self.client.clone()))
     }
 
-    /// Gets the UriScheme property
+    /// Gets or sets the URI scheme.
     pub fn uri_scheme(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6311,7 +6995,7 @@ impl EndpointUpdateContext {
         Ok(EndpointUpdateContext::new(handle, self.client.clone()))
     }
 
-    /// Gets the TargetHost property
+    /// Gets or sets the target host.
     pub fn target_host(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6329,7 +7013,7 @@ impl EndpointUpdateContext {
         Ok(EndpointUpdateContext::new(handle, self.client.clone()))
     }
 
-    /// Gets the Transport property
+    /// Gets or sets the transport.
     pub fn transport(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6347,7 +7031,7 @@ impl EndpointUpdateContext {
         Ok(EndpointUpdateContext::new(handle, self.client.clone()))
     }
 
-    /// Gets the IsExternal property
+    /// Gets or sets a value indicating whether the endpoint is external.
     pub fn is_external(&self) -> Result<bool, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6365,7 +7049,7 @@ impl EndpointUpdateContext {
         Ok(EndpointUpdateContext::new(handle, self.client.clone()))
     }
 
-    /// Gets the IsProxied property
+    /// Gets or sets a value indicating whether the endpoint is proxied.
     pub fn is_proxied(&self) -> Result<bool, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6383,7 +7067,7 @@ impl EndpointUpdateContext {
         Ok(EndpointUpdateContext::new(handle, self.client.clone()))
     }
 
-    /// Gets the ExcludeReferenceEndpoint property
+    /// Gets or sets a value indicating whether the endpoint is excluded from the default reference set.
     pub fn exclude_reference_endpoint(&self) -> Result<bool, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6401,7 +7085,7 @@ impl EndpointUpdateContext {
         Ok(EndpointUpdateContext::new(handle, self.client.clone()))
     }
 
-    /// Gets the TlsEnabled property
+    /// Gets or sets a value indicating whether TLS is enabled.
     pub fn tls_enabled(&self) -> Result<bool, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6445,7 +7129,7 @@ impl EnvironmentCallbackContext {
         &self.client
     }
 
-    /// Gets the Environment property
+    /// Gets the editor used to set environment variables in polyglot callbacks.
     pub fn environment(&self) -> Result<EnvironmentEditor, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6454,7 +7138,7 @@ impl EnvironmentCallbackContext {
         Ok(EnvironmentEditor::new(handle, self.client.clone()))
     }
 
-    /// Gets the Log property
+    /// Gets the logger facade used by polyglot callbacks.
     pub fn log(&self) -> Result<LogFacade, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6463,7 +7147,7 @@ impl EnvironmentCallbackContext {
         Ok(LogFacade::new(handle, self.client.clone()))
     }
 
-    /// Gets the Resource property
+    /// The resource associated with this callback context.
     pub fn resource(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6472,7 +7156,7 @@ impl EnvironmentCallbackContext {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Gets the ExecutionContext property
+    /// Gets the execution context associated with this invocation of the AppHost.
     pub fn execution_context(&self) -> Result<DistributedApplicationExecutionContext, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6507,7 +7191,7 @@ impl EnvironmentEditor {
         &self.client
     }
 
-    /// Invokes the Set method
+    /// Sets an environment variable.
     pub fn set(&self, name: &str, value: Value) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6542,6 +7226,8 @@ impl EventingSubscriberRegistrationContext {
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
     }
+
+    /// Subscribes to the BeforeStart event from an eventing subscriber registration context.
     pub fn on_before_start(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<DistributedApplicationEventSubscription, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6551,6 +7237,8 @@ impl EventingSubscriberRegistrationContext {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DistributedApplicationEventSubscription::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the BeforePublish event from an eventing subscriber registration context.
     pub fn on_before_publish(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<DistributedApplicationEventSubscription, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6560,6 +7248,8 @@ impl EventingSubscriberRegistrationContext {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DistributedApplicationEventSubscription::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the AfterPublish event from an eventing subscriber registration context.
     pub fn on_after_publish(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<DistributedApplicationEventSubscription, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6569,6 +7259,8 @@ impl EventingSubscriberRegistrationContext {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DistributedApplicationEventSubscription::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the AfterResourcesCreated event from an eventing subscriber registration context.
     pub fn on_after_resources_created(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<DistributedApplicationEventSubscription, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6579,7 +7271,7 @@ impl EventingSubscriberRegistrationContext {
         Ok(DistributedApplicationEventSubscription::new(handle, self.client.clone()))
     }
 
-    /// Gets the ExecutionContext property
+    /// The execution context for the AppHost invocation.
     pub fn execution_context(&self) -> Result<DistributedApplicationExecutionContext, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6588,7 +7280,7 @@ impl EventingSubscriberRegistrationContext {
         Ok(DistributedApplicationExecutionContext::new(handle, self.client.clone()))
     }
 
-    /// Gets the CancellationToken property
+    /// The cancellation token associated with the subscriber registration.
     pub fn cancellation_token(&self) -> Result<CancellationToken, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -6622,6 +7314,8 @@ impl ExecutableResource {
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
     }
+
+    /// Configures the resource to use the specified container registry for container image operations.
     pub fn with_container_registry(&self, registry: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -6630,6 +7324,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures custom base images for generated Dockerfiles.
     pub fn with_dockerfile_base_image(&self, build_image: Option<&str>, runtime_image: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -6643,6 +7339,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Publishes an executable as a Docker file
     pub fn publish_as_docker_file(&self, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<ExecutableResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -6652,6 +7350,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ExecutableResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the command for the executable resource.
     pub fn with_executable_command(&self, command: &str) -> Result<ExecutableResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -6660,6 +7360,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ExecutableResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the working directory for the executable resource.
     pub fn with_working_directory(&self, working_directory: &str) -> Result<ExecutableResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -6668,6 +7370,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ExecutableResource::new(handle, self.client.clone()))
     }
+
+    /// Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
     pub fn with_mcp_server(&self, path: Option<&str>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -6681,6 +7385,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Configures OTLP telemetry export
     pub fn with_otlp_exporter(&self, protocol: Option<OtlpProtocol>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -6691,6 +7397,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
     pub fn with_required_command(&self, command: &str, help_link: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -6702,6 +7410,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets an environment variable
     pub fn with_environment(&self, name: &str, value: Value) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -6711,6 +7421,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Allows for the population of environment variables on a resource.
     pub fn with_environment_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -6720,6 +7432,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Adds arguments to be passed to a resource that supports arguments when it is launched.
     pub fn with_args(&self, args: Vec<String>) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -6728,6 +7442,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
+
+    /// Adds a callback to be executed with a list of command-line arguments when a resource is started.
     pub fn with_args_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -6737,6 +7453,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
+
+    /// Configures how information is injected into environment variables when the resource references other resources.
     pub fn with_reference_environment(&self, options: ReferenceEnvironmentInjectionOptions) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -6745,6 +7463,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Adds a reference to another resource
     pub fn with_reference(&self, source: Value, connection_name: Option<&str>, optional: Option<bool>, name: Option<&str>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -6762,6 +7482,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Updates a named endpoint via callback
     pub fn with_endpoint_callback(&self, endpoint_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -6775,6 +7497,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Updates an HTTP endpoint via callback
     pub fn with_http_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -6790,6 +7514,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Updates an HTTPS endpoint via callback
     pub fn with_https_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -6805,6 +7531,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Adds a network endpoint
     pub fn with_endpoint(&self, port: Option<f64>, target_port: Option<f64>, scheme: Option<&str>, name: Option<&str>, env: Option<&str>, is_proxied: Option<bool>, is_external: Option<bool>, protocol: Option<ProtocolType>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -6836,6 +7564,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Adds an HTTP endpoint
     pub fn with_http_endpoint(&self, port: Option<f64>, target_port: Option<f64>, name: Option<&str>, env: Option<&str>, is_proxied: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -6858,6 +7588,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Adds an HTTPS endpoint
     pub fn with_https_endpoint(&self, port: Option<f64>, target_port: Option<f64>, name: Option<&str>, env: Option<&str>, is_proxied: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -6880,6 +7612,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Marks existing http or https endpoints on a resource as external.
     pub fn with_external_http_endpoints(&self) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -6887,6 +7621,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Gets an endpoint reference
     pub fn get_endpoint(&self, name: &str) -> Result<EndpointReference, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -6895,6 +7631,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(EndpointReference::new(handle, self.client.clone()))
     }
+
+    /// Configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
     pub fn as_http2_service(&self) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -6902,6 +7640,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Registers a callback to customize the URLs displayed for the resource.
     pub fn with_urls(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -6911,6 +7651,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds or modifies displayed URLs
     pub fn with_url(&self, url: Value, display_text: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -6922,6 +7664,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Registers a callback to update the URL displayed for the endpoint with the specified name.
     pub fn with_url_for_endpoint(&self, endpoint_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -6932,6 +7676,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Excludes a resource from being published to the manifest.
     pub fn exclude_from_manifest(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -6939,6 +7685,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Waits for another resource to be ready
     pub fn wait_for(&self, dependency: &IResource, wait_behavior: Option<WaitBehavior>) -> Result<IResourceWithWaitSupport, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -6950,6 +7698,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithWaitSupport::new(handle, self.client.clone()))
     }
+
+    /// Waits for another resource to start
     pub fn wait_for_start(&self, dependency: &IResource, wait_behavior: Option<WaitBehavior>) -> Result<IResourceWithWaitSupport, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -6961,6 +7711,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithWaitSupport::new(handle, self.client.clone()))
     }
+
+    /// Prevents resource from starting automatically
     pub fn with_explicit_start(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -6968,6 +7720,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Waits for the dependency resource to enter the Exited or Finished state before starting the resource.
     pub fn wait_for_completion(&self, dependency: &IResource, exit_code: Option<f64>) -> Result<IResourceWithWaitSupport, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -6979,6 +7733,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithWaitSupport::new(handle, self.client.clone()))
     }
+
+    /// Adds a health check by key
     pub fn with_health_check(&self, key: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -6987,6 +7743,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a health check to the resource which is mapped to a specific endpoint.
     pub fn with_http_health_check(&self, path: Option<&str>, status_code: Option<f64>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7003,6 +7761,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Adds a resource command
     pub fn with_command(&self, name: &str, display_name: &str, execute_command: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, command_options: Option<CommandOptions>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7017,6 +7777,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a command to the resource that starts a local process when invoked.
     pub fn with_process_command(&self, command_name: &str, display_name: &str, options: ProcessCommandExportOptions) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7027,6 +7789,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a command to the resource that starts a local process created by a callback when invoked.
     pub fn with_process_command_factory(&self, command_name: &str, display_name: &str, create_process_spec: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, options: Option<ProcessCommandResultExportOptions>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7041,6 +7805,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds an HTTP resource command
     pub fn with_http_command(&self, path: &str, display_name: &str, options: Option<HttpCommandExportOptions>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7053,6 +7819,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Indicates whether developer certificates should be treated as trusted certificate authorities for the resource at run time. Currently this indicates trust for the ASP.NET Core developer certificate. The developer certificate will only be trusted when running in local development scenarios; in publish mode resources will use their default certificate trust.
     pub fn with_developer_certificate_trust(&self, trust: bool) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7061,6 +7829,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Sets the certificate trust scope
     pub fn with_certificate_trust_scope(&self, scope: CertificateTrustScope) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7069,6 +7839,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
     pub fn with_https_developer_certificate(&self, password: Option<&ParameterResource>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7079,6 +7851,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Disable HTTPS/TLS server certificate configuration for the resource. No HTTPS/TLS termination configuration will be applied.
     pub fn without_https_certificate(&self) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7086,6 +7860,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Adds a relationship to another resource using its builder.
     pub fn with_relationship(&self, resource_builder: &IResource, r#type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7095,6 +7871,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the parent relationship
     pub fn with_parent_relationship(&self, parent: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7103,6 +7881,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets a child relationship
     pub fn with_child_relationship(&self, child: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7111,6 +7891,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Specifies the icon to use when displaying the resource in the dashboard.
     pub fn with_icon_name(&self, icon_name: &str, icon_variant: Option<IconVariant>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7122,6 +7904,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures the compute environment for the compute resource.
     pub fn with_compute_environment(&self, compute_environment_resource: &IComputeEnvironmentResource) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7130,6 +7914,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
+
+    /// Adds an HTTP health probe to the resource
     pub fn with_http_probe(&self, probe_type: ProbeType, path: Option<&str>, initial_delay_seconds: Option<f64>, period_seconds: Option<f64>, timeout_seconds: Option<f64>, failure_threshold: Option<f64>, success_threshold: Option<f64>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7159,6 +7945,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry.
     pub fn exclude_from_mcp(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7166,6 +7954,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds an asynchronous callback to configure container image push options for the resource.
     pub fn with_image_push_options(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7175,6 +7965,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the remote image name (without registry endpoint or tag) for container push operations.
     pub fn with_remote_image_name(&self, remote_image_name: &str) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7183,6 +7975,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the remote image tag for container push operations.
     pub fn with_remote_image_tag(&self, remote_image_tag: &str) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7191,6 +7985,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a pipeline step to the resource that will be executed during deployment.
     pub fn with_pipeline_step_factory(&self, step_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, depends_on: Option<Vec<String>>, required_by: Option<Vec<String>>, tags: Option<Vec<String>>, description: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7213,6 +8009,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
     pub fn with_pipeline_configuration(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7222,12 +8020,16 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Gets the name of the resource from a builder.
     pub fn get_resource_name(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/getResourceName", args)?;
         Ok(serde_json::from_value(result)?)
     }
+
+    /// Subscribes to the BeforeResourceStarted event.
     pub fn on_before_resource_started(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7237,6 +8039,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the ResourceStopped event.
     pub fn on_resource_stopped(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7246,6 +8050,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the InitializeResource event.
     pub fn on_initialize_resource(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7255,6 +8061,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the ResourceEndpointsAllocated event.
     pub fn on_resource_endpoints_allocated(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7264,6 +8072,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the ResourceReady event.
     pub fn on_resource_ready(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7273,6 +8083,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Creates an execution configuration builder for the specified resource.
     pub fn create_execution_configuration(&self) -> Result<IExecutionConfigurationBuilder, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -7280,6 +8092,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IExecutionConfigurationBuilder::new(handle, self.client.clone()))
     }
+
+    /// Adds an optional string parameter
     pub fn with_optional_string(&self, value: Option<&str>, enabled: Option<bool>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7293,6 +8107,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures the resource with a DTO
     pub fn with_config(&self, config: TestConfigDto) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7301,6 +8117,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures environment with callback (test version)
     pub fn test_with_environment_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7310,6 +8128,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Sets the created timestamp
     pub fn with_created_at(&self, created_at: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7318,6 +8138,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the modified timestamp
     pub fn with_modified_at(&self, modified_at: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7326,6 +8148,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the correlation ID
     pub fn with_correlation_id(&self, correlation_id: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7334,6 +8158,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures with optional callback
     pub fn with_optional_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7343,6 +8169,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the resource status
     pub fn with_status(&self, status: TestResourceStatus) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7351,6 +8179,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures with nested DTO
     pub fn with_nested_config(&self, config: TestNestedDto) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7359,6 +8189,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds validation callback
     pub fn with_validator(&self, validator: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7368,6 +8200,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Waits for another resource (test version)
     pub fn test_wait_for(&self, dependency: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7376,6 +8210,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a dependency on another resource
     pub fn with_dependency(&self, dependency: &IResourceWithConnectionString) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7384,6 +8220,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a dependency from a string or another resource
     pub fn with_union_dependency(&self, dependency: Value) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7392,6 +8230,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the endpoints
     pub fn with_endpoints(&self, endpoints: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7400,6 +8240,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets environment variables
     pub fn with_environment_variables(&self, variables: HashMap<String, String>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7408,6 +8250,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Performs a cancellable operation
     pub fn with_cancellable_operation(&self, operation: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7417,6 +8261,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a label to the resource
     pub fn with_merge_label(&self, label: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7425,6 +8271,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a categorized label to the resource
     pub fn with_merge_label_categorized(&self, label: &str, category: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7434,6 +8282,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a named endpoint
     pub fn with_merge_endpoint(&self, endpoint_name: &str, port: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7443,6 +8293,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a named endpoint with scheme
     pub fn with_merge_endpoint_scheme(&self, endpoint_name: &str, port: f64, scheme: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7453,6 +8305,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures resource logging
     pub fn with_merge_logging(&self, log_level: &str, enable_console: Option<bool>, max_files: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7467,6 +8321,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures resource logging with file path
     pub fn with_merge_logging_path(&self, log_level: &str, log_path: &str, enable_console: Option<bool>, max_files: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7482,6 +8338,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a route
     pub fn with_merge_route(&self, path: &str, method: &str, handler: &str, priority: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7493,6 +8351,8 @@ impl ExecutableResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a route with middleware
     pub fn with_merge_route_middleware(&self, path: &str, method: &str, handler: &str, priority: f64, middleware: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7532,7 +8392,7 @@ impl ExecuteCommandContext {
         &self.client
     }
 
-    /// Gets the ServiceProvider property
+    /// The service provider.
     pub fn service_provider(&self) -> Result<IServiceProvider, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -7541,7 +8401,7 @@ impl ExecuteCommandContext {
         Ok(IServiceProvider::new(handle, self.client.clone()))
     }
 
-    /// Gets the ResourceName property
+    /// The resource name.
     pub fn resource_name(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -7549,7 +8409,7 @@ impl ExecuteCommandContext {
         Ok(serde_json::from_value(result)?)
     }
 
-    /// Gets the CancellationToken property
+    /// The cancellation token.
     pub fn cancellation_token(&self) -> Result<CancellationToken, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -7558,7 +8418,7 @@ impl ExecuteCommandContext {
         Ok(CancellationToken::new(handle, self.client.clone()))
     }
 
-    /// Gets the Logger property
+    /// The logger for the resource.
     pub fn logger(&self) -> Result<ILogger, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -7567,7 +8427,7 @@ impl ExecuteCommandContext {
         Ok(ILogger::new(handle, self.client.clone()))
     }
 
-    /// Gets the Arguments property
+    /// Gets the invocation arguments supplied by the client when the command is executed.
     pub fn arguments(&self) -> Result<InteractionInputCollection, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -7601,6 +8461,8 @@ impl ExternalServiceResource {
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
     }
+
+    /// Configures the resource to use the specified container registry for container image operations.
     pub fn with_container_registry(&self, registry: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7609,6 +8471,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures custom base images for generated Dockerfiles.
     pub fn with_dockerfile_base_image(&self, build_image: Option<&str>, runtime_image: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7622,6 +8486,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds an HTTP health check to the external service for polyglot app hosts.
     pub fn with_http_health_check(&self, path: Option<&str>, status_code: Option<f64>, endpoint_name: Option<&str>) -> Result<ExternalServiceResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7638,6 +8504,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ExternalServiceResource::new(handle, self.client.clone()))
     }
+
+    /// Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
     pub fn with_required_command(&self, command: &str, help_link: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7649,6 +8517,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Registers a callback to customize the URLs displayed for the resource.
     pub fn with_urls(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7658,6 +8528,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds or modifies displayed URLs
     pub fn with_url(&self, url: Value, display_text: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7669,6 +8541,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Registers a callback to update the URL displayed for the endpoint with the specified name.
     pub fn with_url_for_endpoint(&self, endpoint_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7679,6 +8553,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Excludes a resource from being published to the manifest.
     pub fn exclude_from_manifest(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7686,6 +8562,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Prevents resource from starting automatically
     pub fn with_explicit_start(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7693,6 +8571,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a health check by key
     pub fn with_health_check(&self, key: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7701,6 +8581,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a resource command
     pub fn with_command(&self, name: &str, display_name: &str, execute_command: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, command_options: Option<CommandOptions>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7715,6 +8597,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a command to the resource that starts a local process when invoked.
     pub fn with_process_command(&self, command_name: &str, display_name: &str, options: ProcessCommandExportOptions) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7725,6 +8609,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a command to the resource that starts a local process created by a callback when invoked.
     pub fn with_process_command_factory(&self, command_name: &str, display_name: &str, create_process_spec: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, options: Option<ProcessCommandResultExportOptions>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7739,6 +8625,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a relationship to another resource using its builder.
     pub fn with_relationship(&self, resource_builder: &IResource, r#type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7748,6 +8636,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the parent relationship
     pub fn with_parent_relationship(&self, parent: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7756,6 +8646,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets a child relationship
     pub fn with_child_relationship(&self, child: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7764,6 +8656,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Specifies the icon to use when displaying the resource in the dashboard.
     pub fn with_icon_name(&self, icon_name: &str, icon_variant: Option<IconVariant>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7775,6 +8669,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry.
     pub fn exclude_from_mcp(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7782,6 +8678,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a pipeline step to the resource that will be executed during deployment.
     pub fn with_pipeline_step_factory(&self, step_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, depends_on: Option<Vec<String>>, required_by: Option<Vec<String>>, tags: Option<Vec<String>>, description: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7804,6 +8702,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
     pub fn with_pipeline_configuration(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7813,12 +8713,16 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Gets the name of the resource from a builder.
     pub fn get_resource_name(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/getResourceName", args)?;
         Ok(serde_json::from_value(result)?)
     }
+
+    /// Subscribes to the BeforeResourceStarted event.
     pub fn on_before_resource_started(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7828,6 +8732,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the ResourceStopped event.
     pub fn on_resource_stopped(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7837,6 +8743,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the InitializeResource event.
     pub fn on_initialize_resource(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7846,6 +8754,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the ResourceReady event.
     pub fn on_resource_ready(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7855,6 +8765,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Creates an execution configuration builder for the specified resource.
     pub fn create_execution_configuration(&self) -> Result<IExecutionConfigurationBuilder, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -7862,6 +8774,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IExecutionConfigurationBuilder::new(handle, self.client.clone()))
     }
+
+    /// Adds an optional string parameter
     pub fn with_optional_string(&self, value: Option<&str>, enabled: Option<bool>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7875,6 +8789,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures the resource with a DTO
     pub fn with_config(&self, config: TestConfigDto) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7883,6 +8799,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the created timestamp
     pub fn with_created_at(&self, created_at: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7891,6 +8809,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the modified timestamp
     pub fn with_modified_at(&self, modified_at: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7899,6 +8819,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the correlation ID
     pub fn with_correlation_id(&self, correlation_id: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7907,6 +8829,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures with optional callback
     pub fn with_optional_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7916,6 +8840,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the resource status
     pub fn with_status(&self, status: TestResourceStatus) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7924,6 +8850,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures with nested DTO
     pub fn with_nested_config(&self, config: TestNestedDto) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7932,6 +8860,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds validation callback
     pub fn with_validator(&self, validator: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7941,6 +8871,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Waits for another resource (test version)
     pub fn test_wait_for(&self, dependency: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7949,6 +8881,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a dependency on another resource
     pub fn with_dependency(&self, dependency: &IResourceWithConnectionString) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7957,6 +8891,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a dependency from a string or another resource
     pub fn with_union_dependency(&self, dependency: Value) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7965,6 +8901,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the endpoints
     pub fn with_endpoints(&self, endpoints: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7973,6 +8911,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Performs a cancellable operation
     pub fn with_cancellable_operation(&self, operation: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7982,6 +8922,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a label to the resource
     pub fn with_merge_label(&self, label: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7990,6 +8932,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a categorized label to the resource
     pub fn with_merge_label_categorized(&self, label: &str, category: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -7999,6 +8943,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a named endpoint
     pub fn with_merge_endpoint(&self, endpoint_name: &str, port: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -8008,6 +8954,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a named endpoint with scheme
     pub fn with_merge_endpoint_scheme(&self, endpoint_name: &str, port: f64, scheme: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -8018,6 +8966,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures resource logging
     pub fn with_merge_logging(&self, log_level: &str, enable_console: Option<bool>, max_files: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -8032,6 +8982,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures resource logging with file path
     pub fn with_merge_logging_path(&self, log_level: &str, log_path: &str, enable_console: Option<bool>, max_files: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -8047,6 +8999,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a route
     pub fn with_merge_route(&self, path: &str, method: &str, handler: &str, priority: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -8058,6 +9012,8 @@ impl ExternalServiceResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a route with middleware
     pub fn with_merge_route_middleware(&self, path: &str, method: &str, handler: &str, priority: f64, middleware: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -8097,13 +9053,15 @@ impl IAspireStore {
         &self.client
     }
 
-    /// Gets the BasePath property
+    /// Gets the base path of this store.
     pub fn base_path(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/IAspireStore.basePath", args)?;
         Ok(serde_json::from_value(result)?)
     }
+
+    /// Gets a deterministic file path that is a copy of the `sourceFilename`. The resulting file name will depend on the content of the file.
     pub fn get_file_name_with_content(&self, filename_template: &str, source_filename: &str) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("aspireStore".to_string(), self.handle.to_json());
@@ -8190,6 +9148,8 @@ impl IConfiguration {
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
     }
+
+    /// Gets a configuration value by key.
     pub fn get_config_value(&self, key: &str) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("configuration".to_string(), self.handle.to_json());
@@ -8197,6 +9157,8 @@ impl IConfiguration {
         let result = self.client.invoke_capability("Aspire.Hosting/getConfigValue", args)?;
         Ok(serde_json::from_value(result)?)
     }
+
+    /// Gets a connection string by name.
     pub fn get_connection_string(&self, name: &str) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("configuration".to_string(), self.handle.to_json());
@@ -8204,6 +9166,8 @@ impl IConfiguration {
         let result = self.client.invoke_capability("Aspire.Hosting/getConnectionString", args)?;
         Ok(serde_json::from_value(result)?)
     }
+
+    /// Gets a configuration section by key.
     pub fn get_section(&self, key: &str) -> Result<IConfigurationSection, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("configuration".to_string(), self.handle.to_json());
@@ -8212,6 +9176,8 @@ impl IConfiguration {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IConfigurationSection::new(handle, self.client.clone()))
     }
+
+    /// Gets the child sections of a configuration handle.
     pub fn get_children(&self) -> Result<Vec<IConfigurationSection>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("configuration".to_string(), self.handle.to_json());
@@ -8219,6 +9185,8 @@ impl IConfiguration {
         let handles: Vec<Handle> = serde_json::from_value(result)?;
         Ok(handles.into_iter().map(|h| IConfigurationSection::new(h, self.client.clone())).collect())
     }
+
+    /// Checks whether a configuration section exists.
     pub fn exists(&self, key: &str) -> Result<bool, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("configuration".to_string(), self.handle.to_json());
@@ -8338,6 +9306,8 @@ impl IDistributedApplicationBuilder {
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
     }
+
+    /// Adds a container registry resource
     pub fn add_container_registry(&self, name: &str, endpoint: Value, repository: Option<Value>) -> Result<ContainerRegistryResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -8350,6 +9320,8 @@ impl IDistributedApplicationBuilder {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerRegistryResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a container resource to the application.
     pub fn add_container(&self, name: &str, image: Value) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -8359,6 +9331,8 @@ impl IDistributedApplicationBuilder {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a Dockerfile to the application model that can be treated like a container resource.
     pub fn add_dockerfile(&self, name: &str, context_path: &str, dockerfile_path: Option<&str>, stage: Option<&str>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -8374,6 +9348,8 @@ impl IDistributedApplicationBuilder {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a container resource built from a programmatically generated Dockerfile
     pub fn add_dockerfile_builder(&self, name: &str, context_path: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, stage: Option<&str>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -8388,6 +9364,8 @@ impl IDistributedApplicationBuilder {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a .NET tool resource to the application model.
     pub fn add_dotnet_tool(&self, name: &str, package_id: &str) -> Result<DotnetToolResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -8397,6 +9375,8 @@ impl IDistributedApplicationBuilder {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DotnetToolResource::new(handle, self.client.clone()))
     }
+
+    /// Adds an executable resource to the application model.
     pub fn add_executable(&self, name: &str, command: &str, working_directory: &str, args: Vec<String>) -> Result<ExecutableResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -8408,6 +9388,8 @@ impl IDistributedApplicationBuilder {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ExecutableResource::new(handle, self.client.clone()))
     }
+
+    /// Adds an external service resource
     pub fn add_external_service(&self, name: &str, url: Value) -> Result<ExternalServiceResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -8418,7 +9400,7 @@ impl IDistributedApplicationBuilder {
         Ok(ExternalServiceResource::new(handle, self.client.clone()))
     }
 
-    /// Gets the AppHostDirectory property
+    /// Directory of the project where the app host is located. Defaults to the content root if there's no project.
     pub fn app_host_directory(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -8435,7 +9417,7 @@ impl IDistributedApplicationBuilder {
         Ok(IHostEnvironment::new(handle, self.client.clone()))
     }
 
-    /// Gets the Eventing property
+    /// Eventing infrastructure for AppHost lifecycle.
     pub fn eventing(&self) -> Result<IDistributedApplicationEventing, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -8444,7 +9426,7 @@ impl IDistributedApplicationBuilder {
         Ok(IDistributedApplicationEventing::new(handle, self.client.clone()))
     }
 
-    /// Gets the ExecutionContext property
+    /// Execution context for this invocation of the AppHost.
     pub fn execution_context(&self) -> Result<DistributedApplicationExecutionContext, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -8453,7 +9435,7 @@ impl IDistributedApplicationBuilder {
         Ok(DistributedApplicationExecutionContext::new(handle, self.client.clone()))
     }
 
-    /// Gets the Pipeline property
+    /// Gets the deployment pipeline for this distributed application.
     pub fn pipeline(&self) -> Result<IDistributedApplicationPipeline, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -8462,7 +9444,7 @@ impl IDistributedApplicationBuilder {
         Ok(IDistributedApplicationPipeline::new(handle, self.client.clone()))
     }
 
-    /// Gets the UserSecretsManager property
+    /// Gets the service for managing user secrets.
     pub fn user_secrets_manager(&self) -> Result<IUserSecretsManager, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -8471,7 +9453,7 @@ impl IDistributedApplicationBuilder {
         Ok(IUserSecretsManager::new(handle, self.client.clone()))
     }
 
-    /// Invokes the Build method
+    /// Builds the distributed application
     pub fn build(&self) -> Result<DistributedApplication, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -8479,6 +9461,8 @@ impl IDistributedApplicationBuilder {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DistributedApplication::new(handle, self.client.clone()))
     }
+
+    /// Adds a parameter resource
     pub fn add_parameter(&self, name: &str, value: Option<&str>, publish_value_as_default: Option<bool>, secret: Option<bool>) -> Result<ParameterResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -8496,6 +9480,8 @@ impl IDistributedApplicationBuilder {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ParameterResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a parameter resource to the application, with a value coming from configuration.
     pub fn add_parameter_from_configuration(&self, name: &str, configuration_key: &str, secret: Option<bool>) -> Result<ParameterResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -8508,6 +9494,8 @@ impl IDistributedApplicationBuilder {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ParameterResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a parameter with a generated default value
     pub fn add_parameter_with_generated_value(&self, name: &str, value: GenerateParameterDefault, secret: Option<bool>, persist: Option<bool>) -> Result<ParameterResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -8523,6 +9511,8 @@ impl IDistributedApplicationBuilder {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ParameterResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a connection string resource
     pub fn add_connection_string(&self, name: &str, environment_variable_name_or_expression: Option<Value>) -> Result<IResourceWithConnectionString, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -8534,6 +9524,8 @@ impl IDistributedApplicationBuilder {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithConnectionString::new(handle, self.client.clone()))
     }
+
+    /// Adds a .NET project resource
     pub fn add_project(&self, name: &str, project_path: &str, launch_profile_or_options: Option<Value>) -> Result<ProjectResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -8546,6 +9538,8 @@ impl IDistributedApplicationBuilder {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ProjectResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a C# application resource
     pub fn add_c_sharp_app(&self, name: &str, path: &str, options: Option<&ProjectResourceOptions>) -> Result<CSharpAppResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -8558,6 +9552,8 @@ impl IDistributedApplicationBuilder {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(CSharpAppResource::new(handle, self.client.clone()))
     }
+
+    /// Gets the application configuration.
     pub fn get_configuration(&self) -> Result<IConfiguration, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -8565,6 +9561,8 @@ impl IDistributedApplicationBuilder {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IConfiguration::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the BeforeStart event, which fires before the application starts.
     pub fn subscribe_before_start(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<DistributedApplicationEventSubscription, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -8574,6 +9572,8 @@ impl IDistributedApplicationBuilder {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DistributedApplicationEventSubscription::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the BeforePublish event, which fires before the application is published.
     pub fn subscribe_before_publish(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<DistributedApplicationEventSubscription, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -8583,6 +9583,8 @@ impl IDistributedApplicationBuilder {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DistributedApplicationEventSubscription::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the AfterPublish event, which fires after the application is published.
     pub fn subscribe_after_publish(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<DistributedApplicationEventSubscription, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -8592,6 +9594,8 @@ impl IDistributedApplicationBuilder {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DistributedApplicationEventSubscription::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the AfterResourcesCreated event, which fires after all resources are created.
     pub fn subscribe_after_resources_created(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<DistributedApplicationEventSubscription, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -8601,6 +9605,8 @@ impl IDistributedApplicationBuilder {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DistributedApplicationEventSubscription::new(handle, self.client.clone()))
     }
+
+    /// Adds an ATS-friendly eventing subscriber callback to the distributed-application builder.
     pub fn add_eventing_subscriber(&self, subscribe: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -8609,6 +9615,8 @@ impl IDistributedApplicationBuilder {
         let result = self.client.invoke_capability("Aspire.Hosting/addEventingSubscriber", args)?;
         Ok(())
     }
+
+    /// Attempts to add an ATS-friendly eventing subscriber callback to the distributed-application builder.
     pub fn try_add_eventing_subscriber(&self, subscribe: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -8617,6 +9625,8 @@ impl IDistributedApplicationBuilder {
         let result = self.client.invoke_capability("Aspire.Hosting/tryAddEventingSubscriber", args)?;
         Ok(())
     }
+
+    /// Adds a test Redis resource from ATS documentation.
     pub fn add_test_redis(&self, name: &str, port: Option<f64>) -> Result<TestRedisResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -8628,6 +9638,8 @@ impl IDistributedApplicationBuilder {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(TestRedisResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a test vault resource
     pub fn add_test_vault(&self, name: &str) -> Result<TestVaultResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -8689,7 +9701,7 @@ impl IDistributedApplicationEventing {
         &self.client
     }
 
-    /// Invokes the Unsubscribe method
+    /// Unsubscribe from an event.
     pub fn unsubscribe(&self, subscription: &DistributedApplicationEventSubscription) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -8723,6 +9735,8 @@ impl IDistributedApplicationPipeline {
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
     }
+
+    /// Disables the publish and deploy validation that requires build-only containers to be consumed by another resource.
     pub fn disable_build_only_container_validation(&self) -> Result<IDistributedApplicationPipeline, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("pipeline".to_string(), self.handle.to_json());
@@ -8730,6 +9744,8 @@ impl IDistributedApplicationPipeline {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IDistributedApplicationPipeline::new(handle, self.client.clone()))
     }
+
+    /// Adds an application-level pipeline step in a TypeScript-friendly shape.
     pub fn add_step(&self, step_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, depends_on: Option<Vec<String>>, required_by: Option<Vec<String>>) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("pipeline".to_string(), self.handle.to_json());
@@ -8745,6 +9761,8 @@ impl IDistributedApplicationPipeline {
         let result = self.client.invoke_capability("Aspire.Hosting/addStep", args)?;
         Ok(())
     }
+
+    /// Registers a pipeline configuration callback in a TypeScript-friendly shape.
     pub fn configure(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("pipeline".to_string(), self.handle.to_json());
@@ -8805,6 +9823,8 @@ impl IExecutionConfigurationBuilder {
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
     }
+
+    /// Builds the execution configuration for the specified builder.
     pub fn build(&self, execution_context: &DistributedApplicationExecutionContext, resource_logger: Option<&ILogger>, cancellation_token: Option<&CancellationToken>) -> Result<IExecutionConfigurationResult, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -8820,6 +9840,8 @@ impl IExecutionConfigurationBuilder {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IExecutionConfigurationResult::new(handle, self.client.clone()))
     }
+
+    /// Adds an HTTPS certificate configuration gatherer using certificate metadata instead of a raw X509 certificate.
     pub fn with_https_certificate_config(&self, config_context_factory: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IExecutionConfigurationBuilder, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -8829,6 +9851,8 @@ impl IExecutionConfigurationBuilder {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IExecutionConfigurationBuilder::new(handle, self.client.clone()))
     }
+
+    /// Adds a command line arguments configuration gatherer to the builder.
     pub fn with_arguments_config(&self) -> Result<IExecutionConfigurationBuilder, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -8836,6 +9860,8 @@ impl IExecutionConfigurationBuilder {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IExecutionConfigurationBuilder::new(handle, self.client.clone()))
     }
+
+    /// Adds an environment variables configuration gatherer to the builder.
     pub fn with_environment_variables_config(&self) -> Result<IExecutionConfigurationBuilder, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -8843,6 +9869,8 @@ impl IExecutionConfigurationBuilder {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IExecutionConfigurationBuilder::new(handle, self.client.clone()))
     }
+
+    /// Adds a certificate trust configuration gatherer to the builder.
     pub fn with_certificate_trust_config(&self, config_context_factory: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IExecutionConfigurationBuilder, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -8878,12 +9906,16 @@ impl IExecutionConfigurationResult {
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
     }
+
+    /// Gets certificate trust execution-configuration data when present.
     pub fn get_certificate_trust_data(&self) -> Result<CertificateTrustExecutionConfigurationExportData, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("configuration".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/getCertificateTrustData", args)?;
         Ok(serde_json::from_value(result)?)
     }
+
+    /// Gets HTTPS certificate execution-configuration data when present.
     pub fn get_https_certificate_data(&self) -> Result<HttpsCertificateExecutionConfigurationExportData, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("configuration".to_string(), self.handle.to_json());
@@ -8996,24 +10028,32 @@ impl IHostEnvironment {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IHostEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Checks if the environment is Development.
     pub fn is_development(&self) -> Result<bool, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("environment".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/isDevelopment", args)?;
         Ok(serde_json::from_value(result)?)
     }
+
+    /// Checks if the environment is Production.
     pub fn is_production(&self) -> Result<bool, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("environment".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/isProduction", args)?;
         Ok(serde_json::from_value(result)?)
     }
+
+    /// Checks if the environment is Staging.
     pub fn is_staging(&self) -> Result<bool, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("environment".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/isStaging", args)?;
         Ok(serde_json::from_value(result)?)
     }
+
+    /// Checks if the environment matches the specified name.
     pub fn is_environment(&self, environment_name: &str) -> Result<bool, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("environment".to_string(), self.handle.to_json());
@@ -9047,6 +10087,8 @@ impl ILogger {
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
     }
+
+    /// Logs an information message.
     pub fn log_information(&self, message: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("logger".to_string(), self.handle.to_json());
@@ -9054,6 +10096,8 @@ impl ILogger {
         let result = self.client.invoke_capability("Aspire.Hosting/logInformation", args)?;
         Ok(())
     }
+
+    /// Logs a warning message.
     pub fn log_warning(&self, message: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("logger".to_string(), self.handle.to_json());
@@ -9061,6 +10105,8 @@ impl ILogger {
         let result = self.client.invoke_capability("Aspire.Hosting/logWarning", args)?;
         Ok(())
     }
+
+    /// Logs an error message.
     pub fn log_error(&self, message: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("logger".to_string(), self.handle.to_json());
@@ -9068,6 +10114,8 @@ impl ILogger {
         let result = self.client.invoke_capability("Aspire.Hosting/logError", args)?;
         Ok(())
     }
+
+    /// Logs a debug message.
     pub fn log_debug(&self, message: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("logger".to_string(), self.handle.to_json());
@@ -9075,6 +10123,8 @@ impl ILogger {
         let result = self.client.invoke_capability("Aspire.Hosting/logDebug", args)?;
         Ok(())
     }
+
+    /// Logs a message with a specified log level.
     pub fn log(&self, level: &str, message: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("logger".to_string(), self.handle.to_json());
@@ -9109,6 +10159,8 @@ impl ILoggerFactory {
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
     }
+
+    /// Creates a logger for the specified category name.
     pub fn create_logger(&self, category_name: &str) -> Result<ILogger, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("loggerFactory".to_string(), self.handle.to_json());
@@ -9143,6 +10195,8 @@ impl IReportingStep {
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
     }
+
+    /// Creates a reporting task with plain-text status text.
     pub fn create_task(&self, status_text: &str, cancellation_token: Option<&CancellationToken>) -> Result<IReportingTask, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("reportingStep".to_string(), self.handle.to_json());
@@ -9155,6 +10209,8 @@ impl IReportingStep {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IReportingTask::new(handle, self.client.clone()))
     }
+
+    /// Creates a reporting task with Markdown-formatted status text.
     pub fn create_markdown_task(&self, markdown_string: &str, cancellation_token: Option<&CancellationToken>) -> Result<IReportingTask, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("reportingStep".to_string(), self.handle.to_json());
@@ -9167,6 +10223,8 @@ impl IReportingStep {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IReportingTask::new(handle, self.client.clone()))
     }
+
+    /// Logs a plain-text message for the reporting step.
     pub fn log_step(&self, level: &str, message: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("reportingStep".to_string(), self.handle.to_json());
@@ -9175,6 +10233,8 @@ impl IReportingStep {
         let result = self.client.invoke_capability("Aspire.Hosting/logStep", args)?;
         Ok(())
     }
+
+    /// Logs a Markdown-formatted message for the reporting step.
     pub fn log_step_markdown(&self, level: &str, markdown_string: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("reportingStep".to_string(), self.handle.to_json());
@@ -9183,6 +10243,8 @@ impl IReportingStep {
         let result = self.client.invoke_capability("Aspire.Hosting/logStepMarkdown", args)?;
         Ok(())
     }
+
+    /// Completes the reporting step with plain-text completion text.
     pub fn complete_step(&self, completion_text: &str, completion_state: Option<&str>, cancellation_token: Option<&CancellationToken>) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("reportingStep".to_string(), self.handle.to_json());
@@ -9197,6 +10259,8 @@ impl IReportingStep {
         let result = self.client.invoke_capability("Aspire.Hosting/completeStep", args)?;
         Ok(())
     }
+
+    /// Completes the reporting step with Markdown-formatted completion text.
     pub fn complete_step_markdown(&self, markdown_string: &str, completion_state: Option<&str>, cancellation_token: Option<&CancellationToken>) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("reportingStep".to_string(), self.handle.to_json());
@@ -9237,6 +10301,8 @@ impl IReportingTask {
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
     }
+
+    /// Updates the reporting task with plain-text status text.
     pub fn update_task(&self, status_text: &str, cancellation_token: Option<&CancellationToken>) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("reportingTask".to_string(), self.handle.to_json());
@@ -9248,6 +10314,8 @@ impl IReportingTask {
         let result = self.client.invoke_capability("Aspire.Hosting/updateTask", args)?;
         Ok(())
     }
+
+    /// Updates the reporting task with Markdown-formatted status text.
     pub fn update_task_markdown(&self, markdown_string: &str, cancellation_token: Option<&CancellationToken>) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("reportingTask".to_string(), self.handle.to_json());
@@ -9259,6 +10327,8 @@ impl IReportingTask {
         let result = self.client.invoke_capability("Aspire.Hosting/updateTaskMarkdown", args)?;
         Ok(())
     }
+
+    /// Completes the reporting task with plain-text completion text.
     pub fn complete_task(&self, completion_message: Option<&str>, completion_state: Option<&str>, cancellation_token: Option<&CancellationToken>) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("reportingTask".to_string(), self.handle.to_json());
@@ -9275,6 +10345,8 @@ impl IReportingTask {
         let result = self.client.invoke_capability("Aspire.Hosting/completeTask", args)?;
         Ok(())
     }
+
+    /// Completes the reporting task with Markdown-formatted completion text.
     pub fn complete_task_markdown(&self, markdown_string: &str, completion_state: Option<&str>, cancellation_token: Option<&CancellationToken>) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("reportingTask".to_string(), self.handle.to_json());
@@ -9393,6 +10465,8 @@ impl IResourceWithContainerFiles {
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
     }
+
+    /// Adds a container files source annotation to the resource being built, specifying the path to the container files source.
     pub fn with_container_files_source(&self, source_path: &str) -> Result<IResourceWithContainerFiles, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -9401,6 +10475,8 @@ impl IResourceWithContainerFiles {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithContainerFiles::new(handle, self.client.clone()))
     }
+
+    /// Removes any container files source annotation from the resource being built.
     pub fn clear_container_files_sources(&self) -> Result<IResourceWithContainerFiles, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -9538,6 +10614,8 @@ impl IServiceProvider {
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
     }
+
+    /// Gets the distributed application eventing service from the service provider.
     pub fn get_eventing(&self) -> Result<IDistributedApplicationEventing, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("serviceProvider".to_string(), self.handle.to_json());
@@ -9545,6 +10623,8 @@ impl IServiceProvider {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IDistributedApplicationEventing::new(handle, self.client.clone()))
     }
+
+    /// Gets the logger factory from the service provider.
     pub fn get_logger_factory(&self) -> Result<ILoggerFactory, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("serviceProvider".to_string(), self.handle.to_json());
@@ -9552,6 +10632,8 @@ impl IServiceProvider {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ILoggerFactory::new(handle, self.client.clone()))
     }
+
+    /// Gets the resource logger service from the service provider.
     pub fn get_resource_logger_service(&self) -> Result<ResourceLoggerService, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("serviceProvider".to_string(), self.handle.to_json());
@@ -9559,6 +10641,8 @@ impl IServiceProvider {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ResourceLoggerService::new(handle, self.client.clone()))
     }
+
+    /// Gets the distributed application model from the service provider.
     pub fn get_distributed_application_model(&self) -> Result<DistributedApplicationModel, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("serviceProvider".to_string(), self.handle.to_json());
@@ -9566,6 +10650,8 @@ impl IServiceProvider {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(DistributedApplicationModel::new(handle, self.client.clone()))
     }
+
+    /// Gets the resource notification service from the service provider.
     pub fn get_resource_notification_service(&self) -> Result<ResourceNotificationService, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("serviceProvider".to_string(), self.handle.to_json());
@@ -9573,6 +10659,8 @@ impl IServiceProvider {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ResourceNotificationService::new(handle, self.client.clone()))
     }
+
+    /// Gets the Aspire store from the service provider.
     pub fn get_aspire_store(&self) -> Result<IAspireStore, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("serviceProvider".to_string(), self.handle.to_json());
@@ -9580,6 +10668,8 @@ impl IServiceProvider {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IAspireStore::new(handle, self.client.clone()))
     }
+
+    /// Gets the user secrets manager from the service provider.
     pub fn get_user_secrets_manager(&self) -> Result<IUserSecretsManager, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("serviceProvider".to_string(), self.handle.to_json());
@@ -9640,7 +10730,7 @@ impl IUserSecretsManager {
         &self.client
     }
 
-    /// Gets the IsAvailable property
+    /// Gets a value indicating whether user secrets are available.
     pub fn is_available(&self) -> Result<bool, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -9648,7 +10738,7 @@ impl IUserSecretsManager {
         Ok(serde_json::from_value(result)?)
     }
 
-    /// Gets the FilePath property
+    /// Gets the path to the user secrets file.
     pub fn file_path(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -9656,7 +10746,7 @@ impl IUserSecretsManager {
         Ok(serde_json::from_value(result)?)
     }
 
-    /// Invokes the TrySetSecret method
+    /// Attempts to set a user secret value synchronously.
     pub fn try_set_secret(&self, name: &str, value: &str) -> Result<bool, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -9666,7 +10756,7 @@ impl IUserSecretsManager {
         Ok(serde_json::from_value(result)?)
     }
 
-    /// Invokes the TryDeleteSecret method
+    /// Attempts to delete a user secret value synchronously.
     pub fn try_delete_secret(&self, name: &str) -> Result<bool, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -9674,6 +10764,8 @@ impl IUserSecretsManager {
         let result = self.client.invoke_capability("Aspire.Hosting/IUserSecretsManager.tryDeleteSecret", args)?;
         Ok(serde_json::from_value(result)?)
     }
+
+    /// Saves state to user secrets from a JSON string.
     pub fn save_state_json(&self, json: &str, cancellation_token: Option<&CancellationToken>) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("userSecretsManager".to_string(), self.handle.to_json());
@@ -9685,6 +10777,8 @@ impl IUserSecretsManager {
         let result = self.client.invoke_capability("Aspire.Hosting/saveStateJson", args)?;
         Ok(())
     }
+
+    /// Gets a secret value if it exists in configuration, or sets it to the provided value if it does not.
     pub fn get_or_set_secret(&self, resource_builder: &IResource, name: &str, value: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("userSecretsManager".to_string(), self.handle.to_json());
@@ -9730,7 +10824,7 @@ impl InitializeResourceEvent {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Gets the Eventing property
+    /// The `IDistributedApplicationEventing` service for the app host.
     pub fn eventing(&self) -> Result<IDistributedApplicationEventing, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -9739,7 +10833,7 @@ impl InitializeResourceEvent {
         Ok(IDistributedApplicationEventing::new(handle, self.client.clone()))
     }
 
-    /// Gets the Logger property
+    /// An instance of `ILogger` that can be used to log messages for the resource.
     pub fn logger(&self) -> Result<ILogger, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -9748,7 +10842,7 @@ impl InitializeResourceEvent {
         Ok(ILogger::new(handle, self.client.clone()))
     }
 
-    /// Gets the Notifications property
+    /// The `ResourceNotificationService` for the app host.
     pub fn notifications(&self) -> Result<ResourceNotificationService, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -9757,7 +10851,7 @@ impl InitializeResourceEvent {
         Ok(ResourceNotificationService::new(handle, self.client.clone()))
     }
 
-    /// Gets the Services property
+    /// The `IServiceProvider` for the app host.
     pub fn services(&self) -> Result<IServiceProvider, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -9792,7 +10886,7 @@ impl InputsDialogValidationContext {
         &self.client
     }
 
-    /// Gets the Inputs property
+    /// Gets the inputs that are being validated.
     pub fn inputs(&self) -> Result<InteractionInputCollection, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -9801,7 +10895,7 @@ impl InputsDialogValidationContext {
         Ok(InteractionInputCollection::new(handle, self.client.clone()))
     }
 
-    /// Gets the CancellationToken property
+    /// Gets the cancellation token for the validation operation.
     pub fn cancellation_token(&self) -> Result<CancellationToken, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -9810,7 +10904,7 @@ impl InputsDialogValidationContext {
         Ok(CancellationToken::new(handle, self.client.clone()))
     }
 
-    /// Invokes the AddValidationError method
+    /// Adds a validation error for the input with the specified name.
     pub fn add_validation_error(&self, input_name: &str, error_message: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -9846,7 +10940,7 @@ impl InteractionInputCollection {
         &self.client
     }
 
-    /// Invokes the ToArray method
+    /// Gets all inputs in declaration order.
     pub fn to_array(&self) -> Result<Vec<InteractionInput>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -9880,7 +10974,7 @@ impl LogFacade {
         &self.client
     }
 
-    /// Invokes the Info method
+    /// Writes an informational log message.
     pub fn info(&self, message: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -9889,7 +10983,7 @@ impl LogFacade {
         Ok(())
     }
 
-    /// Invokes the Warning method
+    /// Writes a warning log message.
     pub fn warning(&self, message: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -9898,7 +10992,7 @@ impl LogFacade {
         Ok(())
     }
 
-    /// Invokes the Error method
+    /// Writes an error log message.
     pub fn error(&self, message: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -9907,7 +11001,7 @@ impl LogFacade {
         Ok(())
     }
 
-    /// Invokes the Debug method
+    /// Writes a debug log message.
     pub fn debug(&self, message: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -9941,6 +11035,8 @@ impl ParameterResource {
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
     }
+
+    /// Configures the resource to use the specified container registry for container image operations.
     pub fn with_container_registry(&self, registry: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -9949,6 +11045,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures custom base images for generated Dockerfiles.
     pub fn with_dockerfile_base_image(&self, build_image: Option<&str>, runtime_image: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -9962,6 +11060,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the description of the parameter resource.
     pub fn with_description(&self, description: &str, enable_markdown: Option<bool>) -> Result<ParameterResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -9973,6 +11073,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ParameterResource::new(handle, self.client.clone()))
     }
+
+    /// Sets a custom input for the parameter resource from a polyglot app host.
     pub fn with_custom_input(&self, options: ParameterCustomInputOptions) -> Result<ParameterResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -9981,6 +11083,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ParameterResource::new(handle, self.client.clone()))
     }
+
+    /// Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
     pub fn with_required_command(&self, command: &str, help_link: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -9992,6 +11096,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Registers a callback to customize the URLs displayed for the resource.
     pub fn with_urls(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10001,6 +11107,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds or modifies displayed URLs
     pub fn with_url(&self, url: Value, display_text: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10012,6 +11120,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Registers a callback to update the URL displayed for the endpoint with the specified name.
     pub fn with_url_for_endpoint(&self, endpoint_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10022,6 +11132,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Excludes a resource from being published to the manifest.
     pub fn exclude_from_manifest(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10029,6 +11141,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Prevents resource from starting automatically
     pub fn with_explicit_start(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10036,6 +11150,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a health check by key
     pub fn with_health_check(&self, key: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10044,6 +11160,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a resource command
     pub fn with_command(&self, name: &str, display_name: &str, execute_command: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, command_options: Option<CommandOptions>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10058,6 +11176,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a command to the resource that starts a local process when invoked.
     pub fn with_process_command(&self, command_name: &str, display_name: &str, options: ProcessCommandExportOptions) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10068,6 +11188,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a command to the resource that starts a local process created by a callback when invoked.
     pub fn with_process_command_factory(&self, command_name: &str, display_name: &str, create_process_spec: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, options: Option<ProcessCommandResultExportOptions>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10082,6 +11204,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a relationship to another resource using its builder.
     pub fn with_relationship(&self, resource_builder: &IResource, r#type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10091,6 +11215,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the parent relationship
     pub fn with_parent_relationship(&self, parent: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10099,6 +11225,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets a child relationship
     pub fn with_child_relationship(&self, child: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10107,6 +11235,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Specifies the icon to use when displaying the resource in the dashboard.
     pub fn with_icon_name(&self, icon_name: &str, icon_variant: Option<IconVariant>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10118,6 +11248,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry.
     pub fn exclude_from_mcp(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10125,6 +11257,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a pipeline step to the resource that will be executed during deployment.
     pub fn with_pipeline_step_factory(&self, step_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, depends_on: Option<Vec<String>>, required_by: Option<Vec<String>>, tags: Option<Vec<String>>, description: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10147,6 +11281,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
     pub fn with_pipeline_configuration(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10156,12 +11292,16 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Gets the name of the resource from a builder.
     pub fn get_resource_name(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/getResourceName", args)?;
         Ok(serde_json::from_value(result)?)
     }
+
+    /// Subscribes to the BeforeResourceStarted event.
     pub fn on_before_resource_started(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10171,6 +11311,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the ResourceStopped event.
     pub fn on_resource_stopped(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10180,6 +11322,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the InitializeResource event.
     pub fn on_initialize_resource(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10189,6 +11333,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the ResourceReady event.
     pub fn on_resource_ready(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10198,6 +11344,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Creates an execution configuration builder for the specified resource.
     pub fn create_execution_configuration(&self) -> Result<IExecutionConfigurationBuilder, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -10205,6 +11353,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IExecutionConfigurationBuilder::new(handle, self.client.clone()))
     }
+
+    /// Adds an optional string parameter
     pub fn with_optional_string(&self, value: Option<&str>, enabled: Option<bool>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10218,6 +11368,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures the resource with a DTO
     pub fn with_config(&self, config: TestConfigDto) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10226,6 +11378,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the created timestamp
     pub fn with_created_at(&self, created_at: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10234,6 +11388,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the modified timestamp
     pub fn with_modified_at(&self, modified_at: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10242,6 +11398,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the correlation ID
     pub fn with_correlation_id(&self, correlation_id: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10250,6 +11408,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures with optional callback
     pub fn with_optional_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10259,6 +11419,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the resource status
     pub fn with_status(&self, status: TestResourceStatus) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10267,6 +11429,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures with nested DTO
     pub fn with_nested_config(&self, config: TestNestedDto) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10275,6 +11439,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds validation callback
     pub fn with_validator(&self, validator: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10284,6 +11450,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Waits for another resource (test version)
     pub fn test_wait_for(&self, dependency: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10292,6 +11460,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a dependency on another resource
     pub fn with_dependency(&self, dependency: &IResourceWithConnectionString) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10300,6 +11470,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a dependency from a string or another resource
     pub fn with_union_dependency(&self, dependency: Value) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10308,6 +11480,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the endpoints
     pub fn with_endpoints(&self, endpoints: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10316,6 +11490,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Performs a cancellable operation
     pub fn with_cancellable_operation(&self, operation: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10325,6 +11501,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a label to the resource
     pub fn with_merge_label(&self, label: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10333,6 +11511,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a categorized label to the resource
     pub fn with_merge_label_categorized(&self, label: &str, category: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10342,6 +11522,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a named endpoint
     pub fn with_merge_endpoint(&self, endpoint_name: &str, port: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10351,6 +11533,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a named endpoint with scheme
     pub fn with_merge_endpoint_scheme(&self, endpoint_name: &str, port: f64, scheme: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10361,6 +11545,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures resource logging
     pub fn with_merge_logging(&self, log_level: &str, enable_console: Option<bool>, max_files: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10375,6 +11561,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures resource logging with file path
     pub fn with_merge_logging_path(&self, log_level: &str, log_path: &str, enable_console: Option<bool>, max_files: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10390,6 +11578,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a route
     pub fn with_merge_route(&self, path: &str, method: &str, handler: &str, priority: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10401,6 +11591,8 @@ impl ParameterResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a route with middleware
     pub fn with_merge_route_middleware(&self, path: &str, method: &str, handler: &str, priority: f64, middleware: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10440,7 +11632,7 @@ impl PipelineConfigurationContext {
         &self.client
     }
 
-    /// Gets the Pipeline property
+    /// Gets the pipeline editor used by polyglot callbacks.
     pub fn pipeline(&self) -> Result<PipelineEditor, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -10449,7 +11641,7 @@ impl PipelineConfigurationContext {
         Ok(PipelineEditor::new(handle, self.client.clone()))
     }
 
-    /// Gets the Log property
+    /// Gets the logger facade used by polyglot callbacks.
     pub fn log(&self) -> Result<LogFacade, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -10458,7 +11650,7 @@ impl PipelineConfigurationContext {
         Ok(LogFacade::new(handle, self.client.clone()))
     }
 
-    /// Invokes the GetSteps method
+    /// Gets all pipeline steps with the specified tag.
     pub fn get_steps(&self, tag: &str) -> Result<Vec<PipelineStep>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -10494,7 +11686,7 @@ impl PipelineContext {
         &self.client
     }
 
-    /// Gets the Model property
+    /// Gets the distributed application model to be deployed.
     pub fn model(&self) -> Result<DistributedApplicationModel, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -10503,7 +11695,7 @@ impl PipelineContext {
         Ok(DistributedApplicationModel::new(handle, self.client.clone()))
     }
 
-    /// Gets the ExecutionContext property
+    /// Gets the execution context for the distributed application.
     pub fn execution_context(&self) -> Result<DistributedApplicationExecutionContext, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -10512,7 +11704,7 @@ impl PipelineContext {
         Ok(DistributedApplicationExecutionContext::new(handle, self.client.clone()))
     }
 
-    /// Gets the Services property
+    /// Gets the service provider for dependency resolution.
     pub fn services(&self) -> Result<IServiceProvider, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -10521,7 +11713,7 @@ impl PipelineContext {
         Ok(IServiceProvider::new(handle, self.client.clone()))
     }
 
-    /// Gets the Logger property
+    /// Gets the logger for pipeline operations.
     pub fn logger(&self) -> Result<ILogger, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -10530,7 +11722,7 @@ impl PipelineContext {
         Ok(ILogger::new(handle, self.client.clone()))
     }
 
-    /// Gets the CancellationToken property
+    /// Gets the cancellation token for the pipeline operation.
     pub fn cancellation_token(&self) -> Result<CancellationToken, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -10552,7 +11744,7 @@ impl PipelineContext {
         Ok(PipelineContext::new(handle, self.client.clone()))
     }
 
-    /// Gets the Summary property
+    /// Gets the pipeline summary that steps can add information to. The summary will be displayed to users after pipeline execution completes.
     pub fn summary(&self) -> Result<PipelineSummary, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -10587,7 +11779,7 @@ impl PipelineEditor {
         &self.client
     }
 
-    /// Invokes the Steps method
+    /// Gets all configured pipeline steps.
     pub fn steps(&self) -> Result<Vec<PipelineStep>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -10596,7 +11788,7 @@ impl PipelineEditor {
         Ok(handles.into_iter().map(|h| PipelineStep::new(h, self.client.clone())).collect())
     }
 
-    /// Invokes the StepsByTag method
+    /// Gets all pipeline steps that have the specified tag.
     pub fn steps_by_tag(&self, tag: &str) -> Result<Vec<PipelineStep>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -10632,7 +11824,7 @@ impl PipelineStep {
         &self.client
     }
 
-    /// Gets the ExportedName property
+    /// Gets or initializes the unique name of the step.
     pub fn name(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -10640,7 +11832,7 @@ impl PipelineStep {
         Ok(serde_json::from_value(result)?)
     }
 
-    /// Gets the ExportedDescription property
+    /// Gets or initializes the description of the step.
     pub fn description(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -10648,7 +11840,22 @@ impl PipelineStep {
         Ok(serde_json::from_value(result)?)
     }
 
-    /// Invokes the DependsOn method
+    /// Gets or initializes the list of step names that this step depends on.
+    pub fn depends_on_steps(&self) -> AspireList<String> {
+        AspireList::with_getter(self.handle.clone(), self.client.clone(), "Aspire.Hosting.Pipelines/PipelineStep.dependsOnSteps")
+    }
+
+    /// Gets or initializes the list of step names that require this step to complete before they can finish. This is used internally during pipeline construction and is converted to DependsOn relationships.
+    pub fn required_by_steps(&self) -> AspireList<String> {
+        AspireList::with_getter(self.handle.clone(), self.client.clone(), "Aspire.Hosting.Pipelines/PipelineStep.requiredBySteps")
+    }
+
+    /// Gets or initializes the list of tags that categorize this step.
+    pub fn tags(&self) -> AspireList<String> {
+        AspireList::with_getter(self.handle.clone(), self.client.clone(), "Aspire.Hosting.Pipelines/PipelineStep.tags")
+    }
+
+    /// Adds a dependency on another step.
     pub fn depends_on(&self, step_name: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -10657,7 +11864,7 @@ impl PipelineStep {
         Ok(())
     }
 
-    /// Invokes the RequiredBy method
+    /// Specifies that this step is required by another step. This creates the inverse relationship where the other step will depend on this step.
     pub fn required_by(&self, step_name: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -10666,7 +11873,7 @@ impl PipelineStep {
         Ok(())
     }
 
-    /// Invokes the AddTag method
+    /// Adds a tag to the step.
     pub fn add_tag(&self, tag: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -10701,7 +11908,7 @@ impl PipelineStepContext {
         &self.client
     }
 
-    /// Gets the PipelineContext property
+    /// Gets the pipeline context shared across all steps.
     pub fn pipeline_context(&self) -> Result<PipelineContext, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -10710,7 +11917,7 @@ impl PipelineStepContext {
         Ok(PipelineContext::new(handle, self.client.clone()))
     }
 
-    /// Gets the ReportingStep property
+    /// Gets the publishing step associated with this specific step execution.
     pub fn reporting_step(&self) -> Result<IReportingStep, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -10719,7 +11926,7 @@ impl PipelineStepContext {
         Ok(IReportingStep::new(handle, self.client.clone()))
     }
 
-    /// Gets the Model property
+    /// Gets the distributed application model to be deployed.
     pub fn model(&self) -> Result<DistributedApplicationModel, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -10728,7 +11935,7 @@ impl PipelineStepContext {
         Ok(DistributedApplicationModel::new(handle, self.client.clone()))
     }
 
-    /// Gets the ExecutionContext property
+    /// Gets the execution context for the distributed application.
     pub fn execution_context(&self) -> Result<DistributedApplicationExecutionContext, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -10737,7 +11944,7 @@ impl PipelineStepContext {
         Ok(DistributedApplicationExecutionContext::new(handle, self.client.clone()))
     }
 
-    /// Gets the Services property
+    /// Gets the service provider for dependency resolution.
     pub fn services(&self) -> Result<IServiceProvider, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -10746,7 +11953,7 @@ impl PipelineStepContext {
         Ok(IServiceProvider::new(handle, self.client.clone()))
     }
 
-    /// Gets the Logger property
+    /// Gets the logger for pipeline operations that writes to both the pipeline logger and the step logger.
     pub fn logger(&self) -> Result<ILogger, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -10755,7 +11962,7 @@ impl PipelineStepContext {
         Ok(ILogger::new(handle, self.client.clone()))
     }
 
-    /// Gets the CancellationToken property
+    /// Gets the cancellation token for the pipeline operation.
     pub fn cancellation_token(&self) -> Result<CancellationToken, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -10764,7 +11971,7 @@ impl PipelineStepContext {
         Ok(CancellationToken::new(handle, self.client.clone()))
     }
 
-    /// Gets the Summary property
+    /// Gets the pipeline summary that steps can add information to. The summary will be displayed to users after pipeline execution completes.
     pub fn summary(&self) -> Result<PipelineSummary, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -10799,7 +12006,7 @@ impl PipelineStepFactoryContext {
         &self.client
     }
 
-    /// Gets the PipelineContext property
+    /// Gets the pipeline context that has the model and other properties.
     pub fn pipeline_context(&self) -> Result<PipelineContext, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -10808,7 +12015,7 @@ impl PipelineStepFactoryContext {
         Ok(PipelineContext::new(handle, self.client.clone()))
     }
 
-    /// Gets the Resource property
+    /// Gets the resource that this factory is associated with.
     pub fn resource(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -10843,7 +12050,7 @@ impl PipelineSummary {
         &self.client
     }
 
-    /// Invokes the Add method
+    /// Adds a key-value pair to the pipeline summary with a plain-text value.
     pub fn add(&self, key: &str, value: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -10852,6 +12059,8 @@ impl PipelineSummary {
         let result = self.client.invoke_capability("Aspire.Hosting.Pipelines/PipelineSummary.add", args)?;
         Ok(())
     }
+
+    /// Adds a key-value pair to the pipeline summary with a Markdown-formatted value.
     pub fn add_markdown(&self, key: &str, markdown_string: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("summary".to_string(), self.handle.to_json());
@@ -10886,6 +12095,8 @@ impl ProjectResource {
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
     }
+
+    /// Configures the resource to use the specified container registry for container image operations.
     pub fn with_container_registry(&self, registry: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10894,6 +12105,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures custom base images for generated Dockerfiles.
     pub fn with_dockerfile_base_image(&self, build_image: Option<&str>, runtime_image: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10907,6 +12120,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
     pub fn with_mcp_server(&self, path: Option<&str>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10920,6 +12135,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Configures OTLP telemetry export
     pub fn with_otlp_exporter(&self, protocol: Option<OtlpProtocol>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10930,6 +12147,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Configures how many replicas of the project should be created for the project.
     pub fn with_replicas(&self, replicas: f64) -> Result<ProjectResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10938,6 +12157,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ProjectResource::new(handle, self.client.clone()))
     }
+
+    /// Configures the project to disable forwarded headers when being published.
     pub fn disable_forwarded_headers(&self) -> Result<ProjectResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10945,6 +12166,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ProjectResource::new(handle, self.client.clone()))
     }
+
+    /// Publishes a project as a Docker file with optional container configuration
     pub fn publish_as_docker_file(&self, configure: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<ProjectResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10954,6 +12177,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ProjectResource::new(handle, self.client.clone()))
     }
+
+    /// Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
     pub fn with_required_command(&self, command: &str, help_link: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10965,6 +12190,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets an environment variable
     pub fn with_environment(&self, name: &str, value: Value) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10974,6 +12201,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Allows for the population of environment variables on a resource.
     pub fn with_environment_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10983,6 +12212,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Adds arguments to be passed to a resource that supports arguments when it is launched.
     pub fn with_args(&self, args: Vec<String>) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -10991,6 +12222,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
+
+    /// Adds a callback to be executed with a list of command-line arguments when a resource is started.
     pub fn with_args_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11000,6 +12233,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
+
+    /// Configures how information is injected into environment variables when the resource references other resources.
     pub fn with_reference_environment(&self, options: ReferenceEnvironmentInjectionOptions) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11008,6 +12243,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Adds a reference to another resource
     pub fn with_reference(&self, source: Value, connection_name: Option<&str>, optional: Option<bool>, name: Option<&str>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11025,6 +12262,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Updates a named endpoint via callback
     pub fn with_endpoint_callback(&self, endpoint_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11038,6 +12277,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Updates an HTTP endpoint via callback
     pub fn with_http_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11053,6 +12294,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Updates an HTTPS endpoint via callback
     pub fn with_https_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11068,6 +12311,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Adds a network endpoint
     pub fn with_endpoint(&self, port: Option<f64>, target_port: Option<f64>, scheme: Option<&str>, name: Option<&str>, env: Option<&str>, is_proxied: Option<bool>, is_external: Option<bool>, protocol: Option<ProtocolType>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11099,6 +12344,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Adds an HTTP endpoint
     pub fn with_http_endpoint(&self, port: Option<f64>, target_port: Option<f64>, name: Option<&str>, env: Option<&str>, is_proxied: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11121,6 +12368,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Adds an HTTPS endpoint
     pub fn with_https_endpoint(&self, port: Option<f64>, target_port: Option<f64>, name: Option<&str>, env: Option<&str>, is_proxied: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11143,6 +12392,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Marks existing http or https endpoints on a resource as external.
     pub fn with_external_http_endpoints(&self) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11150,6 +12401,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Gets an endpoint reference
     pub fn get_endpoint(&self, name: &str) -> Result<EndpointReference, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11158,6 +12411,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(EndpointReference::new(handle, self.client.clone()))
     }
+
+    /// Configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
     pub fn as_http2_service(&self) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11165,6 +12420,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Registers a callback to customize the URLs displayed for the resource.
     pub fn with_urls(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11174,6 +12431,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds or modifies displayed URLs
     pub fn with_url(&self, url: Value, display_text: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11185,6 +12444,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Registers a callback to update the URL displayed for the endpoint with the specified name.
     pub fn with_url_for_endpoint(&self, endpoint_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11195,6 +12456,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures the resource to copy container files from the specified source resource during publishing.
     pub fn publish_with_container_files(&self, source: &IResourceWithContainerFiles, destination_path: &str) -> Result<IContainerFilesDestinationResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11204,6 +12467,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IContainerFilesDestinationResource::new(handle, self.client.clone()))
     }
+
+    /// Excludes a resource from being published to the manifest.
     pub fn exclude_from_manifest(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11211,6 +12476,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Waits for another resource to be ready
     pub fn wait_for(&self, dependency: &IResource, wait_behavior: Option<WaitBehavior>) -> Result<IResourceWithWaitSupport, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11222,6 +12489,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithWaitSupport::new(handle, self.client.clone()))
     }
+
+    /// Waits for another resource to start
     pub fn wait_for_start(&self, dependency: &IResource, wait_behavior: Option<WaitBehavior>) -> Result<IResourceWithWaitSupport, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11233,6 +12502,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithWaitSupport::new(handle, self.client.clone()))
     }
+
+    /// Prevents resource from starting automatically
     pub fn with_explicit_start(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11240,6 +12511,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Waits for the dependency resource to enter the Exited or Finished state before starting the resource.
     pub fn wait_for_completion(&self, dependency: &IResource, exit_code: Option<f64>) -> Result<IResourceWithWaitSupport, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11251,6 +12524,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithWaitSupport::new(handle, self.client.clone()))
     }
+
+    /// Adds a health check by key
     pub fn with_health_check(&self, key: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11259,6 +12534,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a health check to the resource which is mapped to a specific endpoint.
     pub fn with_http_health_check(&self, path: Option<&str>, status_code: Option<f64>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11275,6 +12552,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Adds a resource command
     pub fn with_command(&self, name: &str, display_name: &str, execute_command: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, command_options: Option<CommandOptions>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11289,6 +12568,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a command to the resource that starts a local process when invoked.
     pub fn with_process_command(&self, command_name: &str, display_name: &str, options: ProcessCommandExportOptions) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11299,6 +12580,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a command to the resource that starts a local process created by a callback when invoked.
     pub fn with_process_command_factory(&self, command_name: &str, display_name: &str, create_process_spec: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, options: Option<ProcessCommandResultExportOptions>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11313,6 +12596,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds an HTTP resource command
     pub fn with_http_command(&self, path: &str, display_name: &str, options: Option<HttpCommandExportOptions>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11325,6 +12610,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Indicates whether developer certificates should be treated as trusted certificate authorities for the resource at run time. Currently this indicates trust for the ASP.NET Core developer certificate. The developer certificate will only be trusted when running in local development scenarios; in publish mode resources will use their default certificate trust.
     pub fn with_developer_certificate_trust(&self, trust: bool) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11333,6 +12620,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Sets the certificate trust scope
     pub fn with_certificate_trust_scope(&self, scope: CertificateTrustScope) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11341,6 +12630,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
     pub fn with_https_developer_certificate(&self, password: Option<&ParameterResource>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11351,6 +12642,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Disable HTTPS/TLS server certificate configuration for the resource. No HTTPS/TLS termination configuration will be applied.
     pub fn without_https_certificate(&self) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11358,6 +12651,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Adds a relationship to another resource using its builder.
     pub fn with_relationship(&self, resource_builder: &IResource, r#type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11367,6 +12662,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the parent relationship
     pub fn with_parent_relationship(&self, parent: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11375,6 +12672,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets a child relationship
     pub fn with_child_relationship(&self, child: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11383,6 +12682,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Specifies the icon to use when displaying the resource in the dashboard.
     pub fn with_icon_name(&self, icon_name: &str, icon_variant: Option<IconVariant>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11394,6 +12695,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures the compute environment for the compute resource.
     pub fn with_compute_environment(&self, compute_environment_resource: &IComputeEnvironmentResource) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11402,6 +12705,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
+
+    /// Adds an HTTP health probe to the resource
     pub fn with_http_probe(&self, probe_type: ProbeType, path: Option<&str>, initial_delay_seconds: Option<f64>, period_seconds: Option<f64>, timeout_seconds: Option<f64>, failure_threshold: Option<f64>, success_threshold: Option<f64>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11431,6 +12736,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry.
     pub fn exclude_from_mcp(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11438,6 +12745,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds an asynchronous callback to configure container image push options for the resource.
     pub fn with_image_push_options(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11447,6 +12756,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the remote image name (without registry endpoint or tag) for container push operations.
     pub fn with_remote_image_name(&self, remote_image_name: &str) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11455,6 +12766,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the remote image tag for container push operations.
     pub fn with_remote_image_tag(&self, remote_image_tag: &str) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11463,6 +12776,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a pipeline step to the resource that will be executed during deployment.
     pub fn with_pipeline_step_factory(&self, step_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, depends_on: Option<Vec<String>>, required_by: Option<Vec<String>>, tags: Option<Vec<String>>, description: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11485,6 +12800,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
     pub fn with_pipeline_configuration(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11494,12 +12811,16 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Gets the name of the resource from a builder.
     pub fn get_resource_name(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/getResourceName", args)?;
         Ok(serde_json::from_value(result)?)
     }
+
+    /// Subscribes to the BeforeResourceStarted event.
     pub fn on_before_resource_started(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11509,6 +12830,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the ResourceStopped event.
     pub fn on_resource_stopped(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11518,6 +12841,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the InitializeResource event.
     pub fn on_initialize_resource(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11527,6 +12852,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the ResourceEndpointsAllocated event.
     pub fn on_resource_endpoints_allocated(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11536,6 +12863,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the ResourceReady event.
     pub fn on_resource_ready(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11545,6 +12874,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Creates an execution configuration builder for the specified resource.
     pub fn create_execution_configuration(&self) -> Result<IExecutionConfigurationBuilder, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -11552,6 +12883,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IExecutionConfigurationBuilder::new(handle, self.client.clone()))
     }
+
+    /// Adds an optional string parameter
     pub fn with_optional_string(&self, value: Option<&str>, enabled: Option<bool>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11565,6 +12898,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures the resource with a DTO
     pub fn with_config(&self, config: TestConfigDto) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11573,6 +12908,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures environment with callback (test version)
     pub fn test_with_environment_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11582,6 +12919,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Sets the created timestamp
     pub fn with_created_at(&self, created_at: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11590,6 +12929,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the modified timestamp
     pub fn with_modified_at(&self, modified_at: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11598,6 +12939,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the correlation ID
     pub fn with_correlation_id(&self, correlation_id: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11606,6 +12949,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures with optional callback
     pub fn with_optional_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11615,6 +12960,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the resource status
     pub fn with_status(&self, status: TestResourceStatus) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11623,6 +12970,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures with nested DTO
     pub fn with_nested_config(&self, config: TestNestedDto) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11631,6 +12980,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds validation callback
     pub fn with_validator(&self, validator: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11640,6 +12991,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Waits for another resource (test version)
     pub fn test_wait_for(&self, dependency: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11648,6 +13001,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a dependency on another resource
     pub fn with_dependency(&self, dependency: &IResourceWithConnectionString) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11656,6 +13011,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a dependency from a string or another resource
     pub fn with_union_dependency(&self, dependency: Value) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11664,6 +13021,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the endpoints
     pub fn with_endpoints(&self, endpoints: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11672,6 +13031,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets environment variables
     pub fn with_environment_variables(&self, variables: HashMap<String, String>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11680,6 +13041,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Performs a cancellable operation
     pub fn with_cancellable_operation(&self, operation: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11689,6 +13052,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a label to the resource
     pub fn with_merge_label(&self, label: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11697,6 +13062,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a categorized label to the resource
     pub fn with_merge_label_categorized(&self, label: &str, category: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11706,6 +13073,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a named endpoint
     pub fn with_merge_endpoint(&self, endpoint_name: &str, port: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11715,6 +13084,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a named endpoint with scheme
     pub fn with_merge_endpoint_scheme(&self, endpoint_name: &str, port: f64, scheme: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11725,6 +13096,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures resource logging
     pub fn with_merge_logging(&self, log_level: &str, enable_console: Option<bool>, max_files: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11739,6 +13112,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures resource logging with file path
     pub fn with_merge_logging_path(&self, log_level: &str, log_path: &str, enable_console: Option<bool>, max_files: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11754,6 +13129,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a route
     pub fn with_merge_route(&self, path: &str, method: &str, handler: &str, priority: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11765,6 +13142,8 @@ impl ProjectResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a route with middleware
     pub fn with_merge_route_middleware(&self, path: &str, method: &str, handler: &str, priority: f64, middleware: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -11804,7 +13183,7 @@ impl ProjectResourceOptions {
         &self.client
     }
 
-    /// Gets the LaunchProfileName property
+    /// The launch profile to use. If `null` then the default launch profile will be used.
     pub fn launch_profile_name(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -11822,7 +13201,7 @@ impl ProjectResourceOptions {
         Ok(ProjectResourceOptions::new(handle, self.client.clone()))
     }
 
-    /// Gets the ExcludeLaunchProfile property
+    /// If set, no launch profile will be used, and LaunchProfileName will be ignored.
     pub fn exclude_launch_profile(&self) -> Result<bool, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -11840,7 +13219,7 @@ impl ProjectResourceOptions {
         Ok(ProjectResourceOptions::new(handle, self.client.clone()))
     }
 
-    /// Gets the ExcludeKestrelEndpoints property
+    /// If set, ignore endpoints coming from Kestrel configuration.
     pub fn exclude_kestrel_endpoints(&self) -> Result<bool, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -11884,7 +13263,7 @@ impl ReferenceExpressionBuilder {
         &self.client
     }
 
-    /// Gets the IsEmpty property
+    /// Indicates whether the expression is empty.
     pub fn is_empty(&self) -> Result<bool, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -11892,7 +13271,7 @@ impl ReferenceExpressionBuilder {
         Ok(serde_json::from_value(result)?)
     }
 
-    /// Invokes the AppendLiteral method
+    /// Appends a literal value to the expression.
     pub fn append_literal(&self, value: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -11901,7 +13280,7 @@ impl ReferenceExpressionBuilder {
         Ok(())
     }
 
-    /// Invokes the AppendFormatted method
+    /// Appends a formatted value to the expression.
     pub fn append_formatted(&self, value: &str, format: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -11913,7 +13292,7 @@ impl ReferenceExpressionBuilder {
         Ok(())
     }
 
-    /// Invokes the AppendValueProvider method
+    /// Appends a value provider to the reference expression
     pub fn append_value_provider(&self, value_provider: &Value, format: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -11925,7 +13304,7 @@ impl ReferenceExpressionBuilder {
         Ok(())
     }
 
-    /// Invokes the Build method
+    /// Builds the reference expression
     pub fn build(&self) -> Result<ReferenceExpression, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -12002,6 +13381,8 @@ impl ResourceLoggerService {
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
     }
+
+    /// Completes the log stream for a resource.
     pub fn complete_log(&self, resource: &IResource) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("loggerService".to_string(), self.handle.to_json());
@@ -12009,6 +13390,8 @@ impl ResourceLoggerService {
         let result = self.client.invoke_capability("Aspire.Hosting/completeLog", args)?;
         Ok(())
     }
+
+    /// Completes the log stream by resource name.
     pub fn complete_log_by_name(&self, resource_name: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("loggerService".to_string(), self.handle.to_json());
@@ -12042,6 +13425,8 @@ impl ResourceNotificationService {
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
     }
+
+    /// Waits for a resource to reach a specified state.
     pub fn wait_for_resource_state(&self, resource_name: &str, target_state: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("notificationService".to_string(), self.handle.to_json());
@@ -12052,6 +13437,8 @@ impl ResourceNotificationService {
         let result = self.client.invoke_capability("Aspire.Hosting/waitForResourceState", args)?;
         Ok(())
     }
+
+    /// Waits for a resource to reach one of the specified states.
     pub fn wait_for_resource_states(&self, resource_name: &str, target_states: Vec<String>) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("notificationService".to_string(), self.handle.to_json());
@@ -12060,6 +13447,8 @@ impl ResourceNotificationService {
         let result = self.client.invoke_capability("Aspire.Hosting/waitForResourceStates", args)?;
         Ok(serde_json::from_value(result)?)
     }
+
+    /// Waits for a resource to become healthy.
     pub fn wait_for_resource_healthy(&self, resource_name: &str) -> Result<ResourceEventDto, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("notificationService".to_string(), self.handle.to_json());
@@ -12067,6 +13456,8 @@ impl ResourceNotificationService {
         let result = self.client.invoke_capability("Aspire.Hosting/waitForResourceHealthy", args)?;
         Ok(serde_json::from_value(result)?)
     }
+
+    /// Waits for all dependencies of a resource to be ready.
     pub fn wait_for_dependencies(&self, resource: &IResource) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("notificationService".to_string(), self.handle.to_json());
@@ -12074,6 +13465,8 @@ impl ResourceNotificationService {
         let result = self.client.invoke_capability("Aspire.Hosting/waitForDependencies", args)?;
         Ok(())
     }
+
+    /// Tries to get the current state of a resource.
     pub fn try_get_resource_state(&self, resource_name: &str) -> Result<ResourceEventDto, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("notificationService".to_string(), self.handle.to_json());
@@ -12081,6 +13474,8 @@ impl ResourceNotificationService {
         let result = self.client.invoke_capability("Aspire.Hosting/tryGetResourceState", args)?;
         Ok(serde_json::from_value(result)?)
     }
+
+    /// Publishes an update for a resource's state.
     pub fn publish_resource_update(&self, resource: &IResource, state: Option<&str>, state_style: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("notificationService".to_string(), self.handle.to_json());
@@ -12121,7 +13516,7 @@ impl ResourceReadyEvent {
         &self.client
     }
 
-    /// Gets the Resource property
+    /// The resource that is in a healthy state.
     pub fn resource(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -12209,7 +13604,7 @@ impl ResourceUrlsCallbackContext {
         &self.client
     }
 
-    /// Gets the Resource property
+    /// Gets the resource this the URLs are associated with.
     pub fn resource(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -12218,7 +13613,7 @@ impl ResourceUrlsCallbackContext {
         Ok(IResource::new(handle, self.client.clone()))
     }
 
-    /// Gets the UrlsEditor property
+    /// Gets the editor used to manipulate displayed URLs in polyglot callbacks.
     pub fn urls(&self) -> Result<ResourceUrlsEditor, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -12227,7 +13622,7 @@ impl ResourceUrlsCallbackContext {
         Ok(ResourceUrlsEditor::new(handle, self.client.clone()))
     }
 
-    /// Gets the Log property
+    /// Gets the logger facade used by polyglot callbacks.
     pub fn log(&self) -> Result<LogFacade, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -12236,7 +13631,7 @@ impl ResourceUrlsCallbackContext {
         Ok(LogFacade::new(handle, self.client.clone()))
     }
 
-    /// Gets the ExecutionContext property
+    /// Gets the execution context associated with this invocation of the AppHost.
     pub fn execution_context(&self) -> Result<DistributedApplicationExecutionContext, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -12245,7 +13640,7 @@ impl ResourceUrlsCallbackContext {
         Ok(DistributedApplicationExecutionContext::new(handle, self.client.clone()))
     }
 
-    /// Invokes the GetEndpoint method
+    /// Gets an endpoint reference from the associated resource
     pub fn get_endpoint(&self, name: &str) -> Result<EndpointReference, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -12281,7 +13676,7 @@ impl ResourceUrlsEditor {
         &self.client
     }
 
-    /// Gets the ExecutionContext property
+    /// Gets the execution context associated with this editor.
     pub fn execution_context(&self) -> Result<DistributedApplicationExecutionContext, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -12290,7 +13685,7 @@ impl ResourceUrlsEditor {
         Ok(DistributedApplicationExecutionContext::new(handle, self.client.clone()))
     }
 
-    /// Invokes the Add method
+    /// Adds a displayed URL.
     pub fn add(&self, url: Value, display_text: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -12302,7 +13697,7 @@ impl ResourceUrlsEditor {
         Ok(())
     }
 
-    /// Invokes the AddForEndpoint method
+    /// Adds a displayed URL for a specific endpoint.
     pub fn add_for_endpoint(&self, endpoint: &EndpointReference, url: Value, display_text: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -12377,7 +13772,7 @@ impl TestCallbackContext {
         Ok(TestCallbackContext::new(handle, self.client.clone()))
     }
 
-    /// Gets the CancellationToken property
+    /// CancellationToken is supported by ATS.
     pub fn cancellation_token(&self) -> Result<CancellationToken, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -12425,12 +13820,12 @@ impl TestCollectionContext {
         &self.client
     }
 
-    /// Gets the Items property
+    /// List property - should generate AspireList getter like Dictionary properties.
     pub fn items(&self) -> AspireList<String> {
         AspireList::with_getter(self.handle.clone(), self.client.clone(), "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCollectionContext.items")
     }
 
-    /// Gets the Metadata property
+    /// Dictionary property - already works with AspireDict getter.
     pub fn metadata(&self) -> AspireDict<String, String> {
         AspireDict::with_getter(self.handle.clone(), self.client.clone(), "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCollectionContext.metadata")
     }
@@ -12460,6 +13855,8 @@ impl TestDatabaseResource {
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
     }
+
+    /// Configures the resource to use the specified container registry for container image operations.
     pub fn with_container_registry(&self, registry: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12468,6 +13865,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a bind mount to a container resource.
     pub fn with_bind_mount(&self, source: &str, target: &str, is_read_only: Option<bool>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12480,6 +13879,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the Entrypoint for the container.
     pub fn with_entrypoint(&self, entrypoint: &str) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12488,6 +13889,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Allows overriding the image tag on a container.
     pub fn with_image_tag(&self, tag: &str) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12496,6 +13899,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Allows overriding the image registry on a container.
     pub fn with_image_registry(&self, registry: &str) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12504,6 +13909,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Allows overriding the image on a container.
     pub fn with_image(&self, image: &str, tag: Option<&str>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12515,6 +13922,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Allows setting the image to a specific sha256 on a container.
     pub fn with_image_sha256(&self, sha256: &str) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12523,6 +13932,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a callback to be executed with a list of arguments to add to the container runtime run command when a container resource is started.
     pub fn with_container_runtime_args(&self, args: Vec<String>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12531,6 +13942,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the lifetime behavior of the container resource.
     pub fn with_lifetime(&self, lifetime: ContainerLifetime) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12539,6 +13952,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the pull policy for the container resource.
     pub fn with_image_pull_policy(&self, pull_policy: ImagePullPolicy) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12547,6 +13962,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Changes the resource to be published as a container in the manifest.
     pub fn publish_as_container(&self) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12554,6 +13971,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Causes Aspire to build the specified container image from a Dockerfile.
     pub fn with_dockerfile(&self, context_path: &str, dockerfile_path: Option<&str>, stage: Option<&str>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12568,6 +13987,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Overrides the default container name for this resource. By default Aspire generates a unique container name based on the resource name and a random postfix (or a postfix based on a hash of the AppHost project path for persistent container resources). This method allows you to override that behavior with a custom name, but could lead to naming conflicts if the specified name is not unique.
     pub fn with_container_name(&self, name: &str) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12576,6 +13997,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a build argument when the container is built from a Dockerfile.
     pub fn with_build_arg(&self, name: &str, value: Value) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12585,6 +14008,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a secret build argument when the container is built from a Dockerfile.
     pub fn with_build_secret(&self, name: &str, value: &ParameterResource) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12594,6 +14019,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Adds container certificate path overrides used for certificate trust at run time.
     pub fn with_container_certificate_paths(&self, custom_certificates_destination: Option<&str>, default_certificate_bundle_paths: Option<Vec<String>>, default_certificate_directory_paths: Option<Vec<String>>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12610,6 +14037,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Set whether a container resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the container. If set to `false`, endpoints belonging to the container resource will ignore the configured proxy settings and run proxy-less.
     pub fn with_endpoint_proxy_support(&self, proxy_enabled: bool) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12618,6 +14047,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Configures the resource to use a programmatically generated Dockerfile
     pub fn with_dockerfile_builder(&self, context_path: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, stage: Option<&str>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12631,6 +14062,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Configures custom base images for generated Dockerfiles.
     pub fn with_dockerfile_base_image(&self, build_image: Option<&str>, runtime_image: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12644,6 +14077,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a network alias to container resource.
     pub fn with_container_network_alias(&self, alias: &str) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12652,6 +14087,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
     pub fn with_mcp_server(&self, path: Option<&str>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12665,6 +14102,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Configures OTLP telemetry export
     pub fn with_otlp_exporter(&self, protocol: Option<OtlpProtocol>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12675,6 +14114,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Changes the resource to be published as a connection string reference in the manifest.
     pub fn publish_as_connection_string(&self) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12682,6 +14123,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
     pub fn with_required_command(&self, command: &str, help_link: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12693,6 +14136,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets an environment variable
     pub fn with_environment(&self, name: &str, value: Value) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12702,6 +14147,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Allows for the population of environment variables on a resource.
     pub fn with_environment_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12711,6 +14158,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Adds arguments to be passed to a resource that supports arguments when it is launched.
     pub fn with_args(&self, args: Vec<String>) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12719,6 +14168,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
+
+    /// Adds a callback to be executed with a list of command-line arguments when a resource is started.
     pub fn with_args_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12728,6 +14179,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
+
+    /// Configures how information is injected into environment variables when the resource references other resources.
     pub fn with_reference_environment(&self, options: ReferenceEnvironmentInjectionOptions) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12736,6 +14189,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Adds a reference to another resource
     pub fn with_reference(&self, source: Value, connection_name: Option<&str>, optional: Option<bool>, name: Option<&str>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12753,6 +14208,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Updates a named endpoint via callback
     pub fn with_endpoint_callback(&self, endpoint_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12766,6 +14223,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Updates an HTTP endpoint via callback
     pub fn with_http_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12781,6 +14240,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Updates an HTTPS endpoint via callback
     pub fn with_https_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12796,6 +14257,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Adds a network endpoint
     pub fn with_endpoint(&self, port: Option<f64>, target_port: Option<f64>, scheme: Option<&str>, name: Option<&str>, env: Option<&str>, is_proxied: Option<bool>, is_external: Option<bool>, protocol: Option<ProtocolType>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12827,6 +14290,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Adds an HTTP endpoint
     pub fn with_http_endpoint(&self, port: Option<f64>, target_port: Option<f64>, name: Option<&str>, env: Option<&str>, is_proxied: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12849,6 +14314,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Adds an HTTPS endpoint
     pub fn with_https_endpoint(&self, port: Option<f64>, target_port: Option<f64>, name: Option<&str>, env: Option<&str>, is_proxied: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12871,6 +14338,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Marks existing http or https endpoints on a resource as external.
     pub fn with_external_http_endpoints(&self) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12878,6 +14347,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Gets an endpoint reference
     pub fn get_endpoint(&self, name: &str) -> Result<EndpointReference, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12886,6 +14357,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(EndpointReference::new(handle, self.client.clone()))
     }
+
+    /// Configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
     pub fn as_http2_service(&self) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12893,6 +14366,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Registers a callback to customize the URLs displayed for the resource.
     pub fn with_urls(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12902,6 +14377,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds or modifies displayed URLs
     pub fn with_url(&self, url: Value, display_text: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12913,6 +14390,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Registers a callback to update the URL displayed for the endpoint with the specified name.
     pub fn with_url_for_endpoint(&self, endpoint_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12923,6 +14402,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Excludes a resource from being published to the manifest.
     pub fn exclude_from_manifest(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12930,6 +14411,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Waits for another resource to be ready
     pub fn wait_for(&self, dependency: &IResource, wait_behavior: Option<WaitBehavior>) -> Result<IResourceWithWaitSupport, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12941,6 +14424,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithWaitSupport::new(handle, self.client.clone()))
     }
+
+    /// Waits for another resource to start
     pub fn wait_for_start(&self, dependency: &IResource, wait_behavior: Option<WaitBehavior>) -> Result<IResourceWithWaitSupport, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12952,6 +14437,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithWaitSupport::new(handle, self.client.clone()))
     }
+
+    /// Prevents resource from starting automatically
     pub fn with_explicit_start(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12959,6 +14446,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Waits for the dependency resource to enter the Exited or Finished state before starting the resource.
     pub fn wait_for_completion(&self, dependency: &IResource, exit_code: Option<f64>) -> Result<IResourceWithWaitSupport, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12970,6 +14459,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithWaitSupport::new(handle, self.client.clone()))
     }
+
+    /// Adds a health check by key
     pub fn with_health_check(&self, key: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12978,6 +14469,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a health check to the resource which is mapped to a specific endpoint.
     pub fn with_http_health_check(&self, path: Option<&str>, status_code: Option<f64>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -12994,6 +14487,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Adds a resource command
     pub fn with_command(&self, name: &str, display_name: &str, execute_command: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, command_options: Option<CommandOptions>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13008,6 +14503,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a command to the resource that starts a local process when invoked.
     pub fn with_process_command(&self, command_name: &str, display_name: &str, options: ProcessCommandExportOptions) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13018,6 +14515,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a command to the resource that starts a local process created by a callback when invoked.
     pub fn with_process_command_factory(&self, command_name: &str, display_name: &str, create_process_spec: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, options: Option<ProcessCommandResultExportOptions>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13032,6 +14531,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds an HTTP resource command
     pub fn with_http_command(&self, path: &str, display_name: &str, options: Option<HttpCommandExportOptions>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13044,6 +14545,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Indicates whether developer certificates should be treated as trusted certificate authorities for the resource at run time. Currently this indicates trust for the ASP.NET Core developer certificate. The developer certificate will only be trusted when running in local development scenarios; in publish mode resources will use their default certificate trust.
     pub fn with_developer_certificate_trust(&self, trust: bool) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13052,6 +14555,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Sets the certificate trust scope
     pub fn with_certificate_trust_scope(&self, scope: CertificateTrustScope) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13060,6 +14565,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
     pub fn with_https_developer_certificate(&self, password: Option<&ParameterResource>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13070,6 +14577,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Disable HTTPS/TLS server certificate configuration for the resource. No HTTPS/TLS termination configuration will be applied.
     pub fn without_https_certificate(&self) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13077,6 +14586,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Adds a relationship to another resource using its builder.
     pub fn with_relationship(&self, resource_builder: &IResource, r#type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13086,6 +14597,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the parent relationship
     pub fn with_parent_relationship(&self, parent: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13094,6 +14607,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets a child relationship
     pub fn with_child_relationship(&self, child: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13102,6 +14617,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Specifies the icon to use when displaying the resource in the dashboard.
     pub fn with_icon_name(&self, icon_name: &str, icon_variant: Option<IconVariant>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13113,6 +14630,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures the compute environment for the compute resource.
     pub fn with_compute_environment(&self, compute_environment_resource: &IComputeEnvironmentResource) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13121,6 +14640,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
+
+    /// Adds an HTTP health probe to the resource
     pub fn with_http_probe(&self, probe_type: ProbeType, path: Option<&str>, initial_delay_seconds: Option<f64>, period_seconds: Option<f64>, timeout_seconds: Option<f64>, failure_threshold: Option<f64>, success_threshold: Option<f64>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13150,6 +14671,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry.
     pub fn exclude_from_mcp(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13157,6 +14680,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds an asynchronous callback to configure container image push options for the resource.
     pub fn with_image_push_options(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13166,6 +14691,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the remote image name (without registry endpoint or tag) for container push operations.
     pub fn with_remote_image_name(&self, remote_image_name: &str) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13174,6 +14701,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the remote image tag for container push operations.
     pub fn with_remote_image_tag(&self, remote_image_tag: &str) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13182,6 +14711,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a pipeline step to the resource that will be executed during deployment.
     pub fn with_pipeline_step_factory(&self, step_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, depends_on: Option<Vec<String>>, required_by: Option<Vec<String>>, tags: Option<Vec<String>>, description: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13204,6 +14735,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
     pub fn with_pipeline_configuration(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13213,6 +14746,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a volume to a container resource.
     pub fn with_volume(&self, target: &str, name: Option<&str>, is_read_only: Option<bool>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -13227,12 +14762,16 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Gets the name of the resource from a builder.
     pub fn get_resource_name(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/getResourceName", args)?;
         Ok(serde_json::from_value(result)?)
     }
+
+    /// Subscribes to the BeforeResourceStarted event.
     pub fn on_before_resource_started(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13242,6 +14781,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the ResourceStopped event.
     pub fn on_resource_stopped(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13251,6 +14792,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the InitializeResource event.
     pub fn on_initialize_resource(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13260,6 +14803,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the ResourceEndpointsAllocated event.
     pub fn on_resource_endpoints_allocated(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13269,6 +14814,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the ResourceReady event.
     pub fn on_resource_ready(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13278,6 +14825,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Creates an execution configuration builder for the specified resource.
     pub fn create_execution_configuration(&self) -> Result<IExecutionConfigurationBuilder, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -13285,6 +14834,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IExecutionConfigurationBuilder::new(handle, self.client.clone()))
     }
+
+    /// Adds an optional string parameter
     pub fn with_optional_string(&self, value: Option<&str>, enabled: Option<bool>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13298,6 +14849,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures the resource with a DTO
     pub fn with_config(&self, config: TestConfigDto) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13306,6 +14859,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures environment with callback (test version)
     pub fn test_with_environment_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13315,6 +14870,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Sets the created timestamp
     pub fn with_created_at(&self, created_at: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13323,6 +14880,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the modified timestamp
     pub fn with_modified_at(&self, modified_at: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13331,6 +14890,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the correlation ID
     pub fn with_correlation_id(&self, correlation_id: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13339,6 +14900,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures with optional callback
     pub fn with_optional_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13348,6 +14911,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the resource status
     pub fn with_status(&self, status: TestResourceStatus) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13356,6 +14921,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures with nested DTO
     pub fn with_nested_config(&self, config: TestNestedDto) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13364,6 +14931,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds validation callback
     pub fn with_validator(&self, validator: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13373,6 +14942,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Waits for another resource (test version)
     pub fn test_wait_for(&self, dependency: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13381,6 +14952,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a dependency on another resource
     pub fn with_dependency(&self, dependency: &IResourceWithConnectionString) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13389,6 +14962,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a dependency from a string or another resource
     pub fn with_union_dependency(&self, dependency: Value) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13397,6 +14972,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the endpoints
     pub fn with_endpoints(&self, endpoints: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13405,6 +14982,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets environment variables
     pub fn with_environment_variables(&self, variables: HashMap<String, String>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13413,6 +14992,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Performs a cancellable operation
     pub fn with_cancellable_operation(&self, operation: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13422,6 +15003,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a label to the resource
     pub fn with_merge_label(&self, label: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13430,6 +15013,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a categorized label to the resource
     pub fn with_merge_label_categorized(&self, label: &str, category: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13439,6 +15024,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a named endpoint
     pub fn with_merge_endpoint(&self, endpoint_name: &str, port: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13448,6 +15035,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a named endpoint with scheme
     pub fn with_merge_endpoint_scheme(&self, endpoint_name: &str, port: f64, scheme: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13458,6 +15047,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures resource logging
     pub fn with_merge_logging(&self, log_level: &str, enable_console: Option<bool>, max_files: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13472,6 +15063,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures resource logging with file path
     pub fn with_merge_logging_path(&self, log_level: &str, log_path: &str, enable_console: Option<bool>, max_files: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13487,6 +15080,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a route
     pub fn with_merge_route(&self, path: &str, method: &str, handler: &str, priority: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13498,6 +15093,8 @@ impl TestDatabaseResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a route with middleware
     pub fn with_merge_route_middleware(&self, path: &str, method: &str, handler: &str, priority: f64, middleware: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13672,6 +15269,8 @@ impl TestRedisResource {
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
     }
+
+    /// Configures the resource to use the specified container registry for container image operations.
     pub fn with_container_registry(&self, registry: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13680,6 +15279,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a bind mount to a container resource.
     pub fn with_bind_mount(&self, source: &str, target: &str, is_read_only: Option<bool>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13692,6 +15293,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the Entrypoint for the container.
     pub fn with_entrypoint(&self, entrypoint: &str) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13700,6 +15303,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Allows overriding the image tag on a container.
     pub fn with_image_tag(&self, tag: &str) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13708,6 +15313,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Allows overriding the image registry on a container.
     pub fn with_image_registry(&self, registry: &str) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13716,6 +15323,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Allows overriding the image on a container.
     pub fn with_image(&self, image: &str, tag: Option<&str>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13727,6 +15336,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Allows setting the image to a specific sha256 on a container.
     pub fn with_image_sha256(&self, sha256: &str) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13735,6 +15346,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a callback to be executed with a list of arguments to add to the container runtime run command when a container resource is started.
     pub fn with_container_runtime_args(&self, args: Vec<String>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13743,6 +15356,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the lifetime behavior of the container resource.
     pub fn with_lifetime(&self, lifetime: ContainerLifetime) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13751,6 +15366,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the pull policy for the container resource.
     pub fn with_image_pull_policy(&self, pull_policy: ImagePullPolicy) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13759,6 +15376,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Changes the resource to be published as a container in the manifest.
     pub fn publish_as_container(&self) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13766,6 +15385,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Causes Aspire to build the specified container image from a Dockerfile.
     pub fn with_dockerfile(&self, context_path: &str, dockerfile_path: Option<&str>, stage: Option<&str>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13780,6 +15401,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Overrides the default container name for this resource. By default Aspire generates a unique container name based on the resource name and a random postfix (or a postfix based on a hash of the AppHost project path for persistent container resources). This method allows you to override that behavior with a custom name, but could lead to naming conflicts if the specified name is not unique.
     pub fn with_container_name(&self, name: &str) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13788,6 +15411,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a build argument when the container is built from a Dockerfile.
     pub fn with_build_arg(&self, name: &str, value: Value) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13797,6 +15422,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a secret build argument when the container is built from a Dockerfile.
     pub fn with_build_secret(&self, name: &str, value: &ParameterResource) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13806,6 +15433,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Adds container certificate path overrides used for certificate trust at run time.
     pub fn with_container_certificate_paths(&self, custom_certificates_destination: Option<&str>, default_certificate_bundle_paths: Option<Vec<String>>, default_certificate_directory_paths: Option<Vec<String>>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13822,6 +15451,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Set whether a container resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the container. If set to `false`, endpoints belonging to the container resource will ignore the configured proxy settings and run proxy-less.
     pub fn with_endpoint_proxy_support(&self, proxy_enabled: bool) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13830,6 +15461,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Configures the resource to use a programmatically generated Dockerfile
     pub fn with_dockerfile_builder(&self, context_path: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, stage: Option<&str>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13843,6 +15476,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Configures custom base images for generated Dockerfiles.
     pub fn with_dockerfile_base_image(&self, build_image: Option<&str>, runtime_image: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13856,6 +15491,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a network alias to container resource.
     pub fn with_container_network_alias(&self, alias: &str) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13864,6 +15501,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
     pub fn with_mcp_server(&self, path: Option<&str>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13877,6 +15516,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Configures OTLP telemetry export
     pub fn with_otlp_exporter(&self, protocol: Option<OtlpProtocol>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13887,6 +15528,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Changes the resource to be published as a connection string reference in the manifest.
     pub fn publish_as_connection_string(&self) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13894,6 +15537,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
     pub fn with_required_command(&self, command: &str, help_link: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13905,6 +15550,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets an environment variable
     pub fn with_environment(&self, name: &str, value: Value) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13914,6 +15561,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Allows for the population of environment variables on a resource.
     pub fn with_environment_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13923,6 +15572,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Adds a connection property annotation to the resource being built.
     pub fn with_connection_property(&self, name: &str, value: Value) -> Result<IResourceWithConnectionString, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13932,6 +15583,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithConnectionString::new(handle, self.client.clone()))
     }
+
+    /// Adds arguments to be passed to a resource that supports arguments when it is launched.
     pub fn with_args(&self, args: Vec<String>) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13940,6 +15593,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
+
+    /// Adds a callback to be executed with a list of command-line arguments when a resource is started.
     pub fn with_args_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13949,6 +15604,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
+
+    /// Configures how information is injected into environment variables when the resource references other resources.
     pub fn with_reference_environment(&self, options: ReferenceEnvironmentInjectionOptions) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13957,6 +15614,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Adds a reference to another resource
     pub fn with_reference(&self, source: Value, connection_name: Option<&str>, optional: Option<bool>, name: Option<&str>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13974,6 +15633,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Retrieves the value of a specified connection property from the resource's connection properties.
     pub fn get_connection_property(&self, key: &str) -> Result<ReferenceExpression, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -13981,6 +15642,8 @@ impl TestRedisResource {
         let result = self.client.invoke_capability("Aspire.Hosting/getConnectionProperty", args)?;
         Ok(serde_json::from_value(result)?)
     }
+
+    /// Updates a named endpoint via callback
     pub fn with_endpoint_callback(&self, endpoint_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -13994,6 +15657,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Updates an HTTP endpoint via callback
     pub fn with_http_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14009,6 +15674,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Updates an HTTPS endpoint via callback
     pub fn with_https_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14024,6 +15691,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Adds a network endpoint
     pub fn with_endpoint(&self, port: Option<f64>, target_port: Option<f64>, scheme: Option<&str>, name: Option<&str>, env: Option<&str>, is_proxied: Option<bool>, is_external: Option<bool>, protocol: Option<ProtocolType>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14055,6 +15724,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Adds an HTTP endpoint
     pub fn with_http_endpoint(&self, port: Option<f64>, target_port: Option<f64>, name: Option<&str>, env: Option<&str>, is_proxied: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14077,6 +15748,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Adds an HTTPS endpoint
     pub fn with_https_endpoint(&self, port: Option<f64>, target_port: Option<f64>, name: Option<&str>, env: Option<&str>, is_proxied: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14099,6 +15772,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Marks existing http or https endpoints on a resource as external.
     pub fn with_external_http_endpoints(&self) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14106,6 +15781,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Gets an endpoint reference
     pub fn get_endpoint(&self, name: &str) -> Result<EndpointReference, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14114,6 +15791,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(EndpointReference::new(handle, self.client.clone()))
     }
+
+    /// Configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
     pub fn as_http2_service(&self) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14121,6 +15800,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Registers a callback to customize the URLs displayed for the resource.
     pub fn with_urls(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14130,6 +15811,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds or modifies displayed URLs
     pub fn with_url(&self, url: Value, display_text: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14141,6 +15824,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Registers a callback to update the URL displayed for the endpoint with the specified name.
     pub fn with_url_for_endpoint(&self, endpoint_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14151,6 +15836,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Excludes a resource from being published to the manifest.
     pub fn exclude_from_manifest(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14158,6 +15845,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Waits for another resource to be ready
     pub fn wait_for(&self, dependency: &IResource, wait_behavior: Option<WaitBehavior>) -> Result<IResourceWithWaitSupport, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14169,6 +15858,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithWaitSupport::new(handle, self.client.clone()))
     }
+
+    /// Waits for another resource to start
     pub fn wait_for_start(&self, dependency: &IResource, wait_behavior: Option<WaitBehavior>) -> Result<IResourceWithWaitSupport, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14180,6 +15871,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithWaitSupport::new(handle, self.client.clone()))
     }
+
+    /// Prevents resource from starting automatically
     pub fn with_explicit_start(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14187,6 +15880,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Waits for the dependency resource to enter the Exited or Finished state before starting the resource.
     pub fn wait_for_completion(&self, dependency: &IResource, exit_code: Option<f64>) -> Result<IResourceWithWaitSupport, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14198,6 +15893,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithWaitSupport::new(handle, self.client.clone()))
     }
+
+    /// Adds a health check by key
     pub fn with_health_check(&self, key: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14206,6 +15903,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a health check to the resource which is mapped to a specific endpoint.
     pub fn with_http_health_check(&self, path: Option<&str>, status_code: Option<f64>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14222,6 +15921,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Adds a resource command
     pub fn with_command(&self, name: &str, display_name: &str, execute_command: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, command_options: Option<CommandOptions>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14236,6 +15937,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a command to the resource that starts a local process when invoked.
     pub fn with_process_command(&self, command_name: &str, display_name: &str, options: ProcessCommandExportOptions) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14246,6 +15949,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a command to the resource that starts a local process created by a callback when invoked.
     pub fn with_process_command_factory(&self, command_name: &str, display_name: &str, create_process_spec: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, options: Option<ProcessCommandResultExportOptions>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14260,6 +15965,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds an HTTP resource command
     pub fn with_http_command(&self, path: &str, display_name: &str, options: Option<HttpCommandExportOptions>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14272,6 +15979,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Indicates whether developer certificates should be treated as trusted certificate authorities for the resource at run time. Currently this indicates trust for the ASP.NET Core developer certificate. The developer certificate will only be trusted when running in local development scenarios; in publish mode resources will use their default certificate trust.
     pub fn with_developer_certificate_trust(&self, trust: bool) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14280,6 +15989,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Sets the certificate trust scope
     pub fn with_certificate_trust_scope(&self, scope: CertificateTrustScope) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14288,6 +15999,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
     pub fn with_https_developer_certificate(&self, password: Option<&ParameterResource>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14298,6 +16011,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Disable HTTPS/TLS server certificate configuration for the resource. No HTTPS/TLS termination configuration will be applied.
     pub fn without_https_certificate(&self) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14305,6 +16020,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Adds a relationship to another resource using its builder.
     pub fn with_relationship(&self, resource_builder: &IResource, r#type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14314,6 +16031,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the parent relationship
     pub fn with_parent_relationship(&self, parent: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14322,6 +16041,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets a child relationship
     pub fn with_child_relationship(&self, child: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14330,6 +16051,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Specifies the icon to use when displaying the resource in the dashboard.
     pub fn with_icon_name(&self, icon_name: &str, icon_variant: Option<IconVariant>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14341,6 +16064,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures the compute environment for the compute resource.
     pub fn with_compute_environment(&self, compute_environment_resource: &IComputeEnvironmentResource) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14349,6 +16074,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
+
+    /// Adds an HTTP health probe to the resource
     pub fn with_http_probe(&self, probe_type: ProbeType, path: Option<&str>, initial_delay_seconds: Option<f64>, period_seconds: Option<f64>, timeout_seconds: Option<f64>, failure_threshold: Option<f64>, success_threshold: Option<f64>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14378,6 +16105,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry.
     pub fn exclude_from_mcp(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14385,6 +16114,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds an asynchronous callback to configure container image push options for the resource.
     pub fn with_image_push_options(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14394,6 +16125,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the remote image name (without registry endpoint or tag) for container push operations.
     pub fn with_remote_image_name(&self, remote_image_name: &str) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14402,6 +16135,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the remote image tag for container push operations.
     pub fn with_remote_image_tag(&self, remote_image_tag: &str) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14410,6 +16145,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a pipeline step to the resource that will be executed during deployment.
     pub fn with_pipeline_step_factory(&self, step_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, depends_on: Option<Vec<String>>, required_by: Option<Vec<String>>, tags: Option<Vec<String>>, description: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14432,6 +16169,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
     pub fn with_pipeline_configuration(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14441,6 +16180,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a volume to a container resource.
     pub fn with_volume(&self, target: &str, name: Option<&str>, is_read_only: Option<bool>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -14455,12 +16196,16 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Gets the name of the resource from a builder.
     pub fn get_resource_name(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/getResourceName", args)?;
         Ok(serde_json::from_value(result)?)
     }
+
+    /// Subscribes to the BeforeResourceStarted event.
     pub fn on_before_resource_started(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14470,6 +16215,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the ResourceStopped event.
     pub fn on_resource_stopped(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14479,6 +16226,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the ConnectionStringAvailable event.
     pub fn on_connection_string_available(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithConnectionString, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14488,6 +16237,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithConnectionString::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the InitializeResource event.
     pub fn on_initialize_resource(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14497,6 +16248,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the ResourceEndpointsAllocated event.
     pub fn on_resource_endpoints_allocated(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14506,6 +16259,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the ResourceReady event.
     pub fn on_resource_ready(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14515,6 +16270,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Creates an execution configuration builder for the specified resource.
     pub fn create_execution_configuration(&self) -> Result<IExecutionConfigurationBuilder, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -14522,6 +16279,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IExecutionConfigurationBuilder::new(handle, self.client.clone()))
     }
+
+    /// Adds a child database to a test Redis resource
     pub fn add_test_child_database(&self, name: &str, database_name: Option<&str>) -> Result<TestDatabaseResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14533,6 +16292,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(TestDatabaseResource::new(handle, self.client.clone()))
     }
+
+    /// Configures the Redis resource with persistence
     pub fn with_persistence(&self, mode: Option<TestPersistenceMode>) -> Result<TestRedisResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14543,6 +16304,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(TestRedisResource::new(handle, self.client.clone()))
     }
+
+    /// Adds an optional string parameter
     pub fn with_optional_string(&self, value: Option<&str>, enabled: Option<bool>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14556,6 +16319,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures the resource with a DTO
     pub fn with_config(&self, config: TestConfigDto) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14564,12 +16329,18 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Gets the tags for the resource
     pub fn get_tags(&self) -> AspireList<String> {
         AspireList::with_getter(self.handle.clone(), self.client.clone(), "Aspire.Hosting.CodeGeneration.Rust.Tests/getTags")
     }
+
+    /// Gets the metadata for the resource
     pub fn get_metadata(&self) -> AspireDict<String, String> {
         AspireDict::with_getter(self.handle.clone(), self.client.clone(), "Aspire.Hosting.CodeGeneration.Rust.Tests/getMetadata")
     }
+
+    /// Sets the connection string using a reference expression
     pub fn with_connection_string(&self, connection_string: ReferenceExpression) -> Result<IResourceWithConnectionString, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14578,6 +16349,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithConnectionString::new(handle, self.client.clone()))
     }
+
+    /// Configures environment with callback (test version)
     pub fn test_with_environment_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14587,6 +16360,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Sets the created timestamp
     pub fn with_created_at(&self, created_at: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14595,6 +16370,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the modified timestamp
     pub fn with_modified_at(&self, modified_at: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14603,6 +16380,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the correlation ID
     pub fn with_correlation_id(&self, correlation_id: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14611,6 +16390,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures with optional callback
     pub fn with_optional_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14620,6 +16401,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the resource status
     pub fn with_status(&self, status: TestResourceStatus) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14628,6 +16411,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures with nested DTO
     pub fn with_nested_config(&self, config: TestNestedDto) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14636,6 +16421,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds validation callback
     pub fn with_validator(&self, validator: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14645,6 +16432,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Waits for another resource (test version)
     pub fn test_wait_for(&self, dependency: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14653,12 +16442,16 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Gets the endpoints
     pub fn get_endpoints(&self) -> Result<Vec<String>, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/getEndpoints", args)?;
         Ok(serde_json::from_value(result)?)
     }
+
+    /// Sets connection string using direct interface target
     pub fn with_connection_string_direct(&self, connection_string: &str) -> Result<IResourceWithConnectionString, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14667,6 +16460,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithConnectionString::new(handle, self.client.clone()))
     }
+
+    /// Redis-specific configuration
     pub fn with_redis_specific(&self, option: &str) -> Result<TestRedisResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14675,6 +16470,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(TestRedisResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a dependency on another resource
     pub fn with_dependency(&self, dependency: &IResourceWithConnectionString) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14683,6 +16480,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a dependency from a string or another resource
     pub fn with_union_dependency(&self, dependency: Value) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14691,6 +16490,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the endpoints
     pub fn with_endpoints(&self, endpoints: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14699,6 +16500,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets environment variables
     pub fn with_environment_variables(&self, variables: HashMap<String, String>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14707,6 +16510,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Gets the status of the resource asynchronously
     pub fn get_status_async(&self, cancellation_token: Option<&CancellationToken>) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14717,6 +16522,8 @@ impl TestRedisResource {
         let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/getStatusAsync", args)?;
         Ok(serde_json::from_value(result)?)
     }
+
+    /// Performs a cancellable operation
     pub fn with_cancellable_operation(&self, operation: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14726,6 +16533,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Waits for the resource to be ready
     pub fn wait_for_ready_async(&self, timeout: f64, cancellation_token: Option<&CancellationToken>) -> Result<bool, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14737,6 +16546,8 @@ impl TestRedisResource {
         let result = self.client.invoke_capability("Aspire.Hosting.CodeGeneration.Rust.Tests/waitForReadyAsync", args)?;
         Ok(serde_json::from_value(result)?)
     }
+
+    /// Tests multi-param callback destructuring
     pub fn with_multi_param_handle_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<TestRedisResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14746,6 +16557,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(TestRedisResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a data volume with persistence
     pub fn with_data_volume(&self, name: Option<&str>, is_read_only: Option<bool>) -> Result<TestRedisResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14759,6 +16572,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(TestRedisResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a label to the resource
     pub fn with_merge_label(&self, label: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14767,6 +16582,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a categorized label to the resource
     pub fn with_merge_label_categorized(&self, label: &str, category: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14776,6 +16593,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a named endpoint
     pub fn with_merge_endpoint(&self, endpoint_name: &str, port: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14785,6 +16604,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a named endpoint with scheme
     pub fn with_merge_endpoint_scheme(&self, endpoint_name: &str, port: f64, scheme: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14795,6 +16616,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures resource logging
     pub fn with_merge_logging(&self, log_level: &str, enable_console: Option<bool>, max_files: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14809,6 +16632,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures resource logging with file path
     pub fn with_merge_logging_path(&self, log_level: &str, log_path: &str, enable_console: Option<bool>, max_files: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14824,6 +16649,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a route
     pub fn with_merge_route(&self, path: &str, method: &str, handler: &str, priority: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14835,6 +16662,8 @@ impl TestRedisResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a route with middleware
     pub fn with_merge_route_middleware(&self, path: &str, method: &str, handler: &str, priority: f64, middleware: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14910,7 +16739,7 @@ impl TestResourceContext {
         Ok(TestResourceContext::new(handle, self.client.clone()))
     }
 
-    /// Invokes the GetValueAsync method
+    /// Instance method that should be exposed as async method.
     pub fn get_value_async(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -14918,7 +16747,7 @@ impl TestResourceContext {
         Ok(serde_json::from_value(result)?)
     }
 
-    /// Invokes the SetValueAsync method
+    /// Instance method with parameter.
     pub fn set_value_async(&self, value: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -14927,7 +16756,7 @@ impl TestResourceContext {
         Ok(())
     }
 
-    /// Invokes the ValidateAsync method
+    /// Instance method with return type.
     pub fn validate_async(&self) -> Result<bool, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
@@ -14960,6 +16789,8 @@ impl TestVaultResource {
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
     }
+
+    /// Configures the resource to use the specified container registry for container image operations.
     pub fn with_container_registry(&self, registry: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14968,6 +16799,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a bind mount to a container resource.
     pub fn with_bind_mount(&self, source: &str, target: &str, is_read_only: Option<bool>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14980,6 +16813,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the Entrypoint for the container.
     pub fn with_entrypoint(&self, entrypoint: &str) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14988,6 +16823,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Allows overriding the image tag on a container.
     pub fn with_image_tag(&self, tag: &str) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -14996,6 +16833,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Allows overriding the image registry on a container.
     pub fn with_image_registry(&self, registry: &str) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15004,6 +16843,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Allows overriding the image on a container.
     pub fn with_image(&self, image: &str, tag: Option<&str>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15015,6 +16856,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Allows setting the image to a specific sha256 on a container.
     pub fn with_image_sha256(&self, sha256: &str) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15023,6 +16866,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a callback to be executed with a list of arguments to add to the container runtime run command when a container resource is started.
     pub fn with_container_runtime_args(&self, args: Vec<String>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15031,6 +16876,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the lifetime behavior of the container resource.
     pub fn with_lifetime(&self, lifetime: ContainerLifetime) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15039,6 +16886,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the pull policy for the container resource.
     pub fn with_image_pull_policy(&self, pull_policy: ImagePullPolicy) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15047,6 +16896,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Changes the resource to be published as a container in the manifest.
     pub fn publish_as_container(&self) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15054,6 +16905,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Causes Aspire to build the specified container image from a Dockerfile.
     pub fn with_dockerfile(&self, context_path: &str, dockerfile_path: Option<&str>, stage: Option<&str>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15068,6 +16921,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Overrides the default container name for this resource. By default Aspire generates a unique container name based on the resource name and a random postfix (or a postfix based on a hash of the AppHost project path for persistent container resources). This method allows you to override that behavior with a custom name, but could lead to naming conflicts if the specified name is not unique.
     pub fn with_container_name(&self, name: &str) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15076,6 +16931,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a build argument when the container is built from a Dockerfile.
     pub fn with_build_arg(&self, name: &str, value: Value) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15085,6 +16942,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a secret build argument when the container is built from a Dockerfile.
     pub fn with_build_secret(&self, name: &str, value: &ParameterResource) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15094,6 +16953,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Adds container certificate path overrides used for certificate trust at run time.
     pub fn with_container_certificate_paths(&self, custom_certificates_destination: Option<&str>, default_certificate_bundle_paths: Option<Vec<String>>, default_certificate_directory_paths: Option<Vec<String>>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15110,6 +16971,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Set whether a container resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the container. If set to `false`, endpoints belonging to the container resource will ignore the configured proxy settings and run proxy-less.
     pub fn with_endpoint_proxy_support(&self, proxy_enabled: bool) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15118,6 +16981,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Configures the resource to use a programmatically generated Dockerfile
     pub fn with_dockerfile_builder(&self, context_path: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, stage: Option<&str>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15131,6 +16996,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Configures custom base images for generated Dockerfiles.
     pub fn with_dockerfile_base_image(&self, build_image: Option<&str>, runtime_image: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15144,6 +17011,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a network alias to container resource.
     pub fn with_container_network_alias(&self, alias: &str) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15152,6 +17021,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Marks the resource as hosting a Model Context Protocol (MCP) server on the specified endpoint.
     pub fn with_mcp_server(&self, path: Option<&str>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15165,6 +17036,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Configures OTLP telemetry export
     pub fn with_otlp_exporter(&self, protocol: Option<OtlpProtocol>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15175,6 +17048,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Changes the resource to be published as a connection string reference in the manifest.
     pub fn publish_as_connection_string(&self) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15182,6 +17057,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
     pub fn with_required_command(&self, command: &str, help_link: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15193,6 +17070,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets an environment variable
     pub fn with_environment(&self, name: &str, value: Value) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15202,6 +17081,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Allows for the population of environment variables on a resource.
     pub fn with_environment_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15211,6 +17092,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Adds arguments to be passed to a resource that supports arguments when it is launched.
     pub fn with_args(&self, args: Vec<String>) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15219,6 +17102,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
+
+    /// Adds a callback to be executed with a list of command-line arguments when a resource is started.
     pub fn with_args_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithArgs, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15228,6 +17113,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithArgs::new(handle, self.client.clone()))
     }
+
+    /// Configures how information is injected into environment variables when the resource references other resources.
     pub fn with_reference_environment(&self, options: ReferenceEnvironmentInjectionOptions) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15236,6 +17123,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Adds a reference to another resource
     pub fn with_reference(&self, source: Value, connection_name: Option<&str>, optional: Option<bool>, name: Option<&str>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15253,6 +17142,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Updates a named endpoint via callback
     pub fn with_endpoint_callback(&self, endpoint_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15266,6 +17157,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Updates an HTTP endpoint via callback
     pub fn with_http_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15281,6 +17174,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Updates an HTTPS endpoint via callback
     pub fn with_https_endpoint_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, name: Option<&str>, create_if_not_exists: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15296,6 +17191,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Adds a network endpoint
     pub fn with_endpoint(&self, port: Option<f64>, target_port: Option<f64>, scheme: Option<&str>, name: Option<&str>, env: Option<&str>, is_proxied: Option<bool>, is_external: Option<bool>, protocol: Option<ProtocolType>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15327,6 +17224,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Adds an HTTP endpoint
     pub fn with_http_endpoint(&self, port: Option<f64>, target_port: Option<f64>, name: Option<&str>, env: Option<&str>, is_proxied: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15349,6 +17248,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Adds an HTTPS endpoint
     pub fn with_https_endpoint(&self, port: Option<f64>, target_port: Option<f64>, name: Option<&str>, env: Option<&str>, is_proxied: Option<bool>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15371,6 +17272,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Marks existing http or https endpoints on a resource as external.
     pub fn with_external_http_endpoints(&self) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15378,6 +17281,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Gets an endpoint reference
     pub fn get_endpoint(&self, name: &str) -> Result<EndpointReference, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15386,6 +17291,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(EndpointReference::new(handle, self.client.clone()))
     }
+
+    /// Configures a resource to mark all endpoints' transport as HTTP/2. This is useful for HTTP/2 services that need prior knowledge.
     pub fn as_http2_service(&self) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15393,6 +17300,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Registers a callback to customize the URLs displayed for the resource.
     pub fn with_urls(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15402,6 +17311,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds or modifies displayed URLs
     pub fn with_url(&self, url: Value, display_text: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15413,6 +17324,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Registers a callback to update the URL displayed for the endpoint with the specified name.
     pub fn with_url_for_endpoint(&self, endpoint_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15423,6 +17336,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Excludes a resource from being published to the manifest.
     pub fn exclude_from_manifest(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15430,6 +17345,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Waits for another resource to be ready
     pub fn wait_for(&self, dependency: &IResource, wait_behavior: Option<WaitBehavior>) -> Result<IResourceWithWaitSupport, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15441,6 +17358,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithWaitSupport::new(handle, self.client.clone()))
     }
+
+    /// Waits for another resource to start
     pub fn wait_for_start(&self, dependency: &IResource, wait_behavior: Option<WaitBehavior>) -> Result<IResourceWithWaitSupport, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15452,6 +17371,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithWaitSupport::new(handle, self.client.clone()))
     }
+
+    /// Prevents resource from starting automatically
     pub fn with_explicit_start(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15459,6 +17380,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Waits for the dependency resource to enter the Exited or Finished state before starting the resource.
     pub fn wait_for_completion(&self, dependency: &IResource, exit_code: Option<f64>) -> Result<IResourceWithWaitSupport, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15470,6 +17393,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithWaitSupport::new(handle, self.client.clone()))
     }
+
+    /// Adds a health check by key
     pub fn with_health_check(&self, key: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15478,6 +17403,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a health check to the resource which is mapped to a specific endpoint.
     pub fn with_http_health_check(&self, path: Option<&str>, status_code: Option<f64>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15494,6 +17421,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Adds a resource command
     pub fn with_command(&self, name: &str, display_name: &str, execute_command: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, command_options: Option<CommandOptions>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15508,6 +17437,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a command to the resource that starts a local process when invoked.
     pub fn with_process_command(&self, command_name: &str, display_name: &str, options: ProcessCommandExportOptions) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15518,6 +17449,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a command to the resource that starts a local process created by a callback when invoked.
     pub fn with_process_command_factory(&self, command_name: &str, display_name: &str, create_process_spec: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, options: Option<ProcessCommandResultExportOptions>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15532,6 +17465,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds an HTTP resource command
     pub fn with_http_command(&self, path: &str, display_name: &str, options: Option<HttpCommandExportOptions>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15544,6 +17479,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Indicates whether developer certificates should be treated as trusted certificate authorities for the resource at run time. Currently this indicates trust for the ASP.NET Core developer certificate. The developer certificate will only be trusted when running in local development scenarios; in publish mode resources will use their default certificate trust.
     pub fn with_developer_certificate_trust(&self, trust: bool) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15552,6 +17489,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Sets the certificate trust scope
     pub fn with_certificate_trust_scope(&self, scope: CertificateTrustScope) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15560,6 +17499,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Indicates that a resource should use the developer certificate key pair for HTTPS endpoints at run time. Currently this indicates use of the ASP.NET Core developer certificate. The developer certificate will only be used when running in local development scenarios; in publish mode resources will use their default certificate configuration.
     pub fn with_https_developer_certificate(&self, password: Option<&ParameterResource>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15570,6 +17511,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Disable HTTPS/TLS server certificate configuration for the resource. No HTTPS/TLS termination configuration will be applied.
     pub fn without_https_certificate(&self) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15577,6 +17520,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Adds a relationship to another resource using its builder.
     pub fn with_relationship(&self, resource_builder: &IResource, r#type: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15586,6 +17531,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the parent relationship
     pub fn with_parent_relationship(&self, parent: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15594,6 +17541,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets a child relationship
     pub fn with_child_relationship(&self, child: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15602,6 +17551,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Specifies the icon to use when displaying the resource in the dashboard.
     pub fn with_icon_name(&self, icon_name: &str, icon_variant: Option<IconVariant>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15613,6 +17564,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures the compute environment for the compute resource.
     pub fn with_compute_environment(&self, compute_environment_resource: &IComputeEnvironmentResource) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15621,6 +17574,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
+
+    /// Adds an HTTP health probe to the resource
     pub fn with_http_probe(&self, probe_type: ProbeType, path: Option<&str>, initial_delay_seconds: Option<f64>, period_seconds: Option<f64>, timeout_seconds: Option<f64>, failure_threshold: Option<f64>, success_threshold: Option<f64>, endpoint_name: Option<&str>) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15650,6 +17605,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Exclude the resource from MCP operations using the Aspire MCP server. The resource is excluded from results that return resources, console logs and telemetry.
     pub fn exclude_from_mcp(&self) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15657,6 +17614,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds an asynchronous callback to configure container image push options for the resource.
     pub fn with_image_push_options(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15666,6 +17625,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the remote image name (without registry endpoint or tag) for container push operations.
     pub fn with_remote_image_name(&self, remote_image_name: &str) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15674,6 +17635,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the remote image tag for container push operations.
     pub fn with_remote_image_tag(&self, remote_image_tag: &str) -> Result<IComputeResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15682,6 +17645,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IComputeResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a pipeline step to the resource that will be executed during deployment.
     pub fn with_pipeline_step_factory(&self, step_name: &str, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static, depends_on: Option<Vec<String>>, required_by: Option<Vec<String>>, tags: Option<Vec<String>>, description: Option<&str>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15704,6 +17669,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Registers a callback to be executed during the pipeline configuration phase, allowing modification of step dependencies and relationships.
     pub fn with_pipeline_configuration(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15713,6 +17680,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a volume to a container resource.
     pub fn with_volume(&self, target: &str, name: Option<&str>, is_read_only: Option<bool>) -> Result<ContainerResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -15727,12 +17696,16 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ContainerResource::new(handle, self.client.clone()))
     }
+
+    /// Gets the name of the resource from a builder.
     pub fn get_resource_name(&self) -> Result<String, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/getResourceName", args)?;
         Ok(serde_json::from_value(result)?)
     }
+
+    /// Subscribes to the BeforeResourceStarted event.
     pub fn on_before_resource_started(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15742,6 +17715,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the ResourceStopped event.
     pub fn on_resource_stopped(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15751,6 +17726,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the InitializeResource event.
     pub fn on_initialize_resource(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15760,6 +17737,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the ResourceEndpointsAllocated event.
     pub fn on_resource_endpoints_allocated(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEndpoints, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15769,6 +17748,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEndpoints::new(handle, self.client.clone()))
     }
+
+    /// Subscribes to the ResourceReady event.
     pub fn on_resource_ready(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15778,6 +17759,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Creates an execution configuration builder for the specified resource.
     pub fn create_execution_configuration(&self) -> Result<IExecutionConfigurationBuilder, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("resource".to_string(), self.handle.to_json());
@@ -15785,6 +17768,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IExecutionConfigurationBuilder::new(handle, self.client.clone()))
     }
+
+    /// Adds an optional string parameter
     pub fn with_optional_string(&self, value: Option<&str>, enabled: Option<bool>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15798,6 +17783,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures the resource with a DTO
     pub fn with_config(&self, config: TestConfigDto) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15806,6 +17793,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures environment with callback (test version)
     pub fn test_with_environment_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15815,6 +17804,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Sets the created timestamp
     pub fn with_created_at(&self, created_at: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15823,6 +17814,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the modified timestamp
     pub fn with_modified_at(&self, modified_at: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15831,6 +17824,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the correlation ID
     pub fn with_correlation_id(&self, correlation_id: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15839,6 +17834,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures with optional callback
     pub fn with_optional_callback(&self, callback: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15848,6 +17845,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the resource status
     pub fn with_status(&self, status: TestResourceStatus) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15856,6 +17855,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures with nested DTO
     pub fn with_nested_config(&self, config: TestNestedDto) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15864,6 +17865,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds validation callback
     pub fn with_validator(&self, validator: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15873,6 +17876,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Waits for another resource (test version)
     pub fn test_wait_for(&self, dependency: &IResource) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15881,6 +17886,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a dependency on another resource
     pub fn with_dependency(&self, dependency: &IResourceWithConnectionString) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15889,6 +17896,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a dependency from a string or another resource
     pub fn with_union_dependency(&self, dependency: Value) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15897,6 +17906,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets the endpoints
     pub fn with_endpoints(&self, endpoints: Vec<String>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15905,6 +17916,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Sets environment variables
     pub fn with_environment_variables(&self, variables: HashMap<String, String>) -> Result<IResourceWithEnvironment, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15913,6 +17926,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResourceWithEnvironment::new(handle, self.client.clone()))
     }
+
+    /// Performs a cancellable operation
     pub fn with_cancellable_operation(&self, operation: impl Fn(Vec<Value>) -> Value + Send + Sync + 'static) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15922,6 +17937,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures vault using direct interface target
     pub fn with_vault_direct(&self, option: &str) -> Result<ITestVaultResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15930,6 +17947,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(ITestVaultResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a label to the resource
     pub fn with_merge_label(&self, label: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15938,6 +17957,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Adds a categorized label to the resource
     pub fn with_merge_label_categorized(&self, label: &str, category: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15947,6 +17968,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a named endpoint
     pub fn with_merge_endpoint(&self, endpoint_name: &str, port: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15956,6 +17979,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a named endpoint with scheme
     pub fn with_merge_endpoint_scheme(&self, endpoint_name: &str, port: f64, scheme: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15966,6 +17991,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures resource logging
     pub fn with_merge_logging(&self, log_level: &str, enable_console: Option<bool>, max_files: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15980,6 +18007,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures resource logging with file path
     pub fn with_merge_logging_path(&self, log_level: &str, log_path: &str, enable_console: Option<bool>, max_files: Option<f64>) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -15995,6 +18024,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a route
     pub fn with_merge_route(&self, path: &str, method: &str, handler: &str, priority: f64) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -16006,6 +18037,8 @@ impl TestVaultResource {
         let handle: Handle = serde_json::from_value(result)?;
         Ok(IResource::new(handle, self.client.clone()))
     }
+
+    /// Configures a route with middleware
     pub fn with_merge_route_middleware(&self, path: &str, method: &str, handler: &str, priority: f64, middleware: &str) -> Result<IResource, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("builder".to_string(), self.handle.to_json());
@@ -16045,7 +18078,7 @@ impl UpdateCommandStateContext {
         &self.client
     }
 
-    /// Gets the ServiceProvider property
+    /// The service provider.
     pub fn service_provider(&self) -> Result<IServiceProvider, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());

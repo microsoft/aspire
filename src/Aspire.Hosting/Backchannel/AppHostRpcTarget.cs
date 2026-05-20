@@ -213,11 +213,11 @@ internal class AppHostRpcTarget(
         // and store the results. The "baseline.v0" capability is the bare minimum
         // that we need as of CLI version 9.2-preview*.
         //
-        // Some capabilties will be opt in. For example in 9.3 we might refine the
+        // Some capabilities will be opt in. For example in 9.3 we might refine the
         // publishing activities API to return more information, or add log streaming
-        // features. So that would add a new capability that the apphsot can report
+        // features. So that would add a new capability that the apphost can report
         // on initial backchannel negotiation and the CLI can adapt its behavior around
-        // that. There may be scenarios where we need to break compataiblity at which
+        // that. There may be scenarios where we need to break compatibility at which
         // point we might increase the baseline version that the apphost reports.
         //
         // The ability to support a back channel at all is determined by the CLI by

@@ -60,7 +60,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         var doc = XDocument.Load(Path.Combine(outputDirectory.FullName, "nuget.config"));
         Assert.Contains(doc.Root!.Element("packageSources")!.Elements("clear"), _ => true);
         Assert.Contains(doc.Root!.Element("packageSources")!.Elements("add"), e => (string?)e.Attribute("value") == sourceOverride);
-        Assert.Contains(doc.Root!.Element("packageSources")!.Elements("add"), e => (string?)e.Attribute("value") == PackageSourceOverrideMappings.NuGetOrgSource);
+        Assert.Contains(doc.Root!.Element("packageSources")!.Elements("add"), e => (string?)e.Attribute("value") == PackageSources.NuGetOrg);
         Assert.DoesNotContain(doc.Descendants("add"), e => (string?)e.Attribute("value") == "https://private.example/v3/index.json");
         Assert.Null(doc.Root!.Element("disabledPackageSources"));
         Assert.Null(doc.Root!.Element("packageSourceCredentials"));
@@ -102,7 +102,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         Assert.Equal(["CommunityToolkit*"], GetPackagePatternsForSource(doc, communitySource));
         Assert.Equal([PackageMapping.AllPackages], GetPackagePatternsForSource(doc, fallbackSource));
         Assert.Empty(GetPackagePatternsForSource(doc, channelAspireSource));
-        Assert.Empty(GetPackagePatternsForSource(doc, PackageSourceOverrideMappings.NuGetOrgSource));
+        Assert.Empty(GetPackagePatternsForSource(doc, PackageSources.NuGetOrg));
     }
 
     [Fact]

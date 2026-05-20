@@ -2,6 +2,7 @@
   CapabilityId: Aspire.Hosting.CodeGeneration.Java.Tests/withOptionalString,
   MethodName: withOptionalString,
   QualifiedMethodName: withOptionalString,
+  Description: Adds an optional string parameter,
   Documentation: {
     Summary: Adds an optional string parameter
   },

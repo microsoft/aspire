@@ -185,6 +185,7 @@ func newAspire_Hosting_CodeGeneration_Go_TestsTestVaultResourceFromHandle(h *han
 	return &aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
+// TestWaitFor waits for another resource (test version)
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) TestWaitFor(dependency Resource) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
@@ -197,6 +198,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) TestWaitFor(de
 	return s
 }
 
+// TestWithEnvironmentCallback configures environment with callback (test version)
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -215,6 +217,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) TestWithEnviro
 	return s
 }
 
+// WithCancellableOperation performs a cancellable operation
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCancellableOperation(operation func(arg *CancellationToken)) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -233,6 +236,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCancellabl
 	return s
 }
 
+// WithConfig configures the resource with a DTO
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithConfig(config *TestConfigDto) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -244,6 +248,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithConfig(con
 	return s
 }
 
+// WithCorrelationId sets the correlation ID
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCorrelationId(correlationId string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -255,6 +260,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCorrelatio
 	return s
 }
 
+// WithCreatedAt sets the created timestamp
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCreatedAt(createdAt string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -266,6 +272,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithCreatedAt(
 	return s
 }
 
+// WithDependency adds a dependency on another resource
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDependency(dependency ResourceWithConnectionString) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
@@ -278,6 +285,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithDependency
 	return s
 }
 
+// WithEndpoints sets the endpoints
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEndpoints(endpoints []string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -289,6 +297,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEndpoints(
 	return s
 }
 
+// WithEnvironmentVariables sets environment variables
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEnvironmentVariables(variables map[string]string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -300,6 +309,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithEnvironmen
 	return s
 }
 
+// WithMergeEndpoint configures a named endpoint
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeEndpoint(endpointName string, port float64) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -312,6 +322,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeEndpo
 	return s
 }
 
+// WithMergeEndpointScheme configures a named endpoint with scheme
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeEndpointScheme(endpointName string, port float64, scheme string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -325,6 +336,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeEndpo
 	return s
 }
 
+// WithMergeLabel adds a label to the resource
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeLabel(label string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -336,6 +348,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeLabel
 	return s
 }
 
+// WithMergeLabelCategorized adds a categorized label to the resource
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeLabelCategorized(label string, category string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -348,6 +361,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeLabel
 	return s
 }
 
+// WithMergeLogging configures resource logging
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeLogging(logLevel string, options ...*WithMergeLoggingOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -366,6 +380,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeLoggi
 	return s
 }
 
+// WithMergeLoggingPath configures resource logging with file path
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeLoggingPath(logLevel string, logPath string, options ...*WithMergeLoggingPathOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -385,6 +400,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeLoggi
 	return s
 }
 
+// WithMergeRoute configures a route
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeRoute(path string, method string, handler string, priority float64) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -399,6 +415,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeRoute
 	return s
 }
 
+// WithMergeRouteMiddleware configures a route with middleware
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeRouteMiddleware(path string, method string, handler string, priority float64, middleware string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -414,6 +431,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithMergeRoute
 	return s
 }
 
+// WithModifiedAt sets the modified timestamp
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithModifiedAt(modifiedAt string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -425,6 +443,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithModifiedAt
 	return s
 }
 
+// WithNestedConfig configures with nested DTO
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithNestedConfig(config *TestNestedDto) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -436,6 +455,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithNestedConf
 	return s
 }
 
+// WithOptionalCallback configures with optional callback
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithOptionalCallback(options ...*WithOptionalCallbackOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -461,6 +481,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithOptionalCa
 	return s
 }
 
+// WithOptionalString adds an optional string parameter
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithOptionalString(options ...*WithOptionalStringOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -478,6 +499,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithOptionalSt
 	return s
 }
 
+// WithStatus sets the resource status
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithStatus(status TestResourceStatus) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -489,6 +511,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithStatus(sta
 	return s
 }
 
+// WithUnionDependency adds a dependency from a string or another resource
 // Allowed types for parameter dependency: string, ResourceWithConnectionString.
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUnionDependency(dependency any) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
@@ -507,6 +530,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithUnionDepen
 	return s
 }
 
+// WithValidator adds validation callback
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithValidator(validator func(arg TestResourceContext) bool) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -524,6 +548,7 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithValidator(
 	return s
 }
 
+// WithVaultDirect configures vault using direct interface target
 func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithVaultDirect(option string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -554,6 +579,7 @@ func newIDistributedApplicationBuilderFromHandle(h *handle, c *client) IDistribu
 	return &iDistributedApplicationBuilder{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
+// AddTestRedis adds a test Redis resource from ATS documentation.
 func (s *iDistributedApplicationBuilder) AddTestRedis(name string, options ...*AddTestRedisOptions) TestRedisResource {
 	if s.err != nil { return &testRedisResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -580,6 +606,7 @@ func (s *iDistributedApplicationBuilder) AddTestRedis(name string, options ...*A
 	return &testRedisResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
+// AddTestVault adds a test vault resource
 func (s *iDistributedApplicationBuilder) AddTestVault(name string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
 	if s.err != nil { return &aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -637,7 +664,7 @@ func newTestCallbackContextFromHandle(h *handle, c *client) TestCallbackContext 
 	return &testCallbackContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// CancellationToken gets the CancellationToken property
+// CancellationToken cancellationToken is supported by ATS.
 func (s *testCallbackContext) CancellationToken() (*CancellationToken, error) {
 	if s.err != nil { var zero *CancellationToken; return zero, s.err }
 	ctx := context.Background()
@@ -750,7 +777,7 @@ func newTestCollectionContextFromHandle(h *handle, c *client) TestCollectionCont
 	return &testCollectionContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// Items gets the Items property
+// Items list property - should generate AspireList getter like Dictionary properties.
 func (s *testCollectionContext) Items() *List[string] {
 	if s.items == nil {
 		s.items = newListWithGetter[string](s.handleWrapperBase, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCollectionContext.items")
@@ -758,7 +785,7 @@ func (s *testCollectionContext) Items() *List[string] {
 	return s.items
 }
 
-// Metadata gets the Metadata property
+// Metadata dictionary property - already works with AspireDict getter.
 func (s *testCollectionContext) Metadata() *Dict[string, string] {
 	if s.metadata == nil {
 		s.metadata = newDictWithGetter[string, string](s.handleWrapperBase, "Aspire.Hosting.CodeGeneration.TypeScript.Tests.TestTypes/TestCollectionContext.metadata")
@@ -807,6 +834,7 @@ func newTestDatabaseResourceFromHandle(h *handle, c *client) TestDatabaseResourc
 	return &testDatabaseResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
+// TestWaitFor waits for another resource (test version)
 func (s *testDatabaseResource) TestWaitFor(dependency Resource) TestDatabaseResource {
 	if s.err != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
@@ -819,6 +847,7 @@ func (s *testDatabaseResource) TestWaitFor(dependency Resource) TestDatabaseReso
 	return s
 }
 
+// TestWithEnvironmentCallback configures environment with callback (test version)
 func (s *testDatabaseResource) TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -837,6 +866,7 @@ func (s *testDatabaseResource) TestWithEnvironmentCallback(callback func(arg Tes
 	return s
 }
 
+// WithCancellableOperation performs a cancellable operation
 func (s *testDatabaseResource) WithCancellableOperation(operation func(arg *CancellationToken)) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -855,6 +885,7 @@ func (s *testDatabaseResource) WithCancellableOperation(operation func(arg *Canc
 	return s
 }
 
+// WithConfig configures the resource with a DTO
 func (s *testDatabaseResource) WithConfig(config *TestConfigDto) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -866,6 +897,7 @@ func (s *testDatabaseResource) WithConfig(config *TestConfigDto) TestDatabaseRes
 	return s
 }
 
+// WithCorrelationId sets the correlation ID
 func (s *testDatabaseResource) WithCorrelationId(correlationId string) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -877,6 +909,7 @@ func (s *testDatabaseResource) WithCorrelationId(correlationId string) TestDatab
 	return s
 }
 
+// WithCreatedAt sets the created timestamp
 func (s *testDatabaseResource) WithCreatedAt(createdAt string) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -888,6 +921,7 @@ func (s *testDatabaseResource) WithCreatedAt(createdAt string) TestDatabaseResou
 	return s
 }
 
+// WithDataVolume adds a data volume
 func (s *testDatabaseResource) WithDataVolume(options ...*TestDatabaseResourceWithDataVolumeOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -905,6 +939,7 @@ func (s *testDatabaseResource) WithDataVolume(options ...*TestDatabaseResourceWi
 	return s
 }
 
+// WithDependency adds a dependency on another resource
 func (s *testDatabaseResource) WithDependency(dependency ResourceWithConnectionString) TestDatabaseResource {
 	if s.err != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
@@ -917,6 +952,7 @@ func (s *testDatabaseResource) WithDependency(dependency ResourceWithConnectionS
 	return s
 }
 
+// WithEndpoints sets the endpoints
 func (s *testDatabaseResource) WithEndpoints(endpoints []string) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -928,6 +964,7 @@ func (s *testDatabaseResource) WithEndpoints(endpoints []string) TestDatabaseRes
 	return s
 }
 
+// WithEnvironmentVariables sets environment variables
 func (s *testDatabaseResource) WithEnvironmentVariables(variables map[string]string) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -939,6 +976,7 @@ func (s *testDatabaseResource) WithEnvironmentVariables(variables map[string]str
 	return s
 }
 
+// WithMergeEndpoint configures a named endpoint
 func (s *testDatabaseResource) WithMergeEndpoint(endpointName string, port float64) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -951,6 +989,7 @@ func (s *testDatabaseResource) WithMergeEndpoint(endpointName string, port float
 	return s
 }
 
+// WithMergeEndpointScheme configures a named endpoint with scheme
 func (s *testDatabaseResource) WithMergeEndpointScheme(endpointName string, port float64, scheme string) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -964,6 +1003,7 @@ func (s *testDatabaseResource) WithMergeEndpointScheme(endpointName string, port
 	return s
 }
 
+// WithMergeLabel adds a label to the resource
 func (s *testDatabaseResource) WithMergeLabel(label string) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -975,6 +1015,7 @@ func (s *testDatabaseResource) WithMergeLabel(label string) TestDatabaseResource
 	return s
 }
 
+// WithMergeLabelCategorized adds a categorized label to the resource
 func (s *testDatabaseResource) WithMergeLabelCategorized(label string, category string) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -987,6 +1028,7 @@ func (s *testDatabaseResource) WithMergeLabelCategorized(label string, category 
 	return s
 }
 
+// WithMergeLogging configures resource logging
 func (s *testDatabaseResource) WithMergeLogging(logLevel string, options ...*WithMergeLoggingOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1005,6 +1047,7 @@ func (s *testDatabaseResource) WithMergeLogging(logLevel string, options ...*Wit
 	return s
 }
 
+// WithMergeLoggingPath configures resource logging with file path
 func (s *testDatabaseResource) WithMergeLoggingPath(logLevel string, logPath string, options ...*WithMergeLoggingPathOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1024,6 +1067,7 @@ func (s *testDatabaseResource) WithMergeLoggingPath(logLevel string, logPath str
 	return s
 }
 
+// WithMergeRoute configures a route
 func (s *testDatabaseResource) WithMergeRoute(path string, method string, handler string, priority float64) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1038,6 +1082,7 @@ func (s *testDatabaseResource) WithMergeRoute(path string, method string, handle
 	return s
 }
 
+// WithMergeRouteMiddleware configures a route with middleware
 func (s *testDatabaseResource) WithMergeRouteMiddleware(path string, method string, handler string, priority float64, middleware string) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1053,6 +1098,7 @@ func (s *testDatabaseResource) WithMergeRouteMiddleware(path string, method stri
 	return s
 }
 
+// WithModifiedAt sets the modified timestamp
 func (s *testDatabaseResource) WithModifiedAt(modifiedAt string) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1064,6 +1110,7 @@ func (s *testDatabaseResource) WithModifiedAt(modifiedAt string) TestDatabaseRes
 	return s
 }
 
+// WithNestedConfig configures with nested DTO
 func (s *testDatabaseResource) WithNestedConfig(config *TestNestedDto) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1075,6 +1122,7 @@ func (s *testDatabaseResource) WithNestedConfig(config *TestNestedDto) TestDatab
 	return s
 }
 
+// WithOptionalCallback configures with optional callback
 func (s *testDatabaseResource) WithOptionalCallback(options ...*WithOptionalCallbackOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1100,6 +1148,7 @@ func (s *testDatabaseResource) WithOptionalCallback(options ...*WithOptionalCall
 	return s
 }
 
+// WithOptionalString adds an optional string parameter
 func (s *testDatabaseResource) WithOptionalString(options ...*WithOptionalStringOptions) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1117,6 +1166,7 @@ func (s *testDatabaseResource) WithOptionalString(options ...*WithOptionalString
 	return s
 }
 
+// WithStatus sets the resource status
 func (s *testDatabaseResource) WithStatus(status TestResourceStatus) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1128,6 +1178,7 @@ func (s *testDatabaseResource) WithStatus(status TestResourceStatus) TestDatabas
 	return s
 }
 
+// WithUnionDependency adds a dependency from a string or another resource
 // Allowed types for parameter dependency: string, ResourceWithConnectionString.
 func (s *testDatabaseResource) WithUnionDependency(dependency any) TestDatabaseResource {
 	if s.err != nil { return s }
@@ -1146,6 +1197,7 @@ func (s *testDatabaseResource) WithUnionDependency(dependency any) TestDatabaseR
 	return s
 }
 
+// WithValidator adds validation callback
 func (s *testDatabaseResource) WithValidator(validator func(arg TestResourceContext) bool) TestDatabaseResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1382,6 +1434,7 @@ func newTestRedisResourceFromHandle(h *handle, c *client) TestRedisResource {
 	return &testRedisResource{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
+// AddTestChildDatabase adds a child database to a test Redis resource
 func (s *testRedisResource) AddTestChildDatabase(name string, options ...*AddTestChildDatabaseOptions) TestDatabaseResource {
 	if s.err != nil { return &testDatabaseResource{resourceBuilderBase: newErroredResourceBuilder(s.err, s.client)} }
 	ctx := context.Background()
@@ -1408,6 +1461,7 @@ func (s *testRedisResource) AddTestChildDatabase(name string, options ...*AddTes
 	return &testDatabaseResource{resourceBuilderBase: newResourceBuilderBase(href.getHandle(), s.client)}
 }
 
+// GetEndpoints gets the endpoints
 func (s *testRedisResource) GetEndpoints() ([]string, error) {
 	if s.err != nil { var zero []string; return zero, s.err }
 	ctx := context.Background()
@@ -1422,6 +1476,7 @@ func (s *testRedisResource) GetEndpoints() ([]string, error) {
 	return decodeAs[[]string](result)
 }
 
+// GetMetadata gets the metadata for the resource
 func (s *testRedisResource) GetMetadata() *Dict[string, string] {
 	if s.getMetadata == nil {
 		s.getMetadata = newDictWithGetter[string, string](s.handleWrapperBase, "Aspire.Hosting.CodeGeneration.Go.Tests/getMetadata")
@@ -1429,6 +1484,7 @@ func (s *testRedisResource) GetMetadata() *Dict[string, string] {
 	return s.getMetadata
 }
 
+// GetStatusAsync gets the status of the resource asynchronously
 func (s *testRedisResource) GetStatusAsync(options ...*GetStatusAsyncOptions) (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -1456,6 +1512,7 @@ func (s *testRedisResource) GetStatusAsync(options ...*GetStatusAsyncOptions) (s
 	return decodeAs[string](result)
 }
 
+// GetTags gets the tags for the resource
 func (s *testRedisResource) GetTags() *List[string] {
 	if s.getTags == nil {
 		s.getTags = newListWithGetter[string](s.handleWrapperBase, "Aspire.Hosting.CodeGeneration.Go.Tests/getTags")
@@ -1463,6 +1520,7 @@ func (s *testRedisResource) GetTags() *List[string] {
 	return s.getTags
 }
 
+// TestWaitFor waits for another resource (test version)
 func (s *testRedisResource) TestWaitFor(dependency Resource) TestRedisResource {
 	if s.err != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
@@ -1475,6 +1533,7 @@ func (s *testRedisResource) TestWaitFor(dependency Resource) TestRedisResource {
 	return s
 }
 
+// TestWithEnvironmentCallback configures environment with callback (test version)
 func (s *testRedisResource) TestWithEnvironmentCallback(callback func(arg TestEnvironmentContext)) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1493,6 +1552,7 @@ func (s *testRedisResource) TestWithEnvironmentCallback(callback func(arg TestEn
 	return s
 }
 
+// WaitForReadyAsync waits for the resource to be ready
 func (s *testRedisResource) WaitForReadyAsync(timeout float64, options ...*WaitForReadyAsyncOptions) (bool, error) {
 	if s.err != nil { var zero bool; return zero, s.err }
 	ctx := context.Background()
@@ -1521,6 +1581,7 @@ func (s *testRedisResource) WaitForReadyAsync(timeout float64, options ...*WaitF
 	return decodeAs[bool](result)
 }
 
+// WithCancellableOperation performs a cancellable operation
 func (s *testRedisResource) WithCancellableOperation(operation func(arg *CancellationToken)) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1539,6 +1600,7 @@ func (s *testRedisResource) WithCancellableOperation(operation func(arg *Cancell
 	return s
 }
 
+// WithConfig configures the resource with a DTO
 func (s *testRedisResource) WithConfig(config *TestConfigDto) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1550,6 +1612,7 @@ func (s *testRedisResource) WithConfig(config *TestConfigDto) TestRedisResource 
 	return s
 }
 
+// WithConnectionString sets the connection string using a reference expression
 func (s *testRedisResource) WithConnectionString(connectionString *ReferenceExpression) TestRedisResource {
 	if s.err != nil { return s }
 	if connectionString != nil { if err := connectionString.Err(); err != nil { s.setErr(err); return s } }
@@ -1562,6 +1625,7 @@ func (s *testRedisResource) WithConnectionString(connectionString *ReferenceExpr
 	return s
 }
 
+// WithConnectionStringDirect sets connection string using direct interface target
 func (s *testRedisResource) WithConnectionStringDirect(connectionString string) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1573,6 +1637,7 @@ func (s *testRedisResource) WithConnectionStringDirect(connectionString string) 
 	return s
 }
 
+// WithCorrelationId sets the correlation ID
 func (s *testRedisResource) WithCorrelationId(correlationId string) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1584,6 +1649,7 @@ func (s *testRedisResource) WithCorrelationId(correlationId string) TestRedisRes
 	return s
 }
 
+// WithCreatedAt sets the created timestamp
 func (s *testRedisResource) WithCreatedAt(createdAt string) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1595,6 +1661,7 @@ func (s *testRedisResource) WithCreatedAt(createdAt string) TestRedisResource {
 	return s
 }
 
+// WithDataVolume adds a data volume with persistence
 func (s *testRedisResource) WithDataVolume(options ...*TestDatabaseResourceWithDataVolumeOptions) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1612,6 +1679,7 @@ func (s *testRedisResource) WithDataVolume(options ...*TestDatabaseResourceWithD
 	return s
 }
 
+// WithDependency adds a dependency on another resource
 func (s *testRedisResource) WithDependency(dependency ResourceWithConnectionString) TestRedisResource {
 	if s.err != nil { return s }
 	if dependency != nil { if err := dependency.Err(); err != nil { s.setErr(err); return s } }
@@ -1624,6 +1692,7 @@ func (s *testRedisResource) WithDependency(dependency ResourceWithConnectionStri
 	return s
 }
 
+// WithEndpoints sets the endpoints
 func (s *testRedisResource) WithEndpoints(endpoints []string) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1635,6 +1704,7 @@ func (s *testRedisResource) WithEndpoints(endpoints []string) TestRedisResource 
 	return s
 }
 
+// WithEnvironmentVariables sets environment variables
 func (s *testRedisResource) WithEnvironmentVariables(variables map[string]string) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1646,6 +1716,7 @@ func (s *testRedisResource) WithEnvironmentVariables(variables map[string]string
 	return s
 }
 
+// WithMergeEndpoint configures a named endpoint
 func (s *testRedisResource) WithMergeEndpoint(endpointName string, port float64) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1658,6 +1729,7 @@ func (s *testRedisResource) WithMergeEndpoint(endpointName string, port float64)
 	return s
 }
 
+// WithMergeEndpointScheme configures a named endpoint with scheme
 func (s *testRedisResource) WithMergeEndpointScheme(endpointName string, port float64, scheme string) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1671,6 +1743,7 @@ func (s *testRedisResource) WithMergeEndpointScheme(endpointName string, port fl
 	return s
 }
 
+// WithMergeLabel adds a label to the resource
 func (s *testRedisResource) WithMergeLabel(label string) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1682,6 +1755,7 @@ func (s *testRedisResource) WithMergeLabel(label string) TestRedisResource {
 	return s
 }
 
+// WithMergeLabelCategorized adds a categorized label to the resource
 func (s *testRedisResource) WithMergeLabelCategorized(label string, category string) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1694,6 +1768,7 @@ func (s *testRedisResource) WithMergeLabelCategorized(label string, category str
 	return s
 }
 
+// WithMergeLogging configures resource logging
 func (s *testRedisResource) WithMergeLogging(logLevel string, options ...*WithMergeLoggingOptions) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1712,6 +1787,7 @@ func (s *testRedisResource) WithMergeLogging(logLevel string, options ...*WithMe
 	return s
 }
 
+// WithMergeLoggingPath configures resource logging with file path
 func (s *testRedisResource) WithMergeLoggingPath(logLevel string, logPath string, options ...*WithMergeLoggingPathOptions) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1731,6 +1807,7 @@ func (s *testRedisResource) WithMergeLoggingPath(logLevel string, logPath string
 	return s
 }
 
+// WithMergeRoute configures a route
 func (s *testRedisResource) WithMergeRoute(path string, method string, handler string, priority float64) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1745,6 +1822,7 @@ func (s *testRedisResource) WithMergeRoute(path string, method string, handler s
 	return s
 }
 
+// WithMergeRouteMiddleware configures a route with middleware
 func (s *testRedisResource) WithMergeRouteMiddleware(path string, method string, handler string, priority float64, middleware string) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1760,6 +1838,7 @@ func (s *testRedisResource) WithMergeRouteMiddleware(path string, method string,
 	return s
 }
 
+// WithModifiedAt sets the modified timestamp
 func (s *testRedisResource) WithModifiedAt(modifiedAt string) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1771,6 +1850,7 @@ func (s *testRedisResource) WithModifiedAt(modifiedAt string) TestRedisResource 
 	return s
 }
 
+// WithMultiParamHandleCallback tests multi-param callback destructuring
 func (s *testRedisResource) WithMultiParamHandleCallback(callback func(arg1 TestCallbackContext, arg2 TestEnvironmentContext)) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1789,6 +1869,7 @@ func (s *testRedisResource) WithMultiParamHandleCallback(callback func(arg1 Test
 	return s
 }
 
+// WithNestedConfig configures with nested DTO
 func (s *testRedisResource) WithNestedConfig(config *TestNestedDto) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1800,6 +1881,7 @@ func (s *testRedisResource) WithNestedConfig(config *TestNestedDto) TestRedisRes
 	return s
 }
 
+// WithOptionalCallback configures with optional callback
 func (s *testRedisResource) WithOptionalCallback(options ...*WithOptionalCallbackOptions) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1825,6 +1907,7 @@ func (s *testRedisResource) WithOptionalCallback(options ...*WithOptionalCallbac
 	return s
 }
 
+// WithOptionalString adds an optional string parameter
 func (s *testRedisResource) WithOptionalString(options ...*WithOptionalStringOptions) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1842,6 +1925,7 @@ func (s *testRedisResource) WithOptionalString(options ...*WithOptionalStringOpt
 	return s
 }
 
+// WithPersistence configures the Redis resource with persistence
 func (s *testRedisResource) WithPersistence(options ...*WithPersistenceOptions) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1859,6 +1943,7 @@ func (s *testRedisResource) WithPersistence(options ...*WithPersistenceOptions) 
 	return s
 }
 
+// WithRedisSpecific redis-specific configuration
 func (s *testRedisResource) WithRedisSpecific(option string) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1870,6 +1955,7 @@ func (s *testRedisResource) WithRedisSpecific(option string) TestRedisResource {
 	return s
 }
 
+// WithStatus sets the resource status
 func (s *testRedisResource) WithStatus(status TestResourceStatus) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1881,6 +1967,7 @@ func (s *testRedisResource) WithStatus(status TestResourceStatus) TestRedisResou
 	return s
 }
 
+// WithUnionDependency adds a dependency from a string or another resource
 // Allowed types for parameter dependency: string, ResourceWithConnectionString.
 func (s *testRedisResource) WithUnionDependency(dependency any) TestRedisResource {
 	if s.err != nil { return s }
@@ -1899,6 +1986,7 @@ func (s *testRedisResource) WithUnionDependency(dependency any) TestRedisResourc
 	return s
 }
 
+// WithValidator adds validation callback
 func (s *testRedisResource) WithValidator(validator func(arg TestResourceContext) bool) TestRedisResource {
 	if s.err != nil { return s }
 	ctx := context.Background()
@@ -1939,7 +2027,7 @@ func newTestResourceContextFromHandle(h *handle, c *client) TestResourceContext 
 	return &testResourceContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
 }
 
-// GetValueAsync invokes the GetValueAsync method
+// GetValueAsync instance method that should be exposed as async method.
 func (s *testResourceContext) GetValueAsync() (string, error) {
 	if s.err != nil { var zero string; return zero, s.err }
 	ctx := context.Background()
@@ -1993,7 +2081,7 @@ func (s *testResourceContext) SetValue(value float64) TestResourceContext {
 	return s
 }
 
-// SetValueAsync invokes the SetValueAsync method
+// SetValueAsync instance method with parameter.
 func (s *testResourceContext) SetValueAsync(value string) error {
 	if s.err != nil { return s.err }
 	ctx := context.Background()
@@ -2005,7 +2093,7 @@ func (s *testResourceContext) SetValueAsync(value string) error {
 	return err
 }
 
-// ValidateAsync invokes the ValidateAsync method
+// ValidateAsync instance method with return type.
 func (s *testResourceContext) ValidateAsync() (bool, error) {
 	if s.err != nil { var zero bool; return zero, s.err }
 	ctx := context.Background()
