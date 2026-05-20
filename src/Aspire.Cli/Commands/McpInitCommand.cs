@@ -3,6 +3,7 @@
 
 using System.CommandLine;
 using Aspire.Cli.Agents;
+using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Git;
@@ -39,6 +40,7 @@ internal sealed class McpInitCommand : BaseCommand, IPackageMetaPrefetchingComma
         ICliUpdateNotifier updateNotifier,
         CliExecutionContext executionContext,
         IAgentEnvironmentDetector agentEnvironmentDetector,
+        IAspireSkillsInstaller aspireSkillsInstaller,
         PlaywrightCliInstaller playwrightCliInstaller,
         IGitRepository gitRepository,
         ILanguageDiscovery languageDiscovery,
@@ -52,6 +54,7 @@ internal sealed class McpInitCommand : BaseCommand, IPackageMetaPrefetchingComma
             updateNotifier,
             executionContext,
             agentEnvironmentDetector,
+            aspireSkillsInstaller,
             playwrightCliInstaller,
             gitRepository,
             languageDiscovery,

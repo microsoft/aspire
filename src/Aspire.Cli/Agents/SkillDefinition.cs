@@ -20,7 +20,7 @@ internal sealed class SkillDefinition
         CommonAgentApplicators.AspireSkillName,
         AgentCommandStrings.SkillDescription_Aspire,
         skillContent: null,
-        embeddedResourceRoot: CommonAgentApplicators.AspireSkillResourceRoot,
+        sourceKind: SkillSourceKind.AspireSkillsBundle,
         installExcludedRelativePaths: [Path.Combine("evals")],
         isDefault: true);
 
@@ -31,7 +31,7 @@ internal sealed class SkillDefinition
         CommonAgentApplicators.AspireDeploymentSkillName,
         AgentCommandStrings.SkillDescription_AspireDeployment,
         skillContent: null,
-        embeddedResourceRoot: CommonAgentApplicators.AspireDeploymentSkillResourceRoot,
+        sourceKind: SkillSourceKind.AspireSkillsBundle,
         installExcludedRelativePaths: [],
         isDefault: true);
 
@@ -42,7 +42,7 @@ internal sealed class SkillDefinition
         "playwright-cli",
         AgentCommandStrings.SkillDescription_PlaywrightCli,
         skillContent: null,
-        embeddedResourceRoot: null, // Playwright is installed via PlaywrightCliInstaller, not a static file
+        sourceKind: SkillSourceKind.ExternalInstaller, // Playwright is installed via PlaywrightCliInstaller, not a static file
         installExcludedRelativePaths: [],
         isDefault: false);
 
@@ -54,7 +54,7 @@ internal sealed class SkillDefinition
         CommonAgentApplicators.DotnetInspectSkillName,
         AgentCommandStrings.SkillDescription_DotnetInspect,
         CommonAgentApplicators.DotnetInspectSkillFileContent,
-        embeddedResourceRoot: null,
+        sourceKind: SkillSourceKind.Static,
         installExcludedRelativePaths: [],
         isDefault: false,
         applicableLanguages: [KnownLanguageId.CSharp]);
@@ -67,16 +67,16 @@ internal sealed class SkillDefinition
         CommonAgentApplicators.AspireifySkillName,
         AgentCommandStrings.SkillDescription_Aspireify,
         skillContent: null,
-        embeddedResourceRoot: CommonAgentApplicators.AspireifySkillResourceRoot,
+        sourceKind: SkillSourceKind.AspireSkillsBundle,
         installExcludedRelativePaths: [],
         isDefault: true);
 
-    private SkillDefinition(string name, string description, string? skillContent, string? embeddedResourceRoot, IReadOnlyList<string> installExcludedRelativePaths, bool isDefault, IReadOnlyList<string>? applicableLanguages = null)
+    private SkillDefinition(string name, string description, string? skillContent, SkillSourceKind sourceKind, IReadOnlyList<string> installExcludedRelativePaths, bool isDefault, IReadOnlyList<string>? applicableLanguages = null)
     {
         Name = name;
         Description = description;
         SkillContent = skillContent;
-        EmbeddedResourceRoot = embeddedResourceRoot;
+        SourceKind = sourceKind;
         InstallExcludedRelativePaths = installExcludedRelativePaths;
         IsDefault = isDefault;
         ApplicableLanguages = applicableLanguages ?? [];
@@ -93,15 +93,19 @@ internal sealed class SkillDefinition
     public string Description { get; }
 
     /// <summary>
-    /// Gets the content for the top-level SKILL.md file when the skill is defined as a single-file bundle,
-    /// or <c>null</c> when installable files come from <see cref="EmbeddedResourceRoot"/> or another installer.
+    /// Gets the content for the top-level SKILL.md file when the skill is defined as a single-file bundle.
     /// </summary>
     public string? SkillContent { get; }
 
     /// <summary>
-    /// Gets the embedded resource root for bundled skill files, or <c>null</c> if the skill is not installed from an embedded file tree.
+    /// Gets where the installable files for this skill come from.
     /// </summary>
-    public string? EmbeddedResourceRoot { get; }
+    public SkillSourceKind SourceKind { get; }
+
+    /// <summary>
+    /// Gets whether this skill has files that <c>aspire agent init</c> installs directly.
+    /// </summary>
+    public bool HasInstallableFiles => SkillContent is not null || SourceKind is SkillSourceKind.AspireSkillsBundle;
 
     /// <summary>
     /// Gets relative paths that should be excluded when the skill is installed into a workspace.
@@ -179,4 +183,25 @@ internal sealed class SkillDefinition
 
     /// <inheritdoc />
     public override string ToString() => Name;
+}
+
+/// <summary>
+/// Identifies where skill files are sourced from.
+/// </summary>
+internal enum SkillSourceKind
+{
+    /// <summary>
+    /// The skill is represented by static content compiled into the CLI.
+    /// </summary>
+    Static,
+
+    /// <summary>
+    /// The skill is installed from the external Aspire skills bundle.
+    /// </summary>
+    AspireSkillsBundle,
+
+    /// <summary>
+    /// The skill is managed by a dedicated external installer.
+    /// </summary>
+    ExternalInstaller
 }

@@ -156,6 +156,15 @@
   <data name="SkillLocation_OpenCodeDescription" xml:space="preserve">
     <value>Legacy location for OpenCode skills</value>
   </data>
+  <data name="AspireSkillsInstaller_InstallingStatus" xml:space="preserve">
+    <value>Installing Aspire skills...</value>
+  </data>
+  <data name="AspireSkillsInstaller_NpmUnavailable" xml:space="preserve">
+    <value>Aspire skills require npm for the first install, which was not found on PATH.</value>
+  </data>
+  <data name="AspireSkillsInstaller_InvalidBundle" xml:space="preserve">
+    <value>The Aspire skills bundle is invalid: {0}</value>
+  </data>
   <data name="PlaywrightCliInstaller_InstallingStatus" xml:space="preserve">
     <value>Installing Playwright CLI...</value>
   </data>
