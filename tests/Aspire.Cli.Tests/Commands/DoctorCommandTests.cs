@@ -59,29 +59,28 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task DoctorCommand_Json_VersionUpdateBanner_StaysOnStderr()
+    public async Task DoctorCommand_Json_VersionUpdateBanner_IsSuppressed()
     {
-        // Regression test for https://github.com/microsoft/aspire/pull/17105#issuecomment-4501689881.
-        // When --format json is requested AND a CLI update notification fires after the command
-        // runs, the banner must land on stderr while stdout stays parseable JSON. The JsonDocument
-        // parse below is the contract: anything else on stdout (status text, the update banner
-        // itself, error noise) would break it.
+        // The cli-version environment check already surfaces "newer version available" inside
+        // checks[]; the post-command update banner would be a second, less-structured copy of
+        // the same data. DoctorCommand opts out of BaseCommand's update notifier
+        // (UpdateNotificationsEnabled => false) so the banner does not fire at all — neither
+        // on stdout (which would break JSON parsing) nor on stderr (where it would just be noise
+        // duplicating checks[].cli-version).
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         var errorWriter = new StringWriter();
+        var notifierInvoked = false;
 
         var services = CreateDoctorVersionServiceCollection(workspace, outputHelper, options =>
         {
             options.OutputTextWriter = outputWriter;
             options.ErrorTextWriter = errorWriter;
-            // TestCliUpdateNotifier doesn't emit anything by default, so route its
-            // post-command notification through the real interaction service to
-            // reproduce the same DisplayVersionUpdateNotification banner that ships
-            // in production.
             options.CliUpdateNotifierFactory = sp => new TestCliUpdateNotifier
             {
                 NotifyIfUpdateAvailableCallback = () =>
                 {
+                    notifierInvoked = true;
                     var interactionService = sp.GetRequiredService<IInteractionService>();
                     interactionService.DisplayVersionUpdateNotification("13.99.0", "aspire update");
                 }
@@ -94,13 +93,14 @@ public class DoctorCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
         Assert.Equal(CliExitCodes.Success, exitCode);
 
+        Assert.False(notifierInvoked, "DoctorCommand should not invoke the CLI update notifier; the cli-version check carries that information directly in checks[].");
+
         var stdoutText = string.Concat(outputWriter.Logs);
         using var doc = JsonDocument.Parse(stdoutText);
         Assert.True(doc.RootElement.TryGetProperty("checks", out _));
 
         var stderrText = errorWriter.ToString();
-        Assert.Contains("13.99.0", stderrText, StringComparison.Ordinal);
-        Assert.Contains("aspire update", stderrText, StringComparison.Ordinal);
+        Assert.DoesNotContain("13.99.0", stderrText, StringComparison.Ordinal);
     }
 
     [Fact]
