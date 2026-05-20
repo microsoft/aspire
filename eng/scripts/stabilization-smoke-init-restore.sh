@@ -131,10 +131,10 @@ run_aspire() {
 
 # Stage a NuGet.config in the work dir BEFORE running `aspire new`. The CLI itself fetches
 # the templates package via NuGet, and the subsequent restore needs both Aspire.* (from local
-# stable) and non-Aspire transitives (from the public dotnet feeds). packageSourceMapping pins
-# Aspire.* to our feed so a missing/preview Aspire dep fails fast rather than silently falling
-# back to nuget.org. Mirrors the source-mapping pattern in tests/Shared/nuget-with-package-
-# source-mapping.config used by Helix.
+# stable) and any non-Aspire transitives. packageSourceMapping pins Aspire.* to our feed so
+# a missing/preview Aspire dep fails fast rather than silently falling back to nuget.org for
+# an older stable release. Everything else flows from nuget.org — matches what an end user
+# running `aspire new` would have configured by default.
 cat > "$WORK_DIR/NuGet.config" <<EOF
 <?xml version="1.0" encoding="utf-8"?>
 <configuration>
@@ -144,25 +144,13 @@ cat > "$WORK_DIR/NuGet.config" <<EOF
   <packageSources>
     <clear />
     <add key="local-stable" value="$LOCAL_FEED" />
-    <add key="dotnet-public" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public/nuget/v3/index.json" />
-    <add key="dotnet-eng" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-eng/nuget/v3/index.json" />
-    <add key="dotnet9" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet9/nuget/v3/index.json" />
-    <add key="dotnet10" value="https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet10/nuget/v3/index.json" />
+    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
   </packageSources>
   <packageSourceMapping>
     <packageSource key="local-stable">
       <package pattern="Aspire*" />
     </packageSource>
-    <packageSource key="dotnet-public">
-      <package pattern="*" />
-    </packageSource>
-    <packageSource key="dotnet-eng">
-      <package pattern="*" />
-    </packageSource>
-    <packageSource key="dotnet9">
-      <package pattern="*" />
-    </packageSource>
-    <packageSource key="dotnet10">
+    <packageSource key="nuget.org">
       <package pattern="*" />
     </packageSource>
   </packageSourceMapping>
@@ -171,7 +159,7 @@ cat > "$WORK_DIR/NuGet.config" <<EOF
   </disabledPackageSources>
 </configuration>
 EOF
-echo "  ✓ Source-mapped NuGet.config written (Aspire* -> local-stable; everything else -> public dotnet feeds)"
+echo "  ✓ Source-mapped NuGet.config written (Aspire* -> local-stable; everything else -> nuget.org)"
 
 PROJECT_NAME="MyAspireApp"
 echo ""
@@ -217,7 +205,7 @@ else
 fi
 
 echo ""
-echo "→ aspire restore (against local stable feed + public dotnet feeds for transitives)"
+echo "→ aspire restore (against local stable feed for Aspire packages, nuget.org for everything else)"
 (cd "$PROJECT_DIR" && run_aspire restore < /dev/null)
 
 echo ""
