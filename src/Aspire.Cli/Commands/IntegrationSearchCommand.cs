@@ -72,7 +72,7 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
                 .OrderBy(p => p.FriendlyName, new CommunityToolkitFirstComparer())
                 .ToArray();
 
-            return CommandResult.FromExitCode(DisplayIntegrationResults(packagesWithShortName, searchTerm, format));
+            return CommandResult.FromExitCode(DisplayIntegrationResults(packagesWithShortName, searchTerm, format, configuredChannel));
         }
         catch (ProjectLocatorException ex)
         {
@@ -90,13 +90,13 @@ internal abstract class IntegrationDiscoveryCommand : BaseCommand
         }
     }
 
-    private int DisplayIntegrationResults(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, string? searchTerm, OutputFormat format)
+    private int DisplayIntegrationResults(IEnumerable<(string FriendlyName, NuGetPackage Package, PackageChannel Channel)> packages, string? searchTerm, OutputFormat format, string? configuredChannel)
     {
         var matches = (searchTerm is null
             ? packages.Select(p => (p.FriendlyName, p.Package, p.Channel, SearchScore: 0.0))
             : IntegrationPackageSearchService.GetIntegrationSearchMatches(packages, searchTerm))
             .GroupBy(p => p.Package.Id)
-            .Select(IntegrationPackageSearchService.SelectPreferredIntegrationPackage);
+            .Select(p => IntegrationPackageSearchService.SelectPreferredIntegrationPackage(p, configuredChannel));
 
         var orderedMatches = searchTerm is null
             ? matches.OrderBy(p => p.FriendlyName, new CommunityToolkitFirstComparer()).ThenBy(p => p.Package.Id, StringComparer.OrdinalIgnoreCase)
