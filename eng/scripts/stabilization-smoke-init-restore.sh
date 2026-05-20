@@ -117,6 +117,13 @@ echo "→ Building Aspire.Cli (stabilized) for use as the smoke driver"
 # also prevents `dotnet run` from re-resolving NuGet against the temp-dir NuGet.config.
 # --no-launch-profile keeps src/Aspire.Cli/Properties/launchSettings.json out of the picture
 # so the CLI receives exactly the args we pass after `--`.
+# --non-interactive (a recursive root-level option, see Aspire.Cli/Commands/RootCommand.cs:
+# NonInteractiveOption with Recursive = true) is the canonical "I'm in CI, never prompt" flag.
+# It causes the CLI to fail fast on any prompt that doesn't have an explicit answer instead of
+# silently defaulting or hanging on stdin. The explicit suppression flags below (--language,
+# --suppress-agent-init, --localhost-tld) supply the actual *values* we want for the known
+# prompts; --non-interactive guards against any future prompt being added without a matching
+# suppression flag, and against ambient prompts like the certificate trust check.
 run_aspire() {
     (
         cd "$REPO_ROOT"
@@ -125,7 +132,7 @@ run_aspire() {
             --no-build \
             --no-launch-profile \
             -p:StabilizePackageVersion=true \
-            -- "$@"
+            -- --non-interactive "$@"
     )
 }
 
