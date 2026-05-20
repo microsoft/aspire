@@ -2406,6 +2406,168 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
         Assert.Contains(PackageChannelNames.Daily, channelList);
     }
 
+    [Theory]
+    [InlineData(PackageChannelNames.Daily)]
+    [InlineData(PackageChannelNames.Local)]
+    [InlineData("pr-12345")]
+    public async Task UpdateCommand_SelfUpdate_ChannelStagingOnIdentityThatCannotSynthesizeStaging_SurfacesFriendlyReason(string identityChannel)
+    {
+        // Regression: https://github.com/microsoft/aspire/issues/16807
+        // `aspire update --self --channel staging` (and the post-project-update CLI prompt
+        // that dispatches to the same method) used to bypass the friendly
+        // GetStagingChannelUnavailableReason() lookup and instead surface CliDownloader's
+        // generic "Unsupported channel 'staging'. Available channels: …" error. The
+        // self-update path must now mirror the project-update path: when staging is
+        // requested but the packaging service refuses to synthesize it, return a
+        // FailedToUpgradeProject failure whose message is the reason verbatim, and never
+        // hit the downloader.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        const string unavailableReason = "FAKE staging unavailable reason (identity test)";
+
+        TestInteractionService? capturedInteractionService = null;
+        var downloaderInvoked = false;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(identityChannel: identityChannel);
+
+            options.InteractionServiceFactory = _ =>
+            {
+                capturedInteractionService = new TestInteractionService();
+                return capturedInteractionService;
+            };
+
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetStagingChannelUnavailableReasonCallback = () => unavailableReason
+            };
+
+            options.CliDownloaderFactory = _ => new TestCliDownloader(workspace.WorkspaceRoot)
+            {
+                DownloadLatestCliAsyncCallback = (channel, ct) =>
+                {
+                    downloaderInvoked = true;
+                    var archivePath = Path.Combine(workspace.WorkspaceRoot.FullName, "test-cli.tar.gz");
+                    File.WriteAllText(archivePath, "fake archive");
+                    return Task.FromResult(archivePath);
+                }
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --self --channel staging");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToUpgradeProject, exitCode);
+        Assert.False(downloaderInvoked, "CliDownloader must not be invoked when staging is reported unavailable");
+
+        Assert.NotNull(capturedInteractionService);
+        var errorText = string.Join("\n", capturedInteractionService!.DisplayedErrors);
+        Assert.Contains(unavailableReason, errorText);
+        Assert.DoesNotContain("Unsupported channel", errorText);
+        Assert.DoesNotContain("Failed to update CLI:", errorText);
+    }
+
+    [Fact]
+    public async Task UpdateCommand_SelfUpdate_ChannelStagingWhenPackagingServiceReportsAvailable_InvokesDownloader()
+    {
+        // Positive companion to the regression test above: when the packaging service
+        // reports staging as available (GetStagingChannelUnavailableReason returns null —
+        // e.g. identity is stable/staging, overrideStagingFeed is set, or the staging
+        // feature flag is on), the self-update path must NOT short-circuit and must
+        // dispatch through to CliDownloader with the staging channel name.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        string? capturedChannel = null;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(identityChannel: PackageChannelNames.Staging);
+
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                // Explicitly null — staging IS available for this CLI identity.
+                GetStagingChannelUnavailableReasonCallback = () => null
+            };
+
+            options.CliDownloaderFactory = _ => new TestCliDownloader(workspace.WorkspaceRoot)
+            {
+                DownloadLatestCliAsyncCallback = (channel, ct) =>
+                {
+                    capturedChannel = channel;
+                    var archivePath = Path.Combine(workspace.WorkspaceRoot.FullName, "test-cli.tar.gz");
+                    File.WriteAllText(archivePath, "fake archive");
+                    return Task.FromResult(archivePath);
+                }
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --self --channel staging");
+
+        // Extraction of the fake archive will fail, so we don't assert on exit code here.
+        // The contract under test is that the downloader receives 'staging', proving the
+        // staging pre-check did NOT short-circuit when the packaging service said staging
+        // is available.
+        await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(PackageChannelNames.Staging, capturedChannel);
+    }
+
+    [Fact]
+    public async Task UpdateCommand_SelfUpdate_NonStagingChannelOnDailyCli_DoesNotConsultStagingUnavailableReason()
+    {
+        // Negative companion: the staging-unavailable pre-check must be scoped to the
+        // staging channel only. Updating to stable/daily on a daily CLI must not call
+        // GetStagingChannelUnavailableReason() (avoids unrelated work) and must dispatch
+        // straight to the downloader.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var stagingReasonConsulted = false;
+        string? capturedChannel = null;
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => workspace.CreateExecutionContext(identityChannel: PackageChannelNames.Daily);
+
+            options.PackagingServiceFactory = _ => new TestPackagingService
+            {
+                GetStagingChannelUnavailableReasonCallback = () =>
+                {
+                    stagingReasonConsulted = true;
+                    return "should-not-be-surfaced";
+                }
+            };
+
+            options.CliDownloaderFactory = _ => new TestCliDownloader(workspace.WorkspaceRoot)
+            {
+                DownloadLatestCliAsyncCallback = (channel, ct) =>
+                {
+                    capturedChannel = channel;
+                    var archivePath = Path.Combine(workspace.WorkspaceRoot.FullName, "test-cli.tar.gz");
+                    File.WriteAllText(archivePath, "fake archive");
+                    return Task.FromResult(archivePath);
+                }
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("update --self --channel daily");
+
+        await result.InvokeAsync().DefaultTimeout();
+
+        Assert.False(stagingReasonConsulted, "Staging unavailable-reason must not be consulted when the channel is not 'staging'");
+        Assert.Equal(PackageChannelNames.Daily, capturedChannel);
+    }
+
     [Fact]
     public async Task UpdateCommand_SelfOption_IsAvailableAndParseable()
     {

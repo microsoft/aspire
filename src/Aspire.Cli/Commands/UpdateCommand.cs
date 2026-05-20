@@ -492,6 +492,23 @@ internal sealed class UpdateCommand : BaseCommand
 
         try
         {
+            // Mirror the pre-check that the project-update path already performs (see the
+            // matching block above that handles `--channel staging`): when the user has
+            // asked for the `staging` channel but the running CLI's identity cannot
+            // synthesize a real staging feed (daily/local/pr-<N> without overrideStagingFeed
+            // or the StagingChannelEnabled feature flag), surface the friendly explanation
+            // from PackagingService instead of letting CliDownloader throw the generic
+            // "Unsupported channel 'staging'. Available channels: …" error.
+            // See https://github.com/microsoft/aspire/issues/16807.
+            if (string.Equals(channel, PackageChannelNames.Staging, StringComparisons.ChannelName))
+            {
+                var stagingUnavailableReason = _packagingService.GetStagingChannelUnavailableReason();
+                if (stagingUnavailableReason is not null)
+                {
+                    throw new ChannelNotFoundException(stagingUnavailableReason);
+                }
+            }
+
             // Get current executable path for display purposes only
             var currentExePath = Environment.ProcessPath;
             if (string.IsNullOrEmpty(currentExePath))
@@ -513,6 +530,15 @@ internal sealed class UpdateCommand : BaseCommand
         catch (OperationCanceledException)
         {
             return CommandResult.Cancelled();
+        }
+        catch (ChannelNotFoundException ex)
+        {
+            // Surface the packaging-service reason verbatim (no "Failed to update CLI: " prefix)
+            // and use the same exit code as the project-update path so scripted callers see a
+            // consistent failure shape regardless of which entry point hit the unavailable channel.
+            var message = Markup.Escape(ex.Message);
+            Telemetry.RecordError(message, ex);
+            return CommandResult.Failure(CliExitCodes.FailedToUpgradeProject, message);
         }
         catch (Exception ex)
         {
