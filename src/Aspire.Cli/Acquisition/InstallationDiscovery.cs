@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.RegularExpressions;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 
@@ -18,7 +19,7 @@ namespace Aspire.Cli.Acquisition;
 /// then centralizes canonicalization, deduplication, install metadata checks,
 /// peer probing, and row shaping in this class.
 /// </remarks>
-internal sealed class InstallationDiscovery : IInstallationDiscovery
+internal sealed partial class InstallationDiscovery : IInstallationDiscovery
 {
     private static readonly string s_aspireBinaryName = OperatingSystem.IsWindows() ? "aspire.exe" : "aspire";
 
@@ -361,44 +362,27 @@ internal sealed class InstallationDiscovery : IInstallationDiscovery
             return null;
         }
 
-        // Version examples:
-        //   13.4.0-pr.17115.gcd700928   ← extract 17115
-        //   13.3.0-pr.1234.abc          ← extract 1234
-        //   13.4.0-preview.1.99999.1    ← no -pr. → null
-        //   13.4.0                      ← no -pr. → null
-        // Require a leading hyphen so we don't accept a stray "pr." token
-        // mid-version (e.g. a hypothetical "13.4.0-fix.pr.1" — defensive,
-        // not observed). Require a trailing '.' so a malformed
-        // "13.4.0-pr.17115" without the hash suffix is still accepted,
-        // but the digits run must terminate cleanly.
-        const string Marker = "-pr.";
-        var start = version.IndexOf(Marker, StringComparison.Ordinal);
-        if (start < 0)
+        var match = PrChannelVersionRegex().Match(version);
+        if (!match.Success)
         {
             return null;
         }
 
-        var afterMarker = version.AsSpan(start + Marker.Length);
-        // Scan as many ASCII digits as we can — must be at least one, and
-        // must terminate at '.', '+' (semver build-metadata separator), or
-        // end-of-string. Anything else (e.g. "pr.foo") is rejected so
-        // unrelated tokens don't get misclassified as PR channels.
-        var digits = 0;
-        while (digits < afterMarker.Length && afterMarker[digits] is >= '0' and <= '9')
-        {
-            digits++;
-        }
-        if (digits == 0)
-        {
-            return null;
-        }
-        if (digits < afterMarker.Length && afterMarker[digits] is not '.' and not '+')
-        {
-            return null;
-        }
-
-        return string.Concat("pr-", afterMarker[..digits]);
+        return string.Concat("pr-", match.Groups["number"].Value);
     }
+
+    // Version examples:
+    //   13.4.0-pr.17115.gcd700928   -> extract 17115
+    //   13.3.0-pr.1234.abc          -> extract 1234
+    //   13.4.0-preview.1.99999.1    -> no -pr. -> null
+    //   13.4.0                      -> no -pr. -> null
+    // Require a leading hyphen so we don't accept a stray "pr." token
+    // mid-version (e.g. a hypothetical "13.4.0-fix.pr.1" — defensive,
+    // not observed). Require the digits to terminate at '.', '+', or the
+    // end of the string so unrelated tokens don't get misclassified as PR
+    // channels.
+    [GeneratedRegex(@"-pr\.(?<number>[0-9]+)(?:[.+]|$)", RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture)]
+    private static partial Regex PrChannelVersionRegex();
 
     private string? TryReadChannel()
     {
