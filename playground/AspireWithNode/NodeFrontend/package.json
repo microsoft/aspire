@@ -5,7 +5,7 @@
   "packageManager": "pnpm@10.30.1",
   "main": "app.js",
   "engines": {
-    "node": ">=20.12"
+    "node": ">=22.22"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",

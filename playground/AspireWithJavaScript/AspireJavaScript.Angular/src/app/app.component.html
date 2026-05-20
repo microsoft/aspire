@@ -66,12 +66,14 @@
           </tr>
         </thead>
         <tbody>
-          <tr *ngFor="let forecast of forecasts; index as i;">
-            <td>{{forecast.date}}</td>
-              <td>{{forecast.temperatureC}}</td>
-              <td>{{forecast.temperatureF}}</td>
-              <td>{{forecast.summary}}</td>
-          </tr>
+          @for (forecast of forecasts.value(); track forecast.date) {
+            <tr>
+              <td>{{ forecast.date }}</td>
+              <td>{{ forecast.temperatureC }}</td>
+              <td>{{ forecast.temperatureF }}</td>
+              <td>{{ forecast.summary }}</td>
+            </tr>
+          }
         </tbody>
       </table>
     </div>
