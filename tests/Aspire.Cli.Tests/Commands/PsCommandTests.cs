@@ -3,6 +3,7 @@
 
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
@@ -516,6 +517,14 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
                     ResourceType = "Container",
                     State = "Running",
                     StateStyle = "success"
+                },
+                new ResourceSnapshot
+                {
+                    Name = "aspire-dashboard",
+                    DisplayName = "aspire-dashboard",
+                    ResourceType = "Project",
+                    State = "Hidden",
+                    IsHidden = true
                 }
             ]
         };
@@ -554,6 +563,291 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
         var redis = appHost.Resources.First(r => r.Name == "redis");
         Assert.Equal("Container", redis.ResourceType);
         Assert.Equal("Running", redis.State);
+        Assert.DoesNotContain(appHost.Resources, resource => resource.Name == "aspire-dashboard");
+    }
+
+    [Fact]
+    public async Task PsCommand_ResourcesOption_WithIncludeHidden_IncludesHiddenResources()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var textWriter = new TestOutputTextWriter(outputHelper);
+
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            IsInScope = true,
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost.csproj"),
+                ProcessId = 1234
+            },
+            ResourceSnapshots =
+            [
+                new ResourceSnapshot
+                {
+                    Name = "apiservice",
+                    DisplayName = "apiservice",
+                    ResourceType = "Project",
+                    State = "Running"
+                },
+                new ResourceSnapshot
+                {
+                    Name = "aspire-dashboard",
+                    DisplayName = "aspire-dashboard",
+                    ResourceType = "Project",
+                    State = "Hidden",
+                    IsHidden = true
+                }
+            ]
+        };
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = textWriter;
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("ps --format json --resources --include-hidden");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+
+        var jsonOutput = string.Join(string.Empty, textWriter.Logs);
+        var appHosts = JsonSerializer.Deserialize(jsonOutput, PsCommandJsonContext.RelaxedEscaping.ListAppHostDisplayInfo);
+        Assert.NotNull(appHosts);
+        var resources = Assert.Single(appHosts).Resources;
+        Assert.NotNull(resources);
+        Assert.Contains(resources, resource => resource.Name == "apiservice");
+        Assert.Contains(resources, resource => resource.Name == "aspire-dashboard");
+    }
+
+    [Theory]
+    [InlineData(false, 1)]
+    [InlineData(true, 2)]
+    public async Task PsCommand_FollowResourcesOption_HandlesHiddenResources(bool includeHidden, int expectedResourceCount)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var outputLines = new List<string>();
+        var textWriter = new TestOutputTextWriter(outputHelper, line =>
+        {
+            outputLines.Add(line);
+            cancellationTokenSource.Cancel();
+        });
+
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            IsInScope = true,
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost.csproj"),
+                ProcessId = 1234
+            },
+            ResourceSnapshots =
+            [
+                new ResourceSnapshot
+                {
+                    Name = "apiservice",
+                    DisplayName = "apiservice",
+                    ResourceType = "Project",
+                    State = "Running"
+                },
+                new ResourceSnapshot
+                {
+                    Name = "aspire-dashboard",
+                    DisplayName = "aspire-dashboard",
+                    ResourceType = "Project",
+                    State = "Hidden",
+                    IsHidden = true
+                }
+            ]
+        };
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = textWriter;
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var includeHiddenArg = includeHidden ? " --include-hidden" : string.Empty;
+        var result = command.Parse($"ps --format json --resources --follow{includeHiddenArg}");
+
+        var exitCode = await result.InvokeAsync(cancellationToken: cancellationTokenSource.Token).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var outputLine = Assert.Single(outputLines);
+        var appHosts = JsonSerializer.Deserialize(outputLine, PsCommandJsonContext.RelaxedEscaping.ListAppHostDisplayInfo);
+        Assert.NotNull(appHosts);
+        var resources = Assert.Single(appHosts).Resources;
+        Assert.NotNull(resources);
+        Assert.Equal(expectedResourceCount, resources.Count);
+        Assert.Contains(resources, resource => resource.Name == "apiservice");
+        Assert.Equal(includeHidden, resources.Any(resource => resource.Name == "aspire-dashboard"));
+    }
+
+    [Fact]
+    public async Task PsCommand_FollowJsonFormat_StreamsFullSnapshotsForResourceUpdates()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var outputLines = new List<string>();
+        var updateResource = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var textWriter = new TestOutputTextWriter(outputHelper, line =>
+        {
+            outputLines.Add(line);
+            if (outputLines.Count == 1)
+            {
+                updateResource.SetResult();
+            }
+            else if (outputLines.Count == 2)
+            {
+                cancellationTokenSource.Cancel();
+            }
+        });
+
+        var snapshots = new List<ResourceSnapshot>
+        {
+            new()
+            {
+                Name = "apiservice",
+                DisplayName = "apiservice",
+                ResourceType = "Project",
+                State = "Starting",
+                StateStyle = "info"
+            }
+        };
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            IsInScope = true,
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost.csproj"),
+                ProcessId = 1234,
+                CliProcessId = 5678
+            },
+            GetResourceSnapshotsHandler = _ => Task.FromResult(snapshots.ToList()),
+            WatchResourceSnapshotsHandler = WatchResourceSnapshotsAsync
+        };
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = textWriter;
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("ps --format json --resources --follow");
+
+        var exitCode = await result.InvokeAsync(cancellationToken: cancellationTokenSource.Token).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(2, outputLines.Count);
+
+        var initialSnapshot = JsonSerializer.Deserialize(outputLines[0], PsCommandJsonContext.RelaxedEscaping.ListAppHostDisplayInfo);
+        var updatedSnapshot = JsonSerializer.Deserialize(outputLines[1], PsCommandJsonContext.RelaxedEscaping.ListAppHostDisplayInfo);
+        Assert.NotNull(initialSnapshot);
+        Assert.NotNull(updatedSnapshot);
+        Assert.Equal("Starting", Assert.Single(Assert.Single(initialSnapshot).Resources!).State);
+        Assert.Equal("Running", Assert.Single(Assert.Single(updatedSnapshot).Resources!).State);
+
+        async IAsyncEnumerable<ResourceSnapshot> WatchResourceSnapshotsAsync(bool includeHidden, [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            Assert.False(includeHidden);
+            await updateResource.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            snapshots[0] = new ResourceSnapshot
+            {
+                Name = "apiservice",
+                DisplayName = "apiservice",
+                ResourceType = "Project",
+                State = "Running",
+                StateStyle = "success"
+            };
+            yield return snapshots[0];
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    [Fact]
+    public async Task PsCommand_FollowWithoutJsonFormat_ReturnsInvalidCommand()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("ps --follow");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
+    }
+
+    [Fact]
+    public async Task PsCommand_FollowJsonFormat_StreamsFullSnapshotWhenConnectionIsRemoved()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var outputLines = new List<string>();
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        var textWriter = new TestOutputTextWriter(outputHelper, line =>
+        {
+            outputLines.Add(line);
+            if (outputLines.Count == 1)
+            {
+                monitor.RemoveConnection("hash1", "socket.hash1");
+                monitor.NotifyConnectionsChanged();
+            }
+            else if (outputLines.Count == 2)
+            {
+                cancellationTokenSource.Cancel();
+            }
+        });
+
+        var connection = new TestAppHostAuxiliaryBackchannel
+        {
+            IsInScope = true,
+            AppHostInfo = new AppHostInformation
+            {
+                AppHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost.csproj"),
+                ProcessId = 1234,
+                CliProcessId = 5678
+            }
+        };
+        monitor.AddConnection("hash1", "socket.hash1", connection);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.OutputTextWriter = textWriter;
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("ps --format json --follow");
+
+        var exitCode = await result.InvokeAsync(cancellationToken: cancellationTokenSource.Token).DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(2, outputLines.Count);
+
+        var initialSnapshot = JsonSerializer.Deserialize(outputLines[0], PsCommandJsonContext.RelaxedEscaping.ListAppHostDisplayInfo);
+        var updatedSnapshot = JsonSerializer.Deserialize(outputLines[1], PsCommandJsonContext.RelaxedEscaping.ListAppHostDisplayInfo);
+        Assert.NotNull(initialSnapshot);
+        Assert.NotNull(updatedSnapshot);
+        Assert.Single(initialSnapshot);
+        Assert.Empty(updatedSnapshot);
     }
 
     [Fact]
@@ -953,4 +1247,5 @@ public class PsCommandTests(ITestOutputHelper outputHelper)
             });
         }
     }
+
 }

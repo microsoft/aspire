@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import * as sinon from 'sinon';
 
 import { IInteractionService, InteractionService } from '../../server/interactionService';
-import { ICliRpcClient, ValidationResult } from '../../server/rpcClient';
+import { ICliRpcClient, RpcClient, ValidationResult } from '../../server/rpcClient';
 import { extensionLogOutputChannel } from '../../utils/logging';
 import AspireRpcServer, { RpcServerConnectionInfo } from '../../server/AspireRpcServer';
 import { AspireDebugSession } from '../../debugger/AspireDebugSession';
@@ -188,6 +188,26 @@ suite('InteractionService endpoints', () => {
 		finally {
 			showInformationMessageStub.restore();
 		}
+	});
+
+	test("RPC close clears active progress notification", async () => {
+		let closeHandler: (() => void) | undefined;
+		const messageConnection = {
+			onClose: (handler: () => void) => {
+				closeHandler = handler;
+				return { dispose: () => { } };
+			},
+			sendRequest: sinon.stub()
+		} as any;
+
+		const rpcClient = new RpcClient({} as any, messageConnection, null, () => null);
+
+		rpcClient.interactionService.showStatus('Scanning for running AppHosts...');
+		assert.strictEqual((rpcClient.interactionService as any)._progressNotifier.isActive, true);
+
+		closeHandler!();
+
+		assert.strictEqual((rpcClient.interactionService as any)._progressNotifier.isActive, false);
 	});
 
 	test("displaySubtleMessage endpoint", async () => {

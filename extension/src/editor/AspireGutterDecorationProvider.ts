@@ -4,7 +4,8 @@ import { getParserForDocument } from './parsers/AppHostResourceParser';
 import './parsers/csharpAppHostParser';
 import './parsers/jsTsAppHostParser';
 import { AspireAppHostTreeProvider } from '../views/AspireAppHostTreeProvider';
-import { findResourceState, findWorkspaceResourceState } from './resourceStateUtils';
+import { AppHostDisplayInfo } from '../views/AppHostDataRepository';
+import { findResourceState, findWorkspaceResourceState, matchesAppHostPathOrDirectory } from './resourceStateUtils';
 import { ResourceState, StateStyle, HealthStatus } from './resourceConstants';
 
 type GutterCategory = 'running' | 'warning' | 'error' | 'starting' | 'stopped' | 'completed';
@@ -154,7 +155,10 @@ export class AspireGutterDecorationProvider implements vscode.Disposable {
 
         const appHosts = this._treeProvider.appHosts;
         const workspaceResources = this._treeProvider.workspaceResources;
-        if (appHosts.length === 0 && workspaceResources.length === 0) {
+        const workspaceAppHostPath = this._treeProvider.workspaceAppHostPath ?? '';
+        const globalAppHost = this._resolveGlobalAppHostForDocument(editor.document, appHosts);
+        const workspaceAppHostMatchesDocument = workspaceAppHostPath !== '' && this._documentMatchesAppHostPath(editor.document, workspaceAppHostPath);
+        if (globalAppHost === undefined && (!workspaceAppHostMatchesDocument || workspaceResources.length === 0)) {
             this._clearDecorations(editor);
             return;
         }
@@ -165,7 +169,9 @@ export class AspireGutterDecorationProvider implements vscode.Disposable {
             return;
         }
 
-        const findWorkspace = findWorkspaceResourceState(workspaceResources, this._treeProvider.workspaceAppHostPath ?? '');
+        const findWorkspace = workspaceAppHostMatchesDocument
+            ? findWorkspaceResourceState(workspaceResources, workspaceAppHostPath)
+            : () => undefined;
         const buckets = new Map<GutterCategory, vscode.DecorationOptions[]>(
             gutterCategories.map(c => [c, []])
         );
@@ -179,7 +185,7 @@ export class AspireGutterDecorationProvider implements vscode.Disposable {
             if (parsed.kind !== 'resource') {
                 continue;
             }
-            const match = findResourceState(appHosts, parsed.name)
+            const match = (globalAppHost ? findResourceState([globalAppHost], parsed.name) : undefined)
                 ?? findWorkspace(parsed.name);
             if (!match) {
                 continue;
@@ -199,6 +205,18 @@ export class AspireGutterDecorationProvider implements vscode.Disposable {
         for (const [category, options] of buckets) {
             editor.setDecorations(decorationTypes[category], options);
         }
+    }
+
+    private _resolveGlobalAppHostForDocument(document: vscode.TextDocument, appHosts: readonly AppHostDisplayInfo[]): AppHostDisplayInfo | undefined {
+        return appHosts.find(host => this._documentMatchesAppHostPath(document, host.appHostPath));
+    }
+
+    private _documentMatchesAppHostPath(document: vscode.TextDocument, appHostPath: string | undefined): boolean {
+        if (!appHostPath) {
+            return false;
+        }
+
+        return matchesAppHostPathOrDirectory(document.uri.fsPath, appHostPath);
     }
 
     private _clearDecorations(editor: vscode.TextEditor): void {

@@ -58,6 +58,9 @@ export const dashboardLabel = vscode.l10n.t('Dashboard');
 export const cliPidLabel = (pid: number) => vscode.l10n.t('CLI PID: {0}', pid);
 export const appHostPidLabel = (pid: number) => vscode.l10n.t('AppHost PID: {0}', pid);
 export const errorFetchingAppHosts = (error: string) => vscode.l10n.t('Error fetching running AppHosts: {0}', error);
+export const aspireDescribeMinimumVersion = '13.2.0';
+export const aspireCliDescribeNotSupported = (version: string) => vscode.l10n.t('Workspace resources require Aspire CLI {0} or newer. Update the Aspire CLI and refresh the Aspire panel.', version);
+export const appHostDescribeMayNotBeSupported = (version: string) => vscode.l10n.t('No workspace resources were returned. Workspace resources require the AppHost to reference Aspire.Hosting {0} or newer.', version);
 export const resourcesGroupLabel = vscode.l10n.t('Resources');
 export const noCommandsAvailable = vscode.l10n.t('No commands available for this resource.');
 export const selectCommandPlaceholder = vscode.l10n.t('Select a command to execute');
@@ -73,6 +76,11 @@ export const resourceCommandMaxLength = (length: number) => vscode.l10n.t('Value
 export const selectDashboardPlaceholder = vscode.l10n.t('Select a dashboard to open');
 export const workspaceAppHostLabel = vscode.l10n.t('Workspace AppHost');
 export const resourceCountDescription = (count: number) => vscode.l10n.t('({0} resources)', count);
+export const appHostCandidateDescription = (language: string, status: string) => vscode.l10n.t('{0} · {1}', language, status);
+export const workspaceViewSelectedSingleAppHost = (language?: string) => language
+    ? vscode.l10n.t('Workspace view selected because aspire ls found one buildable {0} AppHost.', language)
+    : vscode.l10n.t('Workspace view selected because aspire ls found one buildable AppHost.');
+export const workspaceViewSelectedMultipleAppHosts = (count: number) => vscode.l10n.t('Workspace view selected because aspire ls found {0} buildable AppHosts.', count);
 export const tooltipType = (type: string) => vscode.l10n.t('Type: {0}', type);
 export const tooltipState = (state: string) => vscode.l10n.t('State: {0}', state);
 export const tooltipHealth = (health: string) => vscode.l10n.t('Health: {0}', health);

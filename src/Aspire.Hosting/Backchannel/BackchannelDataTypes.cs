@@ -1435,3 +1435,4 @@ internal sealed class ResourceLogBatch
     /// </summary>
     public required ResourceLogLine[] Lines { get; init; }
 }
+

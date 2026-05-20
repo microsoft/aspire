@@ -14,6 +14,7 @@ import { isDirectory } from '../utils/io';
 
 export interface IInteractionService {
     showStatus: (statusText: string | null) => void;
+    clearProgressNotification: () => void;
     promptForString: (promptText: string, defaultValue: string | null, required: boolean, rpcClient: ICliRpcClient) => Promise<string | null>;
     promptForSecretString: (promptText: string, required: boolean, rpcClient: ICliRpcClient) => Promise<string | null>;
     promptForFilePath: (promptText: string, defaultValue: string | null, directory: boolean) => Promise<string | null>;

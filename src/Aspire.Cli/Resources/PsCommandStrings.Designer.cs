@@ -104,5 +104,17 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ResourcesOptionDescription", resourceCulture);
             }
         }
+
+        public static string FollowOptionDescription {
+            get {
+                return ResourceManager.GetString("FollowOptionDescription", resourceCulture);
+            }
+        }
+
+        public static string FollowRequiresJson {
+            get {
+                return ResourceManager.GetString("FollowRequiresJson", resourceCulture);
+            }
+        }
     }
 }

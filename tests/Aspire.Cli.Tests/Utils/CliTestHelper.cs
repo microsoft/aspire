@@ -711,16 +711,26 @@ internal sealed class TestBundleService(bool isBundle) : IBundleService
 internal sealed class TestOutputTextWriter : TextWriter
 {
     private readonly ITestOutputHelper _outputHelper;
+    private readonly Action<string>? _onLine;
     private readonly StringBuilder _buffer = new();
     public List<string> Logs { get; } = new List<string>();
 
-    public TestOutputTextWriter(ITestOutputHelper outputHelper) : this(outputHelper, null)
+    public TestOutputTextWriter(ITestOutputHelper outputHelper) : this(outputHelper, (IFormatProvider?)null)
     {
     }
 
-    public TestOutputTextWriter(ITestOutputHelper outputHelper, IFormatProvider? formatProvider) : base(formatProvider)
+    public TestOutputTextWriter(ITestOutputHelper outputHelper, Action<string> onLine) : this(outputHelper, null, onLine)
+    {
+    }
+
+    public TestOutputTextWriter(ITestOutputHelper outputHelper, IFormatProvider? formatProvider) : this(outputHelper, formatProvider, null)
+    {
+    }
+
+    private TestOutputTextWriter(ITestOutputHelper outputHelper, IFormatProvider? formatProvider, Action<string>? onLine) : base(formatProvider)
     {
         _outputHelper = outputHelper;
+        _onLine = onLine;
     }
 
     public override Encoding Encoding => Encoding.UTF8;
@@ -773,6 +783,7 @@ internal sealed class TestOutputTextWriter : TextWriter
         _buffer.Clear();
         _outputHelper.WriteLine(line);
         Logs.Add(line);
+        _onLine?.Invoke(line);
     }
 
 }
