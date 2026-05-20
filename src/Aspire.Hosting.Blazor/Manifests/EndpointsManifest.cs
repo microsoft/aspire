@@ -18,7 +18,7 @@ using System.Text.Json.Serialization;
 
 namespace Aspire.Hosting;
 
-internal class EndpointsManifest
+internal sealed class EndpointsManifest
 {
     public EndpointEntry[] Endpoints { get; set; } = [];
 
@@ -26,7 +26,7 @@ internal class EndpointsManifest
     public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
 
-internal class EndpointEntry
+internal sealed class EndpointEntry
 {
     public string Route { get; set; } = "";
     public string AssetFile { get; set; } = "";
@@ -37,7 +37,7 @@ internal class EndpointEntry
     public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
 
-internal class EndpointSelector
+internal sealed class EndpointSelector
 {
     public string Name { get; set; } = "";
 
@@ -45,7 +45,7 @@ internal class EndpointSelector
     public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
 
-internal class EndpointResponseHeader
+internal sealed class EndpointResponseHeader
 {
     public string Name { get; set; } = "";
     public string Value { get; set; } = "";

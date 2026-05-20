@@ -5,6 +5,7 @@
     <IsPackable>true</IsPackable>
     <PackageTags>aspire integration hosting blazor webassembly gateway</PackageTags>
     <Description>Blazor WebAssembly hosting support for Aspire.</Description>
+    <NoWarn>$(NoWarn);ASPIREBLAZOR001</NoWarn>
   </PropertyGroup>
 
   <PropertyGroup>

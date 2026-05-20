@@ -16,7 +16,7 @@ using System.Text.Json.Serialization;
 
 namespace Aspire.Hosting;
 
-internal class DevelopmentManifest
+internal sealed class DevelopmentManifest
 {
     public string[] ContentRoots { get; set; } = [];
     public AssetNode Root { get; set; } = new();
@@ -25,7 +25,7 @@ internal class DevelopmentManifest
     public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
 
-internal class AssetNode
+internal sealed class AssetNode
 {
     public Dictionary<string, AssetNode>? Children { get; set; }
     public AssetMatch? Asset { get; set; }
@@ -61,7 +61,7 @@ internal class AssetNode
     }
 }
 
-internal class AssetMatch
+internal sealed class AssetMatch
 {
     public int ContentRootIndex { get; set; }
 
@@ -69,7 +69,7 @@ internal class AssetMatch
     public Dictionary<string, JsonElement>? ExtensionData { get; set; }
 }
 
-internal class AssetPattern
+internal sealed class AssetPattern
 {
     public int ContentRootIndex { get; set; }
 

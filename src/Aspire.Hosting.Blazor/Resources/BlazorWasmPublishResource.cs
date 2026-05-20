@@ -10,5 +10,5 @@ namespace Aspire.Hosting;
 /// and expose its output for copying into the gateway container.
 /// Implements IResourceWithContainerFiles to participate in the container files pipeline.
 /// </summary>
-internal class BlazorWasmPublishResource(string name)
+internal sealed class BlazorWasmPublishResource(string name)
     : ContainerResource(name), IResourceWithContainerFiles;

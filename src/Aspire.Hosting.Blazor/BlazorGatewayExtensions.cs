@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Immutable;
-using System.Globalization;
+using System.Diagnostics.CodeAnalysis;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.ApplicationModel.Docker;
@@ -19,6 +19,7 @@ namespace Aspire.Hosting;
 /// <summary>
 /// Extension methods for adding Blazor WebAssembly apps and gateway resources.
 /// </summary>
+[Experimental("ASPIREBLAZOR001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public static class BlazorGatewayExtensions
 {
     // Derive the .NET image tag from the runtime version of the app host process.
@@ -28,6 +29,7 @@ public static class BlazorGatewayExtensions
     private static readonly string s_dotNetImageTag = GetDotNetImageTag();
     private const string DotNetSdkImageRepo = "mcr.microsoft.com/dotnet/sdk";
     private const string DotNetAspNetImageRepo = "mcr.microsoft.com/dotnet/aspnet";
+
     /// <summary>
     /// Registers the built-in Blazor Gateway as a file-based C# app.
     /// The gateway is shipped as Gateway.cs alongside this library and launched
@@ -232,8 +234,7 @@ public static class BlazorGatewayExtensions
                     Directory.Delete(gatewayOutputRoot, recursive: true);
                 }
 
-                var outputDir = Path.Combine(gatewayOutputRoot,
-                    DateTime.UtcNow.ToString("yyyyMMddHHmmssfff", CultureInfo.InvariantCulture));
+                var outputDir = Path.Combine(gatewayOutputRoot, "output");
                 Directory.CreateDirectory(outputDir);
 
                 var manifests = await BuildAndDiscoverManifestsAsync(registeredApps, context.Logger, context.CancellationToken).ConfigureAwait(false);
@@ -281,11 +282,10 @@ public static class BlazorGatewayExtensions
     private static ProjectInfo GetProjectInfo(string projectPath, string appHostDirectory)
     {
         var projectDir = Path.GetDirectoryName(projectPath)!;
-        var assemblyName = Path.GetFileNameWithoutExtension(projectPath);
         var solutionRoot = Path.GetFullPath(Path.Combine(appHostDirectory, ".."));
         var relativeProjectPath = Path.GetRelativePath(solutionRoot, projectDir)
             .Replace('\\', '/');
-        return new ProjectInfo(assemblyName, solutionRoot, relativeProjectPath);
+        return new ProjectInfo(solutionRoot, relativeProjectPath);
     }
 
     private static void MirrorGatewayStateToClients(IResourceBuilder<ProjectResource> gateway)
@@ -586,9 +586,8 @@ public static class BlazorGatewayExtensions
             ?? configuration["DOTNET_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"];
     }
 
-    private readonly struct ProjectInfo(string assemblyName, string solutionRoot, string relativeProjectPath)
+    private readonly struct ProjectInfo(string solutionRoot, string relativeProjectPath)
     {
-        public string AssemblyName { get; } = assemblyName;
         public string SolutionRoot { get; } = solutionRoot;
         public string RelativeProjectPath { get; } = relativeProjectPath;
     }

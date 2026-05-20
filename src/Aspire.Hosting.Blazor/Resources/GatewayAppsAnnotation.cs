@@ -11,7 +11,7 @@ namespace Aspire.Hosting;
 /// </summary>
 internal sealed class GatewayAppsAnnotation : IResourceAnnotation
 {
-    public List<GatewayAppRegistration> Apps { get; } = new();
+    public List<GatewayAppRegistration> Apps { get; } = [];
     public bool IsInitialized { get; set; }
 }
 

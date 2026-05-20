@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 
 namespace Aspire.Hosting;
@@ -14,6 +15,7 @@ namespace Aspire.Hosting;
 /// Implements IResourceWithParent so that the orchestrator mirrors the gateway's
 /// lifecycle state (Running, Stopped, etc.) to this child resource automatically.
 /// </summary>
+[Experimental("ASPIREBLAZOR001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public class BlazorWasmAppResource(string name, string projectPath) : Resource(name), IResourceWithEnvironment, IResourceWithParent
 {
     /// <summary>Fully-qualified path to the .csproj file.</summary>

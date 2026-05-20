@@ -9,12 +9,12 @@ namespace Aspire.Hosting;
 /// Typed representation of the JSON output from
 /// <c>dotnet msbuild -getProperty:Prop1 -getProperty:Prop2</c>.
 /// </summary>
-internal class MSBuildPropertiesOutput
+internal sealed class MSBuildPropertiesOutput
 {
     public MSBuildManifestProperties Properties { get; set; } = new();
 }
 
-internal class MSBuildManifestProperties
+internal sealed class MSBuildManifestProperties
 {
     public string StaticWebAssetEndpointsBuildManifestPath { get; set; } = "";
     public string StaticWebAssetDevelopmentManifestPath { get; set; } = "";
