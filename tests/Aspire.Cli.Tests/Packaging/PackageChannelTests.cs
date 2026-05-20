@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Configuration;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
@@ -18,7 +19,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
         var cache = new FakeNuGetPackageCache();
 
         // Act
-        var channel = PackageChannel.CreateImplicitChannel(cache);
+        var channel = PackageChannel.CreateImplicitChannel(cache, new TestFeatures());
 
         // Assert
         Assert.Equal(PackagingStrings.BasedOnNuGetConfig, channel.SourceDetails);
@@ -38,7 +39,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
         };
 
         // Act
-        var channel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Prerelease, mappings, cache);
+        var channel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Prerelease, mappings, cache, new TestFeatures());
 
         // Assert
         Assert.Equal(aspireSource, channel.SourceDetails);
@@ -58,7 +59,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
         };
 
         // Act
-        var channel = PackageChannel.CreateExplicitChannel("pr-10981", PackageChannelQuality.Prerelease, mappings, cache);
+        var channel = PackageChannel.CreateExplicitChannel("pr-10981", PackageChannelQuality.Prerelease, mappings, cache, new TestFeatures());
 
         // Assert
         Assert.Equal(prHivePath, channel.SourceDetails);
@@ -78,7 +79,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
         };
 
         // Act
-        var channel = PackageChannel.CreateExplicitChannel("staging", PackageChannelQuality.Stable, mappings, cache, configureGlobalPackagesFolder: true);
+        var channel = PackageChannel.CreateExplicitChannel("staging", PackageChannelQuality.Stable, mappings, cache, new TestFeatures(), configureGlobalPackagesFolder: true);
 
         // Assert
         Assert.Equal(stagingUrl, channel.SourceDetails);
@@ -94,7 +95,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
         var mappings = Array.Empty<PackageMapping>();
 
         // Act
-        var channel = PackageChannel.CreateExplicitChannel("empty", PackageChannelQuality.Stable, mappings, cache);
+        var channel = PackageChannel.CreateExplicitChannel("empty", PackageChannelQuality.Stable, mappings, cache, new TestFeatures());
 
         // Assert
         Assert.Equal(PackagingStrings.BasedOnNuGetConfig, channel.SourceDetails);
@@ -144,7 +145,7 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
             new PackageMapping("Aspire*", packageSource),
             new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
         };
-        var channel = PackageChannel.CreateExplicitChannel("local", PackageChannelQuality.Both, mappings, cache, pinnedVersion: pinnedVersion);
+        var channel = PackageChannel.CreateExplicitChannel("local", PackageChannelQuality.Both, mappings, cache, new TestFeatures(), pinnedVersion: pinnedVersion);
 
         var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).ToArray();
 
@@ -208,7 +209,48 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
         Assert.Equal("13.5.0-preview.1", package.Version);
     }
 
-    private static PackageChannel CreateLocalChannel(DirectoryInfo packagesDirectory, PackageChannelQuality quality)
+    [Fact]
+    public async Task GetIntegrationPackagesAsync_LocalFolderSource_FiltersDeprecatedByDefault()
+    {
+        // Mirrors the feed-based behavior in NuGetPackageCache: when the
+        // ShowDeprecatedPackages feature flag is off (the default), deprecated
+        // integration package ids must be hidden from local-hive / PR-hive listings.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var packagesDirectory = workspace.CreateDirectory("packages");
+
+        File.WriteAllText(Path.Combine(packagesDirectory.FullName, "Aspire.Hosting.Dapr.13.4.0.nupkg"), string.Empty);
+        File.WriteAllText(Path.Combine(packagesDirectory.FullName, "Aspire.Hosting.Sql.13.4.0.nupkg"), string.Empty);
+
+        var channel = CreateLocalChannel(packagesDirectory, PackageChannelQuality.Stable);
+
+        var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).ToArray();
+
+        Assert.DoesNotContain(packages, p => string.Equals(p.Id, "Aspire.Hosting.Dapr", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(packages, p => string.Equals(p.Id, "Aspire.Hosting.Sql", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task GetIntegrationPackagesAsync_LocalFolderSource_IncludesDeprecatedWhenFlagEnabled()
+    {
+        // When ShowDeprecatedPackages is enabled, deprecated ids must appear in
+        // local-hive listings just as they do on the feed-based path; without this,
+        // a user who flipped the flag silently sees nothing change on PR/local hives.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var packagesDirectory = workspace.CreateDirectory("packages");
+
+        File.WriteAllText(Path.Combine(packagesDirectory.FullName, "Aspire.Hosting.Dapr.13.4.0.nupkg"), string.Empty);
+        File.WriteAllText(Path.Combine(packagesDirectory.FullName, "Aspire.Hosting.Sql.13.4.0.nupkg"), string.Empty);
+
+        var features = new TestFeatures().SetFeature(KnownFeatures.ShowDeprecatedPackages, true);
+        var channel = CreateLocalChannel(packagesDirectory, PackageChannelQuality.Stable, features);
+
+        var packages = (await channel.GetIntegrationPackagesAsync(workspace.WorkspaceRoot, CancellationToken.None).DefaultTimeout()).ToArray();
+
+        Assert.Contains(packages, p => string.Equals(p.Id, "Aspire.Hosting.Dapr", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(packages, p => string.Equals(p.Id, "Aspire.Hosting.Sql", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static PackageChannel CreateLocalChannel(DirectoryInfo packagesDirectory, PackageChannelQuality quality, IFeatures? features = null)
     {
         var cache = new FakeNuGetPackageCache
         {
@@ -221,6 +263,6 @@ public class PackageChannelTests(ITestOutputHelper outputHelper)
             new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
         };
 
-        return PackageChannel.CreateExplicitChannel("local", quality, mappings, cache);
+        return PackageChannel.CreateExplicitChannel("local", quality, mappings, cache, features ?? new TestFeatures());
     }
 }

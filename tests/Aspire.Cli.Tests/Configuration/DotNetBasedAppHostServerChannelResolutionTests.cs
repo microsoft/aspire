@@ -130,7 +130,8 @@ public class DotNetBasedAppHostServerChannelResolutionTests(ITestOutputHelper ou
                         name,
                         PackageChannelQuality.Both,
                         mappings: [],
-                        cache))
+                        cache,
+                        new TestFeatures()))
                     .ToArray();
                 return Task.FromResult<IEnumerable<PackageChannel>>(channels);
             }

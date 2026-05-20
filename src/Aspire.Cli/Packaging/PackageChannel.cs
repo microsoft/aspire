@@ -3,6 +3,7 @@
 
 using System.IO.Compression;
 using System.Xml.Linq;
+using Aspire.Cli.Configuration;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
@@ -13,8 +14,14 @@ using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Packaging;
 
-internal class PackageChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, ILogger? logger = null)
+internal class PackageChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, IFeatures features, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, ILogger? logger = null)
 {
+    // Threaded so the local-folder integration listing can honor the same
+    // ShowDeprecatedPackages flag that NuGetPackageCache honors on the feed-based path.
+    // Without this, flipping the flag silently has no effect on local hive / PR hive listings
+    // (https://github.com/microsoft/aspire/issues — divergence between two paths through the same intent).
+    private readonly IFeatures _features = features;
+
     private const string GuestAppHostSdkPackageId = "Aspire.Hosting";
 
     public string Name { get; } = name;
@@ -155,6 +162,12 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
     private IEnumerable<NuGetPackage> GetIntegrationPackagesFromLocalPackageSource(DirectoryInfo packageSource, CancellationToken cancellationToken)
     {
+        // Mirror NuGetPackageCache.GetIntegrationPackagesAsync: a user who flipped
+        // ShowDeprecatedPackages to see deprecated packages on stable/staging/daily
+        // must also see them on local-hive / PR-hive listings. Previously the deprecation
+        // check was hardcoded into IsIntegrationPackageId and silently dropped them here.
+        var showDeprecatedPackages = _features.IsFeatureEnabled(KnownFeatures.ShowDeprecatedPackages, defaultValue: false);
+
         var packageMetadata = packageSource
             .EnumerateFiles("*.nupkg", SearchOption.TopDirectoryOnly)
             .Select(file =>
@@ -164,6 +177,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             })
             .OfType<PackageFileMetadata>()
             .Where(metadata => IsIntegrationPackageId(metadata.PackageId))
+            .Where(metadata => showDeprecatedPackages || !DeprecatedPackages.IsDeprecated(metadata.PackageId))
             .Where(IsAllowedByQuality);
 
         if (PinnedVersion is not null)
@@ -378,7 +392,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             .SelectMany(mapping => CreateScopedMappings(mapping, requestedPackageIds, logger))
             .ToArray();
 
-        return new PackageChannel(Name, Quality, scopedMappings, nuGetPackageCache, ConfigureGlobalPackagesFolder, CliDownloadBaseUrl, PinnedVersion, logger);
+        return new PackageChannel(Name, Quality, scopedMappings, nuGetPackageCache, _features, ConfigureGlobalPackagesFolder, CliDownloadBaseUrl, PinnedVersion, logger);
     }
 
     private static IEnumerable<PackageMapping> CreateScopedMappings(PackageMapping mapping, IReadOnlyCollection<string> packageIds, ILogger? logger)
@@ -525,6 +539,11 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         // file. .nupkg files on disk normally carry the canonical casing, but matching
         // case-insensitively avoids silently dropping integrations whose file names were
         // produced with a non-canonical casing (e.g. a third-party hive build).
+        //
+        // This method classifies a package id by namespace only. The deprecation filter
+        // is applied separately in GetIntegrationPackagesFromLocalPackageSource so it can
+        // be gated on the ShowDeprecatedPackages feature flag, matching the feed-based
+        // path in NuGetPackageCache.
         var isHostingOrCommunityToolkitNamespaced = packageId.StartsWith("Aspire.Hosting.", StringComparison.OrdinalIgnoreCase) ||
             packageId.StartsWith("CommunityToolkit.Aspire.Hosting.", StringComparison.OrdinalIgnoreCase);
 
@@ -532,24 +551,23 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             packageId.StartsWith("Aspire.Hosting.Sdk", StringComparison.OrdinalIgnoreCase) ||
             packageId.StartsWith("Aspire.Hosting.Orchestration", StringComparison.OrdinalIgnoreCase) ||
             packageId.StartsWith("Aspire.Hosting.Testing", StringComparison.OrdinalIgnoreCase) ||
-            packageId.StartsWith("Aspire.Hosting.Msi", StringComparison.OrdinalIgnoreCase) ||
-            DeprecatedPackages.IsDeprecated(packageId);
+            packageId.StartsWith("Aspire.Hosting.Msi", StringComparison.OrdinalIgnoreCase);
 
         return isHostingOrCommunityToolkitNamespaced && !isExcluded;
     }
 
-    public static PackageChannel CreateExplicitChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, ILogger? logger = null)
+    public static PackageChannel CreateExplicitChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, IFeatures features, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, ILogger? logger = null)
     {
-        return new PackageChannel(name, quality, mappings, nuGetPackageCache, configureGlobalPackagesFolder, cliDownloadBaseUrl, pinnedVersion, logger);
+        return new PackageChannel(name, quality, mappings, nuGetPackageCache, features, configureGlobalPackagesFolder, cliDownloadBaseUrl, pinnedVersion, logger);
     }
 
-    public static PackageChannel CreateImplicitChannel(INuGetPackageCache nuGetPackageCache, ILogger? logger = null)
+    public static PackageChannel CreateImplicitChannel(INuGetPackageCache nuGetPackageCache, IFeatures features, ILogger? logger = null)
     {
         // The reason that PackageChannelQuality.Both is because there are situations like
         // in community toolkit where there is a newer beta version available for a package
         // in the case of implicit feeds we want to be able to show that, along side the stable
         // version. Not really an issue for template selection though (unless we start allowing)
         // for broader templating options.
-        return new PackageChannel("default", PackageChannelQuality.Both, null, nuGetPackageCache, logger: logger);
+        return new PackageChannel("default", PackageChannelQuality.Both, null, nuGetPackageCache, features, logger: logger);
     }
 }
