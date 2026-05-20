@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREEXTENSION001
 #pragma warning disable ASPIRECERTIFICATES001
 #pragma warning disable ASPIREDOTNETTOOL
+#pragma warning disable ASPIREMAUI001
 
 using System.Diagnostics;
 using System.Globalization;
@@ -203,8 +204,21 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                     var projectLaunchConfiguration = new ProjectLaunchConfiguration();
                     projectLaunchConfiguration.ProjectPath = projectMetadata.ProjectPath;
 
+                    // Check if the resource has a custom launch args override (e.g., MAUI projects using 'dotnet build /t:Run').
+                    // When present, the override args replace the standard 'dotnet run' / 'dotnet watch' invocation.
+                    if (project.TryGetLastAnnotation<ProjectLaunchArgsOverrideAnnotation>(out var launchOverride))
+                    {
+                        projectArgs.AddRange(launchOverride.Args);
+                        // 'dotnet build' takes the project path as a positional argument (not --project)
+                        projectArgs.Add(projectMetadata.ProjectPath);
+
+                        if (!string.IsNullOrEmpty(_distributedApplicationOptions.Configuration))
+                        {
+                            projectArgs.AddRange(["--configuration", _distributedApplicationOptions.Configuration]);
+                        }
+                    }
                     // `dotnet watch` does not work with file-based apps yet, so we have to use `dotnet run` in that case
-                    if (_configuration.GetBool("DOTNET_WATCH") is not true || projectMetadata.IsFileBasedApp)
+                    else if (_configuration.GetBool("DOTNET_WATCH") is not true || projectMetadata.IsFileBasedApp)
                     {
                         projectArgs.Add("run");
                         projectArgs.Add(projectMetadata.IsFileBasedApp ? "--file" : "--project");
@@ -229,9 +243,11 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                         ]);
                     }
 
-                    if (!string.IsNullOrEmpty(_distributedApplicationOptions.Configuration))
+                    // 'launchOverride' is declared via out-var in the TryGetLastAnnotation call above;
+                    // it is null when the annotation is absent, so this guard prevents double-adding --configuration.
+                    if (launchOverride is null && !string.IsNullOrEmpty(_distributedApplicationOptions.Configuration))
                     {
-                        projectArgs.AddRange(new[] { "--configuration", _distributedApplicationOptions.Configuration });
+                        projectArgs.AddRange(["--configuration", _distributedApplicationOptions.Configuration]);
                     }
 
                     // We pretty much always want to suppress the normal launch profile handling
@@ -239,7 +255,10 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                     // (the ambient environment settings for service processes come from the application model
                     // and should be HIGHER priority than the launch profile settings).
                     // This means we need to apply the launch profile settings manually inside CreateExecutableAsync().
-                    projectArgs.Add("--no-launch-profile");
+                    if (launchOverride is null)
+                    {
+                        projectArgs.Add("--no-launch-profile");
+                    }
 
                     // We want this annotation even if we are not using IDE execution; see ToSnapshot() for details.
                     exe.AnnotateAsObjectList(Executable.LaunchConfigurationsAnnotation, projectLaunchConfiguration);

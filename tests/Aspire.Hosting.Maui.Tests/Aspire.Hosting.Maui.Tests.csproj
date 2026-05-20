@@ -3,6 +3,7 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <IsPackable>false</IsPackable>
+    <NoWarn>$(NoWarn);ASPIREMAUI001</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

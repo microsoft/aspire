@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Maui.Annotations;
 using Aspire.Hosting.Maui;
 
 namespace Aspire.Hosting;
@@ -60,6 +61,11 @@ public static class MauiProjectExtensions
         // Do not register the logical grouping resource with AddResource so it stays invisible in the dashboard
         // Only MAUI project targets added through their extension methods will show up
         var resource = new MauiProjectResource(name, projectPath);
+
+        // Add the build queue annotation eagerly so it's ready before any platform resources start.
+        // This avoids a race condition when multiple platforms start concurrently.
+        resource.Annotations.Add(new MauiBuildQueueAnnotation());
+
         return builder.CreateResourceBuilder(resource);
     }
 }
