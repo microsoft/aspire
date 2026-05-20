@@ -167,9 +167,6 @@
   <data name="HeaderPath" xml:space="preserve">
     <value>Path</value>
   </data>
-  <data name="HeaderRelativePath" xml:space="preserve">
-    <value>Relative Path</value>
-  </data>
   <data name="HeaderLanguage" xml:space="preserve">
     <value>Language</value>
   </data>

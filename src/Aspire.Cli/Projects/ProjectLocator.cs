@@ -36,18 +36,18 @@ internal interface IProjectLocator
     /// </summary>
     /// <param name="searchDirectory">The directory to search recursively.</param>
     /// <param name="scope">Controls which files are considered. See <see cref="AppHostDiscoveryScope"/>.</param>
-    /// <param name="cancellationToken">The cancellation token.</param>
     /// <param name="onDirectoryEnumerated">
     /// Optional callback invoked synchronously on the discovery thread with the running total of directories
     /// enumerated so callers can render progress before validation completes. See
     /// <see cref="IAppHostCandidateFinder.FindCandidateFilesAsync"/> for caller obligations.
     /// </param>
+    /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>An async stream of candidate AppHost projects in validation-completion order.</returns>
     async IAsyncEnumerable<AppHostProjectCandidate> FindAppHostProjectsStreamAsync(
         DirectoryInfo searchDirectory,
         AppHostDiscoveryScope scope,
-        [EnumeratorCancellation] CancellationToken cancellationToken,
-        Action<int>? onDirectoryEnumerated = null)
+        Action<int>? onDirectoryEnumerated = null,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var candidates = await FindAppHostProjectsAsync(searchDirectory, scope, cancellationToken).ConfigureAwait(false);
         foreach (var candidate in candidates)
@@ -165,15 +165,15 @@ internal sealed class ProjectLocator(
     {
         var allCandidates = await FindAppHostProjectFilesAsync(searchDirectory, stopAfterMultipleBuildableAppHosts: false, displayProgress: false, scope, maxDepth, cancellationToken);
         var candidates = allCandidates.BuildableAppHost.Concat(allCandidates.UnbuildableSuspectedAppHostProjects).ToList();
-        candidates.Sort((x, y) => x.AppHostFile.FullName.CompareTo(y.AppHostFile.FullName));
+        candidates.Sort((x, y) => string.Compare(x.AppHostFile.FullName, y.AppHostFile.FullName, StringComparison.Ordinal));
         return candidates;
     }
 
     public async IAsyncEnumerable<AppHostProjectCandidate> FindAppHostProjectsStreamAsync(
         DirectoryInfo searchDirectory,
         AppHostDiscoveryScope scope,
-        [EnumeratorCancellation] CancellationToken cancellationToken,
-        Action<int>? onDirectoryEnumerated = null)
+        Action<int>? onDirectoryEnumerated = null,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         var channel = Channel.CreateUnbounded<AppHostProjectCandidate>(new UnboundedChannelOptions
         {
@@ -436,7 +436,7 @@ internal sealed class ProjectLocator(
 
             // This sort is done here to make results deterministic since we get all the app
             // host information in parallel and the order may vary.
-            appHostProjects.Sort((x, y) => x.AppHostFile.FullName.CompareTo(y.AppHostFile.FullName));
+            appHostProjects.Sort((x, y) => string.Compare(x.AppHostFile.FullName, y.AppHostFile.FullName, StringComparison.Ordinal));
 
             return (appHostProjects, unbuildableSuspectedAppHostProjects, hasUnsupportedProjects);
         }

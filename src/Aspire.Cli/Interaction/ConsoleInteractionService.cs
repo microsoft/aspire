@@ -86,11 +86,15 @@ internal class ConsoleInteractionService : IInteractionService
         // Use atomic check-and-set to prevent nested Spectre.Console Status operations.
         // Spectre.Console throws if multiple interactive operations run concurrently.
         // If already in a status, or in debug/non-interactive mode, fall back to subtle message.
-        // Also skip status display if statusText is empty (e.g., when outputting JSON)
-        if (Interlocked.CompareExchange(ref _inStatus, 1, 0) != 0 ||
-            _executionContext.DebugMode ||
+        // Also skip status display if statusText is empty (e.g., when outputting JSON).
+        // IMPORTANT: CompareExchange must be evaluated last so that short-circuit evaluation
+        // skips the swap when an earlier condition forces the fallback path. Otherwise the
+        // swap would set _inStatus to 1 but the try/finally that resets it would never run,
+        // permanently disabling interactive status for the lifetime of the service.
+        if (_executionContext.DebugMode ||
             !_hostEnvironment.SupportsInteractiveOutput ||
-            string.IsNullOrEmpty(statusText))
+            string.IsNullOrEmpty(statusText) ||
+            Interlocked.CompareExchange(ref _inStatus, 1, 0) != 0)
         {
             // Skip displaying if status text is empty (e.g., when outputting JSON)
             if (!string.IsNullOrEmpty(statusText))
@@ -125,10 +129,12 @@ internal class ConsoleInteractionService : IInteractionService
         // Mirrors ShowStatusAsync: prevent nested Spectre.Console Status operations, skip when debug/non-interactive,
         // and treat empty text as "no status UI". The fallback path still drives the action so progress logic runs;
         // we just hand it an updater that emits subtle messages instead of mutating a live spinner.
-        if (Interlocked.CompareExchange(ref _inStatus, 1, 0) != 0 ||
-            _executionContext.DebugMode ||
+        // IMPORTANT: CompareExchange must be evaluated last so that short-circuit evaluation skips the swap when
+        // an earlier condition forces the fallback path; otherwise _inStatus would be left set to 1.
+        if (_executionContext.DebugMode ||
             !_hostEnvironment.SupportsInteractiveOutput ||
-            string.IsNullOrEmpty(initialStatusText))
+            string.IsNullOrEmpty(initialStatusText) ||
+            Interlocked.CompareExchange(ref _inStatus, 1, 0) != 0)
         {
             if (!string.IsNullOrEmpty(initialStatusText))
             {
@@ -177,11 +183,13 @@ internal class ConsoleInteractionService : IInteractionService
         // Use atomic check-and-set to prevent nested Spectre.Console Status operations.
         // Spectre.Console throws if multiple interactive operations run concurrently.
         // If already in a status, or in debug/non-interactive mode, fall back to subtle message.
-        // Also skip status display if statusText is empty (e.g., when outputting JSON)
-        if (Interlocked.CompareExchange(ref _inStatus, 1, 0) != 0 ||
-            _executionContext.DebugMode ||
+        // Also skip status display if statusText is empty (e.g., when outputting JSON).
+        // IMPORTANT: CompareExchange must be evaluated last so that short-circuit evaluation skips the swap when
+        // an earlier condition forces the fallback path; otherwise _inStatus would be left set to 1.
+        if (_executionContext.DebugMode ||
             !_hostEnvironment.SupportsInteractiveOutput ||
-            string.IsNullOrEmpty(statusText))
+            string.IsNullOrEmpty(statusText) ||
+            Interlocked.CompareExchange(ref _inStatus, 1, 0) != 0)
         {
             if (!string.IsNullOrEmpty(statusText))
             {

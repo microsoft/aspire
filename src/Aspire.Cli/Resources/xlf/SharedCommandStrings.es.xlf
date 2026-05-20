@@ -32,11 +32,6 @@
         <target state="new">Path</target>
         <note />
       </trans-unit>
-      <trans-unit id="HeaderRelativePath">
-        <source>Relative Path</source>
-        <target state="new">Relative Path</target>
-        <note />
-      </trans-unit>
       <trans-unit id="HeaderStatus">
         <source>Status</source>
         <target state="new">Status</target>

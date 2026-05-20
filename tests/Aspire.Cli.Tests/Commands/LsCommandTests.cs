@@ -246,7 +246,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
         var appHost = new AppHostProjectCandidate(new FileInfo(appHostPath), KnownLanguageId.CSharp);
         var projectLocator = new TestProjectLocator
         {
-            FindAppHostProjectsStreamAsyncCallback = (_, _, cancellationToken, _) => GetCandidatesAsync(cancellationToken)
+            FindAppHostProjectsStreamAsyncCallback = (_, _, _, cancellationToken) => GetCandidatesAsync(cancellationToken)
         };
 
         async IAsyncEnumerable<AppHostProjectCandidate> GetCandidatesAsync([EnumeratorCancellation] CancellationToken cancellationToken)
@@ -290,7 +290,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
         var textWriter = new TestOutputTextWriter(outputHelper);
         var projectLocator = new TestProjectLocator
         {
-            FindAppHostProjectsStreamAsyncCallback = (_, _, cancellationToken, _) => CancelDiscoveryAsync(cancellationToken)
+            FindAppHostProjectsStreamAsyncCallback = (_, _, _, cancellationToken) => CancelDiscoveryAsync(cancellationToken)
         };
 
         async IAsyncEnumerable<AppHostProjectCandidate> CancelDiscoveryAsync([EnumeratorCancellation] CancellationToken cancellationToken)
@@ -385,7 +385,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
         var appHost2 = new AppHostProjectCandidate(new FileInfo(appHostPath2), KnownLanguageId.TypeScript, AppHostProjectCandidateStatus.PossiblyUnbuildable);
         var projectLocator = new TestProjectLocator
         {
-            FindAppHostProjectsStreamAsyncCallback = (_, _, _, onDirectoryEnumerated) =>
+            FindAppHostProjectsStreamAsyncCallback = (_, _, onDirectoryEnumerated, _) =>
             {
                 onDirectoryEnumerated?.Invoke(42);
                 return ToAsyncEnumerable(appHost1, appHost2);
@@ -436,7 +436,7 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
         var appHost = new AppHostProjectCandidate(new FileInfo(appHostPath), KnownLanguageId.CSharp);
         var projectLocator = new TestProjectLocator
         {
-            FindAppHostProjectsStreamAsyncCallback = (_, _, cancellationToken, onDirectoryEnumerated) =>
+            FindAppHostProjectsStreamAsyncCallback = (_, _, onDirectoryEnumerated, cancellationToken) =>
                 GetCandidatesAsync(cancellationToken, onDirectoryEnumerated)
         };
 

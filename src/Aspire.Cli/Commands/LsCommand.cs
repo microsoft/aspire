@@ -132,7 +132,7 @@ internal sealed class LsCommand : BaseCommand
                 }
                 else
                 {
-                    DisplayTable(appHostInfos);
+                    _interactionService.DisplayRenderable(BuildTable(appHostInfos, _interactionService.SupportsLinks));
                 }
             }
 
@@ -153,14 +153,14 @@ internal sealed class LsCommand : BaseCommand
     {
         var appHosts = new List<AppHostProjectCandidate>();
 
-        await foreach (var candidate in _projectLocator.FindAppHostProjectsStreamAsync(_executionContext.WorkingDirectory, scope, cancellationToken).ConfigureAwait(false))
+        await foreach (var candidate in _projectLocator.FindAppHostProjectsStreamAsync(_executionContext.WorkingDirectory, scope, cancellationToken: cancellationToken).ConfigureAwait(false))
         {
             cancellationToken.ThrowIfCancellationRequested();
             appHosts.Add(candidate);
             WriteJsonStreamCandidate(CreateDisplayInfo(candidate));
         }
 
-        appHosts.Sort((x, y) => x.AppHostFile.FullName.CompareTo(y.AppHostFile.FullName));
+        appHosts.Sort((x, y) => string.Compare(x.AppHostFile.FullName, y.AppHostFile.FullName, StringComparison.Ordinal));
 
         return appHosts;
     }
@@ -207,8 +207,8 @@ internal sealed class LsCommand : BaseCommand
                         .FindAppHostProjectsStreamAsync(
                             _executionContext.WorkingDirectory,
                             scope,
-                            cancellationToken,
-                            onDirectoryEnumerated: count => Volatile.Write(ref directoriesSearched, count))
+                            onDirectoryEnumerated: count => Volatile.Write(ref directoriesSearched, count),
+                            cancellationToken: cancellationToken)
                         .ConfigureAwait(false))
                     {
                         cancellationToken.ThrowIfCancellationRequested();
@@ -229,7 +229,7 @@ internal sealed class LsCommand : BaseCommand
                     }
                 }
 
-                return 0;
+                return CliExitCodes.Success;
 
                 async Task RefreshStatusLoopAsync(Action<string> update, CancellationToken refreshToken)
                 {
@@ -247,7 +247,7 @@ internal sealed class LsCommand : BaseCommand
                 }
             }).ConfigureAwait(false);
 
-        appHosts.Sort((x, y) => x.AppHostFile.FullName.CompareTo(y.AppHostFile.FullName));
+        appHosts.Sort((x, y) => string.Compare(x.AppHostFile.FullName, y.AppHostFile.FullName, StringComparison.Ordinal));
         return appHosts;
     }
 
@@ -271,12 +271,7 @@ internal sealed class LsCommand : BaseCommand
         };
     }
 
-    private void DisplayTable(List<CandidateAppHostDisplayInfo> appHosts)
-    {
-        _interactionService.DisplayRenderable(BuildTable(appHosts));
-    }
-
-    private static Table BuildTable(List<CandidateAppHostDisplayInfo> appHosts)
+    private static Table BuildTable(List<CandidateAppHostDisplayInfo> appHosts, bool supportsLinks)
     {
         var table = new Table();
         table.AddBoldColumn(SharedCommandStrings.HeaderPath);
@@ -286,7 +281,7 @@ internal sealed class LsCommand : BaseCommand
         foreach (var appHost in appHosts)
         {
             table.AddRow(
-                Markup.Escape(appHost.Path),
+                MarkupHelpers.SafeFileLink(supportsLinks, appHost.Path),
                 Markup.Escape(appHost.Language),
                 GetStatusMarkup(appHost.Status));
         }
