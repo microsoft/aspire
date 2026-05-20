@@ -355,11 +355,19 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper)
 
     private static async Task<PeerProbeResult.Failed> ProbeFakeFailureAsync(FakeScriptResult fakePeer)
     {
-        // Spawn the production probe at default settings against the scripted
-        // peer and assert the result is Failed. Centralizing the spawn +
-        // assertion keeps each negative-path test focused on the failure
-        // reason it cares about.
-        var probe = new PeerInstallProbe(NullLogger<PeerInstallProbe>.Instance);
+        // Spawn the production probe against the scripted peer and assert the
+        // result is Failed. Centralizing the spawn + assertion keeps each
+        // negative-path test focused on the failure reason it cares about.
+        //
+        // The 30s timeout is well above the production 5s default. Under heavy
+        // CI load (saturated CPU, slow disk) the fake peer script — which on
+        // Windows shells out to powershell.exe to emit raw stderr bytes — can
+        // take several seconds just to start. These tests are about how the
+        // probe formats a Failed result from real peer stderr/exit semantics,
+        // not about the timeout behavior (see ProbeAsync_PeerHangs_TimesOutAndKills
+        // for that). A wider budget here removes the CI flake without changing
+        // what's being tested.
+        var probe = new PeerInstallProbe(TimeSpan.FromSeconds(30), NullLogger<PeerInstallProbe>.Instance);
         var result = await probe.ProbeAsync(fakePeer.Path, TestContext.Current.CancellationToken);
         return Assert.IsType<PeerProbeResult.Failed>(result);
     }
