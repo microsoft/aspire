@@ -173,10 +173,11 @@ extends:
                   targetPath: '$(Build.SourcesDirectory)/artifacts/signed-archives/$(_BuildConfig)'
 
               - task: DownloadPipelineArtifact@2
-                displayName: 🟣Download Native CLI Tool Packages
+                displayName: 🟣Download Native CLI Packages
                 inputs:
                   itemPattern: |
                     **/Aspire.Cli*.nupkg
+                    **/microsoft-aspire-cli*.tgz
                   targetPath: '$(Build.SourcesDirectory)/artifacts/native-cli-packages/$(_BuildConfig)'
 
               - pwsh: |
@@ -184,7 +185,7 @@ extends:
                   & "$(Build.SourcesDirectory)/eng/scripts/stage-native-cli-tool-packages.ps1" `
                     -DownloadRoot "$(Build.SourcesDirectory)/artifacts/native-cli-packages/$(_BuildConfig)" `
                     -ShippingDir "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping"
-                displayName: 🟣Stage Native CLI Tool Packages
+                displayName: 🟣Stage Native CLI Packages
 
               - task: PowerShell@2
                 displayName: 🟣List artifacts packages contents
