@@ -133,13 +133,17 @@ jobs:
         # Classes that touch IsPrerelease / channel detection / template version pinning /
         # update-notification logic. These are the code paths most likely to behave
         # differently when the CLI's own assembly version label is stable.
-        # --no-build / --no-restore: the previous step already built (with -p:SkipTestProjects=false)
-        # under StabilizePackageVersion=true. Running without these would re-evaluate the
-        # project graph with a different global-property fingerprint than step 1, defeating
-        # MSBuild incremental cache and risking subtle differences in what gets rebuilt.
+        # NOTE: we intentionally do NOT pass --no-build / --no-restore here. SDK 10's
+        # `dotnet test` driver needs to perform its own MSBuild evaluation pass to detect
+        # the Microsoft.Testing.Platform runner (which Aspire.Cli.Tests uses), and without
+        # restore that evaluation reports "All projects must use that test runner ... using
+        # VSTest test runner" and exits non-zero. The previous pack step's restore is keyed
+        # by a different global-property fingerprint and can't be reused. The cost of
+        # letting `dotnet test` re-restore here is small because nothing on disk actually
+        # changes — it's just an in-memory evaluation pass.
         run: |
           ./dotnet.sh test --project tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj \
-            --no-build --no-restore --no-launch-profile \
+            --no-launch-profile \
             -p:StabilizePackageVersion=true \
             -- \
             --filter-class "*.AssemblyMetadataChannelTests" \
