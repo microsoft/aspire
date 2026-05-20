@@ -701,7 +701,7 @@ internal sealed class TestBundleService(bool isBundle) : IBundleService
         => Task.FromResult(isBundle ? BundleExtractResult.AlreadyUpToDate : BundleExtractResult.NoPayload);
 
     public Task<BundleLayoutLease?> EnsureExtractedAndAcquireLayoutAsync(string holderKind, string? commandName = null, CancellationToken cancellationToken = default)
-        => Task.FromResult(Layout is null ? null : new BundleLayoutLease(versionId: null, versionDirectory: null, Layout, lease: null));
+        => Task.FromResult(Layout is null ? null : new BundleLayoutLease(Layout, lease: null));
 
     public string? GetDefaultExtractDir(string processPath) => null;
 }

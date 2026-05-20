@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using Aspire.Cli.Layout;
 using Aspire.Shared;
 
@@ -13,23 +14,11 @@ internal sealed class BundleLayoutLease : IDisposable
 {
     private readonly BundleVersionLease? _lease;
 
-    internal BundleLayoutLease(string? versionId, string? versionDirectory, LayoutConfiguration layout, BundleVersionLease? lease)
+    internal BundleLayoutLease(LayoutConfiguration layout, BundleVersionLease? lease)
     {
-        VersionId = versionId;
-        VersionDirectory = versionDirectory;
         Layout = layout;
         _lease = lease;
     }
-
-    /// <summary>
-    /// Gets the resolved bundle version id, or <see langword="null"/> for unleased fallback layouts.
-    /// </summary>
-    public string? VersionId { get; }
-
-    /// <summary>
-    /// Gets the resolved bundle version directory, or <see langword="null"/> for unleased fallback layouts.
-    /// </summary>
-    public string? VersionDirectory { get; }
 
     /// <summary>
     /// Gets the version-rooted layout configuration.
@@ -45,10 +34,18 @@ internal sealed class BundleLayoutLease : IDisposable
     /// Adds lease handoff environment variables for a bundle-owned child process.
     /// </summary>
     public void AddEnvironment(IDictionary<string, string> environmentVariables)
+        => _lease?.AddEnvironment(environmentVariables);
+
+    /// <summary>
+    /// Adds lease handoff environment variables to a child process.
+    /// </summary>
+    public void AddEnvironment(ProcessStartInfo startInfo)
     {
-        if (VersionDirectory is not null)
+        ArgumentNullException.ThrowIfNull(startInfo);
+
+        if (_lease is not null)
         {
-            BundleVersionLease.AddEnvironment(environmentVariables, VersionDirectory);
+            startInfo.Environment[BundleDiscovery.BundleVersionDirectoryEnvVar] = _lease.VersionDirectory;
         }
     }
 

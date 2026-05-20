@@ -95,7 +95,7 @@ internal sealed class BundleService(
             var fallbackLayout = layoutDiscovery.DiscoverLayout();
             return fallbackLayout is null
                 ? null
-                : new BundleLayoutLease(versionId: null, versionDirectory: null, fallbackLayout, lease: null);
+                : new BundleLayoutLease(fallbackLayout, lease: null);
         }
 
         var lockPath = Path.Combine(extractDir, ".aspire-bundle-lock");
@@ -123,8 +123,6 @@ internal sealed class BundleService(
         {
             lease = BundleVersionLease.Acquire(activeVersion.Value.VersionDirectory, holderKind, commandName);
             return new BundleLayoutLease(
-                activeVersion.Value.VersionId,
-                activeVersion.Value.VersionDirectory,
                 CreateVersionRootedLayout(activeVersion.Value.VersionDirectory),
                 lease);
         }

@@ -24,12 +24,32 @@ internal sealed class BundleVersionLease : IDisposable
     private const string LeaseExtension = ".lease";
     private readonly FileStream _stream;
 
-    private BundleVersionLease(string versionDirectory, string leasePath, FileStream stream)
+    private BundleVersionLease(
+        string? versionId,
+        string versionDirectory,
+        string leasePath,
+        int processId,
+        long processStartTimeUtcTicks,
+        string holderKind,
+        string? commandName,
+        DateTimeOffset acquiredUtc,
+        FileStream stream)
     {
+        VersionId = versionId;
         VersionDirectory = versionDirectory;
         LeasePath = leasePath;
+        ProcessId = processId;
+        ProcessStartTimeUtcTicks = processStartTimeUtcTicks;
+        HolderKind = holderKind;
+        CommandName = commandName;
+        AcquiredUtc = acquiredUtc;
         _stream = stream;
     }
+
+    /// <summary>
+    /// Gets the leased version id.
+    /// </summary>
+    public string? VersionId { get; }
 
     /// <summary>
     /// Gets the leased version directory.
@@ -39,7 +59,33 @@ internal sealed class BundleVersionLease : IDisposable
     /// <summary>
     /// Gets the lease metadata path.
     /// </summary>
+    [JsonIgnore]
     public string LeasePath { get; }
+
+    /// <summary>
+    /// Gets the process id that acquired the lease.
+    /// </summary>
+    public int ProcessId { get; }
+
+    /// <summary>
+    /// Gets the UTC start time ticks for the process that acquired the lease.
+    /// </summary>
+    public long ProcessStartTimeUtcTicks { get; }
+
+    /// <summary>
+    /// Gets the kind of process holding the lease.
+    /// </summary>
+    public string HolderKind { get; }
+
+    /// <summary>
+    /// Gets the command name associated with the lease, if any.
+    /// </summary>
+    public string? CommandName { get; }
+
+    /// <summary>
+    /// Gets when the lease was acquired.
+    /// </summary>
+    public DateTimeOffset AcquiredUtc { get; }
 
     /// <summary>
     /// Creates a lease for <paramref name="versionDirectory"/>.
@@ -70,19 +116,21 @@ internal sealed class BundleVersionLease : IDisposable
         try
         {
             var versionId = Path.GetFileName(fullVersionDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-            var metadata = new BundleVersionLeaseMetadata(
-                VersionId: versionId,
-                VersionDirectory: fullVersionDirectory,
-                ProcessId: Environment.ProcessId,
-                ProcessStartTimeUtcTicks: GetCurrentProcessStartTimeTicks(),
-                HolderKind: holderKind,
-                CommandName: commandName,
-                AcquiredUtc: DateTimeOffset.UtcNow);
+            var lease = new BundleVersionLease(
+                versionId,
+                fullVersionDirectory,
+                leasePath,
+                Environment.ProcessId,
+                GetCurrentProcessStartTimeTicks(),
+                holderKind,
+                commandName,
+                DateTimeOffset.UtcNow,
+                stream);
 
-            JsonSerializer.Serialize(stream, metadata, BundleVersionLeaseJsonSerializerContext.Default.BundleVersionLeaseMetadata);
+            JsonSerializer.Serialize(stream, lease, BundleVersionLeaseJsonSerializerContext.Default.BundleVersionLease);
             stream.Flush(flushToDisk: true);
 
-            return new BundleVersionLease(fullVersionDirectory, leasePath, stream);
+            return lease;
         }
         catch
         {
@@ -115,6 +163,12 @@ internal sealed class BundleVersionLease : IDisposable
 
         environmentVariables[BundleDiscovery.BundleVersionDirectoryEnvVar] = Path.GetFullPath(versionDirectory);
     }
+
+    /// <summary>
+    /// Adds bundle lease handoff environment variables to a child process environment.
+    /// </summary>
+    public void AddEnvironment(IDictionary<string, string> environmentVariables)
+        => AddEnvironment(environmentVariables, VersionDirectory);
 
     /// <summary>
     /// Returns <see langword="true"/> if <paramref name="versionDirectory"/> has any active leases.
@@ -218,15 +272,6 @@ internal sealed class BundleVersionLease : IDisposable
     }
 }
 
-internal sealed record BundleVersionLeaseMetadata(
-    string? VersionId,
-    string VersionDirectory,
-    int ProcessId,
-    long ProcessStartTimeUtcTicks,
-    string HolderKind,
-    string? CommandName,
-    DateTimeOffset AcquiredUtc);
-
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, WriteIndented = true)]
-[JsonSerializable(typeof(BundleVersionLeaseMetadata))]
+[JsonSerializable(typeof(BundleVersionLease))]
 internal sealed partial class BundleVersionLeaseJsonSerializerContext : JsonSerializerContext;

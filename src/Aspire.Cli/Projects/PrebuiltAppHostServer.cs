@@ -963,10 +963,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
             }
         }
 
-        if (_layoutLease?.VersionDirectory is { } versionDirectory)
-        {
-            startInfo.Environment[BundleDiscovery.BundleVersionDirectoryEnvVar] = versionDirectory;
-        }
+        _layoutLease?.AddEnvironment(startInfo);
 
         if (debug)
         {

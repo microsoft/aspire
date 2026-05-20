@@ -148,8 +148,6 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
         var versionDirectory = workspace.CreateDirectory("version");
         var versionLease = BundleVersionLease.Acquire(versionDirectory.FullName, "test", "apphost-server");
         var layoutLease = new BundleLayoutLease(
-            versionId: "test-version",
-            versionDirectory: versionDirectory.FullName,
             new LayoutConfiguration(),
             versionLease);
         var factory = CreateAppHostServerProjectFactory();
