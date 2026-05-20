@@ -1,0 +1,21 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@ellahathaway"
+  ],
+  "description": "Fixed a data loss bug where numeric and boolean resource properties (e.g., container port numbers) were silently converted to null when exporting resource JSON via the telemetry export service.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔢",
+  "firstMergedAt": "2026-05-20T00:59:58Z",
+  "lastMergedAt": "2026-05-20T00:59:58Z",
+  "name": "Fix numeric and boolean resource properties lost in JSON export",
+  "owner": "JamesNK",
+  "prs": [
+    17287
+  ]
+}

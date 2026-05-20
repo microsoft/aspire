@@ -1,0 +1,9 @@
+{
+  "author": "sebastienros",
+  "comment": "Test-only changes adding regression coverage for Rust AppHost scaffold",
+  "mergedAt": "2026-05-20T02:09:56Z",
+  "number": 17283,
+  "runDate": "2026-05-20T03:13:21Z",
+  "status": "excluded",
+  "title": "Add Rust AppHost scaffold regression coverage"
+}

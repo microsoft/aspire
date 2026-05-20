@@ -1,0 +1,21 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [
+    "@ellahathaway"
+  ],
+  "description": "Removed extraneous trailing periods from error and status messages in the CLI and Dashboard that appeared after interpolated values (e.g. resource names, error descriptions), producing grammatically consistent output.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "✏️",
+  "firstMergedAt": "2026-05-20T01:02:40Z",
+  "lastMergedAt": "2026-05-20T01:02:40Z",
+  "name": "Fix trailing periods after interpolated content in error messages",
+  "owner": "JamesNK",
+  "prs": [
+    17288
+  ]
+}

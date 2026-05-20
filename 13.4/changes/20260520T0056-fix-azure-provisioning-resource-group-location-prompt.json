@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Selecting an existing resource group in the Azure provisioning dialog no longer leaves the Location field empty and blocks submission. The disabled Location input now correctly inherits the server-provided resource group location.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🏗️",
+  "firstMergedAt": "2026-05-20T00:56:02Z",
+  "lastMergedAt": "2026-05-20T00:56:02Z",
+  "name": "Fix Azure provisioning dialog stuck on resource group selection",
+  "owner": "DamianEdwards",
+  "prs": [
+    17278
+  ]
+}

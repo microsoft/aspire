@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Bug fix for numeric and boolean properties being lost as null in JSON export",
+  "mergedAt": "2026-05-20T00:59:58Z",
+  "number": 17287,
+  "runDate": "2026-05-20T03:13:21Z",
+  "status": "included",
+  "title": "Fix ConvertPropertyValueToJsonNode to handle NumberValue and BoolValue"
+}

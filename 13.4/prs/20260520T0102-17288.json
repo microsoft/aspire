@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Minor polish: remove trailing periods after interpolated values in CLI and Dashboard error strings",
+  "mergedAt": "2026-05-20T01:02:40Z",
+  "number": 17288,
+  "runDate": "2026-05-20T03:13:21Z",
+  "status": "included",
+  "title": "Remove trailing periods after interpolated content in error strings"
+}

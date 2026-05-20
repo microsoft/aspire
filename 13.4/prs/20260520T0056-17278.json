@@ -1,0 +1,9 @@
+{
+  "author": "DamianEdwards",
+  "comment": "Bug fix for Azure provisioning dialog stuck when selecting existing resource group",
+  "mergedAt": "2026-05-20T00:56:02Z",
+  "number": 17278,
+  "runDate": "2026-05-20T03:13:21Z",
+  "status": "included",
+  "title": "Fix Azure provisioning resource group location prompt"
+}
