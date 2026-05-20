@@ -2,15 +2,15 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #:sdk Microsoft.NET.Sdk.Web
-#:package Microsoft.Extensions.Http.Resilience@10.0.0
-#:package Microsoft.Extensions.ServiceDiscovery@10.0.0
-#:package Microsoft.Extensions.ServiceDiscovery.Yarp@10.0.0
-#:package OpenTelemetry.Exporter.OpenTelemetryProtocol@1.14.0
-#:package OpenTelemetry.Extensions.Hosting@1.14.0
-#:package OpenTelemetry.Instrumentation.AspNetCore@1.14.0
-#:package OpenTelemetry.Instrumentation.Http@1.14.0
-#:package OpenTelemetry.Instrumentation.Runtime@1.14.0
-#:package Yarp.ReverseProxy@2.3.0
+#:package Microsoft.Extensions.Http.Resilience@${MicrosoftExtensionsHttpResilienceVersion}
+#:package Microsoft.Extensions.ServiceDiscovery@${MicrosoftExtensionsServiceDiscoveryVersion}
+#:package Microsoft.Extensions.ServiceDiscovery.Yarp@${MicrosoftExtensionsServiceDiscoveryYarpVersion}
+#:package OpenTelemetry.Exporter.OpenTelemetryProtocol@${OpenTelemetryExporterOpenTelemetryProtocolVersion}
+#:package OpenTelemetry.Extensions.Hosting@${OpenTelemetryExtensionsHostingVersion}
+#:package OpenTelemetry.Instrumentation.AspNetCore@${OpenTelemetryInstrumentationAspNetCoreVersion}
+#:package OpenTelemetry.Instrumentation.Http@${OpenTelemetryInstrumentationHttpVersion}
+#:package OpenTelemetry.Instrumentation.Runtime@${OpenTelemetryInstrumentationRuntimeVersion}
+#:package Yarp.ReverseProxy@${YarpReverseProxyVersion}
 #:property PublishAot=false
 #:property ManagePackageVersionsCentrally=false
 #:property EnforceCodeStyleInBuild=false
