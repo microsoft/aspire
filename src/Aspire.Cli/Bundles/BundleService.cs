@@ -198,7 +198,7 @@ internal sealed class BundleService(
         // non-Windows and once the sidecar already exists.
         if (wingetFirstRunProbe is not null && OperatingSystem.IsWindows())
         {
-            var realBinaryPath = ResolveSymlinks(processPath, logger);
+            var realBinaryPath = ProcessPathResolver.ResolveSymlinks(processPath, logger);
             var binaryDir = Path.GetDirectoryName(realBinaryPath);
             if (!string.IsNullOrEmpty(binaryDir))
             {
@@ -394,7 +394,7 @@ internal sealed class BundleService(
             return null;
         }
 
-        var realBinaryPath = ResolveSymlinks(processPath, logger);
+        var realBinaryPath = ProcessPathResolver.ResolveSymlinks(processPath, logger);
         var binaryDir = Path.GetDirectoryName(realBinaryPath);
         if (string.IsNullOrEmpty(binaryDir))
         {
@@ -441,23 +441,6 @@ internal sealed class BundleService(
         }
 
         return null;
-    }
-
-    private static string ResolveSymlinks(string path, ILogger logger)
-    {
-        try
-        {
-            var resolved = File.ResolveLinkTarget(path, returnFinalTarget: true);
-            return resolved is null ? path : resolved.FullName;
-        }
-        catch (Exception ex)
-        {
-            // Best-effort symlink resolution: any failure falls back to the raw
-            // path. Sidecar discovery using the raw path is still valid in the
-            // non-link case.
-            logger.LogDebug(ex, "Failed to resolve link target for {Path}; using raw path.", path);
-            return path;
-        }
     }
 
     /// <summary>
