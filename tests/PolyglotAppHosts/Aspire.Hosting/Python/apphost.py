@@ -393,7 +393,16 @@ with create_builder() as builder:
     # withHttpHealthCheck
     container.with_http_health_check()
     # withCommand
-    container.with_command("command", "Command", lambda *_args, **_kwargs: {"success": True})
+    def update_command_state(ctx):
+        snapshot = ctx.resource_snapshot
+        return "Enabled" if snapshot.get("HealthStatus") == "Healthy" else "Disabled"
+
+    container.with_command(
+        "command",
+        "Command",
+        lambda *_args, **_kwargs: {"success": True},
+        command_options={"UpdateState": update_command_state}
+    )
     # withHttpCommand
     container.with_http_command("/health", "Health Check")
     container.with_http_command("/api/reset", "Reset", options={"MethodName": "POST", "ConfirmationMessage": "Are you sure?"})

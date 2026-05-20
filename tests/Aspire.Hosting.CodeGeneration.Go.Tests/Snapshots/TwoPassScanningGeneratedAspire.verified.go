@@ -194,6 +194,15 @@ const (
 	CommandResultFormatMarkdown CommandResultFormat = "Markdown"
 )
 
+// HealthStatus represents HealthStatus.
+type HealthStatus string
+
+const (
+	HealthStatusUnhealthy HealthStatus = "Unhealthy"
+	HealthStatusDegraded HealthStatus = "Degraded"
+	HealthStatusHealthy HealthStatus = "Healthy"
+)
+
 // UrlDisplayLocation represents UrlDisplayLocation.
 type UrlDisplayLocation string
 
@@ -654,6 +663,26 @@ func (d *CommandResultData) ToMap() map[string]any {
 	m["Value"] = serializeValue(d.Value)
 	if d.Format != nil { m["Format"] = serializeValue(d.Format) }
 	if d.DisplayImmediately != nil { m["DisplayImmediately"] = serializeValue(d.DisplayImmediately) }
+	return m
+}
+
+// UpdateCommandStateResourceSnapshot represents UpdateCommandStateResourceSnapshot.
+type UpdateCommandStateResourceSnapshot struct {
+	ResourceType string `json:"ResourceType,omitempty"`
+	State *string `json:"State,omitempty"`
+	StateStyle *string `json:"StateStyle,omitempty"`
+	HealthStatus *HealthStatus `json:"HealthStatus,omitempty"`
+	ExitCode *float64 `json:"ExitCode,omitempty"`
+}
+
+// ToMap converts the DTO to a map for JSON serialization.
+func (d *UpdateCommandStateResourceSnapshot) ToMap() map[string]any {
+	m := map[string]any{}
+	m["ResourceType"] = serializeValue(d.ResourceType)
+	if d.State != nil { m["State"] = serializeValue(d.State) }
+	if d.StateStyle != nil { m["StateStyle"] = serializeValue(d.StateStyle) }
+	if d.HealthStatus != nil { m["HealthStatus"] = serializeValue(d.HealthStatus) }
+	if d.ExitCode != nil { m["ExitCode"] = serializeValue(d.ExitCode) }
 	return m
 }
 
@@ -23796,6 +23825,7 @@ func (s *testResourceContext) Value() (float64, error) {
 // UpdateCommandStateContext is the public interface for handle type UpdateCommandStateContext.
 type UpdateCommandStateContext interface {
 	handleReference
+	ResourceSnapshot() (*UpdateCommandStateResourceSnapshot, error)
 	ServiceProvider() ServiceProvider
 	Err() error
 }
@@ -23808,6 +23838,21 @@ type updateCommandStateContext struct {
 // newUpdateCommandStateContextFromHandle wraps an existing handle as UpdateCommandStateContext.
 func newUpdateCommandStateContextFromHandle(h *handle, c *client) UpdateCommandStateContext {
 	return &updateCommandStateContext{resourceBuilderBase: newResourceBuilderBase(h, c)}
+}
+
+// ResourceSnapshot gets the ResourceSnapshotData property
+func (s *updateCommandStateContext) ResourceSnapshot() (*UpdateCommandStateResourceSnapshot, error) {
+	if s.err != nil { var zero *UpdateCommandStateResourceSnapshot; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.resourceSnapshot", reqArgs)
+	if err != nil {
+		var zero *UpdateCommandStateResourceSnapshot
+		return zero, err
+	}
+	return decodeAs[*UpdateCommandStateResourceSnapshot](result)
 }
 
 // ServiceProvider gets the ServiceProvider property

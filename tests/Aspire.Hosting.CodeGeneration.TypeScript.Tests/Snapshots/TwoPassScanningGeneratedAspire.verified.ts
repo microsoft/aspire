@@ -543,6 +543,13 @@ export enum EndpointProperty {
     TlsEnabled = "TlsEnabled",
 }
 
+/** Enum type for HealthStatus */
+export enum HealthStatus {
+    Unhealthy = "Unhealthy",
+    Degraded = "Degraded",
+    Healthy = "Healthy",
+}
+
 /** Specifies how an HTTP command should surface the HTTP response body as command result data. */
 export enum HttpCommandResultMode {
     /** Do not capture the HTTP response body as command result data. */
@@ -1056,6 +1063,20 @@ export interface TestNestedDto {
     config?: TestConfigDto;
     tags?: string[];
     counts?: Record<string, number>;
+}
+
+/** Resource snapshot data exposed to polyglot command state callbacks. */
+export interface UpdateCommandStateResourceSnapshot {
+    /** The type of the resource. */
+    resourceType?: string;
+    /** The current lifecycle state text for the resource. */
+    state?: string | null;
+    /** The display style for the current lifecycle state. */
+    stateStyle?: string | null;
+    /** The current health status for the resource. */
+    healthStatus?: HealthStatus | null;
+    /** The exit code of the resource. */
+    exitCode?: number | null;
 }
 
 // ============================================================================
@@ -7049,6 +7070,8 @@ class TestResourceContextPromiseImpl implements TestResourceContextPromise {
 /** Context for `UpdateState`. */
 export interface UpdateCommandStateContext {
     toJSON(): MarshalledHandle;
+    /** Gets the resource snapshot data available to polyglot command state callbacks. */
+    resourceSnapshot(): Promise<UpdateCommandStateResourceSnapshot>;
     /** The service provider. */
     serviceProvider(): ServiceProviderPromise;
 }
@@ -7063,6 +7086,13 @@ class UpdateCommandStateContextImpl implements UpdateCommandStateContext {
 
     /** Serialize for JSON-RPC transport */
     toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    async resourceSnapshot(): Promise<UpdateCommandStateResourceSnapshot> {
+        return await this._client.invokeCapability<UpdateCommandStateResourceSnapshot>(
+            'Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.resourceSnapshot',
+            { context: this._handle }
+        );
+    }
 
     serviceProvider(): ServiceProviderPromise {
         const promise = (async () => {

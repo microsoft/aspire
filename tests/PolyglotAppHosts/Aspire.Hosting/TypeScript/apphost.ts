@@ -6,10 +6,12 @@ import {
     createBuilder,
     CertificateTrustScope,
     EndpointProperty,
+    HealthStatus,
     IconVariant,
     InputType,
     OtlpProtocol,
     ProbeType,
+    ResourceCommandState,
     refExpr,
 } from './.modules/aspire.js';
 import type { DockerfileBuilderCallbackContext } from './.modules/aspire.js';
@@ -689,6 +691,16 @@ await container.withHealthCheck("http");
 // withCommand
 await container.withCommand("restart", "Restart", async (_ctx) => {
     return { success: true };
+}, {
+    commandOptions: {
+        updateState: async (ctx) => {
+            const snapshot = await ctx.resourceSnapshot();
+
+            return snapshot.healthStatus === HealthStatus.Healthy
+                ? ResourceCommandState.Enabled
+                : ResourceCommandState.Disabled;
+        },
+    },
 });
 
 // withProcessCommand

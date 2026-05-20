@@ -1,4 +1,4 @@
-// ===== AddContainerOptions.java =====
+﻿// ===== AddContainerOptions.java =====
 // AddContainerOptions.java - GENERATED CODE - DO NOT EDIT
 
 package aspire;
@@ -413,7 +413,7 @@ public class AspireClient {
         
         Map<String, Object> params = new HashMap<>();
         params.put("capabilityId", capabilityId);
-        params.put("args", args);
+        params.put("args", marshalTransportValue(args));
 
         Map<String, Object> request = new HashMap<>();
         request.put("jsonrpc", "2.0");
@@ -430,6 +430,45 @@ public class AspireClient {
             handleDisconnect();
             throw new RuntimeException("Failed to invoke capability: " + e.getMessage(), e);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Object marshalTransportValue(Object value) {
+        if (value == null) {
+            return null;
+        }
+
+        if (value instanceof Function<?, ?> function) {
+            Function<Object, Object> typedFunction = (Function<Object, Object>) function;
+            return registerCallback(args -> typedFunction.apply(args.length > 0 ? args[0] : null));
+        }
+
+        Object serialized = serializeValue(value);
+        if (serialized instanceof Map) {
+            Map<String, Object> map = (Map<String, Object>) serialized;
+            Map<String, Object> result = new HashMap<>();
+            for (Map.Entry<String, Object> entry : map.entrySet()) {
+                result.put(entry.getKey(), marshalTransportValue(entry.getValue()));
+            }
+            return result;
+        }
+        if (serialized instanceof List) {
+            List<Object> list = (List<Object>) serialized;
+            List<Object> result = new ArrayList<>();
+            for (Object item : list) {
+                result.add(marshalTransportValue(item));
+            }
+            return result;
+        }
+        if (serialized instanceof Object[] array) {
+            List<Object> result = new ArrayList<>();
+            for (Object item : array) {
+                result.add(marshalTransportValue(item));
+            }
+            return result;
+        }
+
+        return serialized;
     }
 
     public void authenticate(String token) {
@@ -11333,6 +11372,36 @@ public class HandleWrapperBase {
 
     AspireClient getClient() {
         return client;
+    }
+}
+
+// ===== HealthStatus.java =====
+// HealthStatus.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** HealthStatus enum. */
+public enum HealthStatus implements WireValueEnum {
+    UNHEALTHY("Unhealthy"),
+    DEGRADED("Degraded"),
+    HEALTHY("Healthy");
+
+    private final String value;
+
+    HealthStatus(String value) {
+        this.value = value;
+    }
+
+    public String getValue() { return value; }
+
+    public static HealthStatus fromValue(String value) {
+        for (HealthStatus e : values()) {
+            if (e.value.equals(value)) return e;
+        }
+        throw new IllegalArgumentException("Unknown value: " + value);
     }
 }
 
@@ -22951,6 +23020,13 @@ public class UpdateCommandStateContext extends HandleWrapperBase {
         super(handle, client);
     }
 
+    /** Gets the ResourceSnapshotData property */
+    public UpdateCommandStateResourceSnapshot resourceSnapshot() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        return (UpdateCommandStateResourceSnapshot) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.resourceSnapshot", reqArgs);
+    }
+
     /** Gets the ServiceProvider property */
     public IServiceProvider serviceProvider() {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -22958,6 +23034,44 @@ public class UpdateCommandStateContext extends HandleWrapperBase {
         return (IServiceProvider) getClient().invokeCapability("Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.serviceProvider", reqArgs);
     }
 
+}
+
+// ===== UpdateCommandStateResourceSnapshot.java =====
+// UpdateCommandStateResourceSnapshot.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** UpdateCommandStateResourceSnapshot DTO. */
+public class UpdateCommandStateResourceSnapshot implements JsonSerializable {
+    private String resourceType;
+    private String state;
+    private String stateStyle;
+    private HealthStatus healthStatus;
+    private Double exitCode;
+
+    public String getResourceType() { return resourceType; }
+    public void setResourceType(String value) { this.resourceType = value; }
+    public String getState() { return state; }
+    public void setState(String value) { this.state = value; }
+    public String getStateStyle() { return stateStyle; }
+    public void setStateStyle(String value) { this.stateStyle = value; }
+    public HealthStatus getHealthStatus() { return healthStatus; }
+    public void setHealthStatus(HealthStatus value) { this.healthStatus = value; }
+    public Double getExitCode() { return exitCode; }
+    public void setExitCode(Double value) { this.exitCode = value; }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("ResourceType", AspireClient.serializeValue(resourceType));
+        map.put("State", AspireClient.serializeValue(state));
+        map.put("StateStyle", AspireClient.serializeValue(stateStyle));
+        map.put("HealthStatus", AspireClient.serializeValue(healthStatus));
+        map.put("ExitCode", AspireClient.serializeValue(exitCode));
+        return map;
+    }
 }
 
 // ===== UrlDisplayLocation.java =====
@@ -23835,6 +23949,7 @@ public final class WithVolumeOptions {
 .modules/GenerateParameterDefault.java
 .modules/Handle.java
 .modules/HandleWrapperBase.java
+.modules/HealthStatus.java
 .modules/HttpCommandExportOptions.java
 .modules/HttpCommandResultMode.java
 .modules/HttpsCertificateExecutionConfigurationContext.java
@@ -23927,6 +24042,7 @@ public final class WithVolumeOptions {
 .modules/TestResourceStatus.java
 .modules/TestVaultResource.java
 .modules/UpdateCommandStateContext.java
+.modules/UpdateCommandStateResourceSnapshot.java
 .modules/UrlDisplayLocation.java
 .modules/WaitBehavior.java
 .modules/WellKnownPipelineSteps.java

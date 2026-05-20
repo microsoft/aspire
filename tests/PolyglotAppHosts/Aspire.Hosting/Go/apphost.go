@@ -487,9 +487,30 @@ func main() {
 	_ = container.WithUrl(expr)
 	_ = container.WithHttpHealthCheck()
 	_ = container.WithHttpHealthCheck()
+	updateCommandState := func(args ...any) any {
+		if len(args) == 0 {
+			return aspire.ResourceCommandStateDisabled
+		}
+		ctx, ok := args[0].(aspire.UpdateCommandStateContext)
+		if !ok {
+			return aspire.ResourceCommandStateDisabled
+		}
+		snapshot, err := ctx.ResourceSnapshot()
+		if err != nil || snapshot.HealthStatus == nil {
+			return aspire.ResourceCommandStateDisabled
+		}
+		if *snapshot.HealthStatus == aspire.HealthStatusHealthy {
+			return aspire.ResourceCommandStateEnabled
+		}
+		return aspire.ResourceCommandStateDisabled
+	}
 	_ = container.WithCommand("restart", "Restart", func(ctx aspire.ExecuteCommandContext) *aspire.ExecuteCommandResult {
 		_ = ctx
 		return &aspire.ExecuteCommandResult{}
+	}, &aspire.WithCommandOptions{
+		CommandOptions: &aspire.CommandOptions{
+			UpdateState: updateCommandState,
+		},
 	})
 
 	app, err := builder.Build()

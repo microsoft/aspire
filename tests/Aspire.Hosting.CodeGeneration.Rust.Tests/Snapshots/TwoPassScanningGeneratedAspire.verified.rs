@@ -453,6 +453,28 @@ impl std::fmt::Display for CommandResultFormat {
     }
 }
 
+/// HealthStatus
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum HealthStatus {
+    #[default]
+    #[serde(rename = "Unhealthy")]
+    Unhealthy,
+    #[serde(rename = "Degraded")]
+    Degraded,
+    #[serde(rename = "Healthy")]
+    Healthy,
+}
+
+impl std::fmt::Display for HealthStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Unhealthy => write!(f, "Unhealthy"),
+            Self::Degraded => write!(f, "Degraded"),
+            Self::Healthy => write!(f, "Healthy"),
+        }
+    }
+}
+
 /// UrlDisplayLocation
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum UrlDisplayLocation {
@@ -1185,6 +1207,41 @@ impl CommandResultData {
         }
         if let Some(ref v) = self.display_immediately {
             map.insert("DisplayImmediately".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        map
+    }
+}
+
+/// UpdateCommandStateResourceSnapshot
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct UpdateCommandStateResourceSnapshot {
+    #[serde(rename = "ResourceType")]
+    pub resource_type: String,
+    #[serde(rename = "State", skip_serializing_if = "Option::is_none")]
+    pub state: Option<String>,
+    #[serde(rename = "StateStyle", skip_serializing_if = "Option::is_none")]
+    pub state_style: Option<String>,
+    #[serde(rename = "HealthStatus", skip_serializing_if = "Option::is_none")]
+    pub health_status: Option<HealthStatus>,
+    #[serde(rename = "ExitCode", skip_serializing_if = "Option::is_none")]
+    pub exit_code: Option<f64>,
+}
+
+impl UpdateCommandStateResourceSnapshot {
+    pub fn to_map(&self) -> HashMap<String, Value> {
+        let mut map = HashMap::new();
+        map.insert("ResourceType".to_string(), serde_json::to_value(&self.resource_type).unwrap_or(Value::Null));
+        if let Some(ref v) = self.state {
+            map.insert("State".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.state_style {
+            map.insert("StateStyle".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.health_status {
+            map.insert("HealthStatus".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.exit_code {
+            map.insert("ExitCode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         map
     }
@@ -18076,6 +18133,14 @@ impl UpdateCommandStateContext {
 
     pub fn client(&self) -> &Arc<AspireClient> {
         &self.client
+    }
+
+    /// Gets the ResourceSnapshotData property
+    pub fn resource_snapshot(&self) -> Result<UpdateCommandStateResourceSnapshot, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting.ApplicationModel/UpdateCommandStateContext.resourceSnapshot", args)?;
+        Ok(serde_json::from_value(result)?)
     }
 
     /// Gets the ServiceProvider property

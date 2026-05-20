@@ -104,15 +104,16 @@ public class AtsTypeScriptCodeGeneratorTests
         var atsContext = CreateContextFromBothAssemblies();
 
         var files = _generator.GenerateDistributedApplication(atsContext);
+        var aspireTs = files["aspire.ts"];
 
-        Assert.DoesNotContain("export class ReferenceExpression {", files["aspire.ts"]);
+        Assert.DoesNotContain("export class ReferenceExpression {", aspireTs);
         Assert.Contains("export class ReferenceExpression {", files["base.ts"]);
         Assert.Contains("registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression'", files["base.ts"]);
         Assert.Contains("condition: extractHandleForExpr(state.condition),", files["base.ts"]);
         Assert.Contains("('$handle' in json || '$expr' in json)", files["base.ts"]);
         Assert.Contains("registerCancellation(state.client, cancellationToken)", files["base.ts"]);
-        Assert.Contains("arguments(): Promise<InteractionInputCollection>", files["aspire.ts"]);
-        Assert.DoesNotContain("setArguments", files["aspire.ts"]);
+        Assert.Contains("arguments(): Promise<InteractionInputCollection>", aspireTs);
+        Assert.DoesNotContain("setArguments", aspireTs);
     }
 
     [Fact]
