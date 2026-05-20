@@ -30,6 +30,7 @@ public static class AzureServiceBusExtensions
     /// <param name="builder">The builder for the distributed application.</param>
     /// <param name="name">The name of the resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// By default references to the Azure Service Bus resource will be assigned the following roles:
     ///
@@ -37,6 +38,7 @@ public static class AzureServiceBusExtensions
     ///
     /// These can be replaced by calling <see cref="WithRoleAssignments{T}(IResourceBuilder{T}, IResourceBuilder{AzureServiceBusResource}, ServiceBusBuiltInRole[])"/>.
     /// </remarks>
+    /// <ats-remarks />
     [AspireExport]
     public static IResourceBuilder<AzureServiceBusResource> AddAzureServiceBus(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
@@ -166,6 +168,7 @@ public static class AzureServiceBusExtensions
     /// <param name="name">The name of the queue resource.</param>
     /// <param name="queueName">The name of the Service Bus Queue. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzureServiceBusQueueResource> AddServiceBusQueue(this IResourceBuilder<AzureServiceBusResource> builder, [ResourceName] string name, string? queueName = null)
     {
@@ -187,6 +190,7 @@ public static class AzureServiceBusExtensions
     /// <param name="builder">The Azure Service Bus Queue resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the <see cref="AzureServiceBusQueueResource"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport("withQueueProperties", MethodName = "withProperties", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureServiceBusQueueResource> WithProperties(this IResourceBuilder<AzureServiceBusQueueResource> builder, Action<AzureServiceBusQueueResource> configure)
     {
@@ -249,6 +253,7 @@ public static class AzureServiceBusExtensions
     /// <param name="name">The name of the topic resource.</param>
     /// <param name="topicName">The name of the Service Bus Topic. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzureServiceBusTopicResource> AddServiceBusTopic(this IResourceBuilder<AzureServiceBusResource> builder, [ResourceName] string name, string? topicName = null)
     {
@@ -270,6 +275,7 @@ public static class AzureServiceBusExtensions
     /// <param name="builder">The Azure Service Bus Topic resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the <see cref="AzureServiceBusTopicResource"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport("withTopicProperties", MethodName = "withProperties", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureServiceBusTopicResource> WithProperties(this IResourceBuilder<AzureServiceBusTopicResource> builder, Action<AzureServiceBusTopicResource> configure)
     {
@@ -319,6 +325,7 @@ public static class AzureServiceBusExtensions
     /// <param name="name">The name of the subscription resource.</param>
     /// <param name="subscriptionName">The name of the Service Bus Subscription. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzureServiceBusSubscriptionResource> AddServiceBusSubscription(this IResourceBuilder<AzureServiceBusTopicResource> builder, [ResourceName] string name, string? subscriptionName = null)
     {
@@ -340,6 +347,7 @@ public static class AzureServiceBusExtensions
     /// <param name="builder">The Azure Service Bus Subscription resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the <see cref="AzureServiceBusSubscriptionResource"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport("withSubscriptionProperties", MethodName = "withProperties", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureServiceBusSubscriptionResource> WithProperties(this IResourceBuilder<AzureServiceBusSubscriptionResource> builder, Action<AzureServiceBusSubscriptionResource> configure)
     {
@@ -360,6 +368,7 @@ public static class AzureServiceBusExtensions
     /// <param name="builder">The Azure Service Bus resource builder.</param>
     /// <param name="configureContainer">Callback that exposes underlying container used for emulation to allow for customization.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <example>
     /// The following example creates an Azure Service Bus resource that runs locally is an emulator and referencing that
     /// resource in a .NET project.
@@ -377,6 +386,7 @@ public static class AzureServiceBusExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
     [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureServiceBusResource> RunAsEmulator(this IResourceBuilder<AzureServiceBusResource> builder, Action<IResourceBuilder<AzureServiceBusEmulatorResource>>? configureContainer = null)
     {
@@ -515,6 +525,7 @@ public static class AzureServiceBusExtensions
     /// <param name="builder">The builder for the <see cref="AzureServiceBusEmulatorResource"/>.</param>
     /// <param name="path">Path to the file on the AppHost where the emulator configuration is located.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzureServiceBusEmulatorResource> WithConfigurationFile(this IResourceBuilder<AzureServiceBusEmulatorResource> builder, string path)
     {
@@ -564,6 +575,7 @@ public static class AzureServiceBusExtensions
     /// <param name="builder">Builder for the Azure Service Bus emulator container</param>
     /// <param name="port">The port to bind on the host. If <see langword="null"/> is used, a random port will be assigned.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzureServiceBusEmulatorResource> WithHostPort(this IResourceBuilder<AzureServiceBusEmulatorResource> builder, int? port)
     {
@@ -683,6 +695,7 @@ public static class AzureServiceBusExtensions
     /// <param name="target">The target Azure Service Bus namespace.</param>
     /// <param name="roles">The Service Bus roles to be assigned.</param>
     /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="AzureServiceBusRole"/> value.</exception>
     [AspireExport("withServiceBusRoleAssignments")]
     internal static IResourceBuilder<T> WithRoleAssignments<T>(

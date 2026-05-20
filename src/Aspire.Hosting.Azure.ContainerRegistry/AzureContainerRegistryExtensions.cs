@@ -26,6 +26,7 @@ public static class AzureContainerRegistryExtensions
     /// <param name="builder">The builder for the distributed application.</param>
     /// <param name="name">The name of the resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureContainerRegistryResource}"/> builder.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="name"/> is null or empty.</exception>
     [AspireExport]
@@ -81,6 +82,7 @@ public static class AzureContainerRegistryExtensions
     /// <param name="builder">The resource builder for a resource that implements <see cref="IContainerRegistry"/>.</param>
     /// <param name="registryBuilder">The resource builder for the <see cref="AzureContainerRegistryResource"/> to use.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="registryBuilder"/> is null.</exception>
     [AspireExport("withContainerRegistryAzureContainerRegistry", MethodName = "withAzureContainerRegistry")]
     public static IResourceBuilder<T> WithAzureContainerRegistry<T>(this IResourceBuilder<T> builder, IResourceBuilder<AzureContainerRegistryResource> registryBuilder)
@@ -102,6 +104,7 @@ public static class AzureContainerRegistryExtensions
     /// <typeparam name="T">The resource type that implements <see cref="IAzureComputeEnvironmentResource"/>.</typeparam>
     /// <param name="builder">The resource builder for the compute environment resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureContainerRegistryResource}"/> for the associated registry.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the resource does not have an associated Azure Container Registry,
     /// or when the associated container registry is not an <see cref="AzureContainerRegistryResource"/>.</exception>
@@ -133,6 +136,7 @@ public static class AzureContainerRegistryExtensions
     /// based on existing purge tasks to avoid conflicts. If a task with the specified name already exists,
     /// an <see cref="ArgumentException"/> is thrown.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureContainerRegistryResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="schedule"/> is <see langword="null"/>, empty, or whitespace,
     /// or when <paramref name="taskName"/> conflicts with an existing task.</exception>
@@ -266,6 +270,7 @@ public static class AzureContainerRegistryExtensions
     /// <param name="target">The target Azure Container Registry resource.</param>
     /// <param name="roles">The Azure Container Registry roles to assign to the resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="AzureContainerRegistryRole"/> value.</exception>
     [AspireExport("withContainerRegistryRoleAssignments")]
     internal static IResourceBuilder<T> WithRoleAssignments<T>(

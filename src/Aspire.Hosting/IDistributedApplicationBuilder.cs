@@ -56,6 +56,7 @@ namespace Aspire.Hosting;
 /// </code>
 /// </example>
 /// </remarks>
+/// <ats-remarks />
 /// <ats-summary>A builder for creating instances of <ats-see cref="!:type:DistributedApplication" />.</ats-summary>
 [AspireExport(ExposeProperties = true)]
 public interface IDistributedApplicationBuilder
@@ -121,6 +122,10 @@ public interface IDistributedApplicationBuilder
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks>
+    /// Use this property to determine whether the app host is running locally or publishing
+    /// deployment artifacts, and adjust the application model accordingly.
+    /// </ats-remarks>
     public DistributedApplicationExecutionContext ExecutionContext { get; }
 
     /// <summary>

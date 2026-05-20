@@ -19,6 +19,7 @@ public static class DurableTaskResourceExtensions
     /// <param name="builder">The distributed application builder.</param>
     /// <param name="name">The logical name of the scheduler resource.</param>
     /// <returns>An <see cref="IResourceBuilder{TResource}"/> for the scheduler resource.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <example>
     /// Add a Durable Task scheduler resource:
     /// <code>
@@ -121,6 +122,7 @@ public static class DurableTaskResourceExtensions
     /// <param name="builder">The resource builder for the scheduler.</param>
     /// <param name="configureContainer">Callback that exposes underlying container used for emulation to allow for customization.</param>
     /// <returns>The same <see cref="IResourceBuilder{DurableTaskSchedulerResource}"/> instance for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <example>
     /// Run the scheduler locally using the emulator:
     /// <code>
@@ -199,6 +201,7 @@ public static class DurableTaskResourceExtensions
     /// <param name="builder">The scheduler resource builder.</param>
     /// <param name="name">The logical name of the task hub resource.</param>
     /// <returns>An <see cref="IResourceBuilder{TResource}"/> for the task hub resource.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <example>
     /// Add a task hub under a scheduler:
     /// <code>

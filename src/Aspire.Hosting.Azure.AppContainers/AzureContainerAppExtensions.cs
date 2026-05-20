@@ -97,6 +97,7 @@ public static class AzureContainerAppExtensions
     /// <param name="builder">The distributed application builder.</param>
     /// <param name="name">The name of the resource.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzureContainerAppEnvironmentResource> AddAzureContainerAppEnvironment(this IDistributedApplicationBuilder builder, string name)
     {
@@ -445,6 +446,7 @@ public static class AzureContainerAppExtensions
     /// </summary>
     /// <param name="builder">The AzureContainerAppEnvironmentResource to configure.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// By default, the container app environment resources use a different naming convention than azd.
     ///
@@ -464,6 +466,7 @@ public static class AzureContainerAppExtensions
     /// </summary>
     /// <param name="builder">The <see cref="AzureContainerAppEnvironmentResource"/> to configure.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// By default, the generated Azure resource names use long static suffixes (e.g. <c>storageVolume</c>,
@@ -495,6 +498,7 @@ public static class AzureContainerAppExtensions
     /// <param name="builder">The AzureContainerAppEnvironmentResource to configure.</param>
     /// <param name="enable">Whether to include the Aspire dashboard. Default is true.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzureContainerAppEnvironmentResource> WithDashboard(this IResourceBuilder<AzureContainerAppEnvironmentResource> builder, bool enable = true)
     {
@@ -509,6 +513,7 @@ public static class AzureContainerAppExtensions
     /// <param name="builder">The AzureContainerAppEnvironmentResource to configure.</param>
     /// <param name="upgrade">Whether to upgrade HTTP endpoints to HTTPS. Default is true.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// When disabled (<c>false</c>), HTTP endpoints will use HTTP scheme and port 80 in Azure Container Apps.
     /// Note that explicit ports specified for development (e.g., port 8080) are still normalized
@@ -527,6 +532,7 @@ public static class AzureContainerAppExtensions
     /// <param name="builder">The AzureContainerAppEnvironmentResource to configure.</param>
     /// <param name="workspaceBuilder">The resource builder for the <see cref="AzureLogAnalyticsWorkspaceResource"/> to use.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="workspaceBuilder"/> is null.</exception>
     [AspireExport]
     public static IResourceBuilder<AzureContainerAppEnvironmentResource> WithAzureLogAnalyticsWorkspace(this IResourceBuilder<AzureContainerAppEnvironmentResource> builder, IResourceBuilder<AzureLogAnalyticsWorkspaceResource> workspaceBuilder)

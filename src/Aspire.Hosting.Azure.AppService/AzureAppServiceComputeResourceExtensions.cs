@@ -30,6 +30,7 @@ public static class AzureAppServiceComputeResourceExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
     [AspireExport]
     public static IResourceBuilder<T> PublishAsAzureAppServiceWebsite<T>(this IResourceBuilder<T> builder,
         Action<AzureResourceInfrastructure, WebSite>? configure = null,

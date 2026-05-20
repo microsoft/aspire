@@ -78,6 +78,7 @@ public static class AzureFunctionsProjectResourceExtensions
     /// <param name="name">The name to be associated with the Azure Functions project. This name will be used for service discovery when referenced in a dependency.</param>
     /// <param name="projectPath">The path to the Azure Functions project file.</param>
     /// <returns>An <see cref="IResourceBuilder{AzureFunctionsProjectResource}"/> for the added Azure Functions project resource.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// This overload of the <see cref="AddAzureFunctionsProject(IDistributedApplicationBuilder, string, string)"/> method adds an Azure Functions project to the application
@@ -116,6 +117,7 @@ public static class AzureFunctionsProjectResourceExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
     [AspireExport]
     public static IResourceBuilder<AzureFunctionsProjectResource> AddAzureFunctionsProject(this IDistributedApplicationBuilder builder, [ResourceName] string name, string projectPath)
     {

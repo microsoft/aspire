@@ -117,6 +117,7 @@ public static class AzurePostgresExtensions
     /// <param name="builder">The builder for the distributed application.</param>
     /// <param name="name">The name of the resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzurePostgresFlexibleServerResource}"/> builder.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// By default, the Azure PostgreSQL Flexible Server resource is configured to use Microsoft Entra ID (Azure Active Directory) for authentication.
     /// This requires changes to the application code to use an azure credential to authenticate with the resource. See
@@ -137,6 +138,7 @@ public static class AzurePostgresExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
     [AspireExport]
     public static IResourceBuilder<AzurePostgresFlexibleServerResource> AddAzurePostgresFlexibleServer(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
@@ -158,6 +160,7 @@ public static class AzurePostgresExtensions
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <param name="databaseName">The name of the database. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzurePostgresFlexibleServerDatabaseResource> AddDatabase(this IResourceBuilder<AzurePostgresFlexibleServerResource> builder, [ResourceName] string name, string? databaseName = null)
     {
@@ -194,6 +197,7 @@ public static class AzurePostgresExtensions
     /// <param name="builder">The Azure PostgreSQL server resource builder.</param>
     /// <param name="configureContainer">Callback that exposes underlying container to allow for customization.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzurePostgresFlexibleServerResource}"/> builder.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <example>
     /// The following example creates an Azure PostgreSQL Flexible Server resource that runs locally in a
@@ -211,6 +215,7 @@ public static class AzurePostgresExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
     [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzurePostgresFlexibleServerResource> RunAsContainer(this IResourceBuilder<AzurePostgresFlexibleServerResource> builder, Action<IResourceBuilder<PostgresServerResource>>? configureContainer = null)
     {
@@ -402,6 +407,7 @@ public static class AzurePostgresExtensions
     /// </para>
     /// </remarks>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport(RunSyncOnBackgroundThread = true)]
     [Experimental("ASPIREPOSTGRES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzurePostgresFlexibleServerDatabaseResource> WithPostgresMcp(

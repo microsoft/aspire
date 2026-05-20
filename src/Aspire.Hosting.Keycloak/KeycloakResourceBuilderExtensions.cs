@@ -35,6 +35,7 @@ public static class KeycloakResourceBuilderExtensions
     /// <param name="adminUsername">The parameter used as the admin for the Keycloak resource. If <see langword="null"/> a default value will be used.</param>
     /// <param name="adminPassword">The parameter used as the admin password for the Keycloak resource. If <see langword="null"/> a default password will be used.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// The container exposes port 8080 by default.
     /// This version of the package defaults to the <inheritdoc cref="KeycloakContainerImageTags.Tag"/> tag of the <inheritdoc cref="KeycloakContainerImageTags.Registry"/>/<inheritdoc cref="KeycloakContainerImageTags.Image"/> container image.
@@ -48,6 +49,7 @@ public static class KeycloakResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
     [AspireExport]
     public static IResourceBuilder<KeycloakResource> AddKeycloak(
         this IDistributedApplicationBuilder builder,
@@ -145,6 +147,7 @@ public static class KeycloakResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="name">The name of the volume. Defaults to an auto-generated name based on the application and resource names.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// The volume is mounted at /opt/keycloak/data in the container.
     /// <example>
@@ -169,6 +172,7 @@ public static class KeycloakResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="source">The source directory on the host to mount into the container.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// The source directory is mounted at /opt/keycloak/data in the container.
     /// <example>
@@ -257,6 +261,7 @@ public static class KeycloakResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="features">Names of features to enable for the keycloak resource</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<KeycloakResource> WithEnabledFeatures(
         this IResourceBuilder<KeycloakResource> builder,
@@ -278,6 +283,7 @@ public static class KeycloakResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="features">Names of features to disable for the keycloak resource</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<KeycloakResource> WithDisabledFeatures(
         this IResourceBuilder<KeycloakResource> builder,

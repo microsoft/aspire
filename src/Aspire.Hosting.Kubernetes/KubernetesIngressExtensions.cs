@@ -19,6 +19,7 @@ public static class KubernetesIngressExtensions
     /// <param name="builder">The Kubernetes environment resource builder.</param>
     /// <param name="name">The name of the ingress resource. This is used as the Kubernetes resource name.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// After creating the ingress, configure routes using
@@ -26,6 +27,7 @@ public static class KubernetesIngressExtensions
     /// and optionally set an ingress class with <see cref="WithIngressClass(IResourceBuilder{KubernetesIngressResource}, string)"/>.
     /// </para>
     /// </remarks>
+    /// <ats-remarks />
     /// <example>
     /// <code>
     /// var k8s = builder.AddKubernetesEnvironment("k8s");
@@ -63,6 +65,7 @@ public static class KubernetesIngressExtensions
     /// <param name="className">The ingress class name (e.g., <c>"nginx"</c>, <c>"traefik"</c>,
     /// <c>"azure-alb-external"</c>).</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<KubernetesIngressResource> WithIngressClass(
         this IResourceBuilder<KubernetesIngressResource> builder,
@@ -81,6 +84,7 @@ public static class KubernetesIngressExtensions
     /// <param name="builder">The ingress resource builder.</param>
     /// <param name="className">A parameter resource builder for the ingress class name.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport("withIngressClassParam")]
     public static IResourceBuilder<KubernetesIngressResource> WithIngressClass(
         this IResourceBuilder<KubernetesIngressResource> builder,
@@ -102,6 +106,7 @@ public static class KubernetesIngressExtensions
     /// <param name="endpoint">The endpoint reference identifying the target service and port.</param>
     /// <param name="pathType">The path matching strategy. Defaults to <see cref="IngressPathType.Prefix"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <example>
     /// <code>
     /// var api = builder.AddProject&lt;MyApi&gt;("api");
@@ -143,6 +148,7 @@ public static class KubernetesIngressExtensions
     /// <param name="endpoint">The endpoint reference identifying the target service and port.</param>
     /// <param name="pathType">The path matching strategy. Defaults to <see cref="IngressPathType.Prefix"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <example>
     /// <code>
     /// var api = builder.AddProject&lt;MyApi&gt;("api");
@@ -183,6 +189,7 @@ public static class KubernetesIngressExtensions
     /// <param name="builder">The ingress resource builder.</param>
     /// <param name="hostname">The hostname to match (e.g., <c>"api.example.com"</c>).</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <example>
     /// <code>
     /// ingress.WithHostname("api.example.com")
@@ -207,6 +214,7 @@ public static class KubernetesIngressExtensions
     /// <param name="builder">The ingress resource builder.</param>
     /// <param name="hostname">A parameter resource builder for the hostname value.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport("withIngressHostnameParam")]
     public static IResourceBuilder<KubernetesIngressResource> WithHostname(
         this IResourceBuilder<KubernetesIngressResource> builder,
@@ -227,6 +235,7 @@ public static class KubernetesIngressExtensions
     /// <param name="builder">The ingress resource builder.</param>
     /// <param name="secretName">The name of the Kubernetes <c>kubernetes.io/tls</c> Secret.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport("withIngressTls", MethodName = "withTls")]
     public static IResourceBuilder<KubernetesIngressResource> WithTls(
         this IResourceBuilder<KubernetesIngressResource> builder,
@@ -247,6 +256,7 @@ public static class KubernetesIngressExtensions
     /// <param name="builder">The ingress resource builder.</param>
     /// <param name="secretName">A parameter resource builder for the secret name.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport("withIngressTlsParam")]
     public static IResourceBuilder<KubernetesIngressResource> WithTls(
         this IResourceBuilder<KubernetesIngressResource> builder,
@@ -266,6 +276,7 @@ public static class KubernetesIngressExtensions
     /// </summary>
     /// <param name="builder">The ingress resource builder.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport("withIngressTlsAuto")]
     public static IResourceBuilder<KubernetesIngressResource> WithTls(
         this IResourceBuilder<KubernetesIngressResource> builder)
@@ -287,6 +298,7 @@ public static class KubernetesIngressExtensions
     /// <param name="builder">The ingress resource builder.</param>
     /// <param name="endpoint">The endpoint reference identifying the default backend service and port.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<KubernetesIngressResource> WithDefaultBackend(
         this IResourceBuilder<KubernetesIngressResource> builder,
@@ -308,6 +320,7 @@ public static class KubernetesIngressExtensions
     /// <param name="key">The annotation key (e.g., <c>"nginx.ingress.kubernetes.io/rewrite-target"</c>).</param>
     /// <param name="value">The annotation value.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This method sets Kubernetes metadata annotations, not Aspire <see cref="ApplicationModel.IResourceAnnotation"/>
     /// instances. Use these for controller-specific features like path rewriting, rate limiting,
@@ -340,6 +353,7 @@ public static class KubernetesIngressExtensions
     /// <param name="key">The annotation key.</param>
     /// <param name="value">A parameter resource builder for the annotation value.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport("withIngressAnnotationParam")]
     public static IResourceBuilder<KubernetesIngressResource> WithIngressAnnotation(
         this IResourceBuilder<KubernetesIngressResource> builder,

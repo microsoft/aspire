@@ -114,6 +114,7 @@ public static class MauiiOSExtensions
     /// <param name="name">The name of the iOS device resource.</param>
     /// <param name="deviceId">Optional device UDID to target a specific iOS device. If not specified, uses the only attached device (requires exactly one device to be connected).</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This method creates a new iOS device platform resource that will run the MAUI application
     /// targeting the iOS platform using <c>dotnet run</c>. The resource does not auto-start 
@@ -314,6 +315,7 @@ public static class MauiiOSExtensions
     /// <param name="name">The name of the iOS simulator resource.</param>
     /// <param name="simulatorId">Optional simulator UDID to target a specific iOS simulator. If not specified, uses the default simulator.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This method creates a new iOS simulator platform resource that will run the MAUI application
     /// targeting the iOS platform using <c>dotnet run</c>. The resource does not auto-start 

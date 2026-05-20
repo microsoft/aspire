@@ -77,6 +77,7 @@ public static class KubernetesEnvironmentExtensions
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
     /// <param name="name">The name of the Kubernetes environment resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesEnvironmentResource}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<KubernetesEnvironmentResource> AddKubernetesEnvironment(
         this IDistributedApplicationBuilder builder,
@@ -115,6 +116,7 @@ public static class KubernetesEnvironmentExtensions
     /// <param name="builder">The Kubernetes environment resource builder.</param>
     /// <param name="configure">An optional callback to configure Helm chart settings such as namespace, release name, and chart version.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// Helm is the default deployment engine. Call this method to customize Helm-specific settings.
     /// </remarks>
@@ -155,6 +157,7 @@ public static class KubernetesEnvironmentExtensions
     /// <param name="builder">The Kubernetes environment resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the <see cref="KubernetesEnvironmentResource"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<KubernetesEnvironmentResource> WithProperties(this IResourceBuilder<KubernetesEnvironmentResource> builder, Action<KubernetesEnvironmentResource> configure)
     {
@@ -172,6 +175,7 @@ public static class KubernetesEnvironmentExtensions
     /// <param name="builder">The Kubernetes environment resource builder.</param>
     /// <param name="enabled">Whether to enable the dashboard. Default is true.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// When enabled, an Aspire Dashboard container is deployed alongside the application resources
     /// in the Kubernetes cluster. All resources with OTLP telemetry support are automatically
@@ -193,6 +197,7 @@ public static class KubernetesEnvironmentExtensions
     /// <param name="builder">The Kubernetes environment resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the dashboard resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// Use this overload to customize the dashboard container, for example to set a specific host port
     /// or enable forwarded headers for ingress access.
@@ -216,6 +221,7 @@ public static class KubernetesEnvironmentExtensions
     /// <param name="builder">The Kubernetes environment resource builder.</param>
     /// <param name="name">The name of the node pool. This value is used as the <c>nodeSelector</c> value.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesNodePoolResource}"/> for the new node pool.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// For vanilla Kubernetes, this creates a named reference to an existing node pool.
     /// For managed Kubernetes services (e.g., AKS), the cloud-specific <c>AddNodePool</c> overload
@@ -260,6 +266,7 @@ public static class KubernetesEnvironmentExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="nodePool">The node pool to schedule the workload on.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <example>
     /// <code>
     /// var k8s = builder.AddKubernetesEnvironment("k8s");

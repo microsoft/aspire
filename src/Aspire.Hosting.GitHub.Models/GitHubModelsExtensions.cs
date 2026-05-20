@@ -116,6 +116,7 @@ public static class GitHubModelsExtensions
     /// <param name="model">The known model name from the <see cref="GitHubModelName"/> enumeration.</param>
     /// <param name="organization">The organization login associated with the organization to which the request is to be attributed.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     internal static IResourceBuilder<GitHubModelResource> AddGitHubModel(this IDistributedApplicationBuilder builder, [ResourceName] string name, GitHubModelName model, IResourceBuilder<ParameterResource>? organization = null)
     {
@@ -130,6 +131,7 @@ public static class GitHubModelsExtensions
     /// <param name="modelId">The model identifier string, for example <c>"openai/gpt-4o"</c>.</param>
     /// <param name="organization">The organization login associated with the organization to which the request is to be attributed.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     internal static IResourceBuilder<GitHubModelResource> AddGitHubModelById(this IDistributedApplicationBuilder builder, [ResourceName] string name, string modelId, IResourceBuilder<ParameterResource>? organization = null)
     {

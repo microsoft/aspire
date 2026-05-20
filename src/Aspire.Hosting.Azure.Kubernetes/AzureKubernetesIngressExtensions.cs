@@ -20,6 +20,7 @@ public static class AzureKubernetesIngressExtensions
     /// <param name="builder">The AKS environment resource builder.</param>
     /// <param name="name">The name of the ingress resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// This method delegates to the inner <see cref="KubernetesEnvironmentResource"/> of the AKS
@@ -28,6 +29,7 @@ public static class AzureKubernetesIngressExtensions
     /// appropriate class name.
     /// </para>
     /// </remarks>
+    /// <ats-remarks />
     /// <example>
     /// <code>
     /// var aks = builder.AddAzureKubernetesEnvironment("aks");
@@ -57,6 +59,7 @@ public static class AzureKubernetesIngressExtensions
     /// <param name="builder">The AKS environment resource builder.</param>
     /// <param name="name">The name of the gateway resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <example>
     /// <code>
     /// var aks = builder.AddAzureKubernetesEnvironment("aks");
@@ -141,6 +144,7 @@ public static class AzureKubernetesIngressExtensions
     /// <param name="builder">The gateway resource builder.</param>
     /// <param name="loadBalancer">The AGC load balancer to route through.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// Writes the AGC routing annotations (<c>alb.networking.azure.io/alb-name</c> and
     /// <c>alb.networking.azure.io/alb-namespace</c>) onto the rendered Gateway and defaults
@@ -184,6 +188,7 @@ public static class AzureKubernetesIngressExtensions
     /// <param name="builder">The ingress resource builder.</param>
     /// <param name="loadBalancer">The AGC load balancer to route through.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// Writes the AGC routing annotations (<c>alb.networking.azure.io/alb-name</c> and
     /// <c>alb.networking.azure.io/alb-namespace</c>) onto the rendered Ingress and defaults

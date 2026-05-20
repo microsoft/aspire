@@ -328,6 +328,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// (e.g., <c>/subscriptions/{subId}/resourceGroups/{rg}/providers/Microsoft.Bing/accounts/{name}</c>).
     /// </param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the connection resource.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<BingGroundingConnectionResource> AddBingGroundingConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
@@ -381,6 +382,7 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// A parameter resource containing the full Azure resource ID of the Bing Search resource.
     /// </param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the connection resource.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport("addBingGroundingConnectionFromParameter")]
     public static IResourceBuilder<BingGroundingConnectionResource> AddBingGroundingConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,

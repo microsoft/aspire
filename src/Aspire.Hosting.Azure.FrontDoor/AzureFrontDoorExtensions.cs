@@ -26,6 +26,7 @@ public static class AzureFrontDoorExtensions
     /// <param name="builder">The distributed application builder.</param>
     /// <param name="name">The name of the resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// Azure Front Door is a global, scalable entry point that uses the Microsoft global edge network to create
@@ -51,6 +52,7 @@ public static class AzureFrontDoorExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
     [AspireExport]
     public static IResourceBuilder<AzureFrontDoorResource> AddAzureFrontDoor(
         this IDistributedApplicationBuilder builder,
@@ -166,6 +168,7 @@ public static class AzureFrontDoorExtensions
     /// <param name="builder">The Azure Front Door resource builder.</param>
     /// <param name="resource">The resource to add as an origin (e.g., a project, container, or other compute resource with endpoints).</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <example>
     /// Add multiple origins (each gets its own Front Door endpoint):

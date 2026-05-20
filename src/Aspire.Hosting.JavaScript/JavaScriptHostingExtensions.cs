@@ -98,6 +98,7 @@ public static class JavaScriptHostingExtensions
     /// <param name="appDirectory">The path to the directory containing the node application.</param>
     /// <param name="scriptPath">The path to the script relative to the app directory to run.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This method executes a Node script directly using <c>node script.js</c>. If you want to use a package manager
     /// you can add one and configure the install and run scripts using the provided extension methods.
@@ -967,6 +968,7 @@ public static class JavaScriptHostingExtensions
     /// <param name="appDirectory">The path to the directory containing the Vite app.</param>
     /// <param name="runScriptName">The name of the script that runs the Vite app. Defaults to "dev".</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <example>
     /// The following example creates a Vite app using npm as the package manager.
@@ -1132,6 +1134,7 @@ public static class JavaScriptHostingExtensions
     /// <param name="appDirectory">The path to the directory containing the Next.js app.</param>
     /// <param name="runScriptName">The name of the script that runs the Next.js dev server. Defaults to "dev".</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// This method configures the Next.js application for both local development and publishing.
@@ -1285,6 +1288,7 @@ public static class JavaScriptHostingExtensions
     /// <param name="installCommand">The install command itself passed to npm to install dependencies.</param>
     /// <param name="installArgs">The command-line arguments passed to npm to install dependencies.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<TResource> WithNpm<TResource>(this IResourceBuilder<TResource> resource, bool install = true, string? installCommand = null, string[]? installArgs = null) where TResource : JavaScriptAppResource
     {
@@ -1314,12 +1318,14 @@ public static class JavaScriptHostingExtensions
     /// <param name="install">When true (default), automatically installs packages before the application starts. When false, only sets the package manager annotation without creating an installer resource.</param>
     /// <param name="installArgs">Additional command-line arguments passed to "bun install". When null, defaults are applied based on publish mode and lockfile presence.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// Bun forwards script arguments without requiring the <c>--</c> command separator, so this method configures the resource to omit it.
     /// When publishing and a bun lockfile (<c>bun.lock</c> or <c>bun.lockb</c>) is present, <c>--frozen-lockfile</c> is used by default.
     /// Publishing to a container requires Bun to be present in the build image. This method configures a Bun build image when one is not already specified.
     /// To use a specific Bun version, configure a custom build image (for example, <c>oven/bun:&lt;tag&gt;</c>) using <see cref="ContainerResourceBuilderExtensions.WithDockerfileBaseImage{T}(IResourceBuilder{T}, string?, string?)"/>.
     /// </remarks>
+    /// <ats-remarks />
     /// <example>
     /// Run a Vite app using Bun as the package manager:
     /// <code lang="csharp">
@@ -1399,6 +1405,7 @@ public static class JavaScriptHostingExtensions
     /// <param name="install">When true (default), automatically installs packages before the application starts. When false, only sets the package manager annotation without creating an installer resource.</param>
     /// <param name="installArgs">The command-line arguments passed to "yarn install".</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<TResource> WithYarn<TResource>(this IResourceBuilder<TResource> resource, bool install = true, string[]? installArgs = null) where TResource : JavaScriptAppResource
     {
@@ -1477,6 +1484,7 @@ public static class JavaScriptHostingExtensions
     /// <param name="install">When true (default), automatically installs packages before the application starts. When false, only sets the package manager annotation without creating an installer resource.</param>
     /// <param name="installArgs">The command-line arguments passed to "pnpm install".</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<TResource> WithPnpm<TResource>(this IResourceBuilder<TResource> resource, bool install = true, string[]? installArgs = null) where TResource : JavaScriptAppResource
     {
@@ -1627,6 +1635,7 @@ public static class JavaScriptHostingExtensions
     /// <param name="builder">The resource builder for the JavaScript application.</param>
     /// <param name="browser">The browser to use for debugging. Defaults to <c>"msedge"</c>. Supported values include <c>"msedge"</c> and <c>"chrome"</c>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining additional configuration.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This method creates a child <see cref="BrowserDebuggerResource"/> that waits for the parent JavaScript
     /// application to start, then launches a browser debug session targeting the parent's HTTP or HTTPS endpoint.

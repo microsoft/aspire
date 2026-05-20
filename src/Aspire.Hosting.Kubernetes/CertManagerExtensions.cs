@@ -54,6 +54,7 @@ public static class CertManagerExtensions
     /// <param name="chartVersion">The cert-manager Helm chart version to install.
     /// Defaults to a pinned version validated against this Aspire build.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{CertManagerResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// Internally creates a <see cref="KubernetesHelmChartResource"/> via
@@ -76,6 +77,7 @@ public static class CertManagerExtensions
     /// <see cref="CertManagerResource.HelmChart"/>.
     /// </para>
     /// </remarks>
+    /// <ats-remarks />
     [AspireExport]
     public static IResourceBuilder<CertManagerResource> AddCertManager(
         this IResourceBuilder<KubernetesEnvironmentResource> builder,
@@ -148,6 +150,7 @@ public static class CertManagerExtensions
     /// <param name="name">The Aspire resource name. Also used as the <c>metadata.name</c>
     /// of the generated <c>ClusterIssuer</c>, so it must be a valid DNS-1123 label.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{CertManagerIssuerResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<CertManagerIssuerResource> AddIssuer(
         this IResourceBuilder<CertManagerResource> builder,
@@ -174,12 +177,14 @@ public static class CertManagerExtensions
     /// <param name="email">The contact email registered with the ACME account. Let's Encrypt
     /// uses this address for expiry notifications and rate-limit appeals.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{CertManagerIssuerResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// Production certificates are subject to strict per-domain rate limits
     /// (<see href="https://letsencrypt.org/docs/rate-limits/"/>). For development workflows,
     /// prefer <see cref="WithLetsEncryptStaging(IResourceBuilder{CertManagerIssuerResource}, string)"/>
     /// which uses untrusted staging certificates with much higher rate limits.
     /// </remarks>
+    /// <ats-remarks />
     [AspireExport]
     public static IResourceBuilder<CertManagerIssuerResource> WithLetsEncryptProduction(
         this IResourceBuilder<CertManagerIssuerResource> builder,
@@ -193,6 +198,7 @@ public static class CertManagerExtensions
     /// <param name="builder">The issuer resource builder.</param>
     /// <param name="email">A parameter resource builder whose value is the contact email registered with the ACME account.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{CertManagerIssuerResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport("withLetsEncryptProductionParam")]
     public static IResourceBuilder<CertManagerIssuerResource> WithLetsEncryptProduction(
         this IResourceBuilder<CertManagerIssuerResource> builder,
@@ -207,6 +213,7 @@ public static class CertManagerExtensions
     /// <param name="builder">The issuer resource builder.</param>
     /// <param name="email">The contact email registered with the ACME account.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{CertManagerIssuerResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<CertManagerIssuerResource> WithLetsEncryptStaging(
         this IResourceBuilder<CertManagerIssuerResource> builder,
@@ -220,6 +227,7 @@ public static class CertManagerExtensions
     /// <param name="builder">The issuer resource builder.</param>
     /// <param name="email">A parameter resource builder whose value is the contact email registered with the ACME account.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{CertManagerIssuerResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport("withLetsEncryptStagingParam")]
     public static IResourceBuilder<CertManagerIssuerResource> WithLetsEncryptStaging(
         this IResourceBuilder<CertManagerIssuerResource> builder,
@@ -234,6 +242,7 @@ public static class CertManagerExtensions
     /// <param name="serverUrl">The ACME directory URL (e.g., <c>https://acme.example.com/directory</c>).</param>
     /// <param name="email">The contact email registered with the ACME account.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{CertManagerIssuerResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<CertManagerIssuerResource> WithAcmeServer(
         this IResourceBuilder<CertManagerIssuerResource> builder,
@@ -258,6 +267,7 @@ public static class CertManagerExtensions
     /// <param name="serverUrl">The ACME directory URL (e.g., <c>https://acme.example.com/directory</c>).</param>
     /// <param name="email">A parameter resource builder whose value is the contact email registered with the ACME account.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{CertManagerIssuerResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport("withAcmeServerParam")]
     public static IResourceBuilder<CertManagerIssuerResource> WithAcmeServer(
         this IResourceBuilder<CertManagerIssuerResource> builder,
@@ -283,6 +293,7 @@ public static class CertManagerExtensions
     /// </summary>
     /// <param name="builder">The issuer resource builder.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{CertManagerIssuerResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// HTTP-01 is the right choice for gateways exposed via Azure Application Gateway for
     /// Containers (AGC) or any ingress controller that publishes a publicly addressable
@@ -307,6 +318,7 @@ public static class CertManagerExtensions
     /// <param name="builder">The gateway resource builder.</param>
     /// <param name="issuer">The cert-manager <c>ClusterIssuer</c> to issue certificates from.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// Equivalent to calling <c>WithTls()</c> followed by
     /// <c>WithGatewayAnnotation("cert-manager.io/cluster-issuer", issuer.Resource.Name)</c>,

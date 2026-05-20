@@ -187,6 +187,7 @@ public static class ResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="callback">A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport("withEnvironmentCallback")]
     public static IResourceBuilder<T> WithEnvironment<T>(this IResourceBuilder<T> builder, Func<EnvironmentCallbackContext, Task> callback) where T : IResourceWithEnvironment
     {
@@ -488,6 +489,7 @@ public static class ResourceBuilderExtensions
     /// <param name="builder">The resource builder for a resource implementing <see cref="IResourceWithArgs"/>.</param>
     /// <param name="args">The arguments to be passed to the resource when it is started.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<T> WithArgs<T>(this IResourceBuilder<T> builder, params string[] args) where T : IResourceWithArgs
     {
@@ -523,6 +525,7 @@ public static class ResourceBuilderExtensions
     /// <param name="builder">The resource builder for a resource implementing <see cref="IResourceWithArgs"/>.</param>
     /// <param name="callback">A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport("withArgsCallback")]
     public static IResourceBuilder<T> WithArgs<T>(this IResourceBuilder<T> builder, Action<CommandLineArgsCallbackContext> callback) where T : IResourceWithArgs
     {
@@ -697,6 +700,7 @@ public static class ResourceBuilderExtensions
     /// <param name="builder">The resource to configure.</param>
     /// <param name="options">Options controlling which reference information is emitted.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport("withReferenceEnvironment")]
     internal static IResourceBuilder<TDestination> WithReferenceEnvironmentExport<TDestination>(
         this IResourceBuilder<TDestination> builder,
@@ -1365,6 +1369,7 @@ public static class ResourceBuilderExtensions
     /// <param name="protocol">Network protocol: TCP or UDP are supported today, others possibly in future.</param>
     /// <param name="isProxied">Specifies if the endpoint will be proxied by DCP. Defaults to true.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="DistributedApplicationException">Throws an exception if an endpoint with the same name already exists on the specified resource.</exception>
     [AspireExport]
     [System.Diagnostics.CodeAnalysis.SuppressMessage("ApiDesign", "RS0026:Do not add multiple public overloads with optional parameters", Justification = "<Pending>")]
@@ -1498,6 +1503,7 @@ public static class ResourceBuilderExtensions
     /// <param name="env">An optional name of the environment variable to inject.</param>
     /// <param name="isProxied">Specifies if the endpoint will be proxied by DCP. Defaults to true.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// If an endpoint with the same name already exists on the resource, the existing endpoint is updated
     /// with any non-null parameter values. Parameters left as <see langword="null"/> will not modify the existing endpoint's values.
@@ -1524,6 +1530,7 @@ public static class ResourceBuilderExtensions
     /// <param name="env">An optional name of the environment variable to inject.</param>
     /// <param name="isProxied">Specifies if the endpoint will be proxied by DCP. Defaults to true.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// If an endpoint with the same name already exists on the resource, the existing endpoint is updated
     /// with any non-null parameter values. Parameters left as <see langword="null"/> will not modify the existing endpoint's values.
@@ -1542,6 +1549,7 @@ public static class ResourceBuilderExtensions
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<T> WithExternalHttpEndpoints<T>(this IResourceBuilder<T> builder) where T : IResourceWithEndpoints
     {
@@ -1604,6 +1612,7 @@ public static class ResourceBuilderExtensions
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<T> AsHttp2Service<T>(this IResourceBuilder<T> builder) where T : IResourceWithEndpoints
     {
@@ -1619,6 +1628,7 @@ public static class ResourceBuilderExtensions
     /// <param name="builder">The builder for the resource.</param>
     /// <param name="callback">The callback that will customize URLs for the resource.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// The callback will be executed after endpoints have been allocated for this resource.<br/>
@@ -1659,6 +1669,7 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
     [AspireExport]
     public static IResourceBuilder<T> WithUrls<T>(this IResourceBuilder<T> builder, Action<ResourceUrlsCallbackContext> callback)
         where T : IResource
@@ -1832,6 +1843,7 @@ public static class ResourceBuilderExtensions
     /// <param name="endpointName">The name of the endpoint to customize the URL for.</param>
     /// <param name="callback">The callback that will customize the URL.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// Use this method to customize the URL that is automatically added for an endpoint on the resource.<br/>
@@ -1862,6 +1874,7 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
     [AspireExport]
     public static IResourceBuilder<T> WithUrlForEndpoint<T>(this IResourceBuilder<T> builder, string endpointName, Action<ResourceUrlAnnotation> callback)
         where T : IResource
@@ -2007,6 +2020,7 @@ public static class ResourceBuilderExtensions
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource to exclude.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<T> ExcludeFromManifest<T>(this IResourceBuilder<T> builder) where T : IResource
     {
@@ -2283,6 +2297,7 @@ public static class ResourceBuilderExtensions
     /// <typeparam name="T">The type of the resource.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>This method is useful when a resource shouldn't automatically start when the app host starts.</para>
     /// <example>
@@ -2297,6 +2312,7 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
     [AspireExport]
     public static IResourceBuilder<T> WithExplicitStart<T>(this IResourceBuilder<T> builder) where T : IResource
     {
@@ -2311,6 +2327,7 @@ public static class ResourceBuilderExtensions
     /// <param name="dependency">The resource builder for the dependency resource.</param>
     /// <param name="exitCode">The exit code which is interpreted as successful.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>This method is useful when a resource should wait until another has completed. A common usage pattern
     /// would be to include a console application that initializes the database schema or performs other one off
@@ -2329,6 +2346,7 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
     [AspireExport("waitForResourceCompletion", MethodName = "waitForCompletion")]
     public static IResourceBuilder<T> WaitForCompletion<T>(this IResourceBuilder<T> builder, IResourceBuilder<IResource> dependency, int exitCode = 0) where T : IResourceWithWaitSupport
     {
@@ -2358,6 +2376,7 @@ public static class ResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="key">The key for the health check.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// The <see cref="WithHealthCheck{T}(IResourceBuilder{T}, string)"/> method is used in conjunction with
@@ -2387,6 +2406,7 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
     [AspireExport]
     public static IResourceBuilder<T> WithHealthCheck<T>(this IResourceBuilder<T> builder, string key) where T : IResource
     {
@@ -2412,6 +2432,7 @@ public static class ResourceBuilderExtensions
     /// <param name="statusCode">The result code to interpret as healthy.</param>
     /// <param name="endpointName">The name of the endpoint to derive the base address from.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// This method adds a health check to the health check service which polls the specified endpoint on the resource
@@ -2432,6 +2453,7 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
     [AspireExport]
     public static IResourceBuilder<T> WithHttpHealthCheck<T>(this IResourceBuilder<T> builder, string? path = null, int? statusCode = null, string? endpointName = null) where T : IResourceWithEndpoints
     {
@@ -2580,6 +2602,7 @@ public static class ResourceBuilderExtensions
     /// </param>
     /// <param name="commandOptions">Optional configuration for the command.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>The <c>WithCommand</c> method is used to add commands to the resource. Commands are displayed in the dashboard
     /// and can be executed by a user using the dashboard UI.</para>
@@ -3610,6 +3633,7 @@ public static class ResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="trust">Indicates whether the developer certificate should be treated as trusted.</param>
     /// <returns>The <see cref="IResourceBuilder{TResource}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <example>
     /// Disable trust for app host managed developer certificate(s) for a container resource.
@@ -3661,6 +3685,7 @@ public static class ResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="scope">The scope to apply to custom certificate authorities associated with the resource.</param>
     /// <returns>The <see cref="IResourceBuilder{TResource}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// The default scope if not overridden is <see cref="CertificateTrustScope.Append"/> which means that custom certificate
     /// authorities should be appended to the default trusted certificate authorities for the resource. Setting the scope to
@@ -3747,6 +3772,7 @@ public static class ResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="password">A parameter specifying the password used to encrypt the certificate private key.</param>
     /// <returns>The <see cref="IResourceBuilder{TResource}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <example>
     /// Use the developer certificate for HTTPS/TLS endpoints on a container resource:
@@ -3814,6 +3840,7 @@ public static class ResourceBuilderExtensions
     /// <typeparam name="TResource">The type of the resource.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <returns>The <see cref="IResourceBuilder{TResource}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <example>
     /// Disable HTTPS certificate configuration for a Redis resource:
@@ -4178,6 +4205,7 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
     [AspireExport("withBuilderParentRelationship", MethodName = "withParentRelationship")]
     public static IResourceBuilder<T> WithParentRelationship<T>(
         this IResourceBuilder<T> builder,
@@ -4243,6 +4271,7 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
     [AspireExport("withBuilderChildRelationship", MethodName = "withChildRelationship")]
     public static IResourceBuilder<T> WithChildRelationship<T>(
         this IResourceBuilder<T> builder,
@@ -4294,6 +4323,7 @@ public static class ResourceBuilderExtensions
     /// <param name="iconName">The name of the FluentUI icon to use. See https://aka.ms/fluentui-system-icons for available icons.</param>
     /// <param name="iconVariant">The variant of the icon (Regular or Filled). Defaults to Filled.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// This method allows you to specify a custom FluentUI icon that will be displayed for the resource in the dashboard.
@@ -4314,6 +4344,7 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
     [AspireExport]
     public static IResourceBuilder<T> WithIconName<T>(this IResourceBuilder<T> builder, string iconName, IconVariant iconVariant = IconVariant.Filled) where T : IResource
     {
@@ -4329,6 +4360,7 @@ public static class ResourceBuilderExtensions
     /// <param name="builder">The compute resource builder.</param>
     /// <param name="computeEnvironmentResource">The compute environment resource to associate with the compute resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This method allows associating a specific compute environment with the compute resource.
     /// </remarks>
@@ -4520,6 +4552,7 @@ public static class ResourceBuilderExtensions
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<T> ExcludeFromMcp<T>(this IResourceBuilder<T> builder) where T : IResource
     {
@@ -4573,6 +4606,7 @@ public static class ResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="callback">The asynchronous callback to configure push options.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="callback"/> is <c>null</c>.</exception>
     /// <remarks>
     /// This method allows customization of how container images are named and tagged when pushed to a registry using an asynchronous callback.
@@ -4613,12 +4647,16 @@ public static class ResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="remoteImageName">The remote image name (e.g., "myapp" or "myorg/myapp").</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="remoteImageName"/> is <c>null</c>.</exception>
     /// <remarks>
     /// This is a convenience method that registers a callback to set the <see cref="ContainerImagePushOptions.RemoteImageName"/> property.
     /// The remote image name should not include the registry endpoint or tag. Those are managed separately.
     /// This method can be combined with <see cref="WithRemoteImageTag{T}"/> to fully customize the image reference.
     /// </remarks>
+    /// <ats-remarks>
+    /// Use this with <c>withRemoteImageTag</c> to fully customize the image reference used for container push operations.
+    /// </ats-remarks>
     /// <example>
     /// Set a custom remote image name for a container:
     /// <code>
@@ -4649,12 +4687,16 @@ public static class ResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="remoteImageTag">The remote image tag (e.g., "latest", "v1.0.0").</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="remoteImageTag"/> is <c>null</c>.</exception>
     /// <remarks>
     /// This is a convenience method that registers a callback to set the <see cref="ContainerImagePushOptions.RemoteImageTag"/> property.
     /// The tag can be any valid container image tag such as version numbers, environment names, or deployment identifiers.
     /// This method can be combined with <see cref="WithRemoteImageName{T}"/> to fully customize the image reference.
     /// </remarks>
+    /// <ats-remarks>
+    /// Use this with <c>withRemoteImageName</c> to fully customize the image reference used for container push operations.
+    /// </ats-remarks>
     /// <example>
     /// Set a specific version tag for a container:
     /// <code>

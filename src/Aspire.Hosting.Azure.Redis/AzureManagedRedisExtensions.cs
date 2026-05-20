@@ -24,6 +24,7 @@ public static class AzureManagedRedisExtensions
     /// <param name="builder">The builder for the distributed application.</param>
     /// <param name="name">The name of the resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureManagedRedisResource}"/> builder.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// By default, the Azure Managed Redis resource is configured to use Microsoft Entra ID (Azure Active Directory) for authentication.
     /// This requires changes to the application code to use an azure credential to authenticate with the resource. See
@@ -43,6 +44,7 @@ public static class AzureManagedRedisExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
     [AspireExport]
     public static IResourceBuilder<AzureManagedRedisResource> AddAzureManagedRedis(
         this IDistributedApplicationBuilder builder,
@@ -64,6 +66,7 @@ public static class AzureManagedRedisExtensions
     /// <param name="builder">The Azure Managed Redis resource builder.</param>
     /// <param name="configureContainer">Callback that exposes underlying container to allow for customization.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureRedisCacheResource}"/> builder.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <example>
     /// The following example creates an Azure Managed Redis resource that runs locally in a
@@ -81,6 +84,7 @@ public static class AzureManagedRedisExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
     [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureManagedRedisResource> RunAsContainer(
         this IResourceBuilder<AzureManagedRedisResource> builder,

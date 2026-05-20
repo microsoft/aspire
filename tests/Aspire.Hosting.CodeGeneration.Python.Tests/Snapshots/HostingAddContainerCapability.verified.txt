@@ -4,7 +4,7 @@
   QualifiedMethodName: addContainer,
   Documentation: {
     Summary: Adds a container resource to the application.,
-    Returns: The `IResourceBuilder`1` for chaining.,
+    Returns: The resource builder.,
     Parameters: [
       {
         Name: builder,

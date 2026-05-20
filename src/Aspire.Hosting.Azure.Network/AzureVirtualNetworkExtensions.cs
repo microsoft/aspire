@@ -284,6 +284,7 @@ public static class AzureVirtualNetworkExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="subnet">The subnet to associate with the resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This method automatically configures the subnet with the appropriate service delegation
     /// for the target resource type (e.g., "Microsoft.App/environments" for Azure Container Apps).
@@ -327,6 +328,7 @@ public static class AzureVirtualNetworkExtensions
     /// <param name="builder">The subnet resource builder.</param>
     /// <param name="natGateway">The NAT Gateway to associate with the subnet.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureSubnetResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// A NAT Gateway provides outbound internet connectivity for resources in the subnet.
     /// A subnet can have at most one NAT Gateway.
@@ -358,6 +360,7 @@ public static class AzureVirtualNetworkExtensions
     /// <param name="builder">The subnet resource builder.</param>
     /// <param name="nsg">The Network Security Group to associate with the subnet.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureSubnetResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <example>
     /// This example creates a subnet with an associated Network Security Group:
     /// <code>
@@ -403,6 +406,7 @@ public static class AzureVirtualNetworkExtensions
     /// <param name="priority">The rule priority (100-4096). If not specified, auto-increments from 100 by 100.</param>
     /// <param name="name">The rule name. If not specified, auto-generated from parameters.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureSubnetResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// If no Network Security Group has been associated with the subnet, one is automatically created.
     /// </remarks>
@@ -438,6 +442,7 @@ public static class AzureVirtualNetworkExtensions
     /// <param name="priority">The rule priority (100-4096). If not specified, auto-increments from 100 by 100.</param>
     /// <param name="name">The rule name. If not specified, auto-generated from parameters.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureSubnetResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// If no Network Security Group has been associated with the subnet, one is automatically created.
     /// </remarks>
@@ -465,6 +470,7 @@ public static class AzureVirtualNetworkExtensions
     /// <param name="priority">The rule priority (100-4096). If not specified, auto-increments from 100 by 100.</param>
     /// <param name="name">The rule name. If not specified, auto-generated from parameters.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureSubnetResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// If no Network Security Group has been associated with the subnet, one is automatically created.
     /// </remarks>
@@ -492,6 +498,7 @@ public static class AzureVirtualNetworkExtensions
     /// <param name="priority">The rule priority (100-4096). If not specified, auto-increments from 100 by 100.</param>
     /// <param name="name">The rule name. If not specified, auto-generated from parameters.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureSubnetResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// If no Network Security Group has been associated with the subnet, one is automatically created.
     /// </remarks>

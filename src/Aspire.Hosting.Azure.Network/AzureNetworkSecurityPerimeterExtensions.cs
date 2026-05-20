@@ -21,6 +21,7 @@ public static class AzureNetworkSecurityPerimeterExtensions
     /// <param name="builder">The builder for the distributed application.</param>
     /// <param name="name">The name of the Network Security Perimeter resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureNetworkSecurityPerimeterResource}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <example>
     /// This example adds a Network Security Perimeter and associates a storage resource:
     /// <code>
@@ -55,6 +56,7 @@ public static class AzureNetworkSecurityPerimeterExtensions
     /// <param name="builder">The Network Security Perimeter resource builder.</param>
     /// <param name="rule">The access rule configuration.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureNetworkSecurityPerimeterResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <example>
     /// This example adds inbound and outbound access rules:
     /// <code>

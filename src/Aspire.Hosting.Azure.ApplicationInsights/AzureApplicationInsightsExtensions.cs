@@ -20,6 +20,7 @@ public static class AzureApplicationInsightsExtensions
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureApplicationInsightsResource}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzureApplicationInsightsResource> AddAzureApplicationInsights(this IDistributedApplicationBuilder builder, [ResourceName] string name)
         => AddAzureApplicationInsights(builder, name, logAnalyticsWorkspace: null);
@@ -145,6 +146,7 @@ public static class AzureApplicationInsightsExtensions
     /// <param name="builder">The resource builder for <see cref="AzureApplicationInsightsResource"/>.</param>
     /// <param name="logAnalyticsWorkspace">The resource builder for the <see cref="AzureLogAnalyticsWorkspaceResource"/>.</param>
     /// <returns>The <see cref="IResourceBuilder{AzureApplicationInsightsResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzureApplicationInsightsResource> WithLogAnalyticsWorkspace(
         this IResourceBuilder<AzureApplicationInsightsResource> builder,

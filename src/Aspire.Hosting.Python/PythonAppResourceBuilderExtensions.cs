@@ -34,6 +34,7 @@ public static class PythonAppResourceBuilderExtensions
     /// <param name="appDirectory">The path to the directory containing the python application.</param>
     /// <param name="scriptPath">The path to the script relative to the app directory to run.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// This method executes a Python script directly using <c>python script.py</c>.
@@ -50,6 +51,7 @@ public static class PythonAppResourceBuilderExtensions
     /// Python applications automatically have debugging support enabled.
     /// </para>
     /// </remarks>
+    /// <ats-remarks />
     /// <example>
     /// Add a FastAPI Python application to the application model:
     /// <code lang="csharp">
@@ -76,6 +78,7 @@ public static class PythonAppResourceBuilderExtensions
     /// <param name="appDirectory">The path to the directory containing the python application.</param>
     /// <param name="moduleName">The name of the Python module to run (e.g., "flask", "uvicorn").</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// This method runs a Python module using <c>python -m &lt;module&gt;</c>.
@@ -87,6 +90,7 @@ public static class PythonAppResourceBuilderExtensions
     /// Python modules automatically have debugging support enabled.
     /// </para>
     /// </remarks>
+    /// <ats-remarks />
     /// <example>
     /// Add a Flask module to the application model:
     /// <code lang="csharp">
@@ -112,6 +116,7 @@ public static class PythonAppResourceBuilderExtensions
     /// <param name="appDirectory">The path to the directory containing the python application.</param>
     /// <param name="executableName">The name of the executable in the virtual environment (e.g., "pytest", "uvicorn", "flask").</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// This method runs an executable from the virtual environment's bin directory.
@@ -125,6 +130,7 @@ public static class PythonAppResourceBuilderExtensions
     /// tool that can be debugged.
     /// </para>
     /// </remarks>
+    /// <ats-remarks />
     /// <example>
     /// Add a pytest executable to the application model:
     /// <code lang="csharp">
@@ -822,6 +828,7 @@ public static class PythonAppResourceBuilderExtensions
     /// Set to <c>false</c> to disable automatic venv creation (the venv must already exist).
     /// </param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for method chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// This method updates the Python executable path to use the specified virtual environment.
@@ -901,6 +908,7 @@ public static class PythonAppResourceBuilderExtensions
     /// </summary>
     /// <param name="builder">The resource builder.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for method chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// This method adds the <see cref="PythonExecutableDebuggableAnnotation"/> to the resource, which enables
@@ -1027,6 +1035,7 @@ public static class PythonAppResourceBuilderExtensions
     /// <param name="entrypointType">The type of entrypoint (Script, Module, or Executable).</param>
     /// <param name="entrypoint">The entrypoint value (script path, module name, or executable name).</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for method chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// This method allows you to change the entrypoint configuration of a Python application after it has been created.
@@ -1123,6 +1132,7 @@ public static class PythonAppResourceBuilderExtensions
     /// <param name="install">When true (default), automatically installs packages before the application starts. When false, only sets the package manager annotation without creating an installer resource.</param>
     /// <param name="installArgs">The command-line arguments passed to pip install command.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for method chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// This method creates a child resource that runs <c>pip install</c> in the working directory of the Python application.
@@ -1205,6 +1215,7 @@ public static class PythonAppResourceBuilderExtensions
     /// <param name="install">When true (default), automatically runs uv sync before the application starts. When false, only sets the package manager annotation without creating an installer resource.</param>
     /// <param name="args">Optional custom arguments to pass to the uv command. If not provided, defaults to ["sync"].</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for method chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// This method creates a child resource that runs <c>uv sync</c> in the working directory of the Python application.

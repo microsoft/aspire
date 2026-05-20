@@ -144,6 +144,7 @@ public static class AzureSignalRExtensions
     /// <param name="builder">The Azure SignalR resource builder.</param>
     /// <param name="configureContainer">Callback that exposes underlying container used for emulation to allow for customization.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureSignalRResource> RunAsEmulator(this IResourceBuilder<AzureSignalRResource> builder, Action<IResourceBuilder<AzureSignalREmulatorResource>>? configureContainer = null)
     {
@@ -214,6 +215,7 @@ public static class AzureSignalRExtensions
     /// <param name="target">The target Azure SignalR resource.</param>
     /// <param name="roles">The Azure SignalR roles to be assigned (for example, <see cref="AzureSignalRRole.SignalRContributor"/>).</param>
     /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="AzureSignalRRole"/> value.</exception>
     [AspireExport("withSignalRRoleAssignments")]
     internal static IResourceBuilder<T> WithRoleAssignments<T>(

@@ -52,6 +52,7 @@ namespace Aspire.Hosting;
 /// </code>
 /// </example>
 /// </remarks>
+/// <ats-remarks />
 /// <ats-summary>Represents a distributed application that implements the <ats-see cref="!:type:IHost" /> and <ats-see cref="!:type:IAsyncDisposable" /> interfaces.</ats-summary>
 [DebuggerDisplay("{_host}")]
 [DebuggerTypeProxy(typeof(DistributedApplicationDebuggerProxy))]

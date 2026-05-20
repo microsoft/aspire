@@ -76,6 +76,7 @@ public static class AzureSqlExtensions
     /// <param name="builder">The builder for the distributed application.</param>
     /// <param name="name">The name of the resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureSqlServerResource}"/> builder.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzureSqlServerResource> AddAzureSqlServer(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
@@ -106,6 +107,7 @@ public static class AzureSqlExtensions
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <param name="databaseName">The name of the database. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzureSqlDatabaseResource> AddDatabase(this IResourceBuilder<AzureSqlServerResource> builder, [ResourceName] string name, string? databaseName = null)
     {
@@ -142,6 +144,7 @@ public static class AzureSqlExtensions
     /// </summary>
     /// <param name="builder">The builder for the Azure SQL resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzureSqlDatabaseResource> WithDefaultAzureSku(this IResourceBuilder<AzureSqlDatabaseResource> builder)
     {
@@ -155,6 +158,7 @@ public static class AzureSqlExtensions
     /// <param name="builder">The builder for the Azure SQL resource.</param>
     /// <param name="configureContainer">Callback that exposes underlying container to allow for customization.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureSqlServerResource}"/> builder.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <example>
     /// The following example creates an Azure SQL Database (server) resource that runs locally in a
@@ -172,6 +176,7 @@ public static class AzureSqlExtensions
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks />
     [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureSqlServerResource> RunAsContainer(this IResourceBuilder<AzureSqlServerResource> builder, Action<IResourceBuilder<SqlServerServerResource>>? configureContainer = null)
     {
@@ -362,6 +367,7 @@ public static class AzureSqlExtensions
     /// <param name="builder">The Azure SQL Server resource builder.</param>
     /// <param name="subnet">The subnet to delegate for Azure Container Instances used by deployment scripts.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureSqlServerResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// When an Azure SQL Server has a private endpoint, deployment scripts that add database role assignments
@@ -411,6 +417,7 @@ public static class AzureSqlExtensions
     /// <param name="builder">The Azure SQL Server resource builder.</param>
     /// <param name="storage">The storage account to use for deployment scripts.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureSqlServerResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// When an Azure SQL Server has a private endpoint, deployment scripts require a storage account to upload

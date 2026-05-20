@@ -33,6 +33,7 @@ public static class FoundryExtensions
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<FoundryResource> AddFoundry(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
@@ -141,6 +142,7 @@ public static class FoundryExtensions
     /// <param name="builder">The Microsoft Foundry Deployment resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the <see cref="FoundryDeploymentResource"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport("withFoundryDeploymentProperties", MethodName = "withProperties", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<FoundryDeploymentResource> WithProperties(this IResourceBuilder<FoundryDeploymentResource> builder, Action<FoundryDeploymentResource> configure)
     {
@@ -248,6 +250,7 @@ public static class FoundryExtensions
     /// <param name="target">The target Microsoft Foundry resource.</param>
     /// <param name="roles">The Microsoft Foundry roles to be assigned (for example, <see cref="FoundryRole.CognitiveServicesOpenAIUser"/>).</param>
     /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="FoundryRole"/> value.</exception>
     [AspireExport("withFoundryRoleAssignments")]
     internal static IResourceBuilder<T> WithRoleAssignments<T>(

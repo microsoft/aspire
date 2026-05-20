@@ -22,6 +22,7 @@ public static class AzureAppConfigurationExtensions
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// By default references to the Azure App Configuration resource will be assigned the following roles:
     /// 
@@ -29,6 +30,7 @@ public static class AzureAppConfigurationExtensions
     ///
     /// These can be replaced by calling <see cref="WithRoleAssignments{T}(IResourceBuilder{T}, IResourceBuilder{AzureAppConfigurationResource}, AppConfigurationBuiltInRole[])"/>.
     /// </remarks>
+    /// <ats-remarks />
     [AspireExport]
     public static IResourceBuilder<AzureAppConfigurationResource> AddAzureAppConfiguration(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
@@ -94,6 +96,7 @@ public static class AzureAppConfigurationExtensions
     /// <param name="builder">The Azure App Configuration resource builder.</param>
     /// <param name="configureEmulator">Callback that exposes underlying container used for emulation to allow for customization.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureAppConfigurationResource> RunAsEmulator(this IResourceBuilder<AzureAppConfigurationResource> builder, Action<IResourceBuilder<AzureAppConfigurationEmulatorResource>>? configureEmulator = null)
     {
@@ -156,6 +159,7 @@ public static class AzureAppConfigurationExtensions
     /// <param name="builder">Builder for the Azure App Configuration emulator container</param>
     /// <param name="port">The port to bind on the host. If <see langword="null"/> is used, a random port will be assigned.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzureAppConfigurationEmulatorResource> WithHostPort(this IResourceBuilder<AzureAppConfigurationEmulatorResource> builder, int? port)
     {
@@ -208,6 +212,7 @@ public static class AzureAppConfigurationExtensions
     /// <param name="target">The target Azure App Configuration resource.</param>
     /// <param name="roles">The App Configuration roles to be assigned.</param>
     /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="AzureAppConfigurationRole"/> value.</exception>
     [AspireExport("withAppConfigurationRoleAssignments")]
     internal static IResourceBuilder<T> WithRoleAssignments<T>(

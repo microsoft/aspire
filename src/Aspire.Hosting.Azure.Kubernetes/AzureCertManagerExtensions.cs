@@ -23,11 +23,13 @@ public static class AzureCertManagerExtensions
     /// <param name="chartVersion">The cert-manager Helm chart version to install.
     /// Defaults to a pinned version validated against this Aspire build.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{CertManagerResource}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// Delegates to <see cref="CertManagerExtensions.AddCertManager(IResourceBuilder{KubernetesEnvironmentResource}, string, string?)"/>
     /// against the underlying <see cref="AzureKubernetesEnvironmentResource.KubernetesEnvironment"/>,
     /// mirroring the pattern used by <see cref="AzureKubernetesIngressExtensions.AddHelmChart"/>.
     /// </remarks>
+    /// <ats-remarks />
     [AspireExport]
     public static IResourceBuilder<CertManagerResource> AddCertManager(
         this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,

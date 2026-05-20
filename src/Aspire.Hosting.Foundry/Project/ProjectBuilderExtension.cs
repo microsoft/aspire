@@ -34,6 +34,7 @@ public static class AzureCognitiveServicesProjectExtensions
     /// <param name="builder">The <see cref="IResourceBuilder{T}"/> for the parent Microsoft Foundry account resource.</param>
     /// <param name="name">The name of the Microsoft Foundry project resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the Microsoft Foundry project resource.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzureCognitiveServicesProjectResource> AddProject(
         this IResourceBuilder<FoundryResource> builder,
@@ -80,6 +81,7 @@ public static class AzureCognitiveServicesProjectExtensions
     /// <param name="builder">The resource builder for the Microsoft Foundry project.</param>
     /// <param name="keyVault">The Key Vault resource to associate with the project.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <exception cref="InvalidOperationException">Thrown when the project already has a Key Vault connection configured.</exception>
     [AspireExport]
     public static IResourceBuilder<AzureCognitiveServicesProjectResource> WithKeyVault(
@@ -106,6 +108,7 @@ public static class AzureCognitiveServicesProjectExtensions
     /// <param name="builder">The resource builder for the Microsoft Foundry project.</param>
     /// <param name="appInsights">The Application Insights resource to associate with the project.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzureCognitiveServicesProjectResource> WithAppInsights(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,

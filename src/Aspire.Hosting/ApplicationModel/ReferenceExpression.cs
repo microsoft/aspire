@@ -586,6 +586,7 @@ public class ReferenceExpressionBuilder
     /// </summary>
     /// <ats-summary>Appends a value provider to the reference expression</ats-summary>
     /// <param name="valueProvider">An object that implements both interfaces, or an IResourceBuilder wrapping such an object.</param>
+    /// <ats-param name="valueProvider">The value provider to append.</ats-param>
     /// <param name="format">Optional format specifier.</param>
     /// <exception cref="ArgumentException">Thrown if the object doesn't implement the required interfaces.</exception>
     [AspireExport]

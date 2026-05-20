@@ -76,6 +76,7 @@ public static class BrowserLogsBuilderExtensions
     /// <c>Aspire:Hosting:BrowserLogs</c> and otherwise defaults to <see cref="BrowserUserDataMode.Shared"/>.
     /// </param>
     /// <returns>A reference to the original <see cref="IResourceBuilder{T}"/> for further chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// This method adds a child browser logs resource beneath the parent resource represented by <paramref name="builder"/>.

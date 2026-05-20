@@ -23,6 +23,7 @@ public static class AzureUserAssignedIdentityExtensions
     /// The resource is added to the infrastructure only if the application is not in run mode.
     /// </remarks>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureUserAssignedIdentityResource}"/> builder.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzureUserAssignedIdentityResource> AddAzureUserAssignedIdentity(
         this IDistributedApplicationBuilder builder,
@@ -51,6 +52,7 @@ public static class AzureUserAssignedIdentityExtensions
     /// <param name="builder">The builder for the <see cref="IComputeResource"/> the identity will be associated with.</param>
     /// <param name="identityResourceBuilder">The builder for the <see cref="AzureUserAssignedIdentityResource"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{IComputeResource}"/> builder.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <example>
     /// <code>
     /// var identity = builder.AddAzureUserAssignedIdentity("myIdentity");

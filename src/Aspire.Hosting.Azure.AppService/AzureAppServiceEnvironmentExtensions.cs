@@ -81,6 +81,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
     /// <param name="builder">The distributed application builder.</param>
     /// <param name="name">The name of the resource.</param>
     /// <returns><see cref="IResourceBuilder{T}"/></returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> AddAzureAppServiceEnvironment(this IDistributedApplicationBuilder builder, string name)
     {
@@ -274,6 +275,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
     /// <param name="builder">The <see cref="IResourceBuilder{AzureAppServiceEnvironmentResource}"/> to configure.</param>
     /// <param name="upgrade">Whether to upgrade HTTP endpoints to HTTPS. Default is true.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining additional configuration.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// When disabled (<c>false</c>), HTTP endpoints will use HTTP scheme and port 80 in Azure App Service.
     /// Note that Azure App Service forces HTTP to HTTPS redirects at the platform level,
@@ -299,6 +301,7 @@ public static partial class AzureAppServiceEnvironmentExtensions
     /// <param name="builder">The <see cref="IResourceBuilder{AzureAppServiceEnvironmentResource}"/> to configure.</param>
     /// <param name="enable">Whether to include the Aspire dashboard. Default is true.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining additional configuration.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithDashboard(this IResourceBuilder<AzureAppServiceEnvironmentResource> builder, bool enable = true)
     {
