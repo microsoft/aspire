@@ -81,12 +81,14 @@ public static class BlazorClientExtensions
         {
             logging.IncludeFormattedMessage = true;
             logging.IncludeScopes = true;
-            logging.SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(serviceName));
+            // Use a fixed instanceId so all browser tabs report as a single service instance
+            // in the dashboard rather than spawning separate entries per tab.
+            logging.SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(serviceName, serviceInstanceId: serviceName));
             logging.AddOtlpExporter(o => o.Endpoint = new Uri(otlpEndpoint, "v1/logs"));
         });
 
         builder.Services.AddOpenTelemetry()
-            .ConfigureResource(r => r.AddService(serviceName))
+            .ConfigureResource(r => r.AddService(serviceName, serviceInstanceId: serviceName))
             .WithMetrics(metrics =>
             {
                 metrics.AddMeter("Microsoft.AspNetCore.Components");
