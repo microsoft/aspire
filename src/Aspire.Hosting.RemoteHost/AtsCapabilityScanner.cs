@@ -1658,7 +1658,7 @@ public static class AtsCapabilityScanner
                 // Get custom method name from attribute if specified
                 var customMethodName = memberExportAttr?.Id;
                 var methodNameOverride = memberExportAttr?.MethodName;
-                var propertyDocumentation = GetXmlDocumentation(property);
+                var propertyDocumentation = GetXmlDocumentation(property, memberExportAttr?.Description);
                 var propertyDescription = memberExportAttr?.Description ?? propertyDocumentation?.Summary ?? $"Gets the {property.Name} property";
 
                 // Generate getter capability if property is readable
@@ -1855,7 +1855,7 @@ public static class AtsCapabilityScanner
 
                 // The method documentation contains all <param> entries, so load it once and
                 // project each parameter's documentation from the shared parsed member element.
-                var methodDocumentation = GetXmlDocumentation(method);
+                var methodDocumentation = GetXmlDocumentation(method, memberExportAttr?.Description);
                 var description = memberExportAttr?.Description ?? methodDocumentation?.Summary ?? $"Invokes the {method.Name} method";
                 var paramIndex = 0;
                 var hasUnmappedRequiredParam = false;
@@ -2032,7 +2032,7 @@ public static class AtsCapabilityScanner
         var skipFirst = extendsTypeId != null;
         var paramList = skipFirst ? parameters.Skip(1) : parameters;
 
-        var methodDocumentation = GetXmlDocumentation(method);
+        var methodDocumentation = GetXmlDocumentation(method, exportAttr.Description);
         var description = exportAttr.Description ?? methodDocumentation?.Summary;
         var paramIndex = 0;
         foreach (var param in paramList)

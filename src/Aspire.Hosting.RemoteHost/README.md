@@ -72,7 +72,7 @@ await Aspire.Hosting.RemoteHost.RemoteHostServer.RunAsync(args, assemblies);
 
 Discovers and dispatches capability invocations:
 
-- Scans assemblies for `[AspireExport]` and `[AspireContextType]` attributes
+- Scans assemblies for `[AspireExport]` attributes on methods and on types that expose properties
 - Registers capability handlers for each discovered export
 - Routes `invokeCapability` calls to the appropriate handler
 - Handles parameter binding, optional parameters, and async methods
@@ -223,9 +223,9 @@ Capabilities are discovered by scanning assemblies for:
 
    ATS references do not support C# generic type syntax. Use the generated polyglot-visible name for the referenced element so each language generator can translate the same target to that language's documentation link syntax. TypeScript currently renders these references as JSDoc `{@link ...}` links.
 
-2. **[AspireContextType]** - Types whose properties are exposed as capabilities. The type ID is derived as `{AssemblyName}/{TypeName}`:
+2. **[AspireExport(ExposeProperties = true)]** - Types whose properties are exposed as capabilities. The type ID is derived as `{AssemblyName}/{TypeName}`:
    ```csharp
-   [AspireContextType]  // Type ID = Aspire.Hosting/ConfigurationContext
+   [AspireExport(ExposeProperties = true)]  // Type ID = Aspire.Hosting/ConfigurationContext
    public class ConfigurationContext
    {
        public string? ConnectionString { get; set; }
