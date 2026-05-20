@@ -56,6 +56,7 @@ public static class MyIntegrationExtensions
 
 ## Additional documentation
 
+- https://aspire.dev/extensibility/multi-language-integration-authoring/#install-the-analyzer
 - https://github.com/microsoft/aspire/blob/main/src/Aspire.Hosting/Ats/ThirdPartyAtsAttributes.md
 - https://github.com/microsoft/aspire/blob/main/docs/specs/polyglot-apphost.md
 
