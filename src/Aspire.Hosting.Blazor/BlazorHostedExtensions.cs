@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 
@@ -12,6 +13,7 @@ namespace Aspire.Hosting;
 /// Extension methods for configuring a Blazor Web App (hosted model) to proxy
 /// service calls and telemetry from its WebAssembly client.
 /// </summary>
+[Experimental("ASPIREBLAZOR001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public static class BlazorHostedExtensions
 {
     /// <summary>
@@ -139,7 +141,7 @@ public static class BlazorHostedExtensions
 /// </summary>
 internal sealed class HostedClientAnnotation : IResourceAnnotation
 {
-    public List<HostedClientService> Services { get; } = new();
+    public List<HostedClientService> Services { get; } = [];
     public bool ProxyBlazorTelemetry { get; set; }
     public bool IsInitialized { get; set; }
     public string OtlpPrefix { get; set; } = GatewayConfigurationBuilder.DefaultOtlpPrefix;

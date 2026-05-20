@@ -457,7 +457,7 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
 
         GatewayConfigurationBuilder.EmitHostedProxyConfiguration(
             env, hostEndpoint, httpHostEndpoint: null, "blazorapp",
-            services, ProxyBlazorTelemetry: true, httpOtlpEndpoint: "http://localhost:18889");
+            services, proxyBlazorTelemetry: true, httpOtlpEndpoint: "http://localhost:18889");
 
         Assert.Equal("http://localhost:18889",
             env["ReverseProxy__Clusters__cluster-otlp-dashboard__Destinations__d1__Address"]);

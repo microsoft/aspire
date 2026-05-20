@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsAspireHost>true</IsAspireHost>
+    <NoWarn>$(NoWarn);ASPIREBLAZOR001</NoWarn>
     <UserSecretsId>e9c4a2f1-b3d5-4e6a-9f8b-1c2d3e4f5a6b</UserSecretsId>
   </PropertyGroup>
 
