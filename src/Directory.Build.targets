@@ -34,7 +34,14 @@
 
   <!-- Used by Aspire.RepoTesting.targets to dynamically compute per-package versions for Helix testing.
        Returns the PackageId and its computed PackageVersion for packable projects. The version is computed
-       per-project by the Arcade SDK, respecting SuppressFinalPackageVersion, StabilizePackageVersion, etc. -->
+       per-project by the Arcade SDK, respecting SuppressFinalPackageVersion, StabilizePackageVersion, etc.
+
+       This target reads $(PackageVersion) declaratively (i.e. as a property whose value Arcade has already
+       set via property groups during evaluation, not via a prior target). That is correct as of the current
+       Arcade SDK. If a future Arcade bump moves PackageVersion computation into a target body, callers of
+       this target may observe the pre-target value; the Helix package-versions generation in
+       tests/Shared/RepoTesting/Aspire.RepoTesting.targets would then need an explicit dependency on whatever
+       target sets PackageVersion. -->
   <Target Name="ReturnPackageVersion" Returns="@(_ReturnedPackageVersion)">
     <ItemGroup>
       <_ReturnedPackageVersion Include="$(PackageId)" Version="$(PackageVersion)" Condition="'$(IsPackable)' == 'true'" />

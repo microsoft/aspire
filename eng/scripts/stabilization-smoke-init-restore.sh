@@ -24,9 +24,17 @@
 # This script (the smoke) handles the end-to-end consumer flow specifically. It exercises:
 #   * Template integrity — that `aspire new aspire-empty` produces a buildable project shape
 #     using the stably-built Aspire.ProjectTemplates package.
-#   * Template version-pinning — that the SDK reference (Aspire.AppHost.Sdk) and PackageReferences
-#     emitted by the template resolve against the stable feed for Aspire.* packages.
+#   * Template version-pinning — that the SDK reference (Aspire.AppHost.Sdk) and any
+#     PackageReferences emitted by the template resolve against the stable feed for
+#     Aspire.* packages.
 #   * Restore wiring — that `aspire restore` succeeds end-to-end for the generated project tree.
+#
+# Coverage NOTE: today `aspire new aspire-empty` resolves to a single-file `apphost.cs` shape
+# whose only NuGet dependency is `Aspire.AppHost.Sdk` (which transitively pulls
+# Aspire.Hosting.AppHost / Aspire.Hosting). So this smoke validates that the SDK reference path
+# is wired correctly through to the local stable feed — NOT that every Aspire integration
+# package restores. Per-integration NU5104 (stable depends on preview) detection comes from the
+# previous step in the stabilization_check job (the stabilized pack). The two are complementary.
 #
 # Aspire.* packages MUST come from the local stable feed (so missing/preview-only Aspire packages
 # fail restore here, exactly as they would on a real stabilization branch). Non-Aspire deps
@@ -78,11 +86,19 @@ if [ ! -d "$LOCAL_FEED" ]; then
     exit 1
 fi
 
-# Confirm the feed actually contains stabilized Aspire packages (i.e. Aspire.Hosting.13.X.0.nupkg
-# without a -dev/-preview suffix). Otherwise this smoke would be checking the wrong shape.
-if ! ls "$LOCAL_FEED"/Aspire.Hosting.[0-9]*.[0-9]*.[0-9]*.nupkg > /dev/null 2>&1; then
-    echo "❌ No stable Aspire.Hosting.*.nupkg in $LOCAL_FEED. Did pack run with StabilizePackageVersion=true?"
-    echo "   Found nupkgs:"
+# Confirm the feed actually contains stabilized Aspire packages — i.e. e.g. Aspire.Hosting.13.4.0.nupkg
+# with no -dev/-preview/-rc/-alpha/-beta suffix. Without this guard a local-repro run that forgot
+# to pass StabilizePackageVersion=true to the pack would sail past, and the smoke would silently
+# be validating a prerelease build instead of a stable one. (CI is safe regardless because the
+# prior pack step always passes the flag, but local-repro paths through this script need the check.)
+# bash globs treat `[0-9]*` as "one digit then any chars", so the glob alone would match
+# 13.4.0-dev.nupkg too. The grep -v filter is what enforces "no prerelease suffix."
+if ! ls "$LOCAL_FEED"/Aspire.Hosting.[0-9]*.[0-9]*.[0-9]*.nupkg 2>/dev/null \
+        | grep -vE -- '-(dev|preview|rc|alpha|beta|ci|pr)\.' \
+        | grep -q .; then
+    echo "❌ No stable (no -dev/-preview/-rc/-alpha/-beta) Aspire.Hosting.*.nupkg in $LOCAL_FEED."
+    echo "   Did pack run with StabilizePackageVersion=true?"
+    echo "   Aspire.Hosting nupkgs found:"
     ls "$LOCAL_FEED"/Aspire.Hosting.*.nupkg 2>/dev/null | head -5 || true
     exit 1
 fi
@@ -113,27 +129,30 @@ echo "→ Building Aspire.Cli (stabilized) for use as the smoke driver"
         --nologo -v quiet
 )
 
-# Helper: invoke the CLI from anywhere. We use --no-build because we just built above; this
-# also prevents `dotnet run` from re-resolving NuGet against the temp-dir NuGet.config.
-# --no-launch-profile keeps src/Aspire.Cli/Properties/launchSettings.json out of the picture
-# so the CLI receives exactly the args we pass after `--`.
-# --non-interactive (a recursive root-level option, see Aspire.Cli/Commands/RootCommand.cs:
-# NonInteractiveOption with Recursive = true) is the canonical "I'm in CI, never prompt" flag.
-# It causes the CLI to fail fast on any prompt that doesn't have an explicit answer instead of
-# silently defaulting or hanging on stdin. The explicit suppression flags below (--language,
-# --suppress-agent-init, --localhost-tld) supply the actual *values* we want for the known
-# prompts; --non-interactive guards against any future prompt being added without a matching
-# suppression flag, and against ambient prompts like the certificate trust check.
+# Helper: invoke the CLI via the repo-local SDK. Intentionally does NOT change directory —
+# the caller's CWD is what propagates to the spawned aspire process. That matters because:
+#   * aspire's --output (and other path-based) flags resolve relative paths against
+#     Environment.CurrentDirectory.
+#   * NuGet config-walk starts from CWD, so we want the temp-dir NuGet.config (with the
+#     Aspire* -> local-stable source mapping) to be the one found, not the repo's own
+#     NuGet.config which points at dnceng-internal feeds.
+# (`./dotnet.sh` resolves the local SDK via $scriptroot — independent of CWD — so we don't
+# need to be in $REPO_ROOT for the SDK lookup.)
+# --no-build because we just built above; --no-launch-profile keeps src/Aspire.Cli/Properties/
+# launchSettings.json from interfering with our explicit args. --non-interactive (a recursive
+# root-level option, see Aspire.Cli/Commands/RootCommand.cs: NonInteractiveOption with
+# Recursive = true) is the canonical "I'm in CI, never prompt" flag. The explicit suppression
+# flags below (--language, --suppress-agent-init, --localhost-tld) supply the actual *values*
+# we want for the known prompts; --non-interactive guards against any future prompt being
+# added without a matching suppression flag, and against ambient prompts like the certificate
+# trust check.
 run_aspire() {
-    (
-        cd "$REPO_ROOT"
-        "$DOTNET" run --project "$ASPIRE_CLI_PROJECT" \
-            -c "$CONFIGURATION" \
-            --no-build \
-            --no-launch-profile \
-            -p:StabilizePackageVersion=true \
-            -- --non-interactive "$@"
-    )
+    "$DOTNET" run --project "$ASPIRE_CLI_PROJECT" \
+        -c "$CONFIGURATION" \
+        --no-build \
+        --no-launch-profile \
+        -p:StabilizePackageVersion=true \
+        -- --non-interactive "$@"
 }
 
 # Stage a NuGet.config in the work dir BEFORE running `aspire new`. The CLI itself fetches
@@ -169,21 +188,24 @@ EOF
 echo "  ✓ Source-mapped NuGet.config written (Aspire* -> local-stable; everything else -> nuget.org)"
 
 PROJECT_NAME="MyAspireApp"
+# Absolute path so `--output` is unambiguous regardless of CWD.
+PROJECT_DIR="$WORK_DIR/$PROJECT_NAME"
 echo ""
-echo "→ aspire new aspire-empty --name $PROJECT_NAME --output $PROJECT_NAME --language csharp --suppress-agent-init --localhost-tld false"
-# Flags chosen to make the command fully non-interactive:
+echo "→ aspire new aspire-empty --name $PROJECT_NAME --output $PROJECT_DIR --language csharp --suppress-agent-init --localhost-tld false"
+# Flags chosen to make the command fully non-interactive (in addition to --non-interactive
+# baked into run_aspire):
 #   --language csharp        suppresses the language prompt
 #   --suppress-agent-init    suppresses the "configure AI agent environments" prompt
 #   --localhost-tld false    suppresses the localhost-tld prompt
 # --source pins the templates-package fetch to our local-stable feed, so we test the templates
 # we just packed (not whatever's on nuget.org).
-# < /dev/null is belt-and-braces: if a new prompt is ever added without a corresponding
-# suppression flag we want this script to fail fast rather than hang the CI job.
+# CWD is $WORK_DIR so the temp NuGet.config (with Aspire* source-mapped to local-stable) is
+# the one NuGet finds via its config walk.
 (
     cd "$WORK_DIR"
     run_aspire new aspire-empty \
         --name "$PROJECT_NAME" \
-        --output "$PROJECT_NAME" \
+        --output "$PROJECT_DIR" \
         --source "$LOCAL_FEED" \
         --language csharp \
         --suppress-agent-init \
@@ -195,7 +217,6 @@ echo "→ aspire new aspire-empty --name $PROJECT_NAME --output $PROJECT_NAME --
 # single-file AppHost shape (apphost.cs + aspire.config.json) or a project-based shape
 # (<Name>.AppHost.csproj + <Name>.ServiceDefaults.csproj), depending on the CLI's template
 # resolution. Accept either — both are valid AppHost layouts that aspire restore can drive.
-PROJECT_DIR="$WORK_DIR/$PROJECT_NAME"
 if [ ! -d "$PROJECT_DIR" ]; then
     echo "❌ aspire new did not create the project directory $PROJECT_DIR"
     exit 1
@@ -213,6 +234,8 @@ fi
 
 echo ""
 echo "→ aspire restore (against local stable feed for Aspire packages, nuget.org for everything else)"
+# Run from $PROJECT_DIR so aspire restore discovers aspire.config.json there AND so the
+# nearest NuGet.config (the one we wrote at $WORK_DIR) is the one used.
 (cd "$PROJECT_DIR" && run_aspire restore < /dev/null)
 
 echo ""

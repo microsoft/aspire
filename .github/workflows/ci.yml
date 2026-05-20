@@ -133,9 +133,13 @@ jobs:
         # Classes that touch IsPrerelease / channel detection / template version pinning /
         # update-notification logic. These are the code paths most likely to behave
         # differently when the CLI's own assembly version label is stable.
+        # --no-build / --no-restore: the previous step already built (with -p:SkipTestProjects=false)
+        # under StabilizePackageVersion=true. Running without these would re-evaluate the
+        # project graph with a different global-property fingerprint than step 1, defeating
+        # MSBuild incremental cache and risking subtle differences in what gets rebuilt.
         run: |
           ./dotnet.sh test --project tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj \
-            --no-launch-profile \
+            --no-build --no-restore --no-launch-profile \
             -p:StabilizePackageVersion=true \
             -- \
             --filter-class "*.AssemblyMetadataChannelTests" \
