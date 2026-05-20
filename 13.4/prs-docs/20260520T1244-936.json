@@ -1,0 +1,9 @@
+{
+  "author": "alistairmatthews",
+  "comment": "General polyglot documentation update adding TypeScript, Go, and Python examples to multiple fundamental docs pages. Does not clearly correspond to any single product feature changelog entry.",
+  "mergedAt": "2026-05-20T12:44:40Z",
+  "number": 936,
+  "runDate": "2026-05-20T12:57:16Z",
+  "status": "excluded",
+  "title": "Address more C# bias"
+}
