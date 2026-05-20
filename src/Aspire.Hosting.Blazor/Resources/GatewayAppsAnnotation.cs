@@ -9,7 +9,7 @@ namespace Aspire.Hosting;
 /// Annotation stored on a gateway resource that tracks all registered Blazor WASM app registrations.
 /// Replaces the previous static Dictionary approach, keeping state on the resource itself.
 /// </summary>
-internal class GatewayAppsAnnotation : IResourceAnnotation
+internal sealed class GatewayAppsAnnotation : IResourceAnnotation
 {
     public List<GatewayAppRegistration> Apps { get; } = new();
     public bool IsInitialized { get; set; }

@@ -456,7 +456,7 @@ public static class BlazorGatewayExtensions
 
     private static HashSet<string> GetReferencedResourceNames(IResource resource)
     {
-        var names = new HashSet<string>();
+        var names = new HashSet<string>(StringComparers.ResourceName);
         foreach (var annotation in resource.Annotations)
         {
             // Only consider Reference relationships, not WaitFor or Parent,
@@ -477,12 +477,9 @@ public static class BlazorGatewayExtensions
 
     private static GatewayAppsAnnotation GetOrAddGatewayAppsAnnotation(IResource resource)
     {
-        foreach (var annotation in resource.Annotations)
+        if (resource.TryGetLastAnnotation<GatewayAppsAnnotation>(out var existing))
         {
-            if (annotation is GatewayAppsAnnotation existing)
-            {
-                return existing;
-            }
+            return existing;
         }
 
         var newAnnotation = new GatewayAppsAnnotation();
@@ -492,12 +489,9 @@ public static class BlazorGatewayExtensions
 
     private static List<GatewayAppRegistration> GetRegisteredApps(IResource resource)
     {
-        foreach (var annotation in resource.Annotations)
+        if (resource.TryGetLastAnnotation<GatewayAppsAnnotation>(out var apps))
         {
-            if (annotation is GatewayAppsAnnotation apps)
-            {
-                return apps.Apps;
-            }
+            return apps.Apps;
         }
 
         throw new InvalidOperationException("GatewayAppsAnnotation not found on resource.");
