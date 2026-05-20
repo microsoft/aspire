@@ -468,8 +468,7 @@ steps:
         if (-not [bool]$existingOpenPr.draft) {
           Write-Host "Converting existing PR #$($existingOpenPr.number) to draft..."
 
-          $graphQlData = Invoke-GitHubGraphQL -Query @'
-          mutation ConvertPullRequestToDraft($pullRequestId: ID!) {
+          $convertPullRequestToDraftMutation = 'mutation ConvertPullRequestToDraft($pullRequestId: ID!) {
             convertPullRequestToDraft(input: { pullRequestId: $pullRequestId }) {
               pullRequest {
                 number
@@ -477,8 +476,9 @@ steps:
                 url
               }
             }
-          }
-          '@ -Variables @{
+          }'
+
+          $graphQlData = Invoke-GitHubGraphQL -Query $convertPullRequestToDraftMutation -Variables @{
             pullRequestId = $existingOpenPr.node_id
           }
 
