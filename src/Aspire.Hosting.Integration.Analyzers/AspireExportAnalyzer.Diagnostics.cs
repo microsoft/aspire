@@ -164,6 +164,16 @@ public partial class AspireExportAnalyzer
             helpLinkUri: $"https://aka.ms/aspire/diagnostics/{DescriptionShouldUseXmlDocsId}",
             customTags: [WellKnownDiagnosticTags.CompilationEnd]);
 
+        private const string DtoMutableCollectionPropertyMustBeInitSettableId = "ASPIREEXPORT016";
+        internal static readonly DiagnosticDescriptor s_dtoMutableCollectionPropertyMustBeInitSettable = new(
+            id: DtoMutableCollectionPropertyMustBeInitSettableId,
+            title: "AspireDto mutable collection property should be init-settable",
+            messageFormat: "DTO property '{0}' is a get-only mutable collection. Add an init accessor so System.Text.Json replaces the collection during DTO deserialization; otherwise collection values can be merged with initializer defaults.",
+            category: "Design",
+            DiagnosticSeverity.Warning,
+            isEnabledByDefault: true,
+            helpLinkUri: $"https://aka.ms/aspire/diagnostics/{DtoMutableCollectionPropertyMustBeInitSettableId}");
+
         public static readonly ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics = ImmutableArray.Create(
             s_exportMethodMustBeStatic,
             s_invalidExportIdFormat,
@@ -179,7 +189,8 @@ public partial class AspireExportAnalyzer
             s_callbackContextTypeMissingExport,
             s_duplicatePolyglotCapabilityId,
             s_duplicateGeneratedMethodName,
-            s_descriptionShouldUseXmlDocs
+            s_descriptionShouldUseXmlDocs,
+            s_dtoMutableCollectionPropertyMustBeInitSettable
         );
     }
 }

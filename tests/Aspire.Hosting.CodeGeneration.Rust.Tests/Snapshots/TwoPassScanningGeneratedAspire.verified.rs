@@ -1,4 +1,4 @@
-﻿//! aspire.rs - Capability-based Aspire SDK
+//! aspire.rs - Capability-based Aspire SDK
 //! GENERATED CODE - DO NOT EDIT
 
 use std::collections::HashMap;
@@ -528,26 +528,26 @@ impl std::fmt::Display for TestResourceStatus {
 pub struct InteractionInput {
     #[serde(rename = "Name")]
     pub name: String,
-    #[serde(rename = "Label")]
-    pub label: String,
-    #[serde(rename = "Description")]
-    pub description: String,
-    #[serde(rename = "EnableDescriptionMarkdown")]
-    pub enable_description_markdown: bool,
+    #[serde(rename = "Label", skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    #[serde(rename = "Description", skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(rename = "EnableDescriptionMarkdown", skip_serializing_if = "Option::is_none")]
+    pub enable_description_markdown: Option<bool>,
     #[serde(rename = "InputType")]
     pub input_type: InputType,
-    #[serde(rename = "Required")]
-    pub required: bool,
+    #[serde(rename = "Required", skip_serializing_if = "Option::is_none")]
+    pub required: Option<bool>,
     #[serde(rename = "Options")]
     pub options: Vec<Value>,
-    #[serde(rename = "DynamicLoading")]
-    pub dynamic_loading: Value,
+    #[serde(rename = "DynamicLoading", skip_serializing_if = "Option::is_none")]
+    pub dynamic_loading: Option<Value>,
     #[serde(rename = "Value")]
     pub value: String,
-    #[serde(rename = "Placeholder")]
-    pub placeholder: String,
-    #[serde(rename = "AllowCustomChoice")]
-    pub allow_custom_choice: bool,
+    #[serde(rename = "Placeholder", skip_serializing_if = "Option::is_none")]
+    pub placeholder: Option<String>,
+    #[serde(rename = "AllowCustomChoice", skip_serializing_if = "Option::is_none")]
+    pub allow_custom_choice: Option<bool>,
     #[serde(rename = "Disabled")]
     pub disabled: bool,
     #[serde(rename = "MaxLength", skip_serializing_if = "Option::is_none")]
@@ -558,16 +558,30 @@ impl InteractionInput {
     pub fn to_map(&self) -> HashMap<String, Value> {
         let mut map = HashMap::new();
         map.insert("Name".to_string(), serde_json::to_value(&self.name).unwrap_or(Value::Null));
-        map.insert("Label".to_string(), serde_json::to_value(&self.label).unwrap_or(Value::Null));
-        map.insert("Description".to_string(), serde_json::to_value(&self.description).unwrap_or(Value::Null));
-        map.insert("EnableDescriptionMarkdown".to_string(), serde_json::to_value(&self.enable_description_markdown).unwrap_or(Value::Null));
+        if let Some(ref v) = self.label {
+            map.insert("Label".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.description {
+            map.insert("Description".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.enable_description_markdown {
+            map.insert("EnableDescriptionMarkdown".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map.insert("InputType".to_string(), serde_json::to_value(&self.input_type).unwrap_or(Value::Null));
-        map.insert("Required".to_string(), serde_json::to_value(&self.required).unwrap_or(Value::Null));
+        if let Some(ref v) = self.required {
+            map.insert("Required".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map.insert("Options".to_string(), serde_json::to_value(&self.options).unwrap_or(Value::Null));
-        map.insert("DynamicLoading".to_string(), serde_json::to_value(&self.dynamic_loading).unwrap_or(Value::Null));
+        if let Some(ref v) = self.dynamic_loading {
+            map.insert("DynamicLoading".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map.insert("Value".to_string(), serde_json::to_value(&self.value).unwrap_or(Value::Null));
-        map.insert("Placeholder".to_string(), serde_json::to_value(&self.placeholder).unwrap_or(Value::Null));
-        map.insert("AllowCustomChoice".to_string(), serde_json::to_value(&self.allow_custom_choice).unwrap_or(Value::Null));
+        if let Some(ref v) = self.placeholder {
+            map.insert("Placeholder".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.allow_custom_choice {
+            map.insert("AllowCustomChoice".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map.insert("Disabled".to_string(), serde_json::to_value(&self.disabled).unwrap_or(Value::Null));
         if let Some(ref v) = self.max_length {
             map.insert("MaxLength".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
@@ -581,15 +595,17 @@ impl InteractionInput {
 pub struct AddContainerOptions {
     #[serde(rename = "Image")]
     pub image: String,
-    #[serde(rename = "Tag")]
-    pub tag: String,
+    #[serde(rename = "Tag", skip_serializing_if = "Option::is_none")]
+    pub tag: Option<String>,
 }
 
 impl AddContainerOptions {
     pub fn to_map(&self) -> HashMap<String, Value> {
         let mut map = HashMap::new();
         map.insert("Image".to_string(), serde_json::to_value(&self.image).unwrap_or(Value::Null));
-        map.insert("Tag".to_string(), serde_json::to_value(&self.tag).unwrap_or(Value::Null));
+        if let Some(ref v) = self.tag {
+            map.insert("Tag".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map
     }
 }
@@ -637,8 +653,8 @@ pub struct HttpsCertificateInfo {
     pub subject: String,
     #[serde(rename = "Issuer")]
     pub issuer: String,
-    #[serde(rename = "Thumbprint")]
-    pub thumbprint: String,
+    #[serde(rename = "Thumbprint", skip_serializing_if = "Option::is_none")]
+    pub thumbprint: Option<String>,
 }
 
 impl HttpsCertificateInfo {
@@ -646,7 +662,9 @@ impl HttpsCertificateInfo {
         let mut map = HashMap::new();
         map.insert("Subject".to_string(), serde_json::to_value(&self.subject).unwrap_or(Value::Null));
         map.insert("Issuer".to_string(), serde_json::to_value(&self.issuer).unwrap_or(Value::Null));
-        map.insert("Thumbprint".to_string(), serde_json::to_value(&self.thumbprint).unwrap_or(Value::Null));
+        if let Some(ref v) = self.thumbprint {
+            map.insert("Thumbprint".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map
     }
 }
@@ -677,8 +695,8 @@ impl CertificateTrustExecutionConfigurationExportData {
 pub struct HttpsCertificateExecutionConfigurationExportData {
     #[serde(rename = "Subject")]
     pub subject: String,
-    #[serde(rename = "Thumbprint")]
-    pub thumbprint: String,
+    #[serde(rename = "Thumbprint", skip_serializing_if = "Option::is_none")]
+    pub thumbprint: Option<String>,
     #[serde(rename = "KeyPathExpression")]
     pub key_path_expression: String,
     #[serde(rename = "PfxPathExpression")]
@@ -687,20 +705,24 @@ pub struct HttpsCertificateExecutionConfigurationExportData {
     pub is_key_path_referenced: bool,
     #[serde(rename = "IsPfxPathReferenced")]
     pub is_pfx_path_referenced: bool,
-    #[serde(rename = "Password")]
-    pub password: String,
+    #[serde(rename = "Password", skip_serializing_if = "Option::is_none")]
+    pub password: Option<String>,
 }
 
 impl HttpsCertificateExecutionConfigurationExportData {
     pub fn to_map(&self) -> HashMap<String, Value> {
         let mut map = HashMap::new();
         map.insert("Subject".to_string(), serde_json::to_value(&self.subject).unwrap_or(Value::Null));
-        map.insert("Thumbprint".to_string(), serde_json::to_value(&self.thumbprint).unwrap_or(Value::Null));
+        if let Some(ref v) = self.thumbprint {
+            map.insert("Thumbprint".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map.insert("KeyPathExpression".to_string(), serde_json::to_value(&self.key_path_expression).unwrap_or(Value::Null));
         map.insert("PfxPathExpression".to_string(), serde_json::to_value(&self.pfx_path_expression).unwrap_or(Value::Null));
         map.insert("IsKeyPathReferenced".to_string(), serde_json::to_value(&self.is_key_path_referenced).unwrap_or(Value::Null));
         map.insert("IsPfxPathReferenced".to_string(), serde_json::to_value(&self.is_pfx_path_referenced).unwrap_or(Value::Null));
-        map.insert("Password".to_string(), serde_json::to_value(&self.password).unwrap_or(Value::Null));
+        if let Some(ref v) = self.password {
+            map.insert("Password".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map
     }
 }
@@ -712,12 +734,12 @@ pub struct ResourceEventDto {
     pub resource_name: String,
     #[serde(rename = "ResourceId")]
     pub resource_id: String,
-    #[serde(rename = "State")]
-    pub state: String,
-    #[serde(rename = "StateStyle")]
-    pub state_style: String,
-    #[serde(rename = "HealthStatus")]
-    pub health_status: String,
+    #[serde(rename = "State", skip_serializing_if = "Option::is_none")]
+    pub state: Option<String>,
+    #[serde(rename = "StateStyle", skip_serializing_if = "Option::is_none")]
+    pub state_style: Option<String>,
+    #[serde(rename = "HealthStatus", skip_serializing_if = "Option::is_none")]
+    pub health_status: Option<String>,
     #[serde(rename = "ExitCode", skip_serializing_if = "Option::is_none")]
     pub exit_code: Option<f64>,
 }
@@ -727,9 +749,15 @@ impl ResourceEventDto {
         let mut map = HashMap::new();
         map.insert("ResourceName".to_string(), serde_json::to_value(&self.resource_name).unwrap_or(Value::Null));
         map.insert("ResourceId".to_string(), serde_json::to_value(&self.resource_id).unwrap_or(Value::Null));
-        map.insert("State".to_string(), serde_json::to_value(&self.state).unwrap_or(Value::Null));
-        map.insert("StateStyle".to_string(), serde_json::to_value(&self.state_style).unwrap_or(Value::Null));
-        map.insert("HealthStatus".to_string(), serde_json::to_value(&self.health_status).unwrap_or(Value::Null));
+        if let Some(ref v) = self.state {
+            map.insert("State".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.state_style {
+            map.insert("StateStyle".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.health_status {
+            map.insert("HealthStatus".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         if let Some(ref v) = self.exit_code {
             map.insert("ExitCode".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
@@ -822,8 +850,8 @@ pub struct CertificateTrustExecutionConfigurationContext {
     pub certificate_directories_path: ReferenceExpression,
     #[serde(rename = "RootCertificatesPath")]
     pub root_certificates_path: String,
-    #[serde(rename = "IsContainer")]
-    pub is_container: bool,
+    #[serde(rename = "IsContainer", skip_serializing_if = "Option::is_none")]
+    pub is_container: Option<bool>,
 }
 
 impl CertificateTrustExecutionConfigurationContext {
@@ -832,7 +860,9 @@ impl CertificateTrustExecutionConfigurationContext {
         map.insert("CertificateBundlePath".to_string(), serde_json::to_value(&self.certificate_bundle_path).unwrap_or(Value::Null));
         map.insert("CertificateDirectoriesPath".to_string(), serde_json::to_value(&self.certificate_directories_path).unwrap_or(Value::Null));
         map.insert("RootCertificatesPath".to_string(), serde_json::to_value(&self.root_certificates_path).unwrap_or(Value::Null));
-        map.insert("IsContainer".to_string(), serde_json::to_value(&self.is_container).unwrap_or(Value::Null));
+        if let Some(ref v) = self.is_container {
+            map.insert("IsContainer".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map
     }
 }
@@ -1105,24 +1135,32 @@ impl ProcessCommandResultExportOptions {
 pub struct ExecuteCommandResult {
     #[serde(rename = "Success")]
     pub success: bool,
-    #[serde(rename = "Canceled")]
-    pub canceled: bool,
-    #[serde(rename = "ErrorMessage")]
-    pub error_message: String,
-    #[serde(rename = "Message")]
-    pub message: String,
-    #[serde(rename = "Data")]
-    pub data: CommandResultData,
+    #[serde(rename = "Canceled", skip_serializing_if = "Option::is_none")]
+    pub canceled: Option<bool>,
+    #[serde(rename = "ErrorMessage", skip_serializing_if = "Option::is_none")]
+    pub error_message: Option<String>,
+    #[serde(rename = "Message", skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    #[serde(rename = "Data", skip_serializing_if = "Option::is_none")]
+    pub data: Option<CommandResultData>,
 }
 
 impl ExecuteCommandResult {
     pub fn to_map(&self) -> HashMap<String, Value> {
         let mut map = HashMap::new();
         map.insert("Success".to_string(), serde_json::to_value(&self.success).unwrap_or(Value::Null));
-        map.insert("Canceled".to_string(), serde_json::to_value(&self.canceled).unwrap_or(Value::Null));
-        map.insert("ErrorMessage".to_string(), serde_json::to_value(&self.error_message).unwrap_or(Value::Null));
-        map.insert("Message".to_string(), serde_json::to_value(&self.message).unwrap_or(Value::Null));
-        map.insert("Data".to_string(), serde_json::to_value(&self.data).unwrap_or(Value::Null));
+        if let Some(ref v) = self.canceled {
+            map.insert("Canceled".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.error_message {
+            map.insert("ErrorMessage".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.message {
+            map.insert("Message".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.data {
+            map.insert("Data".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map
     }
 }
@@ -1132,18 +1170,22 @@ impl ExecuteCommandResult {
 pub struct CommandResultData {
     #[serde(rename = "Value")]
     pub value: String,
-    #[serde(rename = "Format")]
-    pub format: CommandResultFormat,
-    #[serde(rename = "DisplayImmediately")]
-    pub display_immediately: bool,
+    #[serde(rename = "Format", skip_serializing_if = "Option::is_none")]
+    pub format: Option<CommandResultFormat>,
+    #[serde(rename = "DisplayImmediately", skip_serializing_if = "Option::is_none")]
+    pub display_immediately: Option<bool>,
 }
 
 impl CommandResultData {
     pub fn to_map(&self) -> HashMap<String, Value> {
         let mut map = HashMap::new();
         map.insert("Value".to_string(), serde_json::to_value(&self.value).unwrap_or(Value::Null));
-        map.insert("Format".to_string(), serde_json::to_value(&self.format).unwrap_or(Value::Null));
-        map.insert("DisplayImmediately".to_string(), serde_json::to_value(&self.display_immediately).unwrap_or(Value::Null));
+        if let Some(ref v) = self.format {
+            map.insert("Format".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.display_immediately {
+            map.insert("DisplayImmediately".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map
     }
 }
@@ -1155,8 +1197,8 @@ pub struct ResourceUrlAnnotation {
     pub url: String,
     #[serde(rename = "DisplayText")]
     pub display_text: String,
-    #[serde(rename = "Endpoint")]
-    pub endpoint: Handle,
+    #[serde(rename = "Endpoint", skip_serializing_if = "Option::is_none")]
+    pub endpoint: Option<Handle>,
     #[serde(rename = "DisplayLocation")]
     pub display_location: UrlDisplayLocation,
 }
@@ -1166,7 +1208,9 @@ impl ResourceUrlAnnotation {
         let mut map = HashMap::new();
         map.insert("Url".to_string(), serde_json::to_value(&self.url).unwrap_or(Value::Null));
         map.insert("DisplayText".to_string(), serde_json::to_value(&self.display_text).unwrap_or(Value::Null));
-        map.insert("Endpoint".to_string(), serde_json::to_value(&self.endpoint).unwrap_or(Value::Null));
+        if let Some(ref v) = self.endpoint {
+            map.insert("Endpoint".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
         map.insert("DisplayLocation".to_string(), serde_json::to_value(&self.display_location).unwrap_or(Value::Null));
         map
     }

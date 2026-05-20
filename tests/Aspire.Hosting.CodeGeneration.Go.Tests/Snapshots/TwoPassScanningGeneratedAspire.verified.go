@@ -1,4 +1,4 @@
-﻿// aspire.go - Capability-based Aspire SDK
+// aspire.go - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -228,16 +228,16 @@ const (
 // InteractionInput represents InteractionInput.
 type InteractionInput struct {
 	Name string `json:"Name,omitempty"`
-	Label string `json:"Label,omitempty"`
-	Description string `json:"Description,omitempty"`
-	EnableDescriptionMarkdown bool `json:"EnableDescriptionMarkdown,omitempty"`
+	Label *string `json:"Label,omitempty"`
+	Description *string `json:"Description,omitempty"`
+	EnableDescriptionMarkdown *bool `json:"EnableDescriptionMarkdown,omitempty"`
 	InputType InputType `json:"InputType,omitempty"`
-	Required bool `json:"Required,omitempty"`
+	Required *bool `json:"Required,omitempty"`
 	Options []any `json:"Options,omitempty"`
 	DynamicLoading any `json:"DynamicLoading,omitempty"`
 	Value string `json:"Value,omitempty"`
-	Placeholder string `json:"Placeholder,omitempty"`
-	AllowCustomChoice bool `json:"AllowCustomChoice,omitempty"`
+	Placeholder *string `json:"Placeholder,omitempty"`
+	AllowCustomChoice *bool `json:"AllowCustomChoice,omitempty"`
 	Disabled bool `json:"Disabled,omitempty"`
 	MaxLength *float64 `json:"MaxLength,omitempty"`
 }
@@ -246,16 +246,16 @@ type InteractionInput struct {
 func (d *InteractionInput) ToMap() map[string]any {
 	m := map[string]any{}
 	m["Name"] = serializeValue(d.Name)
-	m["Label"] = serializeValue(d.Label)
-	m["Description"] = serializeValue(d.Description)
-	m["EnableDescriptionMarkdown"] = serializeValue(d.EnableDescriptionMarkdown)
+	if d.Label != nil { m["Label"] = serializeValue(d.Label) }
+	if d.Description != nil { m["Description"] = serializeValue(d.Description) }
+	if d.EnableDescriptionMarkdown != nil { m["EnableDescriptionMarkdown"] = serializeValue(d.EnableDescriptionMarkdown) }
 	m["InputType"] = serializeValue(d.InputType)
-	m["Required"] = serializeValue(d.Required)
+	if d.Required != nil { m["Required"] = serializeValue(d.Required) }
 	if d.Options != nil { m["Options"] = serializeValue(d.Options) }
 	if d.DynamicLoading != nil { m["DynamicLoading"] = serializeValue(d.DynamicLoading) }
 	m["Value"] = serializeValue(d.Value)
-	m["Placeholder"] = serializeValue(d.Placeholder)
-	m["AllowCustomChoice"] = serializeValue(d.AllowCustomChoice)
+	if d.Placeholder != nil { m["Placeholder"] = serializeValue(d.Placeholder) }
+	if d.AllowCustomChoice != nil { m["AllowCustomChoice"] = serializeValue(d.AllowCustomChoice) }
 	m["Disabled"] = serializeValue(d.Disabled)
 	if d.MaxLength != nil { m["MaxLength"] = serializeValue(d.MaxLength) }
 	return m
@@ -264,14 +264,14 @@ func (d *InteractionInput) ToMap() map[string]any {
 // AddContainerOptions represents AddContainerOptions.
 type AddContainerOptions struct {
 	Image string `json:"Image,omitempty"`
-	Tag string `json:"Tag,omitempty"`
+	Tag *string `json:"Tag,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *AddContainerOptions) ToMap() map[string]any {
 	m := map[string]any{}
 	m["Image"] = serializeValue(d.Image)
-	m["Tag"] = serializeValue(d.Tag)
+	if d.Tag != nil { m["Tag"] = serializeValue(d.Tag) }
 	return m
 }
 
@@ -305,7 +305,7 @@ func (d *CreateBuilderOptions) ToMap() map[string]any {
 type HttpsCertificateInfo struct {
 	Subject string `json:"Subject,omitempty"`
 	Issuer string `json:"Issuer,omitempty"`
-	Thumbprint string `json:"Thumbprint,omitempty"`
+	Thumbprint *string `json:"Thumbprint,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
@@ -313,7 +313,7 @@ func (d *HttpsCertificateInfo) ToMap() map[string]any {
 	m := map[string]any{}
 	m["Subject"] = serializeValue(d.Subject)
 	m["Issuer"] = serializeValue(d.Issuer)
-	m["Thumbprint"] = serializeValue(d.Thumbprint)
+	if d.Thumbprint != nil { m["Thumbprint"] = serializeValue(d.Thumbprint) }
 	return m
 }
 
@@ -336,24 +336,24 @@ func (d *CertificateTrustExecutionConfigurationExportData) ToMap() map[string]an
 // HttpsCertificateExecutionConfigurationExportData represents HttpsCertificateExecutionConfigurationExportData.
 type HttpsCertificateExecutionConfigurationExportData struct {
 	Subject string `json:"Subject,omitempty"`
-	Thumbprint string `json:"Thumbprint,omitempty"`
+	Thumbprint *string `json:"Thumbprint,omitempty"`
 	KeyPathExpression string `json:"KeyPathExpression,omitempty"`
 	PfxPathExpression string `json:"PfxPathExpression,omitempty"`
 	IsKeyPathReferenced bool `json:"IsKeyPathReferenced,omitempty"`
 	IsPfxPathReferenced bool `json:"IsPfxPathReferenced,omitempty"`
-	Password string `json:"Password,omitempty"`
+	Password *string `json:"Password,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *HttpsCertificateExecutionConfigurationExportData) ToMap() map[string]any {
 	m := map[string]any{}
 	m["Subject"] = serializeValue(d.Subject)
-	m["Thumbprint"] = serializeValue(d.Thumbprint)
+	if d.Thumbprint != nil { m["Thumbprint"] = serializeValue(d.Thumbprint) }
 	m["KeyPathExpression"] = serializeValue(d.KeyPathExpression)
 	m["PfxPathExpression"] = serializeValue(d.PfxPathExpression)
 	m["IsKeyPathReferenced"] = serializeValue(d.IsKeyPathReferenced)
 	m["IsPfxPathReferenced"] = serializeValue(d.IsPfxPathReferenced)
-	m["Password"] = serializeValue(d.Password)
+	if d.Password != nil { m["Password"] = serializeValue(d.Password) }
 	return m
 }
 
@@ -361,9 +361,9 @@ func (d *HttpsCertificateExecutionConfigurationExportData) ToMap() map[string]an
 type ResourceEventDto struct {
 	ResourceName string `json:"ResourceName,omitempty"`
 	ResourceId string `json:"ResourceId,omitempty"`
-	State string `json:"State,omitempty"`
-	StateStyle string `json:"StateStyle,omitempty"`
-	HealthStatus string `json:"HealthStatus,omitempty"`
+	State *string `json:"State,omitempty"`
+	StateStyle *string `json:"StateStyle,omitempty"`
+	HealthStatus *string `json:"HealthStatus,omitempty"`
 	ExitCode *float64 `json:"ExitCode,omitempty"`
 }
 
@@ -372,9 +372,9 @@ func (d *ResourceEventDto) ToMap() map[string]any {
 	m := map[string]any{}
 	m["ResourceName"] = serializeValue(d.ResourceName)
 	m["ResourceId"] = serializeValue(d.ResourceId)
-	m["State"] = serializeValue(d.State)
-	m["StateStyle"] = serializeValue(d.StateStyle)
-	m["HealthStatus"] = serializeValue(d.HealthStatus)
+	if d.State != nil { m["State"] = serializeValue(d.State) }
+	if d.StateStyle != nil { m["StateStyle"] = serializeValue(d.StateStyle) }
+	if d.HealthStatus != nil { m["HealthStatus"] = serializeValue(d.HealthStatus) }
 	if d.ExitCode != nil { m["ExitCode"] = serializeValue(d.ExitCode) }
 	return m
 }
@@ -432,7 +432,7 @@ type CertificateTrustExecutionConfigurationContext struct {
 	CertificateBundlePath *ReferenceExpression `json:"CertificateBundlePath,omitempty"`
 	CertificateDirectoriesPath *ReferenceExpression `json:"CertificateDirectoriesPath,omitempty"`
 	RootCertificatesPath string `json:"RootCertificatesPath,omitempty"`
-	IsContainer bool `json:"IsContainer,omitempty"`
+	IsContainer *bool `json:"IsContainer,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
@@ -441,7 +441,7 @@ func (d *CertificateTrustExecutionConfigurationContext) ToMap() map[string]any {
 	if d.CertificateBundlePath != nil { m["CertificateBundlePath"] = serializeValue(d.CertificateBundlePath) }
 	if d.CertificateDirectoriesPath != nil { m["CertificateDirectoriesPath"] = serializeValue(d.CertificateDirectoriesPath) }
 	m["RootCertificatesPath"] = serializeValue(d.RootCertificatesPath)
-	m["IsContainer"] = serializeValue(d.IsContainer)
+	if d.IsContainer != nil { m["IsContainer"] = serializeValue(d.IsContainer) }
 	return m
 }
 
@@ -624,9 +624,9 @@ func (d *ProcessCommandResultExportOptions) ToMap() map[string]any {
 // ExecuteCommandResult represents ExecuteCommandResult.
 type ExecuteCommandResult struct {
 	Success bool `json:"Success,omitempty"`
-	Canceled bool `json:"Canceled,omitempty"`
-	ErrorMessage string `json:"ErrorMessage,omitempty"`
-	Message string `json:"Message,omitempty"`
+	Canceled *bool `json:"Canceled,omitempty"`
+	ErrorMessage *string `json:"ErrorMessage,omitempty"`
+	Message *string `json:"Message,omitempty"`
 	Data *CommandResultData `json:"Data,omitempty"`
 }
 
@@ -634,9 +634,9 @@ type ExecuteCommandResult struct {
 func (d *ExecuteCommandResult) ToMap() map[string]any {
 	m := map[string]any{}
 	m["Success"] = serializeValue(d.Success)
-	m["Canceled"] = serializeValue(d.Canceled)
-	m["ErrorMessage"] = serializeValue(d.ErrorMessage)
-	m["Message"] = serializeValue(d.Message)
+	if d.Canceled != nil { m["Canceled"] = serializeValue(d.Canceled) }
+	if d.ErrorMessage != nil { m["ErrorMessage"] = serializeValue(d.ErrorMessage) }
+	if d.Message != nil { m["Message"] = serializeValue(d.Message) }
 	if d.Data != nil { m["Data"] = serializeValue(d.Data) }
 	return m
 }
@@ -644,16 +644,16 @@ func (d *ExecuteCommandResult) ToMap() map[string]any {
 // CommandResultData represents CommandResultData.
 type CommandResultData struct {
 	Value string `json:"Value,omitempty"`
-	Format CommandResultFormat `json:"Format,omitempty"`
-	DisplayImmediately bool `json:"DisplayImmediately,omitempty"`
+	Format *CommandResultFormat `json:"Format,omitempty"`
+	DisplayImmediately *bool `json:"DisplayImmediately,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
 func (d *CommandResultData) ToMap() map[string]any {
 	m := map[string]any{}
 	m["Value"] = serializeValue(d.Value)
-	m["Format"] = serializeValue(d.Format)
-	m["DisplayImmediately"] = serializeValue(d.DisplayImmediately)
+	if d.Format != nil { m["Format"] = serializeValue(d.Format) }
+	if d.DisplayImmediately != nil { m["DisplayImmediately"] = serializeValue(d.DisplayImmediately) }
 	return m
 }
 
@@ -661,7 +661,7 @@ func (d *CommandResultData) ToMap() map[string]any {
 type ResourceUrlAnnotation struct {
 	Url string `json:"Url,omitempty"`
 	DisplayText string `json:"DisplayText,omitempty"`
-	Endpoint EndpointReference `json:"Endpoint,omitempty"`
+	Endpoint *EndpointReference `json:"Endpoint,omitempty"`
 	DisplayLocation UrlDisplayLocation `json:"DisplayLocation,omitempty"`
 }
 
@@ -670,7 +670,7 @@ func (d *ResourceUrlAnnotation) ToMap() map[string]any {
 	m := map[string]any{}
 	m["Url"] = serializeValue(d.Url)
 	m["DisplayText"] = serializeValue(d.DisplayText)
-	m["Endpoint"] = serializeValue(d.Endpoint)
+	if d.Endpoint != nil { m["Endpoint"] = serializeValue(d.Endpoint) }
 	m["DisplayLocation"] = serializeValue(d.DisplayLocation)
 	return m
 }
@@ -697,8 +697,8 @@ func (d *TestConfigDto) ToMap() map[string]any {
 type TestNestedDto struct {
 	Id string `json:"Id,omitempty"`
 	Config *TestConfigDto `json:"Config,omitempty"`
-	Tags *List[string] `json:"Tags,omitempty"`
-	Counts *Dict[string, float64] `json:"Counts,omitempty"`
+	Tags []string `json:"Tags,omitempty"`
+	Counts map[string]float64 `json:"Counts,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.
@@ -713,8 +713,8 @@ func (d *TestNestedDto) ToMap() map[string]any {
 
 // TestDeeplyNestedDto represents TestDeeplyNestedDto.
 type TestDeeplyNestedDto struct {
-	NestedData *Dict[string, *List[*TestConfigDto]] `json:"NestedData,omitempty"`
-	MetadataArray []*Dict[string, string] `json:"MetadataArray,omitempty"`
+	NestedData map[string][]*TestConfigDto `json:"NestedData,omitempty"`
+	MetadataArray []map[string]string `json:"MetadataArray,omitempty"`
 }
 
 // ToMap converts the DTO to a map for JSON serialization.

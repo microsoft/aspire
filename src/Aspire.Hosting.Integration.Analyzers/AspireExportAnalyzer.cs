@@ -155,7 +155,7 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
             SymbolKind.Method);
 
         context.RegisterSymbolAction(
-            c => AnalyzeNamedType(c, aspireExportAttribute, aspireExportIgnoreAttribute, capabilityIds, generatedMethodNames),
+            c => AnalyzeNamedType(c, wellKnownTypes, aspireExportAttribute, aspireExportIgnoreAttribute, capabilityIds, generatedMethodNames),
             SymbolKind.NamedType);
 
         context.RegisterSymbolAction(
@@ -381,12 +381,15 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
 
     private static void AnalyzeNamedType(
         SymbolAnalysisContext context,
+        WellKnownTypes wellKnownTypes,
         INamedTypeSymbol aspireExportAttribute,
         INamedTypeSymbol? aspireExportIgnoreAttribute,
         ConcurrentDictionary<string, ConcurrentBag<CapabilityExport>> capabilityIds,
         ConcurrentDictionary<(string MethodName, string TargetType), ConcurrentBag<GeneratedMethodNameExport>> generatedMethodNames)
     {
         var type = (INamedTypeSymbol)context.Symbol;
+        AnalyzeDtoType(type, wellKnownTypes, aspireExportIgnoreAttribute, context);
+
         var typeExportAttribute = GetContainingTypeAspireExportAttribute(type, aspireExportAttribute);
         if (typeExportAttribute is not null)
         {
@@ -408,6 +411,33 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
 
         var location = GetAttributeLocation(propertyExportAttribute, context.CancellationToken) ?? property.Locations.FirstOrDefault() ?? Location.None;
         AnalyzeExportDescription(context, propertyExportAttribute, location);
+    }
+
+    private static void AnalyzeDtoType(
+        INamedTypeSymbol type,
+        WellKnownTypes wellKnownTypes,
+        INamedTypeSymbol? aspireExportIgnoreAttribute,
+        SymbolAnalysisContext context)
+    {
+        if (!HasAspireDtoAttribute(type))
+        {
+            return;
+        }
+
+        foreach (var property in GetInstanceProperties(type))
+        {
+            if (IsMutableCollectionType(property.Type, wellKnownTypes) &&
+                property.SetMethod is null &&
+                !property.IsStatic &&
+                property.GetMethod?.DeclaredAccessibility == Accessibility.Public &&
+                !HasAspireExportIgnoreAttribute(property, aspireExportIgnoreAttribute))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    Diagnostics.s_dtoMutableCollectionPropertyMustBeInitSettable,
+                    property.Locations.FirstOrDefault() ?? type.Locations.FirstOrDefault() ?? Location.None,
+                    $"{type.Name}.{property.Name}"));
+            }
+        }
     }
 
     private static void ReportAssemblyExportDescriptions(CompilationAnalysisContext context, INamedTypeSymbol aspireExportAttribute)
@@ -2026,6 +2056,14 @@ public partial class AspireExportAnalyzer : DiagnosticAnalyzer
         }
 
         return false;
+    }
+
+    private static bool IsMutableCollectionType(ITypeSymbol type, WellKnownTypes wellKnownTypes)
+    {
+        return TryMatchGenericType(type, wellKnownTypes, WellKnownTypeData.WellKnownType.System_Collections_Generic_Dictionary_2) ||
+            TryMatchGenericType(type, wellKnownTypes, WellKnownTypeData.WellKnownType.System_Collections_Generic_IDictionary_2) ||
+            TryMatchGenericType(type, wellKnownTypes, WellKnownTypeData.WellKnownType.System_Collections_Generic_List_1) ||
+            TryMatchGenericType(type, wellKnownTypes, WellKnownTypeData.WellKnownType.System_Collections_Generic_IList_1);
     }
 
     private static bool IsResourceType(ITypeSymbol type, WellKnownTypes wellKnownTypes)
