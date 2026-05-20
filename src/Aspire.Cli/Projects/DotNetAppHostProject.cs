@@ -39,6 +39,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     private readonly RunningInstanceManager _runningInstanceManager;
     private readonly Diagnostics.FileLoggerProvider _fileLoggerProvider;
     private readonly Program.CliLoggingOptions _loggingOptions;
+    private readonly IAppHostInfoResolver _appHostInfoResolver;
 
     private static readonly string[] s_detectionPatterns = ["*.csproj", "*.fsproj", "*.vbproj", "apphost.cs"];
     internal static IReadOnlyCollection<string> ProjectExtensions { get; } =
@@ -57,6 +58,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         ILogger<DotNetAppHostProject> logger,
         Diagnostics.FileLoggerProvider fileLoggerProvider,
         Program.CliLoggingOptions loggingOptions,
+        IAppHostInfoResolver appHostInfoResolver,
         TimeProvider? timeProvider = null)
     {
         _runner = runner;
@@ -71,6 +73,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         _logger = logger;
         _fileLoggerProvider = fileLoggerProvider;
         _loggingOptions = loggingOptions;
+        _appHostInfoResolver = appHostInfoResolver;
         _timeProvider = timeProvider ?? TimeProvider.System;
         _runningInstanceManager = new RunningInstanceManager(_logger, _interactionService, _timeProvider);
     }
@@ -184,8 +187,9 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             return new AppHostValidationResult(IsValid: IsValidSingleFileAppHost(appHostFile));
         }
 
-        // For project files, check if it's a valid Aspire AppHost using GetAppHostInformationAsync
-        var information = await _runner.GetAppHostInformationAsync(appHostFile, new ProcessInvocationOptions(), cancellationToken);
+        // The resolver owns the cache/MSBuild fallback so validation and later run/publish
+        // decisions share a single source of truth for AppHost project metadata.
+        var information = await _appHostInfoResolver.GetAppHostInfoAsync(appHostFile, cancellationToken);
 
         if (information.ExitCode == 0 && information.IsAspireHost)
         {
@@ -206,7 +210,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         // Use the same MSBuild-based inspection as validation so version resolution
         // follows the project model that run/publish already rely on, including
         // SDK-style projects, package references, and Central Package Management.
-        var information = await _runner.GetAppHostInformationAsync(appHostFile, new ProcessInvocationOptions(), cancellationToken);
+        var information = await _appHostInfoResolver.GetAppHostInfoAsync(appHostFile, cancellationToken);
         return information.ExitCode == 0 && information.IsAspireHost
             ? information.AspireHostingVersion
             : null;
@@ -409,7 +413,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
                 return buildExitCode;
             }
 
-            var compatibilityCheck = await CheckAppHostCompatibilityAsync(effectiveAppHostFile, isSingleFileAppHost, context.WorkingDirectory, cancellationToken);
+            var compatibilityCheck = await CheckAppHostCompatibilityAsync(effectiveAppHostFile, isSingleFileAppHost, cancellationToken);
             if (!compatibilityCheck.IsCompatibleAppHost)
             {
                 context.BuildCompletionSource?.TrySetResult(false);
@@ -474,22 +478,33 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         return CliExitCodes.FailedToBuildArtifacts;
     }
 
-    private async Task<(bool IsCompatibleAppHost, bool SupportsBackchannel, string? AspireHostingVersion)> CheckAppHostCompatibilityAsync(
+    private async Task<(bool IsCompatibleAppHost, string? AspireHostingVersion)> CheckAppHostCompatibilityAsync(
         FileInfo effectiveAppHostFile,
         bool isSingleFileAppHost,
-        DirectoryInfo workingDirectory,
         CancellationToken cancellationToken)
     {
         if (isSingleFileAppHost)
         {
-            return (true, true, VersionHelper.GetDefaultTemplateVersion());
+            return (true, VersionHelper.GetDefaultTemplateVersion());
         }
 
         using var compatibilityActivity = _profilingTelemetry.StartAppHostCheckCompatibility();
-        var appHostCompatibilityCheck = await AppHostHelper.CheckAppHostCompatibilityAsync(_runner, _interactionService, effectiveAppHostFile, _telemetry, workingDirectory, _fileLoggerProvider.LogFilePath, cancellationToken);
+
+        // Reuse the cached MSBuild result from ValidateAppHostAsync so we do not pay for a
+        // second `dotnet msbuild -getProperty/-getItem` invocation just to gate compatibility.
+        // Issue #17197: the legacy code path went runner → MSBuild for both validation and
+        // the compatibility gate, doubling project inspection cost on every `aspire run`.
+        var info = await _appHostInfoResolver.GetAppHostInfoAsync(effectiveAppHostFile, cancellationToken);
+        var appHostCompatibilityCheck = AppHostHelper.EvaluateAppHostCompatibility(
+            info.ExitCode,
+            info.IsAspireHost,
+            info.AspireHostingVersion,
+            _interactionService,
+            _fileLoggerProvider.LogFilePath);
+
         compatibilityActivity.SetAppHostCompatibility(
             appHostCompatibilityCheck.IsCompatibleAppHost,
-            appHostCompatibilityCheck.SupportsBackchannel,
+            supportsBackchannel: appHostCompatibilityCheck.IsCompatibleAppHost,
             appHostCompatibilityCheck.AspireHostingVersion);
 
         return appHostCompatibilityCheck;
@@ -656,13 +671,12 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         // Check compatibility for project-based apphosts
         if (!isSingleFileAppHost)
         {
-            var compatibilityCheck = await AppHostHelper.CheckAppHostCompatibilityAsync(
-                _runner,
-                _interactionService,
+            // Route through the cached helper so publish shares the same MSBuild
+            // inspection result that PublishCommand's earlier ValidateAppHostAsync
+            // populated. Issue #17197.
+            var compatibilityCheck = await CheckAppHostCompatibilityAsync(
                 effectiveAppHostFile,
-                _telemetry,
-                context.WorkingDirectory,
-                _fileLoggerProvider.LogFilePath,
+                isSingleFileAppHost: false,
                 cancellationToken);
 
             if (!compatibilityCheck.IsCompatibleAppHost)
@@ -824,27 +838,11 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     {
         try
         {
-            var (exitCode, jsonDocument) = await _runner.GetProjectItemsAndPropertiesAsync(
-                projectFile,
-                items: [],
-                properties: ["UserSecretsId"],
-                new ProcessInvocationOptions(),
-                cancellationToken);
-
-            if (exitCode != 0 || jsonDocument is null)
-            {
-                return null;
-            }
-
-            var rootElement = jsonDocument.RootElement;
-            if (rootElement.TryGetProperty("Properties", out var properties) &&
-                properties.TryGetProperty("UserSecretsId", out var userSecretsIdElement))
-            {
-                var value = userSecretsIdElement.GetString();
-                return string.IsNullOrWhiteSpace(value) ? null : value;
-            }
-
-            return null;
+            // Read UserSecretsId from the shared AppHost build info cache so isolated mode
+            // does not pay for a second `dotnet msbuild -getProperty` invocation when the
+            // run path already fetched the AppHost metadata for validation/compat.
+            var info = await _appHostInfoResolver.GetAppHostInfoAsync(projectFile, cancellationToken);
+            return info.UserSecretsId;
         }
         catch (Exception ex)
         {
@@ -855,26 +853,10 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
     private async Task<bool> IsUsingCliBundleAsync(FileInfo projectFile, CancellationToken cancellationToken)
     {
-        var (exitCode, jsonDocument) = await _runner.GetProjectItemsAndPropertiesAsync(
-            projectFile,
-            items: [],
-            properties: ["AspireUseCliBundle"],
-            new ProcessInvocationOptions(),
-            cancellationToken);
-
-        if (exitCode != 0 || jsonDocument is null)
-        {
-            return false;
-        }
-
-        var rootElement = jsonDocument.RootElement;
-        if (!rootElement.TryGetProperty("Properties", out var properties) ||
-            !properties.TryGetProperty("AspireUseCliBundle", out var useCliBundleElement))
-        {
-            return false;
-        }
-
-        return string.Equals(useCliBundleElement.GetString(), "true", StringComparison.OrdinalIgnoreCase);
+        // Reuse the cached MSBuild result so `AspireUseCliBundle` is fetched alongside the
+        // IsAspireHost/version inspection rather than triggering a third project evaluation.
+        var info = await _appHostInfoResolver.GetAppHostInfoAsync(projectFile, cancellationToken);
+        return info.IsUsingCliBundle;
     }
 
     private async Task ConfigureCliBundleEnvironmentAsync(Dictionary<string, string> env, CancellationToken cancellationToken)
@@ -928,4 +910,5 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
         return null;
     }
+
 }

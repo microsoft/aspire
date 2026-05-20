@@ -1,4 +1,4 @@
-//! aspire.rs - Capability-based Aspire SDK
+﻿//! aspire.rs - Capability-based Aspire SDK
 //! GENERATED CODE - DO NOT EDIT
 
 use std::collections::HashMap;
@@ -11840,6 +11840,21 @@ impl PipelineStep {
         Ok(serde_json::from_value(result)?)
     }
 
+    /// Gets the step names that this step depends on
+    pub fn depends_on_steps(&self) -> AspireList<String> {
+        AspireList::with_getter(self.handle.clone(), self.client.clone(), "Aspire.Hosting.Pipelines/PipelineStep.dependsOnSteps")
+    }
+
+    /// Gets the step names that require this step to complete
+    pub fn required_by_steps(&self) -> AspireList<String> {
+        AspireList::with_getter(self.handle.clone(), self.client.clone(), "Aspire.Hosting.Pipelines/PipelineStep.requiredBySteps")
+    }
+
+    /// Gets the tags that categorize this step
+    pub fn tags(&self) -> AspireList<String> {
+        AspireList::with_getter(self.handle.clone(), self.client.clone(), "Aspire.Hosting.Pipelines/PipelineStep.tags")
+    }
+
     /// Adds a dependency on another step by name
     pub fn depends_on(&self, step_name: &str) -> Result<(), Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -18131,5 +18146,4 @@ pub fn create_builder(options: Option<CreateBuilderOptions>) -> Result<IDistribu
     let handle: Handle = serde_json::from_value(result)?;
     Ok(IDistributedApplicationBuilder::new(handle, client))
 }
-
 

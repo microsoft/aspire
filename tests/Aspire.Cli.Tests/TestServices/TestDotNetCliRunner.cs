@@ -17,6 +17,7 @@ internal sealed class TestDotNetCliRunner : IDotNetCliRunner
     public Func<FileInfo, ProcessInvocationOptions, CancellationToken, int>? RestoreAsyncCallback { get; set; }
     public Func<FileInfo, ProcessInvocationOptions, CancellationToken, (int ExitCode, bool IsAspireHost, string? AspireHostingVersion)>? GetAppHostInformationAsyncCallback { get; set; }
     public Func<DirectoryInfo, ProcessInvocationOptions, CancellationToken, (int ExitCode, string[] ConfigPaths)>? GetNuGetConfigPathsAsyncCallback { get; set; }
+    public Func<FileInfo, string[], string[], ProcessInvocationOptions, CancellationToken, Task<(int ExitCode, JsonDocument? Output)>>? GetProjectItemsAndPropertiesAsyncCallbackAsync { get; set; }
     public Func<FileInfo, string[], string[], ProcessInvocationOptions, CancellationToken, (int ExitCode, JsonDocument? Output)>? GetProjectItemsAndPropertiesAsyncCallback { get; set; }
     public Func<string, string, FileInfo?, string?, bool, ProcessInvocationOptions, CancellationToken, (int ExitCode, string? TemplateVersion)>? InstallTemplateAsyncCallback { get; set; }
     public Func<string, string, string, ProcessInvocationOptions, CancellationToken, int>? NewProjectAsyncCallback { get; set; }
@@ -80,9 +81,49 @@ internal sealed class TestDotNetCliRunner : IDotNetCliRunner
 
     public Task<(int ExitCode, JsonDocument? Output)> GetProjectItemsAndPropertiesAsync(FileInfo projectFile, string[] items, string[] properties, ProcessInvocationOptions options, CancellationToken cancellationToken)
     {
-        return GetProjectItemsAndPropertiesAsyncCallback != null
-            ? Task.FromResult(GetProjectItemsAndPropertiesAsyncCallback(projectFile, items, properties, options, cancellationToken))
-            : Task.FromResult<(int, JsonDocument?)>((0, JsonDocument.Parse("""{"Properties":{},"Items":{}}""")));
+        if (GetProjectItemsAndPropertiesAsyncCallbackAsync != null)
+        {
+            return GetProjectItemsAndPropertiesAsyncCallbackAsync(projectFile, items, properties, options, cancellationToken);
+        }
+
+        if (GetProjectItemsAndPropertiesAsyncCallback != null)
+        {
+            return Task.FromResult(GetProjectItemsAndPropertiesAsyncCallback(projectFile, items, properties, options, cancellationToken));
+        }
+
+        // DotNetAppHostProject collapsed its three legacy MSBuild round-trips into a single
+        // GetProjectItemsAndPropertiesAsync call (issue #17197). Tests that pre-date that
+        // change still configure GetAppHostInformationAsyncCallback to control compatibility
+        // gating, so honor it here by synthesizing the JSON shape the production code expects.
+        if (GetAppHostInformationAsyncCallback != null)
+        {
+            var (exitCode, isAspireHost, aspireHostingVersion) = GetAppHostInformationAsyncCallback(projectFile, options, cancellationToken);
+            var versionJson = aspireHostingVersion is null ? "null" : $"\"{aspireHostingVersion}\"";
+            var json = $$"""
+                {
+                  "Properties": {
+                    "IsAspireHost": "{{(isAspireHost ? "true" : "false")}}",
+                    "AspireHostingSDKVersion": {{versionJson}}
+                  },
+                  "Items": {}
+                }
+                """;
+            return Task.FromResult<(int, JsonDocument?)>((exitCode, JsonDocument.Parse(json)));
+        }
+
+        // Default response: shape it so DotNetAppHostProject treats the project as a valid
+        // Aspire host with the default template version. Most tests rely on the implicit
+        // "valid AppHost" default.
+        var defaultJson = $$"""
+            {
+              "Properties": {
+                "IsAspireHost": "true",
+                "AspireHostingSDKVersion": "{{VersionHelper.GetDefaultTemplateVersion()}}"
+              },
+              "Items": {}
+            }
+            """;
+        return Task.FromResult<(int, JsonDocument?)>((0, JsonDocument.Parse(defaultJson)));
     }
 
     public Task<(int ExitCode, string? TemplateVersion)> InstallTemplateAsync(string packageName, string version, FileInfo? nugetConfigFile, string? nugetSource, bool force, ProcessInvocationOptions options, CancellationToken cancellationToken)

@@ -454,6 +454,63 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         Assert.True(isSensitive);
     }
 
+    [Fact]
+    public async Task OnResourceFailedToStart_WithErrorMessage_SetsErrorStyleOnState()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var container = builder.AddContainer("api", "test-image");
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events);
+        await appOrchestrator.RunApplicationAsync();
+
+        await events.PublishAsync(new OnResourceFailedToStartContext(
+            CancellationToken.None,
+            KnownResourceTypes.Container,
+            container.Resource,
+            "api-dcp",
+            ErrorMessage: "The endpoint `https` is not defined for the resource `api`. Available endpoints: `http`."));
+
+        Assert.True(resourceNotificationService.TryGetCurrentState("api-dcp", out var snapshotEvent));
+        Assert.Equal(KnownResourceStates.FailedToStart, snapshotEvent.Snapshot.State?.Text);
+        Assert.Equal(KnownResourceStateStyles.Error, snapshotEvent.Snapshot.State?.Style);
+    }
+
+    [Fact]
+    public async Task OnResourceFailedToStart_WithoutErrorMessage_DoesNotSetErrorStyle()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var container = builder.AddContainer("api", "test-image");
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events);
+        await appOrchestrator.RunApplicationAsync();
+
+        await events.PublishAsync(new OnResourceFailedToStartContext(
+            CancellationToken.None,
+            KnownResourceTypes.Container,
+            container.Resource,
+            "api-dcp"));
+
+        Assert.True(resourceNotificationService.TryGetCurrentState("api-dcp", out var snapshotEvent));
+        Assert.Equal(KnownResourceStates.FailedToStart, snapshotEvent.Snapshot.State?.Text);
+        Assert.Null(snapshotEvent.Snapshot.State?.Style);
+    }
+
     private ApplicationOrchestrator CreateOrchestrator(
         DistributedApplicationModel distributedAppModel,
         ResourceNotificationService notificationService,

@@ -5085,6 +5085,33 @@ class PipelineStep:
         )
         return typing.cast(str | None, result)
 
+    @_cached_property
+    def depends_on_steps(self) -> AspireList[str]:
+        """Gets the step names that this step depends on"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.Pipelines/PipelineStep.dependsOnSteps',
+            {'context': self._handle}
+        )
+        return typing.cast(AspireList[str], result)
+
+    @_cached_property
+    def required_by_steps(self) -> AspireList[str]:
+        """Gets the step names that require this step to complete"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.Pipelines/PipelineStep.requiredBySteps',
+            {'context': self._handle}
+        )
+        return typing.cast(AspireList[str], result)
+
+    @_cached_property
+    def tags(self) -> AspireList[str]:
+        """Gets the tags that categorize this step"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.Pipelines/PipelineStep.tags',
+            {'context': self._handle}
+        )
+        return typing.cast(AspireList[str], result)
+
     def depends_on(self, step_name: str) -> None:
         """Adds a dependency on another step by name"""
         rpc_args: dict[str, typing.Any] = {'context': self._handle}
@@ -11111,8 +11138,8 @@ def create_builder(
 
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression", lambda handle, _: ReferenceExpression(handle))
 _register_handle_wrapper("System.Private.CoreLib/System.Threading.CancellationToken", CancellationToken)
-_register_handle_wrapper("Aspire.Hosting/Dict<string,any>", AspireDict)
 _register_handle_wrapper("Aspire.Hosting/List<string>", AspireList)
+_register_handle_wrapper("Aspire.Hosting/Dict<string,any>", AspireDict)
 _register_handle_wrapper("Aspire.Hosting/Dict<string,string>", AspireDict)
 _register_handle_wrapper("Aspire.Hosting/Dict<string,number>", AspireDict)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IAspireStore", AbstractAspireStore)

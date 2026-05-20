@@ -1,4 +1,4 @@
-// aspire.go - Capability-based Aspire SDK
+﻿// aspire.go - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -16364,12 +16364,18 @@ type PipelineStep interface {
 	Description() (string, error)
 	Name() (string, error)
 	RequiredBy(stepName string) error
+	DependsOnSteps() *List[string]
+	RequiredBySteps() *List[string]
+	Tags() *List[string]
 	Err() error
 }
 
 // pipelineStep is the unexported impl of PipelineStep.
 type pipelineStep struct {
 	*resourceBuilderBase
+	dependsOnSteps *List[string]
+	requiredBySteps *List[string]
+	tags *List[string]
 }
 
 // newPipelineStepFromHandle wraps an existing handle as PipelineStep.
@@ -16399,6 +16405,14 @@ func (s *pipelineStep) DependsOn(stepName string) error {
 	reqArgs["stepName"] = serializeValue(stepName)
 	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Pipelines/dependsOn", reqArgs)
 	return err
+}
+
+// DependsOnSteps gets the step names that this step depends on
+func (s *pipelineStep) DependsOnSteps() *List[string] {
+	if s.dependsOnSteps == nil {
+		s.dependsOnSteps = newListWithGetter[string](s.handleWrapperBase, "Aspire.Hosting.Pipelines/PipelineStep.dependsOnSteps")
+	}
+	return s.dependsOnSteps
 }
 
 // Description gets the human-readable description of the step
@@ -16441,6 +16455,22 @@ func (s *pipelineStep) RequiredBy(stepName string) error {
 	reqArgs["stepName"] = serializeValue(stepName)
 	_, err := s.client.invokeCapability(ctx, "Aspire.Hosting.Pipelines/requiredBy", reqArgs)
 	return err
+}
+
+// RequiredBySteps gets the step names that require this step to complete
+func (s *pipelineStep) RequiredBySteps() *List[string] {
+	if s.requiredBySteps == nil {
+		s.requiredBySteps = newListWithGetter[string](s.handleWrapperBase, "Aspire.Hosting.Pipelines/PipelineStep.requiredBySteps")
+	}
+	return s.requiredBySteps
+}
+
+// Tags gets the tags that categorize this step
+func (s *pipelineStep) Tags() *List[string] {
+	if s.tags == nil {
+		s.tags = newListWithGetter[string](s.handleWrapperBase, "Aspire.Hosting.Pipelines/PipelineStep.tags")
+	}
+	return s.tags
 }
 
 // PipelineStepContext is the public interface for handle type PipelineStepContext.

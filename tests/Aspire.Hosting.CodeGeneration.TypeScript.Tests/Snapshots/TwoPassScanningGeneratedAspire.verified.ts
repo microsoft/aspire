@@ -1,4 +1,4 @@
-// aspire.ts - Capability-based Aspire SDK
+﻿// aspire.ts - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -5100,18 +5100,21 @@ class PipelineEditorPromiseImpl implements PipelineEditorPromise {
 /** Represents a step in the deployment pipeline. */
 export interface PipelineStep {
     toJSON(): MarshalledHandle;
-    /**
-     * Gets the exported name projection for polyglot SDKs.
-     *
-     * This projection avoids exporting an ATS setter for the public init-only `Name` property.
-     */
+    /** Gets or initializes the unique name of the step. */
     name(): Promise<string>;
     /**
-     * Gets the exported description projection for polyglot SDKs.
+     * Gets or initializes the description of the step.
      *
-     * This projection avoids exporting an ATS setter for the public init-only `Description` property.
+     * The description provides human-readable context about what the step does,
+     * helping users and tools understand the purpose of the step.
      */
     description(): Promise<string | null>;
+    /** Gets or initializes the list of step names that this step depends on. */
+    dependsOnSteps(): Promise<AspireList<string>>;
+    /** Gets or initializes the list of step names that require this step to complete before they can finish. This is used internally during pipeline construction and is converted to DependsOn relationships. */
+    requiredBySteps(): Promise<AspireList<string>>;
+    /** Gets or initializes the list of tags that categorize this step. */
+    tags(): Promise<AspireList<string>>;
     /**
      * Adds a dependency on another step.
      * @param stepName The name of the step to depend on.
@@ -5130,18 +5133,21 @@ export interface PipelineStep {
 }
 
 export interface PipelineStepPromise extends PromiseLike<PipelineStep> {
-    /**
-     * Gets the exported name projection for polyglot SDKs.
-     *
-     * This projection avoids exporting an ATS setter for the public init-only `Name` property.
-     */
+    /** Gets or initializes the unique name of the step. */
     name(): Promise<string>;
     /**
-     * Gets the exported description projection for polyglot SDKs.
+     * Gets or initializes the description of the step.
      *
-     * This projection avoids exporting an ATS setter for the public init-only `Description` property.
+     * The description provides human-readable context about what the step does,
+     * helping users and tools understand the purpose of the step.
      */
     description(): Promise<string | null>;
+    /** Gets or initializes the list of step names that this step depends on. */
+    dependsOnSteps(): Promise<AspireList<string>>;
+    /** Gets or initializes the list of step names that require this step to complete before they can finish. This is used internally during pipeline construction and is converted to DependsOn relationships. */
+    requiredBySteps(): Promise<AspireList<string>>;
+    /** Gets or initializes the list of tags that categorize this step. */
+    tags(): Promise<AspireList<string>>;
     /**
      * Adds a dependency on another step.
      * @param stepName The name of the step to depend on.
@@ -5182,6 +5188,45 @@ class PipelineStepImpl implements PipelineStep {
             'Aspire.Hosting.Pipelines/PipelineStep.description',
             { context: this._handle }
         );
+    }
+
+    private _dependsOnSteps?: AspireList<string>;
+    async dependsOnSteps(): Promise<AspireList<string>> {
+        if (!this._dependsOnSteps) {
+            this._dependsOnSteps = new AspireList<string>(
+                this._handle,
+                this._client,
+                'Aspire.Hosting.Pipelines/PipelineStep.dependsOnSteps',
+                'Aspire.Hosting.Pipelines/PipelineStep.dependsOnSteps'
+            );
+        }
+        return this._dependsOnSteps;
+    }
+
+    private _requiredBySteps?: AspireList<string>;
+    async requiredBySteps(): Promise<AspireList<string>> {
+        if (!this._requiredBySteps) {
+            this._requiredBySteps = new AspireList<string>(
+                this._handle,
+                this._client,
+                'Aspire.Hosting.Pipelines/PipelineStep.requiredBySteps',
+                'Aspire.Hosting.Pipelines/PipelineStep.requiredBySteps'
+            );
+        }
+        return this._requiredBySteps;
+    }
+
+    private _tags?: AspireList<string>;
+    async tags(): Promise<AspireList<string>> {
+        if (!this._tags) {
+            this._tags = new AspireList<string>(
+                this._handle,
+                this._client,
+                'Aspire.Hosting.Pipelines/PipelineStep.tags',
+                'Aspire.Hosting.Pipelines/PipelineStep.tags'
+            );
+        }
+        return this._tags;
     }
 
     /** @internal */
@@ -5261,6 +5306,18 @@ class PipelineStepPromiseImpl implements PipelineStepPromise {
 
     description(): Promise<string | null> {
         return this._promise.then(obj => obj.description());
+    }
+
+    dependsOnSteps(): Promise<AspireList<string>> {
+        return this._promise.then(obj => obj.dependsOnSteps());
+    }
+
+    requiredBySteps(): Promise<AspireList<string>> {
+        return this._promise.then(obj => obj.requiredBySteps());
+    }
+
+    tags(): Promise<AspireList<string>> {
+        return this._promise.then(obj => obj.tags());
     }
 
     dependsOn(stepName: string): PipelineStepPromise {
@@ -54668,5 +54725,4 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.IResourceWithContainerFiles
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints', (handle, client) => new ResourceWithEndpointsImpl(handle as IResourceWithEndpointsHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment', (handle, client) => new ResourceWithEnvironmentImpl(handle as IResourceWithEnvironmentHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithWaitSupport', (handle, client) => new ResourceWithWaitSupportImpl(handle as IResourceWithWaitSupportHandle, client));
-
 
