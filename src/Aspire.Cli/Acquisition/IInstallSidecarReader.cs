@@ -6,7 +6,11 @@ namespace Aspire.Cli.Acquisition;
 /// <summary>
 /// Result of reading an install-route sidecar from a binary directory.
 /// </summary>
-/// <param name="SidecarPath">Absolute path of the sidecar file that was read.</param>
+/// <param name="SidecarPath">
+/// Absolute path of the sidecar file that was read. Always populated for
+/// <see cref="InstallSidecarInfo"/> because a successful read requires a
+/// resolved sidecar path.
+/// </param>
 /// <param name="Source">
 /// Parsed install route. <see cref="InstallSource.Unknown"/> when the sidecar
 /// exists but its <c>source</c> field does not match a known route.
@@ -21,7 +25,14 @@ internal sealed record InstallSidecarInfo(string SidecarPath, InstallSource Sour
 /// <summary>
 /// Result of attempting to read an install-route sidecar.
 /// </summary>
-/// <param name="SidecarPath">Absolute path of the sidecar file that was considered.</param>
+/// <param name="SidecarPath">
+/// Path of the sidecar file that was considered. Absolute when the binary
+/// directory could be resolved; empty (<see cref="string.Empty"/>) when the
+/// caller passed an empty or unusable directory (e.g.
+/// <see cref="Path.GetDirectoryName(string?)"/> returned null/empty for the
+/// candidate binary), in which case the result is always
+/// <see cref="NotFound"/>.
+/// </param>
 internal abstract record InstallSidecarReadResult(string SidecarPath)
 {
     /// <summary>Sidecar was read and parsed.</summary>

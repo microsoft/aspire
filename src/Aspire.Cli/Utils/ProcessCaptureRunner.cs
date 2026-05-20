@@ -113,6 +113,14 @@ internal static class ProcessCaptureRunner
                 await SwallowExitWaitAsync(process, s_postKillExitWaitBound, logger).ConfigureAwait(false);
                 var interruptedCapture = await SwallowCaptureAsync(captureTask, createEmptyCapture, logger, s_postKillCaptureWaitBound).ConfigureAwait(false);
 
+                // Drive the capture task to completion if the bounded wait gave up on it.
+                // The capture task observes timeoutCts.Token, which is already cancelled in
+                // the timeout branch but not in the user-cancellation branch when the
+                // outer cancellationToken cancels before timeoutCts fires. Signalling here
+                // unifies both paths and ensures no capture task outlives this method's
+                // return — disposing the CTS in the surrounding `using` does NOT cancel it.
+                timeoutCts.Cancel();
+
                 return new ProcessCaptureResult<TCapture>(
                     ExitCode: -1,
                     Capture: interruptedCapture,
@@ -131,6 +139,14 @@ internal static class ProcessCaptureRunner
             // kill so the success path doesn't pay the full timeout for that scenario.
             var capture = await SwallowCaptureAsync(captureTask, createEmptyCapture, logger, s_postKillCaptureWaitBound).ConfigureAwait(false);
             var exitCode = process.ExitCode;
+
+            // If the bounded drain timed out (pipes inherited by descendants), the
+            // capture task is still awaiting on timeoutCts.Token. Disposing the CTS in
+            // the `using` does NOT cancel it, so without an explicit Cancel here the
+            // task could linger up to the remaining wall-clock timeout budget after we
+            // return, holding inherited stdout/stderr handles open for that long.
+            // Cancelling drives the read to terminate promptly.
+            timeoutCts.Cancel();
 
             return new ProcessCaptureResult<TCapture>(
                 ExitCode: exitCode,

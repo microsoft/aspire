@@ -523,14 +523,19 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
     private static bool IsIntegrationPackageId(string packageId)
     {
-        var isHostingOrCommunityToolkitNamespaced = packageId.StartsWith("Aspire.Hosting.", StringComparison.Ordinal) ||
-            packageId.StartsWith("CommunityToolkit.Aspire.Hosting.", StringComparison.Ordinal);
+        // NuGet package IDs are case-insensitive, so prefix checks use OrdinalIgnoreCase
+        // to stay consistent with StringComparers.NuGetPackageId used elsewhere in this
+        // file. .nupkg files on disk normally carry the canonical casing, but matching
+        // case-insensitively avoids silently dropping integrations whose file names were
+        // produced with a non-canonical casing (e.g. a third-party hive build).
+        var isHostingOrCommunityToolkitNamespaced = packageId.StartsWith("Aspire.Hosting.", StringComparison.OrdinalIgnoreCase) ||
+            packageId.StartsWith("CommunityToolkit.Aspire.Hosting.", StringComparison.OrdinalIgnoreCase);
 
-        var isExcluded = packageId.StartsWith("Aspire.Hosting.AppHost", StringComparison.Ordinal) ||
-            packageId.StartsWith("Aspire.Hosting.Sdk", StringComparison.Ordinal) ||
-            packageId.StartsWith("Aspire.Hosting.Orchestration", StringComparison.Ordinal) ||
-            packageId.StartsWith("Aspire.Hosting.Testing", StringComparison.Ordinal) ||
-            packageId.StartsWith("Aspire.Hosting.Msi", StringComparison.Ordinal) ||
+        var isExcluded = packageId.StartsWith("Aspire.Hosting.AppHost", StringComparison.OrdinalIgnoreCase) ||
+            packageId.StartsWith("Aspire.Hosting.Sdk", StringComparison.OrdinalIgnoreCase) ||
+            packageId.StartsWith("Aspire.Hosting.Orchestration", StringComparison.OrdinalIgnoreCase) ||
+            packageId.StartsWith("Aspire.Hosting.Testing", StringComparison.OrdinalIgnoreCase) ||
+            packageId.StartsWith("Aspire.Hosting.Msi", StringComparison.OrdinalIgnoreCase) ||
             DeprecatedPackages.IsDeprecated(packageId);
 
         return isHostingOrCommunityToolkitNamespaced && !isExcluded;
