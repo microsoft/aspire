@@ -505,18 +505,15 @@ steps:
         Write-Host "Draft PR created successfully: #$($createdPr.number) $($createdPr.html_url)"
       }
     displayName: '🟣Submit PR to Homebrew/homebrew-cask'
-    # Guard: only submit to Homebrew from production branches (main / release/* / internal/release/*).
+    # Guard: only submit to Homebrew from production branches.
     # 1ES PT branch validation surfaces this as a non-blocking warning, which is too easy to miss;
     # a hard condition stops accidental submissions from feature, fork or dogfood branches.
+    # _IsProductionBranch is defined in eng/pipelines/common-variables.yml.
     condition: |
       and(
         succeeded(),
         eq('${{ parameters.dryRun }}', 'false'),
-        or(
-          eq(variables['Build.SourceBranch'], 'refs/heads/main'),
-          startsWith(variables['Build.SourceBranch'], 'refs/heads/release/'),
-          startsWith(variables['Build.SourceBranch'], 'refs/heads/internal/release/')
-        )
+        eq(variables['_IsProductionBranch'], 'true')
       )
     env:
       HOMEBREW_CASK_GITHUB_TOKEN: $(aspire-homebrew-bot-pat)

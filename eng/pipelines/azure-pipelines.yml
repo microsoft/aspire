@@ -95,11 +95,12 @@ variables:
     - name: _Sign
       value: true
 
-  # Packages are published only on internal, non-PR builds on publishing branches
-  # (main, release/*, internal/release/*). Feature branches and PR builds don't
-  # have Maestro default channels so archive URLs won't be valid.
+  # Packages are published only on internal, non-PR builds on publishing branches.
+  # Feature branches and PR builds don't have Maestro default channels so archive
+  # URLs won't be valid. The branch set lives in common-variables.yml as
+  # _IsProductionBranch.
   - name: _PackagesPublished
-    value: ${{ and(ne(variables['_RunAsPublic'], 'true'), ne(variables['Build.Reason'], 'PullRequest'), or(eq(variables['Build.SourceBranch'], 'refs/heads/main'), startsWith(variables['Build.SourceBranch'], 'refs/heads/release/'), startsWith(variables['Build.SourceBranch'], 'refs/heads/internal/release/'))) }}
+    value: ${{ and(ne(variables['_RunAsPublic'], 'true'), ne(variables['Build.Reason'], 'PullRequest'), eq(variables['_IsProductionBranch'], 'true')) }}
 
 resources:
   repositories:
