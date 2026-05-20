@@ -256,6 +256,11 @@ sealed partial class TestSummaryGenerator
             return;
         }
 
+        // Look for CLI E2E recordings in a sibling "recordings" directory.
+        // The trx file is typically at testresults/SomeTest.trx and recordings
+        // are at testresults/recordings/{MethodName}.cast.
+        var recordingsDir = FindRecordingsDirectory(trxFilePath);
+
         var failedTests = testRun.Results.UnitTestResults.Where(r => r.Outcome == "Failed");
         if (failedTests.Any())
         {
@@ -293,11 +298,75 @@ sealed partial class TestSummaryGenerator
                 }
 
                 reportBuilder.AppendLine("```");
+
+                AppendRecordingSection(reportBuilder, recordingsDir, test.TestName, test.Output?.ErrorInfoString);
+
                 reportBuilder.AppendLine();
                 reportBuilder.AppendLine("</div>");
             }
         }
         reportBuilder.AppendLine();
+    }
+
+    private static void AppendRecordingSection(StringBuilder reportBuilder, string? recordingsDir, string? testName, string? errorInfo)
+    {
+        if (recordingsDir is null || testName is null)
+        {
+            return;
+        }
+
+        // Hex1bAutomationException already includes a terminal snapshot in the error.
+        // Skip the recording section to avoid redundant output.
+        if (errorInfo is not null && errorInfo.Contains("Terminal snapshot at failure", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        // The .cast file is named by the test method name (via [CallerMemberName]),
+        // but TRX TestName is fully qualified (e.g., "Namespace.Class.Method").
+        // Extract just the method name portion.
+        var methodName = testName;
+        var lastDot = testName.LastIndexOf('.');
+        if (lastDot >= 0 && lastDot < testName.Length - 1)
+        {
+            methodName = testName[(lastDot + 1)..];
+        }
+
+        var recordingText = CastFileReader.ReadRecordingText(recordingsDir, methodName);
+        if (recordingText is null)
+        {
+            return;
+        }
+
+        reportBuilder.AppendLine();
+        reportBuilder.AppendLine("<details><summary>🎬 <b>Terminal Recording</b></summary>");
+        reportBuilder.AppendLine();
+        reportBuilder.AppendLine("```ansi");
+        reportBuilder.AppendLine(recordingText);
+        reportBuilder.AppendLine("```");
+        reportBuilder.AppendLine();
+        reportBuilder.AppendLine("</details>");
+    }
+
+    /// <summary>
+    /// Searches for a "recordings" directory relative to the trx file path,
+    /// walking up the directory tree to handle nested test result layouts.
+    /// </summary>
+    private static string? FindRecordingsDirectory(string trxFilePath)
+    {
+        var dir = Path.GetDirectoryName(Path.GetFullPath(trxFilePath));
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(dir, "recordings");
+            if (Directory.Exists(candidate))
+            {
+                return candidate;
+            }
+
+            dir = Path.GetDirectoryName(dir);
+        }
+
+        return null;
     }
 
     private static string GenerateDurationStatistics(string basePath)
