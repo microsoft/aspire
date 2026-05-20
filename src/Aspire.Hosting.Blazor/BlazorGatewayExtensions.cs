@@ -210,9 +210,17 @@ public static class BlazorGatewayExtensions
                     return;
                 }
 
-                var outputDir = Path.Combine(
+                var gatewayOutputRoot = Path.Combine(
                     gateway.ApplicationBuilder.AppHostDirectory,
-                    "obj", "Aspire.Hosting.Blazor", "gateways", gateway.Resource.Name,
+                    "obj", "Aspire.Hosting.Blazor", "gateways", gateway.Resource.Name);
+
+                // Clean up stale output from previous runs.
+                if (Directory.Exists(gatewayOutputRoot))
+                {
+                    Directory.Delete(gatewayOutputRoot, recursive: true);
+                }
+
+                var outputDir = Path.Combine(gatewayOutputRoot,
                     DateTime.UtcNow.ToString("yyyyMMddHHmmssfff", CultureInfo.InvariantCulture));
                 Directory.CreateDirectory(outputDir);
 
