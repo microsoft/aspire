@@ -147,6 +147,9 @@ public static class AzureCosmosExtensions
             var emulatorSurrogate = new AzureCosmosDBEmulatorResource(builder.Resource);
             var emulatorSurrogateBuilder = builder.ApplicationBuilder.CreateResourceBuilder(emulatorSurrogate);
 
+            emulatorSurrogateBuilder.WithOtlpExporter()
+                .WithEnvironment("ENABLE_OTLP_EXPORTER", "true");
+
             // VNext cosmosdb sets a default CERT_SECRET environment variable for the default emulator certificate and we can't
             // remove it, so we need to provide "some" secret value to avoid issues with our provided certificate. This simply sets the
             // dev cert used by cosmos to have a stable passphrase. Users can override by calling `WithHttpsDeveloperCertificate` again
