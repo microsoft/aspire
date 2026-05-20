@@ -632,9 +632,9 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject
             // --source argument list must agree so non-Aspire transitives have the same
             // catch-all source in both views.
             if (hasOverride && !matchedChannelHasAllPackagesMapping &&
-                !sources.Contains(PackageSourceOverrideMappings.NuGetOrgSource, StringComparer.OrdinalIgnoreCase))
+                !sources.Contains(PackageSources.NuGetOrg, StringComparer.OrdinalIgnoreCase))
             {
-                sources.Add(PackageSourceOverrideMappings.NuGetOrgSource);
+                sources.Add(PackageSources.NuGetOrg);
             }
         }
         catch (Exception ex)

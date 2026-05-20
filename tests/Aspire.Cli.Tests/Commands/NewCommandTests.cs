@@ -718,9 +718,9 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Contains(packageSources.Elements("clear"), _ => true);
         Assert.Contains(packageSources.Elements("add"), e => (string?)e.Attribute("value") == sourceOverride);
-        Assert.Contains(packageSources.Elements("add"), e => (string?)e.Attribute("value") == PackageSourceOverrideMappings.NuGetOrgSource);
+        Assert.Contains(packageSources.Elements("add"), e => (string?)e.Attribute("value") == PackageSources.NuGetOrg);
         Assert.Equal(["Aspire*"], GetPackagePatternsForSource(doc, sourceOverride));
-        Assert.Equal([PackageMapping.AllPackages], GetPackagePatternsForSource(doc, PackageSourceOverrideMappings.NuGetOrgSource));
+        Assert.Equal([PackageMapping.AllPackages], GetPackagePatternsForSource(doc, PackageSources.NuGetOrg));
     }
 
     private static string[] GetPackagePatternsForSource(XDocument doc, string source)

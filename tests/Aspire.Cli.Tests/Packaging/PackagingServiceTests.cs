@@ -313,7 +313,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         Assert.NotEmpty(stableChannel.Mappings!);
         Assert.Contains(stableChannel.Mappings!, m =>
             m.PackageFilter == PackageMapping.AllPackages &&
-            m.Source == "https://api.nuget.org/v3/index.json");
+            m.Source == PackageSources.NuGetOrg);
     }
 
     [Fact]
@@ -356,7 +356,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         
         var nugetMapping = stagingChannel.Mappings!.FirstOrDefault(m => m.PackageFilter == "*");
         Assert.NotNull(nugetMapping);
-        Assert.Equal("https://api.nuget.org/v3/index.json", nugetMapping.Source);
+        Assert.Equal(PackageSources.NuGetOrg, nugetMapping.Source);
     }
 
     [Fact]
@@ -1252,7 +1252,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
         // Arrange - simulate package search returning a mismatched stable version
         var fakeCache = new FakeNuGetPackageCacheWithPackages(
         [
-            new() { Id = "Aspire.ProjectTemplates", Version = "13.2.2", Source = "https://api.nuget.org/v3/index.json" },
+            new() { Id = "Aspire.ProjectTemplates", Version = "13.2.2", Source = PackageSources.NuGetOrg },
         ]);
 
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -1575,7 +1575,7 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
 
         var fallbackMapping = localChannel.Mappings!.FirstOrDefault(m => m.PackageFilter == PackageMapping.AllPackages);
         Assert.NotNull(fallbackMapping);
-        Assert.Equal("https://api.nuget.org/v3/index.json", fallbackMapping.Source);
+        Assert.Equal(PackageSources.NuGetOrg, fallbackMapping.Source);
     }
 
     [Fact]

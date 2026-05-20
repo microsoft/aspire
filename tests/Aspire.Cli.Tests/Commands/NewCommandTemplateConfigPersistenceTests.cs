@@ -423,7 +423,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
         var stableChannel = PackageChannel.CreateExplicitChannel(
             PackageChannelNames.Stable,
             PackageChannelQuality.Stable,
-            [new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")],
+            [new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg)],
             stableCache);
 
         var channels = new List<PackageChannel> { implicitChannel, stableChannel };
@@ -449,7 +449,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
                 quality,
                 [
                     new PackageMapping("Aspire*", feed),
-                    new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json"),
+                    new PackageMapping(PackageMapping.AllPackages, PackageSources.NuGetOrg),
                 ],
                 cache));
         }
