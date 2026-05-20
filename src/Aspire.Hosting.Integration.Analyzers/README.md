@@ -12,11 +12,11 @@ In your integration project, install the experimental analyzer package with [NuG
 dotnet add package Aspire.Hosting.Integration.Analyzers --prerelease
 ```
 
-If you keep your package references in the project file or use Central Package Management, prefer a private development-only reference:
+If you edit the project file directly, keep the analyzer private and use the same package version as the Aspire packages referenced by the integration:
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="Aspire.Hosting.Integration.Analyzers" PrivateAssets="all" />
+  <PackageReference Include="Aspire.Hosting.Integration.Analyzers" Version="<Aspire package version>" PrivateAssets="all" />
 </ItemGroup>
 ```
 

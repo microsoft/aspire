@@ -8,7 +8,7 @@ If your integration project already references `Aspire.Hosting`, you can add the
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="Aspire.Hosting.Integration.Analyzers" PrivateAssets="all" />
+  <PackageReference Include="Aspire.Hosting.Integration.Analyzers" Version="<Aspire package version>" PrivateAssets="all" />
 </ItemGroup>
 ```
 

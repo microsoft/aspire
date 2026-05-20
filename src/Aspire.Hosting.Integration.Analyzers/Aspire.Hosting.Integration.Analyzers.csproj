@@ -7,9 +7,9 @@
     <UsePublicApiAnalyzers>false</UsePublicApiAnalyzers>
     <EnablePackageValidation>false</EnablePackageValidation>
     <IsPackable>true</IsPackable>
+    <!-- This is an analyzer-only package: avoid lib/ assets and prevent transitive exposure from consuming projects. -->
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <DevelopmentDependency>true</DevelopmentDependency>
-    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <SuppressFinalPackageVersion>true</SuppressFinalPackageVersion>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>aspire hosting analyzers ats polyglot integration</PackageTags>
