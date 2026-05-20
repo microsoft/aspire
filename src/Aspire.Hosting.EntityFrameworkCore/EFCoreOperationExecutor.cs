@@ -180,7 +180,7 @@ internal sealed class EFCoreOperationExecutor : IDisposable
         return null;
     }
 
-    private async Task<EFOperationResult> ExecuteEfCommandAsync(string command, string subCommand, Dictionary<string, string?>? additionalArgs = null)
+    private async Task<EFOperationResult> ExecuteEfCommandAsync(string command, string subCommand, Dictionary<string, string?>? additionalArgs = null, bool noBuild = true)
     {
         var initResult = EnsurePathsInitialized();
         if (!initResult.Success)
@@ -188,8 +188,19 @@ internal sealed class EFCoreOperationExecutor : IDisposable
             return initResult;
         }
 
-        // Build the EF command arguments (these go after the -- in dotnet tool exec)
-        var efArgs = new List<string> { command, subCommand, "--no-build", "--no-color", "--prefix-output" };
+        // Build the EF command arguments (these go after the -- in dotnet tool exec).
+        // `--no-build` is normally added because all interactive run-mode commands assume the
+        // project was already built by the AppHost. Bundle generation during `aspire publish`
+        // intentionally omits it: the publish pipeline doesn't pre-build the startup project,
+        // and `dotnet ef migrations bundle` needs the migrations and startup projects compiled
+        // (and matching the requested target runtime) before it can package the bundle.
+        var efArgs = new List<string> { command, subCommand };
+        if (noBuild)
+        {
+            efArgs.Add("--no-build");
+        }
+        efArgs.Add("--no-color");
+        efArgs.Add("--prefix-output");
 
         if (_logger.IsEnabled(LogLevel.Debug))
         {
@@ -317,8 +328,8 @@ internal sealed class EFCoreOperationExecutor : IDisposable
 
                 // Check if the command succeeded
                 var snapshot = resourceEvent.Snapshot;
-                var exitCode = snapshot.Properties.FirstOrDefault(p => p.Name == "ExitCode")?.Value?.ToString();
-                if ((exitCode != null && exitCode != "0") || snapshot.State?.Text == KnownResourceStates.FailedToStart)
+                var exitCode = snapshot.ExitCode;
+                if ((exitCode != null && exitCode.Value != 0) || snapshot.State?.Text == KnownResourceStates.FailedToStart)
                 {
                     return new EFOperationResult
                     {
@@ -699,7 +710,7 @@ internal sealed class EFCoreOperationExecutor : IDisposable
 
         if (!string.IsNullOrEmpty(targetRuntime))
         {
-            args["--runtime"] = targetRuntime;
+            args["--target-runtime"] = targetRuntime;
         }
 
         if (selfContained)
@@ -710,7 +721,9 @@ internal sealed class EFCoreOperationExecutor : IDisposable
         // Overwrite existing bundle
         args["--force"] = null;
 
-        return await ExecuteEfCommandAsync("migrations", "bundle", args).ConfigureAwait(false);
+        // The bundle command compiles the migrations + startup project for the target runtime,
+        // so `--no-build` would defeat the purpose; let dotnet-ef drive the build itself.
+        return await ExecuteEfCommandAsync("migrations", "bundle", args, noBuild: false).ConfigureAwait(false);
     }
 
     public void Dispose()
