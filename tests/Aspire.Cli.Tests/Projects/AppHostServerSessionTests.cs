@@ -133,8 +133,9 @@ public class AppHostServerSessionTests
         public Task<AppHostServerPrepareResult> PrepareAsync(
             string sdkVersion,
             IEnumerable<IntegrationReference> integrations,
-            CancellationToken cancellationToken = default,
-            string? requestedChannel = null) =>
+            string? requestedChannel = null,
+            string? packageSourceOverride = null,
+            CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
         public (string SocketPath, Process Process, OutputCollector OutputCollector) Run(

@@ -1610,6 +1610,31 @@ public class UpdateCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task UpdateCommand_ProjectInOtherDirectory_UsesNearestParentConfiguredChannelWhenProjectDirectoryHasNoConfig()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        File.WriteAllText(
+            Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName),
+            """{ "channel": "daily" }""");
+
+        var globalDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire");
+        Directory.CreateDirectory(globalDir);
+        File.WriteAllText(Path.Combine(globalDir, "settings.global.json"), """{ "channel": "staging" }""");
+
+        var projectDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "elsewhere"));
+
+        var (exitCode, updatedWithChannel, promptInvoked) = await RunUpdateAndCaptureChannelAsync(
+            workspace,
+            updateArgs: $"update --apphost {Path.Combine(projectDirectory.FullName, "AppHost.csproj")}",
+            projectDirectory: projectDirectory);
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(promptInvoked, "Channel selection prompt should not be shown when channel is configured in the nearest parent config");
+        Assert.Equal("daily", updatedWithChannel);
+    }
+
+    [Fact]
     public async Task UpdateCommand_ProjectInOtherDirectory_PrefersProjectLocalConfigOverCwdConfig()
     {
         // Cwd has its own aspire.config.json with a different channel; the project's directory

@@ -351,6 +351,110 @@ public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDispos
         Assert.DoesNotContain(prOldHive.FullName, restoreSources);
     }
 
+    [Fact]
+    public async Task CreateProjectFiles_WithPackageSourceOverride_PrependsOverrideToRestoreAdditionalProjectSources()
+    {
+        // Regression for finding #2 of the 2026-05-19 post-merge review: the DotNet-based
+        // (in-repo / dogfood) AppHost path previously declared a packageSourceOverride parameter
+        // on PrepareAsync but ignored it during restore, so `aspire new --source <pr-hive>` was
+        // silently dropped in dev mode. The override now threads through CreateProjectFilesAsync
+        // and prepends to the RestoreAdditionalProjectSources list so the dogfood hive is the
+        // first source NuGet evaluates for any PackageReference fallback in this path.
+        var appPath = _workspace.WorkspaceRoot.FullName;
+        const string overrideSource = "/tmp/aspire-pr-hive/packages";
+        var aspireConfigPath = Path.Combine(appPath, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(aspireConfigPath, """
+            {
+                "channel": "daily"
+            }
+            """);
+
+        var nugetCache = new FakeNuGetPackageCache();
+        var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Prerelease, new[]
+        {
+            new PackageMapping("Aspire*", "https://pkgs.dev.azure.com/fake/v3/index.json"),
+            new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")
+        }, nugetCache);
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(new[] { dailyChannel })
+        };
+
+        var projectModelPath = Path.Combine(appPath, ".aspire_server");
+        var project = new DotNetBasedAppHostServerProject(
+            appPath,
+            "test.sock",
+            appPath,
+            new TestDotNetCliRunner(),
+            packagingService,
+            NullLogger<DotNetBasedAppHostServerProject>.Instance,
+            projectModelPath);
+
+        var packages = new List<IntegrationReference>
+        {
+            IntegrationReference.FromPackage("Aspire.Hosting", "13.1.0")
+        };
+
+        var (projectFilePath, _) = await project.CreateProjectFilesAsync(packages, packageSourceOverride: overrideSource, cancellationToken: CancellationToken.None).DefaultTimeout();
+
+        var projectDoc = XDocument.Load(projectFilePath);
+        var restoreSources = projectDoc.Descendants("RestoreAdditionalProjectSources").FirstOrDefault()?.Value;
+        Assert.NotNull(restoreSources);
+        var sources = restoreSources!.Split(';');
+        // Override is prepended so the hive wins NuGet's source evaluation order when the same
+        // Aspire package version exists in both the hive and the channel feed.
+        Assert.Equal(overrideSource, sources[0]);
+        Assert.Contains("https://pkgs.dev.azure.com/fake/v3/index.json", sources);
+    }
+
+    [Fact]
+    public async Task CreateProjectFiles_WithoutPackageSourceOverride_DoesNotInjectExtraSource()
+    {
+        // Negative companion to the override regression: ensure the no-override path still emits
+        // only the channel sources (i.e., we are not accidentally introducing an empty/null
+        // source that breaks restore on the existing in-repo flow).
+        var appPath = _workspace.WorkspaceRoot.FullName;
+        var aspireConfigPath = Path.Combine(appPath, AspireConfigFile.FileName);
+        await File.WriteAllTextAsync(aspireConfigPath, """
+            {
+                "channel": "daily"
+            }
+            """);
+
+        var nugetCache = new FakeNuGetPackageCache();
+        const string channelFeed = "https://pkgs.dev.azure.com/fake/v3/index.json";
+        var dailyChannel = PackageChannel.CreateExplicitChannel("daily", PackageChannelQuality.Prerelease, new[]
+        {
+            new PackageMapping("Aspire*", channelFeed)
+        }, nugetCache);
+        var packagingService = new TestPackagingService
+        {
+            GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>(new[] { dailyChannel })
+        };
+
+        var projectModelPath = Path.Combine(appPath, ".aspire_server");
+        var project = new DotNetBasedAppHostServerProject(
+            appPath,
+            "test.sock",
+            appPath,
+            new TestDotNetCliRunner(),
+            packagingService,
+            NullLogger<DotNetBasedAppHostServerProject>.Instance,
+            projectModelPath);
+
+        var packages = new List<IntegrationReference>
+        {
+            IntegrationReference.FromPackage("Aspire.Hosting", "13.1.0")
+        };
+
+        var (projectFilePath, _) = await project.CreateProjectFilesAsync(packages).DefaultTimeout();
+
+        var projectDoc = XDocument.Load(projectFilePath);
+        var restoreSources = projectDoc.Descendants("RestoreAdditionalProjectSources").FirstOrDefault()?.Value;
+        Assert.NotNull(restoreSources);
+        Assert.Equal(channelFeed, restoreSources);
+    }
+
     private static void DumpDirectoryTree(string path, ITestOutputHelper output, string indent = "")
     {
         var dirInfo = new DirectoryInfo(path);

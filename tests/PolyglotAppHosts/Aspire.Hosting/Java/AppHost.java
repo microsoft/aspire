@@ -1,4 +1,5 @@
 import aspire.*;
+import java.util.Map;
 
 void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
@@ -40,6 +41,13 @@ void main() throws Exception {
         var tool = builder.addDotnetTool("mytool", "dotnet-ef");
         var configParam = builder.addParameterFromConfiguration("myconfig", "MyConfig:Key");
         var secretParam = builder.addParameterFromConfiguration("mysecret", "MyConfig:Secret", true);
+        var customInputParam = builder.addParameter("custom-input");
+        var customInputOptions = new ParameterCustomInputOptions();
+        customInputOptions.setInputType(InputType.NUMBER);
+        customInputOptions.setLabel("Worker Count");
+        customInputOptions.setPlaceholder("Enter number (1-10)");
+        customInputOptions.setOptions(Map.of("one", "One", "two", "Two"));
+        customInputParam.withCustomInput(customInputOptions);
         container.withDockerfileBaseImage(new WithDockerfileBaseImageOptions().buildImage("mcr.microsoft.com/dotnet/sdk:8.0"));
         container.withImageRegistry("docker.io");
         dockerContainer.withHttpEndpoint(new WithHttpEndpointOptions().name("http").targetPort(80.0));

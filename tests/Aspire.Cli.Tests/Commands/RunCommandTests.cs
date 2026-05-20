@@ -1984,7 +1984,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var extensionInteractionServiceFactory = (IServiceProvider sp) =>
         {
             var service = new TestExtensionInteractionService(sp);
-            service.StartDebugSessionCallback = (_, _, _) =>
+            service.StartDebugSessionCallback = (_, _, _, _) =>
             {
                 startDebugSessionCalled = true;
             };
@@ -2033,6 +2033,80 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(startDebugSessionCalled, "StartDebugSessionAsync should not be called in non-interactive mode.");
+    }
+
+    [Fact]
+    public async Task RunCommand_AllowsNoBuildInActiveExtensionDebugSession()
+    {
+        var startDebugSessionCalled = false;
+        var runNoBuildValue = false;
+
+        var extensionBackchannel = new TestExtensionBackchannel();
+        extensionBackchannel.GetCapabilitiesAsyncCallback = ct => Task.FromResult(Array.Empty<string>());
+
+        var appHostBackchannel = new TestAppHostBackchannel();
+        appHostBackchannel.GetDashboardUrlsAsyncCallback = (ct) => Task.FromResult(new DashboardUrlsState
+        {
+            DashboardHealthy = true,
+            BaseUrlWithLoginToken = "http://localhost/dashboard",
+            CodespacesUrlWithLoginToken = null
+        });
+        appHostBackchannel.GetAppHostLogEntriesAsyncCallback = ReturnLogEntriesUntilCancelledAsync;
+
+        var backchannelFactory = (IServiceProvider sp) => appHostBackchannel;
+
+        var extensionInteractionServiceFactory = (IServiceProvider sp) =>
+        {
+            var service = new TestExtensionInteractionService(sp);
+            service.StartDebugSessionCallback = (_, _, _, _) =>
+            {
+                startDebugSessionCalled = true;
+            };
+            return service;
+        };
+
+        var runnerFactory = (IServiceProvider sp) =>
+        {
+            var runner = new TestDotNetCliRunner();
+            runner.BuildAsyncCallback = (projectFile, noRestore, options, ct) => 0;
+            runner.GetAppHostInformationAsyncCallback = (projectFile, options, ct) => (0, true, VersionHelper.GetDefaultTemplateVersion());
+            runner.RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, ct) =>
+            {
+                runNoBuildValue = noBuild;
+                var backchannel = sp.GetRequiredService<IAppHostCliBackchannel>();
+                backchannelCompletionSource!.SetResult(backchannel);
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                return 0;
+            };
+            return runner;
+        };
+
+        var projectLocatorFactory = (IServiceProvider sp) => new TestProjectLocator();
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ConfigurationCallback += config => config[KnownConfigNames.ExtensionDebugSessionId] = "existing-session";
+            options.ProjectLocatorFactory = projectLocatorFactory;
+            options.AppHostBackchannelFactory = backchannelFactory;
+            options.DotNetCliRunnerFactory = runnerFactory;
+            options.ExtensionBackchannelFactory = _ => extensionBackchannel;
+            options.InteractionServiceFactory = extensionInteractionServiceFactory;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("run --no-build");
+
+        using var cts = new CancellationTokenSource();
+        var pendingRun = result.InvokeAsync(cancellationToken: cts.Token);
+        cts.Cancel();
+
+        var exitCode = await pendingRun.DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(startDebugSessionCalled, "StartDebugSessionAsync should not be called from an active extension debug session.");
+        Assert.True(runNoBuildValue);
     }
 
     [Theory]

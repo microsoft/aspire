@@ -128,5 +128,65 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("LanguageOptionDescription", resourceCulture);
             }
         }
+
+        internal static string AppHostCreatedRunOne {
+            get {
+                return ResourceManager.GetString("AppHostCreatedRunOne", resourceCulture);
+            }
+        }
+
+        internal static string AppHostCreatedRunOneOf {
+            get {
+                return ResourceManager.GetString("AppHostCreatedRunOneOf", resourceCulture);
+            }
+        }
+
+        internal static string DeprecatedOptionWarning {
+            get {
+                return ResourceManager.GetString("DeprecatedOptionWarning", resourceCulture);
+            }
+        }
+
+        internal static string FileAlreadyExistsSkipping {
+            get {
+                return ResourceManager.GetString("FileAlreadyExistsSkipping", resourceCulture);
+            }
+        }
+
+        internal static string CreatedFile {
+            get {
+                return ResourceManager.GetString("CreatedFile", resourceCulture);
+            }
+        }
+
+        internal static string InstallingAspireProjectTemplates {
+            get {
+                return ResourceManager.GetString("InstallingAspireProjectTemplates", resourceCulture);
+            }
+        }
+
+        internal static string CreatingAppHostFromTemplate {
+            get {
+                return ResourceManager.GetString("CreatingAppHostFromTemplate", resourceCulture);
+            }
+        }
+
+        internal static string FailedToCreateAppHostFromTemplate {
+            get {
+                return ResourceManager.GetString("FailedToCreateAppHostFromTemplate", resourceCulture);
+            }
+        }
+
+        internal static string FailedToParseExistingConfig {
+            get {
+                return ResourceManager.GetString("FailedToParseExistingConfig", resourceCulture);
+            }
+        }
+
+        internal static string FixOrRemoveConfigAndRerun {
+            get {
+                return ResourceManager.GetString("FixOrRemoveConfigAndRerun", resourceCulture);
+            }
+        }
     }
 }

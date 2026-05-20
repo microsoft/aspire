@@ -164,7 +164,14 @@ internal sealed class BundleNuGetService : INuGetService
 
         _logger.LogDebug("Restoring {Count} packages", packageList.Count);
         _logger.LogDebug("aspire-managed path: {ManagedPath}", managedPath);
-        _logger.LogDebug("NuGet restore args: {Args}", string.Join(" ", restoreArgs));
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            // Build a redacted copy of the args specifically for the log line so user-supplied
+            // credentialed feeds (e.g., `https://user:pat@host/v3/index.json`, SAS-token URLs) do
+            // not flow to the debug log alongside the rest of the restore invocation. The
+            // original `restoreArgs` list is still passed verbatim to the process below.
+            _logger.LogDebug("NuGet restore args: {Args}", string.Join(" ", BuildRedactedArgsForLog(restoreArgs)));
+        }
 
         var environmentVariables = new Dictionary<string, string>();
         NuGetSignatureVerificationEnabler.Apply(environmentVariables, _features, _executionContext);
@@ -251,6 +258,25 @@ internal sealed class BundleNuGetService : INuGetService
             logger.LogDebug(ex, "Cached package manifest {ManifestPath} is invalid and will be regenerated.", manifestPath);
             return false;
         }
+    }
+
+    // Returns a redacted copy of the restore args suitable for debug logging. Replaces the value
+    // immediately following each `--source` token with the credential-safe form from
+    // PackageSourceRedactor. Built defensively to handle repeated `--source` flags and a missing
+    // trailing value at the end of the args list.
+    private static IReadOnlyList<string> BuildRedactedArgsForLog(IReadOnlyList<string> args)
+    {
+        var redacted = new List<string>(args.Count);
+        for (var i = 0; i < args.Count; i++)
+        {
+            redacted.Add(args[i]);
+            if (string.Equals(args[i], "--source", StringComparison.Ordinal) && i + 1 < args.Count)
+            {
+                redacted.Add(PackageSourceRedactor.RedactForDisplay(args[++i]));
+            }
+        }
+
+        return redacted;
     }
 
     internal static string ComputePackageHash(

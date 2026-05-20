@@ -170,6 +170,12 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("StartingDebugSessionInExtension", resourceCulture);
             }
         }
+
+        public static string StartingRunSessionInExtension {
+            get {
+                return ResourceManager.GetString("StartingRunSessionInExtension", resourceCulture);
+            }
+        }
         
         public static string AgentConfigurationPrompt {
             get {

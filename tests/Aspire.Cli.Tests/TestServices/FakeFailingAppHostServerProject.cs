@@ -24,8 +24,9 @@ internal sealed class FakeFailingAppHostServerProject(string appDirectoryPath) :
     public Task<AppHostServerPrepareResult> PrepareAsync(
         string sdkVersion,
         IEnumerable<IntegrationReference> integrations,
-        CancellationToken cancellationToken = default,
-        string? requestedChannel = null) =>
+        string? requestedChannel = null,
+        string? packageSourceOverride = null,
+        CancellationToken cancellationToken = default) =>
         Task.FromResult(new AppHostServerPrepareResult(Success: false, Output: null));
 
     public (string SocketPath, Process Process, OutputCollector OutputCollector) Run(

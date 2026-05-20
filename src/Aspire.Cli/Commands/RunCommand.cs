@@ -87,7 +87,6 @@ internal sealed class RunCommand : BaseCommand
     {
         Description = RunCommandStrings.NoBuildArgumentDescription
     };
-    private readonly Option<bool>? _startDebugSessionOption;
 
     public RunCommand(
         IDotNetCliRunner runner,
@@ -126,15 +125,6 @@ internal sealed class RunCommand : BaseCommand
         Options.Add(s_noBuildOption);
         AppHostLauncher.AddLaunchOptions(this);
 
-        if (ExtensionHelper.IsExtensionHost(InteractionService, out _, out _))
-        {
-            _startDebugSessionOption = new Option<bool>("--start-debug-session")
-            {
-                Description = RunCommandStrings.StartDebugSessionArgumentDescription
-            };
-            Options.Add(_startDebugSessionOption);
-        }
-
         TreatUnmatchedTokensAsErrors = false;
     }
 
@@ -152,8 +142,7 @@ internal sealed class RunCommand : BaseCommand
         var startDebugSession = false;
         if (isExtensionHost)
         {
-            Debug.Assert(_startDebugSessionOption is not null);
-            startDebugSession = parseResult.GetValue(_startDebugSessionOption);
+            startDebugSession = parseResult.GetValue(RootCommand.StartDebugSessionOption);
         }
 
         // Validate that --format is only used with --detach
@@ -162,9 +151,15 @@ internal sealed class RunCommand : BaseCommand
             return CommandResult.Failure(CliExitCodes.InvalidCommand, RunCommandStrings.FormatRequiresDetach);
         }
 
-        // Validate that --no-build is not used when watch mode would be enabled
-        // Watch mode is enabled when DefaultWatchEnabled feature is true, or when running under extension host (not in debug session)
-        var watchModeEnabled = _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false) || (isExtensionHost && !startDebugSession);
+        // Validate that --no-build is not used when watch mode would be enabled.
+        // The extension terminal path enables watch mode by delegating to VS Code
+        // before an Aspire debug session exists. Once VS Code starts the session,
+        // the child CLI has ASPIRE_EXTENSION_DEBUG_SESSION_ID and can honor
+        // forwarded options from the original terminal command without recursing.
+        var extensionTerminalRunWithoutDebugSession = isExtensionHost
+            && !startDebugSession
+            && string.IsNullOrEmpty(_configuration[KnownConfigNames.ExtensionDebugSessionId]);
+        var watchModeEnabled = _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false) || extensionTerminalRunWithoutDebugSession;
         if (noBuild && watchModeEnabled)
         {
             return CommandResult.Failure(CliExitCodes.InvalidCommand, RunCommandStrings.NoBuildNotSupportedWithWatchMode);
@@ -185,7 +180,7 @@ internal sealed class RunCommand : BaseCommand
             && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _)
             && string.IsNullOrEmpty(_configuration[KnownConfigNames.ExtensionDebugSessionId]))
         {
-            extensionInteractionService.DisplayConsolePlainText(RunCommandStrings.StartingDebugSessionInExtension);
+            extensionInteractionService.DisplayConsolePlainText(string.Format(CultureInfo.CurrentCulture, startDebugSession ? RunCommandStrings.StartingDebugSessionInExtension : RunCommandStrings.StartingRunSessionInExtension, "run"));
             await extensionInteractionService.StartDebugSessionAsync(ExecutionContext.WorkingDirectory.FullName, passedAppHostProjectFile?.FullName, startDebugSession, new DebugSessionOptions { Command = "run" });
             return CommandResult.Success();
         }

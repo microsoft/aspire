@@ -4,8 +4,10 @@
 #pragma warning disable ASPIREUSERSECRETS001
 
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Resources;
 using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Hosting;
@@ -242,6 +244,39 @@ public static class ParameterResourceBuilderExtensions
 
         return builder;
     }
+
+    /// <summary>
+    /// Sets a custom input for the parameter resource from a polyglot app host.
+    /// </summary>
+    /// <param name="builder">Resource builder for the parameter.</param>
+    /// <param name="options">Options used to customize the input for the parameter.</param>
+    /// <returns>Resource builder for the parameter.</returns>
+    [Experimental(InteractionService.DiagnosticId, UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExport("withCustomInput", Description = "Sets a custom input for the parameter")]
+    internal static IResourceBuilder<ParameterResource> WithCustomInputForPolyglot(this IResourceBuilder<ParameterResource> builder, Ats.ParameterCustomInputOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(options);
+
+        builder.Resource.Annotations.Add(new InputGeneratorAnnotation(parameter => new InteractionInput
+        {
+            Name = parameter.Name,
+            InputType = options.InputType ?? (parameter.Secret ? InputType.SecretText : InputType.Text),
+            Label = GetOptionalString(options.Label) ?? parameter.Name,
+            Description = GetOptionalString(options.Description) ?? parameter.Description,
+            EnableDescriptionMarkdown = options.EnableDescriptionMarkdown ?? parameter.EnableDescriptionMarkdown,
+            Options = options.Options is { Count: > 0 } optionValues ? optionValues.Select(static option => KeyValuePair.Create(option.Key, option.Value)).ToArray() : null,
+            Value = GetOptionalString(options.Value),
+            Placeholder = GetOptionalString(options.Placeholder) ?? string.Format(CultureInfo.CurrentCulture, InteractionStrings.ParametersInputsParameterPlaceholder, parameter.Name),
+            AllowCustomChoice = options.AllowCustomChoice ?? false,
+            Disabled = options.Disabled ?? false,
+            MaxLength = options.MaxLength
+        }));
+
+        return builder;
+    }
+
+    private static string? GetOptionalString(string? value) => string.IsNullOrEmpty(value) ? null : value;
 
     // Internal to allow ParameterProcessor to check for configured values
     // without triggering default value generation

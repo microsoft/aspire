@@ -292,12 +292,15 @@ public sealed class DashboardCommandExecutor(
             _ => null
         };
 
-        await TextVisualizerDialog.OpenDialogAsync(new OpenTextVisualizerDialogOptions
+        var reference = await TextVisualizerDialog.OpenDialogAsync(new OpenTextVisualizerDialogOptions
         {
             DialogService = dialogService,
             ValueDescription = command.GetDisplayName(),
             Value = response.Result.Value,
             FixedFormat = fixedFormat
-        }).ConfigureAwait(false);
+        }).ConfigureAwait(true);
+
+        // Await the result to wait here until the dialog is closed.
+        await reference.Result.ConfigureAwait(true);
     }
 }

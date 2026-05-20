@@ -36,6 +36,8 @@ internal sealed class SdkDumpCommand : BaseCommand
     private readonly IAppHostServerProjectFactory _appHostServerProjectFactory;
     private readonly ILogger<SdkDumpCommand> _logger;
 
+    protected override bool UpdateNotificationsEnabled => false;
+
     private static readonly Argument<string[]> s_integrationArgument = new("integrations")
     {
         Description = "Integrations to scan. Each can be a .csproj path or a NuGet package in PackageName@Version format. If not specified, dumps core Aspire.Hosting capabilities.",
@@ -147,7 +149,7 @@ internal sealed class SdkDumpCommand : BaseCommand
             var prepareResult = await appHostServerProject.PrepareAsync(
                 VersionHelper.GetDefaultTemplateVersion(),
                 integrations,
-                cancellationToken);
+                cancellationToken: cancellationToken);
 
             if (!prepareResult.Success)
             {

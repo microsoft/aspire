@@ -7,6 +7,7 @@ import {
     CertificateTrustScope,
     EndpointProperty,
     IconVariant,
+    InputType,
     OtlpProtocol,
     ProbeType,
     refExpr,
@@ -101,6 +102,16 @@ const generatedParam = await builder.addParameterWithGeneratedValue("generated-s
 }, {
     secret: true,
     persist: true,
+});
+const customInputParam = await builder.addParameter("custom-input");
+await customInputParam.withCustomInput({
+    inputType: InputType.Number,
+    label: "Worker Count",
+    placeholder: "Enter number (1-10)",
+    options: {
+        one: "One",
+        two: "Two",
+    },
 });
 
 // ===================================================================

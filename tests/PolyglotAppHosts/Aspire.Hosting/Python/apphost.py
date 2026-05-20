@@ -111,6 +111,18 @@ with create_builder() as builder:
     # addParameterFromConfiguration
     config_param = builder.add_parameter_from_config("parameter", "Config:Key")
     secret_param = builder.add_parameter_from_config("parameter", "Config:Key")
+    custom_input_param = builder.add_parameter("custom-input")
+    custom_input_param.with_custom_input(
+        {
+            "InputType": "Number",
+            "Label": "Worker Count",
+            "Placeholder": "Enter number (1-10)",
+            "Options": {
+                "one": "One",
+                "two": "Two",
+            },
+        }
+    )
     # withDockerfileBaseImage
     container.with_dockerfile_base_image()
     # withImageRegistry

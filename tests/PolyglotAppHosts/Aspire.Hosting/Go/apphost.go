@@ -25,7 +25,7 @@ func main() {
 	container.WithOtlpExporter(&aspire.WithOtlpExporterOptions{Protocol: &genericOtlpProtocol})
 	taggedContainer := builder.AddContainer("mytaggedcontainer", &aspire.AddContainerOptions{
 		Image: "nginx",
-		Tag:   "stable-alpine",
+		Tag:   aspire.StringPtr("stable-alpine"),
 	})
 	if err = taggedContainer.Err(); err != nil {
 		log.Fatalf(aspire.FormatError(err))
@@ -97,6 +97,17 @@ func main() {
 			Secret:  aspire.BoolPtr(true),
 			Persist: aspire.BoolPtr(true),
 		})
+	customInputType := aspire.InputTypeNumber
+	customInputParam := builder.AddParameter("custom-input")
+	customInputParam.WithCustomInput(&aspire.ParameterCustomInputOptions{
+		InputType:   &customInputType,
+		Label:       "Worker Count",
+		Placeholder: "Enter number (1-10)",
+		Options: map[string]string{
+			"one": "One",
+			"two": "Two",
+		},
+	})
 
 	// ===================================================================
 	// Container-specific methods on ContainerResource

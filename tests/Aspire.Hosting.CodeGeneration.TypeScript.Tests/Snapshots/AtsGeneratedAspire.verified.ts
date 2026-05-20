@@ -133,17 +133,17 @@ export interface TestConfigDto {
 /** Test DTO with deeply nested generic types. */
 export interface TestDeeplyNestedDto {
     /** Deeply nested generic: Dictionary containing List of DTOs. */
-    nestedData?: AspireDict<string, AspireList<TestConfigDto>>;
+    nestedData?: Record<string, TestConfigDto[]>;
     /** Array of dictionaries. */
-    metadataArray?: AspireDict<string, string>[];
+    metadataArray?: Record<string, string>[];
 }
 
 /** Test DTO with complex nested types. */
 export interface TestNestedDto {
     id?: string;
     config?: TestConfigDto;
-    tags?: AspireList<string>;
-    counts?: AspireDict<string, number>;
+    tags?: string[];
+    counts?: Record<string, number>;
 }
 
 // ============================================================================
@@ -4029,4 +4029,5 @@ registerHandleWrapper('Aspire.Hosting.CodeGeneration.TypeScript.Tests/Aspire.Hos
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResource', (handle, client) => new ResourceImpl(handle as IResourceHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithConnectionString', (handle, client) => new ResourceWithConnectionStringImpl(handle as IResourceWithConnectionStringHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEnvironment', (handle, client) => new ResourceWithEnvironmentImpl(handle as IResourceWithEnvironmentHandle, client));
+
 
