@@ -39,10 +39,10 @@ internal static class TypeScriptAppHostToolchainTestHelpers
 
         packageJson["packageManager"] = GetPackageManager(toolchain);
         File.WriteAllText(packageJsonPath, $"{packageJson.ToJsonString(s_packageJsonSerializerOptions)}{Environment.NewLine}");
-        ConfigureToolchainFiles(projectRoot, toolchain);
 
         if (!cleanInstallState)
         {
+            ConfigureToolchainFiles(projectRoot, toolchain);
             return;
         }
 
@@ -60,6 +60,8 @@ internal static class TypeScriptAppHostToolchainTestHelpers
         {
             Directory.Delete(nodeModulesPath, recursive: true);
         }
+
+        ConfigureToolchainFiles(projectRoot, toolchain);
     }
 
     /// <summary>
@@ -153,6 +155,14 @@ internal static class TypeScriptAppHostToolchainTestHelpers
             // Yarn 4 defaults to Plug'n'Play, but the generated AppHost/Vite workflows exercised
             // here expect node_modules resolution across tsx, nodemon, and Vite.
             File.WriteAllText(yarnConfigPath, $"{YarnNodeModulesConfiguration}{Environment.NewLine}");
+
+            var yarnLockPath = Path.Combine(projectRoot, "yarn.lock");
+            if (!File.Exists(yarnLockPath))
+            {
+                // Without a lockfile, Yarn walks up to the AppHost package.json and treats a nested
+                // Vite app as an unlisted workspace instead of an independent package.
+                File.WriteAllText(yarnLockPath, string.Empty);
+            }
         }
         else if (File.Exists(yarnConfigPath))
         {
