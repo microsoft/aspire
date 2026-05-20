@@ -241,15 +241,13 @@ public static class FoundryExtensions
     }
 
     /// <summary>
-    /// Assigns the specified roles to the given resource, granting it the necessary permissions
-    /// on the target Microsoft Foundry resource. This replaces the default role assignments for the resource.
+    /// Assigns Microsoft Foundry roles to a resource
     /// </summary>
     /// <param name="builder">The resource to which the specified roles will be assigned.</param>
     /// <param name="target">The target Microsoft Foundry resource.</param>
     /// <param name="roles">The Microsoft Foundry roles to be assigned (for example, <see cref="FoundryRole.CognitiveServicesOpenAIUser"/>).</param>
     /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
     /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="FoundryRole"/> value.</exception>
-    /// <ats-summary>Assigns Microsoft Foundry roles to a resource</ats-summary>
     [AspireExport("withFoundryRoleAssignments")]
     internal static IResourceBuilder<T> WithRoleAssignments<T>(
         this IResourceBuilder<T> builder,

@@ -410,10 +410,8 @@ public static class JavaScriptHostingExtensions
 
 #pragma warning disable ASPIREEXPORT009 // Polyglot entry point — collision is intentional
     /// <summary>
-    /// Polyglot-compatible overload. All parameters are optional so the TS codegen wraps them
-    /// in a single options object rather than positional args.
+    /// Publishes the JavaScript application as a standalone static website using YARP.
     /// </summary>
-    /// <ats-summary>Publishes the JavaScript application as a standalone static website using YARP.</ats-summary>
     [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport("publishAsStaticWebsite")]
     internal static IResourceBuilder<TResource> PublishAsStaticWebsitePolyglot<TResource>(

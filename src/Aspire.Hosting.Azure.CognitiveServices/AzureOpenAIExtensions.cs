@@ -249,15 +249,13 @@ public static class AzureOpenAIExtensions
     }
 
     /// <summary>
-    /// Assigns the specified roles to the given resource, granting it the necessary permissions
-    /// on the target Azure OpenAI resource. This replaces the default role assignments for the resource.
+    /// Assigns Cognitive Services roles to a resource
     /// </summary>
     /// <param name="builder">The resource to which the specified roles will be assigned.</param>
     /// <param name="target">The target Azure OpenAI resource.</param>
     /// <param name="roles">The Azure OpenAI roles to be assigned (for example, <see cref="AzureOpenAIRole.CognitiveServicesOpenAIUser"/>).</param>
     /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
     /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="AzureOpenAIRole"/> value.</exception>
-    /// <ats-summary>Assigns Cognitive Services roles to a resource</ats-summary>
     [AspireExport("withCognitiveServicesRoleAssignments")]
     internal static IResourceBuilder<T> WithRoleAssignments<T>(
         this IResourceBuilder<T> builder,

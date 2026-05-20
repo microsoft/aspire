@@ -260,7 +260,7 @@ public static class AzureContainerRegistryExtensions
     }
 
     /// <summary>
-    /// Adds role assignments to the specified Azure Container Registry resource.
+    /// Assigns Azure Container Registry roles to a resource.
     /// </summary>
     /// <typeparam name="T">The type of the resource being configured.</typeparam>
     /// <param name="builder">The resource builder for the resource that will have role assignments.</param>
@@ -268,7 +268,6 @@ public static class AzureContainerRegistryExtensions
     /// <param name="roles">The Azure Container Registry roles to assign to the resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="AzureContainerRegistryRole"/> value.</exception>
-    /// <ats-summary>Assigns Azure Container Registry roles to a resource.</ats-summary>
     [AspireExport("withContainerRegistryRoleAssignments")]
     internal static IResourceBuilder<T> WithRoleAssignments<T>(
         this IResourceBuilder<T> builder,

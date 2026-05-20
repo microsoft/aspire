@@ -713,15 +713,13 @@ public static class AzureStorageExtensions
     }
 
     /// <summary>
-    /// Assigns the specified roles to the given resource, granting it the necessary permissions
-    /// on the target Azure Storage account. This replaces the default role assignments for the resource.
+    /// Assigns Azure Storage roles to a resource
     /// </summary>
     /// <param name="builder">The resource to which the specified roles will be assigned.</param>
     /// <param name="target">The target Azure Storage account.</param>
     /// <param name="roles">The storage roles to be assigned.</param>
     /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
     /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="AzureStorageRole"/> value.</exception>
-    /// <ats-summary>Assigns Azure Storage roles to a resource</ats-summary>
     [AspireExport("withStorageRoleAssignments")]
     internal static IResourceBuilder<T> WithRoleAssignments<T>(
         this IResourceBuilder<T> builder,

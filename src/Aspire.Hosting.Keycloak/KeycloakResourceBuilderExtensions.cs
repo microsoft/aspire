@@ -358,9 +358,8 @@ public static class KeycloakResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Adds a realm import to a Keycloak container resource.
+    /// Imports a Keycloak realm configuration
     /// </summary>
-    /// <ats-summary>Imports a Keycloak realm configuration</ats-summary>
     [AspireExport("withRealmImport")]
     internal static IResourceBuilder<KeycloakResource> WithRealmImportInternal(
         this IResourceBuilder<KeycloakResource> builder,

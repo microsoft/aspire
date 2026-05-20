@@ -72,14 +72,13 @@ public static class ExistingAzureResourceExtensions
     }
 
     /// <summary>
-    /// Marks the resource as an existing resource when the application is running.
+    /// Marks an Azure resource as existing in run mode
     /// </summary>
     /// <typeparam name="T">The type of the resource.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <param name="name">The name of the existing resource as a string or parameter resource.</param>
     /// <param name="resourceGroup">The name of the existing resource group as a string or parameter resource.</param>
     /// <returns>The resource builder with the existing resource annotation added.</returns>
-    /// <ats-summary>Marks an Azure resource as existing in run mode</ats-summary>
     [AspireExport("runAsExisting")]
     internal static IResourceBuilder<T> RunAsExistingForPolyglot<T>(
         this IResourceBuilder<T> builder,
@@ -128,14 +127,13 @@ public static class ExistingAzureResourceExtensions
     }
 
     /// <summary>
-    /// Marks the resource as an existing resource when the application is deployed.
+    /// Marks an Azure resource as existing in publish mode
     /// </summary>
     /// <typeparam name="T">The type of the resource.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <param name="name">The name of the existing resource as a string or parameter resource.</param>
     /// <param name="resourceGroup">The name of the existing resource group as a string or parameter resource.</param>
     /// <returns>The resource builder with the existing resource annotation added.</returns>
-    /// <ats-summary>Marks an Azure resource as existing in publish mode</ats-summary>
     [AspireExport("publishAsExisting")]
     internal static IResourceBuilder<T> PublishAsExistingForPolyglot<T>(
         this IResourceBuilder<T> builder,

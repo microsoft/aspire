@@ -52,9 +52,8 @@ public static class YarpRouteExtensions
     }
 
     /// <summary>
-    /// Set the parameters used to match requests.
+    /// Sets the route match criteria.
     /// </summary>
-    /// <ats-summary>Sets the route match criteria.</ats-summary>
     [AspireExport]
     internal static YarpRoute WithMatch(this YarpRoute route, YarpRouteMatch match)
     {
@@ -106,9 +105,8 @@ public static class YarpRouteExtensions
     }
 
     /// <summary>
-    /// Only match requests that contain all of these headers.
+    /// Matches requests that contain the specified headers.
     /// </summary>
-    /// <ats-summary>Matches requests that contain the specified headers.</ats-summary>
     [AspireExport]
     internal static YarpRoute WithMatchHeaders(this YarpRoute route, params YarpRouteHeaderMatch[] headers)
     {
@@ -142,9 +140,8 @@ public static class YarpRouteExtensions
     }
 
     /// <summary>
-    ///  Only match requests that contain all of these query parameters.
+    /// Matches requests that contain the specified query parameters.
     /// </summary>
-    /// <ats-summary>Matches requests that contain the specified query parameters.</ats-summary>
     [AspireExport]
     internal static YarpRoute WithMatchRouteQueryParameter(this YarpRoute route, params YarpRouteQueryParameterMatch[] queryParameters)
     {
@@ -220,9 +217,8 @@ public static class YarpRouteExtensions
     }
 
     /// <summary>
-    /// Add a new transform to the destination.
+    /// Adds a transform to the route.
     /// </summary>
-    /// <ats-summary>Adds a transform to the route.</ats-summary>
     [AspireExport]
     internal static YarpRoute WithTransform(this YarpRoute route, IReadOnlyDictionary<string, string> transform)
     {

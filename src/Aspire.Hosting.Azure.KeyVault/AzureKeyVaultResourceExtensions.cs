@@ -178,15 +178,13 @@ public static partial class AzureKeyVaultResourceExtensions
     }
 
     /// <summary>
-    /// Assigns the specified roles to the given resource, granting it the necessary permissions
-    /// on the target Azure Key Vault resource. This replaces the default role assignments for the resource.
+    /// Assigns Key Vault roles to a resource
     /// </summary>
     /// <param name="builder">The resource to which the specified roles will be assigned.</param>
     /// <param name="target">The target Azure Key Vault resource.</param>
     /// <param name="roles">The Key Vault roles to be assigned.</param>
     /// <returns>The updated <see cref="IResourceBuilder{T}"/> with the applied role assignments.</returns>
     /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="AzureKeyVaultRole"/> value.</exception>
-    /// <ats-summary>Assigns Key Vault roles to a resource</ats-summary>
     [AspireExport("withKeyVaultRoleAssignments")]
     internal static IResourceBuilder<T> WithRoleAssignments<T>(
         this IResourceBuilder<T> builder,

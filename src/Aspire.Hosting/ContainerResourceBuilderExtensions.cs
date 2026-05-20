@@ -1160,14 +1160,13 @@ public static class ContainerResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Adds a build argument when the container is built from a Dockerfile.
+    /// Adds a build argument from a string value or parameter resource
     /// </summary>
     /// <typeparam name="T">The type of container resource.</typeparam>
     /// <param name="builder">The resource builder for the container resource.</param>
     /// <param name="name">The name of the build argument.</param>
     /// <param name="value">The build argument value, either a string or a parameter resource.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Adds a build argument from a string value or parameter resource</ats-summary>
     [AspireExport("withBuildArg")]
     internal static IResourceBuilder<T> WithBuildArgExport<T>(
         this IResourceBuilder<T> builder,
@@ -1267,7 +1266,7 @@ public static class ContainerResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Adds container certificate path overrides used for certificate trust at run time.
+    /// Overrides container certificate bundle and directory paths used for trust configuration
     /// </summary>
     /// <typeparam name="TResource">The type of the resource.</typeparam>
     /// <param name="builder">The resource builder.</param>
@@ -1275,7 +1274,6 @@ public static class ContainerResourceBuilderExtensions
     /// <param name="defaultCertificateBundlePaths">Default certificate bundle paths in the container that will be replaced.</param>
     /// <param name="defaultCertificateDirectoryPaths">Default certificate directory paths in the container that may be appended.</param>
     /// <returns>The updated resource builder.</returns>
-    /// <ats-summary>Overrides container certificate bundle and directory paths used for trust configuration</ats-summary>
     [AspireExport("withContainerCertificatePaths")]
     internal static IResourceBuilder<TResource> WithContainerCertificatePathsExport<TResource>(
         this IResourceBuilder<TResource> builder,

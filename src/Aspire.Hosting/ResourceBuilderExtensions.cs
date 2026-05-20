@@ -432,14 +432,13 @@ public static class ResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Adds a connection property annotation to the resource being built.
+    /// Adds a connection property with a string or reference expression value
     /// </summary>
     /// <typeparam name="T">The type of resource that implements <see cref="IResourceWithConnectionString"/>.</typeparam>
     /// <param name="builder">The resource builder to which the connection property will be added.</param>
     /// <param name="name">The name of the connection property to add.</param>
     /// <param name="value">The value to assign to the connection property, specified as a string or reference expression.</param>
     /// <returns>The same resource builder instance with the specified connection property annotation applied.</returns>
-    /// <ats-summary>Adds a connection property with a string or reference expression value</ats-summary>
     [AspireExport("withConnectionProperty")]
     internal static IResourceBuilder<T> WithConnectionPropertyExport<T>(
         this IResourceBuilder<T> builder,
@@ -692,13 +691,12 @@ public static class ResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Configures how information is injected into environment variables when the resource references other resources.
+    /// Configures which reference values are injected into environment variables
     /// </summary>
     /// <typeparam name="TDestination">The destination resource.</typeparam>
     /// <param name="builder">The resource to configure.</param>
     /// <param name="options">Options controlling which reference information is emitted.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Configures which reference values are injected into environment variables</ats-summary>
     [AspireExport("withReferenceEnvironment")]
     internal static IResourceBuilder<TDestination> WithReferenceEnvironmentExport<TDestination>(
         this IResourceBuilder<TDestination> builder,
@@ -2880,9 +2878,8 @@ public static class ResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Adds a command to the resource that starts a local process when invoked.
+    /// Adds a process resource command
     /// </summary>
-    /// <ats-summary>Adds a process resource command</ats-summary>
     [Experimental("ASPIREPROCESSCOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport("withProcessCommand")]
     internal static IResourceBuilder<TResource> WithProcessCommandExport<TResource>(
@@ -2902,9 +2899,8 @@ public static class ResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Adds a command to the resource that starts a local process created by a callback when invoked.
+    /// Adds a process resource command via callback
     /// </summary>
-    /// <ats-summary>Adds a process resource command via callback</ats-summary>
     [Experimental("ASPIREPROCESSCOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport("withProcessCommandFactory")]
     internal static IResourceBuilder<TResource> WithProcessCommandFactoryExport<TResource>(
@@ -4425,10 +4421,6 @@ public static class ResourceBuilderExtensions
         return builder.WithHttpProbe(type, endpointSelector, path, initialDelaySeconds, periodSeconds, timeoutSeconds, failureThreshold, successThreshold);
     }
 
-    /// <summary>
-    /// ATS export stub for <see cref="WithHttpProbe{T}(IResourceBuilder{T}, ProbeType, string?, int?, int?, int?, int?, int?, string?)"/>
-    /// with renamed parameter to avoid reserved keyword conflicts in Go and Rust.
-    /// </summary>
     /// <ats-summary>Adds an HTTP health probe to the resource</ats-summary>
     [Experimental("ASPIREPROBES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport("withHttpProbe")]
