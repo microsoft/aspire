@@ -141,6 +141,13 @@
       <_AspireAppHostSdkVersion>%(_AppHostSdkItem.Version)</_AspireAppHostSdkVersion>
     </PropertyGroup>
 
+    <!-- Hard-fail if Aspire.AppHost.Sdk wasn't enumerated. Without this check the generated
+         Directory.Packages.Versions.props would emit <AspireAppHostSdkVersion></AspireAppHostSdkVersion>
+         and the Helix consumer's <Import Sdk="Aspire.AppHost.Sdk" Version="" /> would later fail
+         with an opaque NuGet SDK-resolution error instead of pointing here. -->
+    <Error Condition="'$(_AspireAppHostSdkVersion)' == ''"
+           Text="ReturnPackageVersion did not yield Aspire.AppHost.Sdk in @(_AspirePackageVersions). Did src/Aspire.AppHost.Sdk/Aspire.AppHost.Sdk.csproj rename/un-pack, or was the project excluded from _SrcProjectsForVersions?" />
+
     <!-- Duplicate all the @(PackageVersion) items (3rd-party packages) with the evaluated versions -->
     <ItemGroup>
       <_PackageVersionEvaluated Include="@(PackageVersion -> '&lt;PackageVersion Include=&quot;%(Identity)&quot; Version=&quot;%(Version)&quot; /&gt;')" />
