@@ -3,6 +3,7 @@
 
 using System.Collections.Immutable;
 using System.Globalization;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.ApplicationModel.Docker;
 using Microsoft.Extensions.Configuration;
@@ -159,6 +160,10 @@ public static class BlazorGatewayExtensions
                 gateway.WithReference(gateway.ApplicationBuilder.CreateResourceBuilder(svcResource));
             }
         }
+
+        // Make the WASM app appear as a child of the gateway in the dashboard,
+        // similar to how database instances appear under their server resource.
+        wasmApp.WithParentRelationship(gateway.Resource);
 
         return gateway.WithBlazorApp(wasmApp, pathPrefix, serviceNames, apiPrefix, otlpPrefix, proxyTelemetry);
     }
@@ -440,17 +445,13 @@ public static class BlazorGatewayExtensions
 
     private static List<ResourceRelationshipAnnotation> GetServiceDiscoveryReferences(IResource resource)
     {
-        var references = new List<ResourceRelationshipAnnotation>();
-        foreach (var annotation in resource.Annotations)
-        {
-            if (annotation is ResourceRelationshipAnnotation rel
-                && rel.Type == "Reference"
-                && rel.Resource is IResourceWithServiceDiscovery)
-            {
-                references.Add(rel);
-            }
-        }
-        return references;
+        // TODO: ResourceRelationshipAnnotation is public but reading it directly couples us
+        // to the annotation model. Consider whether a higher-level API (e.g. a method on
+        // IResource or an extension) should expose referenced resources instead.
+        return resource.Annotations
+            .OfType<ResourceRelationshipAnnotation>()
+            .Where(rel => rel.Type == KnownRelationshipTypes.Reference && rel.Resource is IResourceWithServiceDiscovery)
+            .ToList();
     }
 
     private static string[] GetResourceNames(List<ResourceRelationshipAnnotation> references)
@@ -465,17 +466,11 @@ public static class BlazorGatewayExtensions
 
     private static HashSet<string> GetReferencedResourceNames(IResource resource)
     {
-        var names = new HashSet<string>(StringComparers.ResourceName);
-        foreach (var annotation in resource.Annotations)
-        {
-            // Only consider Reference relationships, not WaitFor or Parent,
-            // so that .WaitFor(svc).WithBlazorClientApp(svc) still adds WithReference.
-            if (annotation is ResourceRelationshipAnnotation { Type: "Reference" } rel)
-            {
-                names.Add(rel.Resource.Name);
-            }
-        }
-        return names;
+        return resource.Annotations
+            .OfType<ResourceRelationshipAnnotation>()
+            .Where(rel => rel.Type == KnownRelationshipTypes.Reference)
+            .Select(rel => rel.Resource.Name)
+            .ToHashSet(StringComparers.ResourceName);
     }
 
     private static EndpointReference? GetEndpointIfDefined(IResourceWithEndpoints resource, string endpointName)
