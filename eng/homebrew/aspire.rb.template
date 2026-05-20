@@ -15,8 +15,6 @@ cask "aspire" do
     skip "ci.dot.net artifact storage has no version index; Aspire release automation manages cask updates"
   end
 
-  depends_on macos: :monterey
-
   binary "aspire"
 
   # Write the sidecar file

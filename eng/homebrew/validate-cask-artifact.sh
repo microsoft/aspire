@@ -162,7 +162,7 @@ class ArchiveHandler(http.server.SimpleHTTPRequestHandler):
     def copyfile(self, source, outputfile):
         try:
             super().copyfile(source, outputfile)
-        except BrokenPipeError:
+        except (BrokenPipeError, ConnectionResetError):
             pass
 
 class ArchiveServer(socketserver.TCPServer):
