@@ -7,6 +7,10 @@ using System.Text.Json.Serialization;
 
 namespace Aspire.Hosting;
 
+// No PropertyNamingPolicy is set (defaults to PascalCase) because the SDK manifests
+// (EndpointsManifest, DevelopmentManifest) use PascalCase field names. ClientConfiguration
+// uses explicit [JsonPropertyName] attributes for camelCase because it follows the Blazor
+// boot configuration format consumed by JavaScript in the browser.
 [JsonSerializable(typeof(ClientConfiguration))]
 [JsonSerializable(typeof(EndpointsManifest))]
 [JsonSerializable(typeof(DevelopmentManifest))]

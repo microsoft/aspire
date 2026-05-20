@@ -66,7 +66,7 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
         var env = new Dictionary<string, object>();
         var gatewayEndpoint = gateway.GetEndpoint("https");
 
-        GatewayConfigurationBuilder.EmitProxyConfiguration(env, apps, gatewayEndpoint);
+        GatewayConfigurationBuilder.EmitProxyConfiguration(env, apps, gatewayEndpoint, httpOtlpEndpoint: "http://localhost:4318");
 
         Assert.Equal("cluster-otlp-dashboard", env["ReverseProxy__Routes__route-otlp-store__ClusterId"]);
         Assert.Equal("/store/_otlp/{**catch-all}", env["ReverseProxy__Routes__route-otlp-store__Match__Path"]);
@@ -143,7 +143,7 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
         };
         var gatewayEndpoint = gateway.GetEndpoint("https");
 
-        GatewayConfigurationBuilder.EmitProxyConfiguration(env, apps, gatewayEndpoint);
+        GatewayConfigurationBuilder.EmitProxyConfiguration(env, apps, gatewayEndpoint, httpOtlpEndpoint: "http://localhost:4318");
 
         Assert.Equal("x-otlp-api-key", env["ReverseProxy__Routes__route-otlp-store__Transforms__1__RequestHeader"]);
         Assert.Equal("abc123", env["ReverseProxy__Routes__route-otlp-store__Transforms__1__Set"]);
@@ -266,7 +266,7 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
         var env = new Dictionary<string, object>();
         var gatewayEndpoint = gateway.GetEndpoint("https");
 
-        GatewayConfigurationBuilder.EmitProxyConfiguration(env, apps, gatewayEndpoint);
+        GatewayConfigurationBuilder.EmitProxyConfiguration(env, apps, gatewayEndpoint, httpOtlpEndpoint: "http://localhost:4318");
 
         var configResponse = (IManifestExpressionProvider)env["ClientApps__store__ConfigResponse"];
         var manifestExpression = configResponse.ValueExpression;
@@ -291,7 +291,7 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
         var env = new Dictionary<string, object>();
         var gatewayEndpoint = gateway.GetEndpoint("https");
 
-        GatewayConfigurationBuilder.EmitProxyConfiguration(env, apps, gatewayEndpoint);
+        GatewayConfigurationBuilder.EmitProxyConfiguration(env, apps, gatewayEndpoint, httpOtlpEndpoint: "http://localhost:4318");
 
         // Verify custom API prefix in YARP route
         Assert.Equal("/store/myapi/weatherapi/{**catch-all}", env["ReverseProxy__Routes__route-store-weatherapi__Match__Path"]);
@@ -380,7 +380,7 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
         var apps = new List<GatewayAppRegistration> { registration };
         var env = new Dictionary<string, object>();
 
-        GatewayConfigurationBuilder.EmitProxyConfiguration(env, apps, gateway.GetEndpoint("https"), gateway.GetEndpoint("http"));
+        GatewayConfigurationBuilder.EmitProxyConfiguration(env, apps, gateway.GetEndpoint("https"), gateway.GetEndpoint("http"), httpOtlpEndpoint: "http://localhost:4318");
 
         var configResponse = (IManifestExpressionProvider)env["ClientApps__store__ConfigResponse"];
         var configJson = configResponse.ValueExpression;
@@ -414,6 +414,7 @@ public class GatewayConfigurationBuilderTests(ITestOutputHelper testOutputHelper
         GatewayConfigurationBuilder.EmitProxyConfiguration(env, apps, gatewayEndpoint, httpOtlpEndpoint: null);
 
         Assert.False(env.ContainsKey("ReverseProxy__Clusters__cluster-otlp-dashboard__Destinations__d1__Address"));
+        Assert.False(env.ContainsKey("ReverseProxy__Routes__route-otlp-store__ClusterId"));
     }
 
     [Fact]

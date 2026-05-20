@@ -245,8 +245,9 @@ public static class BlazorGatewayExtensions
                 // and isolated mode). Fall back to configuration for cases where the dashboard
                 // resource isn't in the model (e.g. external dashboard).
                 var httpOtlpEndpointUrl = ResolveHttpOtlpEndpointUrl(context, gateway.ApplicationBuilder.Configuration);
+                var resourceLoggerService = context.ExecutionContext.ServiceProvider.GetRequiredService<ResourceLoggerService>();
 
-                GatewayConfigurationBuilder.EmitProxyConfiguration(context.EnvironmentVariables, registeredApps, gatewayEndpoint, httpGatewayEndpoint, httpOtlpEndpointUrl);
+                GatewayConfigurationBuilder.EmitProxyConfiguration(context.EnvironmentVariables, registeredApps, gatewayEndpoint, httpGatewayEndpoint, httpOtlpEndpointUrl, resourceLoggerService);
             });
         }
 
