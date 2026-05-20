@@ -103,7 +103,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
 #pragma warning restore ASPIREINTERACTION001
 
         var rb = builder.AddResource(tunnelResource)
-            .WithArgs("host", tunnelId, "--nologo")
+            .WithArgs("host", tunnelResource.ResolvedTunnelId, "--nologo")
             .WithIconName("CloudBidirectional")
             .WithEnvironment("TUNNEL_SERVICE_USER_AGENT", s_aspireUserAgent)
             .WithInitialState(new()
@@ -176,13 +176,13 @@ public static partial class DevTunnelsResourceBuilderExtensions
 
                 async Task DeleteUnmodeledPortsAsync()
                 {
-                    var existingPorts = await devTunnelClient.GetPortListAsync(tunnelResource.TunnelId, logger, ct).ConfigureAwait(false);
+                    var existingPorts = await devTunnelClient.GetPortListAsync(tunnelResource.ResolvedTunnelId, logger, ct).ConfigureAwait(false);
                     var modeledPortNumbers = tunnelResource.Ports.Select(p => p.TargetEndpoint.Port).ToHashSet();
                     var unmodeledPorts = existingPorts.Ports.Where(p => !modeledPortNumbers.Contains(p.PortNumber)).ToList();
                     if (unmodeledPorts.Count > 0)
                     {
                         logger.LogInformation("Deleting {Count} unmodeled ports from dev tunnel '{TunnelId}': {Ports}", unmodeledPorts.Count, tunnelResource.TunnelId, string.Join(", ", unmodeledPorts.Select(p => p.PortNumber)));
-                        await Task.WhenAll(unmodeledPorts.Select(p => devTunnelClient.DeletePortAsync(tunnelResource.TunnelId, p.PortNumber, logger, ct))).ConfigureAwait(false);
+                        await Task.WhenAll(unmodeledPorts.Select(p => devTunnelClient.DeletePortAsync(tunnelResource.ResolvedTunnelId, p.PortNumber, logger, ct))).ConfigureAwait(false);
                     }
                 }
 
@@ -201,7 +201,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
                     try
                     {
                         _ = await devTunnelClient.CreatePortAsync(
-                                portResource.DevTunnel.TunnelId,
+                                portResource.DevTunnel.ResolvedTunnelId,
                                 portResource.TargetEndpoint.Port,
                                 portResource.Options,
                                 portLogger,
