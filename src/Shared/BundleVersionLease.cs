@@ -69,7 +69,16 @@ internal sealed class BundleVersionLease : IDisposable
 
         try
         {
-            var metadata = CreateMetadata(fullVersionDirectory, holderKind, commandName);
+            var versionId = Path.GetFileName(fullVersionDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            var metadata = new BundleVersionLeaseMetadata(
+                VersionId: versionId,
+                VersionDirectory: fullVersionDirectory,
+                ProcessId: Environment.ProcessId,
+                ProcessStartTimeUtcTicks: GetCurrentProcessStartTimeTicks(),
+                HolderKind: holderKind,
+                CommandName: commandName,
+                AcquiredUtc: DateTimeOffset.UtcNow);
+
             JsonSerializer.Serialize(stream, metadata, BundleVersionLeaseJsonSerializerContext.Default.BundleVersionLeaseMetadata);
             stream.Flush(flushToDisk: true);
 
@@ -206,21 +215,6 @@ internal sealed class BundleVersionLease : IDisposable
         {
             return 0;
         }
-    }
-
-    private static BundleVersionLeaseMetadata CreateMetadata(string versionDirectory, string holderKind, string? commandName)
-    {
-        var versionId = Path.GetFileName(versionDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-        var startTicks = GetCurrentProcessStartTimeTicks();
-
-        return new BundleVersionLeaseMetadata(
-            VersionId: versionId,
-            VersionDirectory: versionDirectory,
-            ProcessId: Environment.ProcessId,
-            ProcessStartTimeUtcTicks: startTicks,
-            HolderKind: holderKind,
-            CommandName: commandName,
-            AcquiredUtc: DateTimeOffset.UtcNow);
     }
 }
 
