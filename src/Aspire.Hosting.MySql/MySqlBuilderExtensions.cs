@@ -183,7 +183,6 @@ public static class MySqlBuilderExtensions
     /// <remarks>
     /// <value>Default script is <code>CREATE DATABASE IF NOT EXISTS `QUOTED_DATABASE_NAME`;</code></value>
     /// </remarks>
-    /// <ats-summary>Defines the SQL script for database creation</ats-summary>
     [AspireExport]
     public static IResourceBuilder<MySqlDatabaseResource> WithCreationScript(this IResourceBuilder<MySqlDatabaseResource> builder, string script)
     {
@@ -347,7 +346,6 @@ public static class MySqlBuilderExtensions
     /// <param name="source">The source directory on the host to mount into the container.</param>
     /// <param name="isReadOnly">A flag that indicates if this is a read-only mount.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Adds a data bind mount for MySQL</ats-summary>
     [AspireExport]
     public static IResourceBuilder<MySqlServerResource> WithDataBindMount(this IResourceBuilder<MySqlServerResource> builder, string source, bool isReadOnly = false)
     {
@@ -379,7 +377,6 @@ public static class MySqlBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="source">The source file or directory on the host to copy into the container.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Copies init files to MySQL</ats-summary>
     [AspireExport]
     public static IResourceBuilder<MySqlServerResource> WithInitFiles(this IResourceBuilder<MySqlServerResource> builder, string source)
     {

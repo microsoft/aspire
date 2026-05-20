@@ -61,7 +61,6 @@ public static class PythonAppResourceBuilderExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
-    /// <ats-summary>Adds a Python script application resource</ats-summary>
     [OverloadResolutionPriority(1)]
     [AspireExport]
     public static IResourceBuilder<PythonAppResource> AddPythonApp(

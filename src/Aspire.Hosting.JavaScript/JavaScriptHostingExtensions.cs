@@ -980,7 +980,6 @@ public static class JavaScriptHostingExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <ats-summary>Adds a Vite application resource</ats-summary>
     [AspireExport]
     public static IResourceBuilder<ViteAppResource> AddViteApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string appDirectory, string runScriptName = "dev")
     {
@@ -1157,7 +1156,6 @@ public static class JavaScriptHostingExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <ats-summary>Adds a Next.js application resource</ats-summary>
     [Experimental("ASPIREJAVASCRIPT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport]
     public static IResourceBuilder<NextJsAppResource> AddNextJsApp(this IDistributedApplicationBuilder builder, [ResourceName] string name, string appDirectory, string runScriptName = "dev")

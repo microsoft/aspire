@@ -180,7 +180,6 @@ public static class KeycloakResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <ats-summary>Adds a data bind mount for Keycloak</ats-summary>
     [AspireExport]
     public static IResourceBuilder<KeycloakResource> WithDataBindMount(this IResourceBuilder<KeycloakResource> builder, string source)
     {

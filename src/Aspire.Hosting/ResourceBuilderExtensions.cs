@@ -2003,7 +2003,6 @@ public static class ResourceBuilderExtensions
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource to exclude.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Excludes the resource from the deployment manifest</ats-summary>
     [AspireExport]
     public static IResourceBuilder<T> ExcludeFromManifest<T>(this IResourceBuilder<T> builder) where T : IResource
     {

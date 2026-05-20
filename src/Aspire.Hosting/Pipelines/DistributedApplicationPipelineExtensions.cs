@@ -21,7 +21,6 @@ public static class DistributedApplicationPipelineExtensions
     /// for a particular app. Prefer wiring build-only containers through <c>PublishWithContainerFiles</c> or
     /// <c>PublishWithStaticFiles</c> when possible.
     /// </remarks>
-    /// <ats-summary>Disables publish and deploy validation for unconsumed build-only containers.</ats-summary>
     [AspireExport]
     public static IDistributedApplicationPipeline DisableBuildOnlyContainerValidation(this IDistributedApplicationPipeline pipeline)
     {

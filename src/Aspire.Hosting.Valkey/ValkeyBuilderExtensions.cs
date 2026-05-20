@@ -203,7 +203,6 @@ public static class ValkeyBuilderExtensions
     /// </example>
     /// </remarks>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Adds a data volume for Valkey and enables persistence</ats-summary>
     [AspireExport]
     public static IResourceBuilder<ValkeyResource> WithDataVolume(
         this IResourceBuilder<ValkeyResource> builder,
@@ -242,7 +241,6 @@ public static class ValkeyBuilderExtensions
     /// </example>
     /// </remarks>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Adds a data bind mount for Valkey and enables persistence</ats-summary>
     [AspireExport]
     public static IResourceBuilder<ValkeyResource> WithDataBindMount(
         this IResourceBuilder<ValkeyResource> builder,

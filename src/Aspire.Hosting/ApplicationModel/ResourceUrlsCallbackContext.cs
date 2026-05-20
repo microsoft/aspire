@@ -82,7 +82,6 @@ public class ResourceUrlsCallbackContext(DistributedApplicationExecutionContext 
     /// <summary>
     /// Gets the execution context associated with this invocation of the AppHost.
     /// </summary>
-    /// <ats-summary>Gets the execution context for this callback invocation</ats-summary>
     [AspireExport]
     public DistributedApplicationExecutionContext ExecutionContext { get; } = executionContext ?? throw new ArgumentNullException(nameof(executionContext));
 }

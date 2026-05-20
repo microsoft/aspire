@@ -254,7 +254,6 @@ public static class KubernetesIngressExtensions
     /// <param name="builder">The ingress resource builder.</param>
     /// <param name="secretName">A parameter resource builder for the secret name.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
-    /// <ats-summary>Configures TLS for a Kubernetes Ingress with a parameterized secret</ats-summary>
     [AspireExport("withIngressTlsParam")]
     public static IResourceBuilder<KubernetesIngressResource> WithTls(
         this IResourceBuilder<KubernetesIngressResource> builder,

@@ -586,7 +586,6 @@ public static class ContainerResourceBuilderExtensions
     /// </summary>
     /// <param name="builder">Resource builder.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Configures the resource to be published as a container</ats-summary>
     [AspireExport]
     public static IResourceBuilder<T> PublishAsContainer<T>(this IResourceBuilder<T> builder) where T : ContainerResource
     {

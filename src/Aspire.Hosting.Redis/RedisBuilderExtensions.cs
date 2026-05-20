@@ -538,7 +538,6 @@ public static class RedisBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="source">The source directory on the host to mount into the container.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Adds a data bind mount for Redis Insight</ats-summary>
     [AspireExport("withRedisInsightDataBindMount", MethodName = "withDataBindMount")]
     public static IResourceBuilder<RedisInsightResource> WithDataBindMount(this IResourceBuilder<RedisInsightResource> builder, string source)
     {

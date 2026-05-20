@@ -452,7 +452,6 @@ public static class AzureContainerAppExtensions
     /// This method allows for reusing the previously deployed resources if the application was deployed using
     /// azd without calling <see cref="AddAzureContainerAppEnvironment"/>
     /// </remarks>
-    /// <ats-summary>Configures resources to use azd naming conventions</ats-summary>
     [AspireExport]
     public static IResourceBuilder<AzureContainerAppEnvironmentResource> WithAzdResourceNaming(this IResourceBuilder<AzureContainerAppEnvironmentResource> builder)
     {

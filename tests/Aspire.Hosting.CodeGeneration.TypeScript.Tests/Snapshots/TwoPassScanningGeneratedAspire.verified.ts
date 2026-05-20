@@ -1837,12 +1837,12 @@ export interface CommandLineArgsCallbackContext {
     /** Gets the callback logger facade */
     log(): LogFacadePromise;
     /**
-     * Gets the resource associated with this callback
+     * The resource associated with this callback context.
      *
      * This will be set to the resource in all cases where Aspire invokes the callback.
      */
     resource(): ResourcePromise;
-    /** Gets the execution context for this callback invocation */
+    /** Gets the execution context associated with this callback. */
     executionContext(): Promise<DistributedApplicationExecutionContext>;
 }
 
@@ -3969,12 +3969,12 @@ export interface EnvironmentCallbackContext {
     /** Gets the callback logger facade */
     log(): LogFacadePromise;
     /**
-     * Gets the resource associated with this callback
+     * The resource associated with this callback context.
      *
      * This will be set to the resource in all cases where Aspire invokes the callback.
      */
     resource(): ResourcePromise;
-    /** Gets the execution context for this callback invocation */
+    /** Gets the execution context associated with this invocation of the AppHost. */
     executionContext(): Promise<DistributedApplicationExecutionContext>;
 }
 
@@ -6308,7 +6308,7 @@ export interface ResourceUrlsCallbackContext {
     urls(): ResourceUrlsEditorPromise;
     /** Gets the callback logger facade */
     log(): LogFacadePromise;
-    /** Gets the execution context for this callback invocation */
+    /** Gets the execution context associated with this invocation of the AppHost. */
     executionContext(): Promise<DistributedApplicationExecutionContext>;
     /**
      * Gets an endpoint reference from the associated resource
@@ -6324,7 +6324,7 @@ export interface ResourceUrlsCallbackContextPromise extends PromiseLike<Resource
     urls(): ResourceUrlsEditorPromise;
     /** Gets the callback logger facade */
     log(): LogFacadePromise;
-    /** Gets the execution context for this callback invocation */
+    /** Gets the execution context associated with this invocation of the AppHost. */
     executionContext(): Promise<DistributedApplicationExecutionContext>;
     /**
      * Gets an endpoint reference from the associated resource
@@ -7150,7 +7150,7 @@ export interface Configuration {
      */
     getSection(key: string): Promise<ConfigurationSection>;
     /**
-     * Gets child configuration sections
+     * Gets the child sections of a configuration handle.
      * @returns The child sections.
      */
     getChildren(): Promise<ConfigurationSection[]>;
@@ -7182,7 +7182,7 @@ export interface ConfigurationPromise extends PromiseLike<Configuration> {
      */
     getSection(key: string): Promise<ConfigurationSection>;
     /**
-     * Gets child configuration sections
+     * Gets the child sections of a configuration handle.
      * @returns The child sections.
      */
     getChildren(): Promise<ConfigurationSection[]>;
@@ -7245,7 +7245,7 @@ class ConfigurationImpl implements Configuration {
     }
 
     /**
-     * Gets child configuration sections
+     * Gets the child sections of a configuration handle.
      * @returns The child sections.
      */
     async getChildren(): Promise<ConfigurationSection[]> {
@@ -7547,7 +7547,7 @@ export interface DistributedApplicationBuilder {
      */
     addParameter(name: string, options?: AddParameterOptions): ParameterResourcePromise;
     /**
-     * Adds a parameter sourced from configuration
+     * Adds a parameter resource to the application, with a value coming from configuration.
      * @param name Name of parameter resource
      * @param configurationKey Configuration key used to get the value of the parameter
      * @param options Additional options.
@@ -7784,7 +7784,7 @@ export interface DistributedApplicationBuilderPromise extends PromiseLike<Distri
      */
     addParameter(name: string, options?: AddParameterOptions): ParameterResourcePromise;
     /**
-     * Adds a parameter sourced from configuration
+     * Adds a parameter resource to the application, with a value coming from configuration.
      * @param name Name of parameter resource
      * @param configurationKey Configuration key used to get the value of the parameter
      * @param options Additional options.
@@ -8218,7 +8218,7 @@ class DistributedApplicationBuilderImpl implements DistributedApplicationBuilder
     }
 
     /**
-     * Adds a parameter sourced from configuration
+     * Adds a parameter resource to the application, with a value coming from configuration.
      * @param name Name of parameter resource
      * @param configurationKey Configuration key used to get the value of the parameter
      * @param options Additional options.
@@ -8715,7 +8715,7 @@ class DistributedApplicationEventingPromiseImpl implements DistributedApplicatio
 export interface DistributedApplicationPipeline {
     toJSON(): MarshalledHandle;
     /**
-     * Disables publish and deploy validation for unconsumed build-only containers.
+     * Disables the publish and deploy validation that requires build-only containers to be consumed by another resource.
      *
      * This is an application-wide escape hatch for scenarios where the build-only container validation is too restrictive
      * for a particular app. Prefer wiring build-only containers through `PublishWithContainerFiles` or
@@ -8739,7 +8739,7 @@ export interface DistributedApplicationPipeline {
 
 export interface DistributedApplicationPipelinePromise extends PromiseLike<DistributedApplicationPipeline> {
     /**
-     * Disables publish and deploy validation for unconsumed build-only containers.
+     * Disables the publish and deploy validation that requires build-only containers to be consumed by another resource.
      *
      * This is an application-wide escape hatch for scenarios where the build-only container validation is too restrictive
      * for a particular app. Prefer wiring build-only containers through `PublishWithContainerFiles` or
@@ -8783,7 +8783,7 @@ class DistributedApplicationPipelineImpl implements DistributedApplicationPipeli
     }
 
     /**
-     * Disables publish and deploy validation for unconsumed build-only containers.
+     * Disables the publish and deploy validation that requires build-only containers to be consumed by another resource.
      *
      * This is an application-wide escape hatch for scenarios where the build-only container validation is too restrictive
      * for a particular app. Prefer wiring build-only containers through `PublishWithContainerFiles` or
@@ -9571,7 +9571,7 @@ class LoggerPromiseImpl implements LoggerPromise {
 export interface LoggerFactory {
     toJSON(): MarshalledHandle;
     /**
-     * Creates a logger for a category
+     * Creates a logger for the specified category name.
      * @param categoryName The category name.
      * @returns A logger handle.
      */
@@ -9580,7 +9580,7 @@ export interface LoggerFactory {
 
 export interface LoggerFactoryPromise extends PromiseLike<LoggerFactory> {
     /**
-     * Creates a logger for a category
+     * Creates a logger for the specified category name.
      * @param categoryName The category name.
      * @returns A logger handle.
      */
@@ -9609,7 +9609,7 @@ class LoggerFactoryImpl implements LoggerFactory {
     }
 
     /**
-     * Creates a logger for a category
+     * Creates a logger for the specified category name.
      * @param categoryName The category name.
      * @returns A logger handle.
      */
@@ -10654,7 +10654,7 @@ export interface ContainerRegistryResource {
      */
     withUrlForEndpoint(endpointName: string, callback: (obj: ResourceUrlAnnotation) => Promise<void>): ContainerRegistryResourcePromise;
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): ContainerRegistryResourcePromise;
@@ -11003,7 +11003,7 @@ export interface ContainerRegistryResourcePromise extends PromiseLike<ContainerR
      */
     withUrlForEndpoint(endpointName: string, callback: (obj: ResourceUrlAnnotation) => Promise<void>): ContainerRegistryResourcePromise;
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): ContainerRegistryResourcePromise;
@@ -11466,7 +11466,7 @@ class ContainerRegistryResourceImpl extends ResourceBuilderBase<ContainerRegistr
     }
 
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): ContainerRegistryResourcePromise {
@@ -12617,7 +12617,7 @@ export interface ContainerResource {
      */
     withImagePullPolicy(pullPolicy: ImagePullPolicy): ContainerResourcePromise;
     /**
-     * Configures the resource to be published as a container
+     * Changes the resource to be published as a container in the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     publishAsContainer(): ContainerResourcePromise;
@@ -12941,7 +12941,7 @@ export interface ContainerResource {
      */
     withUrlForEndpoint(endpointName: string, callback: (obj: ResourceUrlAnnotation) => Promise<void>): ContainerResourcePromise;
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): ContainerResourcePromise;
@@ -13475,7 +13475,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      */
     withImagePullPolicy(pullPolicy: ImagePullPolicy): ContainerResourcePromise;
     /**
-     * Configures the resource to be published as a container
+     * Changes the resource to be published as a container in the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     publishAsContainer(): ContainerResourcePromise;
@@ -13799,7 +13799,7 @@ export interface ContainerResourcePromise extends PromiseLike<ContainerResource>
      */
     withUrlForEndpoint(endpointName: string, callback: (obj: ResourceUrlAnnotation) => Promise<void>): ContainerResourcePromise;
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): ContainerResourcePromise;
@@ -14487,7 +14487,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /**
-     * Configures the resource to be published as a container
+     * Changes the resource to be published as a container in the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     publishAsContainer(): ContainerResourcePromise {
@@ -15342,7 +15342,7 @@ class ContainerResourceImpl extends ResourceBuilderBase<ContainerResourceHandle>
     }
 
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): ContainerResourcePromise {
@@ -17351,7 +17351,7 @@ export interface CSharpAppResource {
      */
     publishWithContainerFiles(source: Awaitable<ResourceWithContainerFiles>, destinationPath: string): CSharpAppResourcePromise;
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): CSharpAppResourcePromise;
@@ -18033,7 +18033,7 @@ export interface CSharpAppResourcePromise extends PromiseLike<CSharpAppResource>
      */
     publishWithContainerFiles(source: Awaitable<ResourceWithContainerFiles>, destinationPath: string): CSharpAppResourcePromise;
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): CSharpAppResourcePromise;
@@ -19189,7 +19189,7 @@ class CSharpAppResourceImpl extends ResourceBuilderBase<CSharpAppResourceHandle>
     }
 
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): CSharpAppResourcePromise {
@@ -20882,7 +20882,7 @@ export interface DotnetToolResource {
      */
     withToolVersion(version: string): DotnetToolResourcePromise;
     /**
-     * Allows prerelease tool versions
+     * Allows prerelease versions of the tool to be used
      * @returns The `IResourceBuilder`1` for chaining.
      */
     withToolPrerelease(): DotnetToolResourcePromise;
@@ -21105,7 +21105,7 @@ export interface DotnetToolResource {
      */
     withUrlForEndpoint(endpointName: string, callback: (obj: ResourceUrlAnnotation) => Promise<void>): DotnetToolResourcePromise;
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): DotnetToolResourcePromise;
@@ -21566,7 +21566,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      */
     withToolVersion(version: string): DotnetToolResourcePromise;
     /**
-     * Allows prerelease tool versions
+     * Allows prerelease versions of the tool to be used
      * @returns The `IResourceBuilder`1` for chaining.
      */
     withToolPrerelease(): DotnetToolResourcePromise;
@@ -21789,7 +21789,7 @@ export interface DotnetToolResourcePromise extends PromiseLike<DotnetToolResourc
      */
     withUrlForEndpoint(endpointName: string, callback: (obj: ResourceUrlAnnotation) => Promise<void>): DotnetToolResourcePromise;
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): DotnetToolResourcePromise;
@@ -22325,7 +22325,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /**
-     * Allows prerelease tool versions
+     * Allows prerelease versions of the tool to be used
      * @returns The `IResourceBuilder`1` for chaining.
      */
     withToolPrerelease(): DotnetToolResourcePromise {
@@ -23009,7 +23009,7 @@ class DotnetToolResourceImpl extends ResourceBuilderBase<DotnetToolResourceHandl
     }
 
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): DotnetToolResourcePromise {
@@ -24919,7 +24919,7 @@ export interface ExecutableResource {
      */
     withUrlForEndpoint(endpointName: string, callback: (obj: ResourceUrlAnnotation) => Promise<void>): ExecutableResourcePromise;
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): ExecutableResourcePromise;
@@ -25570,7 +25570,7 @@ export interface ExecutableResourcePromise extends PromiseLike<ExecutableResourc
      */
     withUrlForEndpoint(endpointName: string, callback: (obj: ResourceUrlAnnotation) => Promise<void>): ExecutableResourcePromise;
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): ExecutableResourcePromise;
@@ -26686,7 +26686,7 @@ class ExecutableResourceImpl extends ResourceBuilderBase<ExecutableResourceHandl
     }
 
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): ExecutableResourcePromise {
@@ -28448,7 +28448,7 @@ export interface ExternalServiceResource {
      */
     withUrlForEndpoint(endpointName: string, callback: (obj: ResourceUrlAnnotation) => Promise<void>): ExternalServiceResourcePromise;
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): ExternalServiceResourcePromise;
@@ -28802,7 +28802,7 @@ export interface ExternalServiceResourcePromise extends PromiseLike<ExternalServ
      */
     withUrlForEndpoint(endpointName: string, callback: (obj: ResourceUrlAnnotation) => Promise<void>): ExternalServiceResourcePromise;
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): ExternalServiceResourcePromise;
@@ -29289,7 +29289,7 @@ class ExternalServiceResourceImpl extends ResourceBuilderBase<ExternalServiceRes
     }
 
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): ExternalServiceResourcePromise {
@@ -30466,7 +30466,7 @@ export interface ParameterResource {
      */
     withUrlForEndpoint(endpointName: string, callback: (obj: ResourceUrlAnnotation) => Promise<void>): ParameterResourcePromise;
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): ParameterResourcePromise;
@@ -30828,7 +30828,7 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      */
     withUrlForEndpoint(endpointName: string, callback: (obj: ResourceUrlAnnotation) => Promise<void>): ParameterResourcePromise;
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): ParameterResourcePromise;
@@ -31333,7 +31333,7 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     }
 
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): ParameterResourcePromise {
@@ -32654,7 +32654,7 @@ export interface ProjectResource {
      */
     publishWithContainerFiles(source: Awaitable<ResourceWithContainerFiles>, destinationPath: string): ProjectResourcePromise;
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): ProjectResourcePromise;
@@ -33336,7 +33336,7 @@ export interface ProjectResourcePromise extends PromiseLike<ProjectResource> {
      */
     publishWithContainerFiles(source: Awaitable<ResourceWithContainerFiles>, destinationPath: string): ProjectResourcePromise;
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): ProjectResourcePromise;
@@ -34493,7 +34493,7 @@ class ProjectResourceImpl extends ResourceBuilderBase<ProjectResourceHandle> imp
     }
 
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): ProjectResourcePromise {
@@ -36245,7 +36245,7 @@ export interface TestDatabaseResource {
      */
     withImagePullPolicy(pullPolicy: ImagePullPolicy): TestDatabaseResourcePromise;
     /**
-     * Configures the resource to be published as a container
+     * Changes the resource to be published as a container in the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     publishAsContainer(): TestDatabaseResourcePromise;
@@ -36569,7 +36569,7 @@ export interface TestDatabaseResource {
      */
     withUrlForEndpoint(endpointName: string, callback: (obj: ResourceUrlAnnotation) => Promise<void>): TestDatabaseResourcePromise;
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): TestDatabaseResourcePromise;
@@ -37103,7 +37103,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      */
     withImagePullPolicy(pullPolicy: ImagePullPolicy): TestDatabaseResourcePromise;
     /**
-     * Configures the resource to be published as a container
+     * Changes the resource to be published as a container in the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     publishAsContainer(): TestDatabaseResourcePromise;
@@ -37427,7 +37427,7 @@ export interface TestDatabaseResourcePromise extends PromiseLike<TestDatabaseRes
      */
     withUrlForEndpoint(endpointName: string, callback: (obj: ResourceUrlAnnotation) => Promise<void>): TestDatabaseResourcePromise;
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): TestDatabaseResourcePromise;
@@ -38114,7 +38114,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /**
-     * Configures the resource to be published as a container
+     * Changes the resource to be published as a container in the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     publishAsContainer(): TestDatabaseResourcePromise {
@@ -38969,7 +38969,7 @@ class TestDatabaseResourceImpl extends ResourceBuilderBase<TestDatabaseResourceH
     }
 
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): TestDatabaseResourcePromise {
@@ -40816,7 +40816,7 @@ export interface TestRedisResource {
      */
     withImagePullPolicy(pullPolicy: ImagePullPolicy): TestRedisResourcePromise;
     /**
-     * Configures the resource to be published as a container
+     * Changes the resource to be published as a container in the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     publishAsContainer(): TestRedisResourcePromise;
@@ -41156,7 +41156,7 @@ export interface TestRedisResource {
      */
     withUrlForEndpoint(endpointName: string, callback: (obj: ResourceUrlAnnotation) => Promise<void>): TestRedisResourcePromise;
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): TestRedisResourcePromise;
@@ -41738,7 +41738,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      */
     withImagePullPolicy(pullPolicy: ImagePullPolicy): TestRedisResourcePromise;
     /**
-     * Configures the resource to be published as a container
+     * Changes the resource to be published as a container in the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     publishAsContainer(): TestRedisResourcePromise;
@@ -42078,7 +42078,7 @@ export interface TestRedisResourcePromise extends PromiseLike<TestRedisResource>
      */
     withUrlForEndpoint(endpointName: string, callback: (obj: ResourceUrlAnnotation) => Promise<void>): TestRedisResourcePromise;
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): TestRedisResourcePromise;
@@ -42813,7 +42813,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /**
-     * Configures the resource to be published as a container
+     * Changes the resource to be published as a container in the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     publishAsContainer(): TestRedisResourcePromise {
@@ -43704,7 +43704,7 @@ class TestRedisResourceImpl extends ResourceBuilderBase<TestRedisResourceHandle>
     }
 
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): TestRedisResourcePromise {
@@ -45822,7 +45822,7 @@ export interface TestVaultResource {
      */
     withImagePullPolicy(pullPolicy: ImagePullPolicy): TestVaultResourcePromise;
     /**
-     * Configures the resource to be published as a container
+     * Changes the resource to be published as a container in the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     publishAsContainer(): TestVaultResourcePromise;
@@ -46146,7 +46146,7 @@ export interface TestVaultResource {
      */
     withUrlForEndpoint(endpointName: string, callback: (obj: ResourceUrlAnnotation) => Promise<void>): TestVaultResourcePromise;
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): TestVaultResourcePromise;
@@ -46682,7 +46682,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      */
     withImagePullPolicy(pullPolicy: ImagePullPolicy): TestVaultResourcePromise;
     /**
-     * Configures the resource to be published as a container
+     * Changes the resource to be published as a container in the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     publishAsContainer(): TestVaultResourcePromise;
@@ -47006,7 +47006,7 @@ export interface TestVaultResourcePromise extends PromiseLike<TestVaultResource>
      */
     withUrlForEndpoint(endpointName: string, callback: (obj: ResourceUrlAnnotation) => Promise<void>): TestVaultResourcePromise;
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): TestVaultResourcePromise;
@@ -47695,7 +47695,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /**
-     * Configures the resource to be published as a container
+     * Changes the resource to be published as a container in the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     publishAsContainer(): TestVaultResourcePromise {
@@ -48550,7 +48550,7 @@ class TestVaultResourceImpl extends ResourceBuilderBase<TestVaultResourceHandle>
     }
 
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): TestVaultResourcePromise {
@@ -50757,7 +50757,7 @@ export interface Resource {
      */
     withUrlForEndpoint(endpointName: string, callback: (obj: ResourceUrlAnnotation) => Promise<void>): ResourcePromise;
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): ResourcePromise;
@@ -51106,7 +51106,7 @@ export interface ResourcePromise extends PromiseLike<Resource> {
      */
     withUrlForEndpoint(endpointName: string, callback: (obj: ResourceUrlAnnotation) => Promise<void>): ResourcePromise;
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): ResourcePromise;
@@ -51570,7 +51570,7 @@ class ResourceImpl extends ResourceBuilderBase<IResourceHandle> implements Resou
     }
 
     /**
-     * Excludes the resource from the deployment manifest
+     * Excludes a resource from being published to the manifest.
      * @returns The `IResourceBuilder`1`.
      */
     excludeFromManifest(): ResourcePromise {

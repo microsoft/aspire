@@ -67,14 +67,12 @@ public class EnvironmentCallbackContext(DistributedApplicationExecutionContext e
     /// This will be set to the resource in all cases where Aspire invokes the callback.
     /// </remarks>
     /// <exception cref="InvalidOperationException">Thrown when the EnvironmentCallbackContext was created without a specified resource.</exception>
-    /// <ats-summary>Gets the resource associated with this callback</ats-summary>
     [AspireExport]
     public IResource Resource => _resource ?? throw new InvalidOperationException($"{nameof(Resource)} is not set. This callback context is not associated with a resource.");
 
     /// <summary>
     /// Gets the execution context associated with this invocation of the AppHost.
     /// </summary>
-    /// <ats-summary>Gets the execution context for this callback invocation</ats-summary>
     [AspireExport]
     public DistributedApplicationExecutionContext ExecutionContext { get; } = executionContext ?? throw new ArgumentNullException(nameof(executionContext));
 }

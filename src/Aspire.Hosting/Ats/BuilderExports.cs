@@ -103,7 +103,6 @@ internal static class BuilderExports
     /// </summary>
     /// <param name="configuration">The configuration handle.</param>
     /// <returns>The child sections.</returns>
-    /// <ats-summary>Gets child configuration sections</ats-summary>
     [AspireExport]
     public static IConfigurationSection[] GetChildren(this IConfiguration configuration)
     {

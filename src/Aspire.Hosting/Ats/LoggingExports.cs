@@ -76,7 +76,6 @@ internal static class LoggingExports
     /// <param name="loggerFactory">The logger factory handle.</param>
     /// <param name="categoryName">The category name.</param>
     /// <returns>A logger handle.</returns>
-    /// <ats-summary>Creates a logger for a category</ats-summary>
     [AspireExport]
     public static ILogger CreateLogger(this ILoggerFactory loggerFactory, string categoryName)
     {

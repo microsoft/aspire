@@ -82,7 +82,6 @@ public static class AzureCognitiveServicesProjectExtensions
     /// <param name="keyVault">The Key Vault resource to associate with the project.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <exception cref="InvalidOperationException">Thrown when the project already has a Key Vault connection configured.</exception>
-    /// <ats-summary>Associates an Azure Key Vault resource with a Microsoft Foundry project.</ats-summary>
     [AspireExport]
     public static IResourceBuilder<AzureCognitiveServicesProjectResource> WithKeyVault(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,

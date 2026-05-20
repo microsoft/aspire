@@ -129,7 +129,6 @@ public static class ParameterResourceBuilderExtensions
     /// <param name="configurationKey">Configuration key used to get the value of the parameter</param>
     /// <param name="secret">Optional flag indicating whether the parameter should be regarded as secret.</param>
     /// <returns>Resource builder for the parameter.</returns>
-    /// <ats-summary>Adds a parameter sourced from configuration</ats-summary>
     [AspireExport]
     public static IResourceBuilder<ParameterResource> AddParameterFromConfiguration(this IDistributedApplicationBuilder builder, string name, string configurationKey, bool secret = false)
     {

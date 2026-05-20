@@ -151,7 +151,6 @@ public static partial class SqlServerBuilderExtensions
     /// <param name="name">The name of the volume. Defaults to an auto-generated name based on the application and resource names.</param>
     /// <param name="isReadOnly">A flag that indicates if this is a read-only volume.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Adds a named volume for the SQL Server data folder</ats-summary>
     [AspireExport]
     public static IResourceBuilder<SqlServerServerResource> WithDataVolume(this IResourceBuilder<SqlServerServerResource> builder, string? name = null, bool isReadOnly = false)
     {
@@ -171,7 +170,6 @@ public static partial class SqlServerBuilderExtensions
     /// The container starts up as non-root and the <paramref name="source"/> directory must be readable by the user that the container runs as.
     /// https://learn.microsoft.com/sql/linux/sql-server-linux-docker-container-configure?view=sql-server-ver16&amp;pivots=cs1-bash#mount-a-host-directory-as-data-volume
     /// </remarks>
-    /// <ats-summary>Adds a bind mount for the SQL Server data folder</ats-summary>
     [AspireExport]
     public static IResourceBuilder<SqlServerServerResource> WithDataBindMount(this IResourceBuilder<SqlServerServerResource> builder, string source, bool isReadOnly = false)
     {

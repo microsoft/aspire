@@ -139,7 +139,6 @@ public static class FoundryExtensions
     /// <param name="builder">The Microsoft Foundry Deployment resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the <see cref="FoundryDeploymentResource"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Configures properties of a Microsoft Foundry deployment resource.</ats-summary>
     [AspireExport("withFoundryDeploymentProperties", MethodName = "withProperties", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<FoundryDeploymentResource> WithProperties(this IResourceBuilder<FoundryDeploymentResource> builder, Action<FoundryDeploymentResource> configure)
     {

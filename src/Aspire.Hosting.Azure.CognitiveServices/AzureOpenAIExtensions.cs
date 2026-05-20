@@ -203,7 +203,6 @@ public static class AzureOpenAIExtensions
     /// <param name="builder">The Azure OpenAI Deployment resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the <see cref="AzureOpenAIDeploymentResource"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Configures properties of an Azure OpenAI deployment</ats-summary>
     [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureOpenAIDeploymentResource> WithProperties(this IResourceBuilder<AzureOpenAIDeploymentResource> builder, Action<AzureOpenAIDeploymentResource> configure)
     {

@@ -77,7 +77,6 @@ public static class KubernetesEnvironmentExtensions
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
     /// <param name="name">The name of the Kubernetes environment resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesEnvironmentResource}"/>.</returns>
-    /// <ats-summary>Adds a Kubernetes publishing environment</ats-summary>
     [AspireExport]
     public static IResourceBuilder<KubernetesEnvironmentResource> AddKubernetesEnvironment(
         this IDistributedApplicationBuilder builder,
@@ -157,7 +156,6 @@ public static class KubernetesEnvironmentExtensions
     /// <param name="builder">The Kubernetes environment resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the <see cref="KubernetesEnvironmentResource"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Configures properties of a Kubernetes environment</ats-summary>
     [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<KubernetesEnvironmentResource> WithProperties(this IResourceBuilder<KubernetesEnvironmentResource> builder, Action<KubernetesEnvironmentResource> configure)
     {
@@ -180,7 +178,6 @@ public static class KubernetesEnvironmentExtensions
     /// in the Kubernetes cluster. All resources with OTLP telemetry support are automatically
     /// configured to send telemetry data to the dashboard.
     /// </remarks>
-    /// <ats-summary>Enables or disables the Aspire dashboard for the Kubernetes environment</ats-summary>
     [AspireExport]
     public static IResourceBuilder<KubernetesEnvironmentResource> WithDashboard(this IResourceBuilder<KubernetesEnvironmentResource> builder, bool enabled = true)
     {

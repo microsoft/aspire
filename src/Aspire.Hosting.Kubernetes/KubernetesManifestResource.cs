@@ -27,7 +27,6 @@ internal sealed class KubernetesManifestResource : BaseKubernetesResource
     /// </summary>
     /// <param name="namespace">The Kubernetes namespace.</param>
     /// <returns>This manifest resource.</returns>
-    /// <ats-summary>Sets the Kubernetes namespace for this manifest</ats-summary>
     [AspireExport]
     public KubernetesManifestResource WithNamespace(string @namespace)
     {

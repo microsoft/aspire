@@ -187,7 +187,6 @@ public static class AzureServiceBusExtensions
     /// <param name="builder">The Azure Service Bus Queue resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the <see cref="AzureServiceBusQueueResource"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Configures properties of an Azure Service Bus queue</ats-summary>
     [AspireExport("withQueueProperties", MethodName = "withProperties", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureServiceBusQueueResource> WithProperties(this IResourceBuilder<AzureServiceBusQueueResource> builder, Action<AzureServiceBusQueueResource> configure)
     {
@@ -271,7 +270,6 @@ public static class AzureServiceBusExtensions
     /// <param name="builder">The Azure Service Bus Topic resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the <see cref="AzureServiceBusTopicResource"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Configures properties of an Azure Service Bus topic</ats-summary>
     [AspireExport("withTopicProperties", MethodName = "withProperties", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureServiceBusTopicResource> WithProperties(this IResourceBuilder<AzureServiceBusTopicResource> builder, Action<AzureServiceBusTopicResource> configure)
     {
@@ -342,7 +340,6 @@ public static class AzureServiceBusExtensions
     /// <param name="builder">The Azure Service Bus Subscription resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the <see cref="AzureServiceBusSubscriptionResource"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Configures properties of an Azure Service Bus subscription</ats-summary>
     [AspireExport("withSubscriptionProperties", MethodName = "withProperties", RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureServiceBusSubscriptionResource> WithProperties(this IResourceBuilder<AzureServiceBusSubscriptionResource> builder, Action<AzureServiceBusSubscriptionResource> configure)
     {

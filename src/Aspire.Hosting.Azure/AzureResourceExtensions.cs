@@ -60,7 +60,6 @@ public static class AzureResourceExtensions
     ///     .WithReference(keyVault);
     /// </code>
     /// </example>
-    /// <ats-summary>Clears the default Azure role assignments from a resource</ats-summary>
     [AspireExport]
     public static IResourceBuilder<T> ClearDefaultRoleAssignments<T>(this IResourceBuilder<T> builder)
         where T : IAzureResource

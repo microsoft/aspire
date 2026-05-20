@@ -153,7 +153,6 @@ public static class DotnetToolResourceExtensions
     /// <typeparam name="T">The type of resource being built. Must inherit from DotnetToolResource.</typeparam>
     /// <param name="builder">The <see cref="IResourceBuilder{T}"/>.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    /// <ats-summary>Allows prerelease tool versions</ats-summary>
     [AspireExport]
     public static IResourceBuilder<T> WithToolPrerelease<T>(this IResourceBuilder<T> builder)
         where T : DotnetToolResource

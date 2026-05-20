@@ -418,7 +418,6 @@ public static class AzureCosmosExtensions
     /// </summary>
     /// <param name="builder">The builder for the Azure Cosmos DB resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Configures Azure Cosmos DB to use the default Azure SKU</ats-summary>
     [AspireExport]
     public static IResourceBuilder<AzureCosmosDBResource> WithDefaultAzureSku(this IResourceBuilder<AzureCosmosDBResource> builder)
     {

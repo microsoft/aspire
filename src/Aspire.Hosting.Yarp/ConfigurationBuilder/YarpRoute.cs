@@ -74,7 +74,6 @@ public static class YarpRouteExtensions
     /// <summary>
     /// Only match requests with the given Path pattern.
     /// </summary>
-    /// <ats-summary>Matches requests with the specified path pattern.</ats-summary>
     [AspireExport]
     public static YarpRoute WithMatchPath(this YarpRoute route, string path)
     {

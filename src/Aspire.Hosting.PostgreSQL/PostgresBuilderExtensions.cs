@@ -477,7 +477,6 @@ public static class PostgresBuilderExtensions
     /// This method automatically selects the correct path based on the configured container image tag.
     /// </para>
     /// </remarks>
-    /// <ats-summary>Adds a data bind mount for PostgreSQL</ats-summary>
     [AspireExport]
     public static IResourceBuilder<PostgresServerResource> WithDataBindMount(this IResourceBuilder<PostgresServerResource> builder, string source, bool isReadOnly = false)
     {
@@ -537,7 +536,6 @@ public static class PostgresBuilderExtensions
     /// and data insertion are not supported since they require a distinct connection to the newly created database.
     /// <value>Default script is <code>CREATE DATABASE "&lt;QUOTED_DATABASE_NAME&gt;"</code></value>
     /// </remarks>
-    /// <ats-summary>Defines the SQL script for database creation</ats-summary>
     [AspireExport]
     public static IResourceBuilder<PostgresDatabaseResource> WithCreationScript(this IResourceBuilder<PostgresDatabaseResource> builder, string script)
     {
@@ -555,7 +553,6 @@ public static class PostgresBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="password">The parameter used to provide the password for the PostgreSQL resource.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Configures the PostgreSQL password</ats-summary>
     [AspireExport]
     public static IResourceBuilder<PostgresServerResource> WithPassword(this IResourceBuilder<PostgresServerResource> builder, IResourceBuilder<ParameterResource> password)
     {
@@ -572,7 +569,6 @@ public static class PostgresBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="userName">The parameter used to provide the user name for the PostgreSQL resource.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Configures the PostgreSQL user name</ats-summary>
     [AspireExport]
     public static IResourceBuilder<PostgresServerResource> WithUserName(this IResourceBuilder<PostgresServerResource> builder, IResourceBuilder<ParameterResource> userName)
     {

@@ -69,7 +69,6 @@ public static class DockerComposeEnvironmentExtensions
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
     /// <param name="name">The name of the Docker Compose environment resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{DockerComposeEnvironmentResource}"/>.</returns>
-    /// <ats-summary>Adds a Docker Compose publishing environment</ats-summary>
     [AspireExport]
     public static IResourceBuilder<DockerComposeEnvironmentResource> AddDockerComposeEnvironment(
         this IDistributedApplicationBuilder builder,
@@ -106,7 +105,6 @@ public static class DockerComposeEnvironmentExtensions
     /// <param name="builder">The Docker Compose environment resource builder.</param>
     /// <param name="configure">A method that can be used for customizing the <see cref="DockerComposeEnvironmentResource"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Configures properties of the Docker Compose environment</ats-summary>
     [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<DockerComposeEnvironmentResource> WithProperties(this IResourceBuilder<DockerComposeEnvironmentResource> builder, Action<DockerComposeEnvironmentResource> configure)
     {
@@ -151,7 +149,6 @@ public static class DockerComposeEnvironmentExtensions
     /// that will be written to the environment-specific <c>.env</c> file adjacent to the Docker Compose file.
     /// </para>
     /// </remarks>
-    /// <ats-summary>Configures the captured environment variables written to the Docker Compose .env file</ats-summary>
     [AspireExport]
     public static IResourceBuilder<DockerComposeEnvironmentResource> ConfigureEnvFile(this IResourceBuilder<DockerComposeEnvironmentResource> builder, Action<IDictionary<string, CapturedEnvironmentVariable>> configure)
     {
@@ -168,7 +165,6 @@ public static class DockerComposeEnvironmentExtensions
     /// <param name="builder">The Docker Compose environment resource builder.</param>
     /// <param name="enabled">Whether to enable the dashboard. Default is true.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Enables or disables the Aspire dashboard for the Docker Compose environment</ats-summary>
     [AspireExport]
     public static IResourceBuilder<DockerComposeEnvironmentResource> WithDashboard(this IResourceBuilder<DockerComposeEnvironmentResource> builder, bool enabled = true)
     {

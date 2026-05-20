@@ -30,7 +30,6 @@ public static class AzureAppServiceComputeResourceExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <ats-summary>Publishes the compute resource as an Azure App Service website or deployment slot</ats-summary>
     [AspireExport]
     public static IResourceBuilder<T> PublishAsAzureAppServiceWebsite<T>(this IResourceBuilder<T> builder,
         Action<AzureResourceInfrastructure, WebSite>? configure = null,

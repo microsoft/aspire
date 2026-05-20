@@ -138,14 +138,12 @@ public sealed class CommandLineArgsCallbackContext(IList<object> args, Cancellat
     /// This will be set to the resource in all cases where Aspire invokes the callback.
     /// </remarks>
     /// <exception cref="InvalidOperationException">Thrown when the CommandLineArgsCallbackContext was created without a specified resource.</exception>
-    /// <ats-summary>Gets the resource associated with this callback</ats-summary>
     [AspireExport]
     public IResource Resource => _resource ?? throw new InvalidOperationException($"{nameof(Resource)} is not set. This callback context is not associated with a resource.");
 
     /// <summary>
     /// Gets the execution context associated with this callback.
     /// </summary>
-    /// <ats-summary>Gets the execution context for this callback invocation</ats-summary>
     [AspireExport(MethodName = "executionContext")]
     internal DistributedApplicationExecutionContext ExportedExecutionContext => ExecutionContext;
 }

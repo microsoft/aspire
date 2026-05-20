@@ -144,7 +144,6 @@ public static class OracleDatabaseBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="source">The source file or directory on the host to copy into the container.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Copies initialization files into the Oracle container.</ats-summary>
     [AspireExport]
     public static IResourceBuilder<OracleDatabaseServerResource> WithInitFiles(this IResourceBuilder<OracleDatabaseServerResource> builder, string source)
     {

@@ -110,7 +110,6 @@ public static class BrowserLogsBuilderExtensions
     ///     .WithBrowserLogs();
     /// </code>
     /// </example>
-    /// <ats-summary>Adds a child browser logs resource that opens tracked browser sessions, captures browser logs, and captures screenshots.</ats-summary>
     [Experimental("ASPIREBROWSERLOGS001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport]
     public static IResourceBuilder<T> WithBrowserLogs<T>(

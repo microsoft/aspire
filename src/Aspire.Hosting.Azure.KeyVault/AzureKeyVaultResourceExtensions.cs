@@ -228,7 +228,6 @@ public static partial class AzureKeyVaultResourceExtensions
     /// <param name="builder">The Azure Key Vault resource builder.</param>
     /// <param name="secretName">The name of the secret.</param>
     /// <returns>A reference to the secret.</returns>
-    /// <ats-summary>Gets a secret reference from the Azure Key Vault</ats-summary>
     [AspireExport]
     public static IAzureKeyVaultSecretReference GetSecret(this IResourceBuilder<AzureKeyVaultResource> builder, string secretName)
     {

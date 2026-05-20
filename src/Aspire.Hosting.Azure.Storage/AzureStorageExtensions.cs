@@ -352,7 +352,6 @@ public static class AzureStorageExtensions
     /// <param name="builder">Storage emulator resource builder.</param>
     /// <param name="enable">Whether to enable API version check or not. Default is <lang>true</lang>.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/> for the <see cref="AzureStorageEmulatorResource"/>.</returns>
-    /// <ats-summary>Configures whether the emulator checks API version validity</ats-summary>
     [AspireExport]
     public static IResourceBuilder<AzureStorageEmulatorResource> WithApiVersionCheck(this IResourceBuilder<AzureStorageEmulatorResource> builder, bool enable = true)
     {
