@@ -191,6 +191,28 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                     // Non-project launch types (e.g. azure-functions) have their launch configuration
                     // applied later in CreateExecutableAsync() after endpoints are allocated,
                     // unless the IDE didn't send DEBUG_SESSION_INFO (handled by the fallback branch below).
+
+                    // File-based apps (.cs files) are not supported by all IDEs (e.g. Visual Studio
+                    // returns 500 for them). Populate fallback process args so that when the IDE
+                    // rejects the launch request and DCP falls back to ExecutionType.Process, the
+                    // executable starts with the correct `dotnet run --file` arguments.
+                    if (projectMetadata.IsFileBasedApp)
+                    {
+                        projectArgs.Add("run");
+                        projectArgs.Add("--file");
+                        projectArgs.Add(projectMetadata.ProjectPath);
+                        projectArgs.Add("--no-cache");
+                        if (projectMetadata.SuppressBuild)
+                        {
+                            projectArgs.Add("--no-build");
+                        }
+                        projectArgs.Add("--no-launch-profile");
+
+                        if (!string.IsNullOrEmpty(_distributedApplicationOptions.Configuration))
+                        {
+                            projectArgs.AddRange(new[] { "--configuration", _distributedApplicationOptions.Configuration });
+                        }
+                    }
                 }
                 else if (!persistent && ShouldFallBackToIdeExecution(isInDebugSession, supportsDebuggingAnnotation))
                 {
