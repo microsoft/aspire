@@ -6,6 +6,7 @@ using System.Xml.Linq;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
 using Semver;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
@@ -88,26 +89,10 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
 
     public async Task<IEnumerable<NuGetPackage>> GetIntegrationPackagesAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
     {
-        // For local hive channels the Aspire* source is a flat folder of .nupkg files.
-        // dotnet package search does not support local folder sources and returns no results.
-        // When a pinned version is set, enumerate the .nupkg files directly instead.
-        if (PinnedVersion is not null)
+        var localPackageSource = GetLocalAspirePackageSource();
+        if (localPackageSource is not null)
         {
-            var aspireMapping = Mappings?.FirstOrDefault(m =>
-                m.PackageFilter.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase) &&
-                m.PackageFilter != PackageMapping.AllPackages &&
-                !UrlHelper.IsHttpUrl(m.Source));
-
-            if (aspireMapping is not null && Directory.Exists(aspireMapping.Source))
-            {
-                return Directory.EnumerateFiles(aspireMapping.Source, "*.nupkg", SearchOption.TopDirectoryOnly)
-                    .Select(TryGetPackageIdentityFromPackageFileName)
-                    .Where(p => p.HasValue)
-                    .Select(p => p!.Value)
-                    .Where(p => p.PackageId.StartsWith("Aspire.Hosting", StringComparison.OrdinalIgnoreCase))
-                    .Select(p => new NuGetPackage { Id = p.PackageId, Version = PinnedVersion, Source = aspireMapping.Source })
-                    .ToList();
-            }
+            return GetIntegrationPackagesFromLocalPackageSource(localPackageSource, cancellationToken);
         }
 
         var tasks = new List<Task<IEnumerable<NuGetPackage>>>();
@@ -148,6 +133,64 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
         }
 
         return filteredPackages;
+    }
+
+    private DirectoryInfo? GetLocalAspirePackageSource()
+    {
+        if (Type is not PackageChannelType.Explicit || Mappings is null)
+        {
+            return null;
+        }
+
+        foreach (var mapping in Mappings)
+        {
+            if (IsScopedAspireMapping(mapping) && Directory.Exists(mapping.Source))
+            {
+                return new DirectoryInfo(mapping.Source);
+            }
+        }
+
+        return null;
+    }
+
+    private IEnumerable<NuGetPackage> GetIntegrationPackagesFromLocalPackageSource(DirectoryInfo packageSource, CancellationToken cancellationToken)
+    {
+        var packageMetadata = packageSource
+            .EnumerateFiles("*.nupkg", SearchOption.TopDirectoryOnly)
+            .Select(file =>
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                return GetPackageFileMetadata(file.FullName);
+            })
+            .OfType<PackageFileMetadata>()
+            .Where(metadata => IsIntegrationPackageId(metadata.PackageId))
+            .Where(IsAllowedByQuality);
+
+        if (PinnedVersion is not null)
+        {
+            packageMetadata = packageMetadata
+                .Where(metadata => string.Equals(metadata.Version.ToString(), PinnedVersion, StringComparison.OrdinalIgnoreCase));
+        }
+
+        var source = PathNormalizer.NormalizePathForStorage(packageSource.FullName);
+
+        return packageMetadata
+            .GroupBy(metadata => metadata.PackageId, StringComparers.NuGetPackageId)
+            .Select(group => group.OrderByDescending(metadata => metadata.Version, SemVersion.PrecedenceComparer).First())
+            .OrderBy(metadata => metadata.PackageId, StringComparers.NuGetPackageId)
+            .Select(metadata => new NuGetPackage { Id = metadata.PackageId, Version = PinnedVersion ?? metadata.Version.ToString(), Source = source })
+            .ToArray();
+    }
+
+    private bool IsAllowedByQuality(PackageFileMetadata metadata)
+    {
+        return new { metadata.Version, Quality } switch
+        {
+            { Quality: PackageChannelQuality.Both } => true,
+            { Quality: PackageChannelQuality.Stable, Version: { IsPrerelease: false } } => true,
+            { Quality: PackageChannelQuality.Prerelease, Version: { IsPrerelease: true } } => true,
+            _ => false
+        };
     }
 
     public async Task<IEnumerable<NuGetPackage>> GetPackagesAsync(string packageId, DirectoryInfo workingDirectory, CancellationToken cancellationToken)
@@ -476,6 +519,21 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
     {
         return mapping.PackageFilter.StartsWith("Aspire", StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(mapping.PackageFilter, PackageMapping.AllPackages, StringComparison.Ordinal);
+    }
+
+    private static bool IsIntegrationPackageId(string packageId)
+    {
+        var isHostingOrCommunityToolkitNamespaced = packageId.StartsWith("Aspire.Hosting.", StringComparison.Ordinal) ||
+            packageId.StartsWith("CommunityToolkit.Aspire.Hosting.", StringComparison.Ordinal);
+
+        var isExcluded = packageId.StartsWith("Aspire.Hosting.AppHost", StringComparison.Ordinal) ||
+            packageId.StartsWith("Aspire.Hosting.Sdk", StringComparison.Ordinal) ||
+            packageId.StartsWith("Aspire.Hosting.Orchestration", StringComparison.Ordinal) ||
+            packageId.StartsWith("Aspire.Hosting.Testing", StringComparison.Ordinal) ||
+            packageId.StartsWith("Aspire.Hosting.Msi", StringComparison.Ordinal) ||
+            DeprecatedPackages.IsDeprecated(packageId);
+
+        return isHostingOrCommunityToolkitNamespaced && !isExcluded;
     }
 
     public static PackageChannel CreateExplicitChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, ILogger? logger = null)

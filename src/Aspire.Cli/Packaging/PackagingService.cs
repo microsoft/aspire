@@ -5,6 +5,7 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
+using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Semver;
@@ -104,7 +105,7 @@ internal class PackagingService : IPackagingService
                 var pinnedVersion = GetLocalHivePinnedVersion(packagesDirectory);
 
                 // Use forward slashes for cross-platform NuGet config compatibility
-                var packagesPath = packagesDirectory.FullName.Replace('\\', '/');
+                var packagesPath = PathNormalizer.NormalizePathForStorage(packagesDirectory.FullName);
                 var prChannel = PackageChannel.CreateExplicitChannel(prHive.Name, PackageChannelQuality.Both, new[]
                 {
                     new PackageMapping("Aspire*", packagesPath),
