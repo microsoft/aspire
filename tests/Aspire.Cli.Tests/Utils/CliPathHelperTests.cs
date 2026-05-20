@@ -135,11 +135,9 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    [SkipOnPlatform(TestPlatforms.Windows, "Symlink resolution test only runs on Linux/macOS where unprivileged symlink creation is reliable.")]
     public void ResolveSymlinkHelpers_Link_ReturnsTarget()
     {
-        Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(),
-            "Symlink resolution test only runs on Linux/macOS where unprivileged symlink creation is reliable.");
-
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var target = Path.Combine(workspace.WorkspaceRoot.FullName, "target-aspire");
         File.WriteAllText(target, string.Empty);
@@ -208,10 +206,9 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    [SkipOnPlatform(TestPlatforms.Windows | TestPlatforms.Linux, "Firmlink stripping in resolve helpers only applies on macOS.")]
     public void ResolveSymlinkToFullPath_OnMacOS_StripsFirmlinkPrefix()
     {
-        Assert.SkipUnless(OperatingSystem.IsMacOS(), "Firmlink stripping in resolve helpers only applies on macOS.");
-
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         // Place a real file under the workspace (which sits on /var/folders on macOS),
         // then construct the firmlinked-form input by prepending /private. Both forms
@@ -229,10 +226,9 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    [SkipOnPlatform(TestPlatforms.Windows | TestPlatforms.Linux, "Firmlink stripping in resolve helpers only applies on macOS.")]
     public void ResolveSymlinkOrOriginalPath_OnMacOS_StripsFirmlinkPrefix()
     {
-        Assert.SkipUnless(OperatingSystem.IsMacOS(), "Firmlink stripping in resolve helpers only applies on macOS.");
-
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var realPath = Path.Combine(workspace.WorkspaceRoot.FullName, "binary-under-test");
         File.WriteAllText(realPath, string.Empty);
@@ -245,6 +241,7 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    [SkipOnPlatform(TestPlatforms.Windows | TestPlatforms.Linux, "Firmlink propagation only applies on macOS.")]
     public void GetAspireHomeDirectory_OnMacOS_PrRouteWithFirmlinkedProcessPath_ReturnsUnfirmlinkedPrefix()
     {
         // Bug B regression: when Environment.ProcessPath comes back firmlinked (/private/var/...),
@@ -252,8 +249,6 @@ public class CliPathHelperTests(ITestOutputHelper outputHelper)
         // inherits the /private/ form and lands in nuget.config in a shape NuGet's packageSourceMapping
         // lookup silently drops. The fix lives in the resolve helpers; this test pins the propagation
         // so a future refactor doesn't reintroduce the asymmetry.
-        Assert.SkipUnless(OperatingSystem.IsMacOS(), "Firmlink propagation only applies on macOS.");
-
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var installPrefix = Path.Combine(workspace.WorkspaceRoot.FullName, "portable");
         var binDir = Path.Combine(installPrefix, "dogfood", "pr-17105", "bin");

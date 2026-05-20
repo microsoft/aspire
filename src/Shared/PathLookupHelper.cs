@@ -139,7 +139,7 @@ internal static class PathLookupHelper
                 foreach (var extension in pathExtensions)
                 {
                     if (TryCombine(directory, command + extension, out var fullPathWithExt) &&
-                        FileExists(fileExists, fullPathWithExt))
+                        FileExistsSafe(fileExists, fullPathWithExt))
                     {
                         yield return fullPathWithExt;
                         foundExtensionMatch = true;
@@ -155,7 +155,7 @@ internal static class PathLookupHelper
 
             // Try exact match (for non-Windows, or as fallback on Windows if no extension match found in this directory).
             if (TryCombine(directory, command, out var fullPath) &&
-                FileExists(fileExists, fullPath))
+                FileExistsSafe(fileExists, fullPath))
             {
                 yield return fullPath;
             }
@@ -176,7 +176,11 @@ internal static class PathLookupHelper
         }
     }
 
-    private static bool FileExists(Func<string, bool> fileExists, string path)
+    // Wrap a possibly-throwing existence probe so callers do not have to handle
+    // the IO/permission failure modes themselves. Used by the PATH-walk above
+    // when a directory on PATH is unreadable or a candidate path is malformed
+    // in a way that File.Exists rejects with an exception rather than false.
+    private static bool FileExistsSafe(Func<string, bool> fileExists, string path)
     {
         try
         {
