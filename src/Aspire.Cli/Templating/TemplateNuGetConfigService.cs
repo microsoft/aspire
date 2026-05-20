@@ -208,7 +208,11 @@ internal sealed class TemplateNuGetConfigService(
 
         // Honor PR hives only when the caller opts in. Init suppresses this so a developer
         // with stale ~/.aspire/hives/* doesn't get a different template than on a clean machine.
-        var hasPrHives = query.IncludePrHives && executionContext.GetHiveCount() > 0;
+        // PR dogfood installs can discover a matching local-build channel outside the default
+        // hives directory, so also treat an explicit local-build channel as a hive signal.
+        var hasPrHives = query.IncludePrHives &&
+            (executionContext.GetHiveCount() > 0 ||
+                allChannels.Any(c => c.Type is PackageChannelType.Explicit && VersionHelper.IsLocalBuildChannel(c.Name)));
 
         IEnumerable<PackageChannel> channels;
         if (!string.IsNullOrEmpty(query.RequestedChannel))

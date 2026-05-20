@@ -9,6 +9,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -62,6 +63,48 @@ namespace Aspire.Cli.Tests.Commands;
 /// </summary>
 public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHelper)
 {
+    private const string PrChannelName = "pr-17225";
+    private static readonly string s_prVersion = VersionHelper.GetDefaultSdkVersion();
+
+    private static readonly PrDogfoodNewTemplateCase[] s_prDogfoodNewTemplateCases =
+    [
+        PrDogfoodNewTemplateCase.CliConfig(KnownTemplateId.TypeScriptStarter, ["--localhost-tld", "false"]),
+        PrDogfoodNewTemplateCase.SelectableEmpty(KnownLanguageId.CSharp, PrDogfoodNewTemplateContract.CSharpEmptyAppHost, ["--localhost-tld", "false"]),
+        PrDogfoodNewTemplateCase.SelectableEmpty(KnownLanguageId.TypeScript, PrDogfoodNewTemplateContract.AspireConfig, ["--localhost-tld", "false"]),
+        PrDogfoodNewTemplateCase.SelectableEmpty(KnownLanguageId.Python, PrDogfoodNewTemplateContract.AspireConfig, ["--localhost-tld", "false"]),
+        PrDogfoodNewTemplateCase.SelectableEmpty(KnownLanguageId.Go, PrDogfoodNewTemplateContract.AspireConfig, ["--localhost-tld", "false"]),
+        PrDogfoodNewTemplateCase.SelectableEmpty(KnownLanguageId.Java, PrDogfoodNewTemplateContract.AspireConfig, ["--localhost-tld", "false"]),
+        PrDogfoodNewTemplateCase.SelectableEmpty(KnownLanguageId.Rust, PrDogfoodNewTemplateContract.AspireConfig, ["--localhost-tld", "false"]),
+        PrDogfoodNewTemplateCase.CliConfig(KnownTemplateId.TypeScriptEmptyAppHost, ["--localhost-tld", "false"]),
+        PrDogfoodNewTemplateCase.CliConfig(KnownTemplateId.PythonEmptyAppHost, ["--localhost-tld", "false"]),
+        PrDogfoodNewTemplateCase.CliConfig(KnownTemplateId.JavaEmptyAppHost, ["--localhost-tld", "false"]),
+        PrDogfoodNewTemplateCase.CliConfig(KnownTemplateId.GoEmptyAppHost, ["--localhost-tld", "false"]),
+        PrDogfoodNewTemplateCase.CliConfig(KnownTemplateId.RustEmptyAppHost, ["--localhost-tld", "false"]),
+        PrDogfoodNewTemplateCase.CliConfig(KnownTemplateId.PythonStarter, ["--localhost-tld", "false", "--use-redis-cache", "false"]),
+        PrDogfoodNewTemplateCase.CliConfig(KnownTemplateId.GoStarter, ["--localhost-tld", "false"]),
+        PrDogfoodNewTemplateCase.DotNet("aspire-starter", ["--localhost-tld", "false", "--use-redis-cache", "false"]),
+        PrDogfoodNewTemplateCase.DotNet("aspire-ts-cs-starter", ["--localhost-tld", "false", "--use-redis-cache", "false"]),
+        PrDogfoodNewTemplateCase.DotNet(KnownTemplateId.DotNetEmptyAppHost, ["--localhost-tld", "false"]),
+        PrDogfoodNewTemplateCase.DotNet("aspire-apphost", ["--localhost-tld", "false"]),
+        PrDogfoodNewTemplateCase.DotNet("aspire-servicedefaults"),
+    ];
+
+    private static readonly PrDogfoodNewTemplateExclusion[] s_prDogfoodNewTemplateExclusions =
+    [
+        new("aspire-test", "This wrapper requires an interactive framework sub-template selection before it reaches package resolution.")
+    ];
+
+    public static TheoryData<PrDogfoodNewTemplateCase> PrDogfoodNewTemplateCases()
+    {
+        var data = new TheoryData<PrDogfoodNewTemplateCase>();
+        foreach (var testCase in s_prDogfoodNewTemplateCases)
+        {
+            data.Add(testCase);
+        }
+
+        return data;
+    }
+
     /// <summary>
     /// Templates that pin <c>aspire.config.json#channel</c> when <see cref="NewCommand"/>
     /// resolves an Explicit channel. Covers both writer code paths:
@@ -164,56 +207,58 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
         Assert.Equal(PackageChannelNames.Staging, persisted);
     }
 
-    /// <summary>
-    /// Issue #17225 regression guard: when <c>PackagingService</c> discovers the running
-    /// <c>pr-&lt;N&gt;</c> CLI's matching dogfood install hive, <c>aspire new aspire-empty</c>
-    /// must use that channel for CLI template version resolution across the language paths.
-    /// C# writes an embedded AppHost template and NuGet.config; guest languages persist the
-    /// channel/sdk before the fake prebuilt AppHost prepare failure stops the run.
-    /// </summary>
-    [Theory]
-    [InlineData(KnownLanguageId.CSharp)]
-    [InlineData(KnownLanguageId.TypeScript)]
-    [InlineData(KnownLanguageId.Python)]
-    [InlineData(KnownLanguageId.Go)]
-    [InlineData(KnownLanguageId.Java)]
-    [InlineData(KnownLanguageId.Rust)]
-    public async Task EmptyAppHost_PrDogfoodInstallHiveDiscovered_UsesPrChannelForLanguage(string languageId)
+    [Fact]
+    public void PrDogfoodNewTemplateContract_AccountsForEveryRegisteredNewTemplate()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        const string prChannelName = "pr-17225";
-        const string prVersion = "13.4.0-pr.17225.gabc123";
-        var installPrefix = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "custom-aspire-prefix"));
-        var processPath = Path.Combine(installPrefix.FullName, "dogfood", prChannelName, "bin", "aspire");
-        Directory.CreateDirectory(Path.GetDirectoryName(processPath)!);
-        File.WriteAllText(processPath, string.Empty);
+        var services = CreatePrDogfoodNewTemplateServices(workspace, processPath: null, dotNetRunner: new TestDotNetCliRunner());
 
-        var packagesDirectory = Directory.CreateDirectory(Path.Combine(installPrefix.FullName, "hives", prChannelName, "packages"));
-        File.WriteAllText(Path.Combine(packagesDirectory.FullName, $"Aspire.ProjectTemplates.{prVersion}.nupkg"), string.Empty);
+        using var serviceProvider = services.BuildServiceProvider();
+        var templateProvider = serviceProvider.GetRequiredService<ITemplateProvider>();
+        var registeredTemplateKeys = templateProvider.GetTemplates()
+            .SelectMany(GetPrDogfoodTemplateCoverageKeys)
+            .OrderBy(static key => key, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
 
-        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        var accountedForTemplateKeys = s_prDogfoodNewTemplateCases.Select(static testCase => testCase.CoverageKey)
+            .Concat(s_prDogfoodNewTemplateExclusions.Select(static exclusion => exclusion.CoverageKey))
+            .OrderBy(static key => key, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        Assert.Equal(accountedForTemplateKeys, registeredTemplateKeys);
+        Assert.All(s_prDogfoodNewTemplateExclusions, static exclusion => Assert.False(string.IsNullOrWhiteSpace(exclusion.Reason)));
+    }
+
+    /// <summary>
+    /// Issue #17225 regression guard: when <c>PackagingService</c> discovers the running
+    /// <c>pr-&lt;N&gt;</c> CLI's matching dogfood install hive, every registered <c>aspire new</c>
+    /// template that consumes Aspire packages must scaffold from that channel/source.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(PrDogfoodNewTemplateCases))]
+    public async Task NewTemplate_PrDogfoodInstallHiveDiscovered_UsesPrChannel(PrDogfoodNewTemplateCase testCase)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var (processPath, packagesDirectory) = CreatePrDogfoodInstallLayout(workspace);
+        var dotNetTemplateInstalls = new List<DotNetTemplateInstall>();
+        var dotNetRunner = new TestDotNetCliRunner
         {
-            options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(
-                workspace.WorkspaceRoot,
-                hivesDirectory: new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives")),
-                identityChannel: prChannelName);
-            options.PackagingServiceFactory = sp => new PackagingService(
-                sp.GetRequiredService<CliExecutionContext>(),
-                sp.GetRequiredService<INuGetPackageCache>(),
-                sp.GetRequiredService<IFeatures>(),
-                sp.GetRequiredService<IConfiguration>(),
-                NullLogger<PackagingService>.Instance,
-                processPathProvider: () => processPath);
+            InstallTemplateAsyncCallback = (packageName, version, nugetConfigFile, nugetSource, _, _, _) =>
+            {
+                dotNetTemplateInstalls.Add(new DotNetTemplateInstall(packageName, version, nugetConfigFile?.FullName, nugetSource));
+                return (0, version);
+            },
+            NewProjectAsyncCallback = (templateName, name, outputPath, _, _) =>
+            {
+                Directory.CreateDirectory(outputPath);
+                File.WriteAllText(Path.Combine(outputPath, $"{name}.generated"), templateName);
+                return 0;
+            }
+        };
 
-            options.EnabledFeatures =
-            [
-                KnownFeatures.ExperimentalPolyglotPython,
-                KnownFeatures.ExperimentalPolyglotGo,
-                KnownFeatures.ExperimentalPolyglotJava,
-                KnownFeatures.ExperimentalPolyglotRust,
-            ];
-        });
+        var services = CreatePrDogfoodNewTemplateServices(workspace, processPath, dotNetRunner);
 
         services.AddSingleton<IAppHostServerProjectFactory>(_ => new TestAppHostServerProjectFactory
         {
@@ -225,26 +270,66 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
         var newCommand = serviceProvider.GetRequiredService<NewCommand>();
 
         const string outputDirectoryName = "TemplateOut";
-        var parseResult = newCommand.Parse(
-            $"new {KnownTemplateId.CSharpEmptyAppHost} --language {languageId} --name TemplateOut --output ./{outputDirectoryName} --localhost-tld false");
-        _ = await parseResult.InvokeAsync().DefaultTimeout();
+        var commandArguments = new List<string>
+        {
+            "new",
+            testCase.TemplateId,
+            "--name",
+            "TemplateOut",
+            "--output",
+            $"./{outputDirectoryName}",
+        };
+        if (testCase.LanguageId is not null)
+        {
+            commandArguments.Add("--language");
+            commandArguments.Add(testCase.LanguageId);
+        }
+        commandArguments.AddRange(testCase.ExtraArguments);
+
+        var parseResult = newCommand.Parse(string.Join(" ", commandArguments));
+        var exitCode = await parseResult.InvokeAsync().DefaultTimeout();
 
         var outputDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, outputDirectoryName);
-        if (languageId.Equals(KnownLanguageId.CSharp, StringComparison.OrdinalIgnoreCase))
+        switch (testCase.Contract)
         {
-            var appHostFile = Path.Combine(outputDirectory, "apphost.cs");
-            Assert.True(File.Exists(appHostFile));
-            Assert.Contains(prVersion, await File.ReadAllTextAsync(appHostFile));
+            case PrDogfoodNewTemplateContract.CSharpEmptyAppHost:
+                Assert.Empty(dotNetTemplateInstalls);
+                var appHostFile = Path.Combine(outputDirectory, "apphost.cs");
+                Assert.True(File.Exists(appHostFile));
+                Assert.Contains(s_prVersion, await File.ReadAllTextAsync(appHostFile));
 
-            var nugetConfig = await File.ReadAllTextAsync(Path.Combine(outputDirectory, "nuget.config"));
-            Assert.Contains(packagesDirectory.FullName.Replace('\\', '/'), nugetConfig);
-        }
-        else
-        {
-            var config = AspireConfigFile.Load(outputDirectory);
-            Assert.NotNull(config);
-            Assert.Equal(prChannelName, config.Channel);
-            Assert.Equal(prVersion, config.SdkVersion);
+                var csharpNuGetConfig = await File.ReadAllTextAsync(Path.Combine(outputDirectory, "nuget.config"));
+                Assert.Contains(packagesDirectory.FullName.Replace('\\', '/'), csharpNuGetConfig);
+                break;
+
+            case PrDogfoodNewTemplateContract.AspireConfig:
+                Assert.Empty(dotNetTemplateInstalls);
+                var config = AspireConfigFile.Load(outputDirectory);
+                Assert.NotNull(config);
+                Assert.Equal(PrChannelName, config.Channel);
+                if (config.SdkVersion is not null)
+                {
+                    Assert.Equal(s_prVersion, config.SdkVersion);
+                }
+                break;
+
+            case PrDogfoodNewTemplateContract.DotNetTemplate:
+                Assert.Equal((int)CliExitCodes.Success, exitCode);
+                var install = Assert.Single(dotNetTemplateInstalls);
+                Assert.Equal(TemplateNuGetConfigService.TemplatesPackageName, install.PackageName);
+                Assert.Equal(s_prVersion, install.Version);
+                Assert.Equal(packagesDirectory.FullName.Replace('\\', '/'), install.NuGetSource);
+
+                var dotNetConfig = AspireConfigFile.Load(outputDirectory);
+                Assert.NotNull(dotNetConfig);
+                Assert.Equal(PrChannelName, dotNetConfig.Channel);
+
+                var dotNetNuGetConfig = await File.ReadAllTextAsync(Path.Combine(outputDirectory, "nuget.config"));
+                Assert.Contains(packagesDirectory.FullName.Replace('\\', '/'), dotNetNuGetConfig);
+                break;
+
+            default:
+                throw new InvalidOperationException($"Unknown template contract: {testCase.Contract}");
         }
     }
 
@@ -378,5 +463,105 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
     private static CliExecutionContext BuildExecutionContextWithIdentity(TemporaryWorkspace workspace, string identityChannel)
     {
         return workspace.CreateExecutionContext(identityChannel: identityChannel);
+    }
+
+    private IServiceCollection CreatePrDogfoodNewTemplateServices(TemporaryWorkspace workspace, string? processPath, TestDotNetCliRunner dotNetRunner)
+    {
+        return CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(
+                workspace.WorkspaceRoot,
+                hivesDirectory: new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives")),
+                identityChannel: PrChannelName);
+            options.PackagingServiceFactory = sp => new PackagingService(
+                sp.GetRequiredService<CliExecutionContext>(),
+                sp.GetRequiredService<INuGetPackageCache>(),
+                sp.GetRequiredService<IFeatures>(),
+                sp.GetRequiredService<IConfiguration>(),
+                NullLogger<PackagingService>.Instance,
+                processPathProvider: () => processPath);
+            options.NuGetPackageCacheFactory = _ => new FakeNuGetPackageCache
+            {
+                GetTemplatePackagesAsyncCallback = (_, prerelease, _, _) =>
+                    Task.FromResult<IEnumerable<NuGetPackage>>(
+                    [
+                        new NuGetPackage
+                        {
+                            Id = TemplateNuGetConfigService.TemplatesPackageName,
+                            Source = prerelease ? "preview-feed" : "stable-feed",
+                            Version = prerelease ? "0.0.1-preview.1" : "0.0.1"
+                        }
+                    ])
+            };
+            options.DotNetCliRunnerFactory = _ => dotNetRunner;
+            options.EnabledFeatures =
+            [
+                KnownFeatures.ExperimentalPolyglotPython,
+                KnownFeatures.ExperimentalPolyglotGo,
+                KnownFeatures.ExperimentalPolyglotJava,
+                KnownFeatures.ExperimentalPolyglotRust,
+                KnownFeatures.ShowAllTemplates,
+            ];
+        });
+    }
+
+    private static (string ProcessPath, DirectoryInfo PackagesDirectory) CreatePrDogfoodInstallLayout(TemporaryWorkspace workspace)
+    {
+        var installPrefix = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "custom-aspire-prefix"));
+        var processPath = Path.Combine(installPrefix.FullName, "dogfood", PrChannelName, "bin", "aspire");
+        Directory.CreateDirectory(Path.GetDirectoryName(processPath)!);
+        File.WriteAllText(processPath, string.Empty);
+
+        var packagesDirectory = Directory.CreateDirectory(Path.Combine(installPrefix.FullName, "hives", PrChannelName, "packages"));
+        File.WriteAllText(Path.Combine(packagesDirectory.FullName, $"Aspire.ProjectTemplates.{s_prVersion}.nupkg"), string.Empty);
+
+        return (processPath, packagesDirectory);
+    }
+
+    private static IEnumerable<string> GetPrDogfoodTemplateCoverageKeys(ITemplate template)
+    {
+        return template.SelectableAppHostLanguages.Count == 0
+            ? [template.Name]
+            : template.SelectableAppHostLanguages.Select(languageId => $"{template.Name}:{languageId}");
+    }
+
+    public sealed record PrDogfoodNewTemplateCase(
+        string TemplateId,
+        string? LanguageId,
+        PrDogfoodNewTemplateContract Contract,
+        string[] ExtraArguments)
+    {
+        public string CoverageKey => LanguageId is null ? TemplateId : $"{TemplateId}:{LanguageId}";
+
+        public static PrDogfoodNewTemplateCase SelectableEmpty(string languageId, PrDogfoodNewTemplateContract contract, string[] extraArguments)
+        {
+            return new(KnownTemplateId.CSharpEmptyAppHost, languageId, contract, extraArguments);
+        }
+
+        public static PrDogfoodNewTemplateCase CliConfig(string templateId, string[]? extraArguments = null)
+        {
+            return new(templateId, LanguageId: null, PrDogfoodNewTemplateContract.AspireConfig, extraArguments ?? []);
+        }
+
+        public static PrDogfoodNewTemplateCase DotNet(string templateId, string[]? extraArguments = null)
+        {
+            return new(templateId, LanguageId: null, PrDogfoodNewTemplateContract.DotNetTemplate, extraArguments ?? []);
+        }
+
+        public override string ToString()
+        {
+            return CoverageKey;
+        }
+    }
+
+    private sealed record PrDogfoodNewTemplateExclusion(string CoverageKey, string Reason);
+
+    private sealed record DotNetTemplateInstall(string PackageName, string Version, string? NuGetConfigFile, string? NuGetSource);
+
+    public enum PrDogfoodNewTemplateContract
+    {
+        CSharpEmptyAppHost,
+        AspireConfig,
+        DotNetTemplate
     }
 }
