@@ -9,6 +9,9 @@ namespace Infrastructure.Tests;
 /// <summary>
 /// End-to-end tests for the GenerateTestSummary tool.
 /// </summary>
+// These tests build and run repository tools in child dotnet processes. Keep them in the same
+// non-parallel collection as the other tool tests so concurrent child builds don't race in artifacts/obj.
+[Collection(ToolBuildCollection.Name)]
 public sealed class GenerateTestSummaryToolTests : IClassFixture<GenerateTestSummaryFixture>, IDisposable
 {
     private readonly TestTempDirectory _tempDirectory = new();

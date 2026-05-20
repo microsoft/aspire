@@ -11,6 +11,9 @@ namespace Infrastructure.Tests;
 /// <summary>
 /// End-to-end tests for the CreateFailingTestIssue tool.
 /// </summary>
+// These tests build and run repository tools in child dotnet processes. Keep them in the same
+// non-parallel collection as the other tool tests so concurrent child builds don't race in artifacts/obj.
+[Collection(ToolBuildCollection.Name)]
 public sealed class CreateFailingTestIssueToolTests : IClassFixture<CreateFailingTestIssueFixture>, IDisposable
 {
     private readonly TestTempDirectory _tempDirectory = new();
