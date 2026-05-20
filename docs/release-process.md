@@ -10,6 +10,7 @@ The Aspire release process involves two main automation components:
    - Publishes NuGet packages to NuGet.org
    - Promotes the build to the GA channel via darc
    - Submits WinGet and Homebrew installer PRs
+   - Optionally publishes the signed VS Code extension to the Visual Studio Marketplace
    - Dispatches the GitHub Actions workflow below as the `aspire-repo-bot`
      GitHub App and waits for it to complete
 
@@ -19,7 +20,14 @@ The Aspire release process involves two main automation components:
    - Creates merge-back PRs
    - Creates baseline version update PRs
    - Normally dispatched automatically by the AzDO pipeline above; can also
-     be run manually as a fallback for partial-failure re-runs
+      be run manually as a fallback for partial-failure re-runs
+
+3. **GitHub Actions Workflow** (`.github/workflows/extension-release.yml`)
+   - Prepares a VS Code extension release PR
+   - Bumps `extension/package.json`
+   - Generates or updates `extension/CHANGELOG.md`
+   - Defaults its comparison baseline to the latest stable Marketplace VSIX's embedded `extension/.version` commit SHA
+   - Can run with `dry_run: true` in forks to validate changelog generation without bot secrets
 
 ## Prerequisites
 
@@ -28,6 +36,8 @@ Before starting a release:
 1. **Signed Build**: Have a successful signed build from the official `microsoft-aspire` pipeline
    - The build will be selected from a dropdown when running the release pipeline
    - The build should have a `BAR ID - NNNNNN` tag (auto-extracted by the pipeline)
+   - If publishing the VS Code extension, the build must include the `aspire-vscode-extension` artifact with exactly one `.vsix`, matching `.manifest`, and matching `.signature.p7s`
+   - If publishing the VS Code extension as a Marketplace pre-release, queue the signed source build with `Package VS Code Extension as Pre-Release=true` so the produced VSIX is marked as pre-release before signing
 
 2. **Release Branch**: Ensure the release branch exists (e.g., `release/9.2`)
 
@@ -86,10 +96,11 @@ Before starting a release:
    |-----------|-------------|---------|
    | `SkipNuGetPublish` | Set `true` if re-running after NuGet success | `false` |
    | `SkipChannelPromotion` | Set `true` if re-running after darc success | `false` |
-   | `SkipWinGetPublish` | Set `true` if re-running after WinGet success | `false` |
-   | `SkipHomebrewPublish` | Set `true` if re-running after Homebrew success | `false` |
+   | `SkipWinGetPublish` | Set `true` if re-running after WinGet success | `true` |
+   | `SkipHomebrewPublish` | Set `true` if re-running after Homebrew success | `true` |
    | `SkipGitHubTasks` | Set `true` to skip dispatching the GH workflow | `false` |
    | `SkipReleaseAssets` | Set `true` to skip uploading aspire-cli-* assets to the GitHub release | `false` |
+   | `PublishVSCodeExtension` | Set `true` to publish the signed `aspire-vscode-extension` artifact to the Visual Studio Marketplace | `false` |
    | `GitHubTasksWorkflowRef` | Ref to load `release-github-tasks.yml` from when dispatching. Only affects the workflow source — the release branch/commit are passed via inputs. Override only when testing pipeline changes on a topic branch. | `main` |
 
 5. Click "Run" and monitor the pipeline. The final stage (`GitHubTasks`)
@@ -100,6 +111,23 @@ Before starting a release:
 6. Verify packages appear on NuGet.org and that the `aspire-cli-*`
    archives are attached to the GitHub release.
 
+To publish only the VS Code extension after merging an extension release PR, run the same `release-publish-nuget` pipeline, select the signed source build from that merge, and set:
+
+| Parameter | Value |
+|-----------|-------|
+| `ReleaseVersion` | `auto` |
+| `IsPrerelease` | `false` for stable, `true` for pre-release |
+| `DryRun` | `false` |
+| `SkipNuGetPublish` | `true` |
+| `SkipChannelPromotion` | `true` |
+| `SkipWinGetPublish` | `true` |
+| `SkipHomebrewPublish` | `true` |
+| `SkipGitHubTasks` | `true` |
+| `SkipReleaseAssets` | `true` |
+| `PublishVSCodeExtension` | `true` |
+
+For a full Aspire release that should also publish the extension, keep the normal NuGet/channel/GitHub task settings and set `PublishVSCodeExtension` to `true`. `IsPrerelease` also controls whether extension publishing passes `--pre-release` to `vsce`; for a pre-release extension, the selected source build must also have been queued with `Package VS Code Extension as Pre-Release=true`.
+
 `commit_sha` and `release_branch` for the GitHub workflow are derived
 automatically from the source build resource — no need to copy them by hand.
 
@@ -107,7 +135,24 @@ automatically from the source build resource — no need to copy them by hand.
 > promoting, tagging, or creating PRs. The dry-run state is propagated to
 > the GitHub workflow as `dry_run: true`.
 
-### Step 2 (fallback): Manually re-run the GitHub workflow
+### Step 2: Prepare a VS Code extension release PR
+
+Run this step only when releasing the VS Code extension independently of the normal Aspire release train, or when the extension changelog/version bump needs to be prepared before setting `PublishVSCodeExtension=true` in the AzDO release pipeline.
+
+1. Navigate to Actions → "Extension Release".
+2. Click "Run workflow".
+3. Fill in the parameters:
+
+   | Parameter | Description | Example |
+   |-----------|-------------|---------|
+   | `release_version` | New VS Code extension version | `1.0.10` |
+   | `from_sha` | Optional start commit SHA. Leave empty to use the latest stable Marketplace VSIX's bundled `extension/.version` SHA. Pass an explicit SHA for non-stable or historical baselines. | empty |
+   | `to_sha` | Optional end commit SHA. Leave empty to use the latest `main` commit. | empty |
+   | `dry_run` | `true` to validate and upload the proposed changelog/PR body artifact without creating a branch or PR. This can be used from forks because it does not require bot secrets. | `true` |
+
+4. Review the generated draft PR. Its description contains the exact `release-publish-nuget` parameter set for publishing the extension after the PR is merged.
+
+### Step 3 (fallback): Manually re-run the GitHub workflow
 
 The GitHub workflow is normally dispatched by the AzDO pipeline as the
 `aspire-repo-bot` GitHub App, with its `authorize` job bypassed for the
@@ -138,7 +183,7 @@ only the GitHub work, you can:
    Manual runs go through the normal `authorize` check (admin/maintain
    permission required).
 
-### Step 3: Post-Release Tasks (Manual)
+### Step 4: Post-Release Tasks (Manual)
 
 After automation completes:
 
@@ -170,6 +215,7 @@ The pipeline runs as a single stage with all steps in sequence. If a step fails:
 | List/Verify Packages | Check that the build artifacts are available |
 | Push Packages to NuGet.org | Check NuGet.org for partial success; the `1ES.PublishNuget@1` task handles duplicates via `allowPackageConflicts: true` |
 | Promote Build to Channel | Re-run with `SkipNuGetPublish: true` |
+| Publish VS Code Extension to Marketplace | Check that `aspire-vscode-extension` contains one `.vsix`, `.manifest`, and `.signature.p7s`; verify `VscePublishToken` in `Aspire-Release-Secrets` has Marketplace: Manage scope; re-run with the already-completed `Skip*` flags set to `true` |
 
 ### GitHub Actions Failures
 
@@ -207,7 +253,7 @@ The AzDO pipeline extends the 1ES Official Pipeline Templates (`v1/1ES.Official.
 
 ### Variable Groups (Azure DevOps)
 
-The pipeline uses the `Aspire-Release-Secrets` variable group. Note that NuGet publishing credentials are managed via a service connection, not a variable group secret.
+The pipeline uses the `Aspire-Release-Secrets` variable group. NuGet publishing credentials are managed via a service connection, not a variable group secret. `VscePublishToken` in this group is used only by the VS Code extension Marketplace publish job; rotate it from the Visual Studio Marketplace publisher management UI when `vsce verify-pat microsoft-aspire` fails or before the PAT expires.
 
 ### Service Connections (Azure DevOps)
 

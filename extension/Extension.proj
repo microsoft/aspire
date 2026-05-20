@@ -26,6 +26,7 @@
       <_VscodeOutputDir>$(ArtifactsPackagesDir)vscode</_VscodeOutputDir>
       <_VsixPath>$(_VscodeOutputDir)\aspire-vscode-$(_EffectiveVersion).vsix</_VsixPath>
       <_ManifestPath>$(_VscodeOutputDir)\aspire-vscode-$(_EffectiveVersion).manifest</_ManifestPath>
+      <_VscePackagePreReleaseArg Condition="'$(PackageVSCodeExtensionAsPreRelease)' == 'true'">--pre-release</_VscePackagePreReleaseArg>
     </PropertyGroup>
 
     <!-- Override package.json version if ExtensionVersionOverride is set, saving original first -->
@@ -43,7 +44,7 @@
     <MakeDir Directories="$(_VscodeOutputDir)" />
 
     <!-- Package extension -->
-    <Exec Command="vsce package --out $(_VsixPath)"
+    <Exec Command="vsce package $(_VscePackagePreReleaseArg) --out $(_VsixPath)"
           IgnoreStandardErrorWarningFormat="true"
           WorkingDirectory="$(ExtensionSrcDir)" />
 

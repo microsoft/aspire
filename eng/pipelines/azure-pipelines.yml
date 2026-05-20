@@ -1,11 +1,6 @@
-# Runtime parameters for VS Code extension publishing (shown in "Run pipeline" UI)
 parameters:
-  - name: publishVSCodeExtension
-    displayName: 'Publish VS Code Extension to Marketplace'
-    type: boolean
-    default: false
-  - name: vscePublishPreRelease
-    displayName: 'Publish as Pre-Release'
+  - name: packageVSCodeExtensionAsPreRelease
+    displayName: 'Package VS Code Extension as Pre-Release'
     type: boolean
     default: false
 
@@ -50,10 +45,6 @@ pr:
 variables:
   - template: /eng/pipelines/common-variables.yml@self
   - template: /eng/common/templates-official/variables/pool-providers.yml@self
-
-  # Variable group containing VscePublishToken for VS Code Marketplace publishing
-  - ${{ if eq(parameters.publishVSCodeExtension, true) }}:
-    - group: Aspire-Release-Secrets
 
   - name: _BuildConfig
     value: Release
@@ -324,9 +315,7 @@ extends:
                   repoLogPath: $(Build.Arcade.LogsPath)
                   repoTestResultsPath: $(Build.Arcade.TestResultsPath)
                   isWindows: true
-                  publishVSCodeExtension: ${{ parameters.publishVSCodeExtension }}
-                  vscePublishToken: $(VscePublishToken)
-                  vscePublishPreRelease: ${{ parameters.vscePublishPreRelease }}
+                  packageVSCodeExtensionAsPreRelease: ${{ parameters.packageVSCodeExtensionAsPreRelease }}
 
               # Extract the Aspire version from a generated nupkg filename so downstream
               # stages can use it. Aspire.Hosting.AppHost has no RID in its filename and
