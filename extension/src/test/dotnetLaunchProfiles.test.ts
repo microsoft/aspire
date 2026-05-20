@@ -1,21 +1,16 @@
 import * as assert from 'assert';
 import * as path from 'path';
-import * as fs from 'fs';
-import * as os from 'os';
 import {
     determineBaseLaunchProfile,
     mergeEnvironmentVariables,
     determineArguments,
     determineWorkingDirectory,
-    determineServerReadyAction,
-    readLaunchSettings,
-    expandEnvironmentVariables,
-    LaunchSettings,
-    LaunchProfile
-} from '../debugger/launchProfiles';
-import { ExecutableLaunchConfiguration, EnvVar, ProjectLaunchConfiguration } from '../dcp/types';
+    expandEnvironmentVariables
+} from '../debugger/dotnetLaunchProfiles';
+import { LaunchProfile, LaunchSettings } from '../debugger/dotnetLaunchSettings';
+import { EnvVar, ProjectLaunchConfiguration } from '../dcp/types';
 
-suite('Launch Profile Tests', () => {
+suite('Dotnet Launch Profile Tests', () => {
     suite('determineBaseLaunchProfile', () => {
         const sampleLaunchSettings: LaunchSettings = {
             profiles: {
@@ -160,7 +155,7 @@ suite('Launch Profile Tests', () => {
 
             const resultMap = new Map(result);
             assert.strictEqual(resultMap.get('VAR1'), 'base1');
-            assert.strictEqual(resultMap.get('VAR2'), 'session2'); // Run session takes precedence
+            assert.strictEqual(resultMap.get('VAR2'), 'session2');
             assert.strictEqual(resultMap.get('VAR3'), 'base3');
             assert.strictEqual(resultMap.get('VAR4'), 'session4');
         });
@@ -185,7 +180,7 @@ suite('Launch Profile Tests', () => {
 
             const resultMap = new Map(result);
             assert.strictEqual(resultMap.get('VAR1'), 'base1');
-            assert.strictEqual(resultMap.get('VAR2'), 'api2'); // Run API takes precedence over base
+            assert.strictEqual(resultMap.get('VAR2'), 'api2');
             assert.strictEqual(resultMap.get('VAR3'), 'base3');
             assert.strictEqual(resultMap.get('VAR5'), 'api5');
         });
@@ -212,7 +207,7 @@ suite('Launch Profile Tests', () => {
 
             const resultMap = new Map(result);
             assert.strictEqual(resultMap.get('VAR1'), 'base1');
-            assert.strictEqual(resultMap.get('VAR2'), 'session2'); // Run session has highest precedence
+            assert.strictEqual(resultMap.get('VAR2'), 'session2');
             assert.strictEqual(resultMap.get('VAR3'), 'api3');
             assert.strictEqual(resultMap.get('VAR4'), 'session4');
         });
@@ -279,7 +274,7 @@ suite('Launch Profile Tests', () => {
 
             const resultMap = new Map(result);
             assert.strictEqual(resultMap.get('VAR1'), 'profile1');
-            assert.strictEqual(resultMap.get('VAR2'), 'debug2'); // Debug config overrides profile
+            assert.strictEqual(resultMap.get('VAR2'), 'debug2');
             assert.strictEqual(resultMap.get('VAR3'), 'profile3');
             assert.strictEqual(resultMap.get('VAR4'), 'debug4');
         });
@@ -308,7 +303,7 @@ suite('Launch Profile Tests', () => {
             const resultMap = new Map(result);
             assert.strictEqual(resultMap.get('VAR1'), 'profile1');
             assert.strictEqual(resultMap.get('VAR2'), 'debug2');
-            assert.strictEqual(resultMap.get('VAR3'), 'api3'); // Run API overrides debug config
+            assert.strictEqual(resultMap.get('VAR3'), 'api3');
             assert.strictEqual(resultMap.get('VAR4'), 'api4');
         });
 
@@ -334,7 +329,7 @@ suite('Launch Profile Tests', () => {
             const resultMap = new Map(result);
             assert.strictEqual(resultMap.get('VAR1'), 'profile1');
             assert.strictEqual(resultMap.get('VAR2'), 'debug2');
-            assert.strictEqual(resultMap.get('VAR3'), 'session3'); // Run session overrides debug config
+            assert.strictEqual(resultMap.get('VAR3'), 'session3');
             assert.strictEqual(resultMap.get('VAR4'), 'session4');
         });
 
@@ -442,9 +437,11 @@ suite('Launch Profile Tests', () => {
     });
 
     suite('determineWorkingDirectory', () => {
-        const projectDir = path.resolve(path.sep, 'project');
-        const projectPath = path.join(projectDir, 'MyApp.csproj');
-        const absoluteWorkingDir = path.resolve(path.sep, 'custom', 'working', 'dir');
+        const systemRoot = path.parse(process.cwd()).root;
+        const projectPath = path.join(systemRoot, 'project', 'MyApp.csproj');
+        const projectDir = path.dirname(projectPath);
+        const absoluteWorkingDir = path.join(systemRoot, 'custom', 'working', 'dir');
+        const toDebugPath = (value: string): string => path.posix.normalize(value.replace(/\\/g, '/'));
 
         test('uses absolute working directory from launch profile', () => {
             const baseProfile: LaunchProfile = {
@@ -454,7 +451,7 @@ suite('Launch Profile Tests', () => {
 
             const result = determineWorkingDirectory(projectPath, baseProfile);
 
-            assert.strictEqual(result, absoluteWorkingDir);
+            assert.strictEqual(result, toDebugPath(absoluteWorkingDir));
         });
 
         test('resolves relative working directory from launch profile', () => {
@@ -465,7 +462,7 @@ suite('Launch Profile Tests', () => {
 
             const result = determineWorkingDirectory(projectPath, baseProfile);
 
-            assert.strictEqual(result, path.join(projectDir, 'custom'));
+            assert.strictEqual(result, toDebugPath(path.join(projectDir, 'custom')));
         });
 
         test('uses project directory when no working directory specified', () => {
@@ -475,13 +472,13 @@ suite('Launch Profile Tests', () => {
 
             const result = determineWorkingDirectory(projectPath, baseProfile);
 
-            assert.strictEqual(result, projectDir);
+            assert.strictEqual(result, toDebugPath(projectDir));
         });
 
         test('uses project directory when base profile is null', () => {
             const result = determineWorkingDirectory(projectPath, null);
 
-            assert.strictEqual(result, projectDir);
+            assert.strictEqual(result, toDebugPath(projectDir));
         });
 
         test('expands environment variables in working directory before resolving', () => {
@@ -493,8 +490,7 @@ suite('Launch Profile Tests', () => {
 
             const result = determineWorkingDirectory('/dummy/project.csproj', baseProfile);
 
-            // $(TEST_WD_ROOT) expands to /opt/app, making it an absolute path
-            assert.strictEqual(result, '/opt/app/output');
+            assert.strictEqual(result, toDebugPath('/opt/app/output'));
             delete process.env['TEST_WD_ROOT'];
         });
 
@@ -507,255 +503,19 @@ suite('Launch Profile Tests', () => {
 
             const result = determineWorkingDirectory('/projects/myapp/myapp.csproj', baseProfile);
 
-            // $(TEST_WD_SUBDIR) expands to build-output, still relative, resolved against project dir
-            assert.strictEqual(result, path.resolve('/projects/myapp', 'build-output/bin'));
+            assert.strictEqual(result, toDebugPath(path.resolve('/projects/myapp', 'build-output/bin')));
             delete process.env['TEST_WD_SUBDIR'];
         });
-    });
 
-    suite('determineServerReadyAction', () => {
-        test('returns undefined when launchBrowser is false', () => {
-            const result = determineServerReadyAction(false, 'https://localhost:5001');
-            assert.strictEqual(result, undefined);
-        });
-
-        test('returns undefined when applicationUrl is undefined', () => {
-            const result = determineServerReadyAction(true, undefined);
-            assert.strictEqual(result, undefined);
-        });
-
-        test('returns serverReadyAction when launchBrowser true and applicationUrl provided', () => {
-            const applicationUrl = 'https://localhost:5001';
-            const result = determineServerReadyAction(true, applicationUrl);
-
-            assert.notStrictEqual(result, undefined);
-            assert.strictEqual(result?.action, 'openExternally');
-            assert.strictEqual(result?.uriFormat, applicationUrl);
-            assert.strictEqual(result?.pattern, '\\bNow listening on:\\s+https?://\\S+');
-        });
-
-        test('returns serverReadyAction with first URL when multiple URLs separated by semicolon', () => {
-            const applicationUrl = 'https://localhost:5001;http://localhost:5000';
-            const result = determineServerReadyAction(true, applicationUrl);
-
-            assert.notStrictEqual(result, undefined);
-            assert.strictEqual(result?.action, 'openExternally');
-            assert.strictEqual(result?.uriFormat, 'https://localhost:5001');
-            assert.strictEqual(result?.pattern, '\\bNow listening on:\\s+https?://\\S+');
-        });
-    });
-
-    suite('readLaunchSettings', () => {
-        let tempDir: string;
-        let projectPath: string;
-        let launchSettingsPath: string;
-
-        setup(() => {
-            tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aspire-test-'));
-            const projectDir = path.join(tempDir, 'TestProject');
-            const propertiesDir = path.join(projectDir, 'Properties');
-
-            fs.mkdirSync(projectDir, { recursive: true });
-            fs.mkdirSync(propertiesDir, { recursive: true });
-
-            projectPath = path.join(projectDir, 'TestProject.csproj');
-            launchSettingsPath = path.join(propertiesDir, 'launchSettings.json');
-
-            // Create a dummy project file
-            fs.writeFileSync(projectPath, '<Project></Project>');
-        });
-
-        teardown(() => {
-            if (fs.existsSync(tempDir)) {
-                fs.rmSync(tempDir, { recursive: true, force: true });
-            }
-        });
-
-        test('successfully reads valid launch settings file', async () => {
-            const launchSettings = {
-                profiles: {
-                    'Development': {
-                        environmentVariables: {
-                            ASPNETCORE_ENVIRONMENT: 'Development'
-                        }
-                    }
-                }
+        test('normalizes Windows-style project paths to forward slashes', () => {
+            const baseProfile: LaunchProfile = {
+                commandName: 'Project',
+                workingDirectory: 'custom'
             };
 
-            fs.writeFileSync(launchSettingsPath, JSON.stringify(launchSettings, null, 2));
+            const result = determineWorkingDirectory('C:\\project\\MyApp.csproj', baseProfile);
 
-            const result = await readLaunchSettings(projectPath);
-
-            assert.notStrictEqual(result, null);
-            assert.strictEqual(result!.profiles['Development'].environmentVariables!.ASPNETCORE_ENVIRONMENT, 'Development');
-        });
-
-        test('returns null when launch settings file does not exist', async () => {
-            const result = await readLaunchSettings(projectPath);
-
-            assert.strictEqual(result, null);
-        });
-
-        test('returns null when launch settings file has invalid JSON', async () => {
-            fs.writeFileSync(launchSettingsPath, '{ invalid json content');
-
-            const result = await readLaunchSettings(projectPath);
-
-            assert.strictEqual(result, null);
-        });
-
-        test('handles empty launch settings file', async () => {
-            const launchSettings = {
-                profiles: {}
-            };
-
-            fs.writeFileSync(launchSettingsPath, JSON.stringify(launchSettings));
-
-            const result = await readLaunchSettings(projectPath);
-
-            assert.notStrictEqual(result, null);
-            assert.deepStrictEqual(result!.profiles, {});
-        });
-
-        test('successfully reads launch settings file with comments', async () => {
-            const launchSettingsWithComments = `{
-  // This is a comment
-  "profiles": {
-    /* Multi-line comment
-       spanning multiple lines */
-    "Development": {
-      "commandName": "Project",
-      // Comment before environmentVariables
-      "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development", // Inline comment
-        "LOG_LEVEL": "Debug" /* Another inline comment */
-      },
-      // Comment before applicationUrl
-      "applicationUrl": "https://localhost:5001",
-      "launchBrowser": true
-    },
-    // Another profile
-    "Production": {
-      "commandName": "Project",
-      "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Production"
-      }
-    }
-  }
-}`;
-
-            fs.writeFileSync(launchSettingsPath, launchSettingsWithComments);
-
-            const result = await readLaunchSettings(projectPath);
-
-            assert.notStrictEqual(result, null);
-            assert.strictEqual(result!.profiles['Development'].commandName, 'Project');
-            assert.strictEqual(result!.profiles['Development'].environmentVariables!.ASPNETCORE_ENVIRONMENT, 'Development');
-            assert.strictEqual(result!.profiles['Development'].environmentVariables!.LOG_LEVEL, 'Debug');
-            assert.strictEqual(result!.profiles['Development'].applicationUrl, 'https://localhost:5001');
-            assert.strictEqual(result!.profiles['Development'].launchBrowser, true);
-            assert.strictEqual(result!.profiles['Production'].environmentVariables!.ASPNETCORE_ENVIRONMENT, 'Production');
-        });
-
-        test('falls back to aspire.config.json profiles when .run.json does not exist for file-based app', async () => {
-            // Create a file-based app (.cs file) with no .run.json
-            const fileBasedAppPath = path.join(tempDir, 'TestProject', 'apphost.cs');
-            fs.writeFileSync(fileBasedAppPath, '// test file-based app');
-
-            // Create aspire.config.json with profiles
-            const aspireConfigPath = path.join(tempDir, 'TestProject', 'aspire.config.json');
-            const aspireConfig = {
-                appHost: { path: 'apphost.cs' },
-                profiles: {
-                    https: {
-                        applicationUrl: 'https://localhost:5001;http://localhost:5000',
-                        environmentVariables: {
-                            ASPNETCORE_ENVIRONMENT: 'Development'
-                        }
-                    },
-                    http: {
-                        applicationUrl: 'http://localhost:5000'
-                    }
-                }
-            };
-            fs.writeFileSync(aspireConfigPath, JSON.stringify(aspireConfig, null, 2));
-
-            const result = await readLaunchSettings(fileBasedAppPath);
-
-            assert.notStrictEqual(result, null);
-            assert.strictEqual(Object.keys(result!.profiles).length, 2);
-            assert.strictEqual(result!.profiles['https'].applicationUrl, 'https://localhost:5001;http://localhost:5000');
-            assert.strictEqual(result!.profiles['https'].environmentVariables!.ASPNETCORE_ENVIRONMENT, 'Development');
-            assert.strictEqual(result!.profiles['https'].commandName, 'Project');
-            assert.strictEqual(result!.profiles['http'].applicationUrl, 'http://localhost:5000');
-        });
-
-        test('returns null when neither .run.json nor aspire.config.json exists for file-based app', async () => {
-            const fileBasedAppPath = path.join(tempDir, 'TestProject', 'apphost.cs');
-            fs.writeFileSync(fileBasedAppPath, '// test file-based app');
-
-            const result = await readLaunchSettings(fileBasedAppPath);
-
-            assert.strictEqual(result, null);
-        });
-
-        test('prefers .run.json over aspire.config.json profiles for file-based app', async () => {
-            const fileBasedAppPath = path.join(tempDir, 'TestProject', 'apphost.cs');
-            fs.writeFileSync(fileBasedAppPath, '// test file-based app');
-
-            // Create both .run.json and aspire.config.json
-            const runJsonPath = path.join(tempDir, 'TestProject', 'apphost.run.json');
-            const runJson = {
-                profiles: {
-                    default: {
-                        commandName: 'Project',
-                        applicationUrl: 'https://localhost:7000'
-                    }
-                }
-            };
-            fs.writeFileSync(runJsonPath, JSON.stringify(runJson, null, 2));
-
-            const aspireConfigPath = path.join(tempDir, 'TestProject', 'aspire.config.json');
-            const aspireConfig = {
-                profiles: {
-                    default: {
-                        applicationUrl: 'https://localhost:9999'
-                    }
-                }
-            };
-            fs.writeFileSync(aspireConfigPath, JSON.stringify(aspireConfig, null, 2));
-
-            const result = await readLaunchSettings(fileBasedAppPath);
-
-            assert.notStrictEqual(result, null);
-            // Should use the .run.json value, not aspire.config.json
-            assert.strictEqual(result!.profiles['default'].applicationUrl, 'https://localhost:7000');
-        });
-
-        test('reads aspire.config.json profiles with comments', async () => {
-            const fileBasedAppPath = path.join(tempDir, 'TestProject', 'apphost.cs');
-            fs.writeFileSync(fileBasedAppPath, '// test file-based app');
-
-            const aspireConfigPath = path.join(tempDir, 'TestProject', 'aspire.config.json');
-            const aspireConfigWithComments = `{
-  // AppHost configuration
-  "appHost": { "path": "apphost.cs" },
-  "profiles": {
-    "https": {
-      "applicationUrl": "https://localhost:5001", // HTTPS endpoint
-      "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
-      }
-    }
-  }
-}`;
-            fs.writeFileSync(aspireConfigPath, aspireConfigWithComments);
-
-            const result = await readLaunchSettings(fileBasedAppPath);
-
-            assert.notStrictEqual(result, null);
-            assert.strictEqual(result!.profiles['https'].applicationUrl, 'https://localhost:5001');
-            assert.strictEqual(result!.profiles['https'].environmentVariables!.ASPNETCORE_ENVIRONMENT, 'Development');
+            assert.strictEqual(result, 'C:/project/custom');
         });
     });
 

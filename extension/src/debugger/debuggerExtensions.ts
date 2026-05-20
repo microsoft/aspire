@@ -46,6 +46,10 @@ export async function createDebugSessionConfiguration(debugSessionConfig: Aspire
         isApphost: launchOptions.isApphost
     };
 
+    if (launchConfig.serverReadyAction) {
+        configuration.serverReadyAction = launchConfig.serverReadyAction;
+    }
+
     if (debugSessionConfig.debuggers) {
         // 1. Check if this is the apphost
         if (launchOptions.isApphost && debugSessionConfig.debuggers['apphost']) {
@@ -85,4 +89,3 @@ export function getResourceDebuggerExtensions(): ResourceDebuggerExtension[] {
 
     return extensions;
 }
-
