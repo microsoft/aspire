@@ -1,7 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { spawnCliProcess } from '../debugger/languages/cli';
 import { AspireTerminalProvider } from '../utils/AspireTerminalProvider';
+import { extensionLogOutputChannel } from '../utils/logging';
 import { ResourceState, HealthStatus, StateStyle } from '../editor/resourceConstants';
 import {
     pidDescription,
@@ -24,16 +26,19 @@ import {
     healthCheckDescription,
     resourceDescriptionHealth,
     resourceDescriptionExitCode,
+    resourceCommandDynamicInputsFailed,
+    resourceCommandLoadingDynamicInputs,
 } from '../loc/strings';
 import { isLinkableUrl } from '../utils/urlSchemes';
 import {
     AppHostDataRepository,
     AppHostDisplayInfo,
+    ResourceCommandArgumentInputJson,
     ResourceJson,
     ViewMode,
     shortenPaths,
 } from './AppHostDataRepository';
-import { collectResourceCommandArguments, hasSecretResourceCommandArguments } from './ResourceCommandArguments';
+import { buildResourceCommandCliArgs, collectResourceCommandArguments, ResourceCommandArgumentValue } from './ResourceCommandArguments';
 
 type TreeElement = AppHostItem | PidItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem | HealthChecksGroupItem | HealthCheckItem;
 
@@ -736,12 +741,15 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             return;
         }
 
-        const additionalArgs = await collectResourceCommandArguments(selected.label, selected.command, { secretWarningState: this._secretWarningState });
-        if (additionalArgs === undefined) {
+        const commandArguments = await collectResourceCommandArguments(selected.label, selected.command, {
+            secretWarningState: this._secretWarningState,
+            loadDynamicArguments: values => this._loadResourceCommandArguments(element, selected.label, values),
+        });
+        if (commandArguments === undefined) {
             return;
         }
 
-        this._runResourceCommand(element, `"${selected.label}"`, additionalArgs, hasSecretResourceCommandArguments(selected.command));
+        this._runResourceCommand(element, `"${selected.label}"`, commandArguments.args, commandArguments.containsSecret);
     }
 
     async copyAppHostPath(element: AppHostItem): Promise<void> {
@@ -781,6 +789,85 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             return;
         }
         this._terminalProvider.sendAspireCommandToAspireTerminal(`resource "${element.resource.name}" ${command} --apphost "${appHost.appHostPath}"`, true, additionalArgs, { redactAdditionalArgs });
+    }
+
+    private async _loadResourceCommandArguments(element: ResourceItem, commandName: string, values: readonly ResourceCommandArgumentValue[]): Promise<ResourceCommandArgumentInputJson[] | undefined> {
+        const appHostPath = this._repository.viewMode === 'workspace'
+            ? this._repository.workspaceAppHostPath
+            : this._findAppHostForResource(element)?.appHostPath;
+
+        return await vscode.window.withProgress(
+            { location: vscode.ProgressLocation.Window, title: resourceCommandLoadingDynamicInputs },
+            async () => {
+                try {
+                    const cliPath = await this._terminalProvider.getAspireCliExecutablePath();
+                    const args = ['resource', element.resource.name, commandName, '--load-arguments'];
+                    if (appHostPath) {
+                        args.push('--apphost', appHostPath);
+                    }
+                    args.push(...buildResourceCommandCliArgs(values));
+
+                    const loadedInputs = await new Promise<ResourceCommandArgumentInputJson[] | undefined>((resolve) => {
+                        let settled = false;
+                        let parsedInputs: ResourceCommandArgumentInputJson[] | undefined;
+                        let stderr = '';
+                        const finish = (value: ResourceCommandArgumentInputJson[] | undefined) => {
+                            if (!settled) {
+                                settled = true;
+                                resolve(value);
+                            }
+                        };
+
+                        const child = spawnCliProcess(this._terminalProvider, cliPath, args, {
+                            noExtensionVariables: true,
+                            lineCallback: line => {
+                                if (settled) {
+                                    return;
+                                }
+
+                                // `aspire resource ... --load-arguments` writes one JSON array line with
+                                // ResourceCommandArgumentInputJson[] metadata, for example:
+                                //   [{"name":"item","inputType":"Choice","options":{"banana":"Banana"}}]
+                                // Other CLI text such as update notifications can appear on stdout too, so
+                                // ignore non-JSON lines and only accept the parsed payload after exit code 0.
+                                try {
+                                    const parsed = JSON.parse(line);
+                                    if (Array.isArray(parsed)) {
+                                        parsedInputs = parsed as ResourceCommandArgumentInputJson[];
+                                    }
+                                } catch {
+                                    // Other CLI output can appear before the machine-readable payload.
+                                }
+                            },
+                            stderrCallback: data => {
+                                stderr += data;
+                            },
+                            errorCallback: error => {
+                                extensionLogOutputChannel.warn(`Failed to load resource command arguments: ${error.message}`);
+                                finish(undefined);
+                            },
+                            exitCallback: code => {
+                                if (code !== 0) {
+                                    extensionLogOutputChannel.warn(`aspire resource --load-arguments exited with code ${code}. ${stderr.trim()}`);
+                                }
+                                finish(code === 0 ? parsedInputs : undefined);
+                            },
+                        });
+
+                        child.stdin.end();
+                    });
+
+                    if (!loadedInputs) {
+                        await vscode.window.showWarningMessage(resourceCommandDynamicInputsFailed, { modal: true });
+                    }
+
+                    return loadedInputs;
+                } catch (error) {
+                    extensionLogOutputChannel.warn(`Failed to load resource command arguments: ${error}`);
+                    await vscode.window.showWarningMessage(resourceCommandDynamicInputsFailed, { modal: true });
+                    return undefined;
+                }
+            });
     }
 
     private _findAppHostForResource(element: ResourceItem): AppHostDisplayInfo | undefined {

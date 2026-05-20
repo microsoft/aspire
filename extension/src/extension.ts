@@ -35,7 +35,7 @@ import { AspireGutterDecorationProvider } from './editor/AspireGutterDecorationP
 import { AppHostFilePresenceWatcher } from './editor/AppHostFilePresenceWatcher';
 import { getSupportedLanguageIds } from './editor/parsers/AppHostResourceParser';
 import { readGitCommitSha } from './utils/versionInfo';
-import { collectResourceCommandArguments, hasSecretResourceCommandArguments } from './views/ResourceCommandArguments';
+import { collectResourceCommandArguments } from './views/ResourceCommandArguments';
 import { ResourceCommandJson } from './views/AppHostDataRepository';
 
 let aspireExtensionContext = new AspireExtensionContext();
@@ -137,8 +137,8 @@ export async function activate(context: vscode.ExtensionContext) {
   const codeLensRegistration = vscode.languages.registerCodeLensProvider(languageFilters, codeLensProvider);
   const codeLensDebugPipelineStepRegistration = vscode.commands.registerCommand('aspire-vscode.codeLensDebugPipelineStep', (stepName: string) => editorCommandProvider.tryExecuteDoAppHost(false, stepName));
   const codeLensResourceActionRegistration = vscode.commands.registerCommand('aspire-vscode.codeLensResourceAction', async (resourceName: string, action: string, appHostPath: string, resourceCommand?: ResourceCommandJson) => {
-    const additionalArgs = await collectResourceCommandArguments(action, resourceCommand, { secretWarningState: context.globalState });
-    if (additionalArgs === undefined) {
+    const commandArguments = await collectResourceCommandArguments(action, resourceCommand, { secretWarningState: context.globalState });
+    if (commandArguments === undefined) {
       return;
     }
 
@@ -146,7 +146,7 @@ export async function activate(context: vscode.ExtensionContext) {
     if (appHostPath) {
       command += ` --apphost "${appHostPath}"`;
     }
-    terminalProvider.sendAspireCommandToAspireTerminal(command, true, additionalArgs, { redactAdditionalArgs: hasSecretResourceCommandArguments(resourceCommand) });
+    terminalProvider.sendAspireCommandToAspireTerminal(command, true, commandArguments.args, { redactAdditionalArgs: commandArguments.containsSecret });
   });
   const codeLensViewLogsRegistration = vscode.commands.registerCommand('aspire-vscode.codeLensViewLogs', (resourceName: string, appHostPath: string) => {
     let command = `logs "${resourceName}"`;

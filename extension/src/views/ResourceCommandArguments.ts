@@ -7,6 +7,7 @@ import {
     resourceCommandContinue,
     resourceCommandCustomChoice,
     resourceCommandCustomChoiceDescription,
+    resourceCommandDynamicInputsUnsupported,
     resourceCommandInvalidNumber,
     resourceCommandMaxLength,
     resourceCommandDontShowAgain,
@@ -19,6 +20,13 @@ export interface ResourceCommandArgumentValue {
     input: ResourceCommandArgumentInputJson;
     value: string;
 }
+
+export interface CollectedResourceCommandArguments {
+    args: string[];
+    containsSecret: boolean;
+}
+
+export type ResourceCommandArgumentLoader = (values: readonly ResourceCommandArgumentValue[]) => Promise<ResourceCommandArgumentInputJson[] | undefined>;
 
 interface ResourceCommandChoiceItem extends vscode.QuickPickItem {
     value: string;
@@ -35,6 +43,7 @@ export interface ResourceCommandArgumentOptions {
     // preference for the current VS Code profile on this machine, not per workspace, AppHost,
     // project, resource, or command.
     secretWarningState?: vscode.Memento;
+    loadDynamicArguments?: ResourceCommandArgumentLoader;
 }
 
 // Resource command number inputs are forwarded to hosting, which validates with
@@ -42,28 +51,68 @@ export interface ResourceCommandArgumentOptions {
 // "-1.5", ".5", and "1e3"; reject locale-specific values like "1,5".
 const numberPattern = /^[+-]?(?:(?:\d+(?:\.\d*)?)|(?:\.\d+))(?:[eE][+-]?\d+)?$/;
 
-export async function collectResourceCommandArguments(commandName: string, command: ResourceCommandJson | undefined, options?: ResourceCommandArgumentOptions): Promise<string[] | undefined> {
-    // This flow only supports the static argumentInputs snapshot emitted by the CLI today. It
-    // does not re-query arguments or options while prompting, so dynamic inputs whose choices or
-    // validation depend on previously-entered values need a future protocol/UI change.
-    const inputs = command?.argumentInputs?.filter(input => !input.disabled) ?? [];
+export async function collectResourceCommandArguments(commandName: string, command: ResourceCommandJson | undefined, options?: ResourceCommandArgumentOptions): Promise<CollectedResourceCommandArguments | undefined> {
+    let inputs = command?.argumentInputs ?? [];
     if (inputs.length === 0) {
-        return [];
+        return { args: [], containsSecret: false };
     }
 
-    if (inputs.some(input => input.inputType === ResourceCommandInputType.SecretText)) {
-        const confirmed = await confirmSecretArgumentWarning(options?.secretWarningState);
-        if (!confirmed) {
-            return undefined;
-        }
+    if (hasDynamicInputs(inputs) && !options?.loadDynamicArguments) {
+        await vscode.window.showWarningMessage(resourceCommandDynamicInputsUnsupported, { modal: true });
+        return undefined;
     }
 
     const values: ResourceCommandArgumentValue[] = [];
     const commandTitle = resourceCommandArgumentsTitle(commandName);
+    const loadedInputSignatures = new Set<string>();
+    let secretWarningConfirmed = false;
+
+    // Load before the first prompt so initially-disabled dependent inputs can become visible
+    // once the AppHost applies defaults or AlwaysLoadOnStart callbacks.
+    const initialLoadedInputs = await loadDynamicArgumentInputs(inputs, values, options?.loadDynamicArguments, loadedInputSignatures);
+    if (!initialLoadedInputs) {
+        return undefined;
+    }
+
+    inputs = initialLoadedInputs;
+    if (inputs.length === 0) {
+        return { args: [], containsSecret: false };
+    }
+
+    if (hasEnabledSecretInput(inputs)) {
+        const confirmed = await confirmSecretArgumentWarning(options?.secretWarningState);
+        if (!confirmed) {
+            return undefined;
+        }
+
+        secretWarningConfirmed = true;
+    }
 
     for (let i = 0; i < inputs.length; i++) {
+        // Reload before each prompt because a previous answer can change later input metadata,
+        // such as enabling an input, replacing choice options, or assigning a default value.
+        const loadedInputs = await loadDynamicArgumentInputs(inputs, values, options?.loadDynamicArguments, loadedInputSignatures);
+        if (!loadedInputs) {
+            return undefined;
+        }
+
+        inputs = loadedInputs;
         const input = inputs[i];
-        const value = await promptForArgumentValue(commandTitle, input, i + 1, inputs.length);
+        if (input.disabled) {
+            continue;
+        }
+
+        if (!secretWarningConfirmed && input.inputType === ResourceCommandInputType.SecretText) {
+            const confirmed = await confirmSecretArgumentWarning(options?.secretWarningState);
+            if (!confirmed) {
+                return undefined;
+            }
+
+            secretWarningConfirmed = true;
+        }
+
+        const enabledInputs = inputs.filter(input => !input.disabled);
+        const value = await promptForArgumentValue(commandTitle, input, values.length + 1, enabledInputs.length);
         if (value === undefined) {
             return undefined;
         }
@@ -71,7 +120,10 @@ export async function collectResourceCommandArguments(commandName: string, comma
         values.push({ input, value });
     }
 
-    return buildResourceCommandCliArgs(values);
+    return {
+        args: buildResourceCommandCliArgs(values),
+        containsSecret: values.some(({ input, value }) => input.inputType === ResourceCommandInputType.SecretText && shouldSubmitValue(input, value))
+    };
 }
 
 export async function confirmSecretArgumentWarning(secretWarningState: vscode.Memento | undefined): Promise<boolean> {
@@ -102,6 +154,64 @@ export async function confirmSecretArgumentWarning(secretWarningState: vscode.Me
 
 export function hasSecretResourceCommandArguments(command: ResourceCommandJson | undefined): boolean {
     return command?.argumentInputs?.some(input => !input.disabled && input.inputType === ResourceCommandInputType.SecretText) ?? false;
+}
+
+export function hasDynamicResourceCommandArguments(command: ResourceCommandJson | undefined): boolean {
+    return command?.argumentInputs?.some(input => input.dynamicLoading) ?? false;
+}
+
+async function loadDynamicArgumentInputs(
+    inputs: readonly ResourceCommandArgumentInputJson[],
+    values: readonly ResourceCommandArgumentValue[],
+    loader: ResourceCommandArgumentLoader | undefined,
+    loadedInputSignatures: Set<string>): Promise<ResourceCommandArgumentInputJson[] | undefined> {
+    if (!loader || !hasDynamicInputs(inputs)) {
+        return [...inputs];
+    }
+
+    // Avoid repeatedly calling the AppHost for the same prompt state. Dynamic input names are
+    // included because a load can replace the metadata shape as well as option/default values.
+    const signature = createDynamicInputLoadSignature(inputs, values);
+    if (loadedInputSignatures.has(signature)) {
+        return [...inputs];
+    }
+
+    loadedInputSignatures.add(signature);
+    const loadedInputs = await loader(values);
+    if (!loadedInputs) {
+        return undefined;
+    }
+
+    return preserveCollectedValues(loadedInputs, values);
+}
+
+function hasDynamicInputs(inputs: readonly ResourceCommandArgumentInputJson[]): boolean {
+    return inputs.some(input => input.dynamicLoading);
+}
+
+function createDynamicInputLoadSignature(inputs: readonly ResourceCommandArgumentInputJson[], values: readonly ResourceCommandArgumentValue[]): string {
+    const dynamicInputNames = inputs
+        .filter(input => input.dynamicLoading)
+        .map(input => input.name)
+        .sort();
+    const collectedValues = values
+        .map(({ input, value }) => [input.name, value])
+        .sort(([a], [b]) => a.localeCompare(b));
+
+    return JSON.stringify({ dynamicInputNames, collectedValues });
+}
+
+function hasEnabledSecretInput(inputs: readonly ResourceCommandArgumentInputJson[]): boolean {
+    return inputs.some(input => !input.disabled && input.inputType === ResourceCommandInputType.SecretText);
+}
+
+function preserveCollectedValues(inputs: readonly ResourceCommandArgumentInputJson[], values: readonly ResourceCommandArgumentValue[]): ResourceCommandArgumentInputJson[] {
+    const valuesByName = new Map(values.map(({ input, value }) => [input.name, value]));
+    // The AppHost returns fresh metadata, not the user's in-progress answers. Keep collected
+    // values so later reloads don't erase earlier prompts while still honoring updated metadata.
+    return inputs.map(input => valuesByName.has(input.name)
+        ? { ...input, value: valuesByName.get(input.name)! }
+        : input);
 }
 
 export function buildResourceCommandCliArgs(values: readonly ResourceCommandArgumentValue[]): string[] {

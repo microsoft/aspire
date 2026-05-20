@@ -7,6 +7,7 @@ using System.CommandLine.Invocation;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
@@ -47,6 +48,12 @@ internal sealed class ResourceCommand : BaseCommand
     private static readonly Option<bool> s_includeHiddenOption = new("--include-hidden")
     {
         Description = SharedCommandStrings.IncludeHiddenOptionDescription
+    };
+    // Hidden integration point for VS Code. It sends the current partial prompt state to
+    // the AppHost and receives the dynamically-loaded command input metadata as JSON.
+    private static readonly Option<bool> s_loadArgumentsOption = new("--load-arguments")
+    {
+        Hidden = true
     };
 
     /// <summary>
@@ -92,6 +99,7 @@ internal sealed class ResourceCommand : BaseCommand
         Arguments.Add(s_commandArgument);
         Options.Add(s_appHostOption);
         Options.Add(s_includeHiddenOption);
+        Options.Add(s_loadArgumentsOption);
         Options.Add(new HelpOption { Action = new ResourceCommandHelpAction(this) });
         TreatUnmatchedTokensAsErrors = false;
 
@@ -118,6 +126,7 @@ internal sealed class ResourceCommand : BaseCommand
         var commandName = parseResult.GetValue(s_commandArgument)!;
         var passedAppHostProjectFile = parseResult.GetValue(s_appHostOption);
         var includeHidden = parseResult.GetValue(s_includeHiddenOption);
+        var loadArguments = parseResult.GetValue(s_loadArgumentsOption);
         var capturedArguments = parseResult.UnmatchedTokens.ToArray();
 
         var result = await _connectionResolver.ResolveConnectionAsync(
@@ -134,13 +143,18 @@ internal sealed class ResourceCommand : BaseCommand
 
         var connection = result.Connection!;
         var command = await GetCommandMetadataAsync(connection, resourceName, commandName, includeHidden, cancellationToken).ConfigureAwait(false);
-        var commandArgumentsResult = CreateCommandArguments(command, capturedArguments);
+        var commandArgumentsResult = CreateCommandArguments(command, capturedArguments, loadArguments ? CommandArgumentParseMode.LoadArguments : CommandArgumentParseMode.Execute);
         if (commandArgumentsResult.ErrorMessage is { } errorMessage)
         {
             return CommandResult.Failure(CliExitCodes.InvalidCommand, errorMessage);
         }
 
         var commandArguments = commandArgumentsResult.Arguments;
+
+        if (loadArguments)
+        {
+            return await LoadCommandArgumentsAsync(parseResult, connection, resourceName, commandName, commandArguments, cancellationToken).ConfigureAwait(false);
+        }
 
         // Use display metadata for well-known command names.
         if (s_wellKnownCommands.TryGetValue(commandName, out var knownCommand))
@@ -166,6 +180,38 @@ internal sealed class ResourceCommand : BaseCommand
             commandName,
             commandArguments,
             cancellationToken));
+    }
+
+    private static async Task<CommandResult> LoadCommandArgumentsAsync(
+        ParseResult parseResult,
+        IAppHostAuxiliaryBackchannel connection,
+        string resourceName,
+        string commandName,
+        JsonNode? commandArguments,
+        CancellationToken cancellationToken)
+    {
+        var response = await connection.ExecuteResourceCommandAsync(
+            resourceName,
+            commandName,
+            new ExecuteResourceCommandOptions
+            {
+                Arguments = commandArguments,
+                ValidateOnly = true,
+                NonInteractive = true,
+                ReturnArgumentInputs = true
+            },
+            cancellationToken).ConfigureAwait(false);
+
+        if (response.ArgumentInputs is null)
+        {
+            return CommandResult.Failure(CliExitCodes.FailedToExecuteResourceCommand, response.Message);
+        }
+
+        var argumentInputs = response.ArgumentInputs.Select(ResourceSnapshotMapper.MapCommandArgumentInput).ToArray();
+        var json = JsonSerializer.Serialize(argumentInputs, ResourcesCommandJsonContext.Ndjson.ResourceCommandArgumentJsonArray);
+        parseResult.InvocationConfiguration.Output.WriteLine(json);
+
+        return CommandResult.Success();
     }
 
     private static async Task<ResourceSnapshotCommand?> GetCommandMetadataAsync(IAppHostAuxiliaryBackchannel connection, string resourceName, string commandName, bool includeHidden, CancellationToken cancellationToken)
@@ -200,7 +246,7 @@ internal sealed class ResourceCommand : BaseCommand
             .ToArray();
     }
 
-    private static (JsonNode? Arguments, string? ErrorMessage) CreateCommandArguments(ResourceSnapshotCommand? command, string[] capturedArguments)
+    private static (JsonNode? Arguments, string? ErrorMessage) CreateCommandArguments(ResourceSnapshotCommand? command, string[] capturedArguments, CommandArgumentParseMode parseMode)
     {
         capturedArguments = RemoveDelimiter(capturedArguments);
 
@@ -208,7 +254,7 @@ internal sealed class ResourceCommand : BaseCommand
         {
             if (command?.ArgumentInputs is { Length: > 0 } inputs)
             {
-                return CreateCommandArguments(inputs, capturedArguments);
+                return CreateCommandArguments(inputs, capturedArguments, parseMode);
             }
 
             return (null, null);
@@ -221,10 +267,10 @@ internal sealed class ResourceCommand : BaseCommand
             return (CreateUnknownArguments(capturedArguments), null);
         }
 
-        return CreateCommandArguments(argumentInputs, capturedArguments);
+        return CreateCommandArguments(argumentInputs, capturedArguments, parseMode);
     }
 
-    private static (JsonObject Arguments, string? ErrorMessage) CreateCommandArguments(ResourceSnapshotCommandArgument[] argumentInputs, string[] capturedArguments)
+    private static (JsonObject Arguments, string? ErrorMessage) CreateCommandArguments(ResourceSnapshotCommandArgument[] argumentInputs, string[] capturedArguments, CommandArgumentParseMode parseMode)
     {
         var arguments = new JsonObject();
         var options = new Dictionary<ResourceSnapshotCommandArgument, Option>();
@@ -235,7 +281,7 @@ internal sealed class ResourceCommand : BaseCommand
 
         foreach (var argument in argumentInputs)
         {
-            var option = CreateCommandArgumentOption(argument);
+            var option = CreateCommandArgumentOption(argument, parseMode);
             options.Add(argument, option);
             parserCommand.Options.Add(option);
         }
@@ -243,7 +289,7 @@ internal sealed class ResourceCommand : BaseCommand
         parserCommand.Validators.Add(result =>
         {
             var missingRequiredOptions = argumentInputs
-                .Where(argument => argument.Required && string.IsNullOrEmpty(argument.Value) && result.GetResult(options[argument]) is not { Implicit: false })
+                .Where(argument => ShouldValidateRequiredOption(argument, parseMode) && result.GetResult(options[argument]) is not { Implicit: false })
                 .Select(argument => $"--{ToKebabCase(argument.Name)}")
                 .ToArray();
 
@@ -327,20 +373,24 @@ internal sealed class ResourceCommand : BaseCommand
         return arguments;
     }
 
-    private static Option CreateCommandArgumentOption(ResourceSnapshotCommandArgument argument)
+    private static Option CreateCommandArgumentOption(ResourceSnapshotCommandArgument argument, CommandArgumentParseMode parseMode)
     {
         // Resource command input names are exposed as both exact-name and kebab-case System.CommandLine options:
         // - "timeoutMilliseconds" accepts "--timeoutMilliseconds" and "--timeout-milliseconds"
         // - "LogLevel" accepts "--LogLevel" and "--log-level"
         // - "url" accepts "--url"
         var optionName = ToKebabCase(argument.Name);
-        Option option = (IsBooleanInput(argument), IsNumberInput(argument)) switch
+        // Dynamic inputs are loaded and validated by the AppHost using the current prompt state.
+        // Keep their values as strings so stale snapshot metadata cannot reject a value before
+        // the AppHost has a chance to enable the input or refresh its choice list.
+        var parseAsString = parseMode == CommandArgumentParseMode.LoadArguments || argument.DynamicLoading is not null;
+        Option option = (IsBooleanInput(argument), IsNumberInput(argument), parseAsString) switch
         {
-            (true, _) => new Option<bool>($"--{optionName}")
+            (true, _, false) => new Option<bool>($"--{optionName}")
             {
                 DefaultValueFactory = _ => bool.TryParse(argument.Value, out var value) && value
             },
-            (_, true) => new Option<double?>($"--{optionName}")
+            (_, true, false) => new Option<double?>($"--{optionName}")
             {
                 Arity = ArgumentArity.ExactlyOne,
                 AllowMultipleArgumentsPerToken = false,
@@ -361,9 +411,9 @@ internal sealed class ResourceCommand : BaseCommand
         }
 
         option.Description = argument.Description ?? argument.Label;
-        option.Required = argument.Required && string.IsNullOrEmpty(argument.Value);
+        option.Required = ShouldValidateRequiredOption(argument, parseMode);
 
-        if (!argument.AllowCustomChoice && argument.Options is { Count: > 0 } options)
+        if (ShouldValidateChoiceOptions(argument, parseMode) && argument.Options is { Count: > 0 } options)
         {
             option.Validators.Add(result =>
             {
@@ -375,7 +425,7 @@ internal sealed class ResourceCommand : BaseCommand
             });
         }
 
-        if (argument.Disabled)
+        if (ShouldValidateDisabledOption(argument, parseMode))
         {
             option.Validators.Add(result =>
             {
@@ -393,6 +443,31 @@ internal sealed class ResourceCommand : BaseCommand
         }
 
         return option;
+    }
+
+    // Static CLI validation only runs for non-dynamic inputs during real execution. In --load-arguments
+    // mode the caller sends partial prompt state such as `--category=fruit`, and dynamic inputs can
+    // change their required/disabled state or choice set after the AppHost runs their load callback.
+    private static bool ShouldValidateRequiredOption(ResourceSnapshotCommandArgument argument, CommandArgumentParseMode parseMode)
+    {
+        return parseMode == CommandArgumentParseMode.Execute &&
+            argument.DynamicLoading is null &&
+            argument.Required &&
+            string.IsNullOrEmpty(argument.Value);
+    }
+
+    private static bool ShouldValidateChoiceOptions(ResourceSnapshotCommandArgument argument, CommandArgumentParseMode parseMode)
+    {
+        return parseMode == CommandArgumentParseMode.Execute &&
+            argument.DynamicLoading is null &&
+            !argument.AllowCustomChoice;
+    }
+
+    private static bool ShouldValidateDisabledOption(ResourceSnapshotCommandArgument argument, CommandArgumentParseMode parseMode)
+    {
+        return parseMode == CommandArgumentParseMode.Execute &&
+            argument.DynamicLoading is null &&
+            argument.Disabled;
     }
 
     private static bool IsBooleanInput(ResourceSnapshotCommandArgument argument)
@@ -494,6 +569,19 @@ internal sealed class ResourceCommand : BaseCommand
         }
 
         return builder.ToString();
+    }
+
+    private enum CommandArgumentParseMode
+    {
+        // Real command execution can fail fast on static metadata because the caller is submitting
+        // a complete invocation. Dynamic inputs are the exception; their validation waits for the
+        // AppHost because their metadata can change after load callbacks run.
+        Execute,
+
+        // Dynamic-input probing sends partial prompt state to the AppHost, such as only
+        // `--category=fruit`. Missing required values, disabled dependent inputs, and stale choice
+        // options must be accepted here so the AppHost can return the next metadata shape.
+        LoadArguments
     }
 
     private sealed class ResourceCommandHelpAction(ResourceCommand command) : AsynchronousCommandLineAction
@@ -804,4 +892,5 @@ internal sealed class ResourceCommand : BaseCommand
             return string.Join(" ", parts);
         }
     }
+
 }

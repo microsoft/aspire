@@ -65,6 +65,9 @@ export const resourceCommandArgumentsTitle = (command: string) => vscode.l10n.t(
 export const resourceCommandArgumentInputTitle = (command: string, input: string) => vscode.l10n.t('{0}: {1}', command, input);
 export const resourceCommandCustomChoice = (value: string) => vscode.l10n.t('Use "{0}"', value);
 export const resourceCommandCustomChoiceDescription = vscode.l10n.t('Custom value');
+export const resourceCommandDynamicInputsUnsupported = vscode.l10n.t('This command has dynamic inputs that the Aspire extension cannot prompt for yet. Run it from the Aspire Dashboard or Aspire CLI instead.');
+export const resourceCommandDynamicInputsFailed = vscode.l10n.t('Failed to load dynamic command inputs. Run this command from the Aspire Dashboard or Aspire CLI instead.');
+export const resourceCommandLoadingDynamicInputs = vscode.l10n.t('Loading command inputs...');
 export const resourceCommandSecretWarning = vscode.l10n.t('This command has secret arguments. Values are masked while you enter them, but they are passed to the Aspire CLI terminal and may be visible in terminal history or scrollback.');
 export const resourceCommandContinue = vscode.l10n.t('Continue');
 export const resourceCommandDontShowAgain = vscode.l10n.t("Don't show again");

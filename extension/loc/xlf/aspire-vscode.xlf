@@ -235,6 +235,9 @@
     <trans-unit id="aspire-vscode.strings.failedToGetTargetPath">
       <source xml:lang="en">Failed to get TargetPath: {0}.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourceCommandDynamicInputsFailed">
+      <source xml:lang="en">Failed to load dynamic command inputs. Run this command from the Aspire Dashboard or Aspire CLI instead.</source>
+    </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostSourceOpenFailed">
       <source xml:lang="en">Failed to open AppHost source file: {0}</source>
     </trans-unit>
@@ -306,6 +309,9 @@
     </trans-unit>
     <trans-unit id="walkthrough.getStarted.description">
       <source xml:lang="en">Learn how to create, run, and monitor distributed applications with Aspire.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourceCommandLoadingDynamicInputs">
+      <source xml:lang="en">Loading command inputs...</source>
     </trans-unit>
     <trans-unit id="command.new">
       <source xml:lang="en">New Aspire project</source>
@@ -510,6 +516,9 @@
     </trans-unit>
     <trans-unit id="extension.debug.step">
       <source xml:lang="en">The pipeline step name to execute when command is &apos;do&apos;</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.resourceCommandDynamicInputsUnsupported">
+      <source xml:lang="en">This command has dynamic inputs that the Aspire extension cannot prompt for yet. Run it from the Aspire Dashboard or Aspire CLI instead.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.resourceCommandSecretWarning">
       <source xml:lang="en">This command has secret arguments. Values are masked while you enter them, but they are passed to the Aspire CLI terminal and may be visible in terminal history or scrollback.</source>

@@ -3,8 +3,10 @@ import * as sinon from 'sinon';
 import * as vscode from 'vscode';
 import {
     buildResourceCommandCliArgs,
+    collectResourceCommandArguments,
     confirmSecretArgumentWarning,
     getResourceCommandArgumentValidationMessage,
+    hasDynamicResourceCommandArguments,
     hasSecretResourceCommandArguments,
     resourceCommandSecretWarningSuppressedKey,
     ResourceCommandArgumentValue,
@@ -205,6 +207,108 @@ suite('ResourceCommandArguments', () => {
                 makeInput({ inputType: 'SecretText', disabled: true }),
             ],
         }), false);
+    });
+
+    test('detects enabled dynamic arguments', () => {
+        assert.strictEqual(hasDynamicResourceCommandArguments({
+            description: null,
+            argumentInputs: [
+                makeInput({ name: 'browser' }),
+                makeInput({ dynamicLoading: { alwaysLoadOnStart: true, dependsOnInputs: ['browser'] } }),
+            ],
+        }), true);
+    });
+
+    test('detects disabled dynamic arguments', () => {
+        assert.strictEqual(hasDynamicResourceCommandArguments({
+            description: null,
+            argumentInputs: [
+                makeInput({ dynamicLoading: { alwaysLoadOnStart: true }, disabled: true }),
+            ],
+        }), true);
+    });
+
+    test('blocks dynamic arguments when no loader is available', async () => {
+        const warningStub = sinon.stub(vscode.window, 'showWarningMessage').resolves(undefined);
+        const quickPickStub = sinon.stub(vscode.window, 'showQuickPick');
+
+        try {
+            const result = await collectResourceCommandArguments('open', {
+                description: null,
+                argumentInputs: [
+                    makeInput({ inputType: 'SecretText' }),
+                    makeInput({ inputType: 'Choice', dynamicLoading: { dependsOnInputs: ['message'] } }),
+                ],
+            });
+
+            assert.strictEqual(result, undefined);
+            assert.strictEqual(warningStub.calledOnce, true);
+            assert.strictEqual(quickPickStub.called, false);
+        }
+        finally {
+            warningStub.restore();
+            quickPickStub.restore();
+        }
+    });
+
+    test('loads dynamic arguments before prompting', async () => {
+        const warningStub = sinon.stub(vscode.window, 'showWarningMessage').resolves(undefined);
+        let loadCount = 0;
+
+        try {
+            const result = await collectResourceCommandArguments('open', {
+                description: null,
+                argumentInputs: [
+                    makeInput({ inputType: 'Choice', dynamicLoading: { alwaysLoadOnStart: true } }),
+                ],
+            }, {
+                loadDynamicArguments: async values => {
+                    assert.deepStrictEqual(values, []);
+                    loadCount++;
+                    return [
+                        makeInput({ inputType: 'Choice', disabled: true, dynamicLoading: { alwaysLoadOnStart: true } }),
+                    ];
+                },
+            });
+
+            assert.deepStrictEqual(result?.args, []);
+            assert.strictEqual(result?.containsSecret, false);
+            assert.strictEqual(loadCount, 1);
+            assert.strictEqual(warningStub.called, false);
+        }
+        finally {
+            warningStub.restore();
+        }
+    });
+
+    test('loads initially disabled dynamic arguments before deciding whether to prompt', async () => {
+        const warningStub = sinon.stub(vscode.window, 'showWarningMessage').resolves(undefined);
+        let loadCount = 0;
+
+        try {
+            const result = await collectResourceCommandArguments('open', {
+                description: null,
+                argumentInputs: [
+                    makeInput({ inputType: 'Choice', disabled: true, dynamicLoading: { alwaysLoadOnStart: true } }),
+                ],
+            }, {
+                loadDynamicArguments: async values => {
+                    assert.deepStrictEqual(values, []);
+                    loadCount++;
+                    return [
+                        makeInput({ inputType: 'Choice', disabled: true, dynamicLoading: { alwaysLoadOnStart: true } }),
+                    ];
+                },
+            });
+
+            assert.deepStrictEqual(result?.args, []);
+            assert.strictEqual(result?.containsSecret, false);
+            assert.strictEqual(loadCount, 1);
+            assert.strictEqual(warningStub.called, false);
+        }
+        finally {
+            warningStub.restore();
+        }
     });
 
     test('stores secret warning suppression when requested', async () => {
