@@ -12,6 +12,7 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
 using Spectre.Console;
 using Spectre.Console.Rendering;
 using InvocationConfiguration = System.CommandLine.InvocationConfiguration;
@@ -420,6 +421,72 @@ public class LsCommandTests(ITestOutputHelper outputHelper)
         var finalOutput = RenderToPlainConsole(interactionService.DisplayedRenderables[0]);
         Assert.Contains("App1.AppHost.csproj", finalOutput);
         Assert.Contains("App2.AppHost.csproj", finalOutput);
+    }
+
+    [Fact]
+    public async Task LsCommand_TableFormat_InteractiveMode_RefreshesSearchStatusWithTimeProvider()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var timeProvider = new FakeTimeProvider();
+        var interactionService = new TestInteractionService();
+        var statusRefreshed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var allowDiscoveryToComplete = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var candidateReported = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App", "App.AppHost.csproj");
+        var appHost = new AppHostProjectCandidate(new FileInfo(appHostPath), KnownLanguageId.CSharp);
+        var projectLocator = new TestProjectLocator
+        {
+            FindAppHostProjectsStreamAsyncCallback = (_, _, cancellationToken, onDirectoryEnumerated) =>
+                GetCandidatesAsync(cancellationToken, onDirectoryEnumerated)
+        };
+
+        interactionService.ShowDynamicStatusCallback = text =>
+        {
+            if (text.Contains("1 directories searched", StringComparison.Ordinal) &&
+                text.Contains("1 AppHosts found", StringComparison.Ordinal))
+            {
+                statusRefreshed.TrySetResult();
+            }
+        };
+
+        async IAsyncEnumerable<AppHostProjectCandidate> GetCandidatesAsync(
+            [EnumeratorCancellation] CancellationToken cancellationToken,
+            Action<int>? onDirectoryEnumerated)
+        {
+            onDirectoryEnumerated?.Invoke(1);
+            yield return appHost;
+            candidateReported.SetResult();
+            await allowDiscoveryToComplete.Task.WaitAsync(cancellationToken);
+        }
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliHostEnvironmentFactory = _ => TestHelpers.CreateInteractiveHostEnvironment();
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.TimeProvider = timeProvider;
+        });
+        using var provider = services.BuildServiceProvider();
+
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("ls");
+
+        var invokeTask = result.InvokeAsync();
+        await candidateReported.Task.DefaultTimeout();
+
+        Assert.Single(interactionService.DynamicStatusTexts);
+
+        timeProvider.Advance(TimeSpan.FromMilliseconds(999));
+        await Task.Yield();
+        Assert.Single(interactionService.DynamicStatusTexts);
+
+        timeProvider.Advance(TimeSpan.FromMilliseconds(1));
+        await statusRefreshed.Task.DefaultTimeout();
+
+        allowDiscoveryToComplete.SetResult();
+        var exitCode = await invokeTask.DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
     }
 
     [Fact]

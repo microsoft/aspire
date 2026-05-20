@@ -24,6 +24,7 @@ internal sealed class LsCommand : BaseCommand
     private readonly ICliHostEnvironment _hostEnvironment;
     private readonly ConsoleEnvironment _consoleEnvironment;
     private readonly ProfilingTelemetry _profilingTelemetry;
+    private readonly TimeProvider _timeProvider;
 
     private static readonly Option<OutputFormat> s_formatOption = new("--format")
     {
@@ -49,7 +50,8 @@ internal sealed class LsCommand : BaseCommand
         ICliHostEnvironment hostEnvironment,
         ConsoleEnvironment consoleEnvironment,
         AspireCliTelemetry telemetry,
-        ProfilingTelemetry profilingTelemetry)
+        ProfilingTelemetry profilingTelemetry,
+        TimeProvider? timeProvider = null)
         : base("ls", SharedCommandStrings.LsCommandDescription, features, updateNotifier, executionContext, interactionService, telemetry)
     {
         _interactionService = interactionService;
@@ -58,6 +60,7 @@ internal sealed class LsCommand : BaseCommand
         _hostEnvironment = hostEnvironment;
         _consoleEnvironment = consoleEnvironment;
         _profilingTelemetry = profilingTelemetry;
+        _timeProvider = timeProvider ?? TimeProvider.System;
 
         Options.Add(s_formatOption);
         Options.Add(s_allOption);
@@ -234,7 +237,7 @@ internal sealed class LsCommand : BaseCommand
                     {
                         while (!refreshToken.IsCancellationRequested)
                         {
-                            await Task.Delay(statusRefreshInterval, refreshToken).ConfigureAwait(false);
+                            await Task.Delay(statusRefreshInterval, _timeProvider, refreshToken).ConfigureAwait(false);
                             update(FormatSearchingStatus(Volatile.Read(ref directoriesSearched), Volatile.Read(ref appHostsFound)));
                         }
                     }

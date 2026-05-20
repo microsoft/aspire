@@ -25,6 +25,7 @@ internal sealed class TestInteractionService : IInteractionService
     public Action<string>? DisplayConsoleWriteLineMessage { get; set; }
     public Func<string, bool, bool>? ConfirmCallback { get; set; }
     public Action<string>? ShowStatusCallback { get; set; }
+    public Action<string>? ShowDynamicStatusCallback { get; set; }
     public Action<string>? DisplayVersionUpdateNotificationCallback { get; set; }
     public string? LastVersionUpdateCommand { get; private set; }
 
@@ -84,18 +85,19 @@ internal sealed class TestInteractionService : IInteractionService
 
     public Task<T> ShowDynamicStatusAsync<T>(string initialStatusText, Func<Action<string>, Task<T>> action, KnownEmoji? emoji = null)
     {
-        lock (_displayLock)
-        {
-            DynamicStatusTexts.Add(initialStatusText);
-        }
+        AddDynamicStatusText(initialStatusText);
 
-        return action(text =>
+        return action(AddDynamicStatusText);
+
+        void AddDynamicStatusText(string text)
         {
             lock (_displayLock)
             {
                 DynamicStatusTexts.Add(text);
             }
-        });
+
+            ShowDynamicStatusCallback?.Invoke(text);
+        }
     }
 
     public void ShowStatus(string statusText, Action action, KnownEmoji? emoji = null, bool allowMarkup = false)

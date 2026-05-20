@@ -100,7 +100,7 @@ internal static class CliTestHelper
 
         services.AddSingleton(options.ConsoleEnvironmentFactory);
         services.AddSingleton(sp => sp.GetRequiredService<ConsoleEnvironment>().Out);
-        services.AddSingleton(TimeProvider.System);
+        services.AddSingleton(options.TimeProvider);
         services.AddSingleton(options.TelemetryFactory);
         services.AddSingleton<ProfilingTelemetry>();
         services.AddSingleton(options.ProjectLocatorFactory);
@@ -300,6 +300,7 @@ internal sealed class CliServiceCollectionTestOptions
     public TestOutputTextWriter? OutputTextWriter { get; set; }
     public StringWriter? ErrorTextWriter { get; set; }
     public bool DisableAnsi { get; set; }
+    public TimeProvider TimeProvider { get; set; } = TimeProvider.System;
 
     public Func<IServiceProvider, ConsoleEnvironment> ConsoleEnvironmentFactory => (IServiceProvider serviceProvider) =>
     {
