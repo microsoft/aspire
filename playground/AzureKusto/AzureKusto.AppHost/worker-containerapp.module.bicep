@@ -17,7 +17,7 @@ param infra_outputs_azure_container_registry_endpoint string
 
 param infra_outputs_azure_container_registry_managed_identity_id string
 
-resource worker 'Microsoft.App/containerApps@2025-02-02-preview' = {
+resource worker 'Microsoft.App/containerApps@2025-10-02-preview' = {
   name: 'worker'
   location: location
   properties: {

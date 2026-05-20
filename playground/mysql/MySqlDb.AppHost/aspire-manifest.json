@@ -3,7 +3,7 @@
     "mysql": {
       "type": "container.v0",
       "connectionString": "Server={mysql.bindings.tcp.host};Port={mysql.bindings.tcp.port};User ID=root;Password={mysql-password.value}",
-      "image": "docker.io/library/mysql:9.6",
+      "image": "docker.io/library/mysql:9.7",
       "bindMounts": [
         {
           "source": "../MySql.ApiService/data",
