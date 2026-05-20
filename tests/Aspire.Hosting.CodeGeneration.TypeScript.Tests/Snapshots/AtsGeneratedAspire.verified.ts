@@ -1,4 +1,4 @@
-﻿// aspire.ts - Capability-based Aspire SDK
+﻿// aspire.mts - Capability-based Aspire SDK
 // This SDK uses the ATS (Aspire Type System) capability API.
 // Capabilities are endpoints like 'Aspire.Hosting/createBuilder'.
 //
@@ -15,10 +15,10 @@ import {
     wrapIfHandle,
     registerHandleWrapper,
     isPromiseLike
-} from './transport.js';
-import type { AspireClientRpc } from './transport.js';
+} from './transport.mjs';
+import type { AspireClientRpc } from './transport.mjs';
 
-import type { HandleReference } from './base.js';
+import type { HandleReference } from './base.mjs';
 
 import {
     ResourceBuilderBase,
@@ -26,24 +26,24 @@ import {
     refExpr,
     AspireDict,
     AspireList
-} from './base.js';
+} from './base.mjs';
 
 export {
     InputType,
     InteractionInputCollection
-} from './base.js';
+} from './base.mjs';
 
 export type {
     InteractionInput,
     InteractionInputOption
-} from './base.js';
+} from './base.mjs';
 
 import type {
     Awaitable,
     InteractionInput,
     InteractionInputCollection,
     InputType
-} from './base.js';
+} from './base.mjs';
 
 // ============================================================================
 // Handle Type Aliases (Internal - not exported to users)
@@ -3959,9 +3959,9 @@ export async function createBuilder(options?: CreateBuilderOptions): Promise<Dis
 }
 
 // Re-export commonly used types
-export { Handle, AppHostUsageError, CancellationToken, CapabilityError, registerCallback } from './transport.js';
-export { refExpr, ReferenceExpression } from './base.js';
-export type { HandleReference, Awaitable } from './base.js';
+export { Handle, AppHostUsageError, CancellationToken, CapabilityError, registerCallback } from './transport.mjs';
+export { refExpr, ReferenceExpression } from './base.mjs';
+export type { HandleReference, Awaitable } from './base.mjs';
 
 // ============================================================================
 // Global Error Handling

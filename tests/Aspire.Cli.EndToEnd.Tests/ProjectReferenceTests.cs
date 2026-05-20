@@ -40,10 +40,10 @@ public sealed class ProjectReferenceTests(ITestOutputHelper output)
         // Step 1: Create a TypeScript AppHost (so we get the SDK version in aspire.config.json)
         await auto.TypeAsync("aspire init --language typescript --non-interactive");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitUntilTextAsync("Created apphost.mts", timeout: TimeSpan.FromMinutes(2));
         await auto.WaitForSuccessPromptAsync(counter);
 
-        // Step 2: Create the integration project, update aspire.config.json, and modify apphost.ts
+        // Step 2: Create the integration project, update aspire.config.json, and modify apphost.mts
         {
             var workDir = workspace.WorkspaceRoot.FullName;
 
@@ -133,9 +133,9 @@ public sealed class ProjectReferenceTests(ITestOutputHelper output)
                 Directory.Delete(modulesDir, recursive: true);
             }
 
-            // Update apphost.ts to use the custom integration
-            File.WriteAllText(Path.Combine(workDir, "apphost.ts"), """
-                import { createBuilder } from './.modules/aspire.js';
+            // Update apphost.mts to use the custom integration
+            File.WriteAllText(Path.Combine(workDir, "apphost.mts"), """
+                import { createBuilder } from './.modules/aspire.mjs';
 
                 const builder = await createBuilder();
                 await builder.addMyService("my-svc");
@@ -163,7 +163,7 @@ public sealed class ProjectReferenceTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(10));
 
         // Step 4: Verify the custom integration was code-generated
-        await auto.TypeAsync("grep addMyService .modules/aspire.ts");
+        await auto.TypeAsync("grep addMyService .modules/aspire.mts");
         await auto.EnterAsync();
         await auto.WaitUntilTextAsync("addMyService", timeout: TimeSpan.FromSeconds(5));
         await auto.WaitForSuccessPromptAsync(counter);

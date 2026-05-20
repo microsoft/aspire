@@ -26,9 +26,10 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
     private const string CodeGenTarget = "TypeScript";
 
     private const string LanguageDisplayName = "TypeScript (Node.js)";
-    private const string AppHostFileName = "apphost.ts";
+    private const string AppHostFileName = "apphost.mts";
     private const string PackageJsonFileName = "package.json";
     private const string AppHostTsConfigFileName = "tsconfig.apphost.json";
+    private const string AppHostPackageName = "aspire-apphost";
     private const string EslintConfigFileName = "eslint.config.mjs";
 
     /// <summary>
@@ -41,7 +42,7 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
     /// <summary>
     /// Cached content of <c>eslint.config.mjs</c>, sourced from the embedded resource of
     /// the same name. The scaffolded file enables <c>@typescript-eslint/no-floating-promises</c>
-    /// against <c>apphost.ts</c> so unawaited AppHost promises surface as lint errors.
+    /// against <c>apphost.mts</c> so unawaited AppHost promises surface as lint errors.
     /// </summary>
     private static readonly string s_eslintConfigContent = EmbeddedResources.Read(EslintConfigFileName);
 
@@ -50,7 +51,7 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
         WriteIndented = true,
         Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
-    private static readonly string[] s_detectionPatterns = ["apphost.ts"];
+    private static readonly string[] s_detectionPatterns = ["apphost.mts", "apphost.ts"];
 
     /// <inheritdoc />
     public string Language => LanguageId;
@@ -60,12 +61,12 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
     {
         var files = new Dictionary<string, string>();
 
-        // Create apphost.ts
+        // Create apphost.mts
         files[AppHostFileName] = """
             // Aspire TypeScript AppHost
             // For more information, see: https://aspire.dev
 
-            import { createBuilder } from './.modules/aspire.js';
+            import { createBuilder } from './.modules/aspire.mjs';
 
             const builder = await createBuilder();
 
@@ -84,7 +85,7 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
             """;
         files[PackageJsonFileName] = CreatePackageJson(request);
 
-        // Create eslint.config.mjs for catching unawaited promises in apphost.ts
+        // Create eslint.config.mjs for catching unawaited promises in apphost.mts
         files[EslintConfigFileName] = s_eslintConfigContent;
 
         // Create an apphost-specific tsconfig so existing brownfield TypeScript settings are preserved.
@@ -122,13 +123,13 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
         // combining with on-disk content. Including existing entries in the scaffold output
         // would cause a double-merge where correctness depends on JsonObject iteration order.
         var packageJson = new JsonObject();
-        var packageJsonPath = Path.Combine(request.TargetPath, PackageJsonFileName);
-
-        var isGreenfield = !File.Exists(packageJsonPath);
-        if (isGreenfield)
+        var hasExistingPackageJson = HasExistingPackageJson(request);
+        if (!hasExistingPackageJson)
         {
-            // Greenfield: include root metadata so the scaffold output is a complete package.json.
-            var packageName = request.ProjectName?.ToLowerInvariant() ?? "aspire-apphost";
+            // Fresh package: include metadata so the scaffold output is a complete package.json.
+            var packageName = IsNestedBrownfieldPackage(request.TargetPath)
+                ? AppHostPackageName
+                : request.ProjectName?.ToLowerInvariant() ?? AppHostPackageName;
             packageJson["name"] = packageName;
             packageJson["version"] = "1.0.0";
             packageJson["private"] = true;
@@ -143,12 +144,12 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
         engines["node"] = "^20.19.0 || ^22.13.0 || >=24";
 
         var scripts = EnsureObject(packageJson, "scripts");
-        scripts["aspire:lint"] = "eslint apphost.ts";
+        scripts["aspire:lint"] = "eslint apphost.mts";
         scripts["aspire:start"] = "aspire run";
         scripts["aspire:build"] = $"tsc -p {AppHostTsConfigFileName}";
         scripts["aspire:dev"] = $"tsc --watch -p {AppHostTsConfigFileName}";
 
-        if (isGreenfield)
+        if (!hasExistingPackageJson)
         {
             scripts["lint"] = "npm run aspire:lint";
             scripts["predev"] = "npm run aspire:lint";
@@ -167,6 +168,20 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
         EnsureDependency(packageJson, "devDependencies", "typescript-eslint", "^8.57.1");
 
         return packageJson.ToJsonString(s_jsonSerializerOptions);
+    }
+
+    private static bool IsNestedBrownfieldPackage(string targetPath)
+    {
+        var targetDirectory = new DirectoryInfo(targetPath);
+        return string.Equals(targetDirectory.Name, AppHostPackageName, StringComparison.OrdinalIgnoreCase) &&
+            targetDirectory.Parent is { } parent &&
+            File.Exists(Path.Combine(parent.FullName, PackageJsonFileName));
+    }
+
+    private static bool HasExistingPackageJson(ScaffoldRequest request)
+    {
+        var packageJsonPath = Path.Combine(request.TargetPath, PackageJsonFileName);
+        return File.Exists(packageJsonPath);
     }
 
     private static void EnsureDependency(JsonObject packageJson, string sectionName, string packageName, string version)
@@ -206,8 +221,10 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
     /// <inheritdoc />
     public DetectionResult Detect(string directoryPath)
     {
-        // Check for apphost.ts
-        var appHostPath = Path.Combine(directoryPath, AppHostFileName);
+        var appHostFileName = File.Exists(Path.Combine(directoryPath, AppHostFileName))
+            ? AppHostFileName
+            : "apphost.ts";
+        var appHostPath = Path.Combine(directoryPath, appHostFileName);
         if (!File.Exists(appHostPath))
         {
             return DetectionResult.NotFound;
@@ -223,7 +240,7 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
         // Note: .csproj precedence is handled by the CLI, not here.
         // Language support should only check for its own language markers.
 
-        return DetectionResult.Found(LanguageId, AppHostFileName);
+        return DetectionResult.Found(LanguageId, appHostFileName);
     }
 
     /// <inheritdoc />
@@ -262,7 +279,7 @@ internal sealed class TypeScriptLanguageSupport : ILanguageSupport
                     "nodemon",
                     "--signal", "SIGTERM",
                     "--watch", ".",
-                    "--ext", "ts",
+                    "--ext", "ts,mts",
                     "--ignore", "node_modules/",
                     "--ignore", ".modules/",
                     "--exec", $"npx --no-install tsc --noEmit -p {AppHostTsConfigFileName} && npx --no-install tsx --tsconfig {AppHostTsConfigFileName} \"{{appHostFile}}\""

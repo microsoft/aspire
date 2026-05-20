@@ -136,13 +136,14 @@ public sealed class SmokeTests(ITestOutputHelper output)
         await auto.AspireNewTypeScriptEmptyAppHostAsync(projectName, counter, channel: "stable");
 
         var projectPath = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
-        var appHostPath = Path.Combine(projectPath, "apphost.ts");
+        var configPath = Path.Combine(projectPath, "aspire.config.json");
+        var appHostFileName = GetStableTypeScriptAppHostFileName(configPath);
+        var appHostPath = Path.Combine(projectPath, appHostFileName);
         if (!File.Exists(appHostPath))
         {
             throw new FileNotFoundException($"Expected TypeScript AppHost file to exist: {appHostPath}", appHostPath);
         }
 
-        AssertStableTypeScriptAppHostConfig(Path.Combine(projectPath, "aspire.config.json"));
         output.WriteLine("Stable TypeScript AppHost config verified.");
 
         await auto.RunCommandFailFastAsync($"cd {projectName}", counter);
@@ -169,14 +170,15 @@ public sealed class SmokeTests(ITestOutputHelper output)
             : throw new InvalidOperationException($"Could not find Aspire.AppHost.Sdk directive in {appHostPath}.");
     }
 
-    private static void AssertStableTypeScriptAppHostConfig(string configPath)
+    private static string GetStableTypeScriptAppHostFileName(string configPath)
     {
         if (!File.Exists(configPath))
         {
             throw new FileNotFoundException($"Expected Aspire config file to exist: {configPath}", configPath);
         }
 
-        // Expected shape: { "appHost": { "path": "apphost.ts", "language": "typescript/nodejs" }, "sdk": { "version": "13.2.0" }, "channel": "stable" }
+        // Stable channel can lag behind current TypeScript template naming, so the
+        // AppHost path is expected to match whichever stable template was created.
         using var config = JsonDocument.Parse(File.ReadAllText(configPath));
         var root = config.RootElement;
         AssertJsonStringProperty(root, "channel", "stable", configPath);
@@ -189,8 +191,15 @@ public sealed class SmokeTests(ITestOutputHelper output)
         }
 
         var appHost = GetRequiredJsonObjectProperty(root, "appHost", configPath);
-        AssertJsonStringProperty(appHost, "path", "apphost.ts", configPath);
+        var appHostPath = GetRequiredJsonStringProperty(appHost, "path", configPath);
+        if (appHostPath is not ("apphost.mts" or "apphost.ts"))
+        {
+            throw new InvalidOperationException($"Expected JSON property 'path' in {configPath} to be 'apphost.mts' or 'apphost.ts', got '{appHostPath}'.");
+        }
+
         AssertJsonStringProperty(appHost, "language", "typescript/nodejs", configPath);
+
+        return appHostPath;
     }
 
     private static JsonElement GetRequiredJsonObjectProperty(JsonElement element, string propertyName, string configPath)

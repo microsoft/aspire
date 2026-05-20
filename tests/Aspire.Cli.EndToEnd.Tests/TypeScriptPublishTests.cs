@@ -40,7 +40,7 @@ public sealed class TypeScriptPublishTests(ITestOutputHelper output)
         await auto.KeyAsync(Hex1bKey.DownArrow);
         await auto.WaitUntilTextAsync("> TypeScript (Node.js)", timeout: TimeSpan.FromSeconds(5));
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitUntilTextAsync("Created apphost.mts", timeout: TimeSpan.FromMinutes(2));
         await auto.DeclineAgentInitPromptAsync(counter);
 
         await auto.TypeAsync("aspire add Aspire.Hosting.Docker");
@@ -58,9 +58,9 @@ public sealed class TypeScriptPublishTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
         await auto.WaitForSuccessPromptAsync(counter);
 
-        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts");
         var newContent = """
-            import { createBuilder } from './.modules/aspire.js';
+            import { createBuilder } from './.modules/aspire.mjs';
 
             const builder = await createBuilder();
 
@@ -133,7 +133,7 @@ public sealed class TypeScriptPublishTests(ITestOutputHelper output)
         await auto.KeyAsync(Hex1bKey.DownArrow);
         await auto.WaitUntilTextAsync("> TypeScript (Node.js)", timeout: TimeSpan.FromSeconds(5));
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitUntilTextAsync("Created apphost.mts", timeout: TimeSpan.FromMinutes(2));
         await auto.DeclineAgentInitPromptAsync(counter);
 
         await auto.TypeAsync("aspire add Aspire.Hosting.Docker");
@@ -151,9 +151,9 @@ public sealed class TypeScriptPublishTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
         await auto.WaitForSuccessPromptAsync(counter);
 
-        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts");
         var newContent = """
-            import { createBuilder } from './.modules/aspire.js';
+            import { createBuilder } from './.modules/aspire.mjs';
 
             const builder = await createBuilder();
 
@@ -220,7 +220,7 @@ public sealed class TypeScriptPublishTests(ITestOutputHelper output)
 
         await auto.TypeAsync("aspire init --language typescript --non-interactive");
         await auto.EnterAsync();
-        await auto.WaitUntilTextAsync("Created apphost.ts", timeout: TimeSpan.FromMinutes(2));
+        await auto.WaitUntilTextAsync("Created apphost.mts", timeout: TimeSpan.FromMinutes(2));
         await auto.WaitForSuccessPromptAsync(counter);
 
         await auto.TypeAsync("aspire add Aspire.Hosting.Docker");
@@ -233,9 +233,9 @@ public sealed class TypeScriptPublishTests(ITestOutputHelper output)
         await auto.WaitUntilTextAsync("SDK code restored successfully", timeout: TimeSpan.FromMinutes(3));
         await auto.WaitForSuccessPromptAsync(counter);
 
-        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
+        var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts");
         var newContent = """
-            import { createBuilder } from './.modules/aspire.js';
+            import { createBuilder } from './.modules/aspire.mjs';
 
             const builder = await createBuilder();
 

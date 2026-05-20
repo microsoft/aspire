@@ -11,8 +11,8 @@
     "rootDir": "."
   },
   "include": [
-    "apphost.ts",
-    ".modules/**/*.ts"
+    "apphost.mts",
+    ".modules/**/*.mts"
   ],
   "exclude": [
     "node_modules"

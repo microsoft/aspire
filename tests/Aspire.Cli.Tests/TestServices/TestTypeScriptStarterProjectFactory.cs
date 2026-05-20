@@ -26,12 +26,18 @@ internal sealed class TestTypeScriptStarterProjectFactory(Func<DirectoryInfo, Ca
 
     public IAppHostProject? TryGetProject(FileInfo appHostFile)
     {
-        return appHostFile.Name.Equals("apphost.ts", StringComparison.OrdinalIgnoreCase) ? _project : null;
+        return IsTypeScriptAppHost(appHostFile) ? _project : null;
     }
 
     public IAppHostProject GetProject(FileInfo appHostFile)
     {
         return TryGetProject(appHostFile) ?? throw new NotSupportedException($"No handler available for AppHost file '{appHostFile.Name}'.");
+    }
+
+    internal static bool IsTypeScriptAppHost(FileInfo appHostFile)
+    {
+        return appHostFile.Name.Equals("apphost.mts", StringComparison.OrdinalIgnoreCase) ||
+            appHostFile.Name.Equals("apphost.ts", StringComparison.OrdinalIgnoreCase);
     }
 }
 
@@ -45,16 +51,16 @@ internal sealed class TestTypeScriptStarterProject(Func<DirectoryInfo, Cancellat
 
     public string DisplayName => "TypeScript (Node.js)";
 
-    public string? AppHostFileName => "apphost.ts";
+    public string? AppHostFileName => "apphost.mts";
 
     public Task<string[]> GetDetectionPatternsAsync(CancellationToken cancellationToken = default)
     {
-        return Task.FromResult<string[]>(["apphost.ts"]);
+        return Task.FromResult<string[]>(["apphost.mts", "apphost.ts"]);
     }
 
     public bool CanHandle(FileInfo appHostFile)
     {
-        return appHostFile.Name.Equals("apphost.ts", StringComparison.OrdinalIgnoreCase);
+        return TestTypeScriptStarterProjectFactory.IsTypeScriptAppHost(appHostFile);
     }
 
     public bool IsUsingProjectReferences(FileInfo appHostFile)
@@ -112,4 +118,5 @@ internal sealed class TestTypeScriptStarterProject(Func<DirectoryInfo, Cancellat
         LastPackageSourceOverride = packageSourceOverride;
         return buildAndGenerateSdkAsync(directory, cancellationToken, packageSourceOverride);
     }
+
 }

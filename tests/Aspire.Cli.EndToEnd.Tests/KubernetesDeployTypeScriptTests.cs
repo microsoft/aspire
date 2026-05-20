@@ -72,13 +72,13 @@ public sealed class KubernetesDeployTypeScriptTests(ITestOutputHelper output)
             await auto.WaitForSuccessPromptAsync(counter);
 
             // =====================================================================
-            // Phase 3: Modify apphost.ts to add Kubernetes environment
+            // Phase 3: Modify apphost.mts to add Kubernetes environment
             // =====================================================================
 
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, ProjectName);
-            var appHostFilePath = Path.Combine(projectDir, "apphost.ts");
+            var appHostFilePath = Path.Combine(projectDir, "apphost.mts");
 
-            output.WriteLine($"Looking for apphost.ts at: {appHostFilePath}");
+            output.WriteLine($"Looking for apphost.mts at: {appHostFilePath}");
 
             var content = File.ReadAllText(appHostFilePath);
 
@@ -107,7 +107,7 @@ await builder.build().run();
 """);
 
             File.WriteAllText(appHostFilePath, content);
-            output.WriteLine("Modified apphost.ts with Kubernetes environment configuration");
+            output.WriteLine("Modified apphost.mts with Kubernetes environment configuration");
 
             // =====================================================================
             // Phase 4: Run aspire deploy interactively

@@ -10,6 +10,6 @@
     "outDir": "./dist",
     "rootDir": "."
   },
-  "include": ["apphost.ts", ".modules/**/*.ts"],
+  "include": ["apphost.mts", ".modules/**/*.mts"],
   "exclude": ["node_modules"]
 }
