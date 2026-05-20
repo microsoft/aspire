@@ -566,7 +566,7 @@ public static class ContainerResourceBuilderExtensions
     /// </remarks>
     /// <ats-summary>Sets the lifetime behavior of the container resource</ats-summary>
     /// <ats-returns>The <ats-see cref="!:type:IResourceBuilder" />.</ats-returns>
-    /// <ats-param name="lifetime">The lifetime behavior of the container resource. The defaults behavior is <ats-see cref="!:type:ContainerLifetime.Session" />.</ats-param>
+    /// <ats-param name="lifetime">The lifetime behavior of the container resource. The defaults behavior is <ats-see cref="!:field:ContainerLifetime.Session" />.</ats-param>
     [AspireExport]
     public static IResourceBuilder<T> WithLifetime<T>(this IResourceBuilder<T> builder, ContainerLifetime lifetime) where T : ContainerResource
     {

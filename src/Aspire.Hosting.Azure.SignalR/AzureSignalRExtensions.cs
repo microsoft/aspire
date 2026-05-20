@@ -216,7 +216,7 @@ public static class AzureSignalRExtensions
     /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="AzureSignalRRole"/> value.</exception>
     /// <ats-summary>Assigns Azure SignalR roles to a resource</ats-summary>
     /// <ats-returns>The updated <ats-see cref="!:type:IResourceBuilder" /> with the applied role assignments.</ats-returns>
-    /// <ats-param name="roles">The Azure SignalR roles to be assigned (for example, <ats-see cref="!:type:AzureSignalRRole.SignalRContributor" />).</ats-param>
+    /// <ats-param name="roles">The Azure SignalR roles to be assigned (for example, <ats-see cref="!:field:AzureSignalRRole.SignalRContributor" />).</ats-param>
     [AspireExport("withSignalRRoleAssignments")]
     internal static IResourceBuilder<T> WithRoleAssignments<T>(
         this IResourceBuilder<T> builder,

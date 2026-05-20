@@ -256,7 +256,7 @@ public static class FoundryExtensions
     /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="FoundryRole"/> value.</exception>
     /// <ats-summary>Assigns Microsoft Foundry roles to a resource</ats-summary>
     /// <ats-returns>The updated <ats-see cref="!:type:IResourceBuilder" /> with the applied role assignments.</ats-returns>
-    /// <ats-param name="roles">The Microsoft Foundry roles to be assigned (for example, <ats-see cref="!:type:FoundryRole.CognitiveServicesOpenAIUser" />).</ats-param>
+    /// <ats-param name="roles">The Microsoft Foundry roles to be assigned (for example, <ats-see cref="!:field:FoundryRole.CognitiveServicesOpenAIUser" />).</ats-param>
     [AspireExport("withFoundryRoleAssignments")]
     internal static IResourceBuilder<T> WithRoleAssignments<T>(
         this IResourceBuilder<T> builder,

@@ -116,7 +116,7 @@ public static class KubernetesIngressExtensions
     /// </example>
     /// <ats-summary>Adds a path-based route to a Kubernetes Ingress</ats-summary>
     /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
-    /// <ats-param name="pathType">The path matching strategy. Defaults to <ats-see cref="!:type:IngressPathType.Prefix" />.</ats-param>
+    /// <ats-param name="pathType">The path matching strategy. Defaults to <ats-see cref="!:field:IngressPathType.Prefix" />.</ats-param>
     [AspireExport("withIngressPathRoute")]
     public static IResourceBuilder<KubernetesIngressResource> WithRoute(
         this IResourceBuilder<KubernetesIngressResource> builder,
@@ -160,7 +160,7 @@ public static class KubernetesIngressExtensions
     /// </example>
     /// <ats-summary>Adds a host-and-path route to a Kubernetes Ingress</ats-summary>
     /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
-    /// <ats-param name="pathType">The path matching strategy. Defaults to <ats-see cref="!:type:IngressPathType.Prefix" />.</ats-param>
+    /// <ats-param name="pathType">The path matching strategy. Defaults to <ats-see cref="!:field:IngressPathType.Prefix" />.</ats-param>
     [AspireExport("withIngressHostRoute")]
     public static IResourceBuilder<KubernetesIngressResource> WithRoute(
         this IResourceBuilder<KubernetesIngressResource> builder,

@@ -265,7 +265,7 @@ public static class AzureOpenAIExtensions
     /// <exception cref="ArgumentException">Thrown when a role value is not a valid <see cref="AzureOpenAIRole"/> value.</exception>
     /// <ats-summary>Assigns Cognitive Services roles to a resource</ats-summary>
     /// <ats-returns>The updated <ats-see cref="!:type:IResourceBuilder" /> with the applied role assignments.</ats-returns>
-    /// <ats-param name="roles">The Azure OpenAI roles to be assigned (for example, <ats-see cref="!:type:AzureOpenAIRole.CognitiveServicesOpenAIUser" />).</ats-param>
+    /// <ats-param name="roles">The Azure OpenAI roles to be assigned (for example, <ats-see cref="!:field:AzureOpenAIRole.CognitiveServicesOpenAIUser" />).</ats-param>
     [AspireExport("withCognitiveServicesRoleAssignments")]
     internal static IResourceBuilder<T> WithRoleAssignments<T>(
         this IResourceBuilder<T> builder,

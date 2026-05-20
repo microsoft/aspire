@@ -418,7 +418,7 @@ public static class AzureVirtualNetworkExtensions
     /// </example>
     /// <ats-summary>Adds an inbound allow rule to the Azure subnet resource's Network Security Group.</ats-summary>
     /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
-    /// <ats-param name="protocol">The network protocol. Defaults to <ats-see cref="!:type:SecurityRuleProtocol.Asterisk" /> (any).</ats-param>
+    /// <ats-param name="protocol">The network protocol. Defaults to <ats-see cref="!:field:SecurityRuleProtocol.Asterisk" /> (any).</ats-param>
     [AspireExport]
     public static IResourceBuilder<AzureSubnetResource> AllowInbound(
         this IResourceBuilder<AzureSubnetResource> builder,
@@ -448,7 +448,7 @@ public static class AzureVirtualNetworkExtensions
     /// </remarks>
     /// <ats-summary>Adds an inbound deny rule to the Azure subnet resource's Network Security Group.</ats-summary>
     /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
-    /// <ats-param name="protocol">The network protocol. Defaults to <ats-see cref="!:type:SecurityRuleProtocol.Asterisk" /> (any).</ats-param>
+    /// <ats-param name="protocol">The network protocol. Defaults to <ats-see cref="!:field:SecurityRuleProtocol.Asterisk" /> (any).</ats-param>
     [AspireExport]
     public static IResourceBuilder<AzureSubnetResource> DenyInbound(
         this IResourceBuilder<AzureSubnetResource> builder,
@@ -478,7 +478,7 @@ public static class AzureVirtualNetworkExtensions
     /// </remarks>
     /// <ats-summary>Adds an outbound allow rule to the Azure subnet resource's Network Security Group.</ats-summary>
     /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
-    /// <ats-param name="protocol">The network protocol. Defaults to <ats-see cref="!:type:SecurityRuleProtocol.Asterisk" /> (any).</ats-param>
+    /// <ats-param name="protocol">The network protocol. Defaults to <ats-see cref="!:field:SecurityRuleProtocol.Asterisk" /> (any).</ats-param>
     [AspireExport]
     public static IResourceBuilder<AzureSubnetResource> AllowOutbound(
         this IResourceBuilder<AzureSubnetResource> builder,
@@ -508,7 +508,7 @@ public static class AzureVirtualNetworkExtensions
     /// </remarks>
     /// <ats-summary>Adds an outbound deny rule to the Azure subnet resource's Network Security Group.</ats-summary>
     /// <ats-returns>A reference to the <ats-see cref="!:type:IResourceBuilder" /> for chaining.</ats-returns>
-    /// <ats-param name="protocol">The network protocol. Defaults to <ats-see cref="!:type:SecurityRuleProtocol.Asterisk" /> (any).</ats-param>
+    /// <ats-param name="protocol">The network protocol. Defaults to <ats-see cref="!:field:SecurityRuleProtocol.Asterisk" /> (any).</ats-param>
     [AspireExport]
     public static IResourceBuilder<AzureSubnetResource> DenyOutbound(
         this IResourceBuilder<AzureSubnetResource> builder,

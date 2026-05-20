@@ -134,7 +134,7 @@ public static class AzureNetworkSecurityPerimeterExtensions
     /// </code>
     /// </example>
     /// <ats-summary>Associates an Azure PaaS resource with a Network Security Perimeter.</ats-summary>
-    /// <ats-param name="accessMode">The access mode for the association. Defaults to <ats-see cref="!:type:NetworkSecurityPerimeterAssociationAccessMode.Enforced" />. Use <ats-see cref="!:type:NetworkSecurityPerimeterAssociationAccessMode.Learning" /> to log violations without blocking traffic.</ats-param>
+    /// <ats-param name="accessMode">The access mode for the association. Defaults to <ats-see cref="!:field:NetworkSecurityPerimeterAssociationAccessMode.Enforced" />. Use <ats-see cref="!:field:NetworkSecurityPerimeterAssociationAccessMode.Learning" /> to log violations without blocking traffic.</ats-param>
     [AspireExport("associateWithNetworkSecurityPerimeter", MethodName = "withNetworkSecurityPerimeter")]
     public static IResourceBuilder<T> WithNetworkSecurityPerimeter<T>(
         this IResourceBuilder<T> target,
