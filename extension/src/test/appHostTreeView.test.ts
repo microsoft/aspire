@@ -632,6 +632,69 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         provider.dispose();
     });
 
+    test('workspace mode renders a running AppHost with no resources', () => {
+        const hostPath = '/repo/AppHost/AppHost.csproj';
+        const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
+        const repository = {
+            viewMode: 'workspace' as ViewMode,
+            appHosts: [],
+            workspaceResources: [],
+            workspaceAppHost: makeAppHost({
+                appHostPath: hostPath,
+                appHostPid: 1234,
+                cliPid: 5678,
+                dashboardUrl: 'https://localhost:17193/login?t=token',
+                resources: [],
+            }),
+            workspaceAppHostPath: hostPath,
+            workspaceAppHostName: 'AppHost.csproj',
+            onDidChangeData,
+        } as unknown as AppHostDataRepository;
+        const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider());
+
+        const [appHostItem] = provider.getChildren();
+        const appHostChildren = provider.getChildren(appHostItem);
+        const result = provider.findAppHostElement(hostPath);
+
+        assert.ok(appHostItem, 'Expected a workspace AppHost item');
+        assert.strictEqual(appHostItem.label, 'AppHost.csproj');
+        assert.strictEqual(appHostChildren.length, 3);
+        assert.ok(result, 'Expected to find the zero-resource workspace AppHost');
+        provider.dispose();
+    });
+
+    test('workspace mode does not render ps resources before describe resources arrive', () => {
+        const hostPath = '/repo/AppHost/AppHost.csproj';
+        const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
+        const repository = {
+            viewMode: 'workspace' as ViewMode,
+            appHosts: [],
+            workspaceResources: [],
+            workspaceAppHost: makeAppHost({
+                appHostPath: hostPath,
+                appHostPid: 1234,
+                cliPid: 5678,
+                dashboardUrl: 'https://localhost:17193/login?t=token',
+                resources: [
+                    makeResource({ name: 'api', displayName: 'api' }),
+                    makeResource({ name: 'api-child', displayName: 'api-child', properties: { 'resource.parentName': 'api' } }),
+                ],
+            }),
+            workspaceAppHostPath: hostPath,
+            workspaceAppHostName: 'AppHost.csproj',
+            onDidChangeData,
+        } as unknown as AppHostDataRepository;
+        const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider());
+
+        const [appHostItem] = provider.getChildren();
+        const appHostChildren = provider.getChildren(appHostItem);
+
+        assert.ok(appHostItem, 'Expected a workspace AppHost item');
+        assert.strictEqual(appHostChildren.length, 3);
+        assert.ok(!appHostChildren.some(child => child.label === 'api'));
+        provider.dispose();
+    });
+
     test('matches the right AppHostItem when multiple are tracked', () => {
         const hostA = '/repo/A/A.csproj';
         const hostB = '/repo/B/B.csproj';

@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Runtime.CompilerServices;
-using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
@@ -314,11 +313,6 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         }
 
         public Task<FileInfo?> GetAppHostFromSettingsAsync(CancellationToken cancellationToken = default) => Task.FromResult<FileInfo?>(null);
-    }
-
-    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
-    {
-        public override DateTimeOffset GetUtcNow() => utcNow;
     }
 
     private async IAsyncEnumerable<BackchannelLogEntry> ReturnLogEntriesUntilCancelledAsync([EnumeratorCancellation] CancellationToken cancellationToken)
@@ -760,7 +754,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
 
         // The command should handle cancellation gracefully
         Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.Equal(1, testInteractionService.DisplayCancellationMessageCount);
+        Assert.Single(testInteractionService.DisplayedCancellations);
 
         // Verify a warning was displayed (not an error)
         var m = Assert.Single(testInteractionService.DisplayedMessages);
@@ -1692,6 +1686,11 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         public Task<FileInfo?> GetAppHostFromSettingsAsync(CancellationToken cancellationToken = default) => Task.FromResult<FileInfo?>(null);
     }
 
+    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => utcNow;
+    }
+
     [Fact]
     public async Task RunCommand_WithNoBuildOption_SkipsBuildAndPassesNoBuildAndNoRestoreToRunner()
     {
@@ -1780,12 +1779,21 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
                 runner.BuildAsyncCallback = (projectFile, noRestore, options, ct) => 0;
                 runner.GetAppHostInformationAsyncCallback = (projectFile, options, ct) => (0, true, VersionHelper.GetDefaultTemplateVersion());
 
-                // Return UserSecretsId when GetProjectItemsAndPropertiesAsync is called
+                // After issue #17197 the AppHost MSBuild inspection is fetched once and cached,
+                // so the IsAspireHost shape and UserSecretsId both come back in the same response.
                 runner.GetProjectItemsAndPropertiesAsyncCallback = (projectFile, items, properties, options, ct) =>
                 {
-                    var json = $$$"""{"Properties": {"UserSecretsId": "{{{originalUserSecretsId}}}"}}""";
-                    var doc = JsonDocument.Parse(json);
-                    return (0, doc);
+                    var json = $$$"""
+                        {
+                          "Properties": {
+                            "IsAspireHost": "true",
+                            "AspireHostingSDKVersion": "{{{VersionHelper.GetDefaultTemplateVersion()}}}",
+                            "UserSecretsId": "{{{originalUserSecretsId}}}"
+                          },
+                          "Items": {}
+                        }
+                        """;
+                    return (0, JsonDocument.Parse(json));
                 };
 
                 runner.RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, ct) =>
@@ -1985,7 +1993,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var extensionInteractionServiceFactory = (IServiceProvider sp) =>
         {
             var service = new TestExtensionInteractionService(sp);
-            service.StartDebugSessionCallback = (_, _, _) =>
+            service.StartDebugSessionCallback = (_, _, _, _) =>
             {
                 startDebugSessionCalled = true;
             };
@@ -2037,88 +2045,77 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void DetachedChildEnvironmentFilter_PreservesDebugSessionVariables()
+    public async Task RunCommand_AllowsNoBuildInActiveExtensionDebugSession()
     {
-        // Extension variables use the ASPIRE_EXTENSION_ prefix and should be filtered
-        Assert.True(AppHostLauncher.IsExtensionEnvironmentVariable(KnownConfigNames.ExtensionEndpoint));
-        Assert.True(AppHostLauncher.IsExtensionEnvironmentVariable(KnownConfigNames.ExtensionDebugSessionId));
+        var startDebugSessionCalled = false;
+        var runNoBuildValue = false;
 
-        // DEBUG_SESSION variables should NOT be filtered
-        Assert.False(AppHostLauncher.IsExtensionEnvironmentVariable(KnownConfigNames.DebugSessionInfo));
-        Assert.False(AppHostLauncher.IsExtensionEnvironmentVariable(KnownConfigNames.DebugSessionRunMode));
-        Assert.False(AppHostLauncher.IsExtensionEnvironmentVariable(KnownConfigNames.DebugSessionPort));
-        Assert.False(AppHostLauncher.IsExtensionEnvironmentVariable(KnownConfigNames.DebugSessionToken));
-        Assert.False(AppHostLauncher.IsExtensionEnvironmentVariable(KnownConfigNames.DebugSessionServerCertificate));
-        Assert.False(AppHostLauncher.IsExtensionEnvironmentVariable(KnownConfigNames.DcpInstanceIdPrefix));
-    }
+        var extensionBackchannel = new TestExtensionBackchannel();
+        extensionBackchannel.GetCapabilitiesAsyncCallback = ct => Task.FromResult(Array.Empty<string>());
 
-    [Fact]
-    public void DetachedChildEnvironment_IncludesProfilingTelemetryContext()
-    {
-        using var listener = CreateActivityListener("test-detached-child-environment");
-        using var source = new ActivitySource("test-detached-child-environment");
-        using var activity = source.StartActivity("parent");
-        Assert.NotNull(activity);
-        activity.SetBaggage(ProfilingTelemetry.Baggage.SessionId, "session-1");
-        activity.TraceStateString = "state-1";
+        var appHostBackchannel = new TestAppHostBackchannel();
+        appHostBackchannel.GetDashboardUrlsAsyncCallback = (ct) => Task.FromResult(new DashboardUrlsState
+        {
+            DashboardHealthy = true,
+            BaseUrlWithLoginToken = "http://localhost/dashboard",
+            CodespacesUrlWithLoginToken = null
+        });
+        appHostBackchannel.GetAppHostLogEntriesAsyncCallback = ReturnLogEntriesUntilCancelledAsync;
 
-        var environment = AppHostLauncher.CreateDetachedChildEnvironment(activity);
+        var backchannelFactory = (IServiceProvider sp) => appHostBackchannel;
 
-        Assert.Equal("true", environment[KnownConfigNames.CliRunDetached]);
-        Assert.Equal("true", environment[ProfilingTelemetry.EnvironmentVariables.Enabled]);
-        Assert.Equal("session-1", environment[ProfilingTelemetry.EnvironmentVariables.SessionId]);
-        Assert.Equal("session-1", environment[KnownConfigNames.Legacy.StartupOperationId]);
-        Assert.Equal(activity.Id, environment[ProfilingTelemetry.EnvironmentVariables.TraceParent]);
-        Assert.Equal("state-1", environment[ProfilingTelemetry.EnvironmentVariables.TraceState]);
-    }
+        var extensionInteractionServiceFactory = (IServiceProvider sp) =>
+        {
+            var service = new TestExtensionInteractionService(sp);
+            service.StartDebugSessionCallback = (_, _, _, _) =>
+            {
+                startDebugSessionCalled = true;
+            };
+            return service;
+        };
 
-    [Fact]
-    public void DetachedChildEnvironment_IncludesProfilingTelemetryContextFromActiveProfilingSpan()
-    {
-        using var listener = CreateActivityListener(ProfilingTelemetry.ActivitySourceName);
-        using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
-            (ProfilingTelemetry.EnvironmentVariables.Enabled, "true")));
+        var runnerFactory = (IServiceProvider sp) =>
+        {
+            var runner = new TestDotNetCliRunner();
+            runner.BuildAsyncCallback = (projectFile, noRestore, options, ct) => 0;
+            runner.GetAppHostInformationAsyncCallback = (projectFile, options, ct) => (0, true, VersionHelper.GetDefaultTemplateVersion());
+            runner.RunAsyncCallback = async (projectFile, watch, noBuild, noRestore, args, env, backchannelCompletionSource, options, ct) =>
+            {
+                runNoBuildValue = noBuild;
+                var backchannel = sp.GetRequiredService<IAppHostCliBackchannel>();
+                backchannelCompletionSource!.SetResult(backchannel);
+                await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                return 0;
+            };
+            return runner;
+        };
 
-        using var activity = profilingTelemetry.StartDetachedSpawnChild("aspire", ["run"], childCommand: "run");
-        Assert.True(activity.IsRunning);
+        var projectLocatorFactory = (IServiceProvider sp) => new TestProjectLocator();
 
-        var environment = AppHostLauncher.CreateDetachedChildEnvironment(Activity.Current);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ConfigurationCallback += config => config[KnownConfigNames.ExtensionDebugSessionId] = "existing-session";
+            options.ProjectLocatorFactory = projectLocatorFactory;
+            options.AppHostBackchannelFactory = backchannelFactory;
+            options.DotNetCliRunnerFactory = runnerFactory;
+            options.ExtensionBackchannelFactory = _ => extensionBackchannel;
+            options.InteractionServiceFactory = extensionInteractionServiceFactory;
+        });
 
-        Assert.Equal("true", environment[KnownConfigNames.CliRunDetached]);
-        Assert.Equal("true", environment[ProfilingTelemetry.EnvironmentVariables.Enabled]);
-        var sessionId = environment[ProfilingTelemetry.EnvironmentVariables.SessionId];
-        Assert.False(string.IsNullOrWhiteSpace(sessionId));
-        Assert.Equal(sessionId, environment[KnownConfigNames.Legacy.StartupOperationId]);
-        Assert.Equal(Activity.Current?.Id, environment[ProfilingTelemetry.EnvironmentVariables.TraceParent]);
-    }
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("run --no-build");
 
-    [Fact]
-    public void DetachedChildEnvironment_DoesNotEnableProfilingForNonProfilingActivity()
-    {
-        using var listener = CreateActivityListener("test-detached-child-environment");
-        using var source = new ActivitySource("test-detached-child-environment");
-        using var activity = source.StartActivity("parent");
-        Assert.NotNull(activity);
+        using var cts = new CancellationTokenSource();
+        var pendingRun = result.InvokeAsync(cancellationToken: cts.Token);
+        cts.Cancel();
 
-        var environment = AppHostLauncher.CreateDetachedChildEnvironment(activity);
+        var exitCode = await pendingRun.DefaultTimeout();
 
-        Assert.Equal("true", environment[KnownConfigNames.CliRunDetached]);
-        Assert.False(environment.ContainsKey(ProfilingTelemetry.EnvironmentVariables.Enabled));
-        Assert.False(environment.ContainsKey(ProfilingTelemetry.EnvironmentVariables.SessionId));
-        Assert.False(environment.ContainsKey(ProfilingTelemetry.EnvironmentVariables.TraceParent));
-        Assert.False(environment.ContainsKey(ProfilingTelemetry.EnvironmentVariables.TraceState));
-    }
-
-    [Fact]
-    public void DetachedChildEnvironment_AllowsMissingProfilingTelemetryContext()
-    {
-        var environment = AppHostLauncher.CreateDetachedChildEnvironment(null);
-
-        Assert.Equal("true", environment[KnownConfigNames.CliRunDetached]);
-        Assert.False(environment.ContainsKey(ProfilingTelemetry.EnvironmentVariables.Enabled));
-        Assert.False(environment.ContainsKey(ProfilingTelemetry.EnvironmentVariables.SessionId));
-        Assert.False(environment.ContainsKey(ProfilingTelemetry.EnvironmentVariables.TraceParent));
-        Assert.False(environment.ContainsKey(ProfilingTelemetry.EnvironmentVariables.TraceState));
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.False(startDebugSessionCalled, "StartDebugSessionAsync should not be called from an active extension debug session.");
+        Assert.True(runNoBuildValue);
     }
 
     [Theory]
@@ -2173,21 +2170,4 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal("certificate_trust_failed", tags[TelemetryConstants.Tags.ErrorType]);
     }
 
-    private static ActivityListener CreateActivityListener(string sourceName)
-    {
-        var listener = new ActivityListener
-        {
-            ShouldListenTo = source => source.Name == sourceName,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded
-        };
-        ActivitySource.AddActivityListener(listener);
-        return listener;
-    }
-
-    private static IConfiguration CreateConfiguration(params (string Key, string? Value)[] values)
-    {
-        return new ConfigurationBuilder()
-            .AddInMemoryCollection(values.Select(value => new KeyValuePair<string, string?>(value.Key, value.Value)))
-            .Build();
-    }
 }

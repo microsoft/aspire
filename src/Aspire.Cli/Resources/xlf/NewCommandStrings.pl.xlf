@@ -42,6 +42,16 @@
         <target state="needs-review-translation">Nazwa projektu do utworzenia.</target>
         <note />
       </trans-unit>
+      <trans-unit id="NoChannelFoundMatching">
+        <source>No channel found matching '{0}'. Valid options are: {1}.</source>
+        <target state="new">No channel found matching '{0}'. Valid options are: {1}.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoPackageChannelsAvailable">
+        <source>No package channels are available.</source>
+        <target state="new">No package channels are available.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="NonInteractiveTemplateRequired">
         <source>A template must be specified when running in non-interactive mode. Use 'aspire new &lt;template&gt;'.</source>
         <target state="new">A template must be specified when running in non-interactive mode. Use 'aspire new &lt;template&gt;'.</target>
@@ -85,6 +95,11 @@
       <trans-unit id="SourceArgumentDescription">
         <source>The NuGet source to use for the project templates</source>
         <target state="needs-review-translation">Źródło NuGet, które ma być używane dla szablonów projektu.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SourceWithCredentialsCannotBePersisted">
+        <source>The --source URL includes credentials, a query string, or a fragment and cannot be written to the project's NuGet.config. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</source>
+        <target state="new">The --source URL includes credentials, a query string, or a fragment and cannot be written to the project's NuGet.config. Configure credentials with NuGet credential providers or user-level NuGet configuration, then pass the feed URL without embedded secrets.</target>
         <note />
       </trans-unit>
       <trans-unit id="UsePrereleaseTemplates">

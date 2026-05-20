@@ -14,6 +14,7 @@ namespace Aspire.Cli.Backchannel;
 internal interface IAppHostCliBackchannel
 {
     Task RequestStopAsync(CancellationToken cancellationToken);
+    Task NotifyAppHostReadyAsync(CancellationToken cancellationToken);
     Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken);
     IAsyncEnumerable<BackchannelLogEntry> GetAppHostLogEntriesAsync(CancellationToken cancellationToken);
     IAsyncEnumerable<RpcResourceState> GetResourceStatesAsync(CancellationToken cancellationToken);
@@ -67,6 +68,27 @@ internal sealed class AppHostCliBackchannel(
             "RequestStopAsync",
             [],
             cancellationToken);
+    }
+
+    public async Task NotifyAppHostReadyAsync(CancellationToken cancellationToken)
+    {
+        var rpc = await GetRpcTaskAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        logger.LogDebug("Notifying AppHost startup readiness");
+
+        try
+        {
+            await rpc.InvokeWithProfilingAsync(
+                profilingTelemetry,
+                "apphost",
+                "NotifyAppHostReadyAsync",
+                [],
+                cancellationToken);
+        }
+        catch (RemoteMethodNotFoundException ex)
+        {
+            logger.LogDebug(ex, "NotifyAppHostReadyAsync RPC method not available on the remote AppHost. The AppHost may be running an older version.");
+        }
     }
 
     public async Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken)

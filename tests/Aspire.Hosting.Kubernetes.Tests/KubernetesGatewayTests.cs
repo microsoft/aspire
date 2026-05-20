@@ -18,7 +18,8 @@ public class KubernetesGatewayTests
             .WithGatewayClass("nginx");
 
         var api = builder.AddContainer("myapi", "nginx")
-            .WithHttpEndpoint(targetPort: 8080);
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
 
         gateway.WithRoute("/api", api.GetEndpoint("http"));
 
@@ -59,7 +60,8 @@ public class KubernetesGatewayTests
         var gateway = k8s.AddGateway("public").WithGatewayClass("test");
 
         var api = builder.AddContainer("myapi", "nginx")
-            .WithHttpEndpoint(targetPort: 8080);
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
 
         gateway.WithRoute("api.example.com", "/", api.GetEndpoint("http"));
 
@@ -85,7 +87,8 @@ public class KubernetesGatewayTests
         var gateway = k8s.AddGateway("public").WithGatewayClass("test");
 
         var api = builder.AddContainer("myapi", "nginx")
-            .WithHttpEndpoint(targetPort: 8080);
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
 
         gateway
             .WithRoute("api.example.com", "/", api.GetEndpoint("http"))
@@ -116,7 +119,8 @@ public class KubernetesGatewayTests
         var gateway = k8s.AddGateway("public").WithGatewayClass("test");
 
         var api = builder.AddContainer("myapi", "nginx")
-            .WithHttpEndpoint(targetPort: 8080);
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
 
         gateway
             .WithRoute("api.example.com", "/", api.GetEndpoint("http"))
@@ -141,10 +145,12 @@ public class KubernetesGatewayTests
         var gateway = k8s.AddGateway("public").WithGatewayClass("test");
 
         var api = builder.AddContainer("myapi", "nginx")
-            .WithHttpEndpoint(targetPort: 8080);
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
 
         var web = builder.AddContainer("myweb", "nginx")
-            .WithHttpEndpoint(targetPort: 80);
+            .WithHttpEndpoint(targetPort: 80)
+            .WithExternalHttpEndpoints();
 
         // Two routes on the same host ΓåÆ should be grouped into one HTTPRoute
         gateway.WithRoute("example.com", "/api", api.GetEndpoint("http"));
@@ -238,7 +244,8 @@ public class KubernetesGatewayTests
         var gateway = k8s.AddGateway("public").WithGatewayClass("azure-alb-external");
 
         var api = builder.AddContainer("myapi", "nginx")
-            .WithHttpEndpoint(targetPort: 8080);
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
 
         // WithTls() without WithHostname() — should still generate an HTTPS listener
         gateway
@@ -284,7 +291,8 @@ public class KubernetesGatewayTests
         var gateway = k8s.AddGateway("public").WithGatewayClass("azure-alb-external");
 
         var api = builder.AddContainer("myapi", "nginx")
-            .WithHttpEndpoint(targetPort: 8080);
+            .WithHttpEndpoint(targetPort: 8080)
+            .WithExternalHttpEndpoints();
 
         gateway
             .WithRoute("/", api.GetEndpoint("http"))
@@ -308,5 +316,78 @@ public class KubernetesGatewayTests
         var nextListenerOrEnd = lines.FindIndex(httpsIndex + 1, l => l.StartsWith("- name:") || l == "");
         var httpsSection = lines.Skip(httpsIndex).Take((nextListenerOrEnd > httpsIndex ? nextListenerOrEnd : lines.Count) - httpsIndex).ToList();
         Assert.Contains(httpsSection, l => l.Contains("hostname:") && l.Contains("api.example.com"));
+    }
+
+    [Fact]
+    public void AddGateway_WithRoute_NonExternalEndpoint_ThrowsOnPublish()
+    {
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("test");
+
+        // Intentionally omit WithExternalHttpEndpoints — the publish-time
+        // validation must surface a clear, actionable error.
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        gateway.WithRoute("/api", api.GetEndpoint("http"));
+
+        var app = builder.Build();
+        var aggregate = Assert.Throws<AggregateException>(app.Run);
+        var ex = aggregate.Flatten().InnerExceptions.OfType<InvalidOperationException>().First(e => e.Message.Contains("WithExternalHttpEndpoints"));
+
+        Assert.Contains("myapi", ex.Message);
+        Assert.Contains("public", ex.Message);
+        Assert.Contains("WithExternalHttpEndpoints", ex.Message);
+    }
+
+    [Fact]
+    public void AddGateway_WithHostRoute_NonExternalEndpoint_ThrowsOnPublish()
+    {
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("test");
+
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        gateway.WithRoute("api.example.com", "/", api.GetEndpoint("http"));
+
+        var app = builder.Build();
+        var aggregate = Assert.Throws<AggregateException>(app.Run);
+        var ex = aggregate.Flatten().InnerExceptions.OfType<InvalidOperationException>().First(e => e.Message.Contains("WithExternalHttpEndpoints"));
+
+        Assert.Contains("myapi", ex.Message);
+        Assert.Contains("WithExternalHttpEndpoints", ex.Message);
+    }
+
+    [Fact]
+    public async Task AddGateway_WithRoute_ExternalEndpoint_Succeeds()
+    {
+        using var tempDir = new TestTempDirectory();
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+
+        var k8s = builder.AddKubernetesEnvironment("env");
+        var gateway = k8s.AddGateway("public").WithGatewayClass("test");
+
+        // WithExternalHttpEndpoints applied AFTER WithRoute to prove that
+        // authoring order does not matter — validation runs at publish time.
+        var api = builder.AddContainer("myapi", "nginx")
+            .WithHttpEndpoint(targetPort: 8080);
+
+        gateway.WithRoute("/api", api.GetEndpoint("http"));
+        api.WithExternalHttpEndpoints();
+
+        var app = builder.Build();
+        app.Run();
+
+        var gatewayFile = Path.Combine(tempDir.Path, "templates", "public", "public.yaml");
+        Assert.True(File.Exists(gatewayFile));
+        var content = await File.ReadAllTextAsync(gatewayFile);
+        Assert.Contains("Gateway", content);
     }
 }

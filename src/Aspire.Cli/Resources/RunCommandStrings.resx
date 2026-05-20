@@ -188,7 +188,10 @@
     <value>AppHost</value>
   </data>
   <data name="StartingDebugSessionInExtension" xml:space="preserve">
-    <value>Detected aspire run inside the Aspire extension, starting a debug session in VS Code...</value>
+    <value>Detected aspire {0} inside the Aspire extension, starting a debug session in VS Code...</value>
+  </data>
+  <data name="StartingRunSessionInExtension" xml:space="preserve">
+    <value>Detected aspire {0} inside the Aspire extension, running app in VS Code. To start a debug session, add --start-debug-session.</value>
   </data>
   <data name="AgentConfigurationPrompt" xml:space="preserve">
     <value>Aspire has detected {0} agentic coding environment(s) to configure. Would you like to configure now?</value>
@@ -231,6 +234,9 @@
   </data>
   <data name="CheckLogsForDetails" xml:space="preserve">
     <value>Check logs for details: {0}</value>
+  </data>
+  <data name="RecentAppHostStartupOutput" xml:space="preserve">
+    <value>Recent AppHost startup output</value>
   </data>
   <data name="ProcessId" xml:space="preserve">
     <value>PID</value>

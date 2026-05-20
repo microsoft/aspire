@@ -31,7 +31,9 @@ basketCache.WithRedisCommander(c =>
 #endif
 
 var catalogDbApp = builder.AddProject<Projects.CatalogDb>("catalogdbapp")
-                          .WithReference(catalogDb);
+                          .WithReference(catalogDb)
+                          .WaitFor(catalogDb)
+                          .WithHttpHealthCheck("/health");
 
 if (builder.Environment.IsDevelopment() && builder.ExecutionContext.IsRunMode)
 {
@@ -53,6 +55,8 @@ if (builder.Environment.IsDevelopment() && builder.ExecutionContext.IsRunMode)
 
 var catalogService = builder.AddProject<Projects.CatalogService>("catalogservice")
                             .WithReference(catalogDb)
+                            .WaitFor(catalogDb)
+                            .WaitFor(catalogDbApp)
                             // Modify the endpoint URL
                             .WithUrlForEndpoint("https", u =>
                             {
@@ -67,6 +71,7 @@ var catalogService = builder.AddProject<Projects.CatalogService>("catalogservice
                             })
                             // Hide the http URL
                             .WithUrlForEndpoint("http", u => u.DisplayLocation = UrlDisplayLocation.DetailsOnly)
+                            .WithHttpHealthCheck("/health")
                             .WithReplicas(2);
 
 var messaging = builder.AddRabbitMQ("messaging")
@@ -77,30 +82,43 @@ var messaging = builder.AddRabbitMQ("messaging")
 
 var basketService = builder.AddProject("basketservice", @"..\BasketService\BasketService.csproj")
                            .WithReference(basketCache)
-                           .WithReference(messaging).WaitFor(messaging);
+                           .WaitFor(basketCache)
+                           .WithReference(messaging)
+                           .WaitFor(messaging)
+                           .WithHttpHealthCheck("/health", endpointName: "http");
 
 var frontend = builder.AddProject<Projects.MyFrontend>("frontend")
-       .WithExternalHttpEndpoints()
-       .WithReference(basketService)
-       .WithReference(catalogService)
-       // Modify the display text of the URLs
-       .WithUrls(c => c.Urls.ForEach(u => u.DisplayText = $"Online store ({u.Endpoint?.EndpointName})"))
-       // Don't show the non-HTTPS link on the resources page (details only)
-       .WithUrlForEndpoint("http", url => url.DisplayLocation = UrlDisplayLocation.DetailsOnly)
-       // Add health relative URL (show in details only)
-       .WithUrlForEndpoint("https", ep => new() { Url = "/health", DisplayText = "Health", DisplayLocation = UrlDisplayLocation.DetailsOnly })
-       .WithHttpHealthCheck("/health");
+    .WithExternalHttpEndpoints()
+    .WithReference(basketService)
+    .WaitFor(basketService)
+    .WithReference(catalogService)
+    .WaitFor(catalogService)
+    // Modify the display text of the URLs
+    .WithUrls(c => c.Urls.ForEach(u => u.DisplayText = $"Online store ({u.Endpoint?.EndpointName})"))
+    // Don't show the non-HTTPS link on the resources page (details only)
+    .WithUrlForEndpoint("http", url => url.DisplayLocation = UrlDisplayLocation.DetailsOnly)
+    // Add health relative URL (show in details only)
+    .WithUrlForEndpoint("https", ep => new() { Url = "/health", DisplayText = "Health", DisplayLocation = UrlDisplayLocation.DetailsOnly })
+    .WithHttpHealthCheck("/health");
 
 builder.AddProject<Projects.OrderProcessor>("orderprocessor", launchProfileName: "OrderProcessor")
-       .WithReference(messaging).WaitFor(messaging);
+    .WithReference(messaging)
+    .WaitFor(messaging);
 
 #if YARP_USE_CONFIG_FILE
 builder.AddYarp("apigateway")
-       .WithConfigFile("yarp.json")
-       .WithReference(basketService)
-       .WithReference(catalogService);
+    .WithConfigFile("yarp.json")
+    .WithReference(basketService)
+    .WaitFor(basketService)
+    .WithReference(catalogService)
+    .WaitFor(catalogService);
 #else
 var yarp = builder.AddYarp("apigateway");
+yarp.WithReference(basketService)
+    .WaitFor(basketService)
+    .WithReference(catalogService)
+    .WaitFor(catalogService);
+
 yarp.WithConfiguration(builder =>
 {
     // catalog 

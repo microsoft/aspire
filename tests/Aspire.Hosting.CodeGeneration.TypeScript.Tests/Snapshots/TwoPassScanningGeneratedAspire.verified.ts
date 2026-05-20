@@ -910,6 +910,30 @@ export interface HttpsCertificateInfo {
     thumbprint?: string | null;
 }
 
+/** Options for customizing parameter inputs from polyglot app hosts. */
+export interface ParameterCustomInputOptions {
+    /** Gets or sets the type of the input. */
+    inputType?: InputType;
+    /** Gets or sets the label for the input. */
+    label?: string | null;
+    /** Gets or sets the description for the input. */
+    description?: string | null;
+    /** Gets or sets whether the description should be rendered as Markdown. */
+    enableDescriptionMarkdown?: boolean | null;
+    /** Gets or sets the choice options keyed by submitted value. */
+    options?: Record<string, string>;
+    /** Gets or sets the initial value of the input. */
+    value?: string | null;
+    /** Gets or sets the placeholder text for the input. */
+    placeholder?: string | null;
+    /** Gets or sets whether custom choices are allowed. */
+    allowCustomChoice?: boolean | null;
+    /** Gets or sets whether the input is disabled. */
+    disabled?: boolean | null;
+    /** Gets or sets the maximum length for text inputs. */
+    maxLength?: number | null;
+}
+
 /** ATS-friendly configuration for resource process commands. */
 export interface ProcessCommandExportOptions {
     /** The executable path or command name to start. */
@@ -1021,17 +1045,17 @@ export interface TestConfigDto {
 /** Test DTO with deeply nested generic types. */
 export interface TestDeeplyNestedDto {
     /** Deeply nested generic: Dictionary containing List of DTOs. */
-    nestedData?: AspireDict<string, AspireList<TestConfigDto>>;
+    nestedData?: Record<string, TestConfigDto[]>;
     /** Array of dictionaries. */
-    metadataArray?: AspireDict<string, string>[];
+    metadataArray?: Record<string, string>[];
 }
 
 /** Test DTO with complex nested types. */
 export interface TestNestedDto {
     id?: string;
     config?: TestConfigDto;
-    tags?: AspireList<string>;
-    counts?: AspireDict<string, number>;
+    tags?: string[];
+    counts?: Record<string, number>;
 }
 
 // ============================================================================
@@ -5076,18 +5100,21 @@ class PipelineEditorPromiseImpl implements PipelineEditorPromise {
 /** Represents a step in the deployment pipeline. */
 export interface PipelineStep {
     toJSON(): MarshalledHandle;
-    /**
-     * Gets the exported name projection for polyglot SDKs.
-     *
-     * This projection avoids exporting an ATS setter for the public init-only `Name` property.
-     */
+    /** Gets or initializes the unique name of the step. */
     name(): Promise<string>;
     /**
-     * Gets the exported description projection for polyglot SDKs.
+     * Gets or initializes the description of the step.
      *
-     * This projection avoids exporting an ATS setter for the public init-only `Description` property.
+     * The description provides human-readable context about what the step does,
+     * helping users and tools understand the purpose of the step.
      */
     description(): Promise<string | null>;
+    /** Gets or initializes the list of step names that this step depends on. */
+    dependsOnSteps(): Promise<AspireList<string>>;
+    /** Gets or initializes the list of step names that require this step to complete before they can finish. This is used internally during pipeline construction and is converted to DependsOn relationships. */
+    requiredBySteps(): Promise<AspireList<string>>;
+    /** Gets or initializes the list of tags that categorize this step. */
+    tags(): Promise<AspireList<string>>;
     /**
      * Adds a dependency on another step.
      * @param stepName The name of the step to depend on.
@@ -5106,18 +5133,21 @@ export interface PipelineStep {
 }
 
 export interface PipelineStepPromise extends PromiseLike<PipelineStep> {
-    /**
-     * Gets the exported name projection for polyglot SDKs.
-     *
-     * This projection avoids exporting an ATS setter for the public init-only `Name` property.
-     */
+    /** Gets or initializes the unique name of the step. */
     name(): Promise<string>;
     /**
-     * Gets the exported description projection for polyglot SDKs.
+     * Gets or initializes the description of the step.
      *
-     * This projection avoids exporting an ATS setter for the public init-only `Description` property.
+     * The description provides human-readable context about what the step does,
+     * helping users and tools understand the purpose of the step.
      */
     description(): Promise<string | null>;
+    /** Gets or initializes the list of step names that this step depends on. */
+    dependsOnSteps(): Promise<AspireList<string>>;
+    /** Gets or initializes the list of step names that require this step to complete before they can finish. This is used internally during pipeline construction and is converted to DependsOn relationships. */
+    requiredBySteps(): Promise<AspireList<string>>;
+    /** Gets or initializes the list of tags that categorize this step. */
+    tags(): Promise<AspireList<string>>;
     /**
      * Adds a dependency on another step.
      * @param stepName The name of the step to depend on.
@@ -5158,6 +5188,45 @@ class PipelineStepImpl implements PipelineStep {
             'Aspire.Hosting.Pipelines/PipelineStep.description',
             { context: this._handle }
         );
+    }
+
+    private _dependsOnSteps?: AspireList<string>;
+    async dependsOnSteps(): Promise<AspireList<string>> {
+        if (!this._dependsOnSteps) {
+            this._dependsOnSteps = new AspireList<string>(
+                this._handle,
+                this._client,
+                'Aspire.Hosting.Pipelines/PipelineStep.dependsOnSteps',
+                'Aspire.Hosting.Pipelines/PipelineStep.dependsOnSteps'
+            );
+        }
+        return this._dependsOnSteps;
+    }
+
+    private _requiredBySteps?: AspireList<string>;
+    async requiredBySteps(): Promise<AspireList<string>> {
+        if (!this._requiredBySteps) {
+            this._requiredBySteps = new AspireList<string>(
+                this._handle,
+                this._client,
+                'Aspire.Hosting.Pipelines/PipelineStep.requiredBySteps',
+                'Aspire.Hosting.Pipelines/PipelineStep.requiredBySteps'
+            );
+        }
+        return this._requiredBySteps;
+    }
+
+    private _tags?: AspireList<string>;
+    async tags(): Promise<AspireList<string>> {
+        if (!this._tags) {
+            this._tags = new AspireList<string>(
+                this._handle,
+                this._client,
+                'Aspire.Hosting.Pipelines/PipelineStep.tags',
+                'Aspire.Hosting.Pipelines/PipelineStep.tags'
+            );
+        }
+        return this._tags;
     }
 
     /** @internal */
@@ -5237,6 +5306,18 @@ class PipelineStepPromiseImpl implements PipelineStepPromise {
 
     description(): Promise<string | null> {
         return this._promise.then(obj => obj.description());
+    }
+
+    dependsOnSteps(): Promise<AspireList<string>> {
+        return this._promise.then(obj => obj.dependsOnSteps());
+    }
+
+    requiredBySteps(): Promise<AspireList<string>> {
+        return this._promise.then(obj => obj.requiredBySteps());
+    }
+
+    tags(): Promise<AspireList<string>> {
+        return this._promise.then(obj => obj.tags());
     }
 
     dependsOn(stepName: string): PipelineStepPromise {
@@ -31826,6 +31907,12 @@ export interface ParameterResource {
      */
     withDescription(description: string, options?: WithDescriptionOptions): ParameterResourcePromise;
     /**
+     * Sets a custom input for the parameter resource from a polyglot app host.
+     * @param options Options used to customize the input for the parameter.
+     * @returns Resource builder for the parameter.
+     */
+    withCustomInput(options: ParameterCustomInputOptions): ParameterResourcePromise;
+    /**
      * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
      *
      * The command is considered valid if either:
@@ -32231,6 +32318,12 @@ export interface ParameterResourcePromise extends PromiseLike<ParameterResource>
      * @returns Resource builder for the parameter.
      */
     withDescription(description: string, options?: WithDescriptionOptions): ParameterResourcePromise;
+    /**
+     * Sets a custom input for the parameter resource from a polyglot app host.
+     * @param options Options used to customize the input for the parameter.
+     * @returns Resource builder for the parameter.
+     */
+    withCustomInput(options: ParameterCustomInputOptions): ParameterResourcePromise;
     /**
      * Declares that a resource requires a specific command/executable to be available on the local machine PATH before it can start.
      *
@@ -32690,6 +32783,25 @@ class ParameterResourceImpl extends ResourceBuilderBase<ParameterResourceHandle>
     withDescription(description: string, options?: WithDescriptionOptions): ParameterResourcePromise {
         const enableMarkdown = options?.enableMarkdown;
         return new ParameterResourcePromiseImpl(this._withDescriptionInternal(description, enableMarkdown), this._client);
+    }
+
+    /** @internal */
+    private async _withCustomInputInternal(options: ParameterCustomInputOptions): Promise<ParameterResource> {
+        const rpcArgs: Record<string, unknown> = { builder: this._handle, options };
+        const result = await this._client.invokeCapability<ParameterResourceHandle>(
+            'Aspire.Hosting/withCustomInput',
+            rpcArgs
+        );
+        return new ParameterResourceImpl(result, this._client);
+    }
+
+    /**
+     * Sets a custom input for the parameter resource from a polyglot app host.
+     * @param options Options used to customize the input for the parameter.
+     * @returns Resource builder for the parameter.
+     */
+    withCustomInput(options: ParameterCustomInputOptions): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._withCustomInputInternal(options), this._client);
     }
 
     /** @internal */
@@ -33816,6 +33928,10 @@ class ParameterResourcePromiseImpl implements ParameterResourcePromise {
 
     withDescription(description: string, options?: WithDescriptionOptions): ParameterResourcePromise {
         return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withDescription(description, options)), this._client);
+    }
+
+    withCustomInput(options: ParameterCustomInputOptions): ParameterResourcePromise {
+        return new ParameterResourcePromiseImpl(this._promise.then(obj => obj.withCustomInput(options)), this._client);
     }
 
     withRequiredCommand(command: string, options?: WithRequiredCommandOptions): ParameterResourcePromise {

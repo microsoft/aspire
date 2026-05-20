@@ -224,9 +224,11 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         IAppHostServerProject appHostServerProject,
         string sdkVersion,
         List<IntegrationReference> integrations,
-        CancellationToken cancellationToken)
+        string? requestedChannel,
+        string? packageSourceOverride = null,
+        CancellationToken cancellationToken = default)
     {
-        var result = await appHostServerProject.PrepareAsync(sdkVersion, integrations, cancellationToken);
+        var result = await appHostServerProject.PrepareAsync(sdkVersion, integrations, requestedChannel, packageSourceOverride, cancellationToken);
         return (result.Success, result.Output, result.ChannelName, result.NeedsCodeGeneration);
     }
 
@@ -234,16 +236,23 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
     /// Builds the AppHost server project and generates SDK code.
     /// </summary>
     /// <returns><see langword="true"/> if the code was generated successfully; otherwise, <see langword="false"/>.</returns>
-    internal async Task<bool> BuildAndGenerateSdkAsync(DirectoryInfo directory, CancellationToken cancellationToken)
+    internal async Task<bool> BuildAndGenerateSdkAsync(DirectoryInfo directory, string? packageSourceOverride = null, CancellationToken cancellationToken = default)
+    {
+        var config = LoadConfiguration(directory);
+        return await BuildAndGenerateSdkAsync(directory, config, packageSourceOverride, cancellationToken);
+    }
+
+    private async Task<bool> BuildAndGenerateSdkAsync(DirectoryInfo directory, AspireConfigFile config, string? packageSourceOverride = null, CancellationToken cancellationToken = default)
     {
         var appHostServerProject = await _appHostServerProjectFactory.CreateAsync(directory.FullName, cancellationToken);
 
-        // Step 1: Load config - source of truth for SDK version and packages
-        var config = LoadConfiguration(directory);
+        // Step 1: Use the supplied config as the source of truth. Update uses an
+        // in-memory config here so a failed generation does not leave
+        // aspire.config.json pinned to versions the current CLI cannot run.
         var integrations = await GetIntegrationReferencesAsync(config, directory, cancellationToken);
         var sdkVersion = GetPrepareSdkVersion(config);
 
-        var (buildSuccess, buildOutput, _, _) = await PrepareAppHostServerAsync(appHostServerProject, sdkVersion, integrations, cancellationToken);
+        var (buildSuccess, buildOutput, _, _) = await PrepareAppHostServerAsync(appHostServerProject, sdkVersion, integrations, config.Channel, packageSourceOverride, cancellationToken);
         if (!buildSuccess)
         {
             if (buildOutput is not null)
@@ -280,9 +289,9 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         return true;
     }
 
-    Task<bool> IGuestAppHostSdkGenerator.BuildAndGenerateSdkAsync(DirectoryInfo directory, CancellationToken cancellationToken)
+    Task<bool> IGuestAppHostSdkGenerator.BuildAndGenerateSdkAsync(DirectoryInfo directory, string? packageSourceOverride, CancellationToken cancellationToken)
     {
-        return BuildAndGenerateSdkAsync(directory, cancellationToken);
+        return BuildAndGenerateSdkAsync(directory, packageSourceOverride, cancellationToken);
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -356,7 +365,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 async () =>
                 {
                     // Prepare the AppHost server (build for dev mode, restore for prebuilt)
-                    var (prepareSuccess, prepareOutput, channelName, needsCodeGen) = await PrepareAppHostServerAsync(appHostServerProject, sdkVersion, integrations, cancellationToken);
+                    var (prepareSuccess, prepareOutput, channelName, needsCodeGen) = await PrepareAppHostServerAsync(appHostServerProject, sdkVersion, integrations, config.Channel, cancellationToken: cancellationToken);
                     if (!prepareSuccess)
                     {
                         return (Success: false, Output: prepareOutput, Error: "Failed to prepare app host.", ChannelName: (string?)null, NeedsCodeGen: false);
@@ -880,7 +889,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
             var sdkVersion = GetPrepareSdkVersion(config);
 
             // Prepare the AppHost server (build for dev mode, restore for prebuilt)
-            var (prepareSuccess, prepareOutput, _, needsCodeGen) = await PrepareAppHostServerAsync(appHostServerProject, sdkVersion, integrations, cancellationToken);
+            var (prepareSuccess, prepareOutput, _, needsCodeGen) = await PrepareAppHostServerAsync(appHostServerProject, sdkVersion, integrations, config.Channel, cancellationToken: cancellationToken);
             if (!prepareSuccess)
             {
                 // Set OutputCollector so PipelineCommandBase can display errors
@@ -1190,10 +1199,16 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
 
         // Update configuration with the new package
         config.AddOrUpdatePackage(context.PackageId, context.PackageVersion);
-        SaveConfiguration(config, directory);
 
         // Build and regenerate SDK code with the new package
-        return await BuildAndGenerateSdkAsync(directory, cancellationToken);
+        var regenerateSuccess = await BuildAndGenerateSdkAsync(directory, config, cancellationToken: cancellationToken);
+        if (!regenerateSuccess)
+        {
+            return false;
+        }
+
+        SaveConfiguration(config, directory);
+        return true;
     }
 
     /// <inheritdoc />
@@ -1219,11 +1234,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 // Check for SDK version update (silently - it's an implementation detail)
                 try
                 {
-                    var sdkPackages = await context.Channel.GetPackagesAsync("Aspire.Hosting", directory, cancellationToken);
-                    var latestSdkPackage = sdkPackages
-                        .Where(p => SemVersion.TryParse(p.Version, SemVersionStyles.Strict, out _))
-                        .OrderByDescending(p => SemVersion.Parse(p.Version, SemVersionStyles.Strict), SemVersion.PrecedenceComparer)
-                        .FirstOrDefault();
+                    var latestSdkPackage = await context.Channel.GetLatestGuestAppHostSdkPackageAsync(directory, cancellationToken);
 
                     if (latestSdkPackage is not null && latestSdkPackage.Version != config.SdkVersion)
                     {
@@ -1263,10 +1274,19 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 return packageUpdates;
             });
 
+        var explicitChannelName = context.Channel.Type == Packaging.PackageChannelType.Explicit ? context.Channel.Name : null;
+        var explicitChannelChanged = explicitChannelName is not null && !string.Equals(config.Channel, explicitChannelName, StringComparisons.CliInputOrOutput);
+
         if (updates.Count == 0 && newSdkVersion is null)
         {
+            if (explicitChannelChanged)
+            {
+                config.Channel = explicitChannelName;
+                SaveConfiguration(config, directory);
+            }
+
             _interactionService.DisplayMessage(KnownEmojis.CheckMarkButton, UpdateCommandStrings.ProjectUpToDateMessage);
-            return new UpdatePackagesResult { UpdatesApplied = false };
+            return new UpdatePackagesResult { UpdatesApplied = explicitChannelChanged };
         }
 
         // Display pending updates
@@ -1292,31 +1312,26 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         {
             config.SdkVersion = newSdkVersion;
         }
-        // Persist the channel only when the update resolved an explicit channel (--channel,
-        // per-project config, or prompt selection). When the resolved channel is Implicit
-        // — i.e. the user hasn't pinned a channel — leave the project's existing setting
-        // untouched rather than silently pinning the running CLI's identity, which would
-        // propagate dev/PR-build identities into the project file. The scaffolding /
-        // build-time paths intentionally do auto-pin identity (see GuestAppHostProject.cs:354
-        // and ScaffoldingService.cs:208) — but `aspire update` is a no-pin path: the user
-        // is updating, not initialising, and we should not change the channel pin state.
-        if (context.Channel.Type == Packaging.PackageChannelType.Explicit)
+        // Persist the channel when update resolved an explicit channel. That can come from
+        // --channel, per-project/global config, prompt selection, or the UpdateCommand
+        // identity-channel fallback for non-project-reference AppHosts. When the resolved
+        // channel is Implicit — i.e. no explicit channel source matched — leave the project's
+        // existing setting untouched rather than pinning the implicit/default channel.
+        if (explicitChannelName is not null)
         {
-            config.Channel = context.Channel.Name;
+            config.Channel = explicitChannelName;
         }
         foreach (var (packageId, _, newVersion) in updates)
         {
             config.AddOrUpdatePackage(packageId, newVersion);
         }
-        SaveConfiguration(config, directory);
-
         // Rebuild and regenerate SDK code with updated packages
         _interactionService.DisplayEmptyLine();
         var regenerateResult = await _interactionService.ShowStatusAsync(
             UpdateCommandStrings.RegeneratingSdkCode,
             async () =>
             {
-                var regenerateSuccess = await BuildAndGenerateSdkAsync(directory, cancellationToken);
+                var regenerateSuccess = await BuildAndGenerateSdkAsync(directory, config, cancellationToken: cancellationToken);
 
                 if (!regenerateSuccess)
                 {
@@ -1330,6 +1345,8 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
         {
             return regenerateResult;
         }
+
+        SaveConfiguration(config, directory);
 
         _interactionService.DisplayMessage(KnownEmojis.Package, UpdateCommandStrings.RegeneratedSdkCode);
 

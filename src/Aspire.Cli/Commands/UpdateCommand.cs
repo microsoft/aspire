@@ -15,6 +15,7 @@ using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Semver;
 using Spectre.Console;
 
 namespace Aspire.Cli.Commands;
@@ -83,7 +84,7 @@ internal sealed class UpdateCommand : BaseCommand
         AddNonInteractiveRequiresYesValidator(this, s_yesOption);
 
         // Customize description based on whether staging channel is enabled
-        var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(_features, _configuration);
+        var isStagingEnabled = IsStagingChannelAvailable();
 
         _channelOption = new Option<string?>("--channel")
         {
@@ -173,14 +174,14 @@ internal sealed class UpdateCommand : BaseCommand
 
             // Resolve the channel using the documented precedence:
             //   1. explicit --channel / hidden --quality
-            //   2. local app config "channel" (relative to the resolved AppHost project, NOT cwd)
+            //   2. nearest local app config "channel" (relative to the resolved AppHost project, NOT cwd)
             //   3. global config "channel"
             //   4. interactive channel prompt when appropriate (PR hives present)
             //   5. implicit/default channel as the documented fallback
             // The directory-scoped lookup is critical: `aspire update --apphost <elsewhere>`
-            // must consult the project's directory tree, not the user's launch cwd. The
-            // process-wide IConfiguration is rooted at the launch cwd at startup, so using
-            // it here would silently read the wrong app's local config (issue #16650).
+            // must consult the selected project's config tree, not the user's launch cwd.
+            // The process-wide IConfiguration is rooted at the launch cwd at startup, so
+            // using it here would silently read the wrong app's local config (issue #16650).
             //
             // Step 3 (global config "channel") is intentionally a read-only path: no CLI
             // code path seeds the global "channel" config (neither the acquisition scripts
@@ -195,7 +196,7 @@ internal sealed class UpdateCommand : BaseCommand
             if (string.IsNullOrWhiteSpace(channelName))
             {
                 var configLookupDirectory = projectFile.Directory ?? ExecutionContext.WorkingDirectory;
-                channelName = await _configurationService.GetConfigurationFromDirectoryAsync("channel", configLookupDirectory, cancellationToken);
+                channelName = await _configurationService.GetConfigurationFromDirectoryAsync("channel", configLookupDirectory, cancellationToken: cancellationToken);
                 channelFromConfig = !string.IsNullOrWhiteSpace(channelName);
             }
 
@@ -203,13 +204,36 @@ internal sealed class UpdateCommand : BaseCommand
 
             var allChannels = await InteractionService.ShowStatusAsync(
                 UpdateCommandStrings.CheckingForUpdates,
-                async () => await _packagingService.GetChannelsAsync(cancellationToken));
+                async () => await _packagingService.GetChannelsAsync(cancellationToken, channelName));
 
             if (!string.IsNullOrWhiteSpace(channelName))
             {
                 // Try to find a channel matching the provided channel/quality
-                channel = allChannels.FirstOrDefault(c => string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase))
-                    ?? throw new ChannelNotFoundException($"No channel found matching '{channelName}'. Valid options are: {string.Join(", ", allChannels.Select(c => c.Name))}");
+                var matchedChannel = allChannels.FirstOrDefault(c => string.Equals(c.Name, channelName, StringComparisons.ChannelName));
+                if (matchedChannel is null)
+                {
+                    // When the user explicitly asked for the 'staging' channel and the packaging
+                    // service refused to synthesize it (daily/local/pr-N CLI without an override),
+                    // surface the packaging-service reason instead of the generic "no channel
+                    // matching" message — the generic message hides the actual fix from the user.
+                    // See https://github.com/microsoft/aspire/issues/16652.
+                    if (string.Equals(channelName, PackageChannelNames.Staging, StringComparisons.ChannelName))
+                    {
+                        var stagingUnavailableReason = _packagingService.GetStagingChannelUnavailableReason();
+                        if (stagingUnavailableReason is not null)
+                        {
+                            throw new ChannelNotFoundException(stagingUnavailableReason);
+                        }
+                    }
+
+                    throw new ChannelNotFoundException(string.Format(
+                        CultureInfo.CurrentCulture,
+                        UpdateCommandStrings.NoChannelFoundMatching,
+                        channelName,
+                        string.Join(", ", allChannels.Select(c => c.Name))));
+                }
+
+                channel = matchedChannel;
 
                 if (channelFromConfig)
                 {
@@ -240,9 +264,9 @@ internal sealed class UpdateCommand : BaseCommand
                 var identityChannel = ExecutionContext.IdentityChannel;
                 PackageChannel? identityMatch = null;
                 if (!string.IsNullOrWhiteSpace(identityChannel)
-                    && !string.Equals(identityChannel, PackageChannelNames.Local, StringComparison.OrdinalIgnoreCase))
+                    && !string.Equals(identityChannel, PackageChannelNames.Local, StringComparisons.ChannelName))
                 {
-                    identityMatch = allChannels.FirstOrDefault(c => string.Equals(c.Name, identityChannel, StringComparison.OrdinalIgnoreCase));
+                    identityMatch = allChannels.FirstOrDefault(c => string.Equals(c.Name, identityChannel, StringComparisons.ChannelName));
                 }
 
                 if (identityMatch is not null)
@@ -289,6 +313,12 @@ internal sealed class UpdateCommand : BaseCommand
                 ConfirmBinding = confirmBinding,
                 NuGetConfigDirBinding = nugetConfigDirBinding
             };
+            var cliUpdateResult = await TryUpdateCliBeforeGuestProjectUpdateAsync(project, projectFile, channel, confirmBinding, parseResult, cancellationToken);
+            if (cliUpdateResult is not null)
+            {
+                return cliUpdateResult;
+            }
+
             await project.UpdatePackagesAsync(updateContext, cancellationToken);
 
             // After successful project update, check if CLI update is available and prompt
@@ -359,6 +389,84 @@ internal sealed class UpdateCommand : BaseCommand
         return CommandResult.FromExitCode(0);
     }
 
+    private async Task<CommandResult?> TryUpdateCliBeforeGuestProjectUpdateAsync(
+        IAppHostProject project,
+        FileInfo projectFile,
+        PackageChannel channel,
+        PromptBinding<bool> confirmBinding,
+        ParseResult parseResult,
+        CancellationToken cancellationToken)
+    {
+        if (_cliDownloader is null ||
+            string.IsNullOrEmpty(channel.CliDownloadBaseUrl) ||
+            project.LanguageId.Equals(KnownLanguageId.CSharp, StringComparison.OrdinalIgnoreCase) ||
+            projectFile.Directory is not { } projectDirectory)
+        {
+            return null;
+        }
+
+        var targetSdkVersion = await GetLatestGuestSdkVersionAsync(channel, projectDirectory, cancellationToken);
+        if (targetSdkVersion is null ||
+            !SemVersion.TryParse(VersionHelper.GetDefaultSdkVersion(), SemVersionStyles.Strict, out var currentCliVersion) ||
+            SemVersion.PrecedenceComparer.Compare(targetSdkVersion, currentCliVersion) <= 0)
+        {
+            return null;
+        }
+
+        var shouldUpdateCli = await InteractionService.PromptConfirmAsync(
+            UpdateCommandStrings.UpdateCliBeforeGuestProjectUpdatePrompt,
+            binding: confirmBinding,
+            cancellationToken: cancellationToken);
+
+        if (!shouldUpdateCli)
+        {
+            return null;
+        }
+
+        var dotNetToolUpdateCommand = GetDotNetToolUpdateCommand();
+        if (dotNetToolUpdateCommand is not null)
+        {
+            InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.DotNetToolSelfUpdateMessage);
+            InteractionService.DisplayPlainText($"  {dotNetToolUpdateCommand}");
+            InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.ProjectUpdateSkippedAfterCliUpdateMessage);
+            return CommandResult.Success();
+        }
+
+        var selfUpdateResult = await ExecuteSelfUpdateAsync(parseResult, cancellationToken, channel.Name);
+        if (selfUpdateResult.ExitCode == CliExitCodes.Success)
+        {
+            InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.ProjectUpdateSkippedAfterCliUpdateMessage);
+        }
+
+        return selfUpdateResult;
+    }
+
+    private async Task<SemVersion?> GetLatestGuestSdkVersionAsync(PackageChannel channel, DirectoryInfo projectDirectory, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var sdkPackage = await channel.GetLatestGuestAppHostSdkPackageAsync(projectDirectory, cancellationToken);
+            return sdkPackage is not null && SemVersion.TryParse(sdkPackage.Version, SemVersionStyles.Strict, out var version)
+                ? version
+                : null;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to check target Aspire SDK version before project update");
+            return null;
+        }
+    }
+
+    private bool IsStagingChannelAvailable()
+    {
+        return KnownFeatures.IsStagingChannelEnabled(_features, _configuration)
+            || string.Equals(ExecutionContext.IdentityChannel, PackageChannelNames.Staging, StringComparisons.ChannelName);
+    }
+
     private async Task<CommandResult> ExecuteSelfUpdateAsync(ParseResult parseResult, CancellationToken cancellationToken, string? selectedChannel = null)
     {
         var channel = selectedChannel ?? parseResult.GetValue(_channelOption) ?? parseResult.GetValue(_qualityOption);
@@ -369,7 +477,7 @@ internal sealed class UpdateCommand : BaseCommand
         // aspire.config.json, not from any global setting.
         if (string.IsNullOrEmpty(channel))
         {
-            var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(_features, _configuration);
+            var isStagingEnabled = IsStagingChannelAvailable();
             var channels = isStagingEnabled
                 ? new[] { PackageChannelNames.Stable, PackageChannelNames.Staging, PackageChannelNames.Daily }
                 : new[] { PackageChannelNames.Stable, PackageChannelNames.Daily };

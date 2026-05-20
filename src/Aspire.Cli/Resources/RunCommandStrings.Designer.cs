@@ -170,6 +170,12 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("StartingDebugSessionInExtension", resourceCulture);
             }
         }
+
+        public static string StartingRunSessionInExtension {
+            get {
+                return ResourceManager.GetString("StartingRunSessionInExtension", resourceCulture);
+            }
+        }
         
         public static string AgentConfigurationPrompt {
             get {
@@ -266,7 +272,13 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("CheckLogsForDetails", resourceCulture);
             }
         }
-        
+
+        public static string RecentAppHostStartupOutput {
+            get {
+                return ResourceManager.GetString("RecentAppHostStartupOutput", resourceCulture);
+            }
+        }
+
         public static string ProcessId {
             get {
                 return ResourceManager.GetString("ProcessId", resourceCulture);

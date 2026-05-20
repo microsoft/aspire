@@ -534,7 +534,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
             foreach (var property in dto.Properties)
             {
                 var fieldName = ToCamelCase(property.Name);
-                var fieldType = MapTypeRefToJava(property.Type, property.IsOptional);
+                var fieldType = MapDtoPropertyTypeToJava(property.Type, property.IsOptional);
                 WriteLine($"    private {fieldType} {fieldName};");
             }
             WriteLine();
@@ -544,7 +544,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
             {
                 var fieldName = ToCamelCase(property.Name);
                 var methodName = ToPascalCase(property.Name);
-                var fieldType = MapTypeRefToJava(property.Type, property.IsOptional);
+                var fieldType = MapDtoPropertyTypeToJava(property.Type, property.IsOptional);
                 
                 WriteLine($"    public {fieldType} get{methodName}() {{ return {fieldName}; }}");
                 WriteLine($"    public void set{methodName}({fieldType} value) {{ this.{fieldName} = value; }}");
@@ -1840,8 +1840,14 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         WriteLine("            // Note: Java doesn't have easy access to command line args from here");
         WriteLine("            resolvedOptions.put(\"Args\", new String[0]);");
         WriteLine("        }");
+        // ASPIRE_PROJECT_DIRECTORY is set by the CLI so the host reports the correct project
+        // directory (not the JVM's user.dir) when matching --apphost <directory> requests.
         WriteLine("        if (resolvedOptions.get(\"ProjectDirectory\") == null) {");
-        WriteLine("            resolvedOptions.put(\"ProjectDirectory\", System.getProperty(\"user.dir\"));");
+        WriteLine("            String projectDirectory = System.getenv(\"ASPIRE_PROJECT_DIRECTORY\");");
+        WriteLine("            if (projectDirectory == null || projectDirectory.isEmpty()) {");
+        WriteLine("                projectDirectory = System.getProperty(\"user.dir\");");
+        WriteLine("            }");
+        WriteLine("            resolvedOptions.put(\"ProjectDirectory\", projectDirectory);");
         WriteLine("        }");
         WriteLine("        if (resolvedOptions.get(\"AppHostFilePath\") == null) {");
         WriteLine("            String appHostFilePath = System.getenv(\"ASPIRE_APPHOST_FILEPATH\");");
@@ -2036,6 +2042,28 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
             AtsTypeCategory.Union => "AspireUnion",
             AtsTypeCategory.Unknown => "Object",
             _ => "Object"
+        };
+    }
+
+    private string MapDtoPropertyTypeToJava(AtsTypeRef? typeRef, bool isOptional, bool useBoxedTypes = false)
+    {
+        if (typeRef is null)
+        {
+            return "Object";
+        }
+
+        if (typeRef.TypeId == AtsConstants.ReferenceExpressionTypeId)
+        {
+            return "ReferenceExpression";
+        }
+
+        return typeRef.Category switch
+        {
+            AtsTypeCategory.Array => $"{MapDtoPropertyTypeToJava(typeRef.ElementType, false)}[]",
+            AtsTypeCategory.List => $"List<{MapDtoPropertyTypeToJava(typeRef.ElementType, false, useBoxedTypes: true)}>",
+            AtsTypeCategory.Dict => $"Map<{MapDtoPropertyTypeToJava(typeRef.KeyType, false, useBoxedTypes: true)}, {MapDtoPropertyTypeToJava(typeRef.ValueType, false, useBoxedTypes: true)}>",
+            AtsTypeCategory.Union => "AspireUnion",
+            _ => MapTypeRefToJava(typeRef, isOptional, useBoxedTypes)
         };
     }
 

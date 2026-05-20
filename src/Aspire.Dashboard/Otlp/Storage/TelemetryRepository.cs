@@ -897,36 +897,14 @@ public sealed partial class TelemetryRepository : IDisposable
     {
         _tracesLock.EnterReadLock();
 
-        var attributesValues = new Dictionary<string, int>(StringComparers.OtlpAttribute);
-
         try
         {
-            foreach (var trace in _traces)
-            {
-                foreach (var span in trace.Spans)
-                {
-                    var values = OtlpSpan.GetFieldValue(span, attributeName);
-                    if (values.Value1 != null)
-                    {
-                        ref var count = ref CollectionsMarshal.GetValueRefOrAddDefault(attributesValues, values.Value1, out _);
-                        // Adds to dictionary if not present.
-                        count++;
-                    }
-                    if (values.Value2 != null)
-                    {
-                        ref var count = ref CollectionsMarshal.GetValueRefOrAddDefault(attributesValues, values.Value2, out _);
-                        // Adds to dictionary if not present.
-                        count++;
-                    }
-                }
-            }
+            return OtlpSpan.GetFieldValuesFromTraces(_traces, attributeName);
         }
         finally
         {
             _tracesLock.ExitReadLock();
         }
-
-        return attributesValues;
     }
 
     public Dictionary<string, int> GetLogsFieldValues(string attributeName)

@@ -68,6 +68,12 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SourceArgumentDescription", resourceCulture);
             }
         }
+
+        public static string SourceWithCredentialsCannotBePersisted {
+            get {
+                return ResourceManager.GetString("SourceWithCredentialsCannotBePersisted", resourceCulture);
+            }
+        }
         
         public static string VersionArgumentDescription {
             get {
@@ -166,6 +172,18 @@ namespace Aspire.Cli.Resources {
         public static string OutputPathContainsInvalidCharacters {
             get {
                 return ResourceManager.GetString("OutputPathContainsInvalidCharacters", resourceCulture);
+            }
+        }
+
+        public static string NoPackageChannelsAvailable {
+            get {
+                return ResourceManager.GetString("NoPackageChannelsAvailable", resourceCulture);
+            }
+        }
+
+        public static string NoChannelFoundMatching {
+            get {
+                return ResourceManager.GetString("NoChannelFoundMatching", resourceCulture);
             }
         }
     }

@@ -1814,6 +1814,18 @@ class InteractionInput(typing.TypedDict, total=False):
     Disabled: bool
     MaxLength: int | None
 
+class ParameterCustomInputOptions(typing.TypedDict, total=False):
+    InputType: InputType | None
+    Label: str | None
+    Description: str | None
+    EnableDescriptionMarkdown: bool | None
+    Options: typing.Mapping[str, str]
+    Value: str | None
+    Placeholder: str | None
+    AllowCustomChoice: bool | None
+    Disabled: bool | None
+    MaxLength: int | None
+
 class ProcessCommandExportOptions(typing.TypedDict, total=False):
     ExecutablePath: str | None
     Arguments: typing.Iterable[str]
@@ -1869,14 +1881,14 @@ class TestConfigDto(typing.TypedDict, total=False):
     OptionalField: str | None
 
 class TestDeeplyNestedDto(typing.TypedDict, total=False):
-    NestedData: AspireDict[str, AspireList[TestConfigDto]]
-    MetadataArray: typing.Iterable[AspireDict[str, str]]
+    NestedData: typing.Mapping[str, typing.Iterable[TestConfigDto]]
+    MetadataArray: typing.Iterable[typing.Mapping[str, str]]
 
 class TestNestedDto(typing.TypedDict, total=False):
     Id: str
     Config: TestConfigDto
-    Tags: AspireList[str]
-    Counts: AspireDict[str, int]
+    Tags: typing.Iterable[str]
+    Counts: typing.Mapping[str, int]
 
 
 # ============================================================================
@@ -5070,6 +5082,33 @@ class PipelineStep:
             {'context': self._handle}
         )
         return typing.cast(str | None, result)
+
+    @_cached_property
+    def depends_on_steps(self) -> AspireList[str]:
+        """Gets the step names that this step depends on"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.Pipelines/PipelineStep.dependsOnSteps',
+            {'context': self._handle}
+        )
+        return typing.cast(AspireList[str], result)
+
+    @_cached_property
+    def required_by_steps(self) -> AspireList[str]:
+        """Gets the step names that require this step to complete"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.Pipelines/PipelineStep.requiredBySteps',
+            {'context': self._handle}
+        )
+        return typing.cast(AspireList[str], result)
+
+    @_cached_property
+    def tags(self) -> AspireList[str]:
+        """Gets the tags that categorize this step"""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.Pipelines/PipelineStep.tags',
+            {'context': self._handle}
+        )
+        return typing.cast(AspireList[str], result)
 
     def depends_on(self, step_name: str) -> None:
         """Adds a dependency on another step by name"""
@@ -10748,6 +10787,7 @@ class ParameterResourceKwargs(_BaseResourceKwargs, total=False):
     """ParameterResource options."""
 
     description: str | tuple[str, bool]
+    custom_input: ParameterCustomInputOptions
 
 class ParameterResource(_BaseResource, AbstractExpressionValue):
     """ParameterResource resource."""
@@ -10768,6 +10808,17 @@ class ParameterResource(_BaseResource, AbstractExpressionValue):
         self._handle = self._wrap_builder(result)
         return self
 
+    def with_custom_input(self, options: ParameterCustomInputOptions) -> typing.Self:
+        """Sets a custom input for the parameter"""
+        rpc_args: dict[str, typing.Any] = {'builder': self._handle}
+        rpc_args['options'] = options
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/withCustomInput',
+            rpc_args,
+        )
+        self._handle = self._wrap_builder(result)
+        return self
+
     def __init__(self, handle: Handle, client: AspireClient, **kwargs: typing.Unpack[ParameterResourceKwargs]) -> None:
         if _description := kwargs.pop("description", None):
             if _validate_type(_description, str):
@@ -10781,6 +10832,13 @@ class ParameterResource(_BaseResource, AbstractExpressionValue):
                 handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withDescription', rpc_args))
             else:
                 raise TypeError("Invalid type for option 'description'. Expected: str or (str, bool)")
+        if _custom_input := kwargs.pop("custom_input", None):
+            if _validate_type(_custom_input, ParameterCustomInputOptions):
+                rpc_args: dict[str, typing.Any] = {"builder": handle}
+                rpc_args["options"] = typing.cast(ParameterCustomInputOptions, _custom_input)
+                handle = self._wrap_builder(client.invoke_capability('Aspire.Hosting/withCustomInput', rpc_args))
+            else:
+                raise TypeError("Invalid type for option 'custom_input'. Expected: ParameterCustomInputOptions")
         super().__init__(handle, client, **kwargs)
 
 
@@ -11189,8 +11247,8 @@ def create_builder(
 
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression", lambda handle, _: ReferenceExpression(handle))
 _register_handle_wrapper("System.Private.CoreLib/System.Threading.CancellationToken", CancellationToken)
-_register_handle_wrapper("Aspire.Hosting/Dict<string,any>", AspireDict)
 _register_handle_wrapper("Aspire.Hosting/List<string>", AspireList)
+_register_handle_wrapper("Aspire.Hosting/Dict<string,any>", AspireDict)
 _register_handle_wrapper("Aspire.Hosting/Dict<string,string>", AspireDict)
 _register_handle_wrapper("Aspire.Hosting/Dict<string,number>", AspireDict)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.IAspireStore", AbstractAspireStore)

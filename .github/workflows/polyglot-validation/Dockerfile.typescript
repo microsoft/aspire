@@ -10,16 +10,20 @@
 #
 # Note: Expects self-extracting binary and NuGet artifacts to be pre-downloaded to /workspace/artifacts/
 #
-FROM mcr.microsoft.com/devcontainers/typescript-node:22
+ARG NODE_VERSION=24
+FROM mcr.microsoft.com/devcontainers/typescript-node:${NODE_VERSION}
+ARG NODE_VERSION
 
 # Ensure Yarn APT repository signing key is available (base image includes Yarn repo)
 RUN curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | gpg --dearmor | sudo tee /etc/apt/keyrings/yarn-archive-keyring.gpg > /dev/null
 
-# Install system dependencies (wget, docker CLI, jq for JSON manipulation)
-RUN apt-get update && apt-get install -y \
+# Install system dependencies and verify the MCR base image provides the requested Node.js runtime.
+RUN case "$NODE_VERSION" in 22|24) ;; *) echo "Unsupported NODE_VERSION: $NODE_VERSION" >&2; exit 1 ;; esac && \
+    apt-get update && apt-get install -y \
     wget \
     docker.io \
     jq \
+    && node --version | grep -E "^v${NODE_VERSION}\\." \
     && rm -rf /var/lib/apt/lists/*
 
 # Pre-configure Aspire CLI path

@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
-using System.Reflection;
 using System.Text;
 using System.Text.Json.Nodes;
 using Aspire.Shared.Json;
@@ -176,7 +175,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
     /// </summary>
     private string MapTypeRefToTypeScript(AtsTypeRef? typeRef)
     {
-        if (typeRef == null)
+        if (typeRef is null)
         {
             return "unknown";
         }
@@ -237,6 +236,36 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         return typeRef.TypeId is AtsConstants.Void or AtsConstants.Any or AtsConstants.CancellationToken
             ? mappedType
             : $"{mappedType} | null";
+    }
+
+    private string MapDtoPropertyTypeToTypeScript(AtsTypeRef? typeRef)
+    {
+        if (typeRef is null)
+        {
+            return "unknown";
+        }
+
+        return typeRef.Category switch
+        {
+            AtsTypeCategory.Array or AtsTypeCategory.List => $"{MapDtoPropertyTypeToTypeScript(typeRef.ElementType)}[]",
+            AtsTypeCategory.Dict => $"Record<{MapDtoPropertyTypeToTypeScript(typeRef.KeyType)}, {MapDtoPropertyTypeToTypeScript(typeRef.ValueType)}>",
+            AtsTypeCategory.Union => MapDtoUnionTypeToTypeScript(typeRef),
+            _ => MapTypeRefToTypeScript(typeRef)
+        };
+    }
+
+    private string MapDtoUnionTypeToTypeScript(AtsTypeRef typeRef)
+    {
+        if (typeRef.UnionTypes is null || typeRef.UnionTypes.Count == 0)
+        {
+            return "unknown";
+        }
+
+        var memberTypes = typeRef.UnionTypes
+            .Select(MapDtoPropertyTypeToTypeScript)
+            .Distinct();
+
+        return string.Join(" | ", memberTypes);
     }
 
     /// <summary>
@@ -738,24 +767,13 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
         var files = new Dictionary<string, string>();
 
         // Add embedded resource files (transport.ts, base.ts)
-        files["transport.ts"] = GetEmbeddedResource("transport.ts");
-        files["base.ts"] = GetEmbeddedResource("base.ts");
+        files["transport.ts"] = EmbeddedResources.Read("transport.ts");
+        files["base.ts"] = EmbeddedResources.Read("base.ts");
 
         // Generate the capability-based aspire.ts SDK
         files["aspire.ts"] = GenerateAspireSdk(context);
 
         return files;
-    }
-
-    private static string GetEmbeddedResource(string name)
-    {
-        var assembly = Assembly.GetExecutingAssembly();
-        var resourceName = $"Aspire.Hosting.CodeGeneration.TypeScript.Resources.{name}";
-
-        using var stream = assembly.GetManifestResourceStream(resourceName)
-            ?? throw new InvalidOperationException($"Embedded resource '{name}' not found.");
-        using var reader = new StreamReader(stream);
-        return reader.ReadToEnd();
     }
 
     /// <summary>
@@ -1090,7 +1108,7 @@ internal sealed class AtsTypeScriptCodeGenerator : ICodeGenerator
             {
                 var tsType = prop.IsCallback
                     ? GenerateCallbackTypeSignature(prop.CallbackParameters, prop.CallbackReturnType)
-                    : MapTypeRefToTypeScript(prop.Type);
+                    : MapDtoPropertyTypeToTypeScript(prop.Type);
                 // All DTO properties are optional in TypeScript to allow partial objects
                 // Convert PascalCase to camelCase for TypeScript
                 var propName = ToCamelCase(prop.Name);

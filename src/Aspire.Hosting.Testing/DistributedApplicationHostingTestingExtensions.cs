@@ -17,7 +17,7 @@ public static class DistributedApplicationHostingTestingExtensions
     /// </summary>
     /// <param name="app">The application.</param>
     /// <param name="resourceName">The resourceName of the resource.</param>
-    /// <param name="endpointName">The resourceName of the endpoint on the resource to communicate with.</param>
+    /// <param name="endpointName">The optional endpoint name. If none is specified, the "https" endpoint is preferred when available, falling back to "http".</param>
     /// <remarks>This method is not available in polyglot app hosts.</remarks>
     /// <returns>The <see cref="HttpClient"/>.</returns>
     [AspireExportIgnore(Reason = "HttpClient is not ATS-compatible.")]
@@ -76,7 +76,7 @@ public static class DistributedApplicationHostingTestingExtensions
     /// </summary>
     /// <param name="app">The application.</param>
     /// <param name="resourceName">The resource name.</param>
-    /// <param name="endpointName">The optional endpoint name. If none are specified, the single defined endpoint is returned.</param>
+    /// <param name="endpointName">The optional endpoint name. If none is specified, the "https" endpoint is preferred when available, falling back to "http".</param>
     /// <returns>A URI representation of the endpoint.</returns>
     /// <exception cref="ArgumentException">The resource was not found, no matching endpoint was found, or multiple endpoints were found.</exception>
     /// <exception cref="InvalidOperationException">The resource has no endpoints.</exception>
@@ -95,7 +95,7 @@ public static class DistributedApplicationHostingTestingExtensions
     /// <param name="app">The application.</param>
     /// <param name="resourceName">The resource name.</param>
     /// <param name="networkIdentifier">The optional network identifier. If none is specified, the default network is used.</param>
-    /// <param name="endpointName">The optional endpoint name. If none are specified, the single defined endpoint is returned.</param>
+    /// <param name="endpointName">The optional endpoint name. If none is specified, the "https" endpoint is preferred when available, falling back to "http".</param>
     /// <remarks>This overload is not available in polyglot app hosts. Use the exported overload that accepts a network identifier string instead.</remarks>
     /// <returns>A URI representation of the endpoint.</returns>
     /// <exception cref="ArgumentException">The resource was not found, no matching endpoint was found, or multiple endpoints were found.</exception>
@@ -115,7 +115,7 @@ public static class DistributedApplicationHostingTestingExtensions
     /// <param name="app">The application.</param>
     /// <param name="resourceName">The resource name.</param>
     /// <param name="networkIdentifier">The optional network identifier string. If none is specified, the default network is used.</param>
-    /// <param name="endpointName">The optional endpoint name. If none are specified, the single defined endpoint is returned.</param>
+    /// <param name="endpointName">The optional endpoint name. If none is specified, the "https" endpoint is preferred when available, falling back to "http".</param>
     /// <returns>A URI representation of the endpoint.</returns>
     /// <exception cref="ArgumentException">The resource was not found, no matching endpoint was found, or multiple endpoints were found.</exception>
     /// <exception cref="InvalidOperationException">The resource has no endpoints.</exception>
@@ -153,7 +153,9 @@ public static class DistributedApplicationHostingTestingExtensions
         }
         else
         {
-            endpoint = GetEndpointOrDefault(resourceWithEndpoints, "http", networkIdentifier) ?? GetEndpointOrDefault(resourceWithEndpoints, "https", networkIdentifier);
+            // Prefer https over http to match the default service discovery behavior (https+http://),
+            // where https is tried first.
+            endpoint = GetEndpointOrDefault(resourceWithEndpoints, "https", networkIdentifier) ?? GetEndpointOrDefault(resourceWithEndpoints, "http", networkIdentifier);
         }
 
         if (endpoint is null)

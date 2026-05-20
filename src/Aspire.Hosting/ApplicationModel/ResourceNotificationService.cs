@@ -139,7 +139,7 @@ public class ResourceNotificationService : IDisposable
         return finalState;
     }
 
-    private async Task WaitUntilHealthyAsync(IResource resource, IResource dependency, WaitBehavior waitBehavior, CancellationToken cancellationToken)
+    private async Task WaitUntilHealthyAsync(IResource resource, IResource dependency, WaitBehavior waitBehavior, CancellationToken cancellationToken, Func<string, Task>? onDependencyReady = null)
     {
         using var activity = ProfilingTelemetry.StartResourceWaitForDependency(Configuration, resource, dependency, WaitType.WaitUntilHealthy, waitBehavior);
 
@@ -173,7 +173,7 @@ public class ResourceNotificationService : IDisposable
                 await resourceEvent.Snapshot.ResourceReadyEvent!.EventTask.WaitAsync(cancellationToken).ConfigureAwait(false);
 
                 resourceLogger.LogInformation("Finished waiting for resource '{ResourceName}'.", displayName);
-            }, cancellationToken).ConfigureAwait(false);
+            }, cancellationToken, onDependencyReady).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -279,7 +279,7 @@ public class ResourceNotificationService : IDisposable
             _ => throw new DistributedApplicationException($"Unexpected wait behavior: {waitBehavior}")
         };
 
-    private async Task WaitUntilCompletionAsync(IResource resource, IResource dependency, int exitCode, CancellationToken cancellationToken)
+    private async Task WaitUntilCompletionAsync(IResource resource, IResource dependency, int exitCode, CancellationToken cancellationToken, Func<string, Task>? onDependencyReady = null)
     {
         using var activity = ProfilingTelemetry.StartResourceWaitForDependency(Configuration, resource, dependency, WaitType.WaitForCompletion, waitBehavior: null);
         activity.SetResourceWaitExpectedExitCode(exitCode);
@@ -289,17 +289,6 @@ public class ResourceNotificationService : IDisposable
 
         var resourceLogger = _resourceLoggerService.GetLogger(resource);
         resourceLogger.LogInformation("Waiting for resource '{ResourceName}' to complete.", dependency.Name);
-
-        // Only transition replicas that are actually starting up to "Waiting".
-        // Replicas already in a Running or terminal state should not be clobbered,
-        // as this broadcast targets ALL replicas of the resource (model-level update),
-        // not just the specific replica being started.
-        await PublishUpdateAsync(resource, s =>
-            s.State?.Text is null
-            || s.State?.Text == KnownResourceStates.Starting
-            || s.State?.Text == KnownResourceStates.Waiting
-                ? s with { State = KnownResourceStates.Waiting }
-                : s).ConfigureAwait(false);
 
         for (var i = 0; i < names.Length; i++)
         {
@@ -353,6 +342,11 @@ public class ResourceNotificationService : IDisposable
 
             resourceLogger.LogInformation("Finished waiting for resource '{ResourceName}'.", displayName);
 
+            if (onDependencyReady is not null)
+            {
+                await onDependencyReady(resourceId).ConfigureAwait(false);
+            }
+
             static bool IsKnownTerminalState(CustomResourceSnapshot snapshot) =>
                 KnownResourceStates.TerminalStates.Contains(snapshot.State?.Text) ||
                 snapshot.ExitCode is not null;
@@ -360,21 +354,10 @@ public class ResourceNotificationService : IDisposable
     }
 
     private async Task WaitUntilStateAsync(IResource resource, IResource dependency, WaitBehavior waitBehavior,
-        Func<ILogger, string, string, ResourceEvent, Task> postRunningAction, CancellationToken cancellationToken)
+        Func<ILogger, string, string, ResourceEvent, Task> postRunningAction, CancellationToken cancellationToken, Func<string, Task>? onDependencyReady = null)
     {
         var resourceLogger = _resourceLoggerService.GetLogger(resource);
         resourceLogger.LogInformation("Waiting for resource '{ResourceName}' to enter the '{State}' state.", dependency.Name, KnownResourceStates.Running);
-
-        // Only transition replicas that are actually starting up to "Waiting".
-        // Replicas already in a Running or terminal state should not be clobbered,
-        // as this broadcast targets ALL replicas of the resource (model-level update),
-        // not just the specific replica being started.
-        await PublishUpdateAsync(resource, s =>
-            s.State?.Text is null
-            || s.State?.Text == KnownResourceStates.Starting
-            || s.State?.Text == KnownResourceStates.Waiting
-                ? s with { State = KnownResourceStates.Waiting }
-                : s).ConfigureAwait(false);
 
         var names = dependency.GetResolvedResourceNames();
         var tasks = new Task[names.Length];
@@ -427,6 +410,11 @@ public class ResourceNotificationService : IDisposable
             // Execute the post-running action specific to the wait type
             await postRunningAction(resourceLogger, displayName, resourceId, resourceEvent).ConfigureAwait(false);
 
+            if (onDependencyReady is not null)
+            {
+                await onDependencyReady(resourceId).ConfigureAwait(false);
+            }
+
             static bool IsContinuableState(WaitBehavior waitBehavior, CustomResourceSnapshot snapshot) =>
                 waitBehavior switch
                 {
@@ -441,7 +429,7 @@ public class ResourceNotificationService : IDisposable
         }
     }
 
-    private async Task WaitUntilStartedAsync(IResource resource, IResource dependency, WaitBehavior waitBehavior, CancellationToken cancellationToken)
+    private async Task WaitUntilStartedAsync(IResource resource, IResource dependency, WaitBehavior waitBehavior, CancellationToken cancellationToken, Func<string, Task>? onDependencyReady = null)
     {
         using var activity = ProfilingTelemetry.StartResourceWaitForDependency(Configuration, resource, dependency, WaitType.WaitUntilStarted, waitBehavior);
 
@@ -453,7 +441,7 @@ public class ResourceNotificationService : IDisposable
                 // We only wait for the resource to reach the Running state.
                 resourceLogger.LogInformation("Finished waiting for resource '{ResourceName}' to start.", displayName);
                 return Task.CompletedTask;
-            }, cancellationToken).ConfigureAwait(false);
+            }, cancellationToken, onDependencyReady).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -486,32 +474,139 @@ public class ResourceNotificationService : IDisposable
 
         try
         {
-            var pendingDependencies = new List<Task>();
-            foreach (var waitAnnotation in waitAnnotationList)
-            {
-                if (waitAnnotation.Resource is IResourceWithoutLifetime)
-                {
-                    // IResourceWithoutLifetime are inert and don't need to be waited on.
-                    continue;
-                }
+            var waitAnnotationsToProcess = waitAnnotationList
+                .Where(static waitAnnotation => waitAnnotation.Resource is not IResourceWithoutLifetime)
+                .ToArray();
 
-                var pendingDependency = waitAnnotation.WaitType switch
-                {
-                    WaitType.WaitUntilHealthy => WaitUntilHealthyAsync(resource, waitAnnotation.Resource, waitAnnotation.WaitBehavior ?? DefaultWaitBehavior, cancellationToken),
-                    WaitType.WaitForCompletion => WaitUntilCompletionAsync(resource, waitAnnotation.Resource, waitAnnotation.ExitCode, cancellationToken),
-                    WaitType.WaitUntilStarted => WaitUntilStartedAsync(resource, waitAnnotation.Resource, waitAnnotation.WaitBehavior ?? DefaultWaitBehavior, cancellationToken),
-                    _ => throw new DistributedApplicationException($"Unexpected wait type: {waitAnnotation.WaitType}")
-                };
-                pendingDependencies.Add(pendingDependency);
+            if (waitAnnotationsToProcess.Length == 0)
+            {
+                return;
             }
 
+            var pendingDependencyCounts = waitAnnotationsToProcess
+                .SelectMany(static waitAnnotation => waitAnnotation.Resource.GetResolvedResourceNames())
+                .GroupBy(static dependencyName => dependencyName, StringComparers.ResourceName)
+                .ToDictionary(static group => group.Key, static group => group.Count(), StringComparers.ResourceName);
+
+            if (pendingDependencyCounts.Count == 0)
+            {
+                return;
+            }
+
+            await PublishWaitingForDependenciesAsync(resource, pendingDependencyCounts.Keys).ConfigureAwait(false);
+
+            using var pendingDependencyLock = new SemaphoreSlim(1, 1);
+
+            async Task OnDependencyReadyAsync(string dependencyName)
+            {
+                await pendingDependencyLock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+                try
+                {
+                    if (!pendingDependencyCounts.TryGetValue(dependencyName, out var pendingCount))
+                    {
+                        return;
+                    }
+
+                    if (pendingCount == 1)
+                    {
+                        pendingDependencyCounts.Remove(dependencyName);
+                    }
+                    else
+                    {
+                        pendingDependencyCounts[dependencyName] = pendingCount - 1;
+                    }
+
+                    var waitingFor = pendingDependencyCounts.Keys.ToArray();
+
+                    if (waitingFor.Length > 0)
+                    {
+                        await PublishWaitingForDependenciesAsync(resource, waitingFor).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        await ClearWaitingForDependenciesAsync(resource).ConfigureAwait(false);
+                    }
+                }
+                finally
+                {
+                    pendingDependencyLock.Release();
+                }
+            }
+
+            var pendingDependencies = waitAnnotationsToProcess
+                .Select(waitAnnotation => waitAnnotation.WaitType switch
+                {
+                    WaitType.WaitUntilHealthy => WaitUntilHealthyAsync(resource, waitAnnotation.Resource, waitAnnotation.WaitBehavior ?? DefaultWaitBehavior, cancellationToken, OnDependencyReadyAsync),
+                    WaitType.WaitForCompletion => WaitUntilCompletionAsync(resource, waitAnnotation.Resource, waitAnnotation.ExitCode, cancellationToken, OnDependencyReadyAsync),
+                    WaitType.WaitUntilStarted => WaitUntilStartedAsync(resource, waitAnnotation.Resource, waitAnnotation.WaitBehavior ?? DefaultWaitBehavior, cancellationToken, OnDependencyReadyAsync),
+                    _ => throw new DistributedApplicationException($"Unexpected wait type: {waitAnnotation.WaitType}")
+                });
+
             await Task.WhenAll(pendingDependencies).ConfigureAwait(false);
+
+            var clearRemainingDependencies = false;
+            await pendingDependencyLock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+            try
+            {
+                clearRemainingDependencies = pendingDependencyCounts.Count > 0;
+                pendingDependencyCounts.Clear();
+            }
+            finally
+            {
+                pendingDependencyLock.Release();
+            }
+
+            if (clearRemainingDependencies)
+            {
+                await ClearWaitingForDependenciesAsync(resource).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException ex)
+        {
+            activity.SetError(ex);
+
+            var errorMessage = BuildCancellationErrorMessage(
+                $"Resource '{resource.Name}' failed to wait for dependencies before the operation was cancelled.",
+                resource.Name);
+
+            throw new OperationCanceledException(errorMessage, ex, ex.CancellationToken);
         }
         catch (Exception ex)
         {
             activity.SetError(ex);
             throw;
         }
+    }
+
+    private Task PublishWaitingForDependenciesAsync(IResource resource, IEnumerable<string> dependencyNames)
+    {
+        var waitingFor = dependencyNames
+            .Where(static dependencyName => !string.IsNullOrWhiteSpace(dependencyName))
+            .Distinct(StringComparers.ResourceName)
+            .ToArray();
+
+        // Only transition replicas that are actually starting up to "Waiting".
+        // Replicas already in a Running or terminal state should not be clobbered,
+        // as this broadcast targets ALL replicas of the resource (model-level update),
+        // not just the specific replica being started.
+        return PublishUpdateAsync(resource, s =>
+            s.State?.Text is null
+            || s.State?.Text == KnownResourceStates.Starting
+            || s.State?.Text == KnownResourceStates.Waiting
+                ? s with
+                {
+                    State = KnownResourceStates.Waiting,
+                    Properties = s.Properties.SetResourceProperty(KnownProperties.Resource.WaitingFor, waitingFor)
+                }
+                : s);
+    }
+
+    private Task ClearWaitingForDependenciesAsync(IResource resource)
+    {
+        return PublishUpdateAsync(resource, s => s with
+        {
+            Properties = s.Properties.RemoveResourceProperty(KnownProperties.Resource.WaitingFor)
+        });
     }
 
     /// <summary>
@@ -717,6 +812,14 @@ public class ResourceNotificationService : IDisposable
             var previousState = GetCurrentSnapshot(resource, notificationState);
 
             var newState = stateFactory(previousState);
+
+            if (!string.Equals(newState.State?.Text, KnownResourceStates.Waiting, StringComparisons.ResourceState))
+            {
+                newState = newState with
+                {
+                    Properties = newState.Properties.RemoveResourceProperty(KnownProperties.Resource.WaitingFor)
+                };
+            }
 
             // Increment the snapshot version, this is a per resource version.
             newState = newState with { Version = notificationState.GetNextVersion() };
@@ -1146,6 +1249,28 @@ public class ResourceNotificationService : IDisposable
                     }
                 }
             }
+
+            if (TryGetWaitingForDependencies(snapshot.Properties, out var waitingFor))
+            {
+                error.AppendLine("- Waiting For:");
+                foreach (var dependencyName in waitingFor)
+                {
+                    if (TryGetCurrentState(dependencyName, out var dependencyEvent))
+                    {
+                        error.Append(CultureInfo.InvariantCulture, $"  - {dependencyName}: State = {dependencyEvent.Snapshot.State?.Text ?? "(null)"}");
+                        error.Append(CultureInfo.InvariantCulture, $", Health = {dependencyEvent.Snapshot.HealthStatus?.ToString() ?? "(null)"}");
+                        if (dependencyEvent.Snapshot.ExitCode is { } exitCode)
+                        {
+                            error.Append(CultureInfo.InvariantCulture, $", Exit Code = {exitCode}");
+                        }
+                        error.AppendLine();
+                    }
+                    else
+                    {
+                        error.AppendLine(CultureInfo.InvariantCulture, $"  - {dependencyName}: Unable to retrieve current state.");
+                    }
+                }
+            }
         }
         else
         {
@@ -1153,6 +1278,30 @@ public class ResourceNotificationService : IDisposable
         }
 
         return error.ToString().TrimEnd();
+    }
+
+    private static bool TryGetWaitingForDependencies(ImmutableArray<ResourcePropertySnapshot> properties, [NotNullWhen(true)] out string[]? dependencies)
+    {
+        foreach (var property in properties)
+        {
+            if (string.Equals(property.Name, KnownProperties.Resource.WaitingFor, StringComparisons.ResourcePropertyName))
+            {
+                if (property.Value is IEnumerable<string> dependencyNames)
+                {
+                    dependencies = dependencyNames
+                        .Where(static dependencyName => !string.IsNullOrWhiteSpace(dependencyName))
+                        .Distinct(StringComparers.ResourceName)
+                        .ToArray();
+
+                    return dependencies.Length > 0;
+                }
+
+                break;
+            }
+        }
+
+        dependencies = null;
+        return false;
     }
 
     /// <inheritdoc/>

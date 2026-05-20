@@ -25,17 +25,40 @@ public class AtsTypeScriptCodeGeneratorTests
     }
 
     [Fact]
-    public async Task EmbeddedResource_PackageJson_MatchesSnapshot()
+    public void EmbeddedResource_PackageJson_IsAvailableWithExpectedStructure()
     {
-        var assembly = typeof(AtsTypeScriptCodeGenerator).Assembly;
-        var resourceName = "Aspire.Hosting.CodeGeneration.TypeScript.Resources.package.json";
+        // The package.json under Resources/ is the single source of truth for
+        // the SDK manifest emitted alongside generated TypeScript. Verify the
+        // embedded resource loads and has the structural fields downstream
+        // consumers rely on — without copying its bytes into a snapshot file
+        // that would drift from the resource on every edit.
+        var content = EmbeddedResources.Read("package.json");
 
-        using var stream = assembly.GetManifestResourceStream(resourceName)!;
-        using var reader = new StreamReader(stream);
-        var content = await reader.ReadToEndAsync();
+        Assert.NotEmpty(content);
 
-        await Verify(content, extension: "json")
-            .UseFileName("package");
+        var packageJson = System.Text.Json.Nodes.JsonNode.Parse(content)!.AsObject();
+        Assert.Equal("aspire-host", packageJson["name"]?.GetValue<string>());
+        Assert.Equal("module", packageJson["type"]?.GetValue<string>());
+        Assert.NotNull(packageJson["dependencies"]?["vscode-jsonrpc"]);
+    }
+
+    [Fact]
+    public void GenerateDistributedApplication_EmitsBaseAndTransportResourcesVerbatim()
+    {
+        var atsContext = CreateContextFromTestAssembly();
+
+        var files = _generator.GenerateDistributedApplication(atsContext);
+
+        Assert.Contains("base.ts", files.Keys);
+        Assert.Contains("transport.ts", files.Keys);
+
+        // base.ts and transport.ts are emitted as embedded-resource pass-throughs,
+        // so asserting equality against the embedded resource (the single source
+        // of truth) keeps the test signal — "the generator emits the resource
+        // verbatim" — without maintaining duplicate *.verified.ts snapshots that
+        // would have to be regenerated on every change to the source resource.
+        Assert.Equal(EmbeddedResources.Read("base.ts"), files["base.ts"]);
+        Assert.Equal(EmbeddedResources.Read("transport.ts"), files["transport.ts"]);
     }
 
     [Fact]
@@ -49,17 +72,13 @@ public class AtsTypeScriptCodeGeneratorTests
 
         // Assert
         Assert.Contains("aspire.ts", files.Keys);
-        Assert.Contains("transport.ts", files.Keys);
-        Assert.Contains("base.ts", files.Keys);
 
+        // aspire.ts is real generated code (composed from scanned types), so a
+        // Verify snapshot is the right tool here. base.ts and transport.ts are
+        // resource pass-throughs and are covered by
+        // GenerateDistributedApplication_EmitsBaseAndTransportResourcesVerbatim.
         await Verify(files["aspire.ts"], extension: "ts")
             .UseFileName("AtsGeneratedAspire");
-
-        await Verify(files["base.ts"], extension: "ts")
-            .UseFileName("base");
-
-        await Verify(files["transport.ts"], extension: "ts")
-            .UseFileName("transport");
     }
 
     [Fact]
@@ -1541,6 +1560,8 @@ public class AtsTypeScriptCodeGeneratorTests
 
         // TestNestedDto should generate an interface with nested types
         Assert.Contains("interface TestNestedDto", code);
+        Assert.Contains("tags?: string[];", code);
+        Assert.Contains("counts?: Record<string, number>;", code);
     }
 
     [Fact]

@@ -133,6 +133,8 @@ public class AppHostServerSessionTests
         public Task<AppHostServerPrepareResult> PrepareAsync(
             string sdkVersion,
             IEnumerable<IntegrationReference> integrations,
+            string? requestedChannel = null,
+            string? packageSourceOverride = null,
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 

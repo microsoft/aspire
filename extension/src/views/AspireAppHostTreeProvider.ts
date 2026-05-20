@@ -71,6 +71,7 @@ class WorkspaceResourcesItem extends vscode.TreeItem {
         public readonly resources: ResourceJson[],
         public readonly dashboardUrl: string | null,
         public readonly appHostPath: string | undefined,
+        public readonly appHost: AppHostDisplayInfo | undefined,
         appHostName?: string
     ) {
         super(appHostName ?? workspaceAppHostLabel, vscode.TreeItemCollapsibleState.Expanded);
@@ -341,6 +342,10 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         return this._repository.workspaceResources;
     }
 
+    get workspaceAppHost(): AppHostDisplayInfo | undefined {
+        return this._repository.workspaceAppHost;
+    }
+
     get workspaceAppHostPath(): string | undefined {
         return this._repository.workspaceAppHostPath;
     }
@@ -454,13 +459,14 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
     private _getWorkspaceChildren(element?: TreeElement): TreeElement[] {
         if (!element) {
-            const resources = [...this._repository.workspaceResources];
-            if (resources.length === 0) {
+            const workspaceResources = [...this._repository.workspaceResources];
+            const workspaceAppHost = this._repository.workspaceAppHost;
+            if (workspaceResources.length === 0 && !workspaceAppHost) {
                 return [];
             }
-            const rawDashboardUrl = resources.find(r => r.dashboardUrl)?.dashboardUrl ?? null;
+            const rawDashboardUrl = workspaceAppHost?.dashboardUrl ?? workspaceResources.find(r => r.dashboardUrl)?.dashboardUrl ?? null;
             const dashboardUrl = rawDashboardUrl ? stripResourceSuffix(rawDashboardUrl) : null;
-            return [new WorkspaceResourcesItem(resources, dashboardUrl, this._repository.workspaceAppHostPath, this._repository.workspaceAppHostName)];
+            return [new WorkspaceResourcesItem(workspaceResources, dashboardUrl, workspaceAppHost?.appHostPath ?? this._repository.workspaceAppHostPath, workspaceAppHost, this._repository.workspaceAppHostName)];
         }
 
         if (element instanceof WorkspaceResourcesItem) {
@@ -468,6 +474,22 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
             if (element.dashboardUrl) {
                 items.push(new EndpointUrlItem(element.dashboardUrl, dashboardLabel));
+            }
+
+            if (element.appHost) {
+                items.push(new PidItem(
+                    element.appHost.appHostPid,
+                    appHostPidLabel(element.appHost.appHostPid),
+                    'terminal',
+                ));
+
+                if (element.appHost.cliPid !== null) {
+                    items.push(new PidItem(
+                        element.appHost.cliPid,
+                        cliPidLabel(element.appHost.cliPid),
+                        'terminal-cmd',
+                    ));
+                }
             }
 
             // Show only top-level resources (those without a parent)
@@ -607,7 +629,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         if (!url) {
             if (this._repository.viewMode === 'workspace') {
                 const resources = [...this._repository.workspaceResources];
-                const resourceUrl = resources.find(r => r.dashboardUrl)?.dashboardUrl ?? null;
+                const resourceUrl = this._repository.workspaceAppHost?.dashboardUrl ?? resources.find(r => r.dashboardUrl)?.dashboardUrl ?? null;
                 url = getBaseDashboardUrl(resourceUrl);
             } else {
                 const appHosts = this._repository.appHosts.filter(a => a.dashboardUrl);

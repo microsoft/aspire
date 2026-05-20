@@ -707,6 +707,9 @@ internal sealed class ProjectLocator(
 
     private async Task CreateSettingsFileAsync(FileInfo projectFile, CancellationToken cancellationToken)
     {
+        FileInfo? settingsFile = null;
+        DirectoryInfo? appHostDirForScopedConfig = null;
+
         // Search from the apphost's directory upward for an existing config file.
         // This handles the case where "aspire new" created a project in a subdirectory
         // and the user runs "aspire run" from the parent without cd-ing first.
@@ -716,6 +719,8 @@ internal sealed class ProjectLocator(
             if (nearAppHost is not null)
             {
                 var configDir = Path.GetDirectoryName(nearAppHost)!;
+                var targetSettingsFilePath = nearAppHost;
+                AspireConfigFile? existingConfig;
 
                 // For legacy .aspire/settings.json, the config root is the parent of .aspire/
                 var trimmedConfigDir = configDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
@@ -726,9 +731,15 @@ internal sealed class ProjectLocator(
                     {
                         configDir = parentDir.FullName;
                     }
+
+                    targetSettingsFilePath = Path.Combine(configDir, AspireConfigFile.FileName);
+                    existingConfig = AspireConfigFile.LoadOrCreate(configDir);
+                }
+                else
+                {
+                    existingConfig = AspireConfigFile.Load(configDir);
                 }
 
-                var existingConfig = AspireConfigFile.Load(configDir);
                 if (existingConfig?.AppHost?.Path is { } existingPath)
                 {
                     // Resolve the stored path relative to the config file's directory.
@@ -745,10 +756,16 @@ internal sealed class ProjectLocator(
                         return;
                     }
                 }
+
+                settingsFile = new FileInfo(targetSettingsFilePath);
+                appHostDirForScopedConfig = appHostDir;
             }
         }
 
-        var settingsFile = GetOrCreateLocalAspireConfigFile();
+        // Only use the working-directory config after checking the selected AppHost's tree.
+        // GetOrCreateLocalAspireConfigFile can migrate legacy .aspire/settings.json into
+        // aspire.config.json, so calling it earlier would recreate the split-config bug.
+        settingsFile ??= GetOrCreateLocalAspireConfigFile();
         var fileExisted = settingsFile.Exists;
 
         logger.LogDebug("Creating settings file at {SettingsFilePath}", settingsFile.FullName);
@@ -756,20 +773,24 @@ internal sealed class ProjectLocator(
         var relativePathToProjectFile = Path.GetRelativePath(settingsFile.Directory!.FullName, projectFile.FullName).Replace(Path.DirectorySeparatorChar, '/');
 
         // Use the configuration writer to set the AppHost path, which will merge with any existing settings.
-        await configurationService.SetConfigurationAsync("appHost.path", relativePathToProjectFile, isGlobal: false, cancellationToken);
+        await ConfigurationService.SetConfigurationInFileAsync(settingsFile.FullName, "appHost.path", relativePathToProjectFile, cancellationToken);
 
         // For polyglot projects, also set language and inherit SDK version from parent/global config.
         var language = languageDiscovery.GetLanguageByFile(projectFile);
         if (language is not null && !language.LanguageId.Value.Equals(KnownLanguageId.CSharp, StringComparison.OrdinalIgnoreCase))
         {
-            await configurationService.SetConfigurationAsync("appHost.language", language.LanguageId.Value, isGlobal: false, cancellationToken);
+            await ConfigurationService.SetConfigurationInFileAsync(settingsFile.FullName, "appHost.language", language.LanguageId.Value, cancellationToken);
 
             // Inherit SDK version from parent/global config if available.
-            var inheritedSdkVersion = await configurationService.GetConfigurationAsync("sdk.version", cancellationToken)
-                ?? await configurationService.GetConfigurationAsync("sdkVersion", cancellationToken);
+            var inheritedSdkVersion = appHostDirForScopedConfig is not null
+                ? await configurationService.GetConfigurationFromDirectoryAsync("sdk.version", appHostDirForScopedConfig, continueSearchWhenKeyMissing: true, cancellationToken: cancellationToken)
+                    ?? await configurationService.GetConfigurationFromDirectoryAsync("sdkVersion", appHostDirForScopedConfig, continueSearchWhenKeyMissing: true, cancellationToken: cancellationToken)
+                : await configurationService.GetConfigurationAsync("sdk.version", cancellationToken)
+                    ?? await configurationService.GetConfigurationAsync("sdkVersion", cancellationToken);
+
             if (!string.IsNullOrEmpty(inheritedSdkVersion))
             {
-                await configurationService.SetConfigurationAsync("sdk.version", inheritedSdkVersion, isGlobal: false, cancellationToken);
+                await ConfigurationService.SetConfigurationInFileAsync(settingsFile.FullName, "sdk.version", inheritedSdkVersion, cancellationToken);
                 logger.LogDebug("Set SDK version {Version} in settings file (inherited from parent config)", inheritedSdkVersion);
             }
         }

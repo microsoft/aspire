@@ -48,7 +48,7 @@ public sealed class SpanWaterfallViewModel
         return tooltip;
     }
 
-    public bool MatchesFilter(string filter, TelemetryFilter? typeFilter, Func<OtlpResourceView, string> getResourceName, [NotNullWhen(true)] out IEnumerable<SpanWaterfallViewModel>? matchedDescendents)
+    public bool MatchesFilter(string filter, TelemetryFilter? typeFilter, IReadOnlyList<FieldTelemetryFilter>? structuredFilters, Func<OtlpResourceView, string> getResourceName, [NotNullWhen(true)] out IEnumerable<SpanWaterfallViewModel>? matchedDescendents)
     {
         if (Filter(this))
         {
@@ -58,7 +58,7 @@ public sealed class SpanWaterfallViewModel
 
         foreach (var child in Children)
         {
-            if (child.MatchesFilter(filter, typeFilter, getResourceName, out var matchedChildDescendents))
+            if (child.MatchesFilter(filter, typeFilter, structuredFilters, getResourceName, out var matchedChildDescendents))
             {
                 matchedDescendents = [child, ..matchedChildDescendents];
                 return true;
@@ -76,6 +76,15 @@ public sealed class SpanWaterfallViewModel
                 {
                     return false;
                 }
+            }
+
+            // A span matches when it satisfies all enabled structured filters,
+            // mirroring TelemetryRepository.GetTraces which checks "a trace matches when
+            // one of its spans matches all filters."
+            if (structuredFilters is { Count: > 0 } &&
+                !structuredFilters.Where(f => f.Enabled).All(f => f.Apply(viewModel.Span)))
+            {
+                return false;
             }
 
             if (string.IsNullOrWhiteSpace(filter))

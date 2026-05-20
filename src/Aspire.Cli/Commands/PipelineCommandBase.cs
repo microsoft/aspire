@@ -40,7 +40,6 @@ internal abstract class PipelineCommandBase : BaseCommand
     protected static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", PublishCommandStrings.ProjectArgumentDescription);
 
     private readonly Option<string?> _outputPathOption;
-    private readonly Option<bool>? _startDebugSessionOption;
 
     protected static readonly Option<string?> s_logLevelOption = new("--log-level")
     {
@@ -104,15 +103,6 @@ internal abstract class PipelineCommandBase : BaseCommand
         Options.Add(s_noBuildOption);
         Options.Add(s_listStepsOption);
 
-        if (ExtensionHelper.IsExtensionHost(interactionService, out _, out _))
-        {
-            _startDebugSessionOption = new Option<bool>("--start-debug-session")
-            {
-                Description = RunCommandStrings.StartDebugSessionArgumentDescription
-            };
-            Options.Add(_startDebugSessionOption);
-        }
-
         // In the publish and deploy commands we forward all unrecognized tokens
         // through to the underlying tooling when we launch the app host.
         TreatUnmatchedTokensAsErrors = false;
@@ -167,7 +157,7 @@ internal abstract class PipelineCommandBase : BaseCommand
         var debugMode = parseResult.GetValue(RootCommand.DebugOption);
         var waitForDebugger = parseResult.GetValue(RootCommand.WaitForDebuggerOption);
         var noBuild = parseResult.GetValue(s_noBuildOption);
-        var startDebugSession = _startDebugSessionOption is not null && parseResult.GetValue(_startDebugSessionOption);
+        var startDebugSession = ExtensionHelper.IsExtensionHost(InteractionService, out _, out _) && parseResult.GetValue(RootCommand.StartDebugSessionOption);
 
         Task<int>? pendingRun = null;
         PublishContext? publishContext = null;

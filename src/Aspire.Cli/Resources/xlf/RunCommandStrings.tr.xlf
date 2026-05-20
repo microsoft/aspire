@@ -162,6 +162,11 @@
         <target state="translated">Proje çalıştırılamadı. {0} adresinde günlüklere bakın</target>
         <note />
       </trans-unit>
+      <trans-unit id="RecentAppHostStartupOutput">
+        <source>Recent AppHost startup output</source>
+        <target state="new">Recent AppHost startup output</target>
+        <note />
+      </trans-unit>
       <trans-unit id="Resource">
         <source>Resource</source>
         <target state="translated">Kaynak</target>
@@ -193,8 +198,13 @@
         <note />
       </trans-unit>
       <trans-unit id="StartingDebugSessionInExtension">
-        <source>Detected aspire run inside the Aspire extension, starting a debug session in VS Code...</source>
-        <target state="translated">Aspire uzantısı içinde Aspire çalıştırması algılandı, VS Code'da hata ayıklama oturumu başlatılıyor...</target>
+        <source>Detected aspire {0} inside the Aspire extension, starting a debug session in VS Code...</source>
+        <target state="new">Detected aspire {0} inside the Aspire extension, starting a debug session in VS Code...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="StartingRunSessionInExtension">
+        <source>Detected aspire {0} inside the Aspire extension, running app in VS Code. To start a debug session, add --start-debug-session.</source>
+        <target state="new">Detected aspire {0} inside the Aspire extension, running app in VS Code. To start a debug session, add --start-debug-session.</target>
         <note />
       </trans-unit>
       <trans-unit id="State">

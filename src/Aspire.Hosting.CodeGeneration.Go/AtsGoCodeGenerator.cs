@@ -540,7 +540,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             foreach (var property in dto.Properties)
             {
                 var propertyName = ToPascalCase(property.Name);
-                var propertyType = MapTypeRefToGo(property.Type, property.IsOptional);
+                var propertyType = MapDtoPropertyTypeToGo(property.Type, property.IsOptional);
                 var jsonTag = $"`json:\"{property.Name},omitempty\"`";
                 WriteLine($"\t{propertyName} {propertyType} {jsonTag}");
             }
@@ -553,7 +553,7 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             foreach (var property in dto.Properties)
             {
                 var propertyName = ToPascalCase(property.Name);
-                var propertyType = MapTypeRefToGo(property.Type, property.IsOptional);
+                var propertyType = MapDtoPropertyTypeToGo(property.Type, property.IsOptional);
                 if (IsNilableGoType(propertyType))
                 {
                     WriteLine($"\tif d.{propertyName} != nil {{ m[\"{property.Name}\"] = serializeValue(d.{propertyName}) }}");
@@ -1863,8 +1863,14 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             WriteLine("\t}");
         }
         WriteLine("\tif _, ok := resolved[\"Args\"]; !ok { resolved[\"Args\"] = os.Args[1:] }");
+        // ASPIRE_PROJECT_DIRECTORY is set by the CLI so the host reports the correct project
+        // directory (not the cwd) when matching --apphost <directory> requests.
         WriteLine("\tif projectDirectory, ok := resolved[\"ProjectDirectory\"].(string); !ok || projectDirectory == \"\" {");
-        WriteLine("\t\tif pwd, err := os.Getwd(); err == nil { resolved[\"ProjectDirectory\"] = pwd }");
+        WriteLine("\t\tif projectDirectory := os.Getenv(\"ASPIRE_PROJECT_DIRECTORY\"); projectDirectory != \"\" {");
+        WriteLine("\t\t\tresolved[\"ProjectDirectory\"] = projectDirectory");
+        WriteLine("\t\t} else if pwd, err := os.Getwd(); err == nil {");
+        WriteLine("\t\t\tresolved[\"ProjectDirectory\"] = pwd");
+        WriteLine("\t\t}");
         WriteLine("\t}");
         WriteLine("\tif appHostFilePath, ok := resolved[\"AppHostFilePath\"].(string); !ok || appHostFilePath == \"\" {");
         WriteLine("\t\tif appHostFilePath := os.Getenv(\"ASPIRE_APPHOST_FILEPATH\"); appHostFilePath != \"\" { resolved[\"AppHostFilePath\"] = appHostFilePath }");
@@ -1928,6 +1934,33 @@ internal sealed class AtsGoCodeGenerator : ICodeGenerator
             AtsTypeCategory.Union => "any",
             AtsTypeCategory.Unknown => "any",
             _ => "any"
+        };
+
+        if (isOptional && !IsNilableGoType(baseType))
+        {
+            return $"*{baseType}";
+        }
+        return baseType;
+    }
+
+    private string MapDtoPropertyTypeToGo(AtsTypeRef? typeRef, bool isOptional)
+    {
+        if (typeRef is null)
+        {
+            return "any";
+        }
+
+        if (typeRef.TypeId == AtsConstants.ReferenceExpressionTypeId)
+        {
+            return "*ReferenceExpression";
+        }
+
+        var baseType = typeRef.Category switch
+        {
+            AtsTypeCategory.Array or AtsTypeCategory.List => $"[]{MapDtoPropertyTypeToGo(typeRef.ElementType, false)}",
+            AtsTypeCategory.Dict => $"map[{MapDtoPropertyTypeToGo(typeRef.KeyType, false)}]{MapDtoPropertyTypeToGo(typeRef.ValueType, false)}",
+            AtsTypeCategory.Union => "any",
+            _ => MapTypeRefToGo(typeRef, isOptional: false)
         };
 
         if (isOptional && !IsNilableGoType(baseType))

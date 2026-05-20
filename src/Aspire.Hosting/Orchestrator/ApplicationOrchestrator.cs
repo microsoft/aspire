@@ -537,9 +537,13 @@ internal sealed class ApplicationOrchestrator
 
     private async Task OnResourceFailedToStart(OnResourceFailedToStartContext context)
     {
+        var stateSnapshot = context.ErrorMessage is not null
+            ? new ResourceStateSnapshot(KnownResourceStates.FailedToStart, KnownResourceStateStyles.Error)
+            : new ResourceStateSnapshot(KnownResourceStates.FailedToStart, null);
+
         if (context.DcpResourceName != null)
         {
-            await _notificationService.PublishUpdateAsync(context.Resource, context.DcpResourceName, s => s with { State = KnownResourceStates.FailedToStart }).ConfigureAwait(false);
+            await _notificationService.PublishUpdateAsync(context.Resource, context.DcpResourceName, s => s with { State = stateSnapshot }).ConfigureAwait(false);
 
             if (context.ResourceType == KnownResourceTypes.Container)
             {
@@ -548,7 +552,7 @@ internal sealed class ApplicationOrchestrator
         }
         else
         {
-            await _notificationService.PublishUpdateAsync(context.Resource, s => s with { State = KnownResourceStates.FailedToStart }).ConfigureAwait(false);
+            await _notificationService.PublishUpdateAsync(context.Resource, s => s with { State = stateSnapshot }).ConfigureAwait(false);
         }
     }
 

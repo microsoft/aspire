@@ -355,11 +355,14 @@ extends:
                   Write-Host "##vso[task.setvariable variable=aspireVersion;isOutput=true]$version"
 
                   # Tag the build so the release pipeline can auto-derive ReleaseVersion
-                  # without operators retyping it. The 'release-version:' prefix avoids
+                  # without operators retyping it. The 'release-version - ' prefix avoids
                   # collisions with other custom build tags (e.g., 1ES compliance tags),
                   # and the tag is visible in the AzDO source-build picker so operators
-                  # can verify the version at queue time.
-                  Write-Host "##vso[build.addbuildtag]release-version:$version"
+                  # can verify the version at queue time. The format intentionally mirrors
+                  # the ' - '-separated 'BAR ID - <id>' tag style: AzDO's 1ES PT request
+                  # validator rejects ':' in tag names because the tag becomes part of the
+                  # URL path of the addbuildtag REST call.
+                  Write-Host "##vso[build.addbuildtag]release-version - $version"
                 name: computeVersion
                 displayName: 🟣Compute Aspire version from nupkg
 

@@ -144,6 +144,65 @@ suite('AppHostDataRepository', () => {
         repository.dispose();
     });
 
+    test('visible workspace panel tracks running AppHost with no resources from ps', async () => {
+        const workspaceFoldersStub = sinon.stub(vscode.workspace, 'workspaceFolders').value([{
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        }]);
+        let getAppHostsLineCallback: ((line: string) => void) | undefined;
+        let psArgs: string[] | undefined;
+        let psOptions: any;
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'extension') {
+                getAppHostsLineCallback = options.lineCallback;
+            }
+            if (args[0] === 'ps') {
+                psArgs = args;
+                psOptions = options;
+            }
+            return new TestChildProcess();
+        });
+
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            assert.ok(getAppHostsLineCallback);
+            getAppHostsLineCallback(JSON.stringify({
+                selected_project_file: '/workspace/apphost/apphost.cs',
+                all_project_file_candidates: ['/workspace/apphost/apphost.cs'],
+            }));
+            await waitForMicrotasks();
+
+            assert.ok(psOptions);
+            assert.deepStrictEqual(psArgs, ['ps', '--format', 'json', '--resources']);
+            psOptions.stdoutCallback(JSON.stringify([{
+                appHostPath: '/workspace/apphost/apphost.cs',
+                appHostPid: 125881,
+                cliPid: 125738,
+                dashboardUrl: 'https://localhost:17193/login?t=061212',
+                resources: [],
+            }]));
+            psOptions.exitCallback(0);
+
+            assert.strictEqual(repository.workspaceResources.length, 0);
+            assert.strictEqual(repository.workspaceAppHost?.appHostPid, 125881);
+            assert.strictEqual(repository.workspaceAppHost?.cliPid, 125738);
+            assert.strictEqual(repository.workspaceAppHost?.dashboardUrl, 'https://localhost:17193/login?t=061212');
+
+            repository.setPanelVisible(false);
+
+            assert.strictEqual(repository.workspaceAppHost, undefined);
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
     test('late close from stopped describe watch does not orphan replacement watch', async () => {
         const firstChildProcess = new TestChildProcess();
         const secondChildProcess = new TestChildProcess();

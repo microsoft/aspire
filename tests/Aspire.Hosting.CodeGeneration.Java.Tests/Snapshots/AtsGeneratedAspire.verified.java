@@ -39,7 +39,11 @@ public class Aspire {
             resolvedOptions.put("Args", new String[0]);
         }
         if (resolvedOptions.get("ProjectDirectory") == null) {
-            resolvedOptions.put("ProjectDirectory", System.getProperty("user.dir"));
+            String projectDirectory = System.getenv("ASPIRE_PROJECT_DIRECTORY");
+            if (projectDirectory == null || projectDirectory.isEmpty()) {
+                projectDirectory = System.getProperty("user.dir");
+            }
+            resolvedOptions.put("ProjectDirectory", projectDirectory);
         }
         if (resolvedOptions.get("AppHostFilePath") == null) {
             String appHostFilePath = System.getenv("ASPIRE_APPHOST_FILEPATH");
@@ -2087,13 +2091,13 @@ import java.util.function.*;
 
 /** TestDeeplyNestedDto DTO. */
 public class TestDeeplyNestedDto implements JsonSerializable {
-    private AspireDict<String, AspireList<TestConfigDto>> nestedData;
-    private AspireDict<String, String>[] metadataArray;
+    private Map<String, List<TestConfigDto>> nestedData;
+    private Map<String, String>[] metadataArray;
 
-    public AspireDict<String, AspireList<TestConfigDto>> getNestedData() { return nestedData; }
-    public void setNestedData(AspireDict<String, AspireList<TestConfigDto>> value) { this.nestedData = value; }
-    public AspireDict<String, String>[] getMetadataArray() { return metadataArray; }
-    public void setMetadataArray(AspireDict<String, String>[] value) { this.metadataArray = value; }
+    public Map<String, List<TestConfigDto>> getNestedData() { return nestedData; }
+    public void setNestedData(Map<String, List<TestConfigDto>> value) { this.nestedData = value; }
+    public Map<String, String>[] getMetadataArray() { return metadataArray; }
+    public void setMetadataArray(Map<String, String>[] value) { this.metadataArray = value; }
 
     public Map<String, Object> toMap() {
         Map<String, Object> map = new HashMap<>();
@@ -2226,17 +2230,17 @@ import java.util.function.*;
 public class TestNestedDto implements JsonSerializable {
     private String id;
     private TestConfigDto config;
-    private AspireList<String> tags;
-    private AspireDict<String, Double> counts;
+    private List<String> tags;
+    private Map<String, Double> counts;
 
     public String getId() { return id; }
     public void setId(String value) { this.id = value; }
     public TestConfigDto getConfig() { return config; }
     public void setConfig(TestConfigDto value) { this.config = value; }
-    public AspireList<String> getTags() { return tags; }
-    public void setTags(AspireList<String> value) { this.tags = value; }
-    public AspireDict<String, Double> getCounts() { return counts; }
-    public void setCounts(AspireDict<String, Double> value) { this.counts = value; }
+    public List<String> getTags() { return tags; }
+    public void setTags(List<String> value) { this.tags = value; }
+    public Map<String, Double> getCounts() { return counts; }
+    public void setCounts(Map<String, Double> value) { this.counts = value; }
 
     public Map<String, Object> toMap() {
         Map<String, Object> map = new HashMap<>();

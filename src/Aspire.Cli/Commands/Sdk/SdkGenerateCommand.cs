@@ -142,7 +142,7 @@ internal sealed class SdkGenerateCommand : BaseCommand
             var prepareResult = await appHostServerProject.PrepareAsync(
                 VersionHelper.GetDefaultTemplateVersion(),
                 integrations,
-                cancellationToken);
+                cancellationToken: cancellationToken);
 
             if (!prepareResult.Success)
             {

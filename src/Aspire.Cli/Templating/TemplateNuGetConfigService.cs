@@ -85,7 +85,7 @@ internal sealed class TemplateNuGetConfigService(
             return;
         }
 
-        var channels = await packagingService.GetChannelsAsync(cancellationToken);
+        var channels = await packagingService.GetChannelsAsync(cancellationToken, channelName);
         var matchingChannel = channels.FirstOrDefault(c =>
             string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
 
@@ -123,7 +123,7 @@ internal sealed class TemplateNuGetConfigService(
             return false;
         }
 
-        var channels = await packagingService.GetChannelsAsync(cancellationToken);
+        var channels = await packagingService.GetChannelsAsync(cancellationToken, channelName);
         var matchingChannel = channels.FirstOrDefault(c =>
             string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
 
@@ -146,6 +146,55 @@ internal sealed class TemplateNuGetConfigService(
     }
 
     /// <summary>
+    /// Creates or updates a project NuGet.config that maps Aspire packages to an explicit package source override.
+    /// </summary>
+    public async Task<bool> CreateOrUpdateNuGetConfigForSourceOverrideAsync(
+        string? sourceOverride,
+        string? channelName,
+        string outputPath,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(sourceOverride))
+        {
+            return false;
+        }
+
+        PackageChannel? matchingChannel = null;
+
+        if (!string.IsNullOrWhiteSpace(channelName))
+        {
+            var channels = await packagingService.GetChannelsAsync(cancellationToken, channelName);
+            matchingChannel = channels.FirstOrDefault(c =>
+                string.Equals(c.Name, channelName, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return await CreateOrUpdateNuGetConfigForSourceOverrideAsync(sourceOverride, matchingChannel, outputPath, cancellationToken);
+    }
+
+    /// <summary>
+    /// Creates or updates a project NuGet.config that maps Aspire packages to an explicit package source override.
+    /// </summary>
+    public static async Task<bool> CreateOrUpdateNuGetConfigForSourceOverrideAsync(
+        string? sourceOverride,
+        PackageChannel? channel,
+        string outputPath,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(sourceOverride))
+        {
+            return false;
+        }
+
+        var mappings = PackageSourceOverrideMappings.Create(sourceOverride, channel);
+        await NuGetConfigMerger.CreateOrUpdateAsync(
+            new DirectoryInfo(outputPath),
+            mappings,
+            channel?.ConfigureGlobalPackagesFolder ?? false,
+            cancellationToken: cancellationToken);
+        return true;
+    }
+
+    /// <summary>
     /// Resolves the channel and template package version that should be used to install Aspire project templates.
     /// </summary>
     /// <param name="query">Inputs that control channel/version selection.</param>
@@ -155,7 +204,7 @@ internal sealed class TemplateNuGetConfigService(
     /// <exception cref="EmptyChoicesException">Thrown when no template package versions are available across the considered channels.</exception>
     public async Task<TemplatePackageSelection> ResolveTemplatePackageAsync(TemplatePackageQuery query, CancellationToken cancellationToken)
     {
-        var allChannels = await packagingService.GetChannelsAsync(cancellationToken);
+        var allChannels = await packagingService.GetChannelsAsync(cancellationToken, query.RequestedChannel);
 
         // Honor PR hives only when the caller opts in. Init suppresses this so a developer
         // with stale ~/.aspire/hives/* doesn't get a different template than on a clean machine.

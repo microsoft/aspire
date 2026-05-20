@@ -240,6 +240,44 @@ public sealed class TypeScriptLanguageSupportTests
         Assert.Contains("npx --no-install tsc --noEmit -p tsconfig.apphost.json && npx --no-install tsx --tsconfig tsconfig.apphost.json \"{appHostFile}\"", watchExecute.Args);
     }
 
+    [Fact]
+    public void Scaffold_EmitsScaffoldedEslintConfigVerbatim()
+    {
+        using var testDir = new TestTempDirectory();
+
+        var files = _languageSupport.Scaffold(new ScaffoldRequest
+        {
+            TargetPath = testDir.Path,
+            ProjectName = "SnapshotApp"
+        });
+
+        Assert.Contains("eslint.config.mjs", files.Keys);
+
+        // The scaffold emits the embedded eslint.config.mjs verbatim. Asserting
+        // equality against the embedded resource keeps a single source of truth
+        // (the ts-starter template file linked into this project) so no
+        // separate .verified.mjs snapshot can drift from it.
+        Assert.Equal(EmbeddedResources.Read("eslint.config.mjs"), files["eslint.config.mjs"]);
+    }
+
+    [Fact]
+    public void Scaffold_EmitsScaffoldedAppHostTsConfigVerbatim()
+    {
+        using var testDir = new TestTempDirectory();
+
+        var files = _languageSupport.Scaffold(new ScaffoldRequest
+        {
+            TargetPath = testDir.Path,
+            ProjectName = "SnapshotApp"
+        });
+
+        Assert.Contains("tsconfig.apphost.json", files.Keys);
+
+        // The scaffold emits the embedded tsconfig.apphost.json verbatim. See
+        // Scaffold_EmitsScaffoldedEslintConfigVerbatim for the rationale.
+        Assert.Equal(EmbeddedResources.Read("tsconfig.apphost.json"), files["tsconfig.apphost.json"]);
+    }
+
     private static JsonObject ParseJson(string content) => JsonNode.Parse(content)!.AsObject();
 
     private static int GetPort(string url) => new Uri(url).Port;
