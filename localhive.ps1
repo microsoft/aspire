@@ -288,15 +288,43 @@ if (Test-Path -LiteralPath $hiveRoot) {
 }
 
 function Copy-PackagesToHive {
-  param([string]$Source,[string]$Destination)
+  # When $VersionSuffix is non-empty, only .nupkg filenames containing the suffix are copied,
+  # and zero matches is treated as a hard failure. This mirrors localhive.sh's $USE_COPY path
+  # (localhive.sh:308-322) and exists because PackagingService.GetLocalHivePinnedVersion picks
+  # the *highest* SemVer-precedence package in the hive
+  # (src/Aspire.Cli/Packaging/PackagingService.cs:338-350). Without the filter, leftover packages
+  # from a prior localhive run with a higher-precedence suffix would silently pin this hive to
+  # that stale version.
+  # When $VersionSuffix is empty, all .nupkg files are copied — this is used only by the
+  # symlink/junction failure fallback below, where the user did not opt into copy mode and
+  # parity with the bash fallback (localhive.sh:329-342) takes priority over the staleness
+  # check.
+  param(
+    [string]$Source,
+    [string]$Destination,
+    [string]$VersionSuffix
+  )
   New-Item -ItemType Directory -Path $Destination -Force | Out-Null
-  Get-ChildItem -LiteralPath $Source -Filter *.nupkg -File | Copy-Item -Destination $Destination -Force
+  $candidates = Get-ChildItem -LiteralPath $Source -Filter *.nupkg -File
+  if ($VersionSuffix) {
+    $candidates = $candidates | Where-Object { $_.Name -like "*$VersionSuffix*" }
+  }
+  $copied = 0
+  foreach ($pkg in $candidates) {
+    Copy-Item -LiteralPath $pkg.FullName -Destination $Destination -Force
+    $copied++
+  }
+  if ($VersionSuffix -and $copied -eq 0) {
+    Write-Err "No .nupkg files matching version suffix '$VersionSuffix' found in $Source."
+    exit 1
+  }
+  return $copied
 }
 
 if ($Copy) {
-  Write-Log "Populating hive '$Name' by copying .nupkg files"
-  Copy-PackagesToHive -Source $pkgDir -Destination $hivePath
-  Write-Log "Created/updated hive '$Name' at $hivePath (copied packages)."
+  Write-Log "Populating hive '$Name' by copying .nupkg files (version suffix: $VersionSuffix)"
+  $copied = Copy-PackagesToHive -Source $pkgDir -Destination $hivePath -VersionSuffix $VersionSuffix
+  Write-Log "Created/updated hive '$Name' at $hivePath (copied $copied packages)."
 }
 else {
   Write-Log "Linking hive '$Name/packages' to $pkgDir"
@@ -314,8 +342,10 @@ else {
     }
     catch {
       Write-Warn "Link creation failed; copying .nupkg files instead"
-      Copy-PackagesToHive -Source $pkgDir -Destination $hivePath
-      Write-Log "Created/updated hive '$Name' at $hivePath (copied packages)."
+      # Fallback path: user did not request -Copy, so mirror the unfiltered bash fallback
+      # (localhive.sh:329-342) and copy everything to maximize the chance the build succeeds.
+      $copied = Copy-PackagesToHive -Source $pkgDir -Destination $hivePath -VersionSuffix ''
+      Write-Log "Created/updated hive '$Name' at $hivePath (copied $copied packages)."
     }
   }
 }
