@@ -618,7 +618,11 @@ public sealed partial class TelemetryRepository : IDisposable
             }
             if (!string.IsNullOrWhiteSpace(context.FilterText))
             {
-                results = results.Where(t => t.FullName.Contains(context.FilterText, StringComparison.OrdinalIgnoreCase));
+                // Search across all user-visible columns: trace name, trace ID, and resource names in spans.
+                results = results.Where(t =>
+                    t.FullName.Contains(context.FilterText, StringComparison.OrdinalIgnoreCase) ||
+                    t.TraceId.Contains(context.FilterText, StringComparison.OrdinalIgnoreCase) ||
+                    t.Spans.Any(s => s.Source.Resource.ResourceName.Contains(context.FilterText, StringComparison.OrdinalIgnoreCase)));
             }
 
             var filters = context.Filters.GetEnabledFilters().ToList();

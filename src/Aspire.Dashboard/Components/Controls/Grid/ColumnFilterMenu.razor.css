@@ -1,0 +1,18 @@
+/* Licensed to the .NET Foundation under one or more agreements. */
+/* The .NET Foundation licenses this file to you under the MIT license. */
+
+.column-filter-menu {
+    padding: 8px;
+    min-width: 180px;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.column-filter-search {
+    margin-bottom: 8px;
+    width: 100%;
+}
+
+.column-filter-options {
+    gap: 4px;
+}

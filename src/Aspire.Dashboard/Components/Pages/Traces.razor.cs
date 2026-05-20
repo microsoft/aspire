@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Globalization;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Dialogs;
@@ -47,6 +48,9 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
     private AspirePageContentLayout? _contentLayout;
     private FluentDataGrid<OtlpTrace> _dataGrid = null!;
     private GridColumnManager _manager = null!;
+
+    // Per-column filter state for ColumnFilterMenu integration.
+    private readonly ConcurrentDictionary<string, bool> _resourceFilterValues = new(StringComparer.OrdinalIgnoreCase);
 
     private ColumnResizeLabels _resizeLabels = ColumnResizeLabels.Default;
     private ColumnSortLabels _sortLabels = ColumnSortLabels.Default;
@@ -187,6 +191,12 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
         _spanTypes = SpanType.CreateKnownSpanTypes(ControlsStringsLoc);
         PageViewModel = new TracesPageViewModel { SelectedResource = _allResource, SelectedSpanType = _spanTypes[0] };
 
+        // Register a column-level filter that uses the per-column resource checkbox state.
+        TracesViewModel.AddColumnFilter(new ColumnValueFilter(
+            _resourceFilterValues,
+            logValueExtractor: _ => string.Empty,
+            spanValueExtractor: span => span.Source.Resource.ResourceName));
+
         UpdateResources();
         _resourcesSubscription = TelemetryRepository.OnNewResources(callback: () => InvokeAsync(workItem: () =>
         {
@@ -213,6 +223,12 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
         _resources = TelemetryRepository.GetResources(includeUninstrumentedPeers: true);
         _resourceViewModels = ResourcesSelectHelpers.CreateResources(_resources);
         _resourceViewModels.Insert(0, _allResource);
+
+        // Keep the per-column resource filter in sync with discovered resources.
+        foreach (var resource in _resources)
+        {
+            _resourceFilterValues.TryAdd(resource.ResourceName, true);
+        }
 
         UpdateSubscription();
     }
@@ -249,6 +265,12 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
     private async Task HandleAfterFilterBindAsync()
     {
         TracesViewModel.FilterText = _filter;
+        await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
+    }
+
+    private async Task OnColumnFilterChangedAsync()
+    {
+        TracesViewModel.ClearData();
         await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
     }
 

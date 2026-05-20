@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Globalization;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Dialogs;
@@ -51,6 +52,10 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     private FluentDataGrid<OtlpLogEntry>? _dataGrid;
     private GridColumnManager _manager = null!;
     private IList<GridColumn> _gridColumns = null!;
+
+    // Per-column filter state for ColumnFilterMenu integration.
+    private readonly ConcurrentDictionary<string, bool> _logLevelFilterValues = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, bool> _resourceFilterValues = new(StringComparer.OrdinalIgnoreCase);
 
     private ColumnResizeLabels _resizeLabels = ColumnResizeLabels.Default;
     private ColumnSortLabels _sortLabels = ColumnSortLabels.Default;
@@ -214,11 +219,27 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             new SelectViewModel<LogLevel?> { Id = LogLevel.Critical, Name = "Critical" },
         };
 
+        // Populate the per-column log level filter with all known severities, all checked by default.
+        _logLevelFilterValues.TryAdd("Trace", true);
+        _logLevelFilterValues.TryAdd("Debug", true);
+        _logLevelFilterValues.TryAdd("Information", true);
+        _logLevelFilterValues.TryAdd("Warning", true);
+        _logLevelFilterValues.TryAdd("Error", true);
+        _logLevelFilterValues.TryAdd("Critical", true);
+
         PageViewModel = new StructuredLogsPageViewModel
         {
             SelectedLogLevel = _logLevels[0],
             SelectedResource = _allResource
         };
+
+        // Register column-level filters that use the per-column checkbox state.
+        ViewModel.AddColumnFilter(new ColumnValueFilter(
+            _logLevelFilterValues,
+            logValueExtractor: entry => entry.Severity.ToString()));
+        ViewModel.AddColumnFilter(new ColumnValueFilter(
+            _resourceFilterValues,
+            logValueExtractor: entry => entry.ResourceView.Resource.ResourceName));
 
         UpdateResources();
         _resourcesSubscription = TelemetryRepository.OnNewResources(() => InvokeAsync(() =>
@@ -279,6 +300,12 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         _resources = TelemetryRepository.GetResources();
         _resourceViewModels = ResourcesSelectHelpers.CreateResources(_resources);
         _resourceViewModels.Insert(0, _allResource);
+
+        // Keep the per-column resource filter in sync with discovered resources.
+        foreach (var resource in _resources)
+        {
+            _resourceFilterValues.TryAdd(resource.ResourceName, true);
+        }
     }
 
     private Task HandleSelectedResourceChangedAsync()
@@ -404,6 +431,12 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         }
 
         await ClearSelectedLogEntryAsync();
+    }
+
+    private async Task OnColumnFilterChangedAsync()
+    {
+        ViewModel.ClearData();
+        await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
     }
 
     private string GetResourceName(OtlpResourceView app) => OtlpHelpers.GetResourceName(app.Resource, _resources);

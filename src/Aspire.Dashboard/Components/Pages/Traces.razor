@@ -45,7 +45,7 @@
                           Immediate="true"
                           ImmediateDelay="@FluentUIExtensions.InputDelay"
                           Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
-                          title="@Loc[nameof(Dashboard.Resources.Traces.TracesNameFilter)]"
+                          title="@ControlsStringsLoc[nameof(ControlsStrings.FilterAllColumnsTitle)]"
                           slot="end" />
 
             <DesktopToolbarDivider />
@@ -109,29 +109,34 @@
                                     OnRowClick="@(r => r.ExecuteOnDefault(d => NavigationManager.NavigateTo(DashboardUrls.TraceDetailUrl(d.TraceId))))"
                                     Class="main-grid enable-row-click">
                         <ChildContent>
-                            <AspireTemplateColumn ColumnId="@TimestampColumn" ColumnManager="@_manager" Title="@ControlsStringsLoc[nameof(ControlsStrings.TimestampColumnHeader)]" TooltipText="@(context => FormatHelpers.FormatDateTime(TimeProvider, context.FirstSpan.StartTime, MillisecondsDisplay.Full, CultureInfo.CurrentCulture))" Tooltip="true">
+                            <AspireTemplateColumn ColumnId="@TimestampColumn" ColumnManager="@_manager" Title="@ControlsStringsLoc[nameof(ControlsStrings.TimestampColumnHeader)]" Sortable="true" SortBy="@(GridSort<OtlpTrace>.ByDescending(t => t.FirstSpan.StartTime))" IsDefaultSortColumn="true" TooltipText="@(context => FormatHelpers.FormatDateTime(TimeProvider, context.FirstSpan.StartTime, MillisecondsDisplay.Full, CultureInfo.CurrentCulture))" Tooltip="true">
                                 @FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, context.FirstSpan.StartTime, MillisecondsDisplay.Truncated)
                             </AspireTemplateColumn>
                             <AspireTemplateColumn ColumnId="@NameColumn" ColumnManager="@_manager" Title="@ControlsStringsLoc[nameof(ControlsStrings.NameColumnHeader)]" Tooltip="true" TooltipText="@(trace => GetNameTooltip(trace))" Class="no-ellipsis">
-                                <div class="trace-name-container">
-                                    <span class="trace-name-content">
-                                        <span style="padding-left:5px; border-left-width: 5px; border-left-style: solid; border-left-color: @(ColorGenerator.Instance.GetColorVariableByKey(GetResourceName((context.RootOrFirstSpan).Source)));">
-                                            <FluentHighlighter HighlightedText="@(TracesViewModel.FilterText)" Text="@(context.FullName)" />
+                                <ColumnOptions>
+                                    <ColumnFilterMenu Values="@_resourceFilterValues" OnFilterChanged="@OnColumnFilterChangedAsync" />
+                                </ColumnOptions>
+                                <ChildContent>
+                                    <div class="trace-name-container">
+                                        <span class="trace-name-content">
+                                            <span style="padding-left:5px; border-left-width: 5px; border-left-style: solid; border-left-color: @(ColorGenerator.Instance.GetColorVariableByKey(GetResourceName((context.RootOrFirstSpan).Source)));">
+                                                <FluentHighlighter HighlightedText="@(TracesViewModel.FilterText)" Text="@(context.FullName)" />
+                                            </span>
+                                            <span class="trace-id">@OtlpHelpers.ToShortenedId(context.TraceId)</span>
                                         </span>
-                                        <span class="trace-id">@OtlpHelpers.ToShortenedId(context.TraceId)</span>
-                                    </span>
-                                    <span @onclick:stopPropagation="true">
-                                        @if (HasGenAISpans(context))
-                                        {
-                                            <FluentButton Appearance="Appearance.Lightweight"
-                                                          Title="@ControlsStringsLoc[nameof(ControlsStrings.GenAIDetailsTitle)]"
-                                                          OnClick="() => OnGenAIClickedAsync(context)">
-                                                <FluentIcon Icon="Icons.Regular.Size20.Sparkle"
-                                                            Color="Color.Accent" />
-                                            </FluentButton>
-                                        }
-                                    </span>
-                                </div>
+                                        <span @onclick:stopPropagation="true">
+                                            @if (HasGenAISpans(context))
+                                            {
+                                                <FluentButton Appearance="Appearance.Lightweight"
+                                                              Title="@ControlsStringsLoc[nameof(ControlsStrings.GenAIDetailsTitle)]"
+                                                              OnClick="() => OnGenAIClickedAsync(context)">
+                                                    <FluentIcon Icon="Icons.Regular.Size20.Sparkle"
+                                                                Color="Color.Accent" />
+                                                </FluentButton>
+                                            }
+                                        </span>
+                                    </div>
+                                </ChildContent>
                             </AspireTemplateColumn>
                             <AspireTemplateColumn ColumnId="@SpansColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Traces.TracesSpansColumnHeader)]">
                                 <FluentOverflow>
@@ -173,7 +178,7 @@
                                     </OverflowTemplate>
                                 </FluentOverflow>
                             </AspireTemplateColumn>
-                            <AspireTemplateColumn ColumnId="@DurationColumn" ColumnManager="@_manager" Title="@ControlsStringsLoc[nameof(ControlsStrings.DurationColumnHeader)]">
+                            <AspireTemplateColumn ColumnId="@DurationColumn" ColumnManager="@_manager" Title="@ControlsStringsLoc[nameof(ControlsStrings.DurationColumnHeader)]" Sortable="true" SortBy="@(GridSort<OtlpTrace>.ByDescending(t => t.Duration))">
                                 <div class="duration-container">
                                     @if (ViewportInformation.IsDesktop)
                                     {

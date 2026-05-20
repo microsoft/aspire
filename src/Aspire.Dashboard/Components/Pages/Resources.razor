@@ -159,12 +159,21 @@
                                                 </span>
                                             </AspireTemplateColumn>
                                             <AspireTemplateColumn ColumnId="@StateColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesStateColumnHeader)]" Sortable="true" SortBy="@_stateSort" Tooltip="true" TooltipText="@(c => ResourceStateViewModel.GetResourceStateTooltip(c.Resource, ColumnsLoc, _resourceByName.Values))">
-                                                <StateColumnDisplay Resource="@context.Resource" UnviewedErrorCounts="@_resourceUnviewedErrorCounts" />
+                                                <ColumnOptions>
+                                                    <ColumnFilterMenu Values="@PageViewModel.ResourceStatesToVisibility" OnFilterChanged="@OnColumnFilterChangedAsync" />
+                                                </ColumnOptions>
+                                                <ChildContent>
+                                                    <StateColumnDisplay Resource="@context.Resource" UnviewedErrorCounts="@_resourceUnviewedErrorCounts" />
+                                                </ChildContent>
                                             </AspireTemplateColumn>
                                             <AspireTemplateColumn ColumnId="@StartTimeColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesStartTimeColumnHeader)]" Sortable="true" SortBy="@_startTimeSort" TooltipText="@(context => context.Resource.StartTimeStamp != null ? FormatHelpers.FormatDateTime(TimeProvider, context.Resource.StartTimeStamp.Value, MillisecondsDisplay.None, CultureInfo.CurrentCulture) : null)" Tooltip="true">
                                                 <StartTimeColumnDisplay Resource="@context.Resource" />
                                             </AspireTemplateColumn>
-                                            <AspirePropertyColumn ColumnId="@TypeColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesTypeColumnHeader)]" Property="@(c => c.Resource.ResourceType)" Sortable="true" SortBy="@_typeSort" IsDefaultSortColumn="true" Tooltip="true" TooltipText="@(c => c.Resource.ResourceType)" />
+                                            <AspirePropertyColumn ColumnId="@TypeColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesTypeColumnHeader)]" Property="@(c => c.Resource.ResourceType)" Sortable="true" SortBy="@_typeSort" IsDefaultSortColumn="true" Tooltip="true" TooltipText="@(c => c.Resource.ResourceType)">
+                                                <ColumnOptions>
+                                                    <ColumnFilterMenu Values="@PageViewModel.ResourceTypesToVisibility" OnFilterChanged="@OnColumnFilterChangedAsync" />
+                                                </ColumnOptions>
+                                            </AspirePropertyColumn>
                                             <AspireTemplateColumn ColumnId="@SourceColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesSourceColumnHeader)]" Tooltip="true" TooltipText="@(ctx => ResourceSourceViewModel.GetSourceViewModel(ctx.Resource)?.Tooltip)">
                                                 @if (ResourceSourceViewModel.GetSourceViewModel(context.Resource) is { } columnDisplay)
                                                 {
