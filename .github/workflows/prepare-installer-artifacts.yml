@@ -76,20 +76,7 @@ jobs:
           # preceding step in this job. The runner shell that started before the install
           # does not yet have that directory on PATH, so prepend it here.
           $env:PATH = "$env:LOCALAPPDATA\Microsoft\WinGet\Links;" + $env:PATH
-          aspire --version
-          $work = Join-Path $env:RUNNER_TEMP "aspire-cli-smoke"
-          if (Test-Path $work) { Remove-Item -Recurse -Force $work }
-          New-Item -ItemType Directory -Path $work | Out-Null
-          Push-Location $work
-          try {
-            aspire --log-level trace new aspire-starter --name SmokeApp --output . --non-interactive --nologo --suppress-agent-init
-            if ($LASTEXITCODE -ne 0) { throw "aspire new failed: exit $LASTEXITCODE" }
-            aspire --log-level trace restore --non-interactive --nologo
-            if ($LASTEXITCODE -ne 0) { throw "aspire restore failed: exit $LASTEXITCODE" }
-          }
-          finally {
-            Pop-Location
-          }
+          & "$env:GITHUB_WORKSPACE/eng/scripts/smoke-installed-cli.ps1"
 
       - name: Smoke test installed CLI (aspire new + restore)
         if: ${{ inputs.installer == 'homebrew' }}
@@ -97,13 +84,7 @@ jobs:
         run: |
           set -euo pipefail
           # brew linked the binary into /opt/homebrew/bin which is already on PATH.
-          aspire --version
-          work="${RUNNER_TEMP}/aspire-cli-smoke"
-          rm -rf "$work"
-          mkdir -p "$work"
-          cd "$work"
-          aspire --log-level trace new aspire-starter --name SmokeApp --output . --non-interactive --nologo --suppress-agent-init
-          aspire --log-level trace restore --non-interactive --nologo
+          eng/scripts/smoke-installed-cli.sh
 
       - name: Collect Aspire CLI logs (Windows)
         if: ${{ always() && inputs.installer == 'winget' }}
