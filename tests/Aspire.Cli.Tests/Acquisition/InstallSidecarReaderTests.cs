@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Tests.Utils;
 
@@ -250,6 +251,58 @@ public class InstallSidecarReaderTests(ITestOutputHelper outputHelper)
         File.WriteAllText(sidecarPath, $"{{\"source\":\"{oversized}\"}}");
 
         Assert.Null(InstallSidecarReader.ReadSourceField(sidecarPath));
+    }
+
+    [Fact]
+    public void TryRead_HandlesUtf8Bom_ReturnsOk()
+    {
+        // `localhive.ps1` writes the sidecar via `Set-Content -Encoding UTF8`,
+        // which on Windows PowerShell 5.x prepends a UTF-8 BOM (0xEF 0xBB 0xBF).
+        // `JsonDocument.Parse` tolerates the BOM today; pin that behavior so a
+        // future parser change does not silently break sidecars planted by the
+        // legacy PS 5.x writer.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sidecarPath = Path.Combine(workspace.WorkspaceRoot.FullName, InstallSidecarReader.SidecarFileName);
+        var bytes = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes("{\"source\":\"script\"}")).ToArray();
+        File.WriteAllBytes(sidecarPath, bytes);
+
+        var reader = new InstallSidecarReader();
+        var result = reader.TryRead(workspace.WorkspaceRoot.FullName);
+
+        var ok = Assert.IsType<InstallSidecarReadResult.Ok>(result);
+        Assert.Equal(InstallSource.Script, ok.Info.Source);
+        Assert.Equal("script", ok.Info.RawSource);
+    }
+
+    [Fact]
+    public void ReadSourceField_HandlesUtf8Bom_ReturnsScript()
+    {
+        // Same Windows PowerShell 5.x BOM scenario as TryRead_HandlesUtf8Bom_ReturnsOk,
+        // but exercising the lightweight ReadSourceField path.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sidecarPath = Path.Combine(workspace.WorkspaceRoot.FullName, InstallSidecarReader.SidecarFileName);
+        var bytes = Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes("{\"source\":\"script\"}")).ToArray();
+        File.WriteAllBytes(sidecarPath, bytes);
+
+        Assert.Equal("script", InstallSidecarReader.ReadSourceField(sidecarPath));
+    }
+
+    [Fact]
+    public void TryRead_IgnoresUnknownAdditionalFields_ReturnsOk()
+    {
+        // The sidecar contract reserves room for future fields. Older parents
+        // must ignore unknown properties (and nested shapes) rather than reject
+        // them, so a newer CLI can extend the sidecar without breaking
+        // discovery on older installs.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        WriteSidecar(workspace.WorkspaceRoot.FullName, "{\"source\":\"script\",\"futureField\":\"value\",\"nested\":{\"a\":1,\"b\":[1,2]}}");
+
+        var reader = new InstallSidecarReader();
+        var result = reader.TryRead(workspace.WorkspaceRoot.FullName);
+
+        var ok = Assert.IsType<InstallSidecarReadResult.Ok>(result);
+        Assert.Equal(InstallSource.Script, ok.Info.Source);
+        Assert.Equal("script", ok.Info.RawSource);
     }
 
     private static string WriteSidecar(string binaryDir, string content)
