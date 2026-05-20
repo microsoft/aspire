@@ -368,6 +368,33 @@ public class AtsCapabilityScannerTests
     }
 
     [Fact]
+    public void ScanAssembly_ExposeProperties_DoesNotGenerateSettersForInitOnlyProperties()
+    {
+        var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
+        var capabilityPrefix = "Aspire.Hosting.RemoteHost.Tests/InitOnlyExportedProperties.";
+
+        var nameGetter = Assert.Single(result.Capabilities,
+            c => c.CapabilityId == capabilityPrefix + "name");
+        Assert.Equal(AtsCapabilityKind.PropertyGetter, nameGetter.CapabilityKind);
+        Assert.Equal(AtsConstants.String, nameGetter.ReturnType.TypeId);
+
+        var descriptionGetter = Assert.Single(result.Capabilities,
+            c => c.CapabilityId == capabilityPrefix + "description");
+        Assert.Equal(AtsCapabilityKind.PropertyGetter, descriptionGetter.CapabilityKind);
+        Assert.Equal(AtsConstants.String, descriptionGetter.ReturnType.TypeId);
+        Assert.True(descriptionGetter.ReturnType.IsNullable);
+
+        var mutableSetter = Assert.Single(result.Capabilities,
+            c => c.CapabilityId == capabilityPrefix + "setMutableLabel");
+        Assert.Equal(AtsCapabilityKind.PropertySetter, mutableSetter.CapabilityKind);
+
+        Assert.DoesNotContain(result.Capabilities,
+            c => c.CapabilityId == capabilityPrefix + "setName");
+        Assert.DoesNotContain(result.Capabilities,
+            c => c.CapabilityId == capabilityPrefix + "setDescription");
+    }
+
+    [Fact]
     public void ScanAssembly_DtoNullableScalarProperties_SetTypeRefNullability()
     {
         var result = AtsCapabilityScanner.ScanAssembly(typeof(AtsCapabilityScannerTests).Assembly);
@@ -656,6 +683,16 @@ public class AtsCapabilityScannerTests
     private sealed class DerivedExportedProperties : BaseExportedProperties
     {
         public string Framework { get; } = "";
+    }
+
+    [AspireExport(ExposeProperties = true)]
+    private sealed class InitOnlyExportedProperties
+    {
+        public required string Name { get; init; }
+
+        public string? Description { get; init; }
+
+        public string MutableLabel { get; set; } = "";
     }
 
     public sealed class AssemblyLevelExportedTestType

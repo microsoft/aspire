@@ -14,22 +14,14 @@ namespace Aspire.Hosting.Pipelines;
 /// </summary>
 [Experimental("ASPIREPIPELINES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 [DebuggerDisplay("{DebuggerToString(),nq}")]
-[AspireExport]
+[AspireExport(ExposeProperties = true)]
 public class PipelineStep
 {
     /// <summary>
     /// Gets or initializes the unique name of the step.
     /// </summary>
+    [AspireExport(Description = "Gets the unique name of the step")]
     public required string Name { get; init; }
-
-    /// <summary>
-    /// Gets the exported name projection for polyglot SDKs.
-    /// </summary>
-    /// <remarks>
-    /// This projection avoids exporting an ATS setter for the public init-only <see cref="Name"/> property.
-    /// </remarks>
-    [AspireExport(MethodName = "name", Description = "Gets the unique name of the step")]
-    internal string ExportedName => Name;
 
     /// <summary>
     /// Gets or initializes the description of the step.
@@ -38,16 +30,8 @@ public class PipelineStep
     /// The description provides human-readable context about what the step does,
     /// helping users and tools understand the purpose of the step.
     /// </remarks>
+    [AspireExport(Description = "Gets the human-readable description of the step")]
     public string? Description { get; init; }
-
-    /// <summary>
-    /// Gets the exported description projection for polyglot SDKs.
-    /// </summary>
-    /// <remarks>
-    /// This projection avoids exporting an ATS setter for the public init-only <see cref="Description"/> property.
-    /// </remarks>
-    [AspireExport(MethodName = "description", Description = "Gets the human-readable description of the step")]
-    internal string? ExportedDescription => Description;
 
     /// <summary>
     /// Gets or initializes the action to execute for this step.
@@ -57,22 +41,26 @@ public class PipelineStep
     /// <summary>
     /// Gets or initializes the list of step names that this step depends on.
     /// </summary>
+    [AspireExport(Description = "Gets the step names that this step depends on")]
     public List<string> DependsOnSteps { get; init; } = [];
 
     /// <summary>
     /// Gets or initializes the list of step names that require this step to complete before they can finish.
     /// This is used internally during pipeline construction and is converted to DependsOn relationships.
     /// </summary>
+    [AspireExport(Description = "Gets the step names that require this step to complete")]
     public List<string> RequiredBySteps { get; init; } = [];
 
     /// <summary>
     /// Gets or initializes the list of tags that categorize this step.
     /// </summary>
+    [AspireExport(Description = "Gets the tags that categorize this step")]
     public List<string> Tags { get; init; } = [];
 
     /// <summary>
     /// Gets or initializes the resource that this step is associated with, if any.
     /// </summary>
+    [AspireExportIgnore(Reason = "The associated resource is an internal runtime link and may be null for steps that are not tied to a resource.")]
     public IResource? Resource { get; set; }
 
     /// <summary>
