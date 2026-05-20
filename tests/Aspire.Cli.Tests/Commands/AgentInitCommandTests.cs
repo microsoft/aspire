@@ -105,12 +105,16 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
 
         // Verify that the Aspire skills were installed to all locations
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire", "SKILL.md")));
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspireify", "SKILL.md")));
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire-deployment", "SKILL.md")));
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".claude", "skills", "aspire", "SKILL.md")));
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".claude", "skills", "aspireify", "SKILL.md")));
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".claude", "skills", "aspire-deployment", "SKILL.md")));
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".github", "skills", "aspire", "SKILL.md")));
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".github", "skills", "aspireify", "SKILL.md")));
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".github", "skills", "aspire-deployment", "SKILL.md")));
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".opencode", "skill", "aspire", "SKILL.md")));
+        Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".opencode", "skill", "aspireify", "SKILL.md")));
         Assert.True(File.Exists(Path.Combine(workspace.WorkspaceRoot.FullName, ".opencode", "skill", "aspire-deployment", "SKILL.md")));
     }
 
@@ -169,6 +173,8 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         // Verify the default Aspire skills were installed
         var aspireSkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire", "SKILL.md");
         Assert.True(File.Exists(aspireSkillPath), $"Expected skill file at {aspireSkillPath}");
+        var aspireifySkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspireify", "SKILL.md");
+        Assert.True(File.Exists(aspireifySkillPath), $"Expected skill file at {aspireifySkillPath}");
         var deploymentSkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire-deployment", "SKILL.md");
         Assert.True(File.Exists(deploymentSkillPath), $"Expected skill file at {deploymentSkillPath}");
     }
@@ -207,6 +213,8 @@ public class AgentInitCommandTests(ITestOutputHelper outputHelper)
         // Verify that the default Aspire skills were installed under the working directory
         var aspireSkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire", "SKILL.md");
         Assert.True(File.Exists(aspireSkillPath), $"Expected skill file at {aspireSkillPath}");
+        var aspireifySkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspireify", "SKILL.md");
+        Assert.True(File.Exists(aspireifySkillPath), $"Expected skill file at {aspireifySkillPath}");
         var deploymentSkillPath = Path.Combine(workspace.WorkspaceRoot.FullName, ".agents", "skills", "aspire-deployment", "SKILL.md");
         Assert.True(File.Exists(deploymentSkillPath), $"Expected skill file at {deploymentSkillPath}");
     }

@@ -77,6 +77,21 @@
         <target state="new">Path to the workspace root directory</target>
         <note />
       </trans-unit>
+      <trans-unit id="AspireSkillsInstaller_InstallingStatus">
+        <source>Installing Aspire skills...</source>
+        <target state="new">Installing Aspire skills...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AspireSkillsInstaller_InvalidBundle">
+        <source>The Aspire skills bundle is invalid: {0}</source>
+        <target state="new">The Aspire skills bundle is invalid: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AspireSkillsInstaller_NpmUnavailable">
+        <source>Aspire skills require npm for the first install, which was not found on PATH.</source>
+        <target state="new">Aspire skills require npm for the first install, which was not found on PATH.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="PlaywrightCliInstaller_FailedToDownload">
         <source>Failed to download {0}.</source>
         <target state="new">Failed to download {0}.</target>
