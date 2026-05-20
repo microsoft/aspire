@@ -52,7 +52,7 @@ public static class YarpRouteExtensions
     }
 
     /// <summary>
-    /// Sets the route match criteria.
+    /// Set the parameters used to match requests.
     /// </summary>
     [AspireExport]
     internal static YarpRoute WithMatch(this YarpRoute route, YarpRouteMatch match)
@@ -84,7 +84,6 @@ public static class YarpRouteExtensions
     /// <summary>
     /// Only match requests that use these optional HTTP methods. E.g. GET, POST.
     /// </summary>
-    /// <ats-summary>Matches requests that use the specified HTTP methods.</ats-summary>
     [AspireExport]
     public static YarpRoute WithMatchMethods(this YarpRoute route, params string[] methods)
     {
@@ -104,7 +103,7 @@ public static class YarpRouteExtensions
     }
 
     /// <summary>
-    /// Matches requests that contain the specified headers.
+    /// Only match requests that contain all of these headers.
     /// </summary>
     [AspireExport]
     internal static YarpRoute WithMatchHeaders(this YarpRoute route, params YarpRouteHeaderMatch[] headers)
@@ -119,7 +118,6 @@ public static class YarpRouteExtensions
     ///  Only match requests with the given Host header. Supports wildcards and ports.
     ///  For unicode host names, do not use punycode.
     /// </summary>
-    /// <ats-summary>Matches requests that contain the specified host headers.</ats-summary>
     [AspireExport]
     public static YarpRoute WithMatchHosts(this YarpRoute route, params string[] hosts)
     {
@@ -139,7 +137,7 @@ public static class YarpRouteExtensions
     }
 
     /// <summary>
-    /// Matches requests that contain the specified query parameters.
+    ///  Only match requests that contain all of these query parameters.
     /// </summary>
     [AspireExport]
     internal static YarpRoute WithMatchRouteQueryParameter(this YarpRoute route, params YarpRouteQueryParameterMatch[] queryParameters)
@@ -155,7 +153,6 @@ public static class YarpRouteExtensions
     /// <summary>
     /// Set the order for the destination
     /// </summary>
-    /// <ats-summary>Sets the route order.</ats-summary>
     [AspireExport]
     public static YarpRoute WithOrder(this YarpRoute route, int? order)
     {
@@ -166,7 +163,6 @@ public static class YarpRouteExtensions
     /// <summary>
     /// Set the MaxRequestBodySize for the destination
     /// </summary>
-    /// <ats-summary>Sets the maximum request body size for the route.</ats-summary>
     [AspireExport]
     public static YarpRoute WithMaxRequestBodySize(this YarpRoute route, long maxRequestBodySize)
     {
@@ -177,7 +173,6 @@ public static class YarpRouteExtensions
     /// <summary>
     /// Set the Metadata of the destination
     /// </summary>
-    /// <ats-summary>Sets metadata for the route.</ats-summary>
     [AspireExport("withRouteMetadata", MethodName = "withMetadata")]
     public static YarpRoute WithMetadata(this YarpRoute route, IReadOnlyDictionary<string, string>? metadata)
     {
@@ -188,7 +183,6 @@ public static class YarpRouteExtensions
     /// <summary>
     /// Set the Transforms of the destination
     /// </summary>
-    /// <ats-summary>Sets the transforms for the route.</ats-summary>
     [AspireExport]
     public static YarpRoute WithTransforms(this YarpRoute route, IReadOnlyList<IReadOnlyDictionary<string, string>>? transforms)
     {
@@ -216,7 +210,7 @@ public static class YarpRouteExtensions
     }
 
     /// <summary>
-    /// Adds a transform to the route.
+    /// Add a new transform to the destination.
     /// </summary>
     [AspireExport]
     internal static YarpRoute WithTransform(this YarpRoute route, IReadOnlyDictionary<string, string> transform)

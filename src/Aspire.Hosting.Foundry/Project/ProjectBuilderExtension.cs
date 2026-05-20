@@ -34,7 +34,6 @@ public static class AzureCognitiveServicesProjectExtensions
     /// <param name="builder">The <see cref="IResourceBuilder{T}"/> for the parent Microsoft Foundry account resource.</param>
     /// <param name="name">The name of the Microsoft Foundry project resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for the Microsoft Foundry project resource.</returns>
-    /// <ats-summary>Adds a Microsoft Foundry project resource to a Microsoft Foundry resource.</ats-summary>
     [AspireExport]
     public static IResourceBuilder<AzureCognitiveServicesProjectResource> AddProject(
         this IResourceBuilder<FoundryResource> builder,
@@ -107,7 +106,6 @@ public static class AzureCognitiveServicesProjectExtensions
     /// <param name="builder">The resource builder for the Microsoft Foundry project.</param>
     /// <param name="appInsights">The Application Insights resource to associate with the project.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    /// <ats-summary>Associates an Azure Application Insights resource with a Microsoft Foundry project.</ats-summary>
     [AspireExport]
     public static IResourceBuilder<AzureCognitiveServicesProjectResource> WithAppInsights(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
@@ -282,7 +280,9 @@ public static class AzureCognitiveServicesProjectExtensions
         return builder.ApplicationBuilder.CreateResourceBuilder(builder.Resource.Parent).AddDeployment(name, model);
     }
 
-    /// <ats-summary>Adds a model deployment to the parent Microsoft Foundry resource.</ats-summary>
+    /// <summary>
+    /// Adds a model deployment to the parent Microsoft Foundry resource.
+    /// </summary>
     [AspireExport("addModelDeployment")]
     internal static IResourceBuilder<FoundryDeploymentResource> AddModelDeploymentForPolyglot(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,

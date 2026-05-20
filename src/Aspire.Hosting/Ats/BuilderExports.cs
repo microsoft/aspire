@@ -135,7 +135,6 @@ internal static class BuilderExports
     /// </summary>
     /// <param name="environment">The host environment handle.</param>
     /// <returns>True if running in Development environment.</returns>
-    /// <ats-summary>Checks if running in Development environment</ats-summary>
     [AspireExport]
     public static bool IsDevelopment(this IHostEnvironment environment)
     {
@@ -149,7 +148,6 @@ internal static class BuilderExports
     /// </summary>
     /// <param name="environment">The host environment handle.</param>
     /// <returns>True if running in Production environment.</returns>
-    /// <ats-summary>Checks if running in Production environment</ats-summary>
     [AspireExport]
     public static bool IsProduction(this IHostEnvironment environment)
     {
@@ -163,7 +161,6 @@ internal static class BuilderExports
     /// </summary>
     /// <param name="environment">The host environment handle.</param>
     /// <returns>True if running in Staging environment.</returns>
-    /// <ats-summary>Checks if running in Staging environment</ats-summary>
     [AspireExport]
     public static bool IsStaging(this IHostEnvironment environment)
     {

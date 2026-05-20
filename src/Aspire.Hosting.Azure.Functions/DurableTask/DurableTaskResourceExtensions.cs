@@ -99,7 +99,9 @@ public static class DurableTaskResourceExtensions
         return builder;
     }
 
-    /// <ats-summary>Configures the Durable Task scheduler to use an existing scheduler instance from a connection string or parameter resource.</ats-summary>
+    /// <summary>
+    /// Configures the Durable Task scheduler to use an existing scheduler instance from a connection string or parameter resource.
+    /// </summary>
     [AspireExport("runAsExisting")]
 #pragma warning disable ASPIREDURABLETASK001
     internal static IResourceBuilder<DurableTaskSchedulerResource> RunAsExistingCore(
@@ -282,7 +284,9 @@ public static class DurableTaskResourceExtensions
         return builder.WithAnnotation(new DurableTaskHubNameAnnotation(taskHubName.Resource));
     }
 
-    /// <ats-summary>Sets the Durable Task hub name from a string or parameter resource.</ats-summary>
+    /// <summary>
+    /// Sets the Durable Task hub name from a string or parameter resource.
+    /// </summary>
     [AspireExport("withTaskHubName")]
 #pragma warning disable ASPIREDURABLETASK001
     internal static IResourceBuilder<DurableTaskHubResource> WithTaskHubNameCore(

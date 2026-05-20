@@ -178,7 +178,8 @@ public static partial class AzureKeyVaultResourceExtensions
     }
 
     /// <summary>
-    /// Assigns Key Vault roles to a resource
+    /// Assigns the specified roles to the given resource, granting it the necessary permissions
+    /// on the target Azure Key Vault resource. This replaces the default role assignments for the resource.
     /// </summary>
     /// <param name="builder">The resource to which the specified roles will be assigned.</param>
     /// <param name="target">The target Azure Key Vault resource.</param>
@@ -252,7 +253,9 @@ public static partial class AzureKeyVaultResourceExtensions
         return builder.AddSecret(name, name, parameterResource.Resource);
     }
 
-    /// <ats-summary>Adds a secret to the Azure Key Vault</ats-summary>
+    /// <summary>
+    /// Adds a secret to the Azure Key Vault
+    /// </summary>
     [AspireExport("addSecret")]
     internal static IResourceBuilder<AzureKeyVaultSecretResource> AddSecretForPolyglot(
         this IResourceBuilder<AzureKeyVaultResource> builder,

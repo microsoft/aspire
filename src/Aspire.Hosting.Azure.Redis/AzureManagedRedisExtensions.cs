@@ -151,7 +151,9 @@ public static class AzureManagedRedisExtensions
         return builder.WithAccessKeyAuthentication(kv);
     }
 
-    /// <ats-summary>Configures Azure Managed Redis to use access key authentication</ats-summary>
+    /// <summary>
+    /// Configures Azure Managed Redis to use access key authentication
+    /// </summary>
     [AspireExport("withAccessKeyAuthentication")]
     internal static IResourceBuilder<AzureManagedRedisResource> WithAccessKeyAuthenticationForPolyglot(
         this IResourceBuilder<AzureManagedRedisResource> builder,

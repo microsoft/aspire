@@ -212,6 +212,7 @@ public static class AzureEventHubsExtensions
     /// <summary>
     /// Configures an Azure Event Hubs resource to be emulated. This resource requires an <see cref="AzureEventHubsResource"/> to be added to the application model.
     /// </summary>
+    /// <ats-summary>Configures the Azure Event Hubs resource to run with the local emulator</ats-summary>
     /// <remarks>
     /// This version of the package defaults to the <inheritdoc cref="EventHubsEmulatorContainerImageTags.Tag"/> tag of the <inheritdoc cref="EventHubsEmulatorContainerImageTags.Registry"/>/<inheritdoc cref="EventHubsEmulatorContainerImageTags.Image"/> container image.
     /// </remarks>
@@ -237,7 +238,6 @@ public static class AzureEventHubsExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
-    /// <ats-summary>Configures the Azure Event Hubs resource to run with the local emulator</ats-summary>
     [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureEventHubsResource> RunAsEmulator(this IResourceBuilder<AzureEventHubsResource> builder, Action<IResourceBuilder<AzureEventHubsEmulatorResource>>? configureContainer = null)
     {
@@ -406,7 +406,6 @@ public static class AzureEventHubsExtensions
     /// <param name="builder">Builder for the Azure Event Hubs emulator container</param>
     /// <param name="port">The port to bind on the host. If <see langword="null"/> is used, a random port will be assigned.</param>
     /// <returns>Azure Event Hubs emulator resource builder.</returns>
-    /// <ats-summary>Sets the host port for the Event Hubs emulator endpoint</ats-summary>
     [AspireExport]
     public static IResourceBuilder<AzureEventHubsEmulatorResource> WithHostPort(this IResourceBuilder<AzureEventHubsEmulatorResource> builder, int? port)
     {
@@ -424,7 +423,6 @@ public static class AzureEventHubsExtensions
     /// <param name="builder">The builder for the <see cref="AzureEventHubsEmulatorResource"/>.</param>
     /// <param name="path">Path to the file on the AppHost where the emulator configuration is located.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Sets the emulator configuration file path</ats-summary>
     [AspireExport]
     public static IResourceBuilder<AzureEventHubsEmulatorResource> WithConfigurationFile(this IResourceBuilder<AzureEventHubsEmulatorResource> builder, string path)
     {
@@ -525,7 +523,8 @@ public static class AzureEventHubsExtensions
     }
 
     /// <summary>
-    /// Assigns Event Hubs roles to a resource
+    /// Assigns the specified roles to the given resource, granting it the necessary permissions
+    /// on the target Azure Event Hubs Namespace resource. This replaces the default role assignments for the resource.
     /// </summary>
     /// <param name="builder">The resource to which the specified roles will be assigned.</param>
     /// <param name="target">The target Azure Event Hubs Namespace resource.</param>

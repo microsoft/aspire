@@ -286,7 +286,6 @@ public static partial class AzureAppServiceEnvironmentExtensions
     ///     .WithHttpsUpgrade(false);
     /// </code>
     /// </example>
-    /// <ats-summary>Configures whether HTTP endpoints are automatically upgraded to HTTPS in Azure App Service</ats-summary>
     [AspireExport]
     public static IResourceBuilder<AzureAppServiceEnvironmentResource> WithHttpsUpgrade(this IResourceBuilder<AzureAppServiceEnvironmentResource> builder, bool upgrade = true)
     {
@@ -320,7 +319,9 @@ public static partial class AzureAppServiceEnvironmentExtensions
         return builder;
     }
 
-    /// <ats-summary>Enables Azure Application Insights for the Azure App Service environment</ats-summary>
+    /// <summary>
+    /// Enables Azure Application Insights for the Azure App Service environment
+    /// </summary>
     [AspireExport("withAzureApplicationInsights")]
     internal static IResourceBuilder<AzureAppServiceEnvironmentResource> WithAzureApplicationInsightsForPolyglot(
         this IResourceBuilder<AzureAppServiceEnvironmentResource> builder,
@@ -398,7 +399,9 @@ public static partial class AzureAppServiceEnvironmentExtensions
         return builder;
     }
 
-    /// <ats-summary>Configures the deployment slot for all Azure App Services in the environment</ats-summary>
+    /// <summary>
+    /// Configures the deployment slot for all Azure App Services in the environment
+    /// </summary>
     [AspireExport("withDeploymentSlot")]
     internal static IResourceBuilder<AzureAppServiceEnvironmentResource> WithDeploymentSlotForPolyglot(
         this IResourceBuilder<AzureAppServiceEnvironmentResource> builder,

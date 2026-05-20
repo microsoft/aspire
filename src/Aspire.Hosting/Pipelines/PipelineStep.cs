@@ -28,7 +28,6 @@ public class PipelineStep
     /// <remarks>
     /// This projection avoids exporting an ATS setter for the public init-only <see cref="Name"/> property.
     /// </remarks>
-    /// <ats-summary>Gets the unique name of the step</ats-summary>
     [AspireExport(MethodName = "name")]
     internal string ExportedName => Name;
 
@@ -47,7 +46,6 @@ public class PipelineStep
     /// <remarks>
     /// This projection avoids exporting an ATS setter for the public init-only <see cref="Description"/> property.
     /// </remarks>
-    /// <ats-summary>Gets the human-readable description of the step</ats-summary>
     [AspireExport(MethodName = "description")]
     internal string? ExportedDescription => Description;
 
@@ -101,7 +99,6 @@ public class PipelineStep
     /// This creates the inverse relationship where the other step will depend on this step.
     /// </summary>
     /// <param name="stepName">The name of the step that requires this step.</param>
-    /// <ats-summary>Specifies that another step requires this step by name</ats-summary>
     [AspireExport]
     public void RequiredBy(string stepName)
     {

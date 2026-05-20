@@ -76,12 +76,12 @@ public static class AzureContainerRegistryExtensions
     /// <summary>
     /// Configures a resource that implements <see cref="IContainerRegistry"/> to use the specified Azure Container Registry.
     /// </summary>
+    /// <ats-summary>Configures a compute environment resource to use an Azure Container Registry.</ats-summary>
     /// <typeparam name="T">The resource type that implements <see cref="IContainerRegistry"/>.</typeparam>
     /// <param name="builder">The resource builder for a resource that implements <see cref="IContainerRegistry"/>.</param>
     /// <param name="registryBuilder">The resource builder for the <see cref="AzureContainerRegistryResource"/> to use.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="registryBuilder"/> is null.</exception>
-    /// <ats-summary>Configures a compute environment resource to use an Azure Container Registry.</ats-summary>
     [AspireExport("withContainerRegistryAzureContainerRegistry", MethodName = "withAzureContainerRegistry")]
     public static IResourceBuilder<T> WithAzureContainerRegistry<T>(this IResourceBuilder<T> builder, IResourceBuilder<AzureContainerRegistryResource> registryBuilder)
         where T : IResource, IComputeEnvironmentResource
@@ -98,13 +98,13 @@ public static class AzureContainerRegistryExtensions
     /// <summary>
     /// Gets the <see cref="AzureContainerRegistryResource"/> associated with the specified Azure compute environment resource.
     /// </summary>
+    /// <ats-summary>Gets the Azure Container Registry associated with a compute environment resource.</ats-summary>
     /// <typeparam name="T">The resource type that implements <see cref="IAzureComputeEnvironmentResource"/>.</typeparam>
     /// <param name="builder">The resource builder for the compute environment resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{AzureContainerRegistryResource}"/> for the associated registry.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is <see langword="null"/>.</exception>
     /// <exception cref="InvalidOperationException">Thrown when the resource does not have an associated Azure Container Registry,
     /// or when the associated container registry is not an <see cref="AzureContainerRegistryResource"/>.</exception>
-    /// <ats-summary>Gets the Azure Container Registry associated with a compute environment resource.</ats-summary>
     [AspireExport]
     public static IResourceBuilder<AzureContainerRegistryResource> GetAzureContainerRegistry<T>(this IResourceBuilder<T> builder)
         where T : IResource, IAzureComputeEnvironmentResource
@@ -145,7 +145,6 @@ public static class AzureContainerRegistryExtensions
     ///     .WithPurgeTask("0 1 * * *", ago: TimeSpan.FromDays(7), keep: 5);
     /// </code>
     /// </example>
-    /// <ats-summary>Configures a purge task for the Azure Container Registry resource.</ats-summary>
     [AspireExport]
     public static IResourceBuilder<AzureContainerRegistryResource> WithPurgeTask(
         this IResourceBuilder<AzureContainerRegistryResource> builder,
@@ -260,7 +259,7 @@ public static class AzureContainerRegistryExtensions
     }
 
     /// <summary>
-    /// Assigns Azure Container Registry roles to a resource.
+    /// Adds role assignments to the specified Azure Container Registry resource.
     /// </summary>
     /// <typeparam name="T">The type of the resource being configured.</typeparam>
     /// <param name="builder">The resource builder for the resource that will have role assignments.</param>

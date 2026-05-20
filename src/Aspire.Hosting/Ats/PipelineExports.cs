@@ -21,7 +21,6 @@ internal static class PipelineExports
     /// <param name="callback">The callback to execute when the step runs.</param>
     /// <param name="dependsOn">Optional step names that this step depends on.</param>
     /// <param name="requiredBy">Optional step names that require this step.</param>
-    /// <ats-summary>Adds a pipeline step to the application</ats-summary>
     [AspireExport]
     public static void AddStep(
         this global::Aspire.Hosting.Pipelines.IDistributedApplicationPipeline pipeline,
@@ -42,7 +41,6 @@ internal static class PipelineExports
     /// </summary>
     /// <param name="pipeline">The distributed application pipeline.</param>
     /// <param name="callback">The callback to execute during pipeline configuration.</param>
-    /// <ats-summary>Configures the application pipeline via a callback</ats-summary>
     [AspireExport]
     public static void Configure(
         this global::Aspire.Hosting.Pipelines.IDistributedApplicationPipeline pipeline,
@@ -60,7 +58,6 @@ internal static class PipelineExports
     /// <param name="summary">The pipeline summary handle.</param>
     /// <param name="key">The key or label for the item.</param>
     /// <param name="markdownString">The Markdown-formatted value for the item.</param>
-    /// <ats-summary>Adds a Markdown-formatted value to the pipeline summary</ats-summary>
     [AspireExport]
     public static void AddMarkdown(this PipelineSummary summary, string key, string markdownString)
     {

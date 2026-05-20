@@ -79,7 +79,9 @@ public static class FoundryExtensions
         return deploymentBuilder;
     }
 
-    /// <ats-summary>Adds a Microsoft Foundry deployment resource to a Microsoft Foundry resource.</ats-summary>
+    /// <summary>
+    /// Adds a Microsoft Foundry deployment resource to a Microsoft Foundry resource.
+    /// </summary>
     [AspireExport("addDeployment")]
     internal static IResourceBuilder<FoundryDeploymentResource> AddDeploymentForPolyglot(
         this IResourceBuilder<FoundryResource> builder,
@@ -155,7 +157,6 @@ public static class FoundryExtensions
     /// </summary>
     /// <param name="builder">The distributed application builder.</param>
     /// <returns>A resource builder for the Foundry Local resource.</returns>
-    /// <ats-summary>Configures the Microsoft Foundry resource to run by using Foundry Local.</ats-summary>
     [AspireExport]
     public static IResourceBuilder<FoundryResource> RunAsFoundryLocal(this IResourceBuilder<FoundryResource> builder)
     {
@@ -240,7 +241,8 @@ public static class FoundryExtensions
     }
 
     /// <summary>
-    /// Assigns Microsoft Foundry roles to a resource
+    /// Assigns the specified roles to the given resource, granting it the necessary permissions
+    /// on the target Microsoft Foundry resource. This replaces the default role assignments for the resource.
     /// </summary>
     /// <param name="builder">The resource to which the specified roles will be assigned.</param>
     /// <param name="target">The target Microsoft Foundry resource.</param>

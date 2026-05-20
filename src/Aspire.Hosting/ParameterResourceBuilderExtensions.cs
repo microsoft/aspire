@@ -39,7 +39,9 @@ public static class ParameterResourceBuilderExtensions
                 );
     }
 
-    /// <ats-summary>Adds a parameter resource</ats-summary>
+    /// <summary>
+    /// Adds a parameter resource
+    /// </summary>
     [AspireExport("addParameter")]
     internal static IResourceBuilder<ParameterResource> AddParameterForPolyglot(
         this IDistributedApplicationBuilder builder,
@@ -181,7 +183,9 @@ public static class ParameterResourceBuilderExtensions
             });
     }
 
-    /// <ats-summary>Adds a parameter with a generated default value</ats-summary>
+    /// <summary>
+    /// Adds a parameter with a generated default value
+    /// </summary>
     [AspireExport("addParameterWithGeneratedValue")]
     internal static IResourceBuilder<ParameterResource> AddParameterWithGeneratedValueForPolyglot(this IDistributedApplicationBuilder builder, [ResourceName] string name, GenerateParameterDefault value, bool secret = false, bool persist = false)
     {
@@ -202,7 +206,6 @@ public static class ParameterResourceBuilderExtensions
     /// <c>true</c> allows the description to contain Markdown elements such as links, text decoration and lists.
     /// </param>
     /// <returns>Resource builder for the parameter.</returns>
-    /// <ats-summary>Sets a parameter description</ats-summary>
     [AspireExport]
     public static IResourceBuilder<ParameterResource> WithDescription(this IResourceBuilder<ParameterResource> builder, string description, bool enableMarkdown = false)
     {
@@ -333,7 +336,9 @@ public static class ParameterResourceBuilderExtensions
                 );
     }
 
-    /// <ats-summary>Adds a connection string resource</ats-summary>
+    /// <summary>
+    /// Adds a connection string resource
+    /// </summary>
     [AspireExport("addConnectionString")]
     internal static IResourceBuilder<IResourceWithConnectionString> AddConnectionStringForPolyglot(
         this IDistributedApplicationBuilder builder,
@@ -358,7 +363,6 @@ public static class ParameterResourceBuilderExtensions
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <returns>The configured <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Publishes the resource as a connection string</ats-summary>
     [AspireExport]
     public static IResourceBuilder<T> PublishAsConnectionString<T>(this IResourceBuilder<T> builder)
         where T : ContainerResource, IResourceWithConnectionString

@@ -234,7 +234,9 @@ public static partial class DevTunnelsResourceBuilderExtensions
         return rb;
     }
 
-    /// <ats-summary>Adds a Dev Tunnel resource to the distributed application model.</ats-summary>
+    /// <summary>
+    /// Adds a Dev Tunnel resource to the distributed application model.
+    /// </summary>
     [AspireExport("addDevTunnel")]
     internal static IResourceBuilder<DevTunnelResource> AddDevTunnelForPolyglot(
         this IDistributedApplicationBuilder builder,
@@ -257,7 +259,6 @@ public static partial class DevTunnelsResourceBuilderExtensions
     /// <param name="resourceBuilder">The resource builder for the referenced resource.</param>
     /// <param name="allowAnonymous">Whether anonymous access is allowed.</param>
     /// <returns>The resource builder.</returns>
-    /// <ats-summary>Configures the dev tunnel to expose all endpoints on the referenced resource.</ats-summary>
     [AspireExport("withReferenceResourceAnonymous", MethodName = "withTunnelReferenceAll")]
     public static IResourceBuilder<DevTunnelResource> WithReference<TResource>(
         this IResourceBuilder<DevTunnelResource> tunnelBuilder,
@@ -307,7 +308,6 @@ public static partial class DevTunnelsResourceBuilderExtensions
     /// <param name="tunnelBuilder">The resource builder.</param>
     /// <param name="targetEndpoint">The endpoint to expose via the dev tunnel.</param>
     /// <returns>The resource builder.</returns>
-    /// <ats-summary>Configures the dev tunnel to expose a target endpoint.</ats-summary>
     [AspireExport("withReferenceEndpoint", MethodName = "withTunnelReference")]
     public static IResourceBuilder<DevTunnelResource> WithReference(
         this IResourceBuilder<DevTunnelResource> tunnelBuilder,
@@ -321,7 +321,6 @@ public static partial class DevTunnelsResourceBuilderExtensions
     /// <param name="targetEndpoint">The endpoint to expose via the dev tunnel.</param>
     /// <param name="allowAnonymous">Whether anonymous access is allowed.</param>
     /// <returns>The resource builder.</returns>
-    /// <ats-summary>Configures the dev tunnel to expose a target endpoint with access control.</ats-summary>
     [AspireExport("withReferenceEndpointAnonymous", MethodName = "withTunnelReferenceAnonymous")]
     public static IResourceBuilder<DevTunnelResource> WithReference(
         this IResourceBuilder<DevTunnelResource> tunnelBuilder,
@@ -361,7 +360,6 @@ public static partial class DevTunnelsResourceBuilderExtensions
     /// </remarks>
     /// <param name="tunnelBuilder">The resource builder.</param>
     /// <returns>The resource builder.</returns>
-    /// <ats-summary>Configures the dev tunnel to allow anonymous access.</ats-summary>
     [AspireExport]
     public static IResourceBuilder<DevTunnelResource> WithAnonymousAccess(this IResourceBuilder<DevTunnelResource> tunnelBuilder)
     {
@@ -426,7 +424,6 @@ public static partial class DevTunnelsResourceBuilderExtensions
     /// <param name="tunnelBuilder">The dev tunnel resource builder.</param>
     /// <param name="targetEndpointReference">The target endpoint reference.</param>
     /// <returns>An <see cref="EndpointReference"/> representing the public tunnel endpoint.</returns>
-    /// <ats-summary>Gets the public endpoint exposed by the dev tunnel.</ats-summary>
     [AspireExport("getEndpointByEndpointReference", MethodName = "getTunnelEndpoint")]
     public static EndpointReference GetEndpoint(this IResourceBuilder<DevTunnelResource> tunnelBuilder, EndpointReference targetEndpointReference)
     {

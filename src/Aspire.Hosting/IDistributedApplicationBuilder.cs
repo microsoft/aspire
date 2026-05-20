@@ -261,6 +261,7 @@ public interface IDistributedApplicationBuilder
     /// <summary>
     /// Builds and returns a new <see cref="DistributedApplication"/> instance. This can only be called once.
     /// </summary>
+    /// <ats-summary>Builds the distributed application</ats-summary>
     /// <returns>A new <see cref="DistributedApplication"/> instance.</returns>
     /// <remarks>
     /// <para>
@@ -271,7 +272,6 @@ public interface IDistributedApplicationBuilder
     /// when the process exists.
     /// </para>
     /// </remarks>
-    /// <ats-summary>Builds the distributed application</ats-summary>
     [AspireExport]
     DistributedApplication Build();
 }

@@ -57,7 +57,6 @@ public class PipelineConfigurationContext
     /// <summary>
     /// Gets the logger facade used by polyglot callbacks.
     /// </summary>
-    /// <ats-summary>Gets the callback logger facade</ats-summary>
     [AspireExport]
     internal LogFacade Log => new(Logger);
 

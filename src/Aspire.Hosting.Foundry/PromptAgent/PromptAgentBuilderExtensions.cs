@@ -297,10 +297,10 @@ public static class PromptAgentBuilderExtensions
     /// Links an Azure AI Search tool to a backing <see cref="AzureSearchResource"/>,
     /// creating the necessary Foundry project connection and role assignments.
     /// </summary>
+    /// <ats-summary>Links an Azure AI Search tool to a backing search resource.</ats-summary>
     /// <param name="tool">The Azure AI Search tool resource builder.</param>
     /// <param name="search">The Azure AI Search resource to use for grounding.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    /// <ats-summary>Links an Azure AI Search tool to a backing search resource.</ats-summary>
     [AspireExport]
     public static IResourceBuilder<AzureAISearchToolResource> WithReference(
         this IResourceBuilder<AzureAISearchToolResource> tool,
@@ -403,7 +403,9 @@ public static class PromptAgentBuilderExtensions
         return WithReference(tool, (object)bingResourceId);
     }
 
-    /// <ats-summary>Links a Bing Grounding tool to a Bing Search resource or connection.</ats-summary>
+    /// <summary>
+    /// Links a Bing Grounding tool to a Bing Search resource or connection.
+    /// </summary>
     [AspireExport("withBingReference", MethodName = "withReference")]
     internal static IResourceBuilder<BingGroundingToolResource> WithReference(
         this IResourceBuilder<BingGroundingToolResource> tool,

@@ -130,7 +130,6 @@ public static class KubernetesEnvironmentExtensions
     ///     });
     /// </code>
     /// </example>
-    /// <ats-summary>Configures Helm chart deployment settings</ats-summary>
     [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<KubernetesEnvironmentResource> WithHelm(
         this IResourceBuilder<KubernetesEnvironmentResource> builder,
@@ -271,7 +270,6 @@ public static class KubernetesEnvironmentExtensions
     ///     .WithNodePool(gpuPool);
     /// </code>
     /// </example>
-    /// <ats-summary>Schedules a workload on a specific Kubernetes node pool</ats-summary>
     [AspireExport("withKubernetesNodePool", MethodName = "withNodePool")]
     public static IResourceBuilder<T> WithNodePool<T>(
         this IResourceBuilder<T> builder,

@@ -334,7 +334,6 @@ public static class GoHostingExtensions
     /// <param name="builder">The resource builder for the Go application.</param>
     /// <param name="args">The program arguments (e.g., <c>"serve"</c>, <c>"--config"</c>, <c>"prod.yaml"</c>).</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    /// <ats-summary>Passes extra arguments to the Go program at runtime (after go run . in normal mode, or after -- in Delve mode)</ats-summary>
     [AspireExport]
     public static IResourceBuilder<T> WithAppArgs<T>(this IResourceBuilder<T> builder, params object[] args)
         where T : GoAppResource
@@ -351,7 +350,6 @@ public static class GoHostingExtensions
     /// <typeparam name="T">The type of the Go application resource.</typeparam>
     /// <param name="builder">The resource builder for the Go application.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    /// <ats-summary>Runs go mod tidy before starting the application to ensure go.sum is up to date</ats-summary>
     [AspireExport]
     public static IResourceBuilder<T> WithModTidy<T>(this IResourceBuilder<T> builder)
         where T : GoAppResource
@@ -402,7 +400,6 @@ public static class GoHostingExtensions
     /// <typeparam name="T">The type of the Go application resource.</typeparam>
     /// <param name="builder">The resource builder for the Go application.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    /// <ats-summary>Runs go mod vendor before starting the application to cache module dependencies locally</ats-summary>
     [AspireExport]
     public static IResourceBuilder<T> WithModVendor<T>(this IResourceBuilder<T> builder)
         where T : GoAppResource
@@ -448,7 +445,6 @@ public static class GoHostingExtensions
     /// <typeparam name="T">The type of the Go application resource.</typeparam>
     /// <param name="builder">The resource builder for the Go application.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
-    /// <ats-summary>Runs go mod download before starting the application to pre-fetch module dependencies into the local cache</ats-summary>
     [AspireExport]
     public static IResourceBuilder<T> WithModDownload<T>(this IResourceBuilder<T> builder)
         where T : GoAppResource
@@ -633,7 +629,6 @@ public static class GoHostingExtensions
     ///        .WithDelveServer(port: 2345);
     /// </code>
     /// </example>
-    /// <ats-summary>Starts a headless Delve server for remote debugging (GoLand, VS Code attach, any DAP client)</ats-summary>
     [AspireExport]
     public static IResourceBuilder<T> WithDelveServer<T>(this IResourceBuilder<T> builder, int port = 2345)
         where T : GoAppResource

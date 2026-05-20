@@ -177,12 +177,12 @@ public static class AzureOpenAIExtensions
     /// <summary>
     /// Adds and returns an Azure OpenAI Deployment resource to the <see cref="AzureOpenAIResource"/> resource.
     /// </summary>
+    /// <ats-summary>Adds an Azure OpenAI deployment resource</ats-summary>
     /// <param name="builder">The Azure OpenAI resource builder.</param>
     /// <param name="name">The name of the Azure OpenAI Deployment resource.</param>
     /// <param name="modelName">The name of the model to deploy.</param>
     /// <param name="modelVersion">The version of the model to deploy.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Adds an Azure OpenAI deployment resource</ats-summary>
     [AspireExport]
     public static IResourceBuilder<AzureOpenAIDeploymentResource> AddDeployment(this IResourceBuilder<AzureOpenAIResource> builder, [ResourceName] string name, string modelName, string modelVersion)
     {
@@ -248,7 +248,8 @@ public static class AzureOpenAIExtensions
     }
 
     /// <summary>
-    /// Assigns Cognitive Services roles to a resource
+    /// Assigns the specified roles to the given resource, granting it the necessary permissions
+    /// on the target Azure OpenAI resource. This replaces the default role assignments for the resource.
     /// </summary>
     /// <param name="builder">The resource to which the specified roles will be assigned.</param>
     /// <param name="target">The target Azure OpenAI resource.</param>

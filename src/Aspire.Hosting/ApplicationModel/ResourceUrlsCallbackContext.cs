@@ -19,7 +19,6 @@ public class ResourceUrlsCallbackContext(DistributedApplicationExecutionContext 
     /// <summary>
     /// Gets the resource this the URLs are associated with.
     /// </summary>
-    /// <ats-summary>Gets the resource associated with these URLs</ats-summary>
     [AspireExport]
     public IResource Resource { get; } = resource;
 
@@ -27,8 +26,8 @@ public class ResourceUrlsCallbackContext(DistributedApplicationExecutionContext 
     /// Gets an endpoint reference from <see cref="Resource"/> for the specified endpoint name.<br/>
     /// If <see cref="Resource"/> does not implement <see cref="IResourceWithEndpoints"/> then returns <c>null</c>.
     /// </summary>
-    /// <param name="name">The name of the endpoint.</param>
     /// <ats-summary>Gets an endpoint reference from the associated resource</ats-summary>
+    /// <param name="name">The name of the endpoint.</param>
     [AspireExport]
     public EndpointReference? GetEndpoint(string name) =>
         Resource switch
@@ -68,14 +67,12 @@ public class ResourceUrlsCallbackContext(DistributedApplicationExecutionContext 
     /// <summary>
     /// Gets the editor used to manipulate displayed URLs in polyglot callbacks.
     /// </summary>
-    /// <ats-summary>Gets the URL editor</ats-summary>
     [AspireExport("ResourceUrlsCallbackContext.urls", MethodName = "urls")]
     internal ResourceUrlsEditor UrlsEditor => new(ExecutionContext, Urls, CancellationToken);
 
     /// <summary>
     /// Gets the logger facade used by polyglot callbacks.
     /// </summary>
-    /// <ats-summary>Gets the callback logger facade</ats-summary>
     [AspireExport]
     internal LogFacade Log => new(() => Logger);
 

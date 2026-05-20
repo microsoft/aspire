@@ -39,7 +39,9 @@ public static class ExternalServiceBuilderExtensions
         return AddExternalServiceImpl(builder, name, uri);
     }
 
-    /// <ats-summary>Adds an external service resource</ats-summary>
+    /// <summary>
+    /// Adds an external service resource
+    /// </summary>
     [AspireExport("addExternalService")]
     internal static IResourceBuilder<ExternalServiceResource> AddExternalServiceForPolyglot(
         this IDistributedApplicationBuilder builder,

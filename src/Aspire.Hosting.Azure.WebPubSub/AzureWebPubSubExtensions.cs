@@ -171,7 +171,6 @@ public static class AzureWebPubSubExtensions
     /// <param name="name">The name of the Azure WebPubSub Hub resource.</param>
     /// <param name="hubName">The name of the Azure WebPubSub Hub. If not provided, this defaults to the same value as <paramref name="name"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Adds a hub to the Azure Web PubSub resource.</ats-summary>
     [AspireExport]
     public static IResourceBuilder<AzureWebPubSubHubResource> AddHub(this IResourceBuilder<AzureWebPubSubResource> builder, [ResourceName] string name, string? hubName = null)
     {
@@ -322,7 +321,8 @@ public static class AzureWebPubSubExtensions
     }
 
     /// <summary>
-    /// Assigns Azure Web PubSub roles to a resource
+    /// Assigns the specified roles to the given resource, granting it the necessary permissions
+    /// on the target Azure Web PubSub resource. This replaces the default role assignments for the resource.
     /// </summary>
     /// <param name="builder">The resource to which the specified roles will be assigned.</param>
     /// <param name="target">The target Azure Web PubSub resource.</param>

@@ -138,7 +138,9 @@ public static class RabbitMQBuilderExtensions
         return builder.WithManagementPlugin(port: null);
     }
 
-    /// <ats-summary>Enables the RabbitMQ management plugin</ats-summary>
+    /// <summary>
+    /// Enables the RabbitMQ management plugin
+    /// </summary>
     [AspireExport("withManagementPlugin")]
     internal static IResourceBuilder<RabbitMQServerResource> WithManagementPluginForPolyglot(
         this IResourceBuilder<RabbitMQServerResource> builder,

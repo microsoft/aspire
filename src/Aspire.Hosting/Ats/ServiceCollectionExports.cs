@@ -19,7 +19,6 @@ internal static class ServiceCollectionExports
     /// </summary>
     /// <param name="builder">The distributed-application builder.</param>
     /// <param name="subscribe">The callback that registers the event subscriptions.</param>
-    /// <ats-summary>Adds an eventing subscriber</ats-summary>
     [AspireExport]
     public static void AddEventingSubscriber(this IDistributedApplicationBuilder builder, Func<EventingSubscriberRegistrationContext, Task> subscribe)
     {
@@ -34,7 +33,6 @@ internal static class ServiceCollectionExports
     /// </summary>
     /// <param name="builder">The distributed-application builder.</param>
     /// <param name="subscribe">The callback that registers the event subscriptions.</param>
-    /// <ats-summary>Attempts to add an eventing subscriber</ats-summary>
     [AspireExport]
     public static void TryAddEventingSubscriber(this IDistributedApplicationBuilder builder, Func<EventingSubscriberRegistrationContext, Task> subscribe)
     {
@@ -70,7 +68,6 @@ internal static class ServiceCollectionExports
     /// <param name="context">The eventing subscriber registration context.</param>
     /// <param name="callback">The callback to invoke when the event fires.</param>
     /// <returns>The event subscription.</returns>
-    /// <ats-summary>Subscribes an eventing subscriber to the BeforeStart event</ats-summary>
     [AspireExport("eventingSubscriberOnBeforeStart", MethodName = "onBeforeStart")]
     public static DistributedApplicationEventSubscription OnBeforeStart(this EventingSubscriberRegistrationContext context, Func<BeforeStartEvent, Task> callback)
     {
@@ -86,7 +83,6 @@ internal static class ServiceCollectionExports
     /// <param name="context">The eventing subscriber registration context.</param>
     /// <param name="callback">The callback to invoke when the event fires.</param>
     /// <returns>The event subscription.</returns>
-    /// <ats-summary>Subscribes an eventing subscriber to the BeforePublish event</ats-summary>
     [AspireExport("eventingSubscriberOnBeforePublish", MethodName = "onBeforePublish")]
     public static DistributedApplicationEventSubscription OnBeforePublish(this EventingSubscriberRegistrationContext context, Func<BeforePublishEvent, Task> callback)
     {
@@ -102,7 +98,6 @@ internal static class ServiceCollectionExports
     /// <param name="context">The eventing subscriber registration context.</param>
     /// <param name="callback">The callback to invoke when the event fires.</param>
     /// <returns>The event subscription.</returns>
-    /// <ats-summary>Subscribes an eventing subscriber to the AfterPublish event</ats-summary>
     [AspireExport("eventingSubscriberOnAfterPublish", MethodName = "onAfterPublish")]
     public static DistributedApplicationEventSubscription OnAfterPublish(this EventingSubscriberRegistrationContext context, Func<AfterPublishEvent, Task> callback)
     {
@@ -118,7 +113,6 @@ internal static class ServiceCollectionExports
     /// <param name="context">The eventing subscriber registration context.</param>
     /// <param name="callback">The callback to invoke when the event fires.</param>
     /// <returns>The event subscription.</returns>
-    /// <ats-summary>Subscribes an eventing subscriber to the AfterResourcesCreated event</ats-summary>
     [AspireExport("eventingSubscriberOnAfterResourcesCreated", MethodName = "onAfterResourcesCreated")]
     public static DistributedApplicationEventSubscription OnAfterResourcesCreated(this EventingSubscriberRegistrationContext context, Func<AfterResourcesCreatedEvent, Task> callback)
     {

@@ -40,13 +40,13 @@ public static class MongoDBBuilderExtensions
     /// <summary>
     /// <inheritdoc cref="AddMongoDB(IDistributedApplicationBuilder, string, int?)"/>
     /// </summary>
+    /// <ats-summary>Adds a MongoDB container resource</ats-summary>
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <param name="port">The host port for MongoDB.</param>
     /// <param name="userName">A parameter that contains the MongoDb server user name, or <see langword="null"/> to use a default value.</param>
     /// <param name="password">A parameter that contains the MongoDb server password, or <see langword="null"/> to use a generated password.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Adds a MongoDB container resource</ats-summary>
     [AspireExport]
     public static IResourceBuilder<MongoDBServerResource> AddMongoDB(this IDistributedApplicationBuilder builder,
         string name,
@@ -178,7 +178,6 @@ public static class MongoDBBuilderExtensions
     /// <param name="builder">The resource builder for Mongo Express.</param>
     /// <param name="port">The port to bind on the host. If <see langword="null"/> is used random port will be assigned.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Sets the host port for the Mongo Express resource</ats-summary>
     [AspireExport]
     public static IResourceBuilder<MongoExpressContainerResource> WithHostPort(this IResourceBuilder<MongoExpressContainerResource> builder, int? port)
     {

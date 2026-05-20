@@ -120,14 +120,12 @@ public sealed class CommandLineArgsCallbackContext(IList<object> args, Cancellat
     /// <summary>
     /// Gets the editor used to manipulate command-line arguments in polyglot callbacks.
     /// </summary>
-    /// <ats-summary>Gets the command-line argument editor</ats-summary>
     [AspireExport("CommandLineArgsCallbackContext.args", MethodName = "args")]
     internal CommandLineArgsEditor ArgsEditor => new(Args);
 
     /// <summary>
     /// Gets the logger facade used by polyglot callbacks.
     /// </summary>
-    /// <ats-summary>Gets the callback logger facade</ats-summary>
     [AspireExport]
     internal LogFacade Log => new(Logger);
 

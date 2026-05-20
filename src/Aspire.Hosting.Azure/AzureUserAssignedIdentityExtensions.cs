@@ -47,6 +47,7 @@ public static class AzureUserAssignedIdentityExtensions
     /// Attaches an existing <see cref="AzureUserAssignedIdentityResource"/> to a compute resource, 
     /// setting it as the target identity for the builder.
     /// </summary>
+    /// <ats-summary>Associates an Azure user-assigned identity with a compute resource</ats-summary>
     /// <param name="builder">The builder for the <see cref="IComputeResource"/> the identity will be associated with.</param>
     /// <param name="identityResourceBuilder">The builder for the <see cref="AzureUserAssignedIdentityResource"/>.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{IComputeResource}"/> builder.</returns>
@@ -57,7 +58,6 @@ public static class AzureUserAssignedIdentityExtensions
     ///     .WithAzureUserAssignedIdentity(identity);
     /// </code>
     /// </example>
-    /// <ats-summary>Associates an Azure user-assigned identity with a compute resource</ats-summary>
     [AspireExport("withUserAssignedIdentityAzureUserAssignedIdentity", MethodName = "withAzureUserAssignedIdentity")]
     public static IResourceBuilder<T> WithAzureUserAssignedIdentity<T>(
         this IResourceBuilder<T> builder,

@@ -155,7 +155,6 @@ public static class KeycloakResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <ats-summary>Adds a data volume for Keycloak</ats-summary>
     [AspireExport]
     public static IResourceBuilder<KeycloakResource> WithDataVolume(this IResourceBuilder<KeycloakResource> builder, string? name = null)
     {
@@ -258,7 +257,6 @@ public static class KeycloakResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="features">Names of features to enable for the keycloak resource</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Enables Keycloak features</ats-summary>
     [AspireExport]
     public static IResourceBuilder<KeycloakResource> WithEnabledFeatures(
         this IResourceBuilder<KeycloakResource> builder,
@@ -280,7 +278,6 @@ public static class KeycloakResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="features">Names of features to disable for the keycloak resource</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Disables Keycloak features</ats-summary>
     [AspireExport]
     public static IResourceBuilder<KeycloakResource> WithDisabledFeatures(
         this IResourceBuilder<KeycloakResource> builder,
@@ -319,7 +316,9 @@ public static class KeycloakResourceBuilderExtensions
         return builder;
     }
 
-    /// <ats-summary>Configures the OTLP exporter for Keycloak</ats-summary>
+    /// <summary>
+    /// Configures the OTLP exporter for Keycloak
+    /// </summary>
     [AspireExport("withOtlpExporter")]
     internal static IResourceBuilder<KeycloakResource> WithOtlpExporterForPolyglot(
         this IResourceBuilder<KeycloakResource> builder,
@@ -357,7 +356,7 @@ public static class KeycloakResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Imports a Keycloak realm configuration
+    /// Adds a realm import to a Keycloak container resource.
     /// </summary>
     [AspireExport("withRealmImport")]
     internal static IResourceBuilder<KeycloakResource> WithRealmImportInternal(

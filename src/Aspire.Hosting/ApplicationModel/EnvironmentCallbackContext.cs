@@ -49,14 +49,12 @@ public class EnvironmentCallbackContext(DistributedApplicationExecutionContext e
     /// <summary>
     /// Gets the editor used to set environment variables in polyglot callbacks.
     /// </summary>
-    /// <ats-summary>Gets the environment variable editor</ats-summary>
     [AspireExport]
     internal EnvironmentEditor Environment => new(EnvironmentVariables);
 
     /// <summary>
     /// Gets the logger facade used by polyglot callbacks.
     /// </summary>
-    /// <ats-summary>Gets the callback logger facade</ats-summary>
     [AspireExport]
     internal LogFacade Log => new(() => Logger);
 

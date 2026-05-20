@@ -149,6 +149,7 @@ public sealed class EndpointReference : IExpressionValue, IManifestExpressionPro
     /// <see cref="EndpointAnnotation.TlsEnabled"/> is <see langword="true"/> on this endpoint, or to
     /// <paramref name="disabledValue"/> otherwise.
     /// </summary>
+    /// <ats-summary>Gets a conditional expression that resolves to the enabledValue when TLS is enabled on the endpoint, or to the disabledValue otherwise.</ats-summary>
     /// <remarks>
     /// The returned expression evaluates the TLS state lazily each time its value is resolved, making it
     /// safe to embed in a <see cref="ReferenceExpression"/> that is built before TLS is configured

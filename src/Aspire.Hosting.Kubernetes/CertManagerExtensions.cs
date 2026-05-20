@@ -46,6 +46,7 @@ public static class CertManagerExtensions
     /// Installs cert-manager into the Kubernetes environment and returns a typed
     /// <see cref="CertManagerResource"/> that can host issuer resources.
     /// </summary>
+    /// <ats-summary>Installs cert-manager into a Kubernetes environment</ats-summary>
     /// <param name="builder">The Kubernetes environment resource builder.</param>
     /// <param name="name">The Aspire resource name for the cert-manager installation. Each call
     /// adds a uniquely-named resource to the application model, so multiple Kubernetes environments
@@ -192,7 +193,6 @@ public static class CertManagerExtensions
     /// <param name="builder">The issuer resource builder.</param>
     /// <param name="email">A parameter resource builder whose value is the contact email registered with the ACME account.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{CertManagerIssuerResource}"/> for chaining.</returns>
-    /// <ats-summary>Configures the issuer for Let's Encrypt production with a parameterized email</ats-summary>
     [AspireExport("withLetsEncryptProductionParam")]
     public static IResourceBuilder<CertManagerIssuerResource> WithLetsEncryptProduction(
         this IResourceBuilder<CertManagerIssuerResource> builder,
@@ -207,7 +207,6 @@ public static class CertManagerExtensions
     /// <param name="builder">The issuer resource builder.</param>
     /// <param name="email">The contact email registered with the ACME account.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{CertManagerIssuerResource}"/> for chaining.</returns>
-    /// <ats-summary>Configures the issuer for Let's Encrypt staging</ats-summary>
     [AspireExport]
     public static IResourceBuilder<CertManagerIssuerResource> WithLetsEncryptStaging(
         this IResourceBuilder<CertManagerIssuerResource> builder,
@@ -221,7 +220,6 @@ public static class CertManagerExtensions
     /// <param name="builder">The issuer resource builder.</param>
     /// <param name="email">A parameter resource builder whose value is the contact email registered with the ACME account.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{CertManagerIssuerResource}"/> for chaining.</returns>
-    /// <ats-summary>Configures the issuer for Let's Encrypt staging with a parameterized email</ats-summary>
     [AspireExport("withLetsEncryptStagingParam")]
     public static IResourceBuilder<CertManagerIssuerResource> WithLetsEncryptStaging(
         this IResourceBuilder<CertManagerIssuerResource> builder,
@@ -317,7 +315,6 @@ public static class CertManagerExtensions
     /// cert-manager is per-cluster and would otherwise silently produce an unsatisfiable
     /// TLS configuration.
     /// </remarks>
-    /// <ats-summary>Configures TLS on a Kubernetes Gateway using a cert-manager ClusterIssuer</ats-summary>
     [AspireExport("withGatewayTlsIssuer")]
     public static IResourceBuilder<KubernetesGatewayResource> WithTls(
         this IResourceBuilder<KubernetesGatewayResource> builder,

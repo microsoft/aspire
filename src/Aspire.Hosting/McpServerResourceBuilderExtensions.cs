@@ -37,7 +37,6 @@ public static class McpServerResourceBuilderExtensions
     ///     .WithMcpServer("/sse", endpointName: "https");
     /// </code>
     /// </example>
-    /// <ats-summary>Configures an MCP server endpoint on the resource</ats-summary>
     [Experimental("ASPIREMCP001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport]
     public static IResourceBuilder<T> WithMcpServer<T>(

@@ -44,7 +44,9 @@ public static class ResourceBuilderExtensions
         return builder.WithAnnotation(new EnvironmentAnnotation(name, value ?? string.Empty));
     }
 
-    /// <ats-summary>Sets an environment variable</ats-summary>
+    /// <summary>
+    /// Sets an environment variable
+    /// </summary>
     [AspireExport]
     internal static IResourceBuilder<T> WithEnvironment<T>(
         this IResourceBuilder<T> builder,
@@ -185,7 +187,6 @@ public static class ResourceBuilderExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="callback">A callback that allows for deferred execution for computing many environment variables. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Sets environment variables via callback</ats-summary>
     [AspireExport("withEnvironmentCallback")]
     public static IResourceBuilder<T> WithEnvironment<T>(this IResourceBuilder<T> builder, Func<EnvironmentCallbackContext, Task> callback) where T : IResourceWithEnvironment
     {
@@ -432,7 +433,7 @@ public static class ResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Adds a connection property with a string or reference expression value
+    /// Adds a connection property annotation to the resource being built.
     /// </summary>
     /// <typeparam name="T">The type of resource that implements <see cref="IResourceWithConnectionString"/>.</typeparam>
     /// <param name="builder">The resource builder to which the connection property will be added.</param>
@@ -522,7 +523,6 @@ public static class ResourceBuilderExtensions
     /// <param name="builder">The resource builder for a resource implementing <see cref="IResourceWithArgs"/>.</param>
     /// <param name="callback">A callback that allows for deferred execution for computing arguments. This runs after resources have been allocated by the orchestrator and allows access to other resources to resolve computed data, e.g. connection strings, ports.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Sets command-line arguments via callback</ats-summary>
     [AspireExport("withArgsCallback")]
     public static IResourceBuilder<T> WithArgs<T>(this IResourceBuilder<T> builder, Action<CommandLineArgsCallbackContext> callback) where T : IResourceWithArgs
     {
@@ -691,7 +691,7 @@ public static class ResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Configures which reference values are injected into environment variables
+    /// Configures how information is injected into environment variables when the resource references other resources.
     /// </summary>
     /// <typeparam name="TDestination">The destination resource.</typeparam>
     /// <param name="builder">The resource to configure.</param>
@@ -709,7 +709,9 @@ public static class ResourceBuilderExtensions
         return builder.WithReferenceEnvironment(options.ToFlags());
     }
 
-    /// <ats-summary>Adds a reference to another resource</ats-summary>
+    /// <summary>
+    /// Adds a reference to another resource
+    /// </summary>
     [AspireExport]
     internal static IResourceBuilder<TDestination> WithReference<TDestination>(
         this IResourceBuilder<TDestination> builder,
@@ -968,7 +970,6 @@ public static class ResourceBuilderExtensions
     /// <param name="resource">The resource that provides the connection properties. Cannot be null.</param>
     /// <param name="key">The key of the connection property to retrieve. Cannot be null.</param>
     /// <returns>The value associated with the specified connection property key.</returns>
-    /// <ats-summary>Gets a connection property by key</ats-summary>
     [AspireExport]
     public static ReferenceExpression GetConnectionProperty(this IResourceWithConnectionString resource, string key)
     {
@@ -1300,7 +1301,9 @@ public static class ResourceBuilderExtensions
         return builder;
     }
 
-    /// <ats-summary>Updates a named endpoint via callback</ats-summary>
+    /// <summary>
+    /// Updates a named endpoint via callback
+    /// </summary>
     [AspireExport]
     internal static IResourceBuilder<T> WithEndpointCallback<T>(this IResourceBuilder<T> builder, [EndpointName] string endpointName, Action<EndpointUpdateContext> callback, bool createIfNotExists = true) where T : IResourceWithEndpoints
     {
@@ -1311,7 +1314,9 @@ public static class ResourceBuilderExtensions
         return builder.WithEndpoint(endpointName, endpoint => callback(new EndpointUpdateContext(endpoint)), createIfNotExists);
     }
 
-    /// <ats-summary>Updates an HTTP endpoint via callback</ats-summary>
+    /// <summary>
+    /// Updates an HTTP endpoint via callback
+    /// </summary>
     [AspireExport]
     internal static IResourceBuilder<T> WithHttpEndpointCallback<T>(this IResourceBuilder<T> builder, Action<EndpointUpdateContext> callback, [EndpointName] string? name = null, bool createIfNotExists = true) where T : IResourceWithEndpoints
     {
@@ -1321,7 +1326,9 @@ public static class ResourceBuilderExtensions
         return builder.WithWellKnownEndpointCallback(callback, name ?? "http", createIfNotExists, static (resourceBuilder, endpointName) => resourceBuilder.WithHttpEndpoint(name: endpointName));
     }
 
-    /// <ats-summary>Updates an HTTPS endpoint via callback</ats-summary>
+    /// <summary>
+    /// Updates an HTTPS endpoint via callback
+    /// </summary>
     [AspireExport]
     internal static IResourceBuilder<T> WithHttpsEndpointCallback<T>(this IResourceBuilder<T> builder, Action<EndpointUpdateContext> callback, [EndpointName] string? name = null, bool createIfNotExists = true) where T : IResourceWithEndpoints
     {
@@ -1346,6 +1353,7 @@ public static class ResourceBuilderExtensions
     /// Exposes an endpoint on a resource. A reference to this endpoint can be retrieved using <see cref="ResourceBuilderExtensions.GetEndpoint{T}(IResourceBuilder{T}, string, NetworkIdentifier)"/>.
     /// The endpoint name will be the scheme name if not specified.
     /// </summary>
+    /// <ats-summary>Adds a network endpoint</ats-summary>
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <param name="targetPort">This is the port the resource is listening on. If the endpoint is used for the container, it is the container port.</param>
@@ -1358,7 +1366,6 @@ public static class ResourceBuilderExtensions
     /// <param name="isProxied">Specifies if the endpoint will be proxied by DCP. Defaults to true.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <exception cref="DistributedApplicationException">Throws an exception if an endpoint with the same name already exists on the specified resource.</exception>
-    /// <ats-summary>Adds a network endpoint</ats-summary>
     [AspireExport]
     [System.Diagnostics.CodeAnalysis.SuppressMessage("ApiDesign", "RS0026:Do not add multiple public overloads with optional parameters", Justification = "<Pending>")]
     public static IResourceBuilder<T> WithEndpoint<T>(this IResourceBuilder<T> builder, int? port = null, int? targetPort = null, string? scheme = null, [EndpointName] string? name = null, string? env = null, bool isProxied = true, bool? isExternal = null, ProtocolType? protocol = null) where T : IResourceWithEndpoints
@@ -1482,6 +1489,7 @@ public static class ResourceBuilderExtensions
     /// This endpoint reference can be retrieved using <see cref="ResourceBuilderExtensions.GetEndpoint{T}(IResourceBuilder{T}, string, NetworkIdentifier)"/>.
     /// The endpoint name will be "http" if not specified.
     /// </summary>
+    /// <ats-summary>Adds an HTTP endpoint</ats-summary>
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <param name="targetPort">This is the port the resource is listening on. If the endpoint is used for the container, it is the container port.</param>
@@ -1494,7 +1502,6 @@ public static class ResourceBuilderExtensions
     /// If an endpoint with the same name already exists on the resource, the existing endpoint is updated
     /// with any non-null parameter values. Parameters left as <see langword="null"/> will not modify the existing endpoint's values.
     /// </remarks>
-    /// <ats-summary>Adds an HTTP endpoint</ats-summary>
     [AspireExport]
     public static IResourceBuilder<T> WithHttpEndpoint<T>(this IResourceBuilder<T> builder, int? port = null, int? targetPort = null, [EndpointName] string? name = null, string? env = null, bool isProxied = true) where T : IResourceWithEndpoints
     {
@@ -1508,6 +1515,7 @@ public static class ResourceBuilderExtensions
     /// This endpoint reference can be retrieved using <see cref="ResourceBuilderExtensions.GetEndpoint{T}(IResourceBuilder{T}, string, NetworkIdentifier)"/>.
     /// The endpoint name will be "https" if not specified.
     /// </summary>
+    /// <ats-summary>Adds an HTTPS endpoint</ats-summary>
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <param name="targetPort">This is the port the resource is listening on. If the endpoint is used for the container, it is the container port.</param>
@@ -1520,7 +1528,6 @@ public static class ResourceBuilderExtensions
     /// If an endpoint with the same name already exists on the resource, the existing endpoint is updated
     /// with any non-null parameter values. Parameters left as <see langword="null"/> will not modify the existing endpoint's values.
     /// </remarks>
-    /// <ats-summary>Adds an HTTPS endpoint</ats-summary>
     [AspireExport]
     public static IResourceBuilder<T> WithHttpsEndpoint<T>(this IResourceBuilder<T> builder, int? port = null, int? targetPort = null, [EndpointName] string? name = null, string? env = null, bool isProxied = true) where T : IResourceWithEndpoints
     {
@@ -1535,7 +1542,6 @@ public static class ResourceBuilderExtensions
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Makes HTTP endpoints externally accessible</ats-summary>
     [AspireExport]
     public static IResourceBuilder<T> WithExternalHttpEndpoints<T>(this IResourceBuilder<T> builder) where T : IResourceWithEndpoints
     {
@@ -1579,6 +1585,7 @@ public static class ResourceBuilderExtensions
     /// Gets an <see cref="EndpointReference"/> by name from the resource. These endpoints are declared either using <see cref="WithEndpoint{T}(IResourceBuilder{T}, int?, int?, string?, string?, string?, bool, bool?, ProtocolType?)"/> or by launch settings (for project resources).
     /// The <see cref="EndpointReference"/> can be used to resolve the address of the endpoint in <see cref="WithEnvironment{T}(IResourceBuilder{T}, Action{EnvironmentCallbackContext})"/>.
     /// </summary>
+    /// <ats-summary>Gets an endpoint reference</ats-summary>
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The the resource builder.</param>
     /// <param name="name">The name of the endpoint.</param>
@@ -1597,7 +1604,6 @@ public static class ResourceBuilderExtensions
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Configures resource for HTTP/2</ats-summary>
     [AspireExport]
     public static IResourceBuilder<T> AsHttp2Service<T>(this IResourceBuilder<T> builder) where T : IResourceWithEndpoints
     {
@@ -1653,7 +1659,6 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <ats-summary>Customizes displayed URLs via callback</ats-summary>
     [AspireExport]
     public static IResourceBuilder<T> WithUrls<T>(this IResourceBuilder<T> builder, Action<ResourceUrlsCallbackContext> callback)
         where T : IResource
@@ -1744,7 +1749,9 @@ public static class ResourceBuilderExtensions
         return builder.WithAnnotation(new ResourceUrlAnnotation { Url = url, DisplayText = displayText });
     }
 
-    /// <ats-summary>Adds or modifies displayed URLs</ats-summary>
+    /// <summary>
+    /// Adds or modifies displayed URLs
+    /// </summary>
     [AspireExport("withUrl")]
     internal static IResourceBuilder<T> WithUrlForPolyglot<T>(
         this IResourceBuilder<T> builder,
@@ -1855,7 +1862,6 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <ats-summary>Customizes the URL for a specific endpoint via callback</ats-summary>
     [AspireExport]
     public static IResourceBuilder<T> WithUrlForEndpoint<T>(this IResourceBuilder<T> builder, string endpointName, Action<ResourceUrlAnnotation> callback)
         where T : IResource
@@ -1961,7 +1967,6 @@ public static class ResourceBuilderExtensions
     /// <param name="builder">The resource builder to which the container files source annotation will be added. Cannot be null.</param>
     /// <param name="sourcePath">The path to the container files source to associate with the resource. Cannot be null.</param>
     /// <returns>The resource builder instance with the container files source annotation applied.</returns>
-    /// <ats-summary>Sets the source directory for container files</ats-summary>
     [AspireExport]
     public static IResourceBuilder<T> WithContainerFilesSource<T>(
          this IResourceBuilder<T> builder,
@@ -1982,7 +1987,6 @@ public static class ResourceBuilderExtensions
     /// <typeparam name="T">The type of resource that supports container files and is being built.</typeparam>
     /// <param name="builder">The resource builder to which the container files source annotations should be removed. Cannot be null.</param>
     /// <returns>The resource builder instance with the container files source annotation applied.</returns>
-    /// <ats-summary>Clears all container file sources</ats-summary>
     [AspireExport]
     public static IResourceBuilder<T> ClearContainerFilesSources<T>(
          this IResourceBuilder<T> builder) where T : IResourceWithContainerFiles
@@ -2047,7 +2051,9 @@ public static class ResourceBuilderExtensions
         return WaitForCore(builder, dependency, waitBehavior: null, addRelationship: true);
     }
 
-    /// <ats-summary>Waits for another resource to be ready</ats-summary>
+    /// <summary>
+    /// Waits for another resource to be ready
+    /// </summary>
     [AspireExport("waitFor")]
     internal static IResourceBuilder<T> WaitForForPolyglot<T>(
         this IResourceBuilder<T> builder,
@@ -2170,7 +2176,9 @@ public static class ResourceBuilderExtensions
         return WaitForStartCore(builder, dependency, waitBehavior: null, addRelationship: true);
     }
 
-    /// <ats-summary>Waits for another resource to start</ats-summary>
+    /// <summary>
+    /// Waits for another resource to start
+    /// </summary>
     [AspireExport("waitForStart")]
     internal static IResourceBuilder<T> WaitForStartForPolyglot<T>(
         this IResourceBuilder<T> builder,
@@ -2271,6 +2279,7 @@ public static class ResourceBuilderExtensions
     /// Adds a <see cref="ExplicitStartupAnnotation" /> annotation to the resource so it doesn't automatically start
     /// with the app host startup.
     /// </summary>
+    /// <ats-summary>Prevents resource from starting automatically</ats-summary>
     /// <typeparam name="T">The type of the resource.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
@@ -2288,7 +2297,6 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <ats-summary>Prevents resource from starting automatically</ats-summary>
     [AspireExport]
     public static IResourceBuilder<T> WithExplicitStart<T>(this IResourceBuilder<T> builder) where T : IResource
     {
@@ -2321,7 +2329,6 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <ats-summary>Waits for resource completion</ats-summary>
     [AspireExport("waitForResourceCompletion", MethodName = "waitForCompletion")]
     public static IResourceBuilder<T> WaitForCompletion<T>(this IResourceBuilder<T> builder, IResourceBuilder<IResource> dependency, int exitCode = 0) where T : IResourceWithWaitSupport
     {
@@ -2346,6 +2353,7 @@ public static class ResourceBuilderExtensions
     /// <summary>
     /// Adds a <see cref="HealthCheckAnnotation"/> to the resource annotations to associate a resource with a named health check managed by the health check service.
     /// </summary>
+    /// <ats-summary>Adds a health check by key</ats-summary>
     /// <typeparam name="T">The type of the resource.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <param name="key">The key for the health check.</param>
@@ -2379,7 +2387,6 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <ats-summary>Adds a health check by key</ats-summary>
     [AspireExport]
     public static IResourceBuilder<T> WithHealthCheck<T>(this IResourceBuilder<T> builder, string key) where T : IResource
     {
@@ -2425,7 +2432,6 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <ats-summary>Adds an HTTP health check</ats-summary>
     [AspireExport]
     public static IResourceBuilder<T> WithHttpHealthCheck<T>(this IResourceBuilder<T> builder, string? path = null, int? statusCode = null, string? endpointName = null) where T : IResourceWithEndpoints
     {
@@ -2563,6 +2569,7 @@ public static class ResourceBuilderExtensions
     /// <summary>
     /// Adds a <see cref="ResourceCommandAnnotation"/> to the resource annotations to add a resource command.
     /// </summary>
+    /// <ats-summary>Adds a resource command</ats-summary>
     /// <typeparam name="T">The type of the resource.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <param name="name">The name of the command. The name uniquely identifies the command.</param>
@@ -2578,7 +2585,6 @@ public static class ResourceBuilderExtensions
     /// and can be executed by a user using the dashboard UI.</para>
     /// <para>When a command is executed, the <paramref name="executeCommand"/> callback is called and is run inside the Aspire host.</para>
     /// </remarks>
-    /// <ats-summary>Adds a resource command</ats-summary>
     [AspireExport]
     [OverloadResolutionPriority(1)]
     public static IResourceBuilder<T> WithCommand<T>(
@@ -2877,7 +2883,7 @@ public static class ResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Adds a process resource command
+    /// Adds a command to the resource that starts a local process when invoked.
     /// </summary>
     [Experimental("ASPIREPROCESSCOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport("withProcessCommand")]
@@ -2898,7 +2904,7 @@ public static class ResourceBuilderExtensions
     }
 
     /// <summary>
-    /// Adds a process resource command via callback
+    /// Adds a command to the resource that starts a local process created by a callback when invoked.
     /// </summary>
     [Experimental("ASPIREPROCESSCOMMAND001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport("withProcessCommandFactory")]
@@ -3417,7 +3423,9 @@ public static class ResourceBuilderExtensions
         return builder;
     }
 
-    /// <ats-summary>Adds an HTTP resource command</ats-summary>
+    /// <summary>
+    /// Adds an HTTP resource command
+    /// </summary>
     [AspireExport("withHttpCommand")]
     internal static IResourceBuilder<TResource> WithHttpCommandExport<TResource>(
         this IResourceBuilder<TResource> builder,
@@ -3623,7 +3631,6 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <ats-summary>Configures developer certificate trust</ats-summary>
     [AspireExport]
     public static IResourceBuilder<TResource> WithDeveloperCertificateTrust<TResource>(this IResourceBuilder<TResource> builder, bool trust)
         where TResource : IResourceWithEnvironment, IResourceWithArgs
@@ -3649,6 +3656,7 @@ public static class ResourceBuilderExtensions
     /// specifies how custom certificate authorities should be applied to a resource at run time in local development scenarios.
     /// Custom certificate trust is only applied in run mode; in publish mode resources will use their default certificate trust behavior.
     /// </summary>
+    /// <ats-summary>Sets the certificate trust scope</ats-summary>
     /// <typeparam name="TResource">The type of the resource.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <param name="scope">The scope to apply to custom certificate authorities associated with the resource.</param>
@@ -3673,7 +3681,6 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <ats-summary>Sets the certificate trust scope</ats-summary>
     [AspireExport]
     public static IResourceBuilder<TResource> WithCertificateTrustScope<TResource>(this IResourceBuilder<TResource> builder, CertificateTrustScope scope)
         where TResource : IResourceWithEnvironment, IResourceWithArgs
@@ -3749,7 +3756,6 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <ats-summary>Configures HTTPS with a developer certificate</ats-summary>
     [Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport("withParameterHttpsDeveloperCertificate", MethodName = "withHttpsDeveloperCertificate")]
     public static IResourceBuilder<TResource> WithHttpsDeveloperCertificate<TResource>(this IResourceBuilder<TResource> builder, IResourceBuilder<ParameterResource>? password = null)
@@ -3817,7 +3823,6 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <ats-summary>Removes HTTPS certificate configuration</ats-summary>
     [Experimental("ASPIRECERTIFICATES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport]
     public static IResourceBuilder<TResource> WithoutHttpsCertificate<TResource>(this IResourceBuilder<TResource> builder)
@@ -4152,6 +4157,7 @@ public static class ResourceBuilderExtensions
     /// <summary>
     /// Adds a <see cref="ResourceRelationshipAnnotation"/> to the resource annotations to add a parent-child relationship.
     /// </summary>
+    /// <ats-summary>Sets the parent relationship</ats-summary>
     /// <typeparam name="T">The type of the resource.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <param name="parent">The parent of <paramref name="builder"/>.</param>
@@ -4172,7 +4178,6 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <ats-summary>Sets the parent relationship</ats-summary>
     [AspireExport("withBuilderParentRelationship", MethodName = "withParentRelationship")]
     public static IResourceBuilder<T> WithParentRelationship<T>(
         this IResourceBuilder<T> builder,
@@ -4216,6 +4221,7 @@ public static class ResourceBuilderExtensions
     /// <summary>
     /// Adds a <see cref="ResourceRelationshipAnnotation"/> to the resource annotations to add a parent-child relationship.
     /// </summary>
+    /// <ats-summary>Sets a child relationship</ats-summary>
     /// <typeparam name="T">The type of the resource.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <param name="child">The child of <paramref name="builder"/>.</param>
@@ -4237,7 +4243,6 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <ats-summary>Sets a child relationship</ats-summary>
     [AspireExport("withBuilderChildRelationship", MethodName = "withChildRelationship")]
     public static IResourceBuilder<T> WithChildRelationship<T>(
         this IResourceBuilder<T> builder,
@@ -4309,7 +4314,6 @@ public static class ResourceBuilderExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <ats-summary>Sets the icon for the resource</ats-summary>
     [AspireExport]
     public static IResourceBuilder<T> WithIconName<T>(this IResourceBuilder<T> builder, string iconName, IconVariant iconVariant = IconVariant.Filled) where T : IResource
     {
@@ -4420,6 +4424,10 @@ public static class ResourceBuilderExtensions
         return builder.WithHttpProbe(type, endpointSelector, path, initialDelaySeconds, periodSeconds, timeoutSeconds, failureThreshold, successThreshold);
     }
 
+    /// <summary>
+    /// ATS export stub for <see cref="WithHttpProbe{T}(IResourceBuilder{T}, ProbeType, string?, int?, int?, int?, int?, int?, string?)"/>
+    /// with renamed parameter to avoid reserved keyword conflicts in Go and Rust.
+    /// </summary>
     /// <ats-summary>Adds an HTTP health probe to the resource</ats-summary>
     [Experimental("ASPIREPROBES001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport("withHttpProbe")]
@@ -4512,7 +4520,6 @@ public static class ResourceBuilderExtensions
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Excludes the resource from MCP server exposure</ats-summary>
     [AspireExport]
     public static IResourceBuilder<T> ExcludeFromMcp<T>(this IResourceBuilder<T> builder) where T : IResource
     {
@@ -4586,7 +4593,6 @@ public static class ResourceBuilderExtensions
     ///     });
     /// </code>
     /// </example>
-/// <ats-summary>Sets image push options via callback</ats-summary>
     [Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 [AspireExport]
     public static IResourceBuilder<T> WithImagePushOptions<T>(
@@ -4620,7 +4626,6 @@ public static class ResourceBuilderExtensions
     ///     .WithRemoteImageName("myorg/myapp");
     /// </code>
     /// </example>
-    /// <ats-summary>Sets the remote image name for publishing</ats-summary>
     [Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
     [AspireExport]
     public static IResourceBuilder<T> WithRemoteImageName<T>(
@@ -4657,7 +4662,6 @@ public static class ResourceBuilderExtensions
     ///     .WithRemoteImageTag("v1.0.0");
     /// </code>
     /// </example>
-    /// <ats-summary>Sets the remote image tag for publishing</ats-summary>
     [Experimental("ASPIREPIPELINES003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
     [AspireExport]
     public static IResourceBuilder<T> WithRemoteImageTag<T>(

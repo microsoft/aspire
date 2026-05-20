@@ -110,6 +110,7 @@ public static class GitHubModelsExtensions
     /// <summary>
     /// Adds a GitHub Model resource to the application model using a known <see cref="GitHubModelName"/>.
     /// </summary>
+    /// <ats-summary>Adds a GitHub Model resource to the distributed application model.</ats-summary>
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency.</param>
     /// <param name="model">The known model name from the <see cref="GitHubModelName"/> enumeration.</param>

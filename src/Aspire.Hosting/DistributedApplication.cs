@@ -251,7 +251,9 @@ public class DistributedApplication : IHost, IAsyncDisposable
         return new DistributedApplicationBuilder(realOptions);
     }
 
-    /// <ats-summary>Creates a new distributed application builder</ats-summary>
+    /// <summary>
+    /// Creates a new distributed application builder
+    /// </summary>
     [AspireExport("createBuilder")]
     internal static IDistributedApplicationBuilder CreateBuilderForPolyglot(
         [AspireUnion(typeof(string[]), typeof(CreateBuilderOptions))] object? argsOrOptions = null)
@@ -491,6 +493,7 @@ public class DistributedApplication : IHost, IAsyncDisposable
     /// Runs an application and returns a Task that only completes when the token is triggered or shutdown is
     /// triggered and all <see cref="IHostedService" /> instances are stopped.
     /// </summary>
+    /// <ats-summary>Runs the distributed application</ats-summary>
     /// <param name="cancellationToken">The token to trigger shutdown.</param>
     /// <returns>The <see cref="Task"/> that represents the asynchronous operation.</returns>
     /// <remarks>
@@ -512,7 +515,6 @@ public class DistributedApplication : IHost, IAsyncDisposable
     /// in refer to <see cref="DistributedApplicationExecutionContext" />.
     /// </para>
     /// </remarks>
-    /// <ats-summary>Runs the distributed application</ats-summary>
     [AspireExport("run")]
     public virtual async Task RunAsync(CancellationToken cancellationToken = default)
     {

@@ -76,7 +76,9 @@ public static class AzureVirtualNetworkExtensions
         return AddAzureVirtualNetworkCore(builder, resource);
     }
 
-    /// <ats-summary>Adds an Azure Virtual Network resource to the application model.</ats-summary>
+    /// <summary>
+    /// Adds an Azure Virtual Network resource to the application model.
+    /// </summary>
     [AspireExport("addAzureVirtualNetwork")]
     internal static IResourceBuilder<AzureVirtualNetworkResource> AddAzureVirtualNetworkForPolyglot(
         this IDistributedApplicationBuilder builder,
@@ -237,7 +239,9 @@ public static class AzureVirtualNetworkExtensions
         return AddSubnetCore(builder, subnet);
     }
 
-    /// <ats-summary>Adds an Azure subnet resource to an Azure Virtual Network resource.</ats-summary>
+    /// <summary>
+    /// Adds an Azure subnet resource to an Azure Virtual Network resource.
+    /// </summary>
     [AspireExport("addSubnet")]
     internal static IResourceBuilder<AzureSubnetResource> AddSubnetForPolyglot(
         this IResourceBuilder<AzureVirtualNetworkResource> builder,
@@ -294,7 +298,6 @@ public static class AzureVirtualNetworkExtensions
     ///     .WithDelegatedSubnet(subnet);
     /// </code>
     /// </example>
-    /// <ats-summary>Associates a delegated Azure subnet resource with an Azure resource that supports subnet delegation.</ats-summary>
     [AspireExport("withSubnetDelegatedSubnet", MethodName = "withDelegatedSubnet")]
     public static IResourceBuilder<T> WithDelegatedSubnet<T>(
         this IResourceBuilder<T> builder,

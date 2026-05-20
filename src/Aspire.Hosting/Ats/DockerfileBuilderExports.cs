@@ -14,7 +14,9 @@ namespace Aspire.Hosting.Ats;
 /// </summary>
 internal static class DockerfileBuilderExports
 {
-    /// <ats-summary>Adds a global ARG statement to the Dockerfile</ats-summary>
+    /// <summary>
+    /// Adds a global ARG statement to the Dockerfile
+    /// </summary>
     [AspireExport("dockerfileBuilderArg", MethodName = "arg")]
     public static DockerfileBuilder Arg(this DockerfileBuilder builder, string name, string? defaultValue = null)
     {
@@ -23,7 +25,9 @@ internal static class DockerfileBuilderExports
         return defaultValue is null ? builder.Arg(name) : builder.Arg(name, defaultValue);
     }
 
-    /// <ats-summary>Adds a FROM statement to start a Dockerfile stage</ats-summary>
+    /// <summary>
+    /// Adds a FROM statement to start a Dockerfile stage
+    /// </summary>
     [AspireExport("dockerfileBuilderFrom", MethodName = "from")]
     public static DockerfileStage From(this DockerfileBuilder builder, string image, string? stageName = null)
     {
@@ -32,7 +36,9 @@ internal static class DockerfileBuilderExports
         return stageName is null ? builder.From(image) : builder.From(image, stageName);
     }
 
-    /// <ats-summary>Adds an ARG statement to a Dockerfile stage</ats-summary>
+    /// <summary>
+    /// Adds an ARG statement to a Dockerfile stage
+    /// </summary>
     [AspireExport("dockerfileStageArg", MethodName = "arg")]
     public static DockerfileStage Arg(this DockerfileStage stage, string name, string? defaultValue = null)
     {
@@ -41,7 +47,9 @@ internal static class DockerfileBuilderExports
         return defaultValue is null ? stage.Arg(name) : stage.Arg(name, defaultValue);
     }
 
-    /// <ats-summary>Adds a WORKDIR statement to a Dockerfile stage</ats-summary>
+    /// <summary>
+    /// Adds a WORKDIR statement to a Dockerfile stage
+    /// </summary>
     [AspireExport]
     public static DockerfileStage WorkDir(this DockerfileStage stage, string path)
     {
@@ -49,7 +57,9 @@ internal static class DockerfileBuilderExports
         return stage.WorkDir(path);
     }
 
-    /// <ats-summary>Adds a RUN statement to a Dockerfile stage</ats-summary>
+    /// <summary>
+    /// Adds a RUN statement to a Dockerfile stage
+    /// </summary>
     [AspireExport("dockerfileStageRun", MethodName = "run")]
     public static DockerfileStage Run(this DockerfileStage stage, string command)
     {
@@ -57,7 +67,9 @@ internal static class DockerfileBuilderExports
         return stage.Run(command);
     }
 
-    /// <ats-summary>Adds a COPY statement to a Dockerfile stage</ats-summary>
+    /// <summary>
+    /// Adds a COPY statement to a Dockerfile stage
+    /// </summary>
     [AspireExport("dockerfileStageCopy", MethodName = "copy")]
     public static DockerfileStage Copy(this DockerfileStage stage, string source, string destination, string? chown = null)
     {
@@ -66,7 +78,9 @@ internal static class DockerfileBuilderExports
         return chown is null ? stage.Copy(source, destination) : stage.Copy(source, destination, chown);
     }
 
-    /// <ats-summary>Adds a COPY --from statement to a Dockerfile stage</ats-summary>
+    /// <summary>
+    /// Adds a COPY --from statement to a Dockerfile stage
+    /// </summary>
     [AspireExport("dockerfileStageCopyFrom", MethodName = "copyFrom")]
     public static DockerfileStage CopyFrom(this DockerfileStage stage, string from, string source, string destination, string? chown = null)
     {
@@ -75,7 +89,9 @@ internal static class DockerfileBuilderExports
         return chown is null ? stage.CopyFrom(from, source, destination) : stage.CopyFrom(from, source, destination, chown);
     }
 
-    /// <ats-summary>Adds an ENV statement to a Dockerfile stage</ats-summary>
+    /// <summary>
+    /// Adds an ENV statement to a Dockerfile stage
+    /// </summary>
     [AspireExport]
     public static DockerfileStage Env(this DockerfileStage stage, string name, string value)
     {
@@ -83,7 +99,9 @@ internal static class DockerfileBuilderExports
         return stage.Env(name, value);
     }
 
-    /// <ats-summary>Adds an EXPOSE statement to a Dockerfile stage</ats-summary>
+    /// <summary>
+    /// Adds an EXPOSE statement to a Dockerfile stage
+    /// </summary>
     [AspireExport]
     public static DockerfileStage Expose(this DockerfileStage stage, int port)
     {
@@ -91,7 +109,9 @@ internal static class DockerfileBuilderExports
         return stage.Expose(port);
     }
 
-    /// <ats-summary>Adds a CMD statement to a Dockerfile stage</ats-summary>
+    /// <summary>
+    /// Adds a CMD statement to a Dockerfile stage
+    /// </summary>
     [AspireExport]
     public static DockerfileStage Cmd(this DockerfileStage stage, string[] command)
     {
@@ -99,7 +119,9 @@ internal static class DockerfileBuilderExports
         return stage.Cmd(command);
     }
 
-    /// <ats-summary>Adds an ENTRYPOINT statement to a Dockerfile stage</ats-summary>
+    /// <summary>
+    /// Adds an ENTRYPOINT statement to a Dockerfile stage
+    /// </summary>
     [AspireExport]
     public static DockerfileStage Entrypoint(this DockerfileStage stage, string[] command)
     {
@@ -107,7 +129,9 @@ internal static class DockerfileBuilderExports
         return stage.Entrypoint(command);
     }
 
-    /// <ats-summary>Adds a RUN statement with mounts to a Dockerfile stage</ats-summary>
+    /// <summary>
+    /// Adds a RUN statement with mounts to a Dockerfile stage
+    /// </summary>
     [AspireExport]
     public static DockerfileStage RunWithMounts(this DockerfileStage stage, string command, string[] mounts)
     {
@@ -115,7 +139,9 @@ internal static class DockerfileBuilderExports
         return stage.RunWithMounts(command, mounts);
     }
 
-    /// <ats-summary>Adds a USER statement to a Dockerfile stage</ats-summary>
+    /// <summary>
+    /// Adds a USER statement to a Dockerfile stage
+    /// </summary>
     [AspireExport]
     public static DockerfileStage User(this DockerfileStage stage, string user)
     {
@@ -123,7 +149,9 @@ internal static class DockerfileBuilderExports
         return stage.User(user);
     }
 
-    /// <ats-summary>Adds an empty line to a Dockerfile stage</ats-summary>
+    /// <summary>
+    /// Adds an empty line to a Dockerfile stage
+    /// </summary>
     [AspireExport]
     public static DockerfileStage EmptyLine(this DockerfileStage stage)
     {
@@ -131,7 +159,9 @@ internal static class DockerfileBuilderExports
         return stage.EmptyLine();
     }
 
-    /// <ats-summary>Adds a comment to a Dockerfile stage</ats-summary>
+    /// <summary>
+    /// Adds a comment to a Dockerfile stage
+    /// </summary>
     [AspireExport]
     public static DockerfileStage Comment(this DockerfileStage stage, string comment)
     {
@@ -139,7 +169,9 @@ internal static class DockerfileBuilderExports
         return stage.Comment(comment);
     }
 
-    /// <ats-summary>Adds Dockerfile stages for published container files</ats-summary>
+    /// <summary>
+    /// Adds Dockerfile stages for published container files
+    /// </summary>
     [AspireExport("dockerfileBuilderAddContainerFilesStages", MethodName = "addContainerFilesStages")]
     public static DockerfileBuilder AddContainerFilesStages(this DockerfileBuilder builder, IResource resource, ILogger? logger = null)
     {
@@ -149,7 +181,9 @@ internal static class DockerfileBuilderExports
         return ContainerFilesExtensions.AddContainerFilesStages(builder, resource, logger);
     }
 
-    /// <ats-summary>Adds COPY --from statements for published container files</ats-summary>
+    /// <summary>
+    /// Adds COPY --from statements for published container files
+    /// </summary>
     [AspireExport("dockerfileStageAddContainerFiles", MethodName = "addContainerFiles")]
     public static DockerfileStage AddContainerFiles(this DockerfileStage stage, IResource resource, string rootDestinationPath, ILogger? logger = null)
     {

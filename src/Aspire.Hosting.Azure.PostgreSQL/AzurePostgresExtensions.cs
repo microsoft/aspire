@@ -319,7 +319,9 @@ public static class AzurePostgresExtensions
         return builder.WithPasswordAuthentication(kv, userName, password);
     }
 
-    /// <ats-summary>Configures password authentication for Azure PostgreSQL Flexible Server</ats-summary>
+    /// <summary>
+    /// Configures password authentication for Azure PostgreSQL Flexible Server
+    /// </summary>
     [AspireExport("withPasswordAuthentication")]
     internal static IResourceBuilder<AzurePostgresFlexibleServerResource> WithPasswordAuthenticationForPolyglot(
         this IResourceBuilder<AzurePostgresFlexibleServerResource> builder,

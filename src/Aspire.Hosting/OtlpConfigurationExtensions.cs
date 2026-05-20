@@ -142,7 +142,9 @@ public static class OtlpConfigurationExtensions
         return builder;
     }
 
-    /// <ats-summary>Configures OTLP telemetry export</ats-summary>
+    /// <summary>
+    /// Configures OTLP telemetry export
+    /// </summary>
     [AspireExport("withOtlpExporter")]
     internal static IResourceBuilder<T> WithOtlpExporterForPolyglot<T>(
         this IResourceBuilder<T> builder,

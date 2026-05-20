@@ -174,7 +174,9 @@ public static class YarpResourceExtensions
         return ConfigureStaticFiles(builder, sourcePath);
     }
 
-    /// <ats-summary>Enables static file serving in the YARP resource.</ats-summary>
+    /// <summary>
+    /// Enables static file serving in the YARP resource.
+    /// </summary>
     [AspireExport("withStaticFiles")]
     internal static IResourceBuilder<YarpResource> WithStaticFilesPolyglot(this IResourceBuilder<YarpResource> builder, string? sourcePath = null)
     {

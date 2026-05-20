@@ -126,7 +126,6 @@ public static class DockerComposeEnvironmentExtensions
     /// This callback runs after the Docker Compose model has been generated and before it is written to disk.
     /// Use it to customize the generated <see cref="ComposeFile"/> for the environment.
     /// </remarks>
-    /// <ats-summary>Configures the generated Docker Compose file before it is written to disk</ats-summary>
     [AspireExport]
     public static IResourceBuilder<DockerComposeEnvironmentResource> ConfigureComposeFile(this IResourceBuilder<DockerComposeEnvironmentResource> builder, Action<ComposeFile> configure)
     {

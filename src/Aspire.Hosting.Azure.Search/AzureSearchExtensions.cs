@@ -138,7 +138,8 @@ public static class AzureSearchExtensions
     }
 
     /// <summary>
-    /// Assigns Azure AI Search roles to a resource
+    /// Assigns the specified roles to the given resource, granting it the necessary permissions
+    /// on the target Azure AI Search service resource. This replaces the default role assignments for the resource.
     /// </summary>
     /// <param name="builder">The resource to which the specified roles will be assigned.</param>
     /// <param name="target">The target Azure AI Search service resource.</param>

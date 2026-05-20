@@ -33,6 +33,7 @@ public static class AzureProvisioningResourceExtensions
     /// <summary>
     /// Configures the Azure provisioning resource <see cref="Infrastructure"/>.
     /// </summary>
+    /// <ats-summary>Configures the Azure provisioning infrastructure callback</ats-summary>
     /// <typeparam name="T">Type of the <see cref="AzureProvisioningResource"/> resource.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <param name="configure">The configuration callback.</param>

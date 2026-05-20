@@ -62,7 +62,9 @@ public sealed partial class HelmChartOptions
         return this;
     }
 
-    /// <ats-summary>Sets the target Kubernetes namespace for deployment.</ats-summary>
+    /// <summary>
+    /// Sets the target Kubernetes namespace for deployment.
+    /// </summary>
     [AspireExport(MethodName = "withNamespace")]
     internal HelmChartOptions WithNamespace([AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object @namespace)
     {
@@ -107,7 +109,9 @@ public sealed partial class HelmChartOptions
         return this;
     }
 
-    /// <ats-summary>Sets the Helm release name for deployment.</ats-summary>
+    /// <summary>
+    /// Sets the Helm release name for deployment.
+    /// </summary>
     [AspireExport(MethodName = "withReleaseName")]
     internal HelmChartOptions WithReleaseName([AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object releaseName)
     {
@@ -157,7 +161,9 @@ public sealed partial class HelmChartOptions
         return this;
     }
 
-    /// <ats-summary>Sets the Helm chart version for deployment.</ats-summary>
+    /// <summary>
+    /// Sets the Helm chart version for deployment.
+    /// </summary>
     [AspireExport(MethodName = "withChartVersion")]
     internal HelmChartOptions WithChartVersion([AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object version)
     {
@@ -202,7 +208,9 @@ public sealed partial class HelmChartOptions
         return this;
     }
 
-    /// <ats-summary>Sets the Helm chart name written to the generated Chart.yaml.</ats-summary>
+    /// <summary>
+    /// Sets the Helm chart name written to the generated Chart.yaml.
+    /// </summary>
     [AspireExport(MethodName = "withChartName")]
     internal HelmChartOptions WithChartName([AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object name)
     {
@@ -247,7 +255,9 @@ public sealed partial class HelmChartOptions
         return this;
     }
 
-    /// <ats-summary>Sets the Helm chart description written to the generated Chart.yaml.</ats-summary>
+    /// <summary>
+    /// Sets the Helm chart description written to the generated Chart.yaml.
+    /// </summary>
     [AspireExport(MethodName = "withChartDescription")]
     internal HelmChartOptions WithChartDescription([AspireUnion(typeof(string), typeof(IResourceBuilder<ParameterResource>))] object description)
     {

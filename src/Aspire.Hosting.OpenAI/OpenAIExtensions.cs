@@ -19,7 +19,6 @@ public static class OpenAIExtensions
     /// <param name="builder">The <see cref="IDistributedApplicationBuilder"/>.</param>
     /// <param name="name">The name of the OpenAI resource.</param>
     /// <returns>The OpenAI resource builder.</returns>
-    /// <ats-summary>Adds an OpenAI resource to the distributed application model.</ats-summary>
     [AspireExport]
     public static IResourceBuilder<OpenAIResource> AddOpenAI(this IDistributedApplicationBuilder builder, [ResourceName] string name)
     {
@@ -142,7 +141,6 @@ public static class OpenAIExtensions
     /// </summary>
     /// <param name="builder">The OpenAI parent resource builder.</param>
     /// <param name="endpoint">The endpoint URI, e.g., https://mygateway.example.com/v1.</param>
-    /// <ats-summary>Configures the endpoint URI for the OpenAI resource.</ats-summary>
     [AspireExport]
     public static IResourceBuilder<OpenAIResource> WithEndpoint(this IResourceBuilder<OpenAIResource> builder, string endpoint)
     {

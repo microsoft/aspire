@@ -87,13 +87,13 @@ public static class AzureAppConfigurationExtensions
     /// <summary>
     /// Configures an Azure App Configuration resource to be emulated. This resource requires an <see cref="AzureAppConfigurationResource"/> to be added to the application model.
     /// </summary>
+    /// <ats-summary>Configures Azure App Configuration to run with the local emulator</ats-summary>
     /// <remarks>
     /// This version of the package defaults to the <inheritdoc cref="AppConfigurationEmulatorContainerImageTags.Tag"/> tag of the <inheritdoc cref="AppConfigurationEmulatorContainerImageTags.Registry"/>/<inheritdoc cref="AppConfigurationEmulatorContainerImageTags.Image"/> container image.
     /// </remarks>
     /// <param name="builder">The Azure App Configuration resource builder.</param>
     /// <param name="configureEmulator">Callback that exposes underlying container used for emulation to allow for customization.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Configures Azure App Configuration to run with the local emulator</ats-summary>
     [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureAppConfigurationResource> RunAsEmulator(this IResourceBuilder<AzureAppConfigurationResource> builder, Action<IResourceBuilder<AzureAppConfigurationEmulatorResource>>? configureEmulator = null)
     {
@@ -156,7 +156,6 @@ public static class AzureAppConfigurationExtensions
     /// <param name="builder">Builder for the Azure App Configuration emulator container</param>
     /// <param name="port">The port to bind on the host. If <see langword="null"/> is used, a random port will be assigned.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Sets the host port for the App Configuration emulator</ats-summary>
     [AspireExport]
     public static IResourceBuilder<AzureAppConfigurationEmulatorResource> WithHostPort(this IResourceBuilder<AzureAppConfigurationEmulatorResource> builder, int? port)
     {
@@ -202,7 +201,8 @@ public static class AzureAppConfigurationExtensions
     }
 
     /// <summary>
-    /// Assigns App Configuration roles to a resource
+    /// Assigns the specified roles to the given resource, granting it the necessary permissions
+    /// on the target Azure App Configuration resource. This replaces the default role assignments for the resource.
     /// </summary>
     /// <param name="builder">The resource to which the specified roles will be assigned.</param>
     /// <param name="target">The target Azure App Configuration resource.</param>

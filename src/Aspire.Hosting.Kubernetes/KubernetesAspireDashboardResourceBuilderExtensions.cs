@@ -120,7 +120,6 @@ public static class KubernetesAspireDashboardResourceBuilderExtensions
     /// container. When enabled, the dashboard will process <c>X-Forwarded-Host</c> and <c>X-Forwarded-Proto</c>
     /// headers which is required when the dashboard is accessed through a reverse proxy or ingress controller.
     /// </remarks>
-    /// <ats-summary>Enables or disables forwarded headers support for the Aspire dashboard</ats-summary>
     [AspireExport]
     public static IResourceBuilder<KubernetesAspireDashboardResource> WithForwardedHeaders(
         this IResourceBuilder<KubernetesAspireDashboardResource> builder,

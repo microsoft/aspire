@@ -153,7 +153,6 @@ public static class PipelineStepFactoryExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="callback">The callback function to execute during the configuration phase.</param>
     /// <returns>The resource builder for chaining.</returns>
-    /// <ats-summary>Configures pipeline step dependencies via a callback</ats-summary>
     [AspireExport]
     public static IResourceBuilder<T> WithPipelineConfiguration<T>(
         this IResourceBuilder<T> builder,

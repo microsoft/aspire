@@ -72,7 +72,7 @@ public static class ExistingAzureResourceExtensions
     }
 
     /// <summary>
-    /// Marks an Azure resource as existing in run mode
+    /// Marks the resource as an existing resource when the application is running.
     /// </summary>
     /// <typeparam name="T">The type of the resource.</typeparam>
     /// <param name="builder">The resource builder.</param>
@@ -127,7 +127,7 @@ public static class ExistingAzureResourceExtensions
     }
 
     /// <summary>
-    /// Marks an Azure resource as existing in publish mode
+    /// Marks the resource as an existing resource when the application is deployed.
     /// </summary>
     /// <typeparam name="T">The type of the resource.</typeparam>
     /// <param name="builder">The resource builder.</param>

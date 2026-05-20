@@ -115,7 +115,9 @@ public static class ContainerRegistryResourceBuilderExtensions
         return resourceBuilder;
     }
 
-    /// <ats-summary>Adds a container registry resource</ats-summary>
+    /// <summary>
+    /// Adds a container registry resource
+    /// </summary>
     [Experimental("ASPIRECOMPUTE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport("addContainerRegistry")]
     internal static IResourceBuilder<ContainerRegistryResource> AddContainerRegistryForPolyglot(
@@ -178,7 +180,6 @@ public static class ContainerRegistryResourceBuilderExtensions
     ///     .WithContainerRegistry(registry);
     /// </code>
     /// </example>
-    /// <ats-summary>Configures a resource to use a container registry</ats-summary>
     [Experimental("ASPIRECOMPUTE003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExport]
     public static IResourceBuilder<TDestination> WithContainerRegistry<TDestination, TContainerRegistry>(

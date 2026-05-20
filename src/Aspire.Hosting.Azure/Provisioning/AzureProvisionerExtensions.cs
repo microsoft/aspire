@@ -20,7 +20,6 @@ public static class AzureProvisionerExtensions
     /// </summary>
     /// <param name="builder">The distributed application builder.</param>
     /// <returns>The distributed application builder.</returns>
-    /// <ats-summary>Adds Azure provisioning services to the distributed application builder</ats-summary>
     [AspireExport]
     public static IDistributedApplicationBuilder AddAzureProvisioning(this IDistributedApplicationBuilder builder)
     {

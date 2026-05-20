@@ -18,7 +18,6 @@ public static class AzureResourceExtensions
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">The resource builder.</param>
     /// <returns>The configured <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Publishes an Azure resource to the manifest as a connection string</ats-summary>
     [AspireExport]
     public static IResourceBuilder<T> PublishAsConnectionString<T>(this IResourceBuilder<T> builder)
         where T : IAzureResource, IResourceWithConnectionString

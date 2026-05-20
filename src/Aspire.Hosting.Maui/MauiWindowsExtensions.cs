@@ -74,7 +74,6 @@ public static class MauiWindowsExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
-    /// <ats-summary>Adds a Windows platform resource for a .NET MAUI project.</ats-summary>
     [AspireExport]
     public static IResourceBuilder<MauiWindowsPlatformResource> AddWindowsDevice(
         this IResourceBuilder<MauiProjectResource> builder,

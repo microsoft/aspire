@@ -38,7 +38,6 @@ public static class AzureKubernetesIngressExtensions
     /// ingress.WithRoute("/api", api.GetEndpoint("http"));
     /// </code>
     /// </example>
-    /// <ats-summary>Adds a Kubernetes Ingress resource to an AKS environment</ats-summary>
     [AspireExport]
     public static IResourceBuilder<KubernetesIngressResource> AddIngress(
         this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
@@ -68,7 +67,6 @@ public static class AzureKubernetesIngressExtensions
     /// gateway.WithRoute("/api", api.GetEndpoint("http"));
     /// </code>
     /// </example>
-    /// <ats-summary>Adds a Kubernetes Gateway API Gateway to an AKS environment</ats-summary>
     [AspireExport]
     public static IResourceBuilder<KubernetesGatewayResource> AddGateway(
         this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
@@ -119,7 +117,6 @@ public static class AzureKubernetesIngressExtensions
     ///     .WithHelmValue("crds.enabled", "true");
     /// </code>
     /// </example>
-    /// <ats-summary>Adds an external Helm chart to an AKS environment</ats-summary>
     [AspireExport]
     public static IResourceBuilder<KubernetesHelmChartResource> AddHelmChart(
         this IResourceBuilder<AzureKubernetesEnvironmentResource> builder,
@@ -140,6 +137,7 @@ public static class AzureKubernetesIngressExtensions
     /// Routes a Kubernetes <see cref="KubernetesGatewayResource"/> through the supplied
     /// Azure Application Gateway for Containers (AGC) <see cref="AzureKubernetesLoadBalancerResource"/>.
     /// </summary>
+    /// <ats-summary>Routes a Kubernetes Gateway through an AGC ApplicationLoadBalancer</ats-summary>
     /// <param name="builder">The gateway resource builder.</param>
     /// <param name="loadBalancer">The AGC load balancer to route through.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesGatewayResource}"/> for chaining.</returns>
@@ -155,7 +153,6 @@ public static class AzureKubernetesIngressExtensions
     /// var gateway = aks.AddGateway("public").WithLoadBalancer(lb);
     /// </code>
     /// </example>
-    /// <ats-summary>Routes a Kubernetes Gateway through an AGC ApplicationLoadBalancer</ats-summary>
     [AspireExport]
     public static IResourceBuilder<KubernetesGatewayResource> WithLoadBalancer(
         this IResourceBuilder<KubernetesGatewayResource> builder,
@@ -183,6 +180,7 @@ public static class AzureKubernetesIngressExtensions
     /// Routes a Kubernetes <see cref="KubernetesIngressResource"/> through the supplied
     /// Azure Application Gateway for Containers (AGC) <see cref="AzureKubernetesLoadBalancerResource"/>.
     /// </summary>
+    /// <ats-summary>Routes a Kubernetes Ingress through an AGC ApplicationLoadBalancer</ats-summary>
     /// <param name="builder">The ingress resource builder.</param>
     /// <param name="loadBalancer">The AGC load balancer to route through.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesIngressResource}"/> for chaining.</returns>
@@ -192,7 +190,6 @@ public static class AzureKubernetesIngressExtensions
     /// the IngressClass to <c>azure-alb-external</c> when one has not already been set via
     /// <c>WithIngressClass(...)</c>.
     /// </remarks>
-    /// <ats-summary>Routes a Kubernetes Ingress through an AGC ApplicationLoadBalancer</ats-summary>
     [AspireExport("withLoadBalancerOnIngress", MethodName = "withLoadBalancer")]
     public static IResourceBuilder<KubernetesIngressResource> WithLoadBalancer(
         this IResourceBuilder<KubernetesIngressResource> builder,

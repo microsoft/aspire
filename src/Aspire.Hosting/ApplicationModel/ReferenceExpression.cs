@@ -221,7 +221,6 @@ public class ReferenceExpression : IExpressionValue, IManifestExpressionProvider
     /// Gets the value of the expression. The final string value after evaluating the format string and its parameters.
     /// </summary>
     /// <param name="cancellationToken">A <see cref="CancellationToken"/>.</param>
-    /// <ats-summary>Gets the resolved string value of the reference expression asynchronously</ats-summary>
     [AspireExport]
     public ValueTask<string?> GetValueAsync(CancellationToken cancellationToken)
     {
@@ -585,6 +584,7 @@ public class ReferenceExpressionBuilder
     /// The object must implement both <see cref="IValueProvider"/> and <see cref="IManifestExpressionProvider"/>,
     /// or be an <see cref="IResourceBuilder{T}"/> where T implements both interfaces.
     /// </summary>
+    /// <ats-summary>Appends a value provider to the reference expression</ats-summary>
     /// <param name="valueProvider">An object that implements both interfaces, or an IResourceBuilder wrapping such an object.</param>
     /// <param name="format">Optional format specifier.</param>
     /// <exception cref="ArgumentException">Thrown if the object doesn't implement the required interfaces.</exception>

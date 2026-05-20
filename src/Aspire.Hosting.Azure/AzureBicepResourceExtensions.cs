@@ -20,7 +20,6 @@ public static class AzureBicepResourceExtensions
     /// <param name="name">The name of the resource. This name will be used as the deployment name.</param>
     /// <param name="bicepFile">The path to the bicep file on disk. This path is relative to the apphost's project directory.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Adds an Azure Bicep template resource from a file</ats-summary>
     [AspireExport]
     public static IResourceBuilder<AzureBicepResource> AddBicepTemplate(this IDistributedApplicationBuilder builder, [ResourceName] string name, string bicepFile)
     {
@@ -38,7 +37,6 @@ public static class AzureBicepResourceExtensions
     /// <param name="name">The name of the resource. This name will be used as the deployment name.</param>
     /// <param name="bicepContent">A string that represents a snippet of bicep.</param>
     /// <returns>An <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Adds an Azure Bicep template resource from inline Bicep content</ats-summary>
     [AspireExport]
     public static IResourceBuilder<AzureBicepResource> AddBicepTemplateString(this IDistributedApplicationBuilder builder, [ResourceName] string name, string bicepContent)
     {
@@ -136,7 +134,9 @@ public static class AzureBicepResourceExtensions
         return builder;
     }
 
-    /// <ats-summary>Adds a Bicep parameter</ats-summary>
+    /// <summary>
+    /// Adds a Bicep parameter
+    /// </summary>
     [AspireExport("withParameter")]
     internal static IResourceBuilder<T> WithParameterForPolyglot<T>(
         this IResourceBuilder<T> builder,

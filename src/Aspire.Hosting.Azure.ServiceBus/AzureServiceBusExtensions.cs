@@ -354,6 +354,7 @@ public static class AzureServiceBusExtensions
     /// <summary>
     /// Configures an Azure Service Bus resource to be emulated. This resource requires an <see cref="AzureServiceBusResource"/> to be added to the application model.
     /// </summary>
+    /// <ats-summary>Configures the Azure Service Bus resource to run with the local emulator</ats-summary>
     /// <remarks>
     /// This version of the package defaults to the <inheritdoc cref="ServiceBusEmulatorContainerImageTags.Tag"/> tag of the <inheritdoc cref="ServiceBusEmulatorContainerImageTags.Registry"/>/<inheritdoc cref="ServiceBusEmulatorContainerImageTags.Image"/> container image.
     /// <param name="builder">The Azure Service Bus resource builder.</param>
@@ -376,7 +377,6 @@ public static class AzureServiceBusExtensions
     /// </code>
     /// </example>
     /// </remarks>
-    /// <ats-summary>Configures the Azure Service Bus resource to run with the local emulator</ats-summary>
     [AspireExport(RunSyncOnBackgroundThread = true)]
     public static IResourceBuilder<AzureServiceBusResource> RunAsEmulator(this IResourceBuilder<AzureServiceBusResource> builder, Action<IResourceBuilder<AzureServiceBusEmulatorResource>>? configureContainer = null)
     {
@@ -515,7 +515,6 @@ public static class AzureServiceBusExtensions
     /// <param name="builder">The builder for the <see cref="AzureServiceBusEmulatorResource"/>.</param>
     /// <param name="path">Path to the file on the AppHost where the emulator configuration is located.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Sets the emulator configuration file path</ats-summary>
     [AspireExport]
     public static IResourceBuilder<AzureServiceBusEmulatorResource> WithConfigurationFile(this IResourceBuilder<AzureServiceBusEmulatorResource> builder, string path)
     {
@@ -565,7 +564,6 @@ public static class AzureServiceBusExtensions
     /// <param name="builder">Builder for the Azure Service Bus emulator container</param>
     /// <param name="port">The port to bind on the host. If <see langword="null"/> is used, a random port will be assigned.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-summary>Sets the host port for the Service Bus emulator endpoint</ats-summary>
     [AspireExport]
     public static IResourceBuilder<AzureServiceBusEmulatorResource> WithHostPort(this IResourceBuilder<AzureServiceBusEmulatorResource> builder, int? port)
     {
@@ -678,7 +676,8 @@ public static class AzureServiceBusExtensions
     }
 
     /// <summary>
-    /// Assigns Service Bus roles to a resource
+    /// Assigns the specified roles to the given resource, granting it the necessary permissions
+    /// on the target Azure Service Bus namespace. This replaces the default role assignments for the resource.
     /// </summary>
     /// <param name="builder">The resource to which the specified roles will be assigned.</param>
     /// <param name="target">The target Azure Service Bus namespace.</param>

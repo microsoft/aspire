@@ -1147,7 +1147,6 @@ public static class PythonAppResourceBuilderExtensions
     /// </code>
     /// </example>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
-    /// <ats-summary>Configures pip package installation for a Python application</ats-summary>
     [AspireExport]
     public static IResourceBuilder<T> WithPip<T>(this IResourceBuilder<T> builder, bool install = true, string[]? installArgs = null)
         where T : PythonAppResource
@@ -1245,7 +1244,6 @@ public static class PythonAppResourceBuilderExtensions
     /// </code>
     /// </example>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
-    /// <ats-summary>Configures uv package management for a Python application</ats-summary>
     [AspireExport]
     public static IResourceBuilder<T> WithUv<T>(this IResourceBuilder<T> builder, bool install = true, string[]? args = null)
         where T : PythonAppResource

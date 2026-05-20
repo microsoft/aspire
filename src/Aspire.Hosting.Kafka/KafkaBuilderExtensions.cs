@@ -29,7 +29,6 @@ public static class KafkaBuilderExtensions
     /// <param name="name">The name of the resource. This name will be used as the connection string name when referenced in a dependency</param>
     /// <param name="port">The host port of Kafka broker.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KafkaServerResource}"/>.</returns>
-    /// <ats-summary>Adds a Kafka container resource</ats-summary>
     [AspireExport]
     public static IResourceBuilder<KafkaServerResource> AddKafka(this IDistributedApplicationBuilder builder, [ResourceName] string name, int? port = null)
     {
@@ -154,7 +153,6 @@ public static class KafkaBuilderExtensions
     /// <param name="builder">The resource builder for KafkaUI.</param>
     /// <param name="port">The port to bind on the host. If <see langword="null"/> is used random port will be assigned.</param>
     /// <returns>The resource builder for KafkaUI.</returns>
-    /// <ats-summary>Sets the host port for the Kafka UI container</ats-summary>
     [AspireExport]
     public static IResourceBuilder<KafkaUIContainerResource> WithHostPort(this IResourceBuilder<KafkaUIContainerResource> builder, int? port)
     {

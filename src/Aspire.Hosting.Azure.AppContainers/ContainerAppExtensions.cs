@@ -200,7 +200,9 @@ public static class ContainerAppExtensions
         });
     }
 
-    /// <ats-summary>Configures the compute resource as an Azure Container App Job</ats-summary>
+    /// <summary>
+    /// Configures the compute resource as an Azure Container App Job
+    /// </summary>
     [AspireExport("publishAsAzureContainerAppJob")]
     internal static IResourceBuilder<T> PublishAsAzureContainerAppJobForPolyglot<T>(
         this IResourceBuilder<T> resource,
@@ -250,7 +252,9 @@ public static class ContainerAppExtensions
         });
     }
 
-    /// <ats-summary>Configures the compute resource as a scheduled Azure Container App Job</ats-summary>
+    /// <summary>
+    /// Configures the compute resource as a scheduled Azure Container App Job
+    /// </summary>
     [AspireExport("publishAsScheduledAzureContainerAppJob")]
     internal static IResourceBuilder<T> PublishAsScheduledAzureContainerAppJobForPolyglot<T>(
         this IResourceBuilder<T> resource,

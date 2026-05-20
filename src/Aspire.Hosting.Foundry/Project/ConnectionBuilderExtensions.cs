@@ -104,7 +104,6 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// <summary>
     /// Adds CosmosDB to a project as a connection
     /// </summary>
-    /// <ats-summary>Adds an Azure Cosmos DB connection to a Microsoft Foundry project.</ats-summary>
     [AspireExport("addCosmosConnection")]
     public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
@@ -144,7 +143,6 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
     /// <summary>
     /// Adds an Azure Storage account to a project as a connection.
     /// </summary>
-    /// <ats-summary>Adds an Azure Storage connection to a Microsoft Foundry project.</ats-summary>
     [AspireExport("addStorageConnection")]
     public static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnection(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,
@@ -280,7 +278,9 @@ public static class AzureCognitiveServicesProjectConnectionsBuilderExtensions
             });
     }
 
-    /// <ats-summary>Adds a connection to a Microsoft Foundry project.</ats-summary>
+    /// <summary>
+    /// Adds a connection to a Microsoft Foundry project.
+    /// </summary>
     [AspireExport("addConnection")]
     internal static IResourceBuilder<AzureCognitiveServicesProjectConnectionResource> AddConnectionForPolyglot(
         this IResourceBuilder<AzureCognitiveServicesProjectResource> builder,

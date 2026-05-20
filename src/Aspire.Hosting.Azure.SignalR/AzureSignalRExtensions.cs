@@ -127,7 +127,9 @@ public static class AzureSignalRExtensions
             .WithDefaultRoleAssignments(SignalRBuiltInRole.GetBuiltInRoleName, defaultRoles.ToArray());
     }
 
-    /// <ats-summary>Adds an Azure SignalR resource to the application model.</ats-summary>
+    /// <summary>
+    /// Adds an Azure SignalR resource to the application model.
+    /// </summary>
     [AspireExport("addAzureSignalR")]
     internal static IResourceBuilder<AzureSignalRResource> AddAzureSignalRForPolyglot(this IDistributedApplicationBuilder builder, [ResourceName] string name)
         => AddAzureSignalR(builder, name);
@@ -135,6 +137,7 @@ public static class AzureSignalRExtensions
     /// <summary>
     /// Configures an Azure SignalR resource to be emulated. This resource requires an <see cref="AzureSignalRResource"/> to be added to the application model. Please note that the resource will be emulated in <b>Serverless mode</b>.
     /// </summary>
+    /// <ats-summary>Configures an Azure SignalR resource to be emulated. This resource requires an Azure SignalR resource to be added to the application model. Please note that the resource will be emulated in Serverless mode.</ats-summary>
     /// <remarks>
     /// This version of the package defaults to the <inheritdoc cref="SignalREmulatorContainerImageTags.Tag"/> tag of the <inheritdoc cref="SignalREmulatorContainerImageTags.Registry"/>/<inheritdoc cref="SignalREmulatorContainerImageTags.Image"/> container image.
     /// </remarks>
@@ -204,7 +207,8 @@ public static class AzureSignalRExtensions
     }
 
     /// <summary>
-    /// Assigns Azure SignalR roles to a resource
+    /// Assigns the specified roles to the given resource, granting it the necessary permissions
+    /// on the target Azure SignalR resource. This replaces the default role assignments for the resource.
     /// </summary>
     /// <param name="builder">The resource to which the specified roles will be assigned.</param>
     /// <param name="target">The target Azure SignalR resource.</param>

@@ -75,7 +75,6 @@ public static class AzureAppServiceComputeResourceExtensions
     /// <param name="builder">The compute resource builder.</param>
     /// <returns>The updated compute resource builder.</returns>
     /// <exception cref="InvalidOperationException">Thrown when the resource is not configured for Azure App Service publishing.</exception>
-    /// <ats-summary>Skips Azure App Service environment variable name validation for the compute resource</ats-summary>
     [AspireExport]
     public static IResourceBuilder<T> SkipEnvironmentVariableNameChecks<T>(this IResourceBuilder<T> builder)
         where T : IComputeResource
