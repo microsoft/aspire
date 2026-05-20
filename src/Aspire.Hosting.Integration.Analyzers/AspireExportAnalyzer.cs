@@ -13,7 +13,7 @@ using Microsoft.CodeAnalysis.Operations;
 namespace Aspire.Hosting.Analyzers;
 
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
-public partial class AspireExportAnalyzer : DiagnosticAnalyzer
+internal partial class AspireExportAnalyzer : DiagnosticAnalyzer
 {
     private const string RunSyncOnBackgroundThreadPropertyName = "RunSyncOnBackgroundThread";
     private const string ExposeMethodsPropertyName = "ExposeMethods";
