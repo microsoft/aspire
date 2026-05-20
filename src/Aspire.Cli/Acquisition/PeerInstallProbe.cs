@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Buffers;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
@@ -40,11 +41,10 @@ internal sealed class PeerInstallProbe : IPeerInstallProbe
     /// install) needs.
     /// </summary>
     /// <remarks>
-    /// The stderr reader caps strictly in bytes. The stdout reader caps in
-    /// chars because it builds the JSON directly into a <see cref="StringBuilder"/>;
-    /// the two are equivalent for the ASCII-shaped JSON contract peers emit,
-    /// and char-counting avoids an unnecessary encode/decode round-trip on the
-    /// hot path.
+    /// The cap is applied to the raw byte stream from each pipe and the
+    /// captured bytes are decoded as UTF-8 once at the end. Both stdout and
+    /// stderr are forced to UTF-8 on the spawn (see <c>StandardOutputEncoding</c>
+    /// / <c>StandardErrorEncoding</c>) so the decode matches the wire shape.
     /// </remarks>
     internal const int OutputCap = 1 * 1024 * 1024;
 
@@ -311,92 +311,75 @@ internal sealed class PeerInstallProbe : IPeerInstallProbe
 
     private static async Task<PeerProcessOutput> CapturePeerOutputAsync(Process process, CancellationToken cancellationToken)
     {
-        var stdoutBuffer = new StringBuilder(capacity: 4096);
-        var readStdoutTask = ReadCappedAsync(process.StandardOutput, stdoutBuffer, OutputCap, cancellationToken);
-        var readStderrTask = ReadCappedBytesAsync(process.StandardError.BaseStream, OutputCap, cancellationToken);
+        var readStdoutTask = ReadCappedAsync(process.StandardOutput.BaseStream, OutputCap, cancellationToken);
+        var readStderrTask = ReadCappedAsync(process.StandardError.BaseStream, OutputCap, cancellationToken);
 
-        await SwallowAsync(readStdoutTask).ConfigureAwait(false);
+        var stdout = await SwallowAsync(readStdoutTask).ConfigureAwait(false);
         var stderr = await SwallowAsync(readStderrTask).ConfigureAwait(false);
 
-        return new PeerProcessOutput(stdoutBuffer.ToString(), stderr.Text, stderr.Truncated);
+        return new PeerProcessOutput(stdout.Text, stderr.Text, stderr.Truncated);
     }
 
     /// <summary>
-    /// Reads stdout into <paramref name="buffer"/> until EOF or
-    /// <paramref name="cap"/> chars have been collected, whichever comes
-    /// first. Char-counting (vs byte-counting on stderr) avoids an
-    /// unnecessary encode round-trip and is equivalent for the ASCII JSON
-    /// shape peers actually emit. The cap exists so a peer spamming stdout
-    /// cannot make the parent allocate unbounded memory.
+    /// Reads <paramref name="stream"/> into a pooled buffer until EOF or
+    /// <paramref name="cap"/> bytes have been captured, whichever comes
+    /// first. Past the cap the loop keeps draining the pipe so the peer
+    /// doesn't block on a full pipe; trailing bytes are discarded and the
+    /// returned <see cref="CappedOutput.Truncated"/> flag is set. The cap
+    /// exists so a peer spamming output cannot make the parent allocate
+    /// unbounded memory.
     /// </summary>
-    private static async Task ReadCappedAsync(StreamReader reader, StringBuilder buffer, int cap, CancellationToken cancellationToken)
+    private static async Task<CappedOutput> ReadCappedAsync(Stream stream, int cap, CancellationToken cancellationToken)
     {
-        var chunk = new char[4096];
-        while (!cancellationToken.IsCancellationRequested)
-        {
-            int read;
-            try
-            {
-                read = await reader.ReadAsync(chunk.AsMemory(), cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex) when (ex is IOException or OperationCanceledException or ObjectDisposedException)
-            {
-                return;
-            }
-            if (read == 0)
-            {
-                return;
-            }
-            var remaining = cap - buffer.Length;
-            if (remaining <= 0)
-            {
-                // Cap hit: keep draining the pipe so the peer doesn't block
-                // on a full pipe, but discard the trailing bytes.
-                continue;
-            }
-            buffer.Append(chunk, 0, Math.Min(read, remaining));
-        }
-    }
-
-    private static async Task<CappedOutput> ReadCappedBytesAsync(Stream stream, int cap, CancellationToken cancellationToken)
-    {
-        var buffer = new byte[4096];
         using var output = new MemoryStream(capacity: Math.Min(cap, 4096));
+        var buffer = ArrayPool<byte>.Shared.Rent(4096);
         var truncated = false;
-
-        while (!cancellationToken.IsCancellationRequested)
+        try
         {
-            int read;
-            try
+            while (true)
             {
-                read = await stream.ReadAsync(buffer.AsMemory(), cancellationToken).ConfigureAwait(false);
-            }
-            catch (Exception ex) when (ex is IOException or OperationCanceledException or ObjectDisposedException)
-            {
-                break;
-            }
+                int read;
+                try
+                {
+                    read = await stream.ReadAsync(buffer.AsMemory(), cancellationToken).ConfigureAwait(false);
+                }
+                // OperationCanceledException is swallowed alongside the I/O exceptions
+                // because cancellation is owned by the process-kill path in
+                // ProcessCaptureRunner; the reader's job is just to stop pulling and
+                // surface whatever was captured so far.
+                catch (Exception ex) when (ex is IOException or OperationCanceledException or ObjectDisposedException)
+                {
+                    break;
+                }
 
-            if (read == 0)
-            {
-                break;
-            }
+                if (read == 0)
+                {
+                    break;
+                }
 
-            var remaining = cap - (int)output.Length;
-            if (remaining <= 0)
-            {
-                truncated = true;
-                continue;
-            }
+                var remaining = cap - (int)output.Length;
+                if (remaining <= 0)
+                {
+                    truncated = true;
+                    continue;
+                }
 
-            var toWrite = Math.Min(read, remaining);
-            output.Write(buffer, 0, toWrite);
-            if (toWrite < read)
-            {
-                truncated = true;
+                var toWrite = Math.Min(read, remaining);
+                output.Write(buffer, 0, toWrite);
+                if (toWrite < read)
+                {
+                    truncated = true;
+                }
             }
         }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
 
-        return new CappedOutput(Encoding.UTF8.GetString(output.ToArray()), truncated);
+        return new CappedOutput(
+            Encoding.UTF8.GetString(output.GetBuffer().AsSpan(0, (int)output.Length)),
+            truncated);
     }
 
     private static string SanitizeStderr(string stderr)
@@ -436,19 +419,6 @@ internal sealed class PeerInstallProbe : IPeerInstallProbe
         return builder.ToString().Trim();
     }
 
-    private static async Task SwallowAsync(Task task)
-    {
-        try
-        {
-            await task.ConfigureAwait(false);
-        }
-        catch
-        {
-            // Reader is being torn down alongside the killed process —
-            // any exception here is uninteresting noise.
-        }
-    }
-
     private static async Task<CappedOutput> SwallowAsync(Task<CappedOutput> task)
     {
         try
@@ -457,6 +427,8 @@ internal sealed class PeerInstallProbe : IPeerInstallProbe
         }
         catch
         {
+            // Reader is being torn down alongside the killed process —
+            // any exception here is uninteresting noise.
             return new CappedOutput(string.Empty, Truncated: false);
         }
     }
