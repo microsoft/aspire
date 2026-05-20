@@ -1090,6 +1090,8 @@ type Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource interface {
 	WithExplicitStart() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithExternalHttpEndpoints() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithHealthCheck(key string) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithHidden() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
+	WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithHttpCommand(path string, displayName string, options ...*WithHttpCommandOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithHttpEndpoint(options ...*WithHttpEndpointOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
 	WithHttpEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpEndpointCallbackOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource
@@ -1973,6 +1975,35 @@ func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHealthChec
 	}
 	reqArgs["key"] = serializeValue(key)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHealthCheck", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithHidden hides the resource from default resource lists
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHidden() Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHidden", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithHiddenOnCompletion hides the resource from default resource lists after successful completion
+func (s *aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource) WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) Aspire_Hosting_CodeGeneration_Go_TestsTestVaultResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithHiddenOnCompletionOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHiddenOnCompletion", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -3047,6 +3078,8 @@ type CSharpAppResource interface {
 	WithExplicitStart() CSharpAppResource
 	WithExternalHttpEndpoints() CSharpAppResource
 	WithHealthCheck(key string) CSharpAppResource
+	WithHidden() CSharpAppResource
+	WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) CSharpAppResource
 	WithHttpCommand(path string, displayName string, options ...*WithHttpCommandOptions) CSharpAppResource
 	WithHttpEndpoint(options ...*WithHttpEndpointOptions) CSharpAppResource
 	WithHttpEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpEndpointCallbackOptions) CSharpAppResource
@@ -3774,6 +3807,35 @@ func (s *cSharpAppResource) WithHealthCheck(key string) CSharpAppResource {
 	}
 	reqArgs["key"] = serializeValue(key)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHealthCheck", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithHidden hides the resource from default resource lists
+func (s *cSharpAppResource) WithHidden() CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHidden", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithHiddenOnCompletion hides the resource from default resource lists after successful completion
+func (s *cSharpAppResource) WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) CSharpAppResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithHiddenOnCompletionOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHiddenOnCompletion", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -5252,6 +5314,8 @@ type ContainerRegistryResource interface {
 	WithEndpoints(endpoints []string) ContainerRegistryResource
 	WithExplicitStart() ContainerRegistryResource
 	WithHealthCheck(key string) ContainerRegistryResource
+	WithHidden() ContainerRegistryResource
+	WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) ContainerRegistryResource
 	WithIconName(iconName string, options ...*WithIconNameOptions) ContainerRegistryResource
 	WithMergeEndpoint(endpointName string, port float64) ContainerRegistryResource
 	WithMergeEndpointScheme(endpointName string, port float64, scheme string) ContainerRegistryResource
@@ -5607,6 +5671,35 @@ func (s *containerRegistryResource) WithHealthCheck(key string) ContainerRegistr
 	}
 	reqArgs["key"] = serializeValue(key)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHealthCheck", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithHidden hides the resource from default resource lists
+func (s *containerRegistryResource) WithHidden() ContainerRegistryResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHidden", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithHiddenOnCompletion hides the resource from default resource lists after successful completion
+func (s *containerRegistryResource) WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) ContainerRegistryResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithHiddenOnCompletionOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHiddenOnCompletion", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -6124,6 +6217,8 @@ type ContainerResource interface {
 	WithExplicitStart() ContainerResource
 	WithExternalHttpEndpoints() ContainerResource
 	WithHealthCheck(key string) ContainerResource
+	WithHidden() ContainerResource
+	WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) ContainerResource
 	WithHttpCommand(path string, displayName string, options ...*WithHttpCommandOptions) ContainerResource
 	WithHttpEndpoint(options ...*WithHttpEndpointOptions) ContainerResource
 	WithHttpEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpEndpointCallbackOptions) ContainerResource
@@ -7006,6 +7101,35 @@ func (s *containerResource) WithHealthCheck(key string) ContainerResource {
 	}
 	reqArgs["key"] = serializeValue(key)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHealthCheck", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithHidden hides the resource from default resource lists
+func (s *containerResource) WithHidden() ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHidden", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithHiddenOnCompletion hides the resource from default resource lists after successful completion
+func (s *containerResource) WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) ContainerResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithHiddenOnCompletionOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHiddenOnCompletion", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -9397,6 +9521,8 @@ type DotnetToolResource interface {
 	WithExplicitStart() DotnetToolResource
 	WithExternalHttpEndpoints() DotnetToolResource
 	WithHealthCheck(key string) DotnetToolResource
+	WithHidden() DotnetToolResource
+	WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) DotnetToolResource
 	WithHttpCommand(path string, displayName string, options ...*WithHttpCommandOptions) DotnetToolResource
 	WithHttpEndpoint(options ...*WithHttpEndpointOptions) DotnetToolResource
 	WithHttpEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpEndpointCallbackOptions) DotnetToolResource
@@ -10110,6 +10236,35 @@ func (s *dotnetToolResource) WithHealthCheck(key string) DotnetToolResource {
 	}
 	reqArgs["key"] = serializeValue(key)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHealthCheck", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithHidden hides the resource from default resource lists
+func (s *dotnetToolResource) WithHidden() DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHidden", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithHiddenOnCompletion hides the resource from default resource lists after successful completion
+func (s *dotnetToolResource) WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) DotnetToolResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithHiddenOnCompletionOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHiddenOnCompletion", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -12003,6 +12158,8 @@ type ExecutableResource interface {
 	WithExplicitStart() ExecutableResource
 	WithExternalHttpEndpoints() ExecutableResource
 	WithHealthCheck(key string) ExecutableResource
+	WithHidden() ExecutableResource
+	WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) ExecutableResource
 	WithHttpCommand(path string, displayName string, options ...*WithHttpCommandOptions) ExecutableResource
 	WithHttpEndpoint(options ...*WithHttpEndpointOptions) ExecutableResource
 	WithHttpEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpEndpointCallbackOptions) ExecutableResource
@@ -12710,6 +12867,35 @@ func (s *executableResource) WithHealthCheck(key string) ExecutableResource {
 	}
 	reqArgs["key"] = serializeValue(key)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHealthCheck", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithHidden hides the resource from default resource lists
+func (s *executableResource) WithHidden() ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHidden", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithHiddenOnCompletion hides the resource from default resource lists after successful completion
+func (s *executableResource) WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) ExecutableResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithHiddenOnCompletionOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHiddenOnCompletion", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -13768,6 +13954,8 @@ type ExternalServiceResource interface {
 	WithEndpoints(endpoints []string) ExternalServiceResource
 	WithExplicitStart() ExternalServiceResource
 	WithHealthCheck(key string) ExternalServiceResource
+	WithHidden() ExternalServiceResource
+	WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) ExternalServiceResource
 	WithHttpHealthCheck(options ...*WithHttpHealthCheckOptions) ExternalServiceResource
 	WithIconName(iconName string, options ...*WithIconNameOptions) ExternalServiceResource
 	WithMergeEndpoint(endpointName string, port float64) ExternalServiceResource
@@ -14124,6 +14312,35 @@ func (s *externalServiceResource) WithHealthCheck(key string) ExternalServiceRes
 	}
 	reqArgs["key"] = serializeValue(key)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHealthCheck", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithHidden hides the resource from default resource lists
+func (s *externalServiceResource) WithHidden() ExternalServiceResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHidden", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithHiddenOnCompletion hides the resource from default resource lists after successful completion
+func (s *externalServiceResource) WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) ExternalServiceResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithHiddenOnCompletionOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHiddenOnCompletion", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -15229,6 +15446,8 @@ type ParameterResource interface {
 	WithEndpoints(endpoints []string) ParameterResource
 	WithExplicitStart() ParameterResource
 	WithHealthCheck(key string) ParameterResource
+	WithHidden() ParameterResource
+	WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) ParameterResource
 	WithIconName(iconName string, options ...*WithIconNameOptions) ParameterResource
 	WithMergeEndpoint(endpointName string, port float64) ParameterResource
 	WithMergeEndpointScheme(endpointName string, port float64, scheme string) ParameterResource
@@ -15615,6 +15834,35 @@ func (s *parameterResource) WithHealthCheck(key string) ParameterResource {
 	}
 	reqArgs["key"] = serializeValue(key)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHealthCheck", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithHidden hides the resource from default resource lists
+func (s *parameterResource) WithHidden() ParameterResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHidden", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithHiddenOnCompletion hides the resource from default resource lists after successful completion
+func (s *parameterResource) WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) ParameterResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithHiddenOnCompletionOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHiddenOnCompletion", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -16758,6 +17006,8 @@ type ProjectResource interface {
 	WithExplicitStart() ProjectResource
 	WithExternalHttpEndpoints() ProjectResource
 	WithHealthCheck(key string) ProjectResource
+	WithHidden() ProjectResource
+	WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) ProjectResource
 	WithHttpCommand(path string, displayName string, options ...*WithHttpCommandOptions) ProjectResource
 	WithHttpEndpoint(options ...*WithHttpEndpointOptions) ProjectResource
 	WithHttpEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpEndpointCallbackOptions) ProjectResource
@@ -17485,6 +17735,35 @@ func (s *projectResource) WithHealthCheck(key string) ProjectResource {
 	}
 	reqArgs["key"] = serializeValue(key)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHealthCheck", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithHidden hides the resource from default resource lists
+func (s *projectResource) WithHidden() ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHidden", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithHiddenOnCompletion hides the resource from default resource lists after successful completion
+func (s *projectResource) WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) ProjectResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithHiddenOnCompletionOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHiddenOnCompletion", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -19677,6 +19956,8 @@ type TestDatabaseResource interface {
 	WithExplicitStart() TestDatabaseResource
 	WithExternalHttpEndpoints() TestDatabaseResource
 	WithHealthCheck(key string) TestDatabaseResource
+	WithHidden() TestDatabaseResource
+	WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) TestDatabaseResource
 	WithHttpCommand(path string, displayName string, options ...*WithHttpCommandOptions) TestDatabaseResource
 	WithHttpEndpoint(options ...*WithHttpEndpointOptions) TestDatabaseResource
 	WithHttpEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpEndpointCallbackOptions) TestDatabaseResource
@@ -20559,6 +20840,35 @@ func (s *testDatabaseResource) WithHealthCheck(key string) TestDatabaseResource 
 	}
 	reqArgs["key"] = serializeValue(key)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHealthCheck", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithHidden hides the resource from default resource lists
+func (s *testDatabaseResource) WithHidden() TestDatabaseResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHidden", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithHiddenOnCompletion hides the resource from default resource lists after successful completion
+func (s *testDatabaseResource) WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) TestDatabaseResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithHiddenOnCompletionOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHiddenOnCompletion", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -21640,6 +21950,8 @@ type TestRedisResource interface {
 	WithExplicitStart() TestRedisResource
 	WithExternalHttpEndpoints() TestRedisResource
 	WithHealthCheck(key string) TestRedisResource
+	WithHidden() TestRedisResource
+	WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) TestRedisResource
 	WithHttpCommand(path string, displayName string, options ...*WithHttpCommandOptions) TestRedisResource
 	WithHttpEndpoint(options ...*WithHttpEndpointOptions) TestRedisResource
 	WithHttpEndpointCallback(callback func(obj EndpointUpdateContext), options ...*WithHttpEndpointCallbackOptions) TestRedisResource
@@ -22744,6 +23056,35 @@ func (s *testRedisResource) WithHealthCheck(key string) TestRedisResource {
 	}
 	reqArgs["key"] = serializeValue(key)
 	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHealthCheck", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithHidden hides the resource from default resource lists
+func (s *testRedisResource) WithHidden() TestRedisResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHidden", reqArgs); err != nil { s.setErr(err) }
+	return s
+}
+
+// WithHiddenOnCompletion hides the resource from default resource lists after successful completion
+func (s *testRedisResource) WithHiddenOnCompletion(options ...*WithHiddenOnCompletionOptions) TestRedisResource {
+	if s.err != nil { return s }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"builder": s.handle.ToJSON(),
+	}
+	if len(options) > 0 {
+		merged := &WithHiddenOnCompletionOptions{}
+		for _, opt := range options {
+			if opt != nil { merged = deepUpdate(merged, opt) }
+		}
+		for k, v := range merged.ToMap() { reqArgs[k] = v }
+	}
+	if _, err := s.client.invokeCapability(ctx, "Aspire.Hosting/withHiddenOnCompletion", reqArgs); err != nil { s.setErr(err) }
 	return s
 }
 
@@ -24463,6 +24804,18 @@ func (o *WithHttpProbeOptions) ToMap() map[string]any {
 	if o.FailureThreshold != nil { m["failureThreshold"] = serializeValue(o.FailureThreshold) }
 	if o.SuccessThreshold != nil { m["successThreshold"] = serializeValue(o.SuccessThreshold) }
 	if o.EndpointName != nil { m["endpointName"] = serializeValue(o.EndpointName) }
+	return m
+}
+
+// WithHiddenOnCompletionOptions carries optional parameters for WithHiddenOnCompletion.
+type WithHiddenOnCompletionOptions struct {
+	ExitCode *float64 `json:"exitCode,omitempty"`
+}
+
+func (o *WithHiddenOnCompletionOptions) ToMap() map[string]any {
+	m := map[string]any{}
+	if o == nil { return m }
+	if o.ExitCode != nil { m["exitCode"] = serializeValue(o.ExitCode) }
 	return m
 }
 
