@@ -298,6 +298,11 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
                 Assert.True(File.Exists(appHostFile));
                 Assert.Contains(s_prVersion, await File.ReadAllTextAsync(appHostFile));
 
+                var csharpConfig = AspireConfigFile.Load(outputDirectory);
+                Assert.NotNull(csharpConfig);
+                Assert.Equal(PrChannelName, csharpConfig.Channel);
+                Assert.Equal(s_prVersion, csharpConfig.SdkVersion);
+
                 var csharpNuGetConfig = await File.ReadAllTextAsync(Path.Combine(outputDirectory, "nuget.config"));
                 Assert.Contains(packagesDirectory.FullName.Replace('\\', '/'), csharpNuGetConfig);
                 break;
