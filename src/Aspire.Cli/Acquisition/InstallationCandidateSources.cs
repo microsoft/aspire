@@ -78,11 +78,8 @@ internal sealed class DogfoodInstallationCandidateSource : IInstallationCandidat
         if (Directory.Exists(dogfoodRoot))
         {
             var subdirCount = 0;
-            foreach (var prDir in InstallationCandidateSourceHelpers.EnumerateDirectoriesSafe(dogfoodRoot, context.Logger))
+            foreach (var prDir in InstallationCandidateSourceHelpers.EnumerateDirectoriesSafe(dogfoodRoot, context.Logger, context.CancellationToken))
             {
-                // Match the per-step cancellation cadence of the dotnet-tool-store source so
-                // Ctrl+C on a slow dogfood root doesn't have to wait for the whole walk.
-                context.CancellationToken.ThrowIfCancellationRequested();
                 subdirCount++;
                 var binDir = Path.Combine(prDir, "bin");
                 var binary = Path.Combine(binDir, context.AspireBinaryName);
@@ -142,45 +139,12 @@ internal sealed class DotnetToolStoreInstallationCandidateSource : IInstallation
             yield break;
         }
 
-        // Directory.EnumerateFiles is deferred — construction never throws, the first
-        // MoveNext does. Iterator methods cannot have yields inside a catch clause, so
-        // we drive the enumerator manually: MoveNext lives in try/catch and yields run
-        // in the unguarded path. That lets us swallow IOExceptions on the root (e.g.
-        // mode 000 on a perm-denied tool store) and on any directory we still hit during
-        // recursion that IgnoreInaccessible does not cover (mid-walk filesystem races).
-        using var enumerator = Directory.EnumerateFiles(toolStore, context.AspireBinaryName, s_enumerationOptions).GetEnumerator();
-
         var anyMatch = false;
-        while (true)
+        foreach (var binary in InstallationCandidateSourceHelpers.EnumerateFilesSafe(toolStore, context.AspireBinaryName, s_enumerationOptions, context.Logger, context.CancellationToken))
         {
-            // Honor cancellation between steps so Ctrl+C on a slow/large tool store
-            // doesn't have to wait for the entire recursive walk to complete.
-            context.CancellationToken.ThrowIfCancellationRequested();
-
-            bool moved;
-            string? current = null;
-            try
-            {
-                moved = enumerator.MoveNext();
-                if (moved)
-                {
-                    current = enumerator.Current;
-                }
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
-            {
-                context.Logger.LogDebug(ex, "Discovery: failed to enumerate files under '{Root}'.", toolStore);
-                yield break;
-            }
-
-            if (!moved)
-            {
-                break;
-            }
-
             anyMatch = true;
-            context.Logger.LogDebug("Discovery: dotnet-tool store walk yielded '{Binary}'.", current);
-            yield return new InstallationDiscoveryCandidate(current!, "dotnet-tool store");
+            context.Logger.LogDebug("Discovery: dotnet-tool store walk yielded '{Binary}'.", binary);
+            yield return new InstallationDiscoveryCandidate(binary, "dotnet-tool store");
         }
 
         if (!anyMatch)
@@ -194,23 +158,31 @@ internal sealed class DotnetToolStoreInstallationCandidateSource : IInstallation
 
 internal static class InstallationCandidateSourceHelpers
 {
-    // Streams subdirectories of <paramref name="root"/> so the caller can observe each
+    // Streams filesystem entries under <paramref name="root"/> so the caller can observe each
     // entry — and the surrounding cancellation token — incrementally. Materializing the
-    // whole list upfront would defeat the per-step cancellation cadence the dogfood
-    // walker relies on (parallel to the dotnet-tool-store source which streams via a
-    // manually-driven enumerator). Iterator methods cannot yield inside a catch, so we
-    // drive the enumerator manually and swallow IOExceptions raised on initial open or
-    // mid-walk.
-    public static IEnumerable<string> EnumerateDirectoriesSafe(string root, ILogger logger)
+    // whole list upfront would defeat the per-step cancellation cadence the discovery
+    // walkers rely on. Iterator methods cannot yield inside a catch, so we drive the
+    // enumerator manually and swallow IOExceptions raised on initial open or mid-walk.
+    public static IEnumerable<string> EnumerateDirectoriesSafe(string root, ILogger logger, CancellationToken cancellationToken = default)
+    {
+        return EnumerateFileSystemEntriesSafe(root, logger, "directories", () => Directory.EnumerateDirectories(root).GetEnumerator(), cancellationToken);
+    }
+
+    public static IEnumerable<string> EnumerateFilesSafe(string root, string searchPattern, EnumerationOptions enumerationOptions, ILogger logger, CancellationToken cancellationToken = default)
+    {
+        return EnumerateFileSystemEntriesSafe(root, logger, "files", () => Directory.EnumerateFiles(root, searchPattern, enumerationOptions).GetEnumerator(), cancellationToken);
+    }
+
+    private static IEnumerable<string> EnumerateFileSystemEntriesSafe(string root, ILogger logger, string entryKind, Func<IEnumerator<string>> enumeratorFactory, CancellationToken cancellationToken)
     {
         IEnumerator<string> enumerator;
         try
         {
-            enumerator = Directory.EnumerateDirectories(root).GetEnumerator();
+            enumerator = enumeratorFactory();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
-            logger.LogDebug(ex, "Discovery: failed to enumerate directories under '{Root}'.", root);
+            logger.LogDebug(ex, "Discovery: failed to enumerate {EntryKind} under '{Root}'.", entryKind, root);
             yield break;
         }
 
@@ -221,11 +193,12 @@ internal static class InstallationCandidateSourceHelpers
                 bool moved;
                 try
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     moved = enumerator.MoveNext();
                 }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
                 {
-                    logger.LogDebug(ex, "Discovery: failed to enumerate directories under '{Root}'.", root);
+                    logger.LogDebug(ex, "Discovery: failed to enumerate {EntryKind} under '{Root}'.", entryKind, root);
                     yield break;
                 }
 
