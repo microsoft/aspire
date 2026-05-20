@@ -3,7 +3,7 @@
 
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Tests.Utils;
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using System.Text;
 
@@ -15,12 +15,37 @@ namespace Aspire.Cli.Tests.Acquisition;
 /// project — to exercise the timeout / stdout-cap / kill paths against
 /// real process semantics.
 /// </summary>
-public class PeerInstallProbeTests(ITestOutputHelper outputHelper)
+public class PeerInstallProbeTests(ITestOutputHelper outputHelper) : IDisposable
 {
+    // Route internal probe diagnostics (LogDebug for "JSON without an
+    // installation row", "invalid JSON", etc.) into the xunit test output
+    // so a failure log tells us why the probe took whichever code path it
+    // took. Keep the factory alive for the lifetime of the test class so
+    // logs aren't cut off mid-probe by an early dispose.
+    private readonly ILoggerFactory _loggerFactory = LoggerFactory.Create(builder => builder.AddXunit(outputHelper, LogLevel.Trace));
+
+    public void Dispose() => _loggerFactory.Dispose();
+
+    private ILogger<PeerInstallProbe> ProbeLogger => _loggerFactory.CreateLogger<PeerInstallProbe>();
+
+    // Surface the actual Failed.Reason on Ok-expected assertions. Without
+    // this helper, Assert.IsType<Ok>(result) discards the (often
+    // multi-line) failure reason and reports only "expected Ok, got
+    // Failed" — useless for diagnosing CI-only failures.
+    private static PeerProbeResult.Ok AssertProbeOk(PeerProbeResult result)
+    {
+        if (result is PeerProbeResult.Failed failed)
+        {
+            Assert.Fail($"Expected PeerProbeResult.Ok, got PeerProbeResult.Failed. Reason:{Environment.NewLine}{failed.Reason}");
+        }
+
+        return Assert.IsType<PeerProbeResult.Ok>(result);
+    }
+
     [Fact]
     public async Task ProbeAsync_BinaryNotFound_ReturnsFailed()
     {
-        var probe = new PeerInstallProbe(NullLogger<PeerInstallProbe>.Instance);
+        var probe = new PeerInstallProbe(ProbeLogger);
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var missing = Path.Combine(workspace.WorkspaceRoot.FullName, "does-not-exist");
 
@@ -41,10 +66,10 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper)
         // default when `--format` is omitted.
         using var fakePeer = FakePeerScript.BuildArgvRecorder(outputHelper);
 
-        var probe = new PeerInstallProbe(NullLogger<PeerInstallProbe>.Instance);
+        var probe = new PeerInstallProbe(ProbeLogger);
         var result = await probe.ProbeAsync(fakePeer.Path, TestContext.Current.CancellationToken);
 
-        Assert.IsType<PeerProbeResult.Ok>(result);
+        AssertProbeOk(result);
         Assert.NotNull(fakePeer.ArgvFile);
         Assert.True(File.Exists(fakePeer.ArgvFile), $"Expected argv recorder file at {fakePeer.ArgvFile} to exist.");
         var argv = await File.ReadAllLinesAsync(fakePeer.ArgvFile, TestContext.Current.CancellationToken);
@@ -74,10 +99,10 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper)
                     """,
             exitCode: 0);
 
-        var probe = new PeerInstallProbe(NullLogger<PeerInstallProbe>.Instance);
+        var probe = new PeerInstallProbe(ProbeLogger);
         var result = await probe.ProbeAsync(fakePeer.Path, TestContext.Current.CancellationToken);
 
-        var ok = Assert.IsType<PeerProbeResult.Ok>(result);
+        var ok = AssertProbeOk(result);
         Assert.Equal("12.5.0", ok.Info.Version);
         Assert.Equal("stable", ok.Info.Channel);
         Assert.Equal("script", ok.Info.Route);
@@ -100,10 +125,10 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper)
                     """,
             exitCode: 0);
 
-        var probe = new PeerInstallProbe(NullLogger<PeerInstallProbe>.Instance);
+        var probe = new PeerInstallProbe(ProbeLogger);
         var result = await probe.ProbeAsync(fakePeer.Path, TestContext.Current.CancellationToken);
 
-        var ok = Assert.IsType<PeerProbeResult.Ok>(result);
+        var ok = AssertProbeOk(result);
         Assert.Equal(InstallationPathStatus.NotOnPath, ok.Info.PathStatus);
     }
 
@@ -124,10 +149,10 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper)
                     """,
             exitCode: 0);
 
-        var probe = new PeerInstallProbe(NullLogger<PeerInstallProbe>.Instance);
+        var probe = new PeerInstallProbe(ProbeLogger);
         var result = await probe.ProbeAsync(fakePeer.Path, TestContext.Current.CancellationToken);
 
-        var ok = Assert.IsType<PeerProbeResult.Ok>(result);
+        var ok = AssertProbeOk(result);
         Assert.Equal(InstallationPathStatus.NotOnPath, ok.Info.PathStatus);
     }
 
@@ -213,10 +238,10 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper)
             versionStdout: "13.4.0-pr.16817.g790d6fa3\n",
             versionExitCode: 0);
 
-        var probe = new PeerInstallProbe(NullLogger<PeerInstallProbe>.Instance);
+        var probe = new PeerInstallProbe(ProbeLogger);
         var result = await probe.ProbeAsync(fakePeer.Path, TestContext.Current.CancellationToken);
 
-        var ok = Assert.IsType<PeerProbeResult.Ok>(result);
+        var ok = AssertProbeOk(result);
         Assert.Equal("13.4.0-pr.16817.g790d6fa3", ok.Info.Version);
         // Fallback can't read route or channel from the older peer; the
         // discovery layer overlays the route from the local sidecar.
@@ -236,7 +261,7 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper)
             versionStdout: string.Empty,
             versionExitCode: 1);
 
-        var probe = new PeerInstallProbe(NullLogger<PeerInstallProbe>.Instance);
+        var probe = new PeerInstallProbe(ProbeLogger);
         var result = await probe.ProbeAsync(fakePeer.Path, TestContext.Current.CancellationToken);
 
         var failed = Assert.IsType<PeerProbeResult.Failed>(result);
@@ -256,7 +281,7 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper)
             versionStdout: string.Empty,
             versionExitCode: 1);
 
-        var probe = new PeerInstallProbe(NullLogger<PeerInstallProbe>.Instance);
+        var probe = new PeerInstallProbe(ProbeLogger);
         var result = await probe.ProbeAsync(fakePeer.Path, TestContext.Current.CancellationToken);
 
         Assert.IsType<PeerProbeResult.Failed>(result);
@@ -275,10 +300,10 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper)
             versionStdout: "9.0.0\n",
             versionExitCode: 0);
 
-        var probe = new PeerInstallProbe(NullLogger<PeerInstallProbe>.Instance);
+        var probe = new PeerInstallProbe(ProbeLogger);
         var result = await probe.ProbeAsync(fakePeer.Path, TestContext.Current.CancellationToken);
 
-        var ok = Assert.IsType<PeerProbeResult.Ok>(result);
+        var ok = AssertProbeOk(result);
         Assert.Equal("9.0.0", ok.Info.Version);
     }
 
@@ -303,10 +328,10 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper)
             versionStdout: "9.0.0\n",
             versionExitCode: 0);
 
-        var probe = new PeerInstallProbe(NullLogger<PeerInstallProbe>.Instance);
+        var probe = new PeerInstallProbe(ProbeLogger);
         var result = await probe.ProbeAsync(fakePeer.Path, TestContext.Current.CancellationToken);
 
-        var ok = Assert.IsType<PeerProbeResult.Ok>(result);
+        var ok = AssertProbeOk(result);
         Assert.Equal("9.0.0", ok.Info.Version);
     }
 
@@ -319,7 +344,7 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper)
 
         // Construct a probe with a deliberately tight timeout so the test
         // doesn't have to wait the production 5s budget.
-        var probe = new PeerInstallProbe(TimeSpan.FromMilliseconds(300), NullLogger<PeerInstallProbe>.Instance);
+        var probe = new PeerInstallProbe(TimeSpan.FromMilliseconds(300), ProbeLogger);
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var result = await probe.ProbeAsync(fakePeer.Path, TestContext.Current.CancellationToken);
         sw.Stop();
@@ -340,7 +365,7 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper)
         var pidFile = Path.Combine(workspace.WorkspaceRoot.FullName, "peer.pid");
         using var fakePeer = FakePeerScript.BuildSleeperWithPidFile(outputHelper, pidFile, sleepSeconds: 30);
 
-        var probe = new PeerInstallProbe(TimeSpan.FromSeconds(30), NullLogger<PeerInstallProbe>.Instance);
+        var probe = new PeerInstallProbe(TimeSpan.FromSeconds(30), ProbeLogger);
         using var cts = new CancellationTokenSource();
         var probeTask = probe.ProbeAsync(fakePeer.Path, cts.Token);
 
@@ -353,7 +378,7 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper)
         Assert.True(process.HasExited);
     }
 
-    private static async Task<PeerProbeResult.Failed> ProbeFakeFailureAsync(FakeScriptResult fakePeer)
+    private async Task<PeerProbeResult.Failed> ProbeFakeFailureAsync(FakeScriptResult fakePeer)
     {
         // Spawn the production probe against the scripted peer and assert the
         // result is Failed. Centralizing the spawn + assertion keeps each
@@ -367,7 +392,7 @@ public class PeerInstallProbeTests(ITestOutputHelper outputHelper)
         // not about the timeout behavior (see ProbeAsync_PeerHangs_TimesOutAndKills
         // for that). A wider budget here removes the CI flake without changing
         // what's being tested.
-        var probe = new PeerInstallProbe(TimeSpan.FromSeconds(30), NullLogger<PeerInstallProbe>.Instance);
+        var probe = new PeerInstallProbe(TimeSpan.FromSeconds(30), ProbeLogger);
         var result = await probe.ProbeAsync(fakePeer.Path, TestContext.Current.CancellationToken);
         return Assert.IsType<PeerProbeResult.Failed>(result);
     }
@@ -482,6 +507,7 @@ internal static class FakePeerScript
                 UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
         }
 
+        DumpScript(outputHelper, path, content);
         return new FakeScriptResult(path, workspace, ArgvFile: argvFile);
     }
 
@@ -505,7 +531,19 @@ internal static class FakePeerScript
                 UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
         }
 
+        DumpScript(outputHelper, path, content);
         return new FakeScriptResult(path, workspace);
+    }
+
+    // Write the rendered script body to the test output so a failed run's
+    // log shows exactly what the probe executed (and where). xUnit only
+    // surfaces test output for failing tests, so passing runs aren't
+    // affected.
+    private static void DumpScript(ITestOutputHelper outputHelper, string path, string content)
+    {
+        outputHelper.WriteLine($"[FakePeerScript] --- begin script at {path} ---");
+        outputHelper.WriteLine(content);
+        outputHelper.WriteLine($"[FakePeerScript] --- end script at {path} ---");
     }
 }
 
