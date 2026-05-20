@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "pnpm-enabled apps using PublishAsNpmScript could fail to start in containers with exit code 127 because pnpm was not available in the final runtime image. The generated Dockerfile now enables Corepack and resolves pnpm in the runtime stage before the entrypoint runs.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🐳",
+  "firstMergedAt": "2026-05-20T03:49:29Z",
+  "lastMergedAt": "2026-05-20T03:49:29Z",
+  "name": "Fix pnpm runtime container startup for PublishAsNpmScript",
+  "owner": "davidfowl",
+  "prs": [
+    17178
+  ]
+}

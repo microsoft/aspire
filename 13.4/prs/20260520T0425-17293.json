@@ -1,0 +1,9 @@
+{
+  "author": "app/dotnet-maestro",
+  "comment": "Bot dependency version bump from microsoft/dcp",
+  "mergedAt": "2026-05-20T04:25:52Z",
+  "number": 17293,
+  "runDate": "2026-05-20T05:24:06Z",
+  "status": "excluded",
+  "title": "[main] Update dependencies from microsoft/dcp"
+}

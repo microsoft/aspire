@@ -1,0 +1,21 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [
+    "@ellahathaway"
+  ],
+  "description": "A structured \"Add filter\" dialog is now available on the trace detail (waterfall) page, matching the experience on the Traces list page. Filters apply per-span with AND logic, and parent spans remain visible when a descendant matches.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🎛️",
+  "firstMergedAt": "2026-05-20T04:04:14Z",
+  "lastMergedAt": "2026-05-20T04:04:14Z",
+  "name": "Structured filter dialog on trace detail page",
+  "owner": "JamesNK",
+  "prs": [
+    17284
+  ]
+}

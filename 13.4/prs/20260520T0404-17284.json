@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Dashboard improvement: structured filter dialog on trace detail page",
+  "mergedAt": "2026-05-20T04:04:14Z",
+  "number": 17284,
+  "runDate": "2026-05-20T05:24:06Z",
+  "status": "included",
+  "title": "Add structured filter dialog to TraceDetail page"
+}
