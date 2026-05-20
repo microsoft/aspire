@@ -24,7 +24,11 @@ internal sealed class BackgroundExportHandler(
         var snapshot = RequestSnapshot.Capture(request);
 
         // Send the real request with retries in the background.
-        _ = SendWithRetryAsync(snapshot, cancellationToken);
+        // Use CancellationToken.None since this work is intentionally detached
+        // from the caller — the SDK disposes the request immediately after
+        // .GetResult() returns, and we want the background send to complete
+        // even if the export pipeline's token is cancelled.
+        _ = SendWithRetryAsync(snapshot, CancellationToken.None);
 
         // Return 200 immediately so the SDK's sync .GetResult() unblocks.
         return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
