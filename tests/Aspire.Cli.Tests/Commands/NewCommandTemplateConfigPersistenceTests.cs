@@ -3,13 +3,16 @@
 
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Templating;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Tests.Commands;
@@ -159,6 +162,90 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
             explicitChannelArg: null);
 
         Assert.Equal(PackageChannelNames.Staging, persisted);
+    }
+
+    /// <summary>
+    /// Issue #17225 regression guard: when <c>PackagingService</c> discovers the running
+    /// <c>pr-&lt;N&gt;</c> CLI's matching dogfood install hive, <c>aspire new aspire-empty</c>
+    /// must use that channel for CLI template version resolution across the language paths.
+    /// C# writes an embedded AppHost template and NuGet.config; guest languages persist the
+    /// channel/sdk before the fake prebuilt AppHost prepare failure stops the run.
+    /// </summary>
+    [Theory]
+    [InlineData(KnownLanguageId.CSharp)]
+    [InlineData(KnownLanguageId.TypeScript)]
+    [InlineData(KnownLanguageId.Python)]
+    [InlineData(KnownLanguageId.Go)]
+    [InlineData(KnownLanguageId.Java)]
+    [InlineData(KnownLanguageId.Rust)]
+    public async Task EmptyAppHost_PrDogfoodInstallHiveDiscovered_UsesPrChannelForLanguage(string languageId)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        const string prChannelName = "pr-17225";
+        const string prVersion = "13.4.0-pr.17225.gabc123";
+        var installPrefix = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "custom-aspire-prefix"));
+        var processPath = Path.Combine(installPrefix.FullName, "dogfood", prChannelName, "bin", "aspire");
+        Directory.CreateDirectory(Path.GetDirectoryName(processPath)!);
+        File.WriteAllText(processPath, string.Empty);
+
+        var packagesDirectory = Directory.CreateDirectory(Path.Combine(installPrefix.FullName, "hives", prChannelName, "packages"));
+        File.WriteAllText(Path.Combine(packagesDirectory.FullName, $"Aspire.ProjectTemplates.{prVersion}.nupkg"), string.Empty);
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.CliExecutionContextFactory = _ => TestExecutionContextHelper.CreateExecutionContext(
+                workspace.WorkspaceRoot,
+                hivesDirectory: new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives")),
+                identityChannel: prChannelName);
+            options.PackagingServiceFactory = sp => new PackagingService(
+                sp.GetRequiredService<CliExecutionContext>(),
+                sp.GetRequiredService<INuGetPackageCache>(),
+                sp.GetRequiredService<IFeatures>(),
+                sp.GetRequiredService<IConfiguration>(),
+                NullLogger<PackagingService>.Instance,
+                processPathProvider: () => processPath);
+
+            options.EnabledFeatures =
+            [
+                KnownFeatures.ExperimentalPolyglotPython,
+                KnownFeatures.ExperimentalPolyglotGo,
+                KnownFeatures.ExperimentalPolyglotJava,
+                KnownFeatures.ExperimentalPolyglotRust,
+            ];
+        });
+
+        services.AddSingleton<IAppHostServerProjectFactory>(_ => new TestAppHostServerProjectFactory
+        {
+            CreateAsyncCallback = (path, _) =>
+                Task.FromResult<IAppHostServerProject>(new FakeFailingAppHostServerProject(path))
+        });
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var newCommand = serviceProvider.GetRequiredService<NewCommand>();
+
+        const string outputDirectoryName = "TemplateOut";
+        var parseResult = newCommand.Parse(
+            $"new {KnownTemplateId.CSharpEmptyAppHost} --language {languageId} --name TemplateOut --output ./{outputDirectoryName} --localhost-tld false");
+        _ = await parseResult.InvokeAsync().DefaultTimeout();
+
+        var outputDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, outputDirectoryName);
+        if (languageId.Equals(KnownLanguageId.CSharp, StringComparison.OrdinalIgnoreCase))
+        {
+            var appHostFile = Path.Combine(outputDirectory, "apphost.cs");
+            Assert.True(File.Exists(appHostFile));
+            Assert.Contains(prVersion, await File.ReadAllTextAsync(appHostFile));
+
+            var nugetConfig = await File.ReadAllTextAsync(Path.Combine(outputDirectory, "nuget.config"));
+            Assert.Contains(packagesDirectory.FullName.Replace('\\', '/'), nugetConfig);
+        }
+        else
+        {
+            var config = AspireConfigFile.Load(outputDirectory);
+            Assert.NotNull(config);
+            Assert.Equal(prChannelName, config.Channel);
+            Assert.Equal(prVersion, config.SdkVersion);
+        }
     }
 
     /// <summary>
