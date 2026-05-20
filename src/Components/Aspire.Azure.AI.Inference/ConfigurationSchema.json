@@ -122,6 +122,11 @@
                       "type": "string",
                       "description": "Gets or sets the name of the AI model deployment to use for chat completions."
                     },
+                    "DisableHealthChecks": {
+                      "type": "boolean",
+                      "description": "Gets or sets a boolean value that indicates whether the health check is disabled or not.",
+                      "default": false
+                    },
                     "DisableMetrics": {
                       "type": "boolean",
                       "description": "Gets or sets a boolean value that indicates whether the OpenTelemetry metrics are enabled or not.",
