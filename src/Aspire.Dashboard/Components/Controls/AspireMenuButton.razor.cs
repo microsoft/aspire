@@ -51,6 +51,18 @@ public partial class AspireMenuButton : FluentComponentBase
     [Parameter]
     public bool HideIcon { get; set; }
 
+    private string ButtonCssClass
+    {
+        get
+        {
+            var iconOnlyClass = string.IsNullOrWhiteSpace(Text) ? " aspire-menu-button-icon-only" : string.Empty;
+
+            return string.IsNullOrWhiteSpace(ButtonClass)
+                ? $"aspire-menu-button{iconOnlyClass}"
+                : $"aspire-menu-button{iconOnlyClass} {ButtonClass}";
+        }
+    }
+
     protected override void OnParametersSet()
     {
         _icon = Icon ?? s_defaultIcon;

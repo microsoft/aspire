@@ -14,12 +14,11 @@
 
     <HeadOutlet @rendermode="@(new InteractiveServerRenderMode(prerender: false))" />
     <!-- Make the body background dark if dark mode will be enabled to prevent a flash of white
-         before fully rendered. This value is from --neutral-layer-2, but that custom
-         property isn't available at this point. -->
+         before fully rendered. This value matches --aspire-color-black for the brand dark theme. -->
     <style>
         @@media (prefers-color-scheme: dark) {
             body {
-                background-color: #272727;
+                background-color: #1F1E33;
             }
         }
     </style>

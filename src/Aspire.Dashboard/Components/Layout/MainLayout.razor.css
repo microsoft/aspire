@@ -18,7 +18,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        background-color: var(--neutral-layer-4);
+        background-color: var(--aspire-surface-nav);
     }
 
     ::deep.layout > header {
@@ -28,16 +28,20 @@
     ::deep.layout > .fluent-appbar {
         grid-area: nav;
         overflow-y: auto;
-        background: var(--neutral-layer-4);
+        background: var(--aspire-surface-nav);
     }
 
     ::deep.layout > .layout-body-container {
         grid-area: main;
-        overflow-x: auto; /* allow horizontal scrolling */
-        overflow: auto;
-        border-left: 1px solid var(--neutral-stroke-rest);
+        overflow: hidden;
+        border-left: none;
         display: flex;
         flex: 1;
+        background: var(--aspire-surface-page);
+    }
+
+    :global([data-theme="dark"]) ::deep.layout > .layout-body-container {
+        background: var(--aspire-surface-page) !important;
     }
 
     ::deep.layout .layout-sidebar-spacer {
@@ -47,9 +51,18 @@
 
     ::deep.layout > .messagebar-container {
         grid-area: messagebar;
-        border-top: 1px solid var(--neutral-stroke-rest);
-        border-left: 1px solid var(--neutral-stroke-rest);
+        background: var(--aspire-messagebar-strip-bg);
+        border-top: none;
+        border-left: none;
         display: flex;
+    }
+
+    ::deep.layout > .messagebar-container:has(.fluent-messagebar, fluent-message-bar) {
+        background: var(--aspire-messagebar-fill);
+    }
+
+    :global([data-theme="dark"]) ::deep.layout > .messagebar-container:has(.fluent-messagebar, fluent-message-bar) {
+        background: var(--aspire-messagebar-fill) !important;
     }
 
     ::deep .header-right {
@@ -57,8 +70,10 @@
     }
 
     ::deep.layout > header {
-        background-color: var(--neutral-layer-4);
+        background-color: var(--aspire-surface-header);
         margin-bottom: 0;
+        border-bottom: none;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
     }
 
     ::deep.layout > header > .header-gutters > fluent-anchor {
@@ -103,7 +118,7 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        background-color: var(--neutral-layer-4);
+        background-color: var(--aspire-surface-nav);
     }
 
     ::deep.layout > header {
@@ -113,21 +128,29 @@
     ::deep.layout > .fluent-appbar {
         grid-area: nav;
         overflow-y: auto;
-        background: var(--neutral-layer-4);
+        background: var(--aspire-surface-nav);
     }
 
     ::deep.layout > .layout-body-container {
         grid-area: main;
-        overflow-x: auto; /* allow horizontal scrolling */
-        overflow: auto;
-        border-left: 1px solid var(--neutral-stroke-rest);
+        overflow: hidden;
+        border-left: 1px solid var(--aspire-border-subtle);
     }
 
     ::deep.layout > .messagebar-container {
         grid-area: messagebar;
-        border-top: 1px solid var(--neutral-stroke-rest);
-        border-left: 1px solid var(--neutral-stroke-rest);
+        background: var(--aspire-messagebar-strip-bg);
+        border-top: none;
+        border-left: none;
         display: flex;
+    }
+
+    ::deep.layout > .messagebar-container:has(.fluent-messagebar, fluent-message-bar) {
+        background: var(--aspire-messagebar-fill);
+    }
+
+    :global([data-theme="dark"]) ::deep.layout > .messagebar-container:has(.fluent-messagebar, fluent-message-bar) {
+        background: var(--aspire-messagebar-fill) !important;
     }
 
     ::deep .header-right {
@@ -136,7 +159,7 @@
 
     ::deep.layout > .aspire-icon {
         padding-left: 15px;
-        background-color: var(--neutral-layer-4);
+        background-color: var(--aspire-surface-nav);
     }
 
     ::deep.layout > .aspire-icon fluent-anchor {
@@ -144,11 +167,11 @@
     }
 
     ::deep.layout > .aspire-icon .navigation-button {
-        border: 1px solid #a8aeb3;
+        border: 1px solid var(--aspire-border-muted);
     }
 
     ::deep.layout > header {
-        background-color: var(--neutral-layer-4);
+        background-color: var(--aspire-surface-header);
         margin-bottom: 0;
     }
 
@@ -179,13 +202,24 @@
        Remove the default horizontal padding to allow for more text  */
     padding-left: 0;
     padding-right: 0;
+    font-family: 'Poppins', var(--body-font);
+    font-weight: 400;
+    letter-spacing: -0.01em;
+}
+
+::deep .desktop-nav-menu > .fluent-appbar-item > .fluentui-counterbadge-container > a.active > .stack-vertical {
+    font-weight: 600;
+}
+
+::deep .desktop-nav-menu > .fluent-appbar-item > .fluentui-counterbadge-container > a {
+    font-family: 'Poppins', var(--body-font);
 }
 
 ::deep.layout > header > .header-gutters > fluent-button[appearance=stealth]:not(:hover)::part(control),
 ::deep.layout > header > .header-gutters > fluent-anchor[appearance=stealth]:not(:hover)::part(control),
 ::deep.layout > header > .header-gutters > fluent-anchor[appearance=stealth].logo::part(control),
 ::deep.layout > .aspire-icon fluent-anchor[appearance=stealth].logo::part(control) {
-    background-color: var(--neutral-layer-4);
+    background-color: var(--aspire-surface-header);
 }
 
 ::deep .header-gutters .header-button {
@@ -197,7 +231,11 @@
     width: 50px;
     height: 100%;
     border-radius: 0;
-    background-color: var(--neutral-fill-secondary-rest);
+    background-color: var(--aspire-surface-header);
+}
+
+::deep .header-gutters .header-button::part(control):hover {
+    background-color: var(--aspire-hover-fill);
 }
 
 ::deep.layout > header > .header-gutters > .header-button-selected:not(:hover)::part(control) {

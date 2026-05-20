@@ -1,6 +1,9 @@
 ::deep.content-layout {
-    height: 100%;
-    width: 100%;
+    box-sizing: border-box;
+    height: calc(100% - 32px);
+    min-height: 0;
+    min-width: 0;
+    width: calc(100% - 40px);
     display: grid;
 
     grid-template-areas:
@@ -19,8 +22,14 @@
 ::deep .title-toolbar-inline {
     padding-left: 0px;
     padding-top: 0px;
+    width: 100%;
 }
 
 ::deep .title-toolbar-inline > h1 {
     margin-left: 0;
+}
+
+::deep .title-toolbar-inline fluent-search {
+    max-width: 320px;
+    width: min(320px, 32vw);
 }

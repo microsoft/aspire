@@ -6,6 +6,7 @@
 
 .summary-details-container {
     height: 100%;
+    min-height: 0;
 }
 
 ::deep split-panels {
@@ -15,16 +16,19 @@
 
 ::deep .summary-container {
     height: 100%;
+    min-height: 0;
     min-width: 100%;
 }
 
 ::deep .details-container {
     height: 100%;
+    min-height: 0;
     display: grid;
     grid-template-rows: auto 1fr;
     grid-template-areas:
         "head"
         "main";
+    overflow: hidden;
 }
 
 ::deep .details-container fluent-toolbar {
@@ -47,22 +51,26 @@
 */
 @media (min-width: 768px) {
     ::deep .details-container > header {
-        background-color: var(--neutral-layer-4);
+        background-color: var(--aspire-details-header-bg);
+        border-radius: var(--aspire-radius-card) var(--aspire-radius-card) 0 0;
     }
 }
 
 ::deep .details-container > header fluent-button[appearance=stealth]:not(:hover)::part(control) {
-    background-color: var(--neutral-layer-4);
+    background-color: transparent;
 }
 
 ::deep .details-container > *:last-child {
     grid-row-start: 2;
+    min-height: 0;
+    overflow: hidden;
 }
 
 ::deep .details-container > header > .details-header-title {
     grid-area: title;
-    font-size: var(--type-ramp-plus-1-font-size);
-    font-weight: bold;
+    font-family: 'Poppins', var(--body-font);
+    font-size: var(--type-ramp-base-font-size);
+    font-weight: 600;
     text-overflow: ellipsis;
     white-space: nowrap;
     overflow: hidden;

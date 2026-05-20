@@ -31,6 +31,7 @@
 ::deep .trace-view-grid .fluent-data-grid-row:not([row-type='header']) {
     background: var(--fill-color);
     border-bottom: calc(var(--stroke-width) * 1px) solid var(--neutral-stroke-divider-rest);
+    min-height: 44px;
 }
 
 ::deep .fluent-data-grid-row[row-type='sticky-header'] th:first-child {
@@ -44,9 +45,9 @@
 }
 
 ::deep .trace-view-grid td:not(.empty-content-cell) {
-    padding: 0;
-    border: 0;
-    border-radius: 0;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
     vertical-align: middle;
 }
 
@@ -57,9 +58,14 @@
 
 ::deep .trace-view-grid .column-header {
     padding: 0 !important;
-    min-height: 32px !important;
-    height: 32px !important;
+    min-height: 38px !important;
+    height: 38px !important;
     border-bottom: 0;
+}
+
+::deep .trace-view-grid .column-header .col-title-text {
+    display: inline-block;
+    transform: translateY(3px);
 }
 
 ::deep .ticks {
@@ -69,11 +75,19 @@
     align-items: center;
 }
 
+::deep .trace-view-grid .column-header .ticks {
+    height: 38px;
+}
+
 ::deep .ticks .tick {
     width: 1px;
-    height: 32px;
-    background: #d8d8d8;
+    height: 44px;
+    background: color-mix(in srgb, var(--aspire-border-muted) 65%, transparent);
     grid-row: 1;
+}
+
+::deep .trace-view-grid .column-header .ticks .tick {
+    height: 38px;
 }
 
 ::deep .ticks .end-tick {
@@ -86,7 +100,11 @@
     margin-right: 0.25rem;
     white-space: nowrap;
     grid-row: 1;
+    align-self: center;
     text-align: left;
+    color: var(--foreground-subtext-rest);
+    font-size: 12px;
+    line-height: 20px;
 }
 
 ::deep .span-name-container {
@@ -106,15 +124,16 @@
 }
 
 ::deep .span-container .span-bar {
-    height: 15px;
-    border-radius: 5px;
+    height: 18px;
+    border-radius: 6px;
     grid-row: 1;
 }
 
 ::deep .span-container .span-bar-label {
-    font-size: 12px;
+    font-size: 13px;
+    line-height: 20px;
     color: var(--foreground-subtext-rest);
-    padding: 0 0.5em;
+    padding: 0 0.65em;
     height: min-content;
 }
 

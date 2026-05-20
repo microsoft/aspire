@@ -77,13 +77,14 @@
             }
         </ToolbarSection>
         <MainSection>
-            <div style="width: 100%; height: 100%; overflow: auto;">
+            <div class="metrics-main-scroll">
                 @if (PageViewModel.Instruments?.Count > 0)
                 {
                     // Collapsed property only allows us to show Panel1 (which is the metric selector)
                     // but we want to only show Panel2 on mobile. So, hide the bar handle and reduce width to 0
                     // on mobile.
-                    <FluentSplitter BarHandle="@ViewportInformation.IsDesktop"
+                    <FluentSplitter Class="metrics-splitter"
+                                    BarHandle="@ViewportInformation.IsDesktop"
                                     Style="height:100%"
                                     Panel1Size="@(ViewportInformation.IsDesktop ? "2fr" : "0")"
                                     Panel2Size="8fr"
@@ -91,10 +92,12 @@
                         <Panel1>
                             @if (ViewportInformation.IsDesktop)
                             {
-                                <TreeMetricSelector
-                                    @ref="_treeMetricSelector"
-                                    PageViewModel="@PageViewModel"
-                                    HandleSelectedTreeItemChangedAsync="@HandleSelectedTreeItemChangedAsync"/>
+                                <div class="metrics-tree-panel">
+                                    <TreeMetricSelector
+                                        @ref="_treeMetricSelector"
+                                        PageViewModel="@PageViewModel"
+                                        HandleSelectedTreeItemChangedAsync="@HandleSelectedTreeItemChangedAsync"/>
+                                </div>
                             }
                         </Panel1>
                         <Panel2>
