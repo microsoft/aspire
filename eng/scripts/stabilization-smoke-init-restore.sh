@@ -42,12 +42,18 @@
 #   ./build.sh -pack -p:StabilizePackageVersion=true -p:SkipTestProjects=true \
 #              -p:SkipPlaygroundProjects=true -p:SkipNativeBuild=true
 #   ./eng/scripts/stabilization-smoke-init-restore.sh
+#
+# Override defaults via env vars when needed:
+#   STABILIZATION_SMOKE_CONFIGURATION  Build configuration the pack step used (default: Debug)
+#   STABILIZATION_SMOKE_FEED           Absolute path to the local NuGet feed
+#                                      (default: $REPO_ROOT/artifacts/packages/$CONFIG/Shipping)
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-LOCAL_FEED="$REPO_ROOT/artifacts/packages/Debug/Shipping"
+CONFIGURATION="${STABILIZATION_SMOKE_CONFIGURATION:-Debug}"
+LOCAL_FEED="${STABILIZATION_SMOKE_FEED:-$REPO_ROOT/artifacts/packages/$CONFIGURATION/Shipping}"
 ASPIRE_CLI_PROJECT="$REPO_ROOT/src/Aspire.Cli/Aspire.Cli.csproj"
 # Use the repo-local SDK that restore.sh / build.sh install under .dotnet/. The wrapper script
 # also sets DOTNET_SKIP_FIRST_TIME_EXPERIENCE and resolves the SDK version from global.json,
@@ -55,8 +61,9 @@ ASPIRE_CLI_PROJECT="$REPO_ROOT/src/Aspire.Cli/Aspire.Cli.csproj"
 DOTNET="$REPO_ROOT/dotnet.sh"
 
 echo "=== Stabilization smoke: aspire init + restore ==="
-echo "Repo root:   $REPO_ROOT"
-echo "Local feed:  $LOCAL_FEED"
+echo "Repo root:     $REPO_ROOT"
+echo "Configuration: $CONFIGURATION"
+echo "Local feed:    $LOCAL_FEED"
 
 if [ ! -d "$LOCAL_FEED" ]; then
     echo "❌ Local feed not found at: $LOCAL_FEED"
@@ -87,7 +94,7 @@ echo "→ Building Aspire.Cli (stabilized) for use as the smoke driver"
 (
     cd "$REPO_ROOT"
     "$DOTNET" build "$ASPIRE_CLI_PROJECT" \
-        -c Debug \
+        -c "$CONFIGURATION" \
         -p:StabilizePackageVersion=true \
         --nologo -v quiet
 )
@@ -100,7 +107,7 @@ run_aspire() {
     (
         cd "$REPO_ROOT"
         "$DOTNET" run --project "$ASPIRE_CLI_PROJECT" \
-            -c Debug \
+            -c "$CONFIGURATION" \
             --no-build \
             --no-launch-profile \
             -p:StabilizePackageVersion=true \
