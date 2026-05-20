@@ -17,7 +17,7 @@ internal static class BlazorWasmAppBuilder
     /// <summary>
     /// Builds a single WASM app via <c>dotnet build</c>.
     /// </summary>
-    public static async Task<bool> BuildAsync(string projectPath, ILogger logger, CancellationToken ct)
+    public static async Task<bool> BuildAsync(string projectPath, ILogger logger, CancellationToken cancellationToken)
     {
         var psi = new ProcessStartInfo
         {
@@ -38,9 +38,9 @@ internal static class BlazorWasmAppBuilder
         }
 
         // Read both streams concurrently to avoid deadlock when a pipe buffer fills.
-        var stdoutTask = process.StandardOutput.ReadToEndAsync(ct);
-        var stderrTask = process.StandardError.ReadToEndAsync(ct);
-        await process.WaitForExitAsync(ct).ConfigureAwait(false);
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
 
         var stdout = await stdoutTask.ConfigureAwait(false);
         var stderr = await stderrTask.ConfigureAwait(false);
@@ -60,7 +60,7 @@ internal static class BlazorWasmAppBuilder
     /// discover the endpoints and development manifest file paths via <c>-getProperty</c>.
     /// </summary>
     public static async Task<(string endpointsManifest, string runtimeManifest)?> GetManifestPathsAsync(
-        string projectPath, ILogger logger, CancellationToken ct)
+        string projectPath, ILogger logger, CancellationToken cancellationToken)
     {
         var psi = new ProcessStartInfo
         {
@@ -80,9 +80,9 @@ internal static class BlazorWasmAppBuilder
         }
 
         // Read both streams concurrently to avoid deadlock when a pipe buffer fills.
-        var stdoutTask = process.StandardOutput.ReadToEndAsync(ct);
-        var stderrTask = process.StandardError.ReadToEndAsync(ct);
-        await process.WaitForExitAsync(ct).ConfigureAwait(false);
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        var stderrTask = process.StandardError.ReadToEndAsync(cancellationToken);
+        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
 
         var stdout = await stdoutTask.ConfigureAwait(false);
         var stderr = await stderrTask.ConfigureAwait(false);

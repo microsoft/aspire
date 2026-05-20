@@ -103,12 +103,9 @@ public static class BlazorHostedExtensions
 
     private static HostedClientAnnotation GetOrAddHostedClientAnnotation(IResource resource)
     {
-        foreach (var annotation in resource.Annotations)
+        if (resource.TryGetLastAnnotation<HostedClientAnnotation>(out var existing))
         {
-            if (annotation is HostedClientAnnotation existing)
-            {
-                return existing;
-            }
+            return existing;
         }
 
         var newAnnotation = new HostedClientAnnotation();
@@ -118,7 +115,7 @@ public static class BlazorHostedExtensions
 
     private static HashSet<string> GetReferencedResourceNames(IResource resource)
     {
-        var names = new HashSet<string>();
+        var names = new HashSet<string>(StringComparers.ResourceName);
         foreach (var annotation in resource.Annotations)
         {
             // Only consider Reference relationships, not WaitFor or Parent,
@@ -141,7 +138,7 @@ public static class BlazorHostedExtensions
 /// <summary>
 /// Annotation stored on a host resource that tracks proxied services and telemetry configuration.
 /// </summary>
-internal class HostedClientAnnotation : IResourceAnnotation
+internal sealed class HostedClientAnnotation : IResourceAnnotation
 {
     public List<HostedClientService> Services { get; } = new();
     public bool ProxyTelemetry { get; set; }
