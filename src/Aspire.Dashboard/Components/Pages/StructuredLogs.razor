@@ -137,10 +137,10 @@
                                                 @GetResourceName(context.ResourceView)
                                             </span>
                                         </AspireTemplateColumn>
-                                        <AspireTemplateColumn ColumnId="@LogLevelColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsLevelColumnHeader)]">
+                                        <AspireTemplateColumn ColumnId="@LogLevelColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsLevelColumnHeader)]" Sortable="true" SortBy="@(GridSort<OtlpLogEntry>.ByAscending(e => e.Severity))">
                                             <LogLevelColumnDisplay LogEntry="@context" />
                                         </AspireTemplateColumn>
-                                        <AspireTemplateColumn ColumnId="@TimestampColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsTimestampColumnHeader)]" TooltipText="@(context => FormatHelpers.FormatDateTime(TimeProvider, context.TimeStamp, MillisecondsDisplay.Full, CultureInfo.CurrentCulture))" Tooltip="true">
+                                        <AspireTemplateColumn ColumnId="@TimestampColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsTimestampColumnHeader)]" Sortable="true" SortBy="@(GridSort<OtlpLogEntry>.ByDescending(e => e.TimeStamp))" IsDefaultSortColumn="true" TooltipText="@(context => FormatHelpers.FormatDateTime(TimeProvider, context.TimeStamp, MillisecondsDisplay.Full, CultureInfo.CurrentCulture))" Tooltip="true">
                                             @FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, context.TimeStamp, MillisecondsDisplay.Truncated)
                                         </AspireTemplateColumn>
                                         <AspireTemplateColumn ColumnId="@MessageColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsMessageColumnHeader)]">
