@@ -191,7 +191,7 @@ internal sealed class RunCommand : BaseCommand
         AppHostProjectContext? context = null;
         Activity? runActivity = null;
         Task? pendingLogCapture = null;
-        CancellationTokenSource? logCaptureCancellationSource = null;
+        using var logCaptureCancellationSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
         try
         {
@@ -319,7 +319,6 @@ internal sealed class RunCommand : BaseCommand
             }
 
             // Set up log capture - writes to unified CLI log file
-            logCaptureCancellationSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             pendingLogCapture = CaptureAppHostLogsAsync(_fileLoggerProvider, backchannel, _interactionService, logCaptureCancellationSource.Token);
 
             // Get dashboard URLs
@@ -550,11 +549,10 @@ internal sealed class RunCommand : BaseCommand
         {
             if (pendingLogCapture is not null)
             {
-                logCaptureCancellationSource?.Cancel();
+                logCaptureCancellationSource.Cancel();
                 await ObserveAppHostLogCaptureShutdownAsync(pendingLogCapture).ConfigureAwait(false);
             }
 
-            logCaptureCancellationSource?.Dispose();
             runActivity?.Dispose();
         }
     }
