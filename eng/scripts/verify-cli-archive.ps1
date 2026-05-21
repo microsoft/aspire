@@ -6,9 +6,12 @@
     This script:
     1. Cleans ~/.aspire to ensure no stale state
     2. Extracts the CLI archive to a temp location
-    3. Runs 'aspire --version' to validate the binary executes
-    4. Runs 'aspire new aspire-starter' to test bundle self-extraction + project creation
-    5. Cleans up temp directories
+    3. Verifies the archive shape contains the native CLI payload and no install-route sidecar
+    4. Runs 'aspire --version' to validate the binary executes
+    5. Runs 'aspire new aspire-starter' to test C# starter creation
+    6. Runs 'aspire new aspire-ts-starter' to test TypeScript starter restore/codegen against the shipped layout
+    7. Verifies the TypeScript starter path extracted the embedded bundle layout
+    8. Cleans up temp directories
 
 .PARAMETER ArchivePath
     Path to the CLI archive (.zip or .tar.gz)
@@ -27,6 +30,14 @@ $ErrorActionPreference = 'Stop'
 function Write-Step  { param([string]$msg) Write-Host "▶ $msg" -ForegroundColor Cyan }
 function Write-Ok    { param([string]$msg) Write-Host "✅ $msg" -ForegroundColor Green }
 function Write-Err   { param([string]$msg) Write-Host "❌ $msg" -ForegroundColor Red }
+
+function Get-ExecutableFileName([string]$BaseName) {
+    if (Test-IsWindows) {
+        return "$BaseName.exe"
+    }
+
+    return $BaseName
+}
 
 function Get-UserHome {
     if ($env:USERPROFILE) {
@@ -55,6 +66,37 @@ function Set-ExecutablePermission([string]$Path) {
     }
 }
 
+function Get-ArchiveRidFamily([string]$ArchiveFileName) {
+    switch -Wildcard ($ArchiveFileName) {
+        '*win-*'   { 'win';   break }
+        '*osx-*'   { 'osx';   break }
+        '*linux-*' { 'linux'; break }
+        default    { $null }
+    }
+}
+
+function Get-ArchiveRoot {
+    param(
+        [Parameter(Mandatory = $true)][string]$ExtractDir
+    )
+
+    $cliName = Get-ExecutableFileName "aspire"
+    $rootCli = Join-Path $ExtractDir $cliName
+    if (Test-Path $rootCli) {
+        return $ExtractDir
+    }
+
+    $candidateDirectories = @(Get-ChildItem -Path $ExtractDir -Directory -Force -ErrorAction SilentlyContinue)
+    if ($candidateDirectories.Count -eq 1) {
+        $candidateRoot = $candidateDirectories[0].FullName
+        if (Test-Path (Join-Path $candidateRoot $cliName)) {
+            return $candidateRoot
+        }
+    }
+
+    throw "Could not find '$cliName' in extracted archive '$ExtractDir'."
+}
+
 function Test-ArchiveSidecar {
     # Per-RID CLI archives must ship sidecar-free; each install route writes
     # its own .aspire-install.json. See docs/specs/install-routes.md.
@@ -63,12 +105,7 @@ function Test-ArchiveSidecar {
         [Parameter(Mandatory = $true)][string]$ArchiveFileName
     )
 
-    $ridFamily = switch -Wildcard ($ArchiveFileName) {
-        '*win-*'   { 'win';   break }
-        '*osx-*'   { 'osx';   break }
-        '*linux-*' { 'linux'; break }
-        default    { $null }
-    }
+    $ridFamily = Get-ArchiveRidFamily $ArchiveFileName
 
     if ($null -eq $ridFamily) {
         throw "Archive RID family not recognized in filename '$ArchiveFileName'. Expected the filename to contain 'win-', 'osx-', or 'linux-'."
@@ -80,6 +117,105 @@ function Test-ArchiveSidecar {
         throw "$ridFamily-* archive '$ArchiveFileName' must not contain '.aspire-install.json' (per-RID archives are shared across install routes; each route authors its own sidecar after extraction). Found: $($strayPaths -join ', ')"
     }
     Write-Step "$ridFamily-* archive correctly omits the install-route sidecar."
+}
+
+function Test-ExtractedBundleLayout {
+    param(
+        [Parameter(Mandatory = $true)][string]$LayoutRoot
+    )
+
+    $bundleRoot = Join-Path $LayoutRoot "bundle"
+    $managedExecutablePath = Join-Path $bundleRoot (Join-Path "managed" (Get-ExecutableFileName "aspire-managed"))
+    if (-not (Test-Path $managedExecutablePath)) {
+        throw "Expected extracted bundle-managed server binary at '$managedExecutablePath', but it was not found."
+    }
+
+    $wwwRootPath = Join-Path $bundleRoot (Join-Path "managed" "wwwroot")
+    if (-not (Test-Path $wwwRootPath)) {
+        throw "Expected dashboard web assets at '$wwwRootPath', but they were not found."
+    }
+
+    $wwwRootFileCount = @(Get-ChildItem -Path $wwwRootPath -Recurse -File -ErrorAction SilentlyContinue).Count
+    if ($wwwRootFileCount -eq 0) {
+        throw "Dashboard asset directory '$wwwRootPath' is empty."
+    }
+
+    $dcpExecutablePath = Join-Path $bundleRoot (Join-Path "dcp" (Get-ExecutableFileName "dcp"))
+    if (-not (Test-Path $dcpExecutablePath)) {
+        throw "Expected DCP binary at '$dcpExecutablePath', but it was not found."
+    }
+
+    Write-Step "Extracted bundle layout contains AppHost server assets."
+
+    Write-Step "Running '$managedExecutablePath --help'..."
+    $managedOutput = & $managedExecutablePath --help 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "aspire-managed failed with exit code $LASTEXITCODE. Output: $managedOutput"
+    }
+
+    Write-Ok "Extracted bundled AppHost server is executable"
+}
+
+function Test-CSharpStarterProject {
+    param(
+        [Parameter(Mandatory = $true)][string]$AspireBin,
+        [Parameter(Mandatory = $true)][string]$ProjectRoot
+    )
+
+    Write-Step "Running 'aspire new aspire-starter --name VerifyApp --output $ProjectRoot --non-interactive --nologo'..."
+    & $AspireBin new aspire-starter --name VerifyApp --output $ProjectRoot --non-interactive --nologo 2>&1 | Write-Host
+    if ($LASTEXITCODE -ne 0) {
+        Write-Err "'aspire new aspire-starter' failed with exit code $LASTEXITCODE"
+        exit 1
+    }
+
+    $appHostDir = Join-Path $ProjectRoot "VerifyApp.AppHost"
+    if (-not (Test-Path $appHostDir)) {
+        Write-Err "Expected project directory 'VerifyApp.AppHost' not found after 'aspire new aspire-starter'"
+        Get-ChildItem $ProjectRoot | Format-Table
+        exit 1
+    }
+
+    Write-Ok "'aspire new aspire-starter' created project successfully"
+}
+
+function Test-TypeScriptStarterProject {
+    param(
+        [Parameter(Mandatory = $true)][string]$AspireBin,
+        [Parameter(Mandatory = $true)][string]$ProjectRoot
+    )
+
+    Write-Step "Running 'aspire new aspire-ts-starter --name VerifyTsApp --output $ProjectRoot --non-interactive --nologo'..."
+    & $AspireBin new aspire-ts-starter --name VerifyTsApp --output $ProjectRoot --non-interactive --nologo 2>&1 | Write-Host
+    if ($LASTEXITCODE -ne 0) {
+        Write-Err "'aspire new aspire-ts-starter' failed with exit code $LASTEXITCODE"
+        exit 1
+    }
+
+    $expectedPaths = @(
+        "apphost.ts",
+        "aspire.config.json",
+        ".modules/aspire.ts",
+        "package.json",
+        "frontend/package.json",
+        "frontend/src/main.tsx",
+        "api/package.json",
+        "api/src/index.ts"
+    )
+
+    foreach ($relativePath in $expectedPaths) {
+        $fullPath = Join-Path $ProjectRoot $relativePath
+        if (-not (Test-Path $fullPath)) {
+            throw "Expected TypeScript starter asset '$relativePath' not found under '$ProjectRoot'."
+        }
+    }
+
+    $configContent = Get-Content -Path (Join-Path $ProjectRoot "aspire.config.json") -Raw
+    if ($configContent -notmatch '"sdk"') {
+        throw "TypeScript starter config '$ProjectRoot/aspire.config.json' did not contain the expected 'sdk' section."
+    }
+
+    Write-Ok "'aspire new aspire-ts-starter' produced AppHost restore/codegen artifacts successfully"
 }
 
 $userHome = Get-UserHome
@@ -156,22 +292,14 @@ try {
         exit 1
     }
 
-    # Find the aspire binary
-    $aspireBin = Join-Path $extractDir "aspire.exe"
-    if (-not (Test-Path $aspireBin)) {
-        $aspireBin = Join-Path $extractDir "aspire"
-        if (-not (Test-Path $aspireBin)) {
-            Write-Err "Could not find 'aspire' binary in extracted archive."
-            Get-ChildItem $extractDir | Format-Table
-            exit 1
-        }
-    }
+    $archiveRoot = Get-ArchiveRoot -ExtractDir $extractDir
+    $aspireBin = Join-Path $archiveRoot (Get-ExecutableFileName "aspire")
     Write-Ok "Extracted CLI binary: $aspireBin"
 
     # Assert the source sidecar matches the archive's RID family before mutating the
     # extracted shape. After Copy-Item moves the binary out, the archive layout is
     # no longer observable.
-    Test-ArchiveSidecar -ExtractDir $extractDir -ArchiveFileName ([System.IO.Path]::GetFileName($ArchivePath))
+    Test-ArchiveSidecar -ExtractDir $archiveRoot -ArchiveFileName ([System.IO.Path]::GetFileName($ArchivePath))
 
     # Install to ~/.aspire/bin so self-extraction works correctly
     Write-Step "Installing CLI to ~/.aspire/bin..."
@@ -195,26 +323,17 @@ try {
     Write-Host "  Version: $versionOutput"
     Write-Ok "'aspire --version' succeeded"
 
-    # Step 4: Create a new project with aspire new
-    # This exercises bundle self-extraction and aspire-managed (template search + download + scaffolding)
-    $projectDir = Join-Path $verifyTmpDir "VerifyApp"
-    New-Item -ItemType Directory -Path $projectDir -Force | Out-Null
+    # Step 4: Create starter projects with aspire new. The C# starter covers the
+    # existing happy path; the TypeScript starter proves the shipped archive can
+    # supply the bundled AppHost server and generate the .modules SDK layout.
+    $csharpProjectDir = Join-Path $verifyTmpDir "VerifyApp"
+    New-Item -ItemType Directory -Path $csharpProjectDir -Force | Out-Null
+    Test-CSharpStarterProject -AspireBin $aspireBin -ProjectRoot $csharpProjectDir
 
-    Write-Step "Running 'aspire new aspire-starter --name VerifyApp --output $projectDir --non-interactive --nologo'..."
-    & $aspireBin new aspire-starter --name VerifyApp --output $projectDir --non-interactive --nologo 2>&1 | Write-Host
-    if ($LASTEXITCODE -ne 0) {
-        Write-Err "'aspire new' failed with exit code $LASTEXITCODE"
-        exit 1
-    }
-
-    # Verify the project was created
-    $appHostDir = Join-Path $projectDir "VerifyApp.AppHost"
-    if (-not (Test-Path $appHostDir)) {
-        Write-Err "Expected project directory 'VerifyApp.AppHost' not found after 'aspire new'"
-        Get-ChildItem $projectDir | Format-Table
-        exit 1
-    }
-    Write-Ok "'aspire new' created project successfully"
+    $typeScriptProjectDir = Join-Path $verifyTmpDir "VerifyTsApp"
+    New-Item -ItemType Directory -Path $typeScriptProjectDir -Force | Out-Null
+    Test-TypeScriptStarterProject -AspireBin $aspireBin -ProjectRoot $typeScriptProjectDir
+    Test-ExtractedBundleLayout -LayoutRoot $aspireDir
 
     Write-Host ""
     Write-Host "=========================================="
