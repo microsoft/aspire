@@ -249,7 +249,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
         using var activity = _profilingTelemetry.StartAppHostRun();
 
-        var isSingleFileAppHost = effectiveAppHostFile.Extension != ".csproj";
+        var isSingleFileAppHost = !IsProjectFile(effectiveAppHostFile);
 
         var env = new Dictionary<string, string>(context.EnvironmentVariables);
 
@@ -841,6 +841,9 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     private static bool IsExecutableLaunchProfile(AppHostLaunchProfile profile)
         => string.Equals(profile.CommandName, "Executable", StringComparison.OrdinalIgnoreCase);
 
+    private static bool IsProjectFile(FileInfo appHostFile)
+        => ProjectExtensions.Contains(appHostFile.Extension.ToLowerInvariant());
+
     private static List<string> ParseArguments(string? rawArguments)
         => string.IsNullOrWhiteSpace(rawArguments)
             ? []
@@ -1009,7 +1012,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         }
 
         var effectiveAppHostFile = context.AppHostFile;
-        var isSingleFileAppHost = effectiveAppHostFile.Extension != ".csproj" && IsValidSingleFileAppHost(effectiveAppHostFile);
+        var isSingleFileAppHost = !IsProjectFile(effectiveAppHostFile) && IsValidSingleFileAppHost(effectiveAppHostFile);
         var env = new Dictionary<string, string>(context.EnvironmentVariables);
 
         // Check compatibility for project-based apphosts
