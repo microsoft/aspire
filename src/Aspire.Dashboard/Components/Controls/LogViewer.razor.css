@@ -27,6 +27,17 @@
     user-select: none;
 }
 
+::deep .console-empty-message {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 20px 24px;
+    color: var(--console-font-color);
+    cursor: default;
+    opacity: 0.72;
+    user-select: none;
+}
+
 ::deep .ansi-fg-black {
     color: var(--console-theme-black);
 }
