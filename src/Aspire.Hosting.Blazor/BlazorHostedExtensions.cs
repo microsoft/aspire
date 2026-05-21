@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics.CodeAnalysis;
-using Aspire.Dashboard.Model;
 using Aspire.Hosting.ApplicationModel;
 
 #pragma warning disable ASPIREATS001 // AspireExportIgnore is experimental
@@ -119,13 +118,9 @@ public static class BlazorHostedExtensions
 
     private static HashSet<string> GetReferencedResourceNames(IResource resource)
     {
-        // TODO: ResourceRelationshipAnnotation is public but reading it directly couples us
-        // to the annotation model. Consider whether a higher-level API (e.g. a method on
-        // IResource or an extension) should expose referenced resources instead.
         return resource.Annotations
-            .OfType<ResourceRelationshipAnnotation>()
-            .Where(rel => rel.Type == KnownRelationshipTypes.Reference)
-            .Select(rel => rel.Resource.Name)
+            .OfType<EndpointReferenceAnnotation>()
+            .Select(a => a.Resource.Name)
             .ToHashSet(StringComparers.ResourceName);
     }
 

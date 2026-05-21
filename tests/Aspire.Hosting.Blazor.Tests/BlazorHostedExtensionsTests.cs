@@ -200,12 +200,11 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
             .WaitFor(weatherApi)
             .ProxyBlazorService(weatherApi);
 
-        var refs = host.Resource.Annotations
-            .OfType<ResourceRelationshipAnnotation>()
-            .Where(r => r.Resource.Name == "weatherapi" && r.Type == "Reference")
-            .ToList();
+        var endpointRef = host.Resource.Annotations
+            .OfType<EndpointReferenceAnnotation>()
+            .SingleOrDefault(a => a.Resource.Name == "weatherapi");
 
-        Assert.Single(refs);
+        Assert.NotNull(endpointRef);
     }
 
     [Fact]
@@ -235,6 +234,52 @@ public class BlazorHostedExtensionsTests(ITestOutputHelper testOutputHelper)
         Assert.Contains("/weather/weatherapi", configJson);
         Assert.Contains("/catalog/catalogapi", configJson);
         Assert.DoesNotContain("/_api/", configJson);
+    }
+
+    [Fact]
+    public void ProxyService_DoesNotDuplicateExistingReferences()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var weatherApi = builder.AddProject<TestProjectMetadata>("weatherapi")
+            .WithHttpEndpoint();
+
+        // Host already references weatherapi via WithReference.
+        var host = builder.AddProject<TestProjectMetadata>("blazorapp")
+            .WithHttpsEndpoint()
+            .WithReference(weatherApi)
+            .ProxyBlazorService(weatherApi);
+
+        // Should not duplicate the endpoint reference annotation
+        var weatherRefs = host.Resource.Annotations
+            .OfType<EndpointReferenceAnnotation>()
+            .Count(a => a.Resource.Name == "weatherapi");
+
+        Assert.Equal(1, weatherRefs);
+    }
+
+    [Fact]
+    public void ProxyService_MultipleServices_AllGetEndpointReferences()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var weatherApi = builder.AddProject<TestProjectMetadata>("weatherapi")
+            .WithHttpEndpoint();
+        var catalogApi = builder.AddProject<TestProjectMetadata>("catalogapi")
+            .WithHttpEndpoint();
+
+        var host = builder.AddProject<TestProjectMetadata>("blazorapp")
+            .WithHttpsEndpoint()
+            .ProxyBlazorService(weatherApi)
+            .ProxyBlazorService(catalogApi);
+
+        var referencedNames = host.Resource.Annotations
+            .OfType<EndpointReferenceAnnotation>()
+            .Select(a => a.Resource.Name)
+            .ToList();
+
+        Assert.Contains("weatherapi", referencedNames);
+        Assert.Contains("catalogapi", referencedNames);
     }
 
     private static async Task<Dictionary<string, object>> GetEnvironmentVariables(
