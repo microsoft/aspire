@@ -34,6 +34,8 @@ internal sealed class InitCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
 
+    protected override bool UpdateNotificationsEnabled => true;
+
     private readonly CliExecutionContext _executionContext;
     private readonly ILanguageService _languageService;
     private readonly ISolutionLocator _solutionLocator;

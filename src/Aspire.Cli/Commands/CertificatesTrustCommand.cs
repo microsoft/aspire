@@ -25,8 +25,6 @@ internal sealed class CertificatesTrustCommand : BaseCommand
         _certificateService = certificateService;
     }
 
-    protected override bool UpdateNotificationsEnabled => false;
-
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         InteractionService.DisplayMessage(KnownEmojis.Information, CertificatesCommandStrings.TrustProgress);

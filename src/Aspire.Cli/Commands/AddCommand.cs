@@ -21,6 +21,8 @@ internal sealed class AddCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
 
+    protected override bool UpdateNotificationsEnabled => true;
+
     private readonly IProjectLocator _projectLocator;
     private readonly IntegrationPackageSearchService _integrationPackageSearchService;
     private readonly IAddCommandPrompter _prompter;

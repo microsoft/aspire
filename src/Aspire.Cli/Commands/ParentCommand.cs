@@ -19,8 +19,6 @@ internal abstract class ParentCommand : BaseCommand
     {
     }
 
-    protected override bool UpdateNotificationsEnabled => false;
-
     protected sealed override Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         return Task.FromResult(CommandResult.DisplayHelp());

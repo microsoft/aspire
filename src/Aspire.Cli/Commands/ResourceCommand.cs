@@ -23,6 +23,8 @@ internal sealed class ResourceCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.ResourceManagement;
 
+    protected override bool UpdateNotificationsEnabled => true;
+
     private readonly IInteractionService _interactionService;
     private readonly IAuxiliaryBackchannelMonitor _backchannelMonitor;
     private readonly IProjectLocator _projectLocator;

@@ -17,7 +17,7 @@ internal abstract class BaseCommand : Command
 {
     private static readonly int[] s_suppressErrorLogsMessageExitCodes = [CliExitCodes.Cancelled, CliExitCodes.MissingRequiredArgument];
 
-    protected virtual bool UpdateNotificationsEnabled { get; } = true;
+    protected virtual bool UpdateNotificationsEnabled { get; }
 
     /// <summary>
     /// Gets the help group for this command.

@@ -18,6 +18,8 @@ internal sealed class StartCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
 
+    protected override bool UpdateNotificationsEnabled => true;
+
     private readonly AppHostLauncher _appHostLauncher;
     private readonly IConfiguration _configuration;
 

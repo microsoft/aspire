@@ -58,8 +58,6 @@ internal sealed class McpInitCommand : BaseCommand, IPackageMetaPrefetchingComma
             telemetry);
     }
 
-    protected override bool UpdateNotificationsEnabled => false;
-
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         // Display deprecation warning

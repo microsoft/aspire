@@ -24,6 +24,8 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
 
+    protected override bool UpdateNotificationsEnabled => true;
+
     private readonly INewCommandPrompter _prompter;
     private readonly ITemplateProvider _templateProvider;
     private readonly ITemplate[] _templates;

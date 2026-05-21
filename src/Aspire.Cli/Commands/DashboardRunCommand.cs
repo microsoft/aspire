@@ -25,6 +25,8 @@ internal sealed class DashboardRunCommand : BaseCommand
 {
     internal override HelpGroup HelpGroup => HelpGroup.Monitoring;
 
+    protected override bool UpdateNotificationsEnabled => true;
+
     private readonly IInteractionService _interactionService;
     private readonly IBundleService _bundleService;
     private readonly LayoutProcessRunner _layoutProcessRunner;
