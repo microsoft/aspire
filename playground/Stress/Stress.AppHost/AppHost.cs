@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 #pragma warning disable ASPIREDOTNETTOOL
+#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
 
 var builder = DistributedApplication.CreateBuilder(args);
 builder.Services.AddHttpClient();
@@ -99,6 +100,9 @@ builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard
 builder.AddExecutable("executableWithSingleArg", "dotnet", Environment.CurrentDirectory, "--version");
 builder.AddExecutable("executableWithSingleEscapedArg", "dotnet", Environment.CurrentDirectory, "one two");
 builder.AddExecutable("executableWithMultipleArgs", "dotnet", Environment.CurrentDirectory, "--version", "one two");
+var stressEmptyProjectPath = new Projects.Stress_Empty().ProjectPath;
+builder.AddExecutable("persistentExecutable", "dotnet", Environment.CurrentDirectory, "run", "--project", stressEmptyProjectPath, "--no-build")
+    .WithPersistentLifetime();
 
 IResourceBuilder<IResource>? previousResourceBuilder = null;
 

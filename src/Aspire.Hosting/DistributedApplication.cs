@@ -611,6 +611,14 @@ public class DistributedApplication : IHost, IAsyncDisposable
                 }
             }
 
+            var logger = _host.Services.GetRequiredService<ILogger<DistributedApplication>>();
+#pragma warning disable CS0618 // Type or member is obsolete
+            if (eventing is DistributedApplicationEventing { } eventingImpl && eventingImpl.HasSubscriptions<AfterEndpointsAllocatedEvent>())
+            {
+                logger.LogWarning("{EventName} is obsolete and is no longer raised by the DCP executor. Use {ResourceEventName} to observe per-resource endpoint allocation.", nameof(AfterEndpointsAllocatedEvent), nameof(ResourceEndpointsAllocatedEvent));
+            }
+#pragma warning restore CS0618 // Type or member is obsolete
+
             var beforeStartEvent = new BeforeStartEvent(_host.Services, _host.Services.GetRequiredService<DistributedApplicationModel>());
             using (var publishEventActivity = ProfilingTelemetry.StartAppHostPublishEvent(configuration, typeof(BeforeStartEvent)))
             {
@@ -653,8 +661,6 @@ public class DistributedApplication : IHost, IAsyncDisposable
 #pragma warning disable ASPIREPIPELINES001 // Pipeline APIs are experimental
             // Execute the before-start pipeline step
             var pipeline = _host.Services.GetRequiredService<IDistributedApplicationPipeline>();
-            var logger = _host.Services.GetRequiredService<ILogger<DistributedApplication>>();
-
             // Cast to internal implementation to access ExecuteStepSequentiallyAsync
             if (pipeline is not DistributedApplicationPipeline pipelineImpl)
             {

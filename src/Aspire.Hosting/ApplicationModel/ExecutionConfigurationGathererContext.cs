@@ -61,6 +61,7 @@ internal class ExecutionConfigurationGathererContext : IExecutionConfigurationGa
             }
             catch (Exception ex)
             {
+                resourceLogger.LogError(ex, "Failed to resolve argument for resource '{ResourceName}'. A dependency may have failed to start.", resource.Name);
                 exceptions.Add(ex);
             }
         }
@@ -81,6 +82,7 @@ internal class ExecutionConfigurationGathererContext : IExecutionConfigurationGa
             }
             catch (Exception ex)
             {
+                resourceLogger.LogError(ex, "Failed to resolve environment variable '{EnvironmentVariable}' for resource '{ResourceName}'. A dependency may have failed to start.", kvp.Key, resource.Name);
                 exceptions.Add(ex);
             }
         }

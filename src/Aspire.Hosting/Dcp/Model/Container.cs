@@ -62,6 +62,15 @@ internal sealed class ContainerSpec
     [JsonPropertyName("persistent")]
     public bool? Persistent { get; set; }
 
+    // Optional parent process PID used to scope persistent container cleanup to a process lifecycle.
+    // When set, MonitorTimestamp must also be set and Persistent must be true.
+    [JsonPropertyName("monitorPid")]
+    public int? MonitorPid { get; set; }
+
+    // Optional parent process identity timestamp used with MonitorPid to guard against PID reuse.
+    [JsonPropertyName("monitorTimestamp")]
+    public DateTime? MonitorTimestamp { get; set; }
+
     [JsonPropertyName("networks")]
     public List<ContainerNetworkConnection>? Networks { get; set; }
 
@@ -582,4 +591,3 @@ internal sealed class Container : CustomResource<ContainerSpec, ContainerStatus>
 
     public static string ObjectKind => Dcp.ContainerKind;
 }
-

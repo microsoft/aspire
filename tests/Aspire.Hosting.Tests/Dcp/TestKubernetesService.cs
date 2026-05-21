@@ -70,12 +70,19 @@ internal sealed class TestKubernetesService : IKubernetesService
         // "Allocate" port for a service.
         if (res is Service svc)
         {
-            if (svc.Status is null)
+            // Container tunnel client services are proxyless, but unlike dynamic
+            // container endpoints they must be ready before the dependent container starts.
+            if (svc.Spec.AddressAllocationMode != AddressAllocationModes.Proxyless ||
+                svc.Spec.Port is not null ||
+                svc.Metadata.Annotations?.ContainsKey(CustomResource.ContainerTunnelInstanceName) is true)
             {
-                svc.Status = new ServiceStatus();
+                if (svc.Status is null)
+                {
+                    svc.Status = new ServiceStatus();
+                }
+                svc.Status.EffectiveAddress = svc.Spec.Address ?? "localhost";
+                svc.Status.EffectivePort = svc.Spec.Port ?? Interlocked.Increment(ref _nextPort);
             }
-            svc.Status.EffectiveAddress = svc.Spec.Address ?? "localhost";
-            svc.Status.EffectivePort = svc.Spec.Port ?? Interlocked.Increment(ref _nextPort);
         }
 
         // Simulate proxy startup by marking it as running immediately.
@@ -92,10 +99,15 @@ internal sealed class TestKubernetesService : IKubernetesService
 
         lock (CreatedResources)
         {
+            var modifiedResources = AllocateProxylessContainerServicePorts(res);
             CreatedResources.Enqueue(res);
             foreach (var c in _watchChannels)
             {
                 c.Writer.TryWrite((WatchEventType.Added, res));
+                foreach (var modifiedResource in modifiedResources)
+                {
+                    c.Writer.TryWrite((WatchEventType.Modified, modifiedResource));
+                }
             }
         }
 
@@ -111,6 +123,32 @@ internal sealed class TestKubernetesService : IKubernetesService
                 c.Writer.TryWrite((WatchEventType.Modified, resource));
             }
         }
+    }
+
+    private List<CustomResource> AllocateProxylessContainerServicePorts(CustomResource resource)
+    {
+        if (resource is not Container container ||
+            container.TryGetAnnotationAsObjectList<ServiceProducerAnnotation>(CustomResource.ServiceProducerAnnotation, out var servicesProduced) is not true)
+        {
+            return [];
+        }
+
+        var modifiedResources = new List<CustomResource>();
+        foreach (var serviceProduced in servicesProduced)
+        {
+            var service = CreatedResources.OfType<Service>().FirstOrDefault(s => s.Metadata.Name == serviceProduced.ServiceName);
+            if (service?.Spec.AddressAllocationMode != AddressAllocationModes.Proxyless || service.Spec.Port is not null || service.Status?.EffectivePort is not null)
+            {
+                continue;
+            }
+
+            service.Status ??= new ServiceStatus();
+            service.Status.EffectiveAddress = service.Spec.Address ?? "localhost";
+            service.Status.EffectivePort = Interlocked.Increment(ref _nextPort);
+            modifiedResources.Add(service);
+        }
+
+        return modifiedResources;
     }
 
     public async Task<T> DeleteAsync<T>(string name, string? namespaceParameter = null, CancellationToken cancellationToken = default) where T : CustomResource, IKubernetesStaticMetadata

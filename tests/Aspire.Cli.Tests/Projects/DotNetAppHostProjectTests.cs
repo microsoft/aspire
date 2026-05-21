@@ -5,6 +5,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
@@ -205,10 +206,12 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             GetProjectItemsAndPropertiesAsyncCallback = (_, _, properties, _, _) =>
             {
                 Assert.Contains("AspireUseCliBundle", properties);
-                return (0, JsonDocument.Parse("""
+                return (0, JsonDocument.Parse($$"""
                     {
                       "Properties": {
                         "MSBuildVersion": "17.0.0",
+                        "IsAspireHost": "true",
+                        "AspireHostingSDKVersion": "{{VersionHelper.GetDefaultTemplateVersion()}}",
                         "AspireUseCliBundle": "true"
                       },
                       "Items": {}

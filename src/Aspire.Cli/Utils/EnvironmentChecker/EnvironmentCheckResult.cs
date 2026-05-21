@@ -4,6 +4,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using Aspire.Cli.Acquisition;
 
 namespace Aspire.Cli.Utils.EnvironmentChecker;
 
@@ -130,6 +131,12 @@ internal sealed class DoctorCheckResponse
     /// </summary>
     [JsonPropertyName("summary")]
     public required DoctorCheckSummary Summary { get; set; }
+
+    /// <summary>
+    /// Gets or sets the discovered Aspire CLI installations.
+    /// </summary>
+    [JsonPropertyName("installations")]
+    public List<InstallationInfo>? Installations { get; set; }
 }
 
 /// <summary>

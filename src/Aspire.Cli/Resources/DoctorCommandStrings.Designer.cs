@@ -204,6 +204,15 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to  (channel: {0}).
+        /// </summary>
+        public static string ChannelSuffixFormat {
+            get {
+                return ResourceManager.GetString("ChannelSuffixFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to AppHost version {0} ({1}).
         /// </summary>
         public static string AppHostVersionMessageFormat {
@@ -389,6 +398,132 @@ namespace Aspire.Cli.Resources {
         public static string DevCertsTrustLabelPartial {
             get {
                 return ResourceManager.GetString("DevCertsTrustLabelPartial", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire CLI Installations.
+        /// </summary>
+        public static string HeaderInstallations {
+            get {
+                return ResourceManager.GetString("HeaderInstallations", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Path.
+        /// </summary>
+        public static string ColumnPath {
+            get {
+                return ResourceManager.GetString("ColumnPath", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Version.
+        /// </summary>
+        public static string ColumnVersion {
+            get {
+                return ResourceManager.GetString("ColumnVersion", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Channel.
+        /// </summary>
+        public static string ColumnChannel {
+            get {
+                return ResourceManager.GetString("ColumnChannel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Route.
+        /// </summary>
+        public static string ColumnRoute {
+            get {
+                return ResourceManager.GetString("ColumnRoute", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to PATH status.
+        /// </summary>
+        public static string ColumnPathStatus {
+            get {
+                return ResourceManager.GetString("ColumnPathStatus", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to (current).
+        /// </summary>
+        public static string ValueCurrentMarker {
+            get {
+                return ResourceManager.GetString("ValueCurrentMarker", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to (unknown).
+        /// </summary>
+        public static string ValueUnknown {
+            get {
+                return ResourceManager.GetString("ValueUnknown", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to (not probed).
+        /// </summary>
+        public static string ValueNotProbed {
+            get {
+                return ResourceManager.GetString("ValueNotProbed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to (probe failed).
+        /// </summary>
+        public static string ValueProbeFailed {
+            get {
+                return ResourceManager.GetString("ValueProbeFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to active.
+        /// </summary>
+        public static string ValuePathActive {
+            get {
+                return ResourceManager.GetString("ValuePathActive", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to shadowed.
+        /// </summary>
+        public static string ValuePathShadowed {
+            get {
+                return ResourceManager.GetString("ValuePathShadowed", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to not on PATH.
+        /// </summary>
+        public static string ValuePathNotOnPath {
+            get {
+                return ResourceManager.GetString("ValuePathNotOnPath", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Install discovery failed. See the Aspire CLI logs for details..
+        /// </summary>
+        public static string InstallationDiscoveryFailedReason {
+            get {
+                return ResourceManager.GetString("InstallationDiscoveryFailedReason", resourceCulture);
             }
         }
     }

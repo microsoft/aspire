@@ -4,6 +4,7 @@
 #pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPIPELINES003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREFILESYSTEM001 // Type is for evaluation purposes only
+#pragma warning disable ASPIREPERSISTENCE001 // Persistence annotation APIs are experimental.
 
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
@@ -22,6 +23,26 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class ContainerResourceBuilderExtensions
 {
+    /// <summary>
+    /// Set whether a container resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the resource.
+    /// </summary>
+    /// <typeparam name="T">The resource type.</typeparam>
+    /// <param name="builder">The resource builder.</param>
+    /// <param name="proxyEnabled">Should endpoints for the resource support using a proxy?</param>
+    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>
+    /// This method is intended to support scenarios with persistent lifetime resources where it is desirable for the resource to be accessible over the same
+    /// port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
+    /// The user needs to be careful to ensure that endpoints are using unique ports when disabling proxy support as by default for proxy-less
+    /// endpoints, Aspire will allocate the target port as the host port, which will increase the chance of port conflicts.
+    /// </remarks>
+    // Keep this method on ContainerResourceBuilderExtensions for binary compatibility; moving it changes the declaring type in metadata.
+    [AspireExportIgnore(Reason = "Binary compatibility shim for the resource-level WithEndpointProxySupport overload.")]
+    public static IResourceBuilder<T> WithEndpointProxySupport<T>(this IResourceBuilder<T> builder, bool proxyEnabled) where T : ContainerResource
+    {
+        return ResourceBuilderExtensions.SetEndpointProxySupport(builder, proxyEnabled);
+    }
+
     /// <summary>
     /// Ensures that a container resource has PipelineStepAnnotations for building and pushing.
     /// </summary>
@@ -532,16 +553,20 @@ public static class ContainerResourceBuilderExtensions
     /// </summary>
     /// <typeparam name="T">The resource type.</typeparam>
     /// <param name="builder">Builder for the container resource.</param>
-    /// <param name="lifetime">The lifetime behavior of the container resource. The defaults behavior is <see cref="ContainerLifetime.Session"/>.</param>
+    /// <param name="lifetime">The lifetime behavior of the container resource. The default behavior is <see cref="ContainerLifetime.Session"/>.</param>
     /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
+    /// <para>
+    /// Prefer <see cref="ResourceBuilderExtensions.WithPersistentLifetime{T}(IResourceBuilder{T})"/> or
+    /// <see cref="ResourceBuilderExtensions.WithSessionLifetime{T}(IResourceBuilder{T})"/> for new code.
+    /// </para>
     /// <example>
     /// Marking a container resource to have a <see cref="ContainerLifetime.Persistent"/> lifetime.
     /// <code language="csharp">
     /// var builder = DistributedApplication.CreateBuilder(args);
     ///
     /// builder.AddContainer("mycontainer", "myimage")
-    ///        .WithLifetime(ContainerLifetime.Persistent);
+    ///        .WithPersistentLifetime();
     ///
     /// builder.Build().Run();
     /// </code>
@@ -552,7 +577,17 @@ public static class ContainerResourceBuilderExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        return builder.WithAnnotation(new ContainerLifetimeAnnotation { Lifetime = lifetime }, ResourceAnnotationMutationBehavior.Replace);
+        return builder
+            .WithAnnotation(new PersistenceAnnotation
+            {
+                Mode = lifetime switch
+                {
+                    ContainerLifetime.Session => PersistenceMode.Session,
+                    ContainerLifetime.Persistent => PersistenceMode.Persistent,
+                    _ => throw new ArgumentOutOfRangeException(nameof(lifetime), lifetime, null)
+                }
+            }, ResourceAnnotationMutationBehavior.Replace)
+            .WithAnnotation(new ContainerLifetimeAnnotation { Lifetime = lifetime }, ResourceAnnotationMutationBehavior.Replace);
     }
 
     /// <summary>
@@ -1460,30 +1495,6 @@ public static class ContainerResourceBuilderExtensions
             // In publish mode, use a bind mount as it is better supported by publish targets
             return builder.WithBindMount(sourceFullPath, destinationPath, isReadOnly: true);
         }
-    }
-
-    /// <summary>
-    /// Set whether a container resource can use proxied endpoints or whether they should be disabled for all endpoints belonging to the container.
-    /// If set to <c>false</c>, endpoints belonging to the container resource will ignore the configured proxy settings and run proxy-less.
-    /// </summary>
-    /// <typeparam name="T">The type of container resource.</typeparam>
-    /// <param name="builder">The resource builder for the container resource.</param>
-    /// <param name="proxyEnabled">Should endpoints for the container resource support using a proxy?</param>
-    /// <returns>The <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <remarks>
-    /// This method is intended to support scenarios with persistent lifetime containers where it is desirable for the container to be accessible over the same
-    /// port whether the Aspire application is running or not. Proxied endpoints bind ports that are only accessible while the Aspire application is running.
-    /// The user needs to be careful to ensure that container endpoints are using unique ports when disabling proxy support as by default for proxy-less
-    /// endpoints, Aspire will allocate the internal container port as the host port, which will increase the chance of port conflicts.
-    /// </remarks>
-    [AspireExport(Description = "Configures endpoint proxy support")]
-    public static IResourceBuilder<T> WithEndpointProxySupport<T>(this IResourceBuilder<T> builder, bool proxyEnabled) where T : ContainerResource
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-
-        builder.WithAnnotation(new ProxySupportAnnotation { ProxyEnabled = proxyEnabled }, ResourceAnnotationMutationBehavior.Replace);
-
-        return builder;
     }
 
     /// <summary>

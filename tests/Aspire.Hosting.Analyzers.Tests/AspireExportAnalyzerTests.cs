@@ -988,6 +988,72 @@ public class AspireExportAnalyzerTests
     }
 
     [Fact]
+    public async Task DtoWithGetOnlyMutableCollectionProperties_ReportsASPIREEXPORT015()
+    {
+        var diagnostic = AspireExportAnalyzer.Diagnostics.s_dtoMutableCollectionPropertyMustBeInitSettable;
+
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+            using System.Collections.Generic;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            [AspireDto]
+            public class MyDtoType
+            {
+                public List<string> Items { get; } = new();
+                public Dictionary<string, string> Metadata { get; } = new();
+            }
+            """,
+            [
+                new DiagnosticResult(diagnostic).WithSpan(9, 25, 9, 30).WithArguments("MyDtoType.Items"),
+                new DiagnosticResult(diagnostic).WithSpan(10, 39, 10, 47).WithArguments("MyDtoType.Metadata")
+            ]);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task DtoWithInitMutableCollectionProperties_NoDiagnostics()
+    {
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+            using System.Collections.Generic;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            [AspireDto]
+            public class MyDtoType
+            {
+                public List<string> Items { get; init; } = new();
+                public Dictionary<string, string> Metadata { get; init; } = new();
+            }
+            """, []);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
+    public async Task DtoWithIgnoredGetOnlyMutableCollectionProperties_NoDiagnostics()
+    {
+        var test = AnalyzerTest.Create<AspireExportAnalyzer>("""
+            using Aspire.Hosting;
+            using System.Collections.Generic;
+
+            var builder = DistributedApplication.CreateBuilder(args);
+
+            [AspireDto]
+            public class MyDtoType
+            {
+                [AspireExportIgnore(Reason = "Not part of the ATS surface.")]
+                public List<string> Items { get; } = new();
+            }
+            """, []);
+
+        await test.RunAsync();
+    }
+
+    [Fact]
     public async Task UnionWithPrimitives_NoDiagnostics()
     {
         var test = AnalyzerTest.Create<AspireExportAnalyzer>("""

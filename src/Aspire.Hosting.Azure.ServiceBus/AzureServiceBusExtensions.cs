@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREPERSISTENCE001 // Resource lifetime APIs are experimental.
 
 using System.Text;
 using System.Text.Json;
@@ -433,22 +434,14 @@ public static class AzureServiceBusExtensions
             context.EnvironmentVariables["MSSQL_SA_PASSWORD"] = passwordParameter;
         }));
 
-        var lifetime = ContainerLifetime.Session;
-
         var surrogate = new AzureServiceBusEmulatorResource(builder.Resource);
         var surrogateBuilder = builder.ApplicationBuilder.CreateResourceBuilder(surrogate);
 
         if (configureContainer != null)
         {
             configureContainer(surrogateBuilder);
-
-            if (surrogate.TryGetLastAnnotation<ContainerLifetimeAnnotation>(out var lifetimeAnnotation))
-            {
-                lifetime = lifetimeAnnotation.Lifetime;
-            }
+            sqlServerResource = sqlServerResource.WithLifetimeOf(surrogateBuilder);
         }
-
-        sqlServerResource = sqlServerResource.WithLifetime(lifetime);
 
         // RunAsEmulator() can be followed by custom model configuration so we need to delay the creation of the Config.json file
         // until all resources are about to be prepared and annotations can't be updated anymore.

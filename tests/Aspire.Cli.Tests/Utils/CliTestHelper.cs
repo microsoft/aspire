@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text;
+using Aspire.Cli.Acquisition;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Backchannel;
@@ -128,6 +129,8 @@ internal static class CliTestHelper
         services.AddSingleton(options.PackagingServiceFactory);
         services.AddSingleton(options.CliExecutionContextFactory);
         services.AddSingleton(options.DiskCacheFactory);
+        services.AddSingleton<IAppHostInfoDiskCache, NullAppHostInfoDiskCache>();
+        services.AddSingleton<IAppHostInfoResolver, AppHostInfoResolver>();
         services.AddSingleton(options.CliHostEnvironmentFactory);
         services.AddSingleton(options.CliDownloaderFactory);
         services.AddSingleton(options.FirstTimeUseNoticeSentinelFactory);
@@ -158,6 +161,17 @@ internal static class CliTestHelper
         services.AddSingleton(options.BundlePayloadProviderFactory);
         services.AddSingleton(options.BundleServiceFactory);
         services.AddSingleton<BundleNuGetService>();
+        services.AddSingleton<IInstallSidecarReader, InstallSidecarReader>();
+        services.AddSingleton<IPeerInstallProbe, PeerInstallProbe>();
+        services.AddSingleton<IInstallationDiscovery, InstallationDiscovery>();
+        services.AddSingleton<WingetFirstRunProbe>();
+        // Always register the null reader by default so unit tests don't reach into the
+        // actual user registry through WingetFirstRunProbe on Windows. Tests that need
+        // the real reader (or a fake) should replace the registration explicitly.
+        services.AddSingleton<IWindowsRegistryReader, NullWindowsRegistryReader>();
+        // IdentityChannelReader for AspireVersionCheck (doctor) — uses the same
+        // pattern as production wiring in Program.cs.
+        services.AddSingleton<IIdentityChannelReader>(_ => new IdentityChannelReader(typeof(Program).Assembly));
         services.AddSingleton<ProfileCaptureService>();
 
         // AppHost project handlers - must match Program.cs registration pattern
@@ -670,8 +684,8 @@ internal sealed class NullBundleService : IBundleService
     public Task<BundleExtractResult> ExtractAsync(string destinationPath, bool force = false, CancellationToken cancellationToken = default)
         => Task.FromResult(BundleExtractResult.NoPayload);
 
-    public Task<Layout.LayoutConfiguration?> EnsureExtractedAndGetLayoutAsync(CancellationToken cancellationToken = default)
-        => Task.FromResult<Layout.LayoutConfiguration?>(null);
+    public Task<BundleLayoutLease?> EnsureExtractedAndAcquireLayoutAsync(string holderKind, string? commandName = null, CancellationToken cancellationToken = default)
+        => Task.FromResult<BundleLayoutLease?>(null);
 
     public string? GetDefaultExtractDir(string processPath) => null;
 }
@@ -700,8 +714,8 @@ internal sealed class TestBundleService(bool isBundle) : IBundleService
     public Task<BundleExtractResult> ExtractAsync(string destinationPath, bool force = false, CancellationToken cancellationToken = default)
         => Task.FromResult(isBundle ? BundleExtractResult.AlreadyUpToDate : BundleExtractResult.NoPayload);
 
-    public Task<Layout.LayoutConfiguration?> EnsureExtractedAndGetLayoutAsync(CancellationToken cancellationToken = default)
-        => Task.FromResult(Layout);
+    public Task<BundleLayoutLease?> EnsureExtractedAndAcquireLayoutAsync(string holderKind, string? commandName = null, CancellationToken cancellationToken = default)
+        => Task.FromResult(Layout is null ? null : new BundleLayoutLease(Layout, lease: null));
 
     public string? GetDefaultExtractDir(string processPath) => null;
 }

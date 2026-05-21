@@ -1,12 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Dashboard.Components.Layout;
-using Aspire.Dashboard.Components.Pages;
+using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Resources;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
+using Microsoft.FluentUI.AspNetCore.Components;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Utils;
@@ -18,14 +19,13 @@ public static class FilterHelpers
         return filters.Where(filter => filter.Enabled);
     }
 
-    public static List<MenuButtonItem> GetFilterMenuItems<TView, TR>(
-        this IPageWithSessionAndUrlState<TView, TR> page,
+    public static List<MenuButtonItem> GetFilterMenuItems(
         IReadOnlyList<FieldTelemetryFilter> filters,
         Action clearFilters,
-        Func<FieldTelemetryFilter, Task> openFilterAsync,
+        Func<FieldTelemetryFilter?, Task> openFilterAsync,
+        Func<Task> afterChangeAsync,
         IStringLocalizer<StructuredFiltering> filterLoc,
-        IStringLocalizer<Dialogs> dialogsLoc,
-        AspirePageContentLayout? contentLayout) where TR : class
+        IStringLocalizer<Dialogs> dialogsLoc)
     {
         var filterMenuItems = new List<MenuButtonItem>();
 
@@ -58,7 +58,7 @@ public static class FilterHelpers
                         filter.Enabled = false;
                     }
 
-                    await page.AfterViewModelChangedAsync(contentLayout, waitToApplyMobileChange: false).ConfigureAwait(true);
+                    await afterChangeAsync().ConfigureAwait(true);
                 }
             });
         }
@@ -75,7 +75,7 @@ public static class FilterHelpers
                         filter.Enabled = true;
                     }
 
-                    await page.AfterViewModelChangedAsync(contentLayout, waitToApplyMobileChange: false).ConfigureAwait(true);
+                    await afterChangeAsync().ConfigureAwait(true);
                 }
             });
         }
@@ -87,10 +87,39 @@ public static class FilterHelpers
             OnClick = async () =>
             {
                 clearFilters();
-                await page.AfterViewModelChangedAsync(contentLayout, waitToApplyMobileChange: false).ConfigureAwait(true);
+                await afterChangeAsync().ConfigureAwait(true);
             }
         });
 
         return filterMenuItems;
+    }
+
+    public static async Task OpenFilterAsync(
+        FieldTelemetryFilter? entry,
+        DashboardDialogService dialogService,
+        EventCallback<DialogResult> onDialogResult,
+        List<string> propertyKeys,
+        List<string> knownKeys,
+        Func<string, Dictionary<string, int>> getFieldValues,
+        IStringLocalizer<StructuredFiltering> filterLoc)
+    {
+        var title = entry is not null ? filterLoc[nameof(StructuredFiltering.DialogTitleEditFilter)] : filterLoc[nameof(StructuredFiltering.DialogTitleAddFilter)];
+        var parameters = new DialogParameters
+        {
+            OnDialogResult = onDialogResult,
+            Title = title,
+            Alignment = HorizontalAlignment.Right,
+            PrimaryAction = null,
+            SecondaryAction = null,
+            Width = dialogService.IsDesktop ? "450px" : "100%"
+        };
+        var data = new FilterDialogViewModel
+        {
+            Filter = entry,
+            PropertyKeys = propertyKeys,
+            KnownKeys = knownKeys,
+            GetFieldValues = getFieldValues
+        };
+        await dialogService.ShowPanelAsync<FilterDialog>(data, parameters).ConfigureAwait(false);
     }
 }

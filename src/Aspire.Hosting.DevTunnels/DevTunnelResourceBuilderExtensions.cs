@@ -177,7 +177,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
                 async Task DeleteUnmodeledPortsAsync()
                 {
                     var existingPorts = await devTunnelClient.GetPortListAsync(tunnelResource.TunnelId, logger, ct).ConfigureAwait(false);
-                    var modeledPortNumbers = tunnelResource.Ports.Select(p => p.TargetEndpoint.Port).ToHashSet();
+                    var modeledPortNumbers = (await Task.WhenAll(tunnelResource.Ports.Select(p => p.GetTunnelPortAsync(ct).AsTask())).ConfigureAwait(false)).ToHashSet();
                     var unmodeledPorts = existingPorts.Ports.Where(p => !modeledPortNumbers.Contains(p.PortNumber)).ToList();
                     if (unmodeledPorts.Count > 0)
                     {
@@ -189,6 +189,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
                 async Task StartPortAsync(DevTunnelPortResource portResource)
                 {
                     var portLogger = e.Services.GetRequiredService<ResourceLoggerService>().GetLogger(portResource);
+                    var tunnelPort = await portResource.GetTunnelPortAsync(ct).ConfigureAwait(false);
 
                     // Clear any prior port status
                     portLogger.LogInformation("Tunnel starting");
@@ -202,17 +203,17 @@ public static partial class DevTunnelsResourceBuilderExtensions
                     {
                         _ = await devTunnelClient.CreatePortAsync(
                                 portResource.DevTunnel.TunnelId,
-                                portResource.TargetEndpoint.Port,
+                                tunnelPort,
                                 portResource.Options,
                                 portLogger,
                                 ct)
                             .ConfigureAwait(false);
 
-                        portLogger.LogInformation("Created dev tunnel port '{Port}' on tunnel '{Tunnel}' targeting endpoint '{Endpoint}' on resource '{TargetResource}'", portResource.TargetEndpoint.Port, portResource.DevTunnel.TunnelId, portResource.TargetEndpoint.EndpointName, portResource.TargetEndpoint.Resource.Name);
+                        portLogger.LogInformation("Created dev tunnel port '{Port}' on tunnel '{Tunnel}' targeting endpoint '{Endpoint}' on resource '{TargetResource}'", tunnelPort, portResource.DevTunnel.TunnelId, portResource.TargetEndpoint.EndpointName, portResource.TargetEndpoint.Resource.Name);
                     }
                     catch (Exception ex)
                     {
-                        portLogger.LogError(ex, "Error trying to create dev tunnel port '{Port}' on tunnel '{Tunnel}': {Error}", portResource.TargetEndpoint.Port, portResource.DevTunnel.TunnelId, ex.Message);
+                        portLogger.LogError(ex, "Error trying to create dev tunnel port '{Port}' on tunnel '{Tunnel}': {Error}", tunnelPort, portResource.DevTunnel.TunnelId, ex.Message);
 #pragma warning disable CS0618 // Type or member is obsolete
                         portResource.TunnelEndpointAnnotation.AllocatedEndpointSnapshot.SetException(ex);
 #pragma warning restore CS0618 // Type or member is obsolete
@@ -589,7 +590,7 @@ public static partial class DevTunnelsResourceBuilderExtensions
         var healtCheckKey = $"{portName}-check";
         tunnelBuilder.ApplicationBuilder.Services.AddHealthChecks().Add(new HealthCheckRegistration(
             healtCheckKey,
-            services => new DevTunnelPortHealthCheck(tunnel, targetEndpoint.Port),
+            services => new DevTunnelPortHealthCheck(portResource),
             failureStatus: default,
             tags: default,
             timeout: default));

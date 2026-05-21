@@ -657,6 +657,22 @@ public static class JavaScriptHostingExtensions
         }
     }
 
+    private static string GetNpmScriptRuntimeImage(
+        string appDirectory,
+        IServiceProvider services,
+        DockerfileBaseImageAnnotation? baseImageAnnotation,
+        JavaScriptPackageManagerAnnotation packageManager,
+        string buildImage)
+    {
+        if (!string.IsNullOrEmpty(baseImageAnnotation?.RuntimeImage))
+        {
+            return baseImageAnnotation.RuntimeImage;
+        }
+
+        return packageManager.ResolveNpmScriptRuntimeImage?.Invoke(buildImage)
+            ?? GetDefaultBaseImage(appDirectory, "alpine", services);
+    }
+
     private static IResourceBuilder<TResource> CreateDefaultJavaScriptAppBuilder<TResource>(
         this IDistributedApplicationBuilder builder,
         TResource resource,
@@ -783,7 +799,7 @@ public static class JavaScriptHostingExtensions
                             }
                             case JavaScriptPublishMode.NpmScript:
                             {
-                                var runtimeImage = baseImageAnnotation?.RuntimeImage ?? GetDefaultBaseImage(appDirectory, "alpine", dockerfileContext.Services);
+                                var runtimeImage = GetNpmScriptRuntimeImage(appDirectory, dockerfileContext.Services, baseImageAnnotation, packageManager, baseImage);
 
                                 // Production dependencies stage for optimized image
                                 var prodDepsStage = dockerfileContext.Builder
@@ -828,11 +844,15 @@ public static class JavaScriptHostingExtensions
                                     ? $"{packageManager.ExecutableName} {packageManager.ScriptCommand ?? "run"} {publishMode.StartScriptName}"
                                     : $"{packageManager.ExecutableName} {packageManager.ScriptCommand ?? "run"} {publishMode.StartScriptName} {publishMode.RunScriptArguments}";
 
-                                dockerfileContext.Builder
+                                var runtimeStage = dockerfileContext.Builder
                                     .From(runtimeImage, "runtime")
                                     .WorkDir("/app")
                                     .CopyFrom("build", "/app", "/app")
-                                    .CopyFrom("prod-deps", "/app/node_modules", "./node_modules")
+                                    .CopyFrom("prod-deps", "/app/node_modules", "./node_modules");
+
+                                packageManager.InitializeDockerRuntimeStage?.Invoke(runtimeStage);
+
+                                runtimeStage
                                     .Env("NODE_ENV", "production")
                                     .Entrypoint(["sh", "-c", $"exec {runCommand}"]);
                                 break;
@@ -1319,6 +1339,7 @@ public static class JavaScriptHostingExtensions
     /// Bun forwards script arguments without requiring the <c>--</c> command separator, so this method configures the resource to omit it.
     /// When publishing and a bun lockfile (<c>bun.lock</c> or <c>bun.lockb</c>) is present, <c>--frozen-lockfile</c> is used by default.
     /// Publishing to a container requires Bun to be present in the build image. This method configures a Bun build image when one is not already specified.
+    /// <see cref="PublishAsNpmScript{TResource}"/> also uses the Bun image for the runtime stage unless a custom runtime image is configured.
     /// To use a specific Bun version, configure a custom build image (for example, <c>oven/bun:&lt;tag&gt;</c>) using <see cref="ContainerResourceBuilderExtensions.WithDockerfileBaseImage{T}(IResourceBuilder{T}, string?, string?)"/>.
     /// </remarks>
     /// <example>
@@ -1360,6 +1381,7 @@ public static class JavaScriptHostingExtensions
                 PackageFilesPatterns = { new CopyFilePattern(packageFilesSourcePattern, "./") },
                 // bun supports passing script flags without the `--` separator.
                 CommandSeparator = null,
+                ResolveNpmScriptRuntimeImage = buildImage => buildImage,
             })
             .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs])
             {
@@ -1508,6 +1530,12 @@ public static class JavaScriptHostingExtensions
                 CommandSeparator = null,
                 // pnpm is not included in the Node.js Docker image by default, so we need to enable it via corepack
                 InitializeDockerBuildStage = stage => stage.Run("corepack enable pnpm"),
+                InitializeDockerRuntimeStage = stage =>
+                {
+                    // Corepack's shim is not enough by itself: without invoking pnpm during the image build,
+                    // the first container start can try to download pnpm before running the app.
+                    stage.Run("corepack enable pnpm && pnpm --version");
+                },
             })
             .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs])
             {

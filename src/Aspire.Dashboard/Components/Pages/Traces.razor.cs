@@ -362,24 +362,14 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
             await _contentLayout.CloseMobileToolbarAsync();
         }
 
-        var title = entry is not null ? FilterLoc[nameof(StructuredFiltering.DialogTitleEditFilter)] : FilterLoc[nameof(StructuredFiltering.DialogTitleAddFilter)];
-        var parameters = new DialogParameters
-        {
-            OnDialogResult = DialogService.CreateDialogCallback(this, HandleFilterDialog),
-            Title = title,
-            Alignment = HorizontalAlignment.Right,
-            PrimaryAction = null,
-            SecondaryAction = null,
-            Width = "450px"
-        };
-        var data = new FilterDialogViewModel
-        {
-            Filter = entry,
-            PropertyKeys = TelemetryRepository.GetTracePropertyKeys(PageViewModel.SelectedResource.Id?.GetResourceKey()),
-            KnownKeys = KnownTraceFields.AllFields,
-            GetFieldValues = TelemetryRepository.GetTraceFieldValues
-        };
-        await DialogService.ShowPanelAsync<FilterDialog>(data, parameters);
+        await FilterHelpers.OpenFilterAsync(
+            entry,
+            DialogService,
+            DialogService.CreateDialogCallback(this, HandleFilterDialog),
+            propertyKeys: TelemetryRepository.GetTracePropertyKeys(PageViewModel.SelectedResource.Id?.GetResourceKey()),
+            knownKeys: KnownTraceFields.AllFields,
+            getFieldValues: TelemetryRepository.GetTraceFieldValues,
+            FilterLoc);
     }
 
     private async Task HandleFilterDialog(DialogResult result)
@@ -424,13 +414,13 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
 
     private List<MenuButtonItem> GetFilterMenuItems()
     {
-        return this.GetFilterMenuItems(
+        return FilterHelpers.GetFilterMenuItems(
             TracesViewModel.Filters,
             clearFilters: TracesViewModel.ClearFilters,
             openFilterAsync: OpenFilterAsync,
+            afterChangeAsync: () => this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: false),
             filterLoc: FilterLoc,
-            dialogsLoc: DialogsLoc,
-            contentLayout: _contentLayout);
+            dialogsLoc: DialogsLoc);
     }
 
     private static bool HasGenAISpans(OtlpTrace trace)

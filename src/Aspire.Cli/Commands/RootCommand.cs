@@ -15,6 +15,7 @@ using Aspire.Cli.Bundles;
 using Aspire.Cli.Commands.Sdk;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
+using Aspire.Cli.Utils;
 using BaseRootCommand = System.CommandLine.RootCommand;
 
 namespace Aspire.Cli.Commands;
@@ -66,6 +67,13 @@ internal sealed class RootCommand : BaseRootCommand
         Description = RootCommandStrings.CliWaitForDebuggerArgumentDescription,
         Recursive = true,
         Hidden = true,
+        DefaultValueFactory = _ => false
+    };
+
+    public static readonly Option<bool> StartDebugSessionOption = new(CommonOptionNames.StartDebugSession)
+    {
+        Description = RunCommandStrings.StartDebugSessionArgumentDescription,
+        Recursive = true,
         DefaultValueFactory = _ => false
     };
 
@@ -202,6 +210,10 @@ internal sealed class RootCommand : BaseRootCommand
         Options.Add(BannerOption);
         Options.Add(WaitForDebuggerOption);
         Options.Add(CliWaitForDebuggerOption);
+        if (ExtensionHelper.IsExtensionHost(interactionService, out _, out _))
+        {
+            Options.Add(StartDebugSessionOption);
+        }
         Options.Add(CaptureProfileOption);
         Options.Add(CaptureProfileOutputOption);
         Options.Add(CaptureProfileDelayOption);

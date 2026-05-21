@@ -111,7 +111,7 @@ public static class HostedAgentResourceBuilderExtensions
             var targetPort = existingHttpEndpoint?.TargetPort ?? 8088;
 
             builder
-                .WithHttpEndpoint(name: "http", env: "DEFAULT_AD_PORT", targetPort: targetPort)
+                .WithHttpEndpoint(name: "http", env: "DEFAULT_AD_PORT", targetPort: targetPort, isProxied: true)
                 .WithUrls((ctx) =>
                 {
                     var http = ctx.Urls.FirstOrDefault(u => u.Endpoint?.EndpointName == "http" || u.Endpoint?.EndpointName == "https");
