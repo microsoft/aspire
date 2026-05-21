@@ -267,6 +267,15 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
 
+        var connectionLostMessageDisplayed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        interactionService.DisplayMessageCallback = (emoji, message, _) =>
+        {
+            if (emoji.Equals(KnownEmojis.Warning) && message == RunCommandStrings.AppHostConnectionLostWaitingForExit)
+            {
+                connectionLostMessageDisplayed.TrySetResult();
+            }
+        };
+
         var projectLocator = new TestProjectLocator
         {
             UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
@@ -274,6 +283,7 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         };
 
         var dashboardRequested = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var appHostCanExit = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var projectFactory = new TestAppHostProjectFactory
         {
             RunAsyncCallback = async (context, cancellationToken) =>
@@ -294,6 +304,8 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
                     (OutputLineStream.StdErr, "Endpoint 'http' must specify a port when isProxied is false.")
                 ]);
 
+                await appHostCanExit.Task.WaitAsync(cancellationToken);
+
                 return CliExitCodes.FailedToDotnetRunAppHost;
             }
         };
@@ -309,9 +321,16 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"run --apphost {appHostFile.FullName}");
 
-        var exitCode = await result.InvokeAsync().DefaultTimeout();
+        var pendingCommand = result.InvokeAsync();
+        await connectionLostMessageDisplayed.Task.DefaultTimeout();
+
+        Assert.False(pendingCommand.IsCompleted);
+
+        appHostCanExit.SetResult();
+        var exitCode = await pendingCommand.DefaultTimeout();
 
         Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+        Assert.Contains(interactionService.DisplayedMessages, message => message.Emoji.Equals(KnownEmojis.Warning) && message.Message == RunCommandStrings.AppHostConnectionLostWaitingForExit);
         Assert.Contains(interactionService.DisplayedLines, line => line.Line == "Endpoint 'http' must specify a port when isProxied is false.");
         Assert.DoesNotContain(interactionService.DisplayedErrors, error => error.Contains("RPC connection closed", StringComparison.Ordinal));
         Assert.DoesNotContain(interactionService.DisplayedErrors, error => error.Contains("Unexpected error", StringComparison.Ordinal));

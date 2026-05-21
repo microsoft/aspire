@@ -279,6 +279,12 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string AppHostConnectionLostWaitingForExit {
+            get {
+                return ResourceManager.GetString("AppHostConnectionLostWaitingForExit", resourceCulture);
+            }
+        }
+
         public static string ProcessId {
             get {
                 return ResourceManager.GetString("ProcessId", resourceCulture);

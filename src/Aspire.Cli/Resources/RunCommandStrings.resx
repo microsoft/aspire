@@ -238,6 +238,9 @@
   <data name="RecentAppHostStartupOutput" xml:space="preserve">
     <value>Recent AppHost startup output</value>
   </data>
+  <data name="AppHostConnectionLostWaitingForExit" xml:space="preserve">
+    <value>The connection to the child AppHost was lost. Waiting for the AppHost process to exit. Press Ctrl+C to stop waiting.</value>
+  </data>
   <data name="ProcessId" xml:space="preserve">
     <value>PID</value>
   </data>

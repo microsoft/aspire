@@ -26,6 +26,7 @@ internal sealed class TestInteractionService : IInteractionService
     public Func<string, bool, bool>? ConfirmCallback { get; set; }
     public Action<string>? ShowStatusCallback { get; set; }
     public Action<string>? ShowDynamicStatusCallback { get; set; }
+    public Action<KnownEmoji, string, ConsoleOutput?>? DisplayMessageCallback { get; set; }
     public Action<string>? DisplayVersionUpdateNotificationCallback { get; set; }
     public string? LastVersionUpdateCommand { get; private set; }
 
@@ -227,6 +228,8 @@ internal sealed class TestInteractionService : IInteractionService
         {
             DisplayedMessages.Add((emoji, message, consoleOverride));
         }
+
+        DisplayMessageCallback?.Invoke(emoji, message, consoleOverride);
     }
 
     public void DisplaySuccess(string message, bool allowMarkup = false)
