@@ -29,7 +29,7 @@
       </trans-unit>
       <trans-unit id="ConsoleLogsNoLogsFound">
         <source>No logs found</source>
-        <target state="new">No logs found</target>
+        <target state="translated">Nessun log trovato</target>
         <note />
       </trans-unit>
       <trans-unit id="ConsoleLogsNoResourceSelected">

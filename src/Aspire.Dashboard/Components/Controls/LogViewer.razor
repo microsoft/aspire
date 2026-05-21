@@ -15,7 +15,7 @@
             @if (ShowNoLogsMessage && logEntries.EntriesCount == 0)
             {
                 <div class="console-empty-message" role="status" aria-live="polite">
-                    <FluentIcon Value="@(new Icons.Regular.Size16.SlideText())" />
+                    <FluentIcon Value="@(new Icons.Regular.Size16.SlideText())" aria-hidden="true" />
                     <span>@Loc[nameof(ConsoleLogs.ConsoleLogsNoLogsFound)]</span>
                 </div>
             }

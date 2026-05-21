@@ -157,6 +157,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     internal LogEntries _logEntries = null!;
     private readonly object _updateLogsLock = new object();
     private CancellationTokenSource? _showNoLogsMessageCts;
+    private Task? _showNoLogsMessageDelayTask;
     private AIContext? _aiContext;
     private LogViewer? _logViewerRef;
 
@@ -667,7 +668,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         StopNoLogsMessageDelay();
 
         _showNoLogsMessageCts = new();
-        _ = ShowNoLogsMessageAfterDelayAsync(_showNoLogsMessageCts.Token);
+        _showNoLogsMessageDelayTask = ShowNoLogsMessageAfterDelayAsync(_showNoLogsMessageCts.Token);
     }
 
     private void StopNoLogsMessageDelay()
@@ -683,26 +684,37 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         try
         {
             await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+
+            await InvokeAsync(() =>
+            {
+                var hasNoLogEntries = false;
+                lock (_updateLogsLock)
+                {
+                    hasNoLogEntries = _logEntries.EntriesCount == 0;
+                }
+
+                if (!cancellationToken.IsCancellationRequested && hasNoLogEntries)
+                {
+                    _showNoLogsMessage = true;
+                    StateHasChanged();
+                }
+            });
         }
         catch (OperationCanceledException)
         {
-            return;
         }
-
-        await InvokeAsync(() =>
+        catch (Exception) when (cancellationToken.IsCancellationRequested)
         {
-            var hasNoLogEntries = false;
-            lock (_updateLogsLock)
-            {
-                hasNoLogEntries = _logEntries.EntriesCount == 0;
-            }
-
-            if (!cancellationToken.IsCancellationRequested && hasNoLogEntries)
-            {
-                _showNoLogsMessage = true;
-                StateHasChanged();
-            }
-        });
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "Failed to show the no logs message.");
+        }
     }
 
     private string GetResourceName(ResourceViewModel resource) => ResourceViewModel.GetResourceName(resource, _resourceByName);
@@ -1022,6 +1034,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     {
         _aiContext?.Dispose();
         StopNoLogsMessageDelay();
+        await TaskHelpers.WaitIgnoreCancelAsync(_showNoLogsMessageDelayTask);
 
         _consoleLogsFiltersChangedSubscription?.Dispose();
 
