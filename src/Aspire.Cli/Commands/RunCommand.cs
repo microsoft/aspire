@@ -73,6 +73,7 @@ internal sealed class RunCommand : BaseCommand
     private readonly ICliHostEnvironment _hostEnvironment;
     private readonly ProfilingTelemetry _profilingTelemetry;
     private bool _isDetachMode;
+    private const int MaxDisplayedAppHostStartupOutputLines = 80;
 
     // Guest AppHosts can bring up the temporary server/backchannel and then fail immediately
     // afterward when the guest startup process hits a syntax, pre-execute, or model validation
@@ -530,6 +531,7 @@ internal sealed class RunCommand : BaseCommand
         }
         catch (AppHostExitedDuringStartupException ex)
         {
+            DisplayRecentAppHostStartupOutput(InteractionService, context?.OutputCollector);
             return CreateRunExitResult(ex.ExitCode);
         }
         catch (Exception ex)
@@ -546,6 +548,18 @@ internal sealed class RunCommand : BaseCommand
     }
 
     private bool IsDetachedStartChild() => _configuration.GetBool(KnownConfigNames.CliRunDetached) is true;
+
+    private static void DisplayRecentAppHostStartupOutput(IInteractionService interactionService, OutputCollector? outputCollector)
+    {
+        var outputLines = outputCollector?.GetLines().TakeLast(MaxDisplayedAppHostStartupOutputLines).ToArray();
+        if (outputLines is null || outputLines.Length == 0)
+        {
+            return;
+        }
+
+        interactionService.DisplayMessage(KnownEmojis.Information, $"{RunCommandStrings.RecentAppHostStartupOutput}:");
+        interactionService.DisplayLines(outputLines);
+    }
 
     private static CommandResult CreateRunExitResult(int exitCode)
     {

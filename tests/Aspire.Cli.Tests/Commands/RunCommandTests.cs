@@ -378,6 +378,65 @@ public class RunCommandTests(ITestOutputHelper outputHelper)
         }
     }
 
+    [Fact]
+    public async Task RunCommand_WhenAppHostExitsDuringStartup_DisplaysCapturedAppHostOutput()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+
+        var appHostDir = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDir.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+
+        var dashboardRequested = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            RunAsyncCallback = async (context, cancellationToken) =>
+            {
+                var outputCollector = new OutputCollector();
+                context.OutputCollector = outputCollector;
+                context.BuildCompletionSource?.TrySetResult(true);
+                context.BackchannelCompletionSource?.TrySetResult(new TestAppHostBackchannel
+                {
+                    GetDashboardUrlsAsyncCallback = async ct =>
+                    {
+                        dashboardRequested.TrySetResult();
+                        await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+                        return new DashboardUrlsState { DashboardHealthy = true };
+                    }
+                });
+
+                await dashboardRequested.Task.WaitAsync(cancellationToken);
+                outputCollector.AppendError("System.InvalidOperationException: Service 'frontend' needs to specify a port for endpoint 'http' since it isn't using a proxy.");
+
+                return CliExitCodes.FailedToDotnetRunAppHost;
+            }
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"run --apphost {appHostFile.FullName}");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+        Assert.Contains(interactionService.DisplayedMessages, message => message.Message == $"{RunCommandStrings.RecentAppHostStartupOutput}:");
+        Assert.Contains(interactionService.DisplayedLines, line => line.Line.Contains("Service 'frontend' needs to specify a port", StringComparison.Ordinal));
+    }
+
     private sealed class ThrowingCertificateService : Aspire.Cli.Certificates.ICertificateService
     {
         public Task<Aspire.Cli.Certificates.EnsureCertificatesTrustedResult> EnsureCertificatesTrustedAsync(CancellationToken cancellationToken)
