@@ -22,7 +22,8 @@ public static class KubernetesCustomResourceExtensions
     /// <param name="apiVersion">The API version the CRD uses.</param>
     /// <param name="kind">The kind or label of the CRD.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesCustomResourceResouce}"/> for chaining.</returns>
-    [AspireExport(Description = "Adds a custom resource to the Kubernetes manifest.")]
+    /// <ats-summary>Adds a custom resource to the Kubernetes manifest.</ats-summary>
+    [AspireExport]
     public static IResourceBuilder<KubernetesCustomResourceResource> AddCustomResource(
         this IResourceBuilder<KubernetesEnvironmentResource> builder,
         [ResourceName] string name, string apiVersion, string kind)
@@ -42,7 +43,8 @@ public static class KubernetesCustomResourceExtensions
     /// <param name="apiVersion">The API version the CRD uses.</param>
     /// <param name="kind">The kind or label of the CRD.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{KubernetesCustomResourceResouce}"/> for chaining.</returns>
-    [AspireExport("addCustomResourceParam", Description = "Adds a custom resource to the Kubernetes manifest using parameters.")]
+    /// <ats-summary>Adds a custom resource to the Kubernetes manifest using parameters.</ats-summary>
+    [AspireExport("addCustomResourceParam")]
     public static IResourceBuilder<KubernetesCustomResourceResource> AddCustomResource(
         this IResourceBuilder<KubernetesEnvironmentResource> builder,
         [ResourceName] string name, IResourceBuilder<ParameterResource> apiVersion, IResourceBuilder<ParameterResource> kind)
@@ -100,7 +102,8 @@ public static class KubernetesCustomResourceExtensions
     /// }
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds a spec file to a CRD resource.")]
+    /// <ats-summary>Adds a spec file to a CRD resource.</ats-summary>
+    [AspireExport]
     public static IResourceBuilder<KubernetesCustomResourceResource> WithSpec(
         this IResourceBuilder<KubernetesCustomResourceResource> builder,
         CustomResourceSpecV1 spec)
