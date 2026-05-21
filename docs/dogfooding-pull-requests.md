@@ -200,7 +200,7 @@ The scripts auto-detect your OS and architecture and locate the latest `ci.yml` 
 
 - Override OS and architecture (auto-detected by default):
   - Allowed OS values: `win`, `linux`, `linux-musl`, `osx`
-  - Allowed arch values: `x64`, `x86`, `arm64`
+  - Allowed arch values: `x64`, `arm64`
   - Tool mode uses `dotnet tool install`, which resolves RID-specific packages for the current host. Use OS/architecture overrides with archive mode, not to cross-install a dotnet tool for another RID.
   - Bash:
     ```bash
