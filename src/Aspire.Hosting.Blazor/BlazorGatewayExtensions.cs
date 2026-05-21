@@ -285,41 +285,51 @@ public static class BlazorGatewayExtensions
 
     private static void MirrorGatewayStateToClients(IResourceBuilder<ProjectResource> gateway)
     {
-        gateway.ApplicationBuilder.Eventing.Subscribe<ResourceReadyEvent>(gateway.Resource, async (e, ct) =>
+        // Subscribe to the gateway's InitializeResourceEvent to start a background watcher
+        // that mirrors state changes from the gateway to all registered WASM app resources.
+        // This mirrors the pattern used by ApplicationOrchestrator.SetChildResourceAsync for
+        // container children, but uses ResourceNotificationService.WatchAsync since the
+        // orchestrator does not propagate state for ProjectResource parents.
+        gateway.ApplicationBuilder.Eventing.Subscribe<InitializeResourceEvent>(gateway.Resource, (e, ct) =>
         {
-            var notificationService = e.Services.GetRequiredService<ResourceNotificationService>();
-            var registeredApps = GetRegisteredApps(gateway.Resource);
-            var now = DateTime.UtcNow;
-            var gatewayEndpoints = GetAllocatedEndpoints(gateway.Resource);
+            var notificationService = e.Notifications;
+            _ = Task.Run(() => WatchGatewayStateAsync(gateway.Resource, notificationService, ct), ct);
+            return Task.CompletedTask;
+        });
+    }
+
+    private static async Task WatchGatewayStateAsync(
+        ProjectResource gateway,
+        ResourceNotificationService notificationService,
+        CancellationToken cancellationToken)
+    {
+        await foreach (var resourceEvent in notificationService.WatchAsync(cancellationToken).ConfigureAwait(false))
+        {
+            if (resourceEvent.Resource != gateway)
+            {
+                continue;
+            }
+
+            var registeredApps = GetRegisteredApps(gateway);
+            var gatewayState = resourceEvent.Snapshot.State;
+
+            var isRunning = gatewayState?.Text == KnownResourceStates.Running;
 
             foreach (var reg in registeredApps)
             {
-                var urls = BuildClientUrls(gatewayEndpoints, reg.PathPrefix);
+                var clientUrls = isRunning
+                    ? BuildClientUrls(GetAllocatedEndpoints(gateway), reg.PathPrefix)
+                    : [];
 
                 await notificationService.PublishUpdateAsync(reg.AppBuilder.Resource, snapshot => snapshot with
                 {
-                    State = KnownResourceStates.Running,
-                    StartTimeStamp = now,
-                    Urls = urls
+                    State = gatewayState,
+                    StartTimeStamp = resourceEvent.Snapshot.StartTimeStamp,
+                    StopTimeStamp = resourceEvent.Snapshot.StopTimeStamp,
+                    Urls = clientUrls
                 }).ConfigureAwait(false);
             }
-        });
-
-        gateway.ApplicationBuilder.Eventing.Subscribe<ResourceStoppedEvent>(gateway.Resource, async (e, ct) =>
-        {
-            var notificationService = e.Services.GetRequiredService<ResourceNotificationService>();
-            var registeredApps = GetRegisteredApps(gateway.Resource);
-            var now = DateTime.UtcNow;
-
-            foreach (var reg in registeredApps)
-            {
-                await notificationService.PublishUpdateAsync(reg.AppBuilder.Resource, snapshot => snapshot with
-                {
-                    State = KnownResourceStates.Finished,
-                    StopTimeStamp = now
-                }).ConfigureAwait(false);
-            }
-        });
+        }
     }
 
     private static void ConfigurePublishEnvironment(
